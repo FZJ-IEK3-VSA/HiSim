@@ -41,6 +41,7 @@ from tests.economics.synthetic_stages import (
     envelope_stage,
     flows_by_year,
     heat_pump_stage,
+    inventory_register,
     state_inputs,
     write_database,
 )
@@ -193,7 +194,7 @@ class TestStagingSemantics:
         # pylint: disable=protected-access  # the merge has no public surface of its own
         charged = [evaluator._charged_subjects(stages, index) for index in (0, 1)]
         assert charged[1] == {SyntheticPlan.ENVELOPE_SUBJECT: 1.0}
-        merged = evaluator._staged_inputs(stages, 2, charged)
+        merged = evaluator._staged_inputs(stages, 2, charged, SyntheticPlan.YEAR)
         assert merged.existing_assets is not None
         installed = {asset.asset_class.value: asset.installation_year for asset in merged.existing_assets.assets}
         assert installed["WallExternalInsulation"] == SyntheticPlan.YEAR + 2
@@ -212,7 +213,7 @@ class TestStagingSemantics:
         # pylint: disable=protected-access  # the merge has no public surface of its own
         charged = [evaluator._charged_subjects(stages, 0)]
         assert charged[0] == {SyntheticPlan.BOILER_SUBJECT: 1.0}
-        merged = evaluator._staged_inputs(stages, 1, charged)
+        merged = evaluator._staged_inputs(stages, 1, charged, SyntheticPlan.YEAR)
         assert merged.existing_assets is not None
         boilers = [asset for asset in merged.existing_assets.assets if asset.asset_class is ComponentType.GAS_HEATER]
         assert len(boilers) == 1
@@ -563,7 +564,7 @@ class TestAgeingFromTheStagesOwnYear:
         evaluator = StagedEvaluator(database)
         # pylint: disable=protected-access  # the merge has no public surface of its own
         charged = [evaluator._charged_subjects(stages, 0)]
-        merged = evaluator._staged_inputs(stages, 1, charged)
+        merged = evaluator._staged_inputs(stages, 1, charged, SyntheticPlan.YEAR)
         assert merged.existing_assets is not None
         classes = {asset.asset_class for asset in merged.existing_assets.assets}
         assert ComponentType.HEAT_PUMP not in classes
@@ -1302,3 +1303,141 @@ class TestThePlanStartYear:
         unstated = EconomicParameters(country=SyntheticPlan.COUNTRY)
         assert effective_price_basis_year(unstated, _DataFrom2024(), 2030, plan_start_year=2000) == 2024
         assert effective_price_basis_year(unstated, _DataFrom2024(), 2030, plan_start_year=2026) == 2026
+
+
+class TestOnePlanYearZero:
+    """Plan year 0 is ``plan_start_year``, else the price basis year (hisim-dutz, hisim-nl6j).
+
+    Owner decision 2026-09-26: one anchor ages the house's own equipment, dates what a stage buys
+    (``year 0 + from_year``) and is the year ``calendar_year`` counts from whenever the plan states
+    a start year. The stages' ``simulation_year`` is the year of their weather and dates nothing;
+    before this, a stage's purchase was dated from it and a later stage aged it
+    ``price basis year - weather year`` years too old.
+
+    Every case below is simulated with the weather of 2019 and priced at 2026, the RenoVisor
+    mockup's seven-year gap, over a 20-year horizon so a replacement ``from_year + L`` falls inside
+    it. The service life of every synthetic subject is ``L = 10``.
+    """
+
+    WEATHER_YEAR = 2019
+    BASIS_YEAR = 2026
+    HORIZON = 20
+
+    #: The register boiler of the kept-asset cases: installed 2020, so with ``L = 10`` it is due
+    #: in the calendar year 2030 whatever year the plan starts in.
+    KEPT_BOILER_YEAR = 2020
+
+    @pytest.fixture(name="gap_parameters")
+    def fixture_gap_parameters(self, parameters) -> EconomicParameters:
+        """The synthetic assumptions, priced at 2026 over 20 years."""
+        gapped: EconomicParameters = replace(
+            parameters, price_basis_year=self.BASIS_YEAR, observation_period_in_years=self.HORIZON
+        )
+        return gapped
+
+    @classmethod
+    def _weathered(cls, stage: Stage, register: Optional[ExistingAssetRegister] = None) -> Stage:
+        """The stage simulated with 2019's weather, optionally over another register."""
+        inputs = replace(stage.inputs, simulation_year=cls.WEATHER_YEAR)
+        if register is not None:
+            inputs = replace(inputs, existing_assets=register)
+        return replace(stage, inputs=inputs)
+
+    @classmethod
+    def _three_stages(cls) -> List[Stage]:
+        """Baseline, a heat pump (and the facade) bought in year 3, a later stage that keeps both.
+
+        The third stage, from year 5, buys nothing new: it is there so the heat pump is *kept* by
+        a stage evaluated with the ageing register, which is the path hisim-dutz is about.
+        """
+        later = replace(heat_pump_stage(5), label="stage 3", job_id="job-later")
+        return [cls._weathered(stage) for stage in (baseline_stage(), heat_pump_stage(3), later)]
+
+    @staticmethod
+    def _years(result, subject: str, category: CostCategory) -> List[int]:
+        """The plan years of one subject's entries in one category."""
+        return [
+            entry.year
+            for entry in result.plan.timeline.entries
+            if entry.subject == subject and entry.category is category
+        ]
+
+    def _kept_boiler_register(self) -> ExistingAssetRegister:
+        """The inventory boiler, installed :attr:`KEPT_BOILER_YEAR` instead of 2010."""
+        (boiler,) = inventory_register().assets
+        return ExistingAssetRegister(assets=[replace(boiler, installation_year=self.KEPT_BOILER_YEAR)])
+
+    def test_a_stage_purchase_is_dated_from_the_plan_start_year(self, database, gap_parameters):
+        """Weather 2019, basis 2026, start 2026: the heat pump bought in year 3 is installed in 2029.
+
+        f = 3, L = 10, T = 20.
+
+            installation_year = plan year 0 + f = 2026 + 3 = 2029   (it was 2019 + 3 = 2022)
+            age in the third stage, at 2026   = 2026 - 2029  = -3  (not floored: a stage purchase)
+            first replacement                 = L - age      = 10 + 3 = 13 = f + L
+
+        Before, the third stage aged the 2022 unit at 2026, age 4, and replaced it in year
+        L - 4 = 6 = f + L - 7: seven years early, the weather-to-basis gap.
+        """
+        result = StagedEvaluator(database).evaluate(
+            self._three_stages(), gap_parameters, brownfield_perspective(), plan_start_year=self.BASIS_YEAR
+        )
+        for stage in (1, 2):
+            life = result.lives_by_stage[stage][SyntheticPlan.HEAT_PUMP_SUBJECT]
+            assert life.installation_year_origin is not None
+            assert (life.installation_year, life.installation_year_origin.value) == (2029, "stage"), stage
+        assert self._years(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT) == [3]
+        assert self._years(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.REPLACEMENT) == [
+            3 + int(SyntheticPlan.LIFETIME_IN_YEARS)
+        ]
+        assert result.plan_start_year == self.BASIS_YEAR
+        assert self.BASIS_YEAR + 13 == 2029 + SyntheticPlan.LIFETIME_IN_YEARS  # the calendar year it is due
+
+    def test_without_a_start_year_a_stage_purchase_is_dated_from_the_basis_year(self, database, gap_parameters):
+        """No start year: plan year 0 is the price basis year 2026, never the weather year 2019.
+
+        The same plan and the same arithmetic as above, anchored on the basis year: installed
+        2026 + 3 = 2029, replaced in year 13. The result states no start year, so the document
+        dates no year (``calendar_year`` null). This pins the change from the weather year.
+        """
+        result = StagedEvaluator(database).evaluate(self._three_stages(), gap_parameters, brownfield_perspective())
+        assert result.plan_start_year is None
+        assert result.lives_by_stage[1][SyntheticPlan.HEAT_PUMP_SUBJECT].installation_year == 2029
+        assert result.lives_by_stage[2][SyntheticPlan.HEAT_PUMP_SUBJECT].installation_year == 2029
+        assert self._years(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.REPLACEMENT) == [13]
+
+    @pytest.mark.parametrize("start, due", [(2026, 4), (2029, 1)])
+    def test_a_kept_asset_is_aged_at_plan_year_zero(self, database, gap_parameters, start, due):
+        """The house's boiler (2020, L = 10) is due in 2030 whichever year the plan starts in.
+
+            start 2026 (= basis): due = L - (2026 - 2020) = 10 - 6 = 4, calendar 2026 + 4 = 2030
+            start 2029 (basis + 3): due = L - (2029 - 2020) = 10 - 9 = 1, calendar 2029 + 1 = 2030
+
+        Three years earlier in plan years, the same calendar year: the price basis year (2026 in
+        both) no longer ages it.
+        """
+        baseline = self._weathered(baseline_stage(), self._kept_boiler_register())
+        result = StagedEvaluator(database).evaluate(
+            [baseline], gap_parameters, brownfield_perspective(), plan_start_year=start
+        )
+        assert self._years(result, SyntheticPlan.BOILER_SUBJECT, CostCategory.REPLACEMENT)[0] == due
+        assert start + due == self.KEPT_BOILER_YEAR + SyntheticPlan.LIFETIME_IN_YEARS
+        assert result.plan.parameters.price_basis_year == self.BASIS_YEAR
+
+    def test_without_a_start_year_a_kept_asset_ages_as_an_unstaged_evaluation_does(self, database, gap_parameters):
+        """No start year: the boiler is aged at the price basis year, exactly as before and as unstaged.
+
+            due = L - (2026 - 2020) = 4
+
+        which is the replacement year a plain evaluation books too.
+        """
+        baseline = self._weathered(baseline_stage(), self._kept_boiler_register())
+        staged = StagedEvaluator(database).evaluate([baseline], gap_parameters, brownfield_perspective())
+        plain = EconomicEvaluator(database, gap_parameters).evaluate(baseline.inputs, brownfield_perspective())
+        assert self._years(staged, SyntheticPlan.BOILER_SUBJECT, CostCategory.REPLACEMENT)[0] == 4
+        assert entry_signature(staged.plan.timeline.entries) == entry_signature(plain.timeline.entries)
+
+    def test_the_anchor_itself(self):
+        """``plan_start_year`` when stated, else the price basis year; never a weather year."""
+        assert StagedEvaluator.plan_year_zero(2029, 2026) == 2029
+        assert StagedEvaluator.plan_year_zero(None, 2026) == 2026

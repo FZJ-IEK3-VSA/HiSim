@@ -399,7 +399,7 @@
               },
               "installation_year": {
                 "type": ["integer", "null"],
-                "description": "The calendar year the subject counts as installed in: for equipment the house already had and keeps, the existing-asset register's year, from which the engine schedules its replacements; for a subject a stage bought, simulation_year + that stage's from_year. Null exactly when service_life_years is."
+                "description": "The calendar year the subject counts as installed in: for equipment the house already had and keeps, the existing-asset register's year, from which the engine schedules its replacements; for a subject a stage bought, the plan's year 0 + that stage's from_year, where year 0 is plan_start_year, else price_basis_year (the year the house's own equipment is aged at too). Null exactly when service_life_years is."
               },
               "installation_year_origin": {
                 "enum": ["request", "mid_life_default", "construction_year_default", "stage", null],

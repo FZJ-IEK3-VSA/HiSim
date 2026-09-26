@@ -273,8 +273,9 @@ class SubjectLife:
         service_life_years: The service life, in years.
         service_life_origin: Where it came from.
         installation_year: The calendar year the subject counts as installed in: a kept asset's
-            register year, or ``simulation_year + from_year`` of the stage that bought it (the
-            year :meth:`StagedEvaluator._staged_inputs` ages a bought subject from).
+            register year, or ``plan year 0 + from_year`` of the stage that bought it (the year
+            :meth:`StagedEvaluator._staged_inputs` ages a bought subject from; plan year 0 is
+            :meth:`StagedEvaluator.plan_year_zero`).
         installation_year_origin: Where that year came from; ``None`` for a register entry whose
             author did not say (a register written before the field existed).
     """
@@ -556,9 +557,10 @@ class StagedEvaluator:
                 catalogue at all, where every scheme stays undetermined and the plan is priced
                 under :meth:`priced_under`'s ``subsidy_mode: NONE``.
             plan_start_year: The calendar year the plan starts in, or ``None``. Recorded on the
-                result for the document's calendar years, and — when ``parameters`` states no
-                ``price_basis_year`` — the year the price basis falls back to instead of the
-                stages' simulation year
+                result for the document's calendar years; the plan's year 0 every register asset
+                is aged at and every stage purchase is dated from (:meth:`plan_year_zero`); and —
+                when ``parameters`` states no ``price_basis_year`` — the year the price basis falls
+                back to instead of the stages' simulation year
                 (:func:`~hisim.economics.evaluator.effective_price_basis_year`).
 
         Returns:
@@ -582,8 +584,9 @@ class StagedEvaluator:
                     parameters, self.database, ordered[0].inputs.simulation_year, plan_start_year
                 ),
             )
-        evaluator = EconomicEvaluator(self.database, parameters, catalog)
-        price_basis_year = evaluator.price_basis_year(ordered[0].inputs)
+        price_basis_year = effective_price_basis_year(parameters, self.database, ordered[0].inputs.simulation_year)
+        year_zero = self.plan_year_zero(plan_start_year, price_basis_year)
+        evaluator = EconomicEvaluator(self.database, parameters, catalog, plan_year_zero=year_zero)
         self._validate_stated_prices(ordered, parameters, price_basis_year)
         active_by_year = self._active_by_year(ordered, parameters.observation_period_in_years)
 
@@ -598,12 +601,12 @@ class StagedEvaluator:
         lives_by_stage: List[Dict[str, SubjectLife]] = []
         for index, stage in enumerate(ordered):
             charged = self._charged_subjects(ordered, index)
-            inputs = self._staged_inputs(ordered, index, charged_by_stage)
+            inputs = self._staged_inputs(ordered, index, charged_by_stage, year_zero)
             per_stage.append(evaluator.evaluate(inputs, perspective, ledger))
             charged_by_stage.append(charged)
             lives_by_stage.append(
                 self._subject_lives(
-                    inputs, stage.from_year, index, charged, perspective, parameters, price_basis_year
+                    inputs, stage.from_year, index, charged, perspective, parameters, price_basis_year, year_zero
                 )
             )
 
@@ -628,6 +631,28 @@ class StagedEvaluator:
             plan_start_year=plan_start_year,
             lives_by_stage=tuple(lives_by_stage),
         )
+
+    @staticmethod
+    def plan_year_zero(plan_start_year: Optional[int], price_basis_year: int) -> int:
+        """The calendar year of the plan's year 0 (owner decision 2026-09-26, hisim-dutz, hisim-nl6j).
+
+        ``plan_start_year`` when the plan states one, else the price basis year the plan is priced
+        at. It is the one anchor for every date of the plan's ageing: each register asset of the
+        house is aged at it (its replacement schedule and the book value a measure writes off),
+        and a subject a stage buys counts as installed in ``plan_year_zero + from_year``, which is
+        also the ``installation_year`` the document publishes for it. The document's
+        ``calendar_year`` is ``plan_start_year + year`` and null without a start year, so whenever
+        it is stated it agrees with this year. Prices are still read at the price basis year; the
+        stages' ``simulation_year`` is the year of their weather and dates nothing.
+
+        Args:
+            plan_start_year: The calendar year the plan starts in, or ``None``.
+            price_basis_year: The price basis year the plan is priced at, as resolved.
+
+        Returns:
+            The calendar year of plan year 0.
+        """
+        return plan_start_year if plan_start_year is not None else price_basis_year
 
     #: How a catalogue is named in the document: the country it applies to and the date the
     #: catalogue was taken from the programmes' own pages, which is the pair that identifies one
@@ -1136,13 +1161,15 @@ class StagedEvaluator:
         stages: Tuple[Stage, ...],
         index: int,
         charged_by_stage: List[Dict[str, float]],
+        plan_year_zero: int,
     ) -> EvaluationInputs:
         """Stage ``index``'s inputs with the ageing register of every earlier stage merged in.
 
         This is step 10 §2 item 4, and it is the whole of "ageing across stages": the register the
         stage is evaluated with holds the house inventory *minus* whatever an earlier stage has
         already torn out, *plus* one :class:`~hisim.economics.facts.ExistingAsset` per subject an
-        earlier stage paid for, installed in that stage's year. The engine's brownfield machinery
+        earlier stage paid for, installed in that stage's calendar year ``plan_year_zero +
+        from_year`` and marked with the origin ``STAGE``. The engine's brownfield machinery
         then schedules the replacements, the residual values and the removal costs itself; this
         module adds no second mechanism.
 
@@ -1155,6 +1182,10 @@ class StagedEvaluator:
             index: The stage to build inputs for.
             charged_by_stage: What every *earlier* stage charged, in stage order; this method is
                 called in order, so the list holds exactly ``index`` entries.
+            plan_year_zero: The calendar year of plan year 0 (:meth:`plan_year_zero`), which the
+                engine ages this stage's register at too. Never the stages' ``simulation_year``:
+                that is the year of their weather, and a purchase dated from it came out
+                ``price basis year - weather year`` years too old (hisim-dutz).
 
         Returns:
             A copy of the stage's inputs carrying the merged register. The caller's record is not
@@ -1163,7 +1194,6 @@ class StagedEvaluator:
         stage = stages[index]
         if index == 0:
             return stage.inputs
-        simulation_year = stage.inputs.simulation_year
         facts_by_subject = {facts.subject: facts.facts for facts in stage.inputs.cost_facts}
         newly_charged_classes = {
             facts_by_subject[subject].asset_class
@@ -1175,7 +1205,7 @@ class StagedEvaluator:
         # Stage 0 is the house as it is: what it "charges" is the reference's own year-0 booking,
         # not a purchase the plan makes, and its equipment is already in the inventory register
         # with its real installation year. Letting it age in here would re-date a 2010 boiler to
-        # the simulation year, so the heat pump that replaces it would write off a nearly new
+        # the plan's year 0, so the heat pump that replaces it would write off a nearly new
         # asset as sunk cost. Only stages 1.. put anything into the building.
         for earlier in range(1, index):
             earlier_facts = {facts.subject: facts.facts for facts in stages[earlier].inputs.cost_facts}
@@ -1195,7 +1225,7 @@ class StagedEvaluator:
                     asset_class=facts.asset_class,
                     size=facts.size,
                     size_unit=facts.size_unit,
-                    installation_year=simulation_year + stages[earlier].from_year,
+                    installation_year=plan_year_zero + stages[earlier].from_year,
                     is_functional=True,
                     replaced_by_asset_classes=(
                         [facts.asset_class]
@@ -1532,6 +1562,7 @@ class StagedEvaluator:
         perspective: Perspective,
         parameters: EconomicParameters,
         price_basis_year: int,
+        plan_year_zero: int,
     ) -> Dict[str, SubjectLife]:
         """The lifetime and installation year of every cost subject one stage is evaluated with.
 
@@ -1549,12 +1580,14 @@ class StagedEvaluator:
             charged: What the stage pays for (:meth:`_charged_subjects`).
             perspective: For the installation context the verdict is taken under.
             parameters: For the country the database is read for.
-            price_basis_year: The plan's price basis year.
+            price_basis_year: The plan's price basis year, for the service life.
+            plan_year_zero: The calendar year of plan year 0 (:meth:`plan_year_zero`); a subject
+                this stage buys is installed in ``plan_year_zero + from_year``.
 
         Returns:
             Subject -> its :class:`SubjectLife`.
         """
-        start = inputs.simulation_year + from_year
+        start = plan_year_zero + from_year
         lives: Dict[str, SubjectLife] = {}
         for subject_facts in inputs.cost_facts:
             facts = subject_facts.facts

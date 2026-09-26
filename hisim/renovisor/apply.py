@@ -38,6 +38,7 @@ from hisim.renovisor.constants import (
 )
 from hisim.renovisor.envelope import LayerNote, UValueComposer
 from hisim.renovisor.request import CatalogueTable, Material, Measure, SemanticChecks
+from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.vocabulary import ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError, Unmapped, Whitelist, WhitelistEntry
 
@@ -235,19 +236,29 @@ class Effects:
     Args:
         house: The working copy of the request's house. It is mutated in place; the caller has
             already deep-copied it.
+        archetype: The envelope of the TABULA row the house is simulated as. An element the
+            request gives no U-value starts from the row's (§4.3's ``U_existing``); ``None`` when
+            the caller has none, in which case a layer on such an element is a translator error.
     """
 
-    def __init__(self, house: Dict[str, Any]) -> None:
+    def __init__(self, house: Dict[str, Any], archetype: Optional[ArchetypeEnvelope] = None) -> None:
         """Store the working house and remember every element's U-value before any measure."""
         self._house = house
+        self._archetype = archetype
         self._layers: List[AddedLayer] = []
         self._original_u_values: Dict[ThermalElement, float] = {}
+        self._original_origins: Dict[ThermalElement, str] = {}
         self._written: List[str] = []
         self._removed: List[str] = []
         for element in ThermalElement:
             value = self.read(HousePaths.u_value(element))
-            if isinstance(value, (int, float)):
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
                 self._original_u_values[element] = float(value)
+            elif archetype is not None:
+                self._original_u_values[element] = archetype.u_value(element)
+                self._original_origins[element] = (
+                    f"not in the request: TABULA {archetype.code}, {archetype.elements[element].origin}"
+                )
 
     @property
     def house(self) -> Dict[str, Any]:
@@ -267,7 +278,7 @@ class Effects:
         return tuple(self._removed)
 
     def original_u_value(self, element: ThermalElement) -> Optional[float]:
-        """Return one element's U-value as the request stated it, before any layer."""
+        """Return one element's U-value before any layer: the request's, else the TABULA row's."""
         return self._original_u_values.get(element)
 
     def read(self, path: str) -> Any:
@@ -348,8 +359,16 @@ class Effects:
             existing = [existing]
         existing.append(layer.to_house())
         element[HousePaths.ADDED_INSULATION] = existing
+        current = element.get(HousePaths.U_VALUE)
+        if not isinstance(current, (int, float)) or isinstance(current, bool):
+            if layer.element not in self._original_u_values:
+                raise TranslatorError(
+                    f"{layer.measure_id} adds a layer to the {layer.element.value}, which has no U-value in the "
+                    "request, and apply() was given no TABULA archetype to start from"
+                )
+            current = self._original_u_values[layer.element]
         composed = UValueComposer.compose(
-            float(element[HousePaths.U_VALUE]),
+            float(current),
             [UValueComposer.resistance(layer.thickness_in_mm, layer.material.thermal_conductivity_w_mk)],
         )
         element[HousePaths.U_VALUE] = composed
@@ -372,7 +391,7 @@ class Effects:
             if layer.element is element
         ]
         composed = float(self._element_block(element)[HousePaths.U_VALUE])
-        return LayerNote.of(existing, layers, composed)
+        return LayerNote.of(existing, layers, composed, origin=self._original_origins.get(element))
 
     def _element_block(self, element: ThermalElement) -> Dict[str, Any]:
         """Return the mutable block of one envelope element."""
@@ -1013,7 +1032,12 @@ class MeasureStatusRules:
         return status
 
 
-def apply(house: Mapping[str, Any], measures: Sequence[Measure], whitelist: Whitelist) -> AppliedPackage:
+def apply(
+    house: Mapping[str, Any],
+    measures: Sequence[Measure],
+    whitelist: Whitelist,
+    archetype: Optional[ArchetypeEnvelope] = None,
+) -> AppliedPackage:
     """Apply one package to one house and say what every measure and option came to.
 
     Args:
@@ -1021,6 +1045,9 @@ def apply(house: Mapping[str, Any], measures: Sequence[Measure], whitelist: Whit
         measures: The package, in the order it is applied.
         whitelist: The parsed ``not_implemented_yet.yaml``, asked once at the end about every
             item no measure function could map.
+        archetype: The envelope of the house's TABULA row
+            (:meth:`hisim.renovisor.tabula.ArchetypeEnvelope.for_request`), which an insulation
+            layer on an element without a stated U-value starts from. Only such a layer needs it.
 
     Returns:
         The renovated house and the measure half of the mapping report.
@@ -1031,7 +1058,7 @@ def apply(house: Mapping[str, Any], measures: Sequence[Measure], whitelist: Whit
     """
     MeasureRegistry.assert_complete()
     working: Dict[str, Any] = copy.deepcopy(dict(house))
-    effects = Effects(working)
+    effects = Effects(working, archetype)
     contexts: List[MeasureContext] = []
     for measure in measures:
         line = MeasureLine(id=measure.id)

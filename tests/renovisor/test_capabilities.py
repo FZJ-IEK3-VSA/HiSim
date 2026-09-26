@@ -496,9 +496,26 @@ class TestTheDocument:
         assert fields["house.occupancy.number_of_residents"]["status"] == (
             ReportStatus.NOT_IMPLEMENTED_YET.value
         )
+        # Stated, the U-value is used; left out, the TABULA variant's stands (§3.4), which the bare
+        # probe shows, and the field announces the worse of the two.
         assert fields["house.building.facade.u_value_in_watt_per_m2_per_kelvin"]["status"] == (
-            ReportStatus.USED.value
+            ReportStatus.DEFAULTED.value
         )
+        assert fields["house.building.roof.area_in_m2"]["status"] == ReportStatus.DEFAULTED.value
+
+    def test_the_retrofit_status_announces_every_variant_and_defaults_to_unrenovated(
+        self, document: CapabilityDocument
+    ) -> None:
+        """Each status selects its variant in the anchor's band; absent, it is unrenovated (§5.3)."""
+        entry = {item["path"]: item for item in document.body["fields"]}["house.building.retrofit_status"]
+
+        assert entry["status"] == ReportStatus.DEFAULTED.value
+        assert "variant 001" in entry["note"]
+        assert {value["value"]: value["status"] for value in entry["values"]} == {
+            "unrenovated": ReportStatus.USED.value,
+            "usual_refurb": ReportStatus.USED.value,
+            "advanced_refurb": ReportStatus.USED.value,
+        }
 
     def test_two_builds_of_one_state_are_byte_identical(
         self, document: CapabilityDocument, tmp_path: Path

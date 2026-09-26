@@ -24,7 +24,7 @@ that member for member, so the two cannot drift.
 """
 
 from enum import Enum
-from typing import Tuple
+from typing import Optional, Tuple
 
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 
@@ -200,6 +200,34 @@ class BuildingType(str, Enum):
     OTHER = "other"
 
 
+class RetrofitStatus(str, Enum):
+    """How far the envelope has been refurbished, as ``building.retrofit_status`` names it.
+
+    Each value selects one TABULA refurbishment variant -- the code's last three digits -- whose
+    row supplies every element U-value the request leaves out, and the row's air infiltration and
+    thermal-bridge surcharge in every case (§3.4 and §5.3 of the calculation-request
+    specification). Absent, the house is ``UNRENOVATED``.
+    """
+
+    UNRENOVATED = "unrenovated"
+    USUAL_REFURB = "usual_refurb"
+    ADVANCED_REFURB = "advanced_refurb"
+
+    @property
+    def variant(self) -> str:
+        """Return the TABULA variant this status selects: ``001``, ``002`` or ``003``."""
+        return {
+            RetrofitStatus.UNRENOVATED: "001",
+            RetrofitStatus.USUAL_REFURB: "002",
+            RetrofitStatus.ADVANCED_REFURB: "003",
+        }[self]
+
+    @classmethod
+    def of_variant(cls, variant: str) -> Optional["RetrofitStatus"]:
+        """Return the status that selects one TABULA variant, or ``None`` for a variant none selects."""
+        return next((status for status in cls if status.variant == variant), None)
+
+
 class RoofShape(str, Enum):
     """The shape of the main roof, as ``building.roof.shape`` names it.
 
@@ -296,9 +324,10 @@ class ReportStatus(str, Enum):
 class ThermalElement(str, Enum):
     """One of the five envelope elements ``house.building`` carries.
 
-    Every envelope measure resolves onto exactly one of them, every one of them has a required
-    U-value in the request, and each lands on
-    ``Building.config.<element>_u_value_in_watt_per_m2_per_kelvin`` and ``<element>_area_in_m2``.
+    Every envelope measure resolves onto exactly one of them. Each may carry a U-value, which
+    lands on ``Building.config.<element>_u_value_in_watt_per_m2_per_kelvin``; one the request
+    leaves out stays the TABULA row's of the selected variant. An area lands on
+    ``<element>_area_in_m2``.
     The value is the request's own block name, so the element is its own path segment.
     """
 

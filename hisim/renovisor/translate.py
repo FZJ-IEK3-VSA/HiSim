@@ -56,11 +56,12 @@ from hisim.renovisor.constants import (
 )
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import House, Request
-from hisim.renovisor.tabula import BuildingCode, BuildingCodeSelector
+from hisim.renovisor.tabula import ArchetypeEnvelope, BuildingCode, BuildingCodeSelector
 from hisim.renovisor.vocabulary import (
     HeatDistributionType,
     HeatGenerator,
     ReportStatus,
+    RetrofitStatus,
     ThermalElement,
 )
 from hisim.renovisor.whitelist import TranslatorError, Unmapped, Whitelist
@@ -1045,7 +1046,9 @@ class Translator:
         Returns:
             The edited energy-system document of the unrenovated house.
         """
-        original = apply(request.document["house"], (), self._whitelist)
+        original = apply(
+            request.document["house"], (), self._whitelist, archetype=ArchetypeEnvelope.for_request(request)
+        )
         return self._run_stages(request, original).editor.build()
 
     def _cost_blocks(self, request: Request, house: Mapping[str, Any], report: MappingReport) -> None:
@@ -1283,15 +1286,13 @@ def _envelope(state: _TranslationState) -> None:
 
     The archetype is a constructor swap rather than a config override because a TABULA code is
     an identifier out of a space of hundreds, and because the swap is what drops the recorded
-    ``weather_identity`` that would otherwise pin a Dublin building to Aachen's solar gains.
+    ``weather_identity`` that would otherwise pin a Dublin building to Aachen's solar gains. The
+    code carries the variant ``building.retrofit_status`` selects, so the swap is also what gives
+    the house its row's air infiltration and thermal-bridge surcharge.
     """
     building = state.house.building
-    code = BuildingCodeSelector.select(
-        country=state.request.country.value,
-        building_type=building.building_type,
-        construction_year=building.construction_year,
-        requested_code=building.tabula_building_code,
-    )
+    code = BuildingCodeSelector.for_request(state.request)
+    archetype = ArchetypeEnvelope.for_request(state.request)
     arguments: Dict[str, Any] = {
         "building_code": code.code,
         "absolute_conditioned_floor_area_in_m2": building.absolute_conditioned_floor_area_in_m2,
@@ -1307,8 +1308,9 @@ def _envelope(state: _TranslationState) -> None:
         ),
     )
     _report_archetype(state, code)
+    _report_variant(state, code, archetype)
     for element in ThermalElement:
-        _element(state, element)
+        _element(state, element, archetype)
     state.write(
         Targets.BUILDING,
         Targets.SET_HEATING_TEMPERATURE,
@@ -1334,7 +1336,7 @@ def _report_archetype(state: _TranslationState, code: BuildingCode) -> None:
     if state.present("house.building.tabula_building_code"):
         state.report.used(
             "house.building.tabula_building_code", target, value=code.code,
-            note="the expert override skips the derivation from country, type and year",
+            note="the expert override skips the derivation from country, type, year and retrofit status",
         )
     state.report.used(
         "house.building.absolute_conditioned_floor_area_in_m2",
@@ -1354,24 +1356,83 @@ def _report_archetype(state: _TranslationState, code: BuildingCode) -> None:
     )
 
 
-def _element(state: _TranslationState, element: ThermalElement) -> None:
-    """Write one envelope element's U-value and area, and report both plus its extra fields."""
+def _report_variant(state: _TranslationState, code: BuildingCode, archetype: ArchetypeEnvelope) -> None:
+    """Report ``retrofit_status``: the TABULA variant it selected, and what that row does whatever the U-values.
+
+    The variant is a whole row (§3.4): besides the U-values of the elements the request leaves
+    out, the ``Building`` reads the row's air infiltration and thermal-bridge surcharge, which no
+    request field sets. The line names both, with the variant they came from, so a reader sees
+    why two requests with the same U-values but different statuses simulate different houses.
+    """
+    path = "house.building.retrofit_status"
+    target = Targets.describe_constructor(Targets.BUILDING, "for_tabula_code", "building_code")
+    row = (
+        f"{code.code}, whose air infiltration {archetype.air_infiltration_rate_per_hour:g} 1/h "
+        f"(n_air_infiltration) and thermal-bridge surcharge "
+        f"{archetype.thermal_bridging_surcharge_in_watt_per_m2_per_kelvin:g} W/(m2K) (delta_U_ThermalBridging) the "
+        "Building reads whatever U-values the request states"
+    )
+    stated = state.house.building.retrofit_status
+    if stated is not None:
+        if code.variant_note is not None:
+            state.report.approximated(path, f"{code.variant_note}: {row}", target=target, value=stated.value)
+        else:
+            state.report.used(path, target, value=stated.value, note=f"selects variant {code.variant}: {row}")
+        return
+    status = code.retrofit_status
+    if state.present("house.building.tabula_building_code"):
+        note = f"absent from the request; the tabula_building_code's own variant {code.variant} stands: {row}"
+    else:
+        note = f"absent from the request, so {RetrofitStatus.UNRENOVATED.value}: variant {code.variant}, {row}"
+    state.report.defaulted(path, status.value if status is not None else code.variant, note=note, target=target)
+
+
+def _element(state: _TranslationState, element: ThermalElement, archetype: ArchetypeEnvelope) -> None:
+    """Write one envelope element's U-value and area, and report both plus its extra fields.
+
+    A U-value the renovated house carries -- the request's, or one a measure wrote -- is written
+    and fixes the element's transmission adjustment factor. One it does not carry leaves the config
+    field unset, so the ``Building`` keeps the TABULA row's U-value and adjustment factor; the
+    line names the value it will use, as the ``Building`` computes it (:class:`ArchetypeEnvelope`).
+    """
     block = state.house.element(element.value)
     u_path = f"house.building.{element.value}.u_value_in_watt_per_m2_per_kelvin"
-    state.write(
-        Targets.BUILDING,
-        Targets.element_u_value(element),
-        block.u_value_in_watt_per_m2_per_kelvin,
-        source=u_path,
-        note=Translator.ADJUSTMENT_NOTE,
-    )
+    u_target = Targets.describe(Targets.BUILDING, Targets.element_u_value(element))
     layer_note = state.applied.element_note(element)
-    state.report.used(
-        u_path,
-        Targets.describe(Targets.BUILDING, Targets.element_u_value(element)),
-        value=block.u_value_in_watt_per_m2_per_kelvin,
-        note=f"{layer_note}; {Translator.ADJUSTMENT_NOTE}" if layer_note else Translator.ADJUSTMENT_NOTE,
+    row = archetype.elements[element]
+    row_note = (
+        f"the TABULA row {archetype.code}'s {row.u_value_in_watt_per_m2_per_kelvin:g} W/(m2K) ({row.origin}), "
+        f"with the row's transmission adjustment factor {row.adjustment_factor:g}"
     )
+    if block.u_value_in_watt_per_m2_per_kelvin is not None:
+        state.write(
+            Targets.BUILDING,
+            Targets.element_u_value(element),
+            block.u_value_in_watt_per_m2_per_kelvin,
+            source=u_path,
+            note=Translator.ADJUSTMENT_NOTE,
+        )
+        note = f"{layer_note}; {Translator.ADJUSTMENT_NOTE}" if layer_note else Translator.ADJUSTMENT_NOTE
+        if state.present(u_path):
+            state.report.used(u_path, u_target, value=block.u_value_in_watt_per_m2_per_kelvin, note=note)
+        else:
+            written = layer_note if layer_note else "a measure of the package wrote it"
+            state.report.defaulted(
+                u_path,
+                block.u_value_in_watt_per_m2_per_kelvin,
+                note=(
+                    f"absent from the request, where the Building would keep {row_note}; {written}; "
+                    f"{Translator.ADJUSTMENT_NOTE}"
+                ),
+                target=u_target,
+            )
+    else:
+        state.report.defaulted(
+            u_path,
+            row.u_value_in_watt_per_m2_per_kelvin,
+            note=f"absent from the request; the Building keeps {row_note}",
+            target=Targets.describe_constructor(Targets.BUILDING, "for_tabula_code", "building_code"),
+        )
     area_path = f"house.building.{element.value}.area_in_m2"
     if block.area_in_m2 is not None:
         state.write(

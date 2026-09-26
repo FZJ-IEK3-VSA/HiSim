@@ -10,7 +10,7 @@ something the translator does not do::
 
 The probe set is data, not a loop (:class:`ProbeSet`), so the verification harness can reuse it.
 It is the anchor -- the vendored mockup with an empty package -- plus the bare baseline with
-every optional block absent, plus one probe per optional block present alone, one per measure,
+every optional block and every element U-value absent, plus one probe per optional block present alone, one per measure,
 one per enum value of every option, one per boundary of every free numeric option, and one per
 value of every settable leaf of the request schema -- the inventory, the location, the applicant
 and a measure's cost band, each enum value, both booleans and both ends of a range -- plus the
@@ -60,6 +60,7 @@ from hisim.renovisor.request import (
     SemanticChecks,
     ValueType,
 )
+from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.translate import TranslatedSystem, Translator
 from hisim.renovisor.vocabulary import ReportStatus
 from hisim.renovisor.whitelist import Whitelist
@@ -92,7 +93,8 @@ class ProbeKind(str, Enum):
     """What one probe is for, which decides what its result is aggregated into.
 
     ``ANCHOR`` and ``BARE`` prove the two ends of the sparseness rule: a request with a package
-    and a request with nothing optional in it at all. ``BLOCK`` turns one optional block on;
+    and a request with nothing optional in it at all -- no optional block, no roof shape and no
+    element U-value. ``BLOCK`` turns one optional block on;
     ``MEASURE`` applies one measure; ``OPTION`` varies one option of one measure; ``FIELD``
     varies one leaf of the request -- an inventory field, the country, an applicant answer or a
     bound of a measure's cost band; ``PAIR`` changes two things at once, which the conditional
@@ -563,6 +565,11 @@ class ProbeSet:
     #: The prefix a probe's subject carries in front of an inventory path.
     HOUSE_PREFIX: ClassVar[str] = "house."
 
+    #: The five envelope elements, each of whose U-value the bare probe leaves out: since the retrofit
+    #: status (calculation-request §3.4) an element the request does not describe takes the TABULA
+    #: row's, and that default is part of what "nothing optional" means.
+    ELEMENTS: ClassVar[Tuple[str, ...]] = ("roof", "facade", "floor", "window", "door")
+
     #: The optional blocks a request may carry, each with the smallest body the schema accepts.
     BLOCKS: ClassVar[Dict[str, Dict[str, Any]]] = {
         "hot_water": {"supply": "together_with_heating_system"},
@@ -801,8 +808,9 @@ class ProbeSet:
             "(the request schema's inclusive bounds) or ProbeSet.OPTION_PROBE_POINTS"
         )
 
-    #: The two-change probes the conditional entries of the list need, as
-    #: ``name -> (house changes, package)``.
+    #: The two-change probes the conditional entries of the list and the combinations the translator
+    #: treats differently need, as ``name -> (house changes, package)``. A package entry without
+    #: ``options`` stands for the measure's smallest package (:meth:`package`).
     PAIRS: ClassVar[Dict[str, Tuple[Dict[str, Any], Optional[List[Dict[str, Any]]]]]] = {
         "pair:solar_thermal_on_oil": (
             {"heating.type_of_system": "conventional_oil_heating",
@@ -833,6 +841,19 @@ class ProbeSet:
             [{"id": "hot_water_system", "options": {"supply": "separate_heat_pump"}}],
         ),
         "pair:postcode": ({}, None),  # the location half is added in :meth:`build`
+        # retrofit_status in a band without the variant it selects: Irish detached houses of 2011-
+        # (IE.N.SFH.10) have no 002, so usual_refurb falls back to 001, approximated (§5.3 step 3).
+        # The anchor's band has all three, so the field probes never meet the fallback.
+        "pair:usual_refurb_in_a_band_without_its_variant": (
+            {"building.construction_year": 2015, "building.retrofit_status": "usual_refurb"},
+            None,
+        ),
+        # An insulation layer on an element the request gives no U-value: U_existing is the TABULA
+        # row's (§4.3), which no single-change probe reaches, since the anchor states every U-value.
+        "pair:external_insulation_on_a_facade_without_u_value": (
+            {"building.facade.u_value_in_watt_per_m2_per_kelvin": None},
+            [{"id": "external_insulation"}],
+        ),
         # A cost block on a measure HiSim prices from its own cost database, which is read on an
         # envelope measure only; the band is the mockup's own.
         "pair:cost_on_heating_system": (
@@ -900,7 +921,11 @@ class ProbeSet:
             Probe(
                 name="bare",
                 kind=ProbeKind.BARE,
-                house={"building.roof.shape": None, **{block: None for block in cls.BLOCKS}},
+                house={
+                    "building.roof.shape": None,
+                    **{f"building.{element}.u_value_in_watt_per_m2_per_kelvin": None for element in cls.ELEMENTS},
+                    **{block: None for block in cls.BLOCKS},
+                },
             ),
         ]
         for block, body in cls.BLOCKS.items():
@@ -916,7 +941,11 @@ class ProbeSet:
                     name=name,
                     kind=ProbeKind.PAIR,
                     house=dict(house),
-                    measures=measures,
+                    # An entry without options is the measure's smallest package (:meth:`package`),
+                    # which a table cannot spell where a material object is required.
+                    measures=None if measures is None else [
+                        entry if "options" in entry else cls.package(str(entry["id"])) for entry in measures
+                    ],
                     location={"postcode": cls.POSTCODE} if name == "pair:postcode" else {},
                     subject="location.postcode" if name == "pair:postcode" else None,
                 )
@@ -1314,7 +1343,12 @@ class ProbeRunner:
         """
         self._whitelist.forget_hits()
         request = Request.parse(document)
-        applied = apply(request.document["house"], request.measures, self._whitelist)
+        applied = apply(
+            request.document["house"],
+            request.measures,
+            self._whitelist,
+            archetype=ArchetypeEnvelope.for_request(request),
+        )
         return self._translator.translate(request, applied)
 
     def _one(self, probe: Probe, anchor: Mapping[str, Any]) -> ProbeResult:

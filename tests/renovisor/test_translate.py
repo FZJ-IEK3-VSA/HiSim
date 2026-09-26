@@ -24,8 +24,9 @@ from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, Roof
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import Request
+from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.translate import BaseFiles, Targets, TranslatedSystem, Translator
-from hisim.renovisor.vocabulary import HeatGenerator, ReportStatus
+from hisim.renovisor.vocabulary import HeatGenerator, ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import Whitelist
 
 BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
@@ -35,7 +36,9 @@ def translate(document: Mapping[str, Any]) -> TranslatedSystem:
     """Validate, apply and translate one request document."""
     whitelist = Whitelist.load()
     request = Request.parse(copy.deepcopy(dict(document)))
-    applied = apply(request.document["house"], request.measures, whitelist)
+    applied = apply(
+        request.document["house"], request.measures, whitelist, archetype=ArchetypeEnvelope.for_request(request)
+    )
     return Translator(BASE_FILES, whitelist).translate(request, applied)
 
 
@@ -519,6 +522,166 @@ class TestAValueThatSelectsNothingIsNotUsed:
         line = system.report.line("house.hot_water.supply")
         assert line is not None and line.status is ReportStatus.APPROXIMATED
         assert line.note == SelectsNothing.HOT_WATER_SEPARATE_HEAT_PUMP
+
+
+#: The five elements, by their request names.
+ELEMENTS = tuple(element.value for element in ThermalElement)
+
+#: The U-value config field of each element on the ``Building``.
+U_FIELDS = {element: f"{element}_u_value_in_watt_per_m2_per_kelvin" for element in ELEMENTS}
+
+
+def undescribed(**house: Any) -> Dict[str, Any]:
+    """Return the mockup's baseline with every element U-value removed and the given paths set.
+
+    The Irish detached house of 1975 whose household knows nothing about its walls: the case
+    ``retrofit_status`` exists for (calculation-request §3.4).
+    """
+    document = baseline(**house)
+    for element in ELEMENTS:
+        document["house"]["building"][element].pop("u_value_in_watt_per_m2_per_kelvin", None)
+    return document
+
+
+def realized_building(system: TranslatedSystem) -> Any:
+    """Return the ``BuildingInformation`` the run would build from a translated file, without simulating.
+
+    The loader's group expansion, class binding and sizing kernel resolve the Building's config
+    (:class:`hisim.renovisor.economics.RealizedTwin`), and the Building derives its envelope from it.
+    """
+    from hisim.components.building import BuildingInformation  # pylint: disable=import-outside-toplevel
+    from hisim.renovisor.economics import RealizedTwin  # pylint: disable=import-outside-toplevel
+
+    twin = RealizedTwin.of(system.model)
+    config = next(config for _, class_name, config in twin.components if class_name == "Building")
+    return BuildingInformation(config)
+
+
+@pytest.mark.base
+class TestTheRetrofitStatus:
+    """``building.retrofit_status`` selects the TABULA variant, a whole row (§3.4, §5.3, !24 and !25)."""
+
+    STATES = ("unrenovated", "usual_refurb", "advanced_refurb")
+
+    def test_three_states_give_three_envelopes_that_fall_from_unrenovated_to_advanced(self) -> None:
+        """The spec's done-when: the translated Building points at the variant, and its U-values fall."""
+        systems = [translate(undescribed(building__retrofit_status=state)) for state in self.STATES]
+
+        codes = [constructor_of(system, Targets.BUILDING)["building_code"] for system in systems]  # type: ignore[index]
+        assert codes == [f"IE.N.SFH.05.Gen.ReEx.001.{variant}" for variant in ("001", "002", "003")]
+        for system in systems:
+            config = config_of(system, Targets.BUILDING)
+            assert not set(U_FIELDS.values()) & set(config), "an undescribed element leaves its field unset"
+        buildings = [realized_building(system) for system in systems]
+        for element in ("facade", "roof", "window"):
+            values = [getattr(building, U_FIELDS[element]) for building in buildings]
+            assert values[0] > values[1] >= values[2], (element, values)
+        conductances = [building.heat_conductance_ventilation_in_watt_per_kelvin for building in buildings]
+        assert conductances[0] > conductances[1] > conductances[2]
+
+    @pytest.mark.parametrize("state, variant", [("usual_refurb", "002"), ("advanced_refurb", "003")])
+    def test_an_undescribed_element_is_defaulted_to_the_variants_u_value(self, state: str, variant: str) -> None:
+        """The line names the value the Building uses, and the row it came from."""
+        system = translate(undescribed(building__retrofit_status=state))
+        building = realized_building(system)
+
+        for element in ELEMENTS:
+            line = system.report.line(f"house.building.{element}.u_value_in_watt_per_m2_per_kelvin")
+            assert line is not None and line.status is ReportStatus.DEFAULTED, element
+            assert line.value == pytest.approx(getattr(building, U_FIELDS[element])), element
+            assert f"IE.N.SFH.05.Gen.ReEx.001.{variant}" in str(line.note), element
+
+    def test_an_undescribed_door_reports_the_estimated_door_not_the_rows_zero(self) -> None:
+        """``IE.N.SFH.05`` states a door U-value of 0; the Building's estimate is what is reported."""
+        system = translate(undescribed())
+
+        line = system.report.line("house.building.door.u_value_in_watt_per_m2_per_kelvin")
+        assert line is not None and line.status is ReportStatus.DEFAULTED
+        assert line.value > 0
+        assert line.value == pytest.approx(realized_building(system).door_u_value_in_watt_per_m2_per_kelvin)
+        assert "mean U_Actual_Door_1" in str(line.note)
+
+    def test_stated_u_values_override_the_variant_but_the_row_still_changes_the_house(self) -> None:
+        """Every U-value stated: the config carries them whatever the variant, and the code and the air change."""
+        unrenovated = translate(baseline())
+        advanced = translate(baseline(building__retrofit_status="advanced_refurb"))
+
+        assert constructor_of(advanced, Targets.BUILDING)["building_code"].endswith(".003")  # type: ignore[index]
+        for element in ELEMENTS:
+            field = U_FIELDS[element]
+            assert config_of(advanced, Targets.BUILDING)[field] == config_of(unrenovated, Targets.BUILDING)[field]
+        line = advanced.report.line("house.building.retrofit_status")
+        assert line is not None and line.status is ReportStatus.USED
+        assert "variant 003" in str(line.note)
+        assert "air infiltration 0.1 1/h" in str(line.note)
+        assert "thermal-bridge surcharge 0.1 W/(m2K)" in str(line.note)
+        before, after = realized_building(unrenovated), realized_building(advanced)
+        assert after.facade_u_value_in_watt_per_m2_per_kelvin == before.facade_u_value_in_watt_per_m2_per_kelvin
+        assert (
+            after.heat_conductance_ventilation_in_watt_per_kelvin
+            < before.heat_conductance_ventilation_in_watt_per_kelvin
+        )
+
+    def test_an_absent_status_is_reported_defaulted_with_the_rows_infiltration(self) -> None:
+        """Absent: unrenovated, variant 001, and the row's two numbers named."""
+        line = translate(baseline()).report.line("house.building.retrofit_status")
+
+        assert line is not None and line.status is ReportStatus.DEFAULTED
+        assert line.value == "unrenovated"
+        assert "variant 001" in str(line.note)
+        assert "air infiltration 0.4 1/h" in str(line.note)
+        assert "thermal-bridge surcharge 0.15 W/(m2K)" in str(line.note)
+
+    def test_an_absent_status_keeps_the_codes_own_variant(self) -> None:
+        """An expert code without a status: its own variant stands, and the line says so."""
+        system = translate(baseline(building__tabula_building_code="IE.N.SFH.05.Gen.ReEx.001.002"))
+
+        line = system.report.line("house.building.retrofit_status")
+        assert line is not None and line.status is ReportStatus.DEFAULTED
+        assert line.value == "usual_refurb"
+        assert "own variant 002" in str(line.note)
+
+    def test_a_band_without_the_variant_falls_back_to_the_existing_state_approximated(self) -> None:
+        """An Irish detached house of 2015 has no 002: 001, approximated, with the gap named."""
+        system = translate(undescribed(building__construction_year=2015, building__retrofit_status="usual_refurb"))
+
+        code = constructor_of(system, Targets.BUILDING)["building_code"]  # type: ignore[index]
+        assert code == "IE.N.SFH.10.Gen.ReEx.001.001"
+        line = system.report.line("house.building.retrofit_status")
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert "no variant 002 (usual_refurb)" in str(line.note)
+        year = system.report.line("house.building.construction_year")
+        assert year is not None and year.status is ReportStatus.USED
+
+    def test_insulation_on_an_undescribed_facade_starts_from_the_variants_u_value(self) -> None:
+        """§4.3's U_existing is the row's: 0.32 W/(m2K) for IE.N.SFH.05's variant 002, by hand.
+
+        120 mm of EPS at 0.0355 W/mK: 1 / (1/0.32 + 0.12/0.0355) = 1 / (3.125 + 3.380282) = 0.153721.
+        """
+        document = undescribed(building__retrofit_status="usual_refurb")
+        document["measures"] = [
+            measure for measure in ContractFiles.request_mockup()["measures"] if measure["id"] == "external_insulation"
+        ]
+
+        system = translate(document)
+
+        facade = config_of(system, Targets.BUILDING)[U_FIELDS["facade"]]
+        assert facade == pytest.approx(1 / (1 / 0.32 + 0.12 / 0.0355))
+        assert facade == pytest.approx(0.153721, abs=1e-6)
+        line = system.report.line("house.building.facade.u_value_in_watt_per_m2_per_kelvin")
+        assert line is not None and line.status is ReportStatus.DEFAULTED
+        assert "not in the request: TABULA IE.N.SFH.05.Gen.ReEx.001.002" in str(line.note)
+        assert "fixes its transmission adjustment factor" in str(line.note)
+
+    def test_every_leaf_of_an_undescribed_house_is_accounted_for(self) -> None:
+        """No U-value in, a line for every element out."""
+        document = undescribed(building__retrofit_status="advanced_refurb")
+
+        system = translate(document)
+
+        system.report.assert_complete(document)
+        for element in ELEMENTS:
+            assert system.report.has(f"house.building.{element}.u_value_in_watt_per_m2_per_kelvin")
 
 
 @pytest.mark.base

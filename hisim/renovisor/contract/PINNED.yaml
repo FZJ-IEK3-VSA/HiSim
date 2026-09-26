@@ -1,7 +1,7 @@
 # Written by `python -m hisim.renovisor.contract.refresh`; do not edit by hand.
 # Records which repository revision each vendored file was copied from and the
 # SHA-256 it had; tests/renovisor/test_contract.py recomputes the hashes.
-refreshed_at: '2026-09-26T10:15:22+00:00'
+refreshed_at: '2026-09-26T19:11:37+00:00'
 files:
   measures.yaml:
     repository: https://github.com/climatemedia/renovisor-api-contract
@@ -21,20 +21,20 @@ files:
     repository: https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues
     ref: origin/main
     path: specs/calculation-request.schema.json
-    commit: cc54813f141ce467928190ce45de4d98ed1633a7
-    commit_date: '2026-09-25T18:18:18Z'
-    sha256: 45cca3b57643b46475a6b0992500441a6bcd4a82bf10ce35763ed24af65aeeff
+    commit: 31bbff5ced52e4a4c28365649c815e5959cba55c
+    commit_date: '2026-09-26T18:59:23Z'
+    sha256: 0c310538f28ec0ec3ff52fd89a5afe505ea0c84742af7f5a808bb8ee1e83eafb
   calculation-request.mockup-1.yaml:
     repository: https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues
     ref: origin/main
     path: specs/calculation-request.mockup-1.yaml
-    commit: cc54813f141ce467928190ce45de4d98ed1633a7
-    commit_date: '2026-09-25T18:18:18Z'
+    commit: 31bbff5ced52e4a4c28365649c815e5959cba55c
+    commit_date: '2026-09-26T18:59:23Z'
     sha256: 81e583524ecbe502ec2be8e9829fd8446dd46f84ffdbd7b0016a6b991c475a50
   measure-capabilities.openapi.yaml:
     repository: https://jugit.fz-juelich.de/iek-3/groups/urbanmodels/renovisorissues
     ref: origin/main
     path: specs/measure-capabilities.openapi.yaml
-    commit: cc54813f141ce467928190ce45de4d98ed1633a7
-    commit_date: '2026-09-25T18:18:18Z'
-    sha256: f2aca5d289c5f162945b0bb57299e4e9c4c276a8e5fb66881b88105d624f4c73
+    commit: 31bbff5ced52e4a4c28365649c815e5959cba55c
+    commit_date: '2026-09-26T18:59:23Z'
+    sha256: 6b618058e6f0c84bea1957cbaef939e97f08e5dad2bc054d1862774148399300

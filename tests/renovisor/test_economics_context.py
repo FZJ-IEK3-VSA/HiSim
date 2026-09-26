@@ -219,14 +219,41 @@ class TestTheRegister:
         """An IE gas boiler: 18 years, from the data rather than the fallback."""
         assert UnknownAge.service_life(ComponentType.GAS_HEATER, 2026, "IE") == (18.0, False)
 
-    def test_any_other_lookup_failure_propagates(self) -> None:
-        """Only a class with no entry falls back: no country data, or no entry valid yet, is an error."""
+    def test_a_class_priced_only_from_a_later_year_is_an_error(self) -> None:
+        """A country that has data but no entry valid yet is a fault of the data, not a fallback."""
         from hisim.economics.catalog_entries import CostDataError
 
-        with pytest.raises(CostDataError, match="No device cost data for country 'XX'"):
-            UnknownAge.service_life(ComponentType.GAS_HEATER, 2026, "XX")
         with pytest.raises(CostDataError, match="valid at 1990"):
             UnknownAge.service_life(ComponentType.GAS_HEATER, 1990, "IE")
+
+    def test_a_country_without_device_data_is_at_the_fallback_mid_life_and_says_so(self) -> None:
+        """NL has no ``devices_NL.json``: every class takes the fallback, and the note names the country.
+
+        The price basis year is the engine's for such a country, the simulation year, since
+        ``effective_price_basis_year`` has no earliest covered year to move to.
+        """
+        assert UnknownAge.service_life(ComponentType.GAS_HEATER, 2019, "NL") == (20.0, True)
+        assert UnknownAge.price_basis_year("NL") == 2019
+        year, note = UnknownAge.installation_year(ComponentType.GAS_HEATER, "NL", 1975)
+        # 2019 - round(20 / 2) = 2009.
+        assert year == 2009
+        assert "20 years, the engine's fallback: the cost database has no device data for NL" in note
+        assert "the simulation year, as the engine takes it for a country without device data" in note
+
+    def test_a_dutch_request_translates_and_its_register_says_why_it_is_dated_as_it_is(self) -> None:
+        """A regression of #832: an NL request failed to translate on the missing cost data."""
+        document = _mockup()
+        document["location"]["country"] = "NL"
+        del document["house"]["heating"]["installation_year"]
+        translated = _translated(document)
+
+        register = translated.economic_context.existing_assets
+        fabric = ComponentType.WALL_EXTERNAL_INSULATION
+        devices = [asset for asset in register.assets if asset.asset_class is not fabric]
+        assert devices and all(asset.installation_year == 2009 for asset in devices)
+        paths = ("economic_context.existing_assets.", "house.heating.installation_year")
+        dated = [line for line in translated.report.lines() if line.path.startswith(paths)]
+        assert dated and all("the cost database has no device data for NL" in (line.note or "") for line in dated)
 
     def test_an_undated_envelope_element_is_as_old_as_the_building(self) -> None:
         """The fabric is as old as the building unless the request says it was renewed."""

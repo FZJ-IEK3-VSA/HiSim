@@ -426,9 +426,15 @@ class UnknownAge:
     engine reads for the asset class at that year from the cost database -- the entry's
     ``service_life_in_years``, or the engine's fallback
     (:attr:`~hisim.economics.calculators.context_resolution.ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS`)
-    for a class the database has no entry for at all, which the mapping report then says. Any other
-    failure of the lookup -- a country without device data, a class priced only from a later year --
-    is an error of the data and propagates.
+    for a class the database has no entry for at all, which the mapping report then says. A country
+    the database has no device data for at all -- NL, which the request schema admits and the
+    capability document lists -- is the same case for every class: its assets take the fallback
+    too, at the price basis year the engine derives for such a country (the simulation year, as
+    :func:`~hisim.economics.evaluator.effective_price_basis_year` has no earlier year to move to),
+    and the note says that it is the country, not the class, the data lacks. That keeps such a
+    request translatable; whether it can be *priced* is the engine's question, not the
+    translator's. Any other failure of the lookup -- a class priced only from a later year in a
+    country that has data -- is an error of the data and propagates.
 
     The database read is the **shipped** one (``CostDatabase(None)``), which is the one every
     RenoVisor calculation is priced against: the translator has no other database to consult, and a
@@ -448,6 +454,15 @@ class UnknownAge:
         "the request states no installation year, so the asset is assumed to be at mid-life: the price "
         "basis year {basis} less half its service life of {life:g} years, the engine's fallback: the "
         "cost database has no entry for {asset_class}; never before the construction year {built}"
+    )
+
+    #: What it says when the country has no device data at all, so both the price basis year and
+    #: the service life are the engine's own choices for a country it cannot price from data.
+    NO_COUNTRY_DATA_NOTE: ClassVar[str] = (
+        "the request states no installation year, so the asset is assumed to be at mid-life: the price "
+        "basis year {basis} (the simulation year, as the engine takes it for a country without device "
+        "data) less half its service life of {life:g} years, the engine's fallback: the cost database "
+        "has no device data for {country}; never before the construction year {built}"
     )
 
     #: The shipped cost database, loaded once: it is immutable, and loading it is the expensive part.
@@ -476,14 +491,15 @@ class UnknownAge:
 
         Returns:
             ``(years, is_fallback)``: the entry's ``service_life_in_years`` and ``False``, or the
-            engine's fallback and ``True`` when the country's data has no entry for the class.
+            engine's fallback and ``True`` when the country's data has no entry for the class, or
+            when the country has no device data at all.
 
         Raises:
-            CostDataError: When the country has no device data at all, or when it prices the class
-                but not at ``year``: both are faults of the data, not an unknown class.
+            CostDataError: When the country prices the class but not at ``year``: a fault of the
+                data, not an unknown class.
         """
         database = cls.database()
-        if country in database.devices and not database.has_device_entry(asset_class, country):
+        if not database.has_device_entry(asset_class, country):
             return ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS, True
         return float(database.get_device_entry(asset_class, year, country).service_life_in_years), False
 
@@ -502,8 +518,13 @@ class UnknownAge:
         basis = cls.price_basis_year(country)
         life, is_fallback = cls.service_life(asset_class, basis, country)
         year = max(construction_year, basis - int(round(life / 2.0)))
-        note = cls.FALLBACK_NOTE if is_fallback else cls.NOTE
-        return year, note.format(basis=basis, life=life, built=construction_year, asset_class=asset_class.name)
+        if country not in cls.database().devices:
+            note = cls.NO_COUNTRY_DATA_NOTE
+        else:
+            note = cls.FALLBACK_NOTE if is_fallback else cls.NOTE
+        return year, note.format(
+            basis=basis, life=life, built=construction_year, asset_class=asset_class.name, country=country
+        )
 
 
 class DwellingTypes:

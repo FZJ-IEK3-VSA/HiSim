@@ -222,6 +222,9 @@ class Building(cp.Component):
         #: The produced solar-gain series, one value per timestep. ``None`` until the first
         #: simulated timestep fetches it; see :meth:`fetch_solar_heat_gains_through_windows`.
         self.solar_heat_gain_through_windows: Optional[List[float]] = None
+        #: Whether the first simulated timestep has checked the internal-heat-gain inputs yet; see
+        #: :meth:`warn_about_unconnected_internal_heat_gains`.
+        self.internal_heat_gain_inputs_checked: bool = False
 
         self.my_building_information = BuildingInformation(
             config=self.buildingconfig,
@@ -616,6 +619,9 @@ class Building(cp.Component):
 
         if self.solar_heat_gain_through_windows is None:
             self.solar_heat_gain_through_windows = self.fetch_solar_heat_gains_through_windows()
+        if not self.internal_heat_gain_inputs_checked:
+            self.warn_about_unconnected_internal_heat_gains()
+            self.internal_heat_gain_inputs_checked = True
 
         # Gets inputs
         internal_heat_gains_through_occupancy_in_watt = stsv.get_input_value(self.occupancy_heat_gain_channel)
@@ -799,11 +805,19 @@ class Building(cp.Component):
         self,
     ) -> None:
         """Prepare the simulation."""
-        # Warn when internal-heat-gain inputs are not connected.  These inputs
-        # are optional so that setups without an occupancy component (e.g. the
-        # simple air-conditioner household) can run, but silently defaulting the
-        # heat gains to 0 W changes the thermal balance.  A warning makes the
-        # omission visible without failing the simulation.
+
+    def warn_about_unconnected_internal_heat_gains(self) -> None:
+        """Warn about each internal-heat-gain input that the finished wiring left unconnected.
+
+        These inputs are optional so that setups without an occupancy component (e.g. the simple
+        air-conditioner household) can run, but silently defaulting the heat gains to 0 W changes
+        the thermal balance. A warning makes the omission visible without failing the simulation.
+
+        Called once, from the first simulated timestep, not from :meth:`i_prepare_simulation`: an
+        input's ``source_output`` is resolved by ``Simulator.connect_all_components``, which
+        ``run_all_timesteps`` calls only after every component has been prepared. At prepare time
+        every input still reads as unconnected, so a check there warned on every run, wired or not.
+        """
         if self.occupancy_heat_gain_channel.source_output is None:
             log.warning(
                 f"Building '{self.component_name}': the 'HeatingByResidents' input is not "

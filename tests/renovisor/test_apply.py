@@ -15,7 +15,7 @@ from typing import Any, Dict, Mapping, Set, Tuple
 
 import pytest
 
-from hisim.renovisor.apply import MeasureRegistry, apply
+from hisim.renovisor.apply import MeasureRegistry, SelectsNothing, apply
 from hisim.renovisor.capabilities import ProbeSet
 from hisim.renovisor.constants import BatteryLaw, LayerDefaults, OpeningUValues
 from hisim.renovisor.contract import ContractFiles
@@ -524,8 +524,12 @@ class TestReplacementsAndRemovals:
 class TestTheWhitelistIsAskedOfTheRenovatedHouse:
     """``when`` is evaluated after the package, not before it."""
 
-    def test_a_dhw_heat_pump_is_used_when_the_package_installs_a_heat_pump(self) -> None:
-        """The generator the request had is a gas boiler; the package makes it a heat pump."""
+    def test_a_dhw_heat_pump_is_the_space_heating_one_when_the_package_installs_a_heat_pump(self) -> None:
+        """The generator the request had is a gas boiler; the package makes it a heat pump.
+
+        The heat pump then makes the hot water too, which stands in for a separate one
+        (hisim-7hq9): the value is approximated with a substitution sentence, not used.
+        """
         applied = apply(
             anchor_house(),
             measures_of(
@@ -538,7 +542,10 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
         supply = next(
             option for option in applied.measures[1].options if option.name == "supply"
         )
-        assert supply.status is ReportStatus.USED
+        assert supply.status is ReportStatus.APPROXIMATED
+        assert supply.note == SelectsNothing.HOT_WATER_SEPARATE_HEAT_PUMP
+        assert "modelled as" in supply.note
+        assert applied.measures[1].status is ReportStatus.APPROXIMATED
 
     def test_the_same_measure_is_not_implemented_on_a_boiler_house(self) -> None:
         """No separate domestic-hot-water heat pump component exists for a boiler."""
@@ -551,6 +558,42 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
         supply = next(option for option in applied.measures[0].options if option.name == "supply")
         assert supply.status is ReportStatus.NOT_IMPLEMENTED_YET
         assert supply.note == "No separate domestic-hot-water heat pump component."
+
+    def test_the_supply_every_twin_simulates_selects_nothing(self) -> None:
+        """``together_with_heating_system`` is what every twin does anyway, so it is no ``used``."""
+        applied = apply(
+            anchor_house(),
+            measures_of({"id": "hot_water_system", "options": {"supply": "together_with_heating_system"}}),
+            whitelist(),
+        )
+
+        supply = next(option for option in applied.measures[0].options if option.name == "supply")
+        assert supply.status is ReportStatus.APPROXIMATED
+        assert supply.note == SelectsNothing.HOT_WATER_TOGETHER
+        assert "modelled as" not in supply.note
+
+    @pytest.mark.parametrize(
+        "supplies, status, note",
+        [
+            ("dhw_only", ReportStatus.APPROXIMATED, SelectsNothing.SOLAR_THERMAL_DHW_ONLY),
+            (
+                "dhw_and_space_heating",
+                ReportStatus.NOT_IMPLEMENTED_YET,
+                "The collector is wired to the hot-water storage only; modelled as dhw_only.",
+            ),
+        ],
+    )
+    def test_the_collectors_supplies_select_nothing(self, supplies: str, status: ReportStatus, note: str) -> None:
+        """Both solar-thermal twins feed the hot-water storage alone (hisim-l56w)."""
+        applied = apply(
+            anchor_house(),
+            measures_of({"id": "solar_thermal_system", "options": {"supplies": supplies}}),
+            whitelist(),
+        )
+
+        line = next(option for option in applied.measures[0].options if option.name == "supplies")
+        assert (line.status, line.note) == (status, note)
+        assert applied.measures[0].status is ReportStatus.APPROXIMATED
 
     def test_an_installation_year_is_recorded_and_carries_its_note(self) -> None:
         """Six measures have it and no HiSim parameter takes it."""

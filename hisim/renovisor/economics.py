@@ -603,6 +603,12 @@ class EconomicContextResult:
             tell an end-of-terrace house from a mid-terrace one. Published as ``approximated``
             lines of the mapping report, under paths of their own so that the request leaf they
             were derived from keeps the line it already has.
+        unread: One ``(request path, value, sentence)`` per *stated* leaf that no figure of this
+            calculation reads -- today an envelope element's installation year when no measure
+            replaces or insulates the element (hisim-glv7). The translator's early ``used`` line
+            for it (:meth:`EconomicContextBuilder.stated_leaves`) is replaced by an
+            ``approximated`` line with the sentence, which says where the value landed and when
+            it would matter.
     """
 
     context: EconomicContext
@@ -610,6 +616,7 @@ class EconomicContextResult:
     unpriced_subjects: List[str] = field(default_factory=list)
     defaults: List[Tuple[str, Any, str]] = field(default_factory=list)
     approximations: List[Tuple[str, Any, str]] = field(default_factory=list)
+    unread: List[Tuple[str, Any, str]] = field(default_factory=list)
 
 
 class EconomicContextBuilder:
@@ -764,6 +771,26 @@ class EconomicContextBuilder:
         "replacement price and the sunk-cost credit"
     )
 
+    #: The note a stated installation year of an envelope element carries when the element has a
+    #: register row but no measure of the package touches it. The engine reads an element's age
+    #: only for a replaced row (the sunk cost and the anyway-cost credit, cost_spec §4.1); a kept
+    #: envelope row matches no cost subject, because only a measure creates one.
+    ENVELOPE_YEAR_KEPT_NOTE: ClassVar[str] = (
+        "recorded as the installation year of this element's row of the existing-asset register, "
+        "but no measure of the package replaces or insulates the element, so no cost line reads "
+        "its age; it only matters once a measure touches the element, for the sunk cost and the "
+        "anyway-cost credit"
+    )
+
+    #: The note a stated installation year of an envelope element carries when the element has no
+    #: area anywhere, so the register has no row for the year to date.
+    ENVELOPE_YEAR_UNREGISTERED_NOTE: ClassVar[str] = (
+        "read by nothing: neither the translated building nor the request gives this element an "
+        "area, so the existing-asset register has no row for it; the year only matters for an "
+        "element with an area that a measure replaces or insulates, for the sunk cost and the "
+        "anyway-cost credit"
+    )
+
     #: The note a defaulted living area carries.
     LIVING_AREA_NOTE: ClassVar[str] = (
         "the request states no living area, so the conditioned floor area is used for the cost "
@@ -784,6 +811,14 @@ class EconomicContextBuilder:
     #: The note a stated applicant role carries.
     APPLICANT_ROLE_USED_NOTE: ClassVar[str] = (
         "who signs the funding application, which decides the programmes open to the applicant"
+    )
+
+    #: The note an omitted applicant role carries. The schema states the default (``Absent:
+    #: owner_occupier``) and the profile applies it, so it is the one ``applicant`` key whose
+    #: omission is a default rather than an unanswered question (hisim-p6uq).
+    APPLICANT_ROLE_DEFAULTED_NOTE: ClassVar[str] = (
+        "the request states no applicant role, so the applicant is taken to be the owner-occupier, "
+        "as the request schema defines it; the role decides the programmes open to the applicant"
     )
 
     #: The note every other stated applicant field carries.
@@ -1251,13 +1286,21 @@ class EconomicContextBuilder:
         have spent regardless; it comes from
         :class:`~hisim.renovisor.constants.AnywayShareByPlacement` and is well below one for a
         first-time improvement.
+
+        The row's installation year counts only for a replaced row: the engine reads the age of
+        the asset a measure replaces, and a kept envelope row matches no cost subject. A stated
+        year on an element no measure touches, or on one with no row, is recorded on
+        ``result.unread`` so the mapping report does not call it used (hisim-glv7).
         """
         assets = []
         for element in ThermalElement:
             area = self._element_area(element)
             if area is None:
+                self._record_unread_year(element, result, self.ENVELOPE_YEAR_UNREGISTERED_NOTE)
                 continue
             replaced, share = self._replacement_of(element)
+            if not replaced:
+                self._record_unread_year(element, result, self.ENVELOPE_YEAR_KEPT_NOTE)
             assets.append(
                 ExistingAsset(
                     asset_class=EnvelopeAssets.of_element(element),
@@ -1272,6 +1315,20 @@ class EconomicContextBuilder:
                 )
             )
         return assets
+
+    def _record_unread_year(
+        self, element: ThermalElement, result: Optional[EconomicContextResult], note: str
+    ) -> None:
+        """Record one envelope element's stated installation year as read by no figure.
+
+        An unstated year needs nothing here: the request carries no leaf for it, and a row that
+        exists already records its construction-year default.
+        """
+        year = self._stated_year(self._raw_element(element))
+        if result is not None and year is not None:
+            result.unread.append(
+                (f"house.building.{element.value}.{self.INSTALLATION_YEAR_KEY}", year, note)
+            )
 
     def _replacement_of(self, element: ThermalElement) -> Tuple[List[ComponentType], float]:
         """What supersedes one envelope element, and at what anyway share.
@@ -1491,7 +1548,9 @@ class EconomicContextBuilder:
         from that block exactly like the others and are never inferred from anything else. The
         block's ``role`` is mapped onto the profile's actor, which decides which programmes are
         open to the applicant at all; a block that names no role leaves the profile's default
-        (owner-occupier) standing, which is the engine's own assertion.
+        (owner-occupier) standing, which is the engine's own assertion and the schema's stated
+        default, and records a ``defaulted`` line for it (hisim-p6uq). No other key of the block
+        has a default: an omitted one is a question, not a value, and gets no line.
 
         The building half is what the request already states: the construction year, the floor
         area, one dwelling unit (the archetype every RenoVisor calculation simulates) and the
@@ -1517,6 +1576,14 @@ class EconomicContextBuilder:
         role = raw.get(self.APPLICANT_ROLE_KEY)
         if role is not None:
             profile.actor = ApplicantActor(str(role).upper())
+        else:
+            result.defaults.append(
+                (
+                    f"{self.APPLICANT_KEY}.{self.APPLICANT_ROLE_KEY}",
+                    profile.actor.value.lower(),
+                    self.APPLICANT_ROLE_DEFAULTED_NOTE,
+                )
+            )
         for name in self.APPLICANT_FIELDS:
             if name in raw:
                 setattr(profile, name, raw[name])

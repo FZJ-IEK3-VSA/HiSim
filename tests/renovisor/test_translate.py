@@ -19,7 +19,7 @@ from typing import Any, Dict, Mapping, Optional
 import pytest
 
 from hisim.energy_system.loader import load_energy_system
-from hisim.renovisor.apply import apply
+from hisim.renovisor.apply import SelectsNothing, apply
 from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, RoofDefaults, StorageDefaults
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.report import MappingReport
@@ -468,6 +468,60 @@ class TestTheHouseFieldsOfTheSharedSchemaAt882a8c1:
 
 
 @pytest.mark.base
+class TestAValueThatSelectsNothingIsNotUsed:
+    """hisim-7hq9 and hisim-l56w: a value the twin simulates whatever the request says is approximated.
+
+    Each of these leaves has one value that describes what every twin already simulates and
+    others that are on the list and run the same twin. So the value that agrees writes nothing
+    and selects nothing: its line is ``approximated``, with a sentence that is not a substitution,
+    and the file is the same whichever value the request carried.
+    """
+
+    CASES = [
+        ({"ventilation": {"type_of_system": "natural"}}, "house.ventilation.type_of_system",
+         {"ventilation": {"type_of_system": "mechanical_extract"}}),
+        ({"ventilation": {"air_tightness": "as_built"}}, "house.ventilation.air_tightness",
+         {"ventilation": {"air_tightness": "diy_sealed"}}),
+        ({"temperature_control": {"type_of_system": "traditional_thermostats"}},
+         "house.temperature_control.type_of_system",
+         {"temperature_control": {"type_of_system": "smart_heating_control_system"}}),
+        ({"hot_water": {"supply": "together_with_heating_system"}}, "house.hot_water.supply",
+         {"hot_water": {"supply": "separate_direct_electric"}}),
+        ({"solar_thermal_system": {"supplies": "dhw_only"}}, "house.solar_thermal_system.supplies",
+         {"solar_thermal_system": {"supplies": "dhw_and_space_heating"}}),
+        ({"solar_thermal_system": {"supplies": "dhw_only", "collector_type": "flat_plate"}},
+         "house.solar_thermal_system.collector_type",
+         {"solar_thermal_system": {"supplies": "dhw_only", "collector_type": "evacuated_tube"}}),
+    ]
+
+    @pytest.mark.parametrize("house, path, listed", CASES, ids=[case[1] for case in CASES])
+    def test_the_agreeing_value_is_approximated_and_the_file_does_not_move(
+        self, house: Dict[str, Any], path: str, listed: Dict[str, Any]
+    ) -> None:
+        """The agreeing value and a listed one translate to the same energy system."""
+        agreeing = translate(baseline(**house))
+        other = translate(baseline(**listed))
+
+        line = agreeing.report.line(path)
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert "selects nothing" in (line.note or "")
+        assert "modelled as" not in (line.note or "")
+        other_line = other.report.line(path)
+        assert other_line is not None and other_line.status is ReportStatus.NOT_IMPLEMENTED_YET
+        assert agreeing.model.components == other.model.components
+
+    def test_a_separate_heat_pump_on_a_heat_pump_house_is_the_space_heating_one(self) -> None:
+        """The heat pump makes the hot water too, which stands in for a separate one."""
+        system = translate(
+            baseline(heating__type_of_system="air_source_heat_pump", hot_water={"supply": "separate_heat_pump"})
+        )
+
+        line = system.report.line("house.hot_water.supply")
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert line.note == SelectsNothing.HOT_WATER_SEPARATE_HEAT_PUMP
+
+
+@pytest.mark.base
 class TestTheReportAccountsForTheRequest:
     """Every leaf exactly once, every default with its value, every note from the list."""
 
@@ -564,6 +618,43 @@ class TestTheEconomicsOnlyLeaves:
             assert line.status is ReportStatus.USED
             assert line.target == Translator.ECONOMICS_TARGET
             assert line.value == value
+
+    @pytest.mark.parametrize(
+        "element, measure, status",
+        [
+            ("facade", True, ReportStatus.USED),
+            ("facade", False, ReportStatus.APPROXIMATED),
+            ("roof", False, ReportStatus.APPROXIMATED),
+        ],
+    )
+    def test_an_envelope_year_is_used_only_where_a_measure_touches_the_element(
+        self, element: str, measure: bool, status: ReportStatus
+    ) -> None:
+        """hisim-glv7: the mockup insulates its facade (which has an area) and leaves its roof alone."""
+        document = copy.deepcopy(ContractFiles.request_mockup())
+        document["house"]["building"][element]["installation_year"] = 1995
+        if not measure:
+            document["measures"] = [m for m in document["measures"] if m["id"] != "external_insulation"]
+
+        line = translate(document).report.line(f"house.building.{element}.installation_year")
+
+        assert line is not None
+        assert line.status is status
+        assert line.value == 1995
+
+    def test_an_omitted_applicant_role_is_reported_defaulted(self) -> None:
+        """hisim-p6uq: the mockup names no role, and the schema's default is a line, not silence."""
+        system = translate(copy.deepcopy(ContractFiles.request_mockup()))
+
+        line = system.report.line("applicant.role")
+
+        assert line is not None
+        assert line.status is ReportStatus.DEFAULTED
+        assert line.value == "owner_occupier"
+        assert all(
+            system.report.line(f"applicant.{key}") is None
+            for key in ("taxable_household_income_in_euro", "household_size", "receives_means_tested_benefit")
+        )
 
     def test_an_envelope_measures_cost_block_is_used(self) -> None:
         """The mockup prices its facade layer: the band is read into the economic context."""

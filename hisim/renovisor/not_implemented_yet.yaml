@@ -7,7 +7,16 @@
 #            by `when` (a condition on the RENOVATED house). A path covers its own subtree.
 #   measure: a catalogue measure id, `id.option`, or `id.option=value`.
 #   note:    the sentence the mapping report and the capability document carry, verbatim.
-#   tracked: optional; the issue that would let the entry be deleted.
+#
+# and every entry says what becomes of it, with exactly one of two keys (the loader refuses an
+# entry with neither or both, hisim-bc02):
+#
+#   tracked:    the bead that would let the entry be deleted -- one id (`hisim-4g9.6`) or a list
+#               of them when one entry covers several features. A document that motivated the
+#               entry (challenges.md D-D, simulation_issues.md) goes in a comment, not here.
+#   deliberate: the reason, in one sentence for reviewers, why HiSim is not meant to act on the
+#               item: a leaf the model rightly reads elsewhere, or that no simulation or
+#               lifecycle figure takes. It is not published; the note is.
 #
 # The list can only shrink by someone implementing the item (T-NIY fails on an entry whose probes
 # report `used` or `approximated`) and can only grow by someone writing the sentence users read.
@@ -16,27 +25,35 @@
 
 - path: house.building.number_of_storeys
   note: The archetype's n_Storey is used.
+  tracked: hisim-9b0m
 
 - path: house.building.window.outside_shading
   note: No shading parameter on Building.
+  tracked: hisim-l77d
 
 - path: house.building.window.thermocover
   note: No window parameter for a removable cover on Building.
+  tracked: hisim-l77d
 
 - path: house.building.window.frame_material
   note: No frame parameter on Building; the U-value carries the whole window.
+  tracked: hisim-hxaj
 
 - path: house.building.window.glazing_panes
   note: No pane-count parameter on Building; the U-value carries the whole window.
+  tracked: hisim-hxaj
 
 - path: house.building.window.low_emissivity_coating
   note: No coating parameter on Building; the U-value carries the whole window.
+  tracked: hisim-hxaj
 
 - path: house.building.door.frame_material
   note: No frame parameter on Building; the U-value carries the whole door.
+  tracked: hisim-hxaj
 
 - path: house.building.door.glazing_panes
   note: No pane-count parameter on Building; the U-value carries the whole door.
+  tracked: hisim-hxaj
 
 # The `air_barrier` option of an insulation measure is listed under `measure:` below. There is
 # no `path:` entry for it: a request may not carry `added_insulation` at all (it is refused with
@@ -45,24 +62,28 @@
 
 # --- Occupancy: the MVP image ships one precomputed profile and no LoadProfileGenerator -------
 
+# Decision D-C (challenges.md): the image ships the precomputed CHR01 couple; hisim-epc.6 puts the
+# LoadProfileGenerator in it and takes residents, appliances and cars off this list.
 - path: house.occupancy.number_of_residents
   note: Every household is simulated as a working couple (CHR01) until the LoadProfileGenerator is in the image.
-  tracked: challenges.md D-C
+  tracked: hisim-epc.6
 
 - path: house.occupancy.home_office_days_per_week
   note: No LoadProfileGenerator parameter.
+  tracked: hisim-w9vg
 
+# Decision D-D (challenges.md): the twins have no group for these yet; each has its bead.
 - path: house.occupancy.pv_self_consumption_optimised
   note: No EMS-without-battery option in the recorded base files yet.
-  tracked: challenges.md D-D
+  tracked: hisim-epc.3
 
 - path: house.appliances.white_appliances
   note: The precomputed occupancy profile has a fixed appliance intensity.
-  tracked: challenges.md D-C
+  tracked: hisim-epc.6
 
 - path: house.electric_vehicles
   note: A car needs a computed driving profile; the image has no LoadProfileGenerator.
-  tracked: challenges.md D-C
+  tracked: [hisim-4g9.8, hisim-epc.6]
 
 # --- Heating --------------------------------------------------------------------------------
 
@@ -74,32 +95,37 @@
     - pellet_heating
     - woodchip_heating
     - district_heating
-    - hvo_heating
     - hydrogen_heating
     - conventional_gas_heating
     - conventional_oil_heating
     - condensing_gas_heating
     - condensing_oil_heating
     - solid_fuel_heating
-  note: No brine/water heat-pump preset, no hybrid twin and no LPG fuel in HiSim; modelled as the nearest implemented generator.
+  note: No brine/water heat-pump preset, no hybrid twin and no LPG or HVO fuel in HiSim; modelled as the nearest implemented generator.
+  tracked: [hisim-ztt7, hisim-epc.20, hisim-kdvg, hisim-epc.19]
 
 - path: house.heating.cooking_range
   note: No HiSim component for a range cooker.
+  tracked: hisim-6clg
 
 - path: house.heating.secondary
   note: No HiSim component for a secondary heater.
+  tracked: hisim-zrsv
 
 - path: house.heating.flow_temperature_in_celsius
   when: heating.type_of_system != air_source_heat_pump
   note: Boilers have no flow-temperature field.
+  tracked: hisim-4g9.4
 
 - path: house.heating.seasonal_efficiency_in_percent
   when: heating.type_of_system == air_source_heat_pump
   note: The heat pump follows its hplib model curve.
+  tracked: hisim-f79l
 
 - path: house.heat_distribution.type_of_system
   when: heating.type_of_system == electric_heating
   note: Electric heating has no heat distribution system.
+  tracked: hisim-mgsn
 
 # The emitter itself is modelled -- HiSim has a LOW_TEMPERATURE_RADIATOR member -- but the cost
 # database has no row for it, and an unpriced subject aborts the whole lifecycle evaluation
@@ -109,27 +135,29 @@
   except: [surface_heating, conventional_radiator]
   note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface
     heating (floor heating), the heat pump's other low-temperature emitter.
-  tracked: hisim/economics/adapter.py _hds_facts (no HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR row)
+  tracked: hisim-epc.1
 
 - path: house.hot_water.supply
   except: [together_with_heating_system]
   when: heating.type_of_system != air_source_heat_pump
   note: No separate domestic-hot-water heat pump or immersion component.
+  tracked: [hisim-lenz, hisim-epc.21]
 
 - path: house.hot_water.supply
   except: [together_with_heating_system, separate_heat_pump]
   note: No immersion-heater component.
+  tracked: hisim-epc.21
 
 - path: house.temperature_control.type_of_system
   except: [traditional_thermostats]
   note: No night-setback group in the recorded base files yet.
-  tracked: challenges.md D-D
+  tracked: hisim-epc.4
 
 # The whole block, its power and (since the shared schema of 2026-09-25) its installation_year:
 # neither the simulation nor the economics has an air-conditioner asset.
 - path: house.air_conditioning
   note: No air-conditioner group in the recorded base files yet.
-  tracked: challenges.md D-D
+  tracked: hisim-epc.5
 
 # --- Photovoltaics ------------------------------------------------------------------------------
 
@@ -137,37 +165,46 @@
 # measure copies its value into pv_system and is reported on its option line, the house's on its path.
 - path: house.pv_system.shading_losses_in_percent
   note: No shading-loss parameter on PVSystem; the array is simulated unshaded.
+  tracked: hisim-8ik8
 
 # --- Ventilation ------------------------------------------------------------------------------
+
+# simulation_issues.md item 8 is hisim-4g9.6: an infiltration rate (n50) and heat recovery on Building.
 
 - path: house.ventilation.type_of_system
   except: [natural]
   note: Ventilation is not configurable in HiSim; the Building reads the air-change rate from the TABULA row.
-  tracked: simulation_issues.md item 8
+  tracked: hisim-4g9.6
 
 - path: house.ventilation.air_tightness
   except: [as_built]
   note: No infiltration parameter on Building.
-  tracked: simulation_issues.md item 8
+  tracked: hisim-4g9.6
 
 # --- Solar thermal ----------------------------------------------------------------------------
 
 - path: house.solar_thermal_system
   when: heating.type_of_system not in [conventional_gas_heating, condensing_gas_heating, air_source_heat_pump]
   note: No recorded solar-thermal wiring for this generator; the collector is left out.
+  tracked: hisim-4g9.7
 
+# Both solar-thermal twins wire the collector into the hot-water storage alone and have no variant
+# for the space-heating buffer (hisim-l56w), so dhw_only is reported approximated, not used.
 - path: house.solar_thermal_system.supplies
   except: [dhw_only]
   note: The collector is wired to the hot-water storage only; modelled as dhw_only.
+  tracked: hisim-k02k
 
 - path: house.solar_thermal_system.collector_type
   except: [flat_plate]
   note: No evacuated-tube preset; modelled as flat_plate.
+  tracked: hisim-k1wd
 
 # --- Location -----------------------------------------------------------------------------------
 
 - path: location.postcode
   note: One weather station per country; the postcode is recorded and has no target.
+  tracked: hisim-ek1w
 
 # --- Measures -------------------------------------------------------------------------------
 
@@ -182,96 +219,127 @@
 
 - measure: heating_system.type_of_system=ground_source_heat_pump
   note: No brine/water preset; modelled as air_source_heat_pump.
+  tracked: hisim-ztt7
 
 - measure: heating_system.type_of_system=hybrid_heat_pump
   note: No hybrid twin; modelled as air_source_heat_pump.
+  tracked: hisim-epc.20
 
 - measure: heating_system.type_of_system=conventional_lpg_heating
   note: No LPG fuel in HiSim; modelled as gas.
+  tracked: hisim-kdvg
 
 - measure: heating_system.type_of_system=condensing_lpg_heating
   note: No LPG fuel in HiSim; modelled as gas.
+  tracked: hisim-kdvg
+
+# HVO runs the oil twin and is billed as heating oil (economics.py), as LPG runs as gas.
+- measure: heating_system.type_of_system=hvo_heating
+  note: No HVO fuel in HiSim; modelled as heating oil.
+  tracked: hisim-epc.19
 
 - measure: heating_installation.type_of_system=low_temperature_radiator
   note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface
     heating (floor heating), the heat pump's other low-temperature emitter.
-  tracked: hisim/economics/adapter.py _hds_facts (no HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR row)
+  tracked: hisim-epc.1
 
+# A measure's installation_year is dropped today. The catalogue describes existing equipment as a
+# stage-0 occurrence of its measure, so the year should date the register row of the asset the
+# measure describes (hisim-9mma, owner decision 2026-09-26; the frontend is asked how it uses them).
 - measure: heating_system.installation_year
   note: No HiSim parameter for the age of a new generator.
+  tracked: hisim-9mma
 
 - measure: ventilation_system.installation_year
   note: No HiSim parameter for the age of a new ventilation system.
+  tracked: hisim-9mma
 
 - measure: photovoltaic_system.installation_year
   note: No HiSim parameter for the age of a new array.
+  tracked: hisim-9mma
 
 # Contract 882a8c1 gave the measure the array's own figures; power, azimuth and tilt reach PVSystem,
 # the annual shading loss has no counterpart there (the PV model computes an unshaded array). The
 # house path of the same figure is listed under Photovoltaics above, with the same sentence.
 - measure: photovoltaic_system.shading_losses_in_percent
   note: No shading-loss parameter on PVSystem; the array is simulated unshaded.
+  tracked: hisim-8ik8
 
 - measure: battery_system.installation_year
   note: No HiSim parameter for the age of a new battery.
+  tracked: hisim-9mma
 
 - measure: solar_thermal_system.installation_year
   note: No HiSim parameter for the age of a new collector.
+  tracked: hisim-9mma
 
 - measure: window_replacement.frame_material
   note: No frame parameter on Building; the U-value carries the whole window.
+  tracked: hisim-hxaj
 
 - measure: door_replacement.frame_material
   note: No frame parameter on Building; the U-value carries the whole door.
+  tracked: hisim-hxaj
 
 - measure: suspended_ground_floor_insulation.air_barrier
   note: No HiSim parameter.
+  tracked: hisim-4g9.6
 
 - measure: hot_water_system.supply=separate_direct_electric
   note: No immersion-heater component.
+  tracked: hisim-epc.21
 
 - measure: hot_water_system.supply=separate_heat_pump
   when: heating.type_of_system != air_source_heat_pump
   note: No separate domestic-hot-water heat pump component.
+  tracked: hisim-lenz
 
 - measure: solar_thermal_system
   when: heating.type_of_system not in [conventional_gas_heating, condensing_gas_heating, air_source_heat_pump]
   note: No recorded solar-thermal wiring for this generator; the collector is left out.
+  tracked: hisim-4g9.7
+
+# The house path's twin, for the measure's own option (hisim-l56w).
+- measure: solar_thermal_system.supplies=dhw_and_space_heating
+  note: The collector is wired to the hot-water storage only; modelled as dhw_only.
+  tracked: hisim-k02k
 
 - measure: outside_shading
   note: No shading parameter on Building.
+  tracked: hisim-l77d
 
 - measure: ventilation_system
   note: Ventilation is not configurable in HiSim; the Building reads the air-change rate from the TABULA row.
-  tracked: simulation_issues.md item 8
+  tracked: hisim-4g9.6
 
 - measure: shallow_air_tightness_measures
   note: No infiltration parameter on Building.
-  tracked: simulation_issues.md item 8
+  tracked: hisim-4g9.6
 
 - measure: diy_sealing_of_air_leaks
   note: No infiltration parameter on Building.
-  tracked: simulation_issues.md item 8
+  tracked: hisim-4g9.6
 
 - measure: thermocover_for_the_windows
   note: No window parameter for a removable cover on Building.
+  tracked: hisim-l77d
 
 - measure: replace_white_appliances
   note: The precomputed occupancy profile has a fixed appliance intensity.
-  tracked: challenges.md D-C
+  tracked: hisim-epc.6
 
 - measure: electric_vehicle
   note: A car needs a computed driving profile; the image has no LoadProfileGenerator.
-  tracked: challenges.md D-C
+  tracked: [hisim-4g9.8, hisim-epc.6]
 
 - measure: temperature_control_system
   note: No night-setback group in the recorded base files yet.
-  tracked: challenges.md D-D
+  tracked: hisim-epc.4
 
 - measure: air_conditioners
   note: No air-conditioner group in the recorded base files yet.
-  tracked: challenges.md D-D
+  tracked: hisim-epc.5
 
 - measure: optimize_behaviour_for_self_consumption_of_pv
   note: No EMS-without-battery option in the recorded base files yet.
-  tracked: challenges.md D-D
+  tracked: hisim-epc.3

@@ -45,6 +45,7 @@ from hisim.renovisor.costs import CostField, CostSchema
 from hisim.renovisor.kpis import KpiField, KpiSchema
 from hisim.renovisor.request import CatalogueTable, ValueType
 from hisim.renovisor.vocabulary import Provenance, ReportStatus
+from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
 #: The tally of §4.2 as decision D-D leaves it. The frontend side's spec counted 16 / 9 / 7;
 #: `air_conditioners`, `temperature_control_system` and
@@ -53,7 +54,11 @@ from hisim.renovisor.vocabulary import Provenance, ReportStatus
 #: PR #10 (2026-09-22) then gave `cavity_wall_insulation`, `basement_internal_insulation` and
 #: `top_floor_ceiling_insulation` a `material` option: the translator stopped picking their
 #: material itself, and the three move from `approximated` to `supported` (15 / 7 became 18 / 4).
-EXPECTED_TALLY: Dict[str, int] = {"supported": 18, "approximated": 4, "not_implemented_yet": 10}
+#: hisim-7hq9 and hisim-l56w (2026-09-26) then reported `hot_water_system.supply` and
+#: `solar_thermal_system.supplies` honestly: every twin makes the hot water on its generator and
+#: feeds the collector into the hot-water storage alone, so no value of either option selects
+#: anything and both measures move from `supported` to `approximated` (18 / 4 became 16 / 6).
+EXPECTED_TALLY: Dict[str, int] = {"supported": 16, "approximated": 6, "not_implemented_yet": 10}
 
 #: The ten measures the list carries at measure level, which is what the tally above counts.
 EXPECTED_NOT_IMPLEMENTED = {
@@ -262,17 +267,60 @@ class TestTheListIsHonestInBothDirections:
             + ", ".join(document.unhit_entries())
         )
 
+    def test_every_entry_names_its_bead_or_why_it_has_none(self) -> None:
+        """hisim-bc02: an omission is written down with an owner or with a reason, never bare."""
+        entries = Whitelist.load().entries()
+
+        assert entries
+        for entry in entries:
+            assert bool(entry.tracked) != bool(entry.deliberate), entry.key()
+            assert all(Whitelist.BEAD_ID.match(bead) for bead in entry.tracked), entry.key()
+
+    @pytest.mark.parametrize(
+        "fate",
+        [
+            "",
+            "  tracked: hisim-4g9.6\n  deliberate: Never.\n",
+            "  tracked: simulation_issues.md item 8\n",
+            "  tracked: [hisim-4g9.6, challenges.md D-D]\n",
+        ],
+        ids=["neither", "both", "a document", "a list with a document"],
+    )
+    def test_an_entry_without_a_bead_or_a_reason_is_refused(self, tmp_path: Path, fate: str) -> None:
+        """The loader, not a reviewer, is what refuses an entry that says nothing of its fate."""
+        listed = tmp_path / "not_implemented_yet.yaml"
+        listed.write_text("- path: house.heating.cooking_range\n  note: No range cooker.\n" + fate, encoding="utf-8")
+
+        with pytest.raises(TranslatorError, match="cooking_range"):
+            Whitelist.load(listed)
+
+    def test_a_list_of_beads_is_read_as_one_entry_tracked_by_each(self, tmp_path: Path) -> None:
+        """One entry may cover several features, each with its own bead."""
+        listed = tmp_path / "not_implemented_yet.yaml"
+        listed.write_text(
+            "- path: house.heating.cooking_range\n  note: No range cooker.\n  tracked: [hisim-6clg, hisim-epc.4]\n",
+            encoding="utf-8",
+        )
+
+        assert Whitelist.load(listed).entries()[0].tracked == ("hisim-6clg", "hisim-epc.4")
+
     def test_no_probe_ends_in_a_translator_error(self, document: CapabilityDocument) -> None:
         """A probe that raised would have failed the build already; this says what that proves."""
         assert len(document.results) == document.body["translator"]["probes"]
 
     def test_an_excepted_value_is_not_noted(self, document: CapabilityDocument) -> None:
-        """A value in ``except`` is implemented, so it must not carry the entry's sentence."""
+        """A value in ``except`` is not on the list, so it must not carry the entry's sentence.
+
+        ``natural`` is what the TABULA air-change rate describes and selects nothing, so it is
+        approximated with its own sentence and no substitution (hisim-7hq9).
+        """
         fields = {entry["path"]: entry for entry in document.body["fields"]}
         ventilation = fields["house.ventilation.type_of_system"]
         natural = next(value for value in ventilation["values"] if value["value"] == "natural")
 
-        assert natural["status"] == ReportStatus.USED.value
+        assert natural["status"] == ReportStatus.APPROXIMATED.value
+        assert natural["substitution"] is False
+        assert "selects nothing" in natural["note"]
         assert "not configurable" not in str(natural.get("note", ""))
         mechanical = next(
             value for value in ventilation["values"] if value["value"] == "mechanical_extract"
@@ -396,6 +444,23 @@ class TestTheDocument:
         assert statuses["ground_source_heat_pump"]["substitution"] is True
         assert statuses["conventional_lpg_heating"]["substitution"] is True
         assert statuses["condensing_lpg_heating"]["substitution"] is True
+
+    def test_hvo_is_reported_as_lpg_is(self, document: CapabilityDocument) -> None:
+        """HVO runs the oil twin as heating oil: a listed stand-in on the measure and on the house (hisim-epc.19)."""
+        heating = next(
+            entry for entry in document.body["measures"] if entry["measure_id"] == "heating_system"
+        )
+        option = next(option for option in heating["options"] if option["name"] == "type_of_system")
+        values = {value["value"]: value for value in option["values"]}
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        house = {value["value"]: value for value in fields["house.heating.type_of_system"]["values"]}
+
+        for table in (values, house):
+            for fuel in ("hvo_heating", "conventional_lpg_heating"):
+                assert table[fuel]["status"] == ReportStatus.NOT_IMPLEMENTED_YET.value, fuel
+                assert table[fuel]["substitution"] is True, fuel
+        assert values["hvo_heating"]["note"] == "No HVO fuel in HiSim; modelled as heating oil."
+        assert "HVO" in house["hvo_heating"]["note"]
 
     def test_a_value_that_is_not_implemented_does_not_change_its_measures_status(
         self, document: CapabilityDocument

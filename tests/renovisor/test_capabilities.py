@@ -445,6 +445,23 @@ class TestTheDocument:
         assert statuses["conventional_lpg_heating"]["substitution"] is True
         assert statuses["condensing_lpg_heating"]["substitution"] is True
 
+    def test_hvo_is_reported_as_lpg_is(self, document: CapabilityDocument) -> None:
+        """HVO runs the oil twin as heating oil: a listed stand-in on the measure and on the house (hisim-epc.19)."""
+        heating = next(
+            entry for entry in document.body["measures"] if entry["measure_id"] == "heating_system"
+        )
+        option = next(option for option in heating["options"] if option["name"] == "type_of_system")
+        values = {value["value"]: value for value in option["values"]}
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        house = {value["value"]: value for value in fields["house.heating.type_of_system"]["values"]}
+
+        for table in (values, house):
+            for fuel in ("hvo_heating", "conventional_lpg_heating"):
+                assert table[fuel]["status"] == ReportStatus.NOT_IMPLEMENTED_YET.value, fuel
+                assert table[fuel]["substitution"] is True, fuel
+        assert values["hvo_heating"]["note"] == "No HVO fuel in HiSim; modelled as heating oil."
+        assert "HVO" in house["hvo_heating"]["note"]
+
     def test_a_value_that_is_not_implemented_does_not_change_its_measures_status(
         self, document: CapabilityDocument
     ) -> None:

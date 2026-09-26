@@ -1542,10 +1542,12 @@ def _heating(state: _TranslationState) -> None:
 
 
 def _generator_note(state: _TranslationState, generator: HeatGenerator) -> Optional[str]:
-    """Return why a generator is an approximation of its twin, or ``None`` when it is exact."""
+    """Return why a generator is an approximation of its twin, or ``None`` when it is exact.
+
+    HVO is not here: it runs the oil twin as heating oil, which ``not_implemented_yet.yaml`` says,
+    as it says for LPG running the gas twin (hisim-epc.19).
+    """
     del state
-    if generator is HeatGenerator.HVO_HEATING:
-        return "the oil twin burns heating oil; HVO has the same combustion model and a different CO2 factor"
     if generator in (HeatGenerator.BIOMASS_HEATING, HeatGenerator.SOLID_FUEL_HEATING):
         return "simulated on the pellet twin, which is the nearest recorded solid-fuel boiler"
     return None

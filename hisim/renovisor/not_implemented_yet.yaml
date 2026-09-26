@@ -95,15 +95,14 @@
     - pellet_heating
     - woodchip_heating
     - district_heating
-    - hvo_heating
     - hydrogen_heating
     - conventional_gas_heating
     - conventional_oil_heating
     - condensing_gas_heating
     - condensing_oil_heating
     - solid_fuel_heating
-  note: No brine/water heat-pump preset, no hybrid twin and no LPG fuel in HiSim; modelled as the nearest implemented generator.
-  tracked: [hisim-ztt7, hisim-epc.20, hisim-kdvg]
+  note: No brine/water heat-pump preset, no hybrid twin and no LPG or HVO fuel in HiSim; modelled as the nearest implemented generator.
+  tracked: [hisim-ztt7, hisim-epc.20, hisim-kdvg, hisim-epc.19]
 
 - path: house.heating.cooking_range
   note: No HiSim component for a range cooker.
@@ -235,6 +234,11 @@
 - measure: heating_system.type_of_system=condensing_lpg_heating
   note: No LPG fuel in HiSim; modelled as gas.
   tracked: hisim-kdvg
+
+# HVO runs the oil twin and is billed as heating oil (economics.py), as LPG runs as gas.
+- measure: heating_system.type_of_system=hvo_heating
+  note: No HVO fuel in HiSim; modelled as heating oil.
+  tracked: hisim-epc.19
 
 - measure: heating_installation.type_of_system=low_temperature_radiator
   note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface

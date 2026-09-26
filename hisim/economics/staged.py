@@ -52,7 +52,7 @@ from hisim.economics.calculators.investment import InvestmentDating
 from hisim.economics.calculators.reserve import replacement_reserve_amount
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
-from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs
+from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, effective_price_basis_year
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective, SubsidyMode
@@ -311,6 +311,10 @@ class StagedResult:
             (renovisorissues #52). Resolved by :meth:`StagedEvaluator.evaluate` for the same reason
             as the catalogue id; ``None`` for a result assembled by hand, whose document then
             echoes only what its parameters state.
+        plan_start_year: The calendar year of the plan's year 0, as the caller stated it, or
+            ``None`` when it stated none (renovisorissues #57). The document dates its years from
+            this alone — never from the stages' ``simulation_year``, which is the year of their
+            weather — and dates none of them without it.
     """
 
     reference: LifecycleCostResult
@@ -323,6 +327,7 @@ class StagedResult:
     stage_by_entry: Tuple[int, ...] = field(default_factory=tuple)
     subsidy_catalog_id: Optional[str] = None
     energy_echo: Optional[EnergyEcho] = None
+    plan_start_year: Optional[int] = None
 
     @property
     def ledger(self) -> Optional[ProvenanceLedger]:
@@ -452,6 +457,7 @@ class StagedEvaluator:
         parameters: EconomicParameters,
         perspective: Perspective,
         catalog: Optional[SubsidyCatalog] = None,
+        plan_start_year: Optional[int] = None,
     ) -> StagedResult:
         """Price one plan: evaluate every stage, splice the timelines, compare against stage 0.
 
@@ -471,6 +477,11 @@ class StagedEvaluator:
             catalog: The subsidy catalogue in force, or ``None`` for a plan priced with no
                 catalogue at all, where every scheme stays undetermined and the plan is priced
                 under :meth:`priced_under`'s ``subsidy_mode: NONE``.
+            plan_start_year: The calendar year the plan starts in, or ``None``. Recorded on the
+                result for the document's calendar years, and — when ``parameters`` states no
+                ``price_basis_year`` — the year the price basis falls back to instead of the
+                stages' simulation year
+                (:func:`~hisim.economics.evaluator.effective_price_basis_year`).
 
         Returns:
             The :class:`StagedResult`, carrying the id of ``catalog`` (:meth:`catalog_id`).
@@ -484,6 +495,15 @@ class StagedEvaluator:
         ordered = tuple(stages)
         parameters, perspective = self.priced_under(parameters, perspective, catalog)
         self._validate(ordered, parameters)
+        if parameters.price_basis_year is None and plan_start_year is not None:
+            # Resolved once, here, so every stage's evaluation reads the same basis year and the
+            # engine's own fallback to the simulation year never runs inside this plan.
+            parameters = replace(
+                parameters,
+                price_basis_year=effective_price_basis_year(
+                    parameters, self.database, ordered[0].inputs.simulation_year, plan_start_year
+                ),
+            )
         evaluator = EconomicEvaluator(self.database, parameters, catalog)
         price_basis_year = evaluator.price_basis_year(ordered[0].inputs)
         self._validate_stated_prices(ordered, parameters, price_basis_year)
@@ -521,6 +541,7 @@ class StagedEvaluator:
             stage_by_entry=spliced.stage_by_entry,
             subsidy_catalog_id=self.catalog_id(catalog, parameters.country),
             energy_echo=self._energy_echo(ordered, tuple(per_stage), parameters, price_basis_year),
+            plan_start_year=plan_start_year,
         )
 
     #: How a catalogue is named in the document: the country it applies to and the date the
@@ -652,8 +673,9 @@ class StagedEvaluator:
         """Refuse stages whose simulations describe different years or different periods.
 
         Two figures must agree across a plan or the splice puts incomparable numbers next to each
-        other: ``simulation_year``, because it anchors every calendar year the document prints and
-        every database lookup, and ``simulated_period_fraction``, because it is the divisor that
+        other: ``simulation_year``, because it is the year of the weather every stage's flows were
+        simulated with and the year the price basis falls back to when neither the parameters nor
+        a plan start year state one, and ``simulated_period_fraction``, because it is the divisor that
         turns a simulated period into a year. Everything else a stage carries is allowed to differ
         — that is what makes it a different state of the house.
 

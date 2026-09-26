@@ -303,13 +303,35 @@ class TestTheDocumentShape:
         assert stages[2]["job_id"] == "job-heat-pump"
         assert stages[2]["measures"] == ["heating_system"]
 
-    def test_every_year_knows_its_calendar_year_and_its_stage(self, document):
-        """Relative years plus one anchor: nothing downstream adds the simulation year itself."""
-        for row in document["plan"]["annual"]:
-            assert row["calendar_year"] == SyntheticPlan.YEAR + row["year"]
+    def test_every_year_knows_its_stage_and_no_calendar_year_without_a_start_year(self, document):
+        """A plan that names no start year dates nothing — least of all from its weather year.
+
+        The stages' ``simulation_year`` is the year of the weather they were simulated with; a
+        2026 plan dated from it put its payback in 2021 (renovisorissues #57).
+        """
+        assert document["parameters"]["plan_start_year"] is None
+        assert document["parameters"]["weather_year"] == SyntheticPlan.YEAR
+        for variant in ("reference", "plan"):
+            assert all(row["calendar_year"] is None for row in document[variant]["annual"])
         stages = {row["year"]: row["stage"] for row in document["plan"]["annual"]}
         assert stages[0] == 1
         assert stages[4] == 2
+
+    def test_a_start_year_dates_every_row_and_leaves_the_weather_year_alone(self, tmp_path, parameters, database):
+        """``calendar_year`` is ``plan_start_year + year`` on both evaluations; ``weather_year`` stays."""
+        perspective = brownfield_perspective()
+        start = SyntheticPlan.YEAR + 7
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0), heat_pump_stage(4)], parameters, perspective, plan_start_year=start
+        )
+        document = StagedDocument(result, parameters, perspective).write(tmp_path / "dated.json")
+        assert document["parameters"]["plan_start_year"] == start
+        assert document["parameters"]["weather_year"] == SyntheticPlan.YEAR
+        for variant in ("reference", "plan"):
+            assert [row["calendar_year"] for row in document[variant]["annual"]] == [
+                start + row["year"] for row in document[variant]["annual"]
+            ]
+        assert document["plan"]["annual"][0]["calendar_year"] == start
 
     def test_the_stage_start_of_a_later_stage_is_an_event(self, document):
         """Chart V9's timeline reads the markers rather than re-deriving them from the stages."""
@@ -424,23 +446,25 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_four(self, document):
-        """Version 4: the parameters block echoes the energy rates and prices used, with origins.
+    def test_the_document_states_schema_version_five(self, document):
+        """Version 5: ``weather_year`` and ``plan_start_year`` replace ``simulation_year`` (#57).
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
         the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
         version 3 (2026-09-26, hisim-fig7) adds the required ``investment_by_stage`` of every
         ``by_subject`` row; version 4 (2026-09-26, renovisorissues #52) changes what
         ``parameters.escalation.energy`` means — every carrier priced, not only the stated ones —
-        and requires ``parameters.energy_prices`` and ``parameters.origins``. A document of that
-        shape stating an older version would tell a consumer it could skip what the later
-        versions require.
+        and requires ``parameters.energy_prices`` and ``parameters.origins``; version 5
+        (2026-09-26, renovisorissues #57) renames ``parameters.simulation_year`` to
+        ``weather_year``, requires ``parameters.plan_start_year`` and dates ``annual[]`` from it
+        alone. A document of that shape stating an older version would tell a consumer it could
+        skip what the later versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 4
+        assert document["schema_version"] == 5
         StagedDocument.validate(document)
-        for older in (1, 2, 3):
+        for older in (1, 2, 3, 4):
             with pytest.raises(jsonschema.ValidationError):
                 StagedDocument.validate({**document, "schema_version": older})
 
@@ -468,6 +492,15 @@ class TestTheParametersBlock:
         from hisim.economics.staged_parameters import ParameterKeys
 
         assert set(document["parameters"]) == set(ParameterKeys.ACCEPTED)
+
+    def test_the_schema_no_longer_knows_simulation_year(self, document):
+        """Version 5 renamed it: a block still carrying ``simulation_year`` is an older format."""
+        import jsonschema
+
+        renamed = json.loads(json.dumps(document))
+        renamed["parameters"]["simulation_year"] = renamed["parameters"].pop("weather_year")
+        with pytest.raises(jsonschema.ValidationError):
+            StagedDocument.validate(renamed)
 
 
 class TestFinancing:

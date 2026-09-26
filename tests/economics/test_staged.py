@@ -21,7 +21,7 @@ import pytest
 from hisim.economics.calculators.energy import StatedPriceError, StatedPrices
 from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.database import CostDatabase
-from hisim.economics.evaluator import EconomicEvaluator
+from hisim.economics.evaluator import EconomicEvaluator, effective_price_basis_year
 from hisim.economics.facts import BillingDeterminants, ExistingAsset, ExistingAssetRegister
 from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
@@ -1231,3 +1231,74 @@ class TestStatedPricesAgainstTheCarbonPath:
             "parameters.energy_prices.NATURAL_GAS.working_price_in_euro_per_kwh.invalid"
         ]
         assert f"{carbon:.6g}" in caught.value.problems[0]["message"]
+
+
+class TestThePlanStartYear:
+    """The weather year and the plan's calendar are different things (renovisorissues #57).
+
+    The stages' ``simulation_year`` is the year of the weather they were simulated with. A plan
+    that states when it starts is dated and — when nothing states a price basis year — priced
+    from that year, never from its weather.
+    """
+
+    #: A weather year no price data covers, so a basis year re-derived from it would show.
+    WEATHER_YEAR = SyntheticPlan.YEAR + 6
+
+    @classmethod
+    def _stages(cls) -> List[Stage]:
+        """The baseline and a heat pump in year 3, simulated with the weather of another year."""
+        return [
+            replace(stage, inputs=replace(stage.inputs, simulation_year=cls.WEATHER_YEAR))
+            for stage in (baseline_stage(), heat_pump_stage(3))
+        ]
+
+    def test_the_basis_year_falls_back_to_the_plan_start_year(self, database, parameters):
+        """No ``price_basis_year`` stated: every evaluation of the plan prices at its start year."""
+        unstated = replace(parameters, price_basis_year=None)
+        result = StagedEvaluator(database).evaluate(
+            self._stages(), unstated, brownfield_perspective(), plan_start_year=SyntheticPlan.YEAR
+        )
+        assert result.plan_start_year == SyntheticPlan.YEAR
+        for evaluated in (result.reference, result.plan, *result.per_stage):
+            assert evaluated.parameters.price_basis_year == SyntheticPlan.YEAR
+            assert evaluated.simulation_year == self.WEATHER_YEAR
+
+    def test_a_stated_basis_year_wins_over_the_plan_start_year(self, database, parameters):
+        """The start year dates the plan; it does not overrule a basis year the caller named."""
+        result = StagedEvaluator(database).evaluate(
+            self._stages(), parameters, brownfield_perspective(), plan_start_year=SyntheticPlan.YEAR + 2
+        )
+        assert result.plan.parameters.price_basis_year == SyntheticPlan.YEAR
+        assert result.plan_start_year == SyntheticPlan.YEAR + 2
+
+    def test_without_a_start_year_the_result_states_none(self, database, parameters):
+        """Nothing is invented: no start year in, no start year out."""
+        result = StagedEvaluator(database).evaluate([baseline_stage()], parameters, brownfield_perspective())
+        assert result.plan_start_year is None
+
+    def test_the_policy_itself(self, database):
+        """Stated basis year, else the plan start year, else the simulation year; clamped to the data."""
+        unstated = EconomicParameters(country=SyntheticPlan.COUNTRY)
+        later = SyntheticPlan.YEAR + 6
+        assert effective_price_basis_year(unstated, database, later) == later
+        assert effective_price_basis_year(unstated, database, later, plan_start_year=later + 1) == later + 1
+        assert effective_price_basis_year(unstated, database, 1990, plan_start_year=later) == later
+        stated = replace(unstated, price_basis_year=SyntheticPlan.YEAR)
+        assert effective_price_basis_year(stated, database, later, plan_start_year=later + 1) == SyntheticPlan.YEAR
+
+    def test_a_start_year_before_the_data_moves_to_the_earliest_covered_year(self):
+        """The clamp the simulation year always had applies to the start year the same way."""
+
+        class _DataFrom2024(CostDatabase):
+            """A database whose device data begins in 2024; nothing else of it is read."""
+
+            def __init__(self) -> None:  # pylint: disable=super-init-not-called
+                """Skip loading any file: only :meth:`earliest_device_year` is asked."""
+
+            def earliest_device_year(self, country: str) -> Optional[int]:
+                """The first year the stub prices devices at."""
+                return 2024
+
+        unstated = EconomicParameters(country=SyntheticPlan.COUNTRY)
+        assert effective_price_basis_year(unstated, _DataFrom2024(), 2030, plan_start_year=2000) == 2024
+        assert effective_price_basis_year(unstated, _DataFrom2024(), 2030, plan_start_year=2026) == 2026

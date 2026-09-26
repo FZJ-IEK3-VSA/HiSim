@@ -25,7 +25,7 @@ from hisim.economics.subsidies import SubsidyCatalog
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import CatalogueTable
 from hisim.renovisor.run import Calculation, ExitCode
-from hisim.renovisor.simulation import Period
+from hisim.renovisor.simulation import Period, SimulationSetup
 
 pytestmark = pytest.mark.system_setups
 
@@ -158,6 +158,51 @@ def fixture_backend_document(runs, parameters_file) -> Dict[str, Any]:
         shutil.copyfile(job / "mapping_report.json", stage / "mapping_report.json")
         stages.append(f"{stage}:0:{'baseline' if index == 0 else 'package'}")
     return _price(stages, parameters_file, root / StagedDocument.FILE_NAME)
+
+
+class TestThePlanStartYear:
+    """The weather year and the plan's calendar are different things (renovisorissues #57).
+
+    The mockup's runs are simulated with the weather of :attr:`SimulationSetup.YEAR`. A plan the
+    reader starts in 2026 is dated from 2026, and the weather year is published under its own name.
+    """
+
+    START = 2026
+
+    @pytest.fixture(name="dated_document", scope="class")
+    def fixture_dated_document(self, runs) -> Dict[str, Any]:
+        """The same two-stage plan, priced with ``plan_start_year`` 2026 in its block."""
+        directory, baseline, package = runs
+        path = directory / "economics_dated.json"
+        path.write_text(json.dumps({**STAGED_PARAMETERS, "plan_start_year": self.START}), encoding="utf-8")
+        return _price(
+            [f"{baseline}:0:baseline", f"{package}:0:package"], path, directory / "dated" / StagedDocument.FILE_NAME
+        )
+
+    def test_the_first_row_is_the_start_year_and_the_weather_year_stays_the_weathers(
+        self, dated_document
+    ) -> None:
+        """Year 0 is 2026; ``weather_year`` is the year of the weather the runs used."""
+        StagedDocument.validate(dated_document)
+        assert SimulationSetup.YEAR != self.START
+        assert dated_document["parameters"]["plan_start_year"] == self.START
+        assert dated_document["parameters"]["weather_year"] == SimulationSetup.YEAR
+        for variant in ("reference", "plan"):
+            annual = dated_document[variant]["annual"]
+            assert annual[0]["calendar_year"] == self.START
+            assert [row["calendar_year"] for row in annual] == [self.START + row["year"] for row in annual]
+
+    def test_without_it_nothing_is_dated(self, document) -> None:
+        """No start year in the block, no calendar year in the document -- never the weather's."""
+        assert document["parameters"]["plan_start_year"] is None
+        assert document["parameters"]["weather_year"] == SimulationSetup.YEAR
+        assert all(row["calendar_year"] is None for row in document["plan"]["annual"])
+
+    def test_it_dates_the_money_and_does_not_change_it(self, dated_document, document) -> None:
+        """The stages state their price basis year, so the start year cannot re-base them."""
+        assert dated_document["parameters"]["price_basis_year"] == document["parameters"]["price_basis_year"]
+        assert dated_document["plan"]["totals"] == document["plan"]["totals"]
+        assert dated_document["comparison"] == document["comparison"]
 
 
 class TestTheEndToEndDocument:

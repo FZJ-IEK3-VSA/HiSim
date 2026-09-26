@@ -156,28 +156,51 @@ class _PriceBasisYearWarnings:
 
 
 def effective_price_basis_year(
-    parameters: EconomicParameters, database: CostDatabase, simulation_year: int
+    parameters: EconomicParameters,
+    database: CostDatabase,
+    simulation_year: int,
+    plan_start_year: Optional[int] = None,
 ) -> int:
     """The price basis year used for every database lookup (cost-spec-v2 §2.1, W1.2).
 
-    An explicit ``EconomicParameters.price_basis_year`` always wins. Otherwise the simulation
-    year is used, unless the shipped database starts later than the simulation year: the engine
-    itself is strict (§3.5: hard error on uncovered years), so the earliest covered year is
-    picked explicitly (with a warning) instead of reintroducing silent fallbacks.
+    An explicit ``EconomicParameters.price_basis_year`` always wins. Otherwise the year it falls
+    back to is ``plan_start_year`` when the caller states one, and the simulation year when it does
+    not; in either case, when the shipped database starts later than that year the earliest covered
+    year is picked explicitly (with a warning) instead, since the engine itself is strict (§3.5:
+    hard error on uncovered years) and a silent fallback is what this policy exists to avoid.
+
+    ``plan_start_year`` is the staged plan's (renovisorissues #57): the calendar year a plan
+    starts in is its economic "today", and the simulation year is the year of the stages' weather.
+    Only :class:`~hisim.economics.staged.StagedEvaluator` passes it. Every other path — the
+    postprocessing bridge, ``evaluate``/``report``/``explain``, an unstaged evaluation — keeps the
+    simulation year, which for HiSim today is also the weather year; separating the simulated
+    calendar year from the weather year is HiSim core's, not this function's.
 
     This policy lives downstream of `economic_inputs.json` so that the postprocessing bridge and
     the re-pricing CLI derive the same year from the same file (they used to differ).
+
+    Args:
+        parameters: The assumptions; their ``price_basis_year`` wins when it is set.
+        database: The cost database, for the earliest year it prices the country's devices at.
+        simulation_year: The ``simulation_year`` of the evaluated inputs.
+        plan_start_year: The calendar year a staged plan starts in, or None outside a staged plan
+            or when the plan names none.
+
+    Returns:
+        The price basis year.
     """
     if parameters.price_basis_year is not None:
         return parameters.price_basis_year
+    anchor = plan_start_year if plan_start_year is not None else simulation_year
     earliest = database.earliest_device_year(parameters.country)
-    if earliest is None or earliest <= simulation_year:
-        return simulation_year
-    key = (parameters.country, simulation_year, earliest)
+    if earliest is None or earliest <= anchor:
+        return anchor
+    key = (parameters.country, anchor, earliest)
     if key not in _PriceBasisYearWarnings.WARNED:
         _PriceBasisYearWarnings.WARNED.add(key)
+        which = "plan start year" if plan_start_year is not None else "simulation year"
         log.warning(
-            f"No device cost data valid at simulation year {simulation_year} for {parameters.country}; "
+            f"No device cost data valid at {which} {anchor} for {parameters.country}; "
             f"using price basis year {earliest} (earliest available). Set "
             "EconomicParameters.price_basis_year to override."
         )

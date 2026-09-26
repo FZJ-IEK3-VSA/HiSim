@@ -12,30 +12,50 @@ milliseconds, and nothing else.
 """
 
 import copy
+import dataclasses
+import json
 import os
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pytest
 
 from hisim.economics.carriers import EnergyCarrier
-from hisim.economics.facts import ExistingAssetRegister
+from hisim.economics.facts import ComponentCostFacts, ExistingAssetRegister
+from hisim.economics.serialization import subsidy_context_from_json, subsidy_context_to_json
+from hisim.economics.timeline import CostCategory
+from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.renovisor.apply import MeasureRegistry, apply
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.contract import ContractFiles
-from hisim.economics.subsidies import ApplicantActor, ApplicantProfile, DwellingType, SubsidyCatalog
+from hisim.economics.subsidies import (
+    ApplicantActor,
+    ApplicantProfile,
+    DwellingType,
+    EligibilityStatus,
+    MeasureForSubsidy,
+    SchemeAssessment,
+    SubsidyCatalog,
+    SubsidyContext,
+    SubsidyPackageContext,
+    assess_schemes,
+)
 from hisim.renovisor.economics import (
     DeviceAssets,
     DwellingTypes,
     EconomicContextBuilder,
     EnvelopeAssets,
     GeneratorAssets,
+    RealizedTwin,
+    TwinEquipment,
+    UnknownAge,
 )
 from hisim.renovisor.request import Request
 from hisim.renovisor.simulation import EconomicSetup, SubsidyCatalogue
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
-from hisim.renovisor.translate import Targets
+from hisim.renovisor.translate import Targets, Translator
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
 pytestmark = pytest.mark.base
@@ -149,17 +169,75 @@ class TestTheRegister:
         boiler = register.find(ComponentType.GAS_HEATER)
         assert boiler.installation_year == document["house"]["heating"]["installation_year"]
 
-    def test_an_undated_asset_is_as_old_as_the_building(self) -> None:
-        """A block that states no installation year falls back to the construction year."""
+    def test_an_undated_device_is_at_mid_life(self) -> None:
+        """Owner decision 2026-09-26: the price basis year less half the service life.
+
+        The expected year is typed in, from the shipped IE data, so a change to the rule or to the
+        data it reads fails here rather than moving both sides of the comparison at once; the
+        mapping report says why the year is what it is.
+        """
         document = _mockup()
         del document["house"]["heating"]["installation_year"]
         built = _built(document)
         boiler = built.context.existing_assets.find(ComponentType.GAS_HEATER)
-        assert boiler.installation_year == document["house"]["building"]["construction_year"]
+
+        # IE's price basis year is 2026 and a gas boiler lives 18 years: 2026 - round(18 / 2) = 2017.
+        assert boiler.installation_year == 2017
+        lines = {path: (value, note) for path, value, note in built.approximations}
+        assert lines["house.heating.installation_year"][0] == boiler.installation_year
+        assert "mid-life" in lines["house.heating.installation_year"][1]
+        assert all(path != "house.heating.installation_year" for path, _value, _note in built.defaults)
+
+    def test_an_undated_array_is_at_its_own_mid_life(self) -> None:
+        """The devices of ``DeviceAssets`` follow the same rule, with their own service life."""
+        document = _mockup()
+        document["house"]["pv_system"] = {"power_in_watt": 4000}
+        built = _built(document)
+        array = built.context.existing_assets.find(ComponentType.PV)
+        # An IE array lives 25 years: 2026 - round(25 / 2) = 2026 - 12 = 2014 (half to even).
+        assert array.installation_year == 2014
+        lines = {path: (value, note) for path, value, note in built.approximations}
+        assert lines["house.pv_system.installation_year"][0] == 2014
+        assert "25-year service life" in lines["house.pv_system.installation_year"][1]
+
+    def test_a_mid_life_year_is_never_before_the_house_was_built(self) -> None:
+        """A device of a house built last year is as old as the house, not older."""
+        document = _mockup()
+        del document["house"]["heating"]["installation_year"]
+        document["house"]["building"]["construction_year"] = 2024
+        boiler = _built(document).context.existing_assets.find(ComponentType.GAS_HEATER)
+        assert boiler.installation_year == 2024
+
+    def test_a_class_the_database_does_not_price_is_at_the_fallback_mid_life_and_says_so(self) -> None:
+        """AT has no ELECTRIC_HEATER entry: 20 years, the engine's fallback, named in the note."""
+        year, note = UnknownAge.installation_year(ComponentType.ELECTRIC_HEATER, "AT", 1975)
+        # AT's price basis year is 2025: 2025 - round(20 / 2) = 2015.
+        assert year == 2015
+        assert "20 years, the engine's fallback: the cost database has no entry for ELECTRIC_HEATER" in note
+
+    def test_a_priced_class_reads_its_service_life_from_the_database(self) -> None:
+        """An IE gas boiler: 18 years, from the data rather than the fallback."""
+        assert UnknownAge.service_life(ComponentType.GAS_HEATER, 2026, "IE") == (18.0, False)
+
+    def test_any_other_lookup_failure_propagates(self) -> None:
+        """Only a class with no entry falls back: no country data, or no entry valid yet, is an error."""
+        from hisim.economics.catalog_entries import CostDataError
+
+        with pytest.raises(CostDataError, match="No device cost data for country 'XX'"):
+            UnknownAge.service_life(ComponentType.GAS_HEATER, 2026, "XX")
+        with pytest.raises(CostDataError, match="valid at 1990"):
+            UnknownAge.service_life(ComponentType.GAS_HEATER, 1990, "IE")
+
+    def test_an_undated_envelope_element_is_as_old_as_the_building(self) -> None:
+        """The fabric is as old as the building unless the request says it was renewed."""
+        document = _mockup()
+        built = _built(document)
+        facade = built.context.existing_assets.find(ComponentType.WALL_EXTERNAL_INSULATION)
+        assert facade.installation_year == document["house"]["building"]["construction_year"]
         assert (
-            "house.heating.installation_year",
+            "house.building.facade.installation_year",
             document["house"]["building"]["construction_year"],
-        ) == built.defaults[0][:2]
+        ) in [(path, value) for path, value, _note in built.defaults]
 
     def test_a_stated_installation_year_wins_over_the_construction_year(self) -> None:
         """E-spec §7's additive field: read when present, defaulted to the construction year.
@@ -500,6 +578,122 @@ class TestTheSubsidyContext:
         assert "approximated" in paths[EconomicContextBuilder.DWELLING_TYPE_PATH]
 
 
+#: The starting generators the existing-heating cases run over: what each one is in the register
+#: and in the subsidy context, and whether Ireland's two heat-pump schemes that ask about it pay.
+STARTING_GENERATORS = [
+    (HeatGenerator.CONVENTIONAL_OIL_HEATING, ComponentType.OIL_HEATER, EnergyCarrier.HEATING_OIL, True),
+    (HeatGenerator.CONVENTIONAL_GAS_HEATING, ComponentType.GAS_HEATER, EnergyCarrier.NATURAL_GAS, True),
+    (HeatGenerator.AIR_SOURCE_HEAT_PUMP, ComponentType.HEAT_PUMP, EnergyCarrier.ELECTRICITY, False),
+]
+
+#: Ireland's heat-pump schemes that condition on the heating being replaced (renovisorissues #50).
+EXISTING_HEATING_SCHEMES = ("IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE", "IE_SEAI_RENEWABLE_HEAT_BONUS")
+
+
+def _with_generator(generator: HeatGenerator) -> Dict[str, Any]:
+    """The mockup, heated by ``generator`` before its package installs an air-source heat pump."""
+    document = _mockup()
+    document["house"]["heating"]["type_of_system"] = generator.value
+    return document
+
+
+def _heat_pump_assessments(context: SubsidyContext) -> Dict[str, SchemeAssessment]:
+    """Ireland's verdicts on the mockup's heat pump and its low-temperature radiators, by scheme.
+
+    The two measures are the candidates the two schemes of :data:`EXISTING_HEATING_SCHEMES` apply
+    to: the renewable heat bonus to a replacing heat pump, the central-heating grant to the heat
+    distribution system installed beside it. The costs are round numbers, since only the
+    eligibility half of the assessment is under test.
+
+    The evaluator states what the evaluation installs (``package.*``) and the central-heating
+    grant needs the heat pump among it; this assessment runs outside an evaluation, so the package
+    is stated here as the evaluator would state it for the two measures.
+    """
+    catalog = SubsidyCatalog.load("IE")
+    context = dataclasses.replace(
+        context,
+        package=SubsidyPackageContext(
+            installed_asset_classes=tuple(
+                sorted(
+                    (
+                        ComponentType.HEAT_PUMP.value,
+                        ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR.value,
+                    )
+                )
+            )
+        ),
+    )
+    measures = [
+        (ComponentType.HEAT_PUMP, Units.KILOWATT, "REPLACE"),
+        (ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR, Units.SQUARE_METER, "INSTALL"),
+    ]
+    assessments: Dict[str, SchemeAssessment] = {}
+    for asset_class, size_unit, kind in measures:
+        measure = MeasureForSubsidy(
+            subject=asset_class.value,
+            facts=ComponentCostFacts(asset_class=asset_class, size=10.0, size_unit=size_unit),
+            measure_kind=kind,
+            cost_by_category={CostCategory.INVESTMENT: UncertainValue.exact(10000.0)},
+        )
+        for assessment in assess_schemes(catalog, measure, context, year=2026):
+            assessments[assessment.scheme.id] = assessment
+    return assessments
+
+
+class TestTheExistingHeating:
+    """The generator the package replaces answers the subsidy questions about it (renovisorissues #50).
+
+    The request states what heats the house in ``house.heating.type_of_system``; the register
+    already knew it, and the subsidy context now carries the same entry, so the heat-pump grants
+    that ask what is being replaced no longer come back undetermined.
+    """
+
+    @pytest.mark.parametrize("generator, asset_class, carrier, _pays", STARTING_GENERATORS)
+    def test_the_context_carries_the_original_generator(
+        self, generator: HeatGenerator, asset_class: ComponentType, carrier: EnergyCarrier, _pays: bool
+    ) -> None:
+        """The heating the house has before the package, not the heat pump the package installs."""
+        context = _built(_with_generator(generator)).context
+        existing = context.subsidy_context.building.existing_heating
+
+        assert existing is not None
+        assert existing.asset_class is asset_class
+        assert existing.energy_carrier is carrier
+        assert existing.replaced_by_asset_classes == [ComponentType.HEAT_PUMP]
+
+    def test_it_is_the_registers_own_entry_built_once(self) -> None:
+        """One entry, so one approximation line for its size rather than two that could disagree."""
+        built = _built(_with_generator(HeatGenerator.CONVENTIONAL_OIL_HEATING))
+        existing = built.context.subsidy_context.building.existing_heating
+
+        assert existing is built.context.existing_assets.find(ComponentType.OIL_HEATER)
+        paths = [path for path, _value, _note in built.approximations]
+        assert paths.count(EconomicContextBuilder.GENERATOR_SIZE_PATH) == 1
+
+    def test_it_survives_the_economic_inputs_round_trip(self) -> None:
+        """The staged evaluator reads the context back out of ``economic_inputs.json``."""
+        context = _built(_with_generator(HeatGenerator.CONVENTIONAL_OIL_HEATING)).context.subsidy_context
+
+        reloaded = subsidy_context_from_json(json.loads(json.dumps(subsidy_context_to_json(context))))
+
+        assert reloaded.building.existing_heating is not None
+        assert reloaded.building.existing_heating == context.building.existing_heating
+
+    @pytest.mark.parametrize("generator, _asset_class, _carrier, pays", STARTING_GENERATORS)
+    def test_the_irish_heat_pump_schemes_no_longer_ask_about_it(
+        self, generator: HeatGenerator, _asset_class: ComponentType, _carrier: EnergyCarrier, pays: bool
+    ) -> None:
+        """A fossil boiler makes both schemes eligible, a heat pump rules both out; neither is a question."""
+        context = _built(_with_generator(generator)).context.subsidy_context
+        assessments = _heat_pump_assessments(context)
+
+        expected = EligibilityStatus.ELIGIBLE if pays else EligibilityStatus.INELIGIBLE
+        for scheme_id in EXISTING_HEATING_SCHEMES:
+            assert assessments[scheme_id].status is expected, scheme_id
+        asked = {name for assessment in assessments.values() for name in assessment.missing_fields}
+        assert not {name for name in asked if name.startswith("building.existing_heating.")}
+
+
 class TestTheTechnicalAttributes:
     """What a subsidy condition may ask about a subject that its asset class does not say."""
 
@@ -733,3 +927,242 @@ class TestTheTables:
         assert AnywayShareByPlacement.of("a placement nobody wrote down") == (
             AnywayShareByPlacement.INTERNAL_FIRST_TIME
         )
+
+
+#: Where the recorded twins the translator writes into live.
+BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
+
+
+def _translated(document: Dict[str, Any]) -> Any:
+    """Translate one request the way a run does, twin and economic context included.
+
+    The equipment rows of the register are sized from the twin of the unrenovated house, which only
+    exists once the translator has written it, so these tests go through the translator rather
+    than through the builder alone.
+
+    Returns:
+        The :class:`~hisim.renovisor.translate.TranslatedSystem`.
+    """
+    whitelist = Whitelist.load()
+    request = Request.parse(document)
+    applied = apply(request.document["house"], request.measures, whitelist)
+    return Translator(BASE_FILES, whitelist).translate(request, applied)
+
+
+def _oil_house(*measure_ids: str) -> Dict[str, Any]:
+    """The mockup as the #48 frontend case: an undated oil boiler and a subset of the package.
+
+    Args:
+        measure_ids: The mockup measures to keep, in catalogue order; none is the baseline.
+
+    Returns:
+        The request document.
+    """
+    document = _mockup()
+    document["house"]["heating"] = {"type_of_system": "conventional_oil_heating"}
+    document["measures"] = [measure for measure in document["measures"] if measure["id"] in measure_ids]
+    return document
+
+
+def _registered(translated: Any, asset_class: ComponentType) -> Any:
+    """The one register entry of a class; two would make the class ambiguous to the engine."""
+    register = translated.economic_context.existing_assets
+    entries = [asset for asset in register.assets if asset.asset_class is asset_class]
+    assert len(entries) == 1, (asset_class, entries)
+    return entries[0]
+
+
+def _realized(model: Any, component: str) -> Any:
+    """The realized configuration of one component of a translated twin."""
+    for name, _class_name, config in RealizedTwin.of(model).components:
+        if name == component:
+            return config
+    raise KeyError(component)
+
+
+class TestTheEquipmentTheHouseAlreadyHas:
+    """renovisorissues #48 and hisim-fig7: the buffer, the cylinder, the emitters and the meters.
+
+    Every twin carries them and the request describes none of them, so before they were in the
+    register the do-nothing reference bought them in year 0, and the baseline was awarded the
+    Irish central-heating grant for radiators it already had.
+    """
+
+    def test_the_baseline_registers_the_buffer_the_cylinder_the_emitters_and_the_meter(self) -> None:
+        """Each at the size the house's own twin realizes, and none of them replaced."""
+        translated = _translated(_oil_house())
+
+        buffer = _registered(translated, ComponentType.SPACE_HEATING_STORAGE)
+        cylinder = _registered(translated, ComponentType.DOMESTIC_HOT_WATER_STORAGE)
+        emitters = _registered(translated, ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR)
+        meter = _registered(translated, ComponentType.ELECTRICITY_METER)
+
+        # The oil twin sizes its boiler at 21,412.53 W and its buffer at 20 l/kW of it:
+        # round(21.41253 * 20, 2) = 428.25 l.
+        assert buffer.size == pytest.approx(428.25)
+        assert buffer.size_unit is Units.LITER
+        # The cylinder of a one-apartment twin is 250 l.
+        assert cylinder.size == pytest.approx(250.0)
+        # The emitters are sized by the mockup's 140 m2 of conditioned floor area.
+        assert emitters.size == pytest.approx(140.0)
+        assert emitters.size_unit is Units.SQUARE_METER
+        assert meter.size == 1.0 and meter.size_unit is Units.ANY
+        for asset in (buffer, cylinder, emitters, meter):
+            assert asset.replaced_by_asset_classes == [], asset
+
+    def test_the_oil_twins_buffer_is_twenty_litres_per_kilowatt_of_its_boiler(self) -> None:
+        """The size is the twin's own law on the twin's own boiler, not a figure of this module."""
+        translated = _translated(_oil_house())
+        boiler = _realized(translated.model, "ConventionalOilBoiler")
+
+        buffer = _registered(translated, ComponentType.SPACE_HEATING_STORAGE)
+        # The design heat load of the mockup's IE.N.SFH.05 house sizes the boiler at 21,412.53 W.
+        assert boiler.maximal_thermal_power_in_watt == pytest.approx(21412.53, abs=0.01)
+        # 21.41253 kW * 20 l/kW, rounded to 0.01 l.
+        assert buffer.size == pytest.approx(428.25)
+
+    def test_the_vessels_and_the_emitters_share_the_heatings_stated_year(self) -> None:
+        """Owner decision 2026-09-26: the heating's stated year dates the parts that go with it."""
+        dated = _mockup()
+        dated["measures"] = []
+        translated = _translated(dated)
+        stated = dated["house"]["heating"]["installation_year"]
+        for asset_class in (
+            ComponentType.SPACE_HEATING_STORAGE,
+            ComponentType.DOMESTIC_HOT_WATER_STORAGE,
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR,
+        ):
+            assert _registered(translated, asset_class).installation_year == stated, asset_class
+
+    def test_undated_equipment_is_at_the_mid_life_of_its_own_class(self) -> None:
+        """No year stated: each part is half-way through its own service life (``UnknownAge``).
+
+        The meters are never dated by the request, so they always are; the vessels and emitters
+        are when the heating states no year. Each line of the mapping report says so.
+        """
+        translated = _translated(_oil_house())
+        lines = {line["path"]: line for line in translated.report.to_json()["fields"]}
+        # IE's price basis year is 2026; each year is 2026 - round(service life / 2), never before 1975.
+        for component, asset_class, expected in (
+            ("SimpleHotWaterStorage", ComponentType.SPACE_HEATING_STORAGE, 2016),  # 20 years: 2026 - 10
+            ("DHWStorage", ComponentType.DOMESTIC_HOT_WATER_STORAGE, 2016),  # 20 years: 2026 - 10
+            ("HeatDistributionSystem", ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR, 2011),  # 30: 2026 - 15
+            ("ElectricityMeter", ComponentType.ELECTRICITY_METER, 2018),  # 16 years: 2026 - 8
+        ):
+            assert _registered(translated, asset_class).installation_year == expected, asset_class
+            line = lines[f"economic_context.existing_assets.{component}"]
+            assert line["value"]["installation_year"] == expected
+            assert "mid-life" in line["note"], component
+
+    def test_a_gas_house_has_its_gas_meter_and_an_electric_one_no_buffer_and_no_emitters(self) -> None:
+        """The register holds what the house's twin carries, and nothing a twin does not."""
+        gas = _mockup()
+        gas["measures"] = []
+        assert _registered(_translated(gas), ComponentType.GAS_METER).size == 1.0
+
+        electric = _oil_house()
+        electric["house"]["heating"] = {"type_of_system": "electric_heating"}
+        classes = {asset.asset_class for asset in _translated(electric).economic_context.existing_assets.assets}
+        assert ComponentType.SPACE_HEATING_STORAGE not in classes
+        assert ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR not in classes
+        assert ComponentType.DOMESTIC_HOT_WATER_STORAGE in classes
+
+    def test_a_heating_system_measure_replaces_the_buffer_like_for_like_and_keeps_the_rest(self) -> None:
+        """The new vessel comes with the new heating; the cylinder, radiators and meter stay."""
+        translated = _translated(_oil_house("heating_system", "photovoltaic_system"))
+
+        assert _registered(translated, ComponentType.SPACE_HEATING_STORAGE).replaced_by_asset_classes == [
+            ComponentType.SPACE_HEATING_STORAGE
+        ]
+        for kept in (
+            ComponentType.DOMESTIC_HOT_WATER_STORAGE,
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR,
+            ComponentType.ELECTRICITY_METER,
+        ):
+            assert _registered(translated, kept).replaced_by_asset_classes == [], kept
+
+    def test_the_replaced_buffer_is_the_old_vessel_not_the_heat_pumps(self) -> None:
+        """The register is sized from the oil twin: 20 l/kW, not the heat pump twin's 50 l/kW."""
+        baseline = _translated(_oil_house())
+        package = _translated(_oil_house("heating_system", "photovoltaic_system"))
+
+        old = _registered(package, ComponentType.SPACE_HEATING_STORAGE)
+        assert old.size == pytest.approx(_registered(baseline, ComponentType.SPACE_HEATING_STORAGE).size)
+        new = _realized(package.model, "SimpleHotWaterStorage").volume_heating_water_storage_in_liter
+        assert new > 2.0 * old.size, "the heat pump's vessel is the larger one"
+
+    def test_the_buffer_subject_carries_the_heating_system_measure_and_the_kept_ones_none(self) -> None:
+        """``measure_id`` null means a baseline subject (E-spec §3), so only the buffer is stamped."""
+        subjects = _translated(_oil_house("heating_system", "photovoltaic_system")).report.to_json()["subjects"]
+
+        assert subjects["SimpleHotWaterStorage"] == "heating_system"
+        assert subjects["MoreAdvancedHeatPumpHPLib"] == "heating_system"
+        for kept in ("DHWStorage", "HeatDistributionSystem", "ElectricityMeter"):
+            assert subjects.get(kept) is None, kept
+
+    def test_a_heating_installation_replaces_the_emitters_with_the_class_it_installs(self) -> None:
+        """Radiators replaced by the emitter the run simulates, and stamped with the measure.
+
+        The mockup asks for low-temperature radiators, which the translator writes as surface
+        heating (``EmitterSubstitution``); the register says what the engine will price.
+        """
+        translated = _translated(_oil_house("heating_system", "heating_installation"))
+
+        emitters = _registered(translated, ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR)
+        assert emitters.replaced_by_asset_classes == [ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING]
+        assert translated.report.to_json()["subjects"]["HeatDistributionSystem"] == "heating_installation"
+
+    def test_a_hot_water_system_measure_replaces_the_cylinder(self) -> None:
+        """A new hot-water supply is a new cylinder, like-for-like."""
+        document = _oil_house()
+        document["measures"] = [{"id": "hot_water_system", "options": {"supply": "together_with_heating_system"}}]
+        translated = _translated(document)
+
+        cylinder = _registered(translated, ComponentType.DOMESTIC_HOT_WATER_STORAGE)
+        assert cylinder.replaced_by_asset_classes == [ComponentType.DOMESTIC_HOT_WATER_STORAGE]
+        assert _registered(translated, ComponentType.SPACE_HEATING_STORAGE).replaced_by_asset_classes == []
+        assert translated.report.to_json()["subjects"]["DHWStorage"] == "hot_water_system"
+
+    def test_a_part_the_package_removes_is_not_replaced_by_its_own_class(self) -> None:
+        """Electric heating has no buffer: the old one is removed, not replaced by a buffer.
+
+        Declaring it replaced by its own class would claim a purchase nothing makes. The engine has
+        no booking for a removal without a successor, and the mapping report says so.
+        """
+        document = _oil_house()
+        document["measures"] = [{"id": "heating_system", "options": {"type_of_system": "electric_heating"}}]
+        translated = _translated(document)
+
+        assert _registered(translated, ComponentType.SPACE_HEATING_STORAGE).replaced_by_asset_classes == []
+        lines = {line["path"]: line for line in translated.report.to_json()["fields"]}
+        note = lines["economic_context.existing_assets.SimpleHotWaterStorage"]["note"]
+        assert "removed by heating_system without a successor" in note
+        assert "SimpleHotWaterStorage" not in translated.report.to_json()["subjects"]
+
+    def test_the_buffer_and_the_cylinder_are_two_asset_classes(self) -> None:
+        """One class for both made a kept cylinder look like a kept buffer (first match wins)."""
+        register = _translated(_oil_house("heating_system")).economic_context.existing_assets
+
+        assert register.find(ComponentType.SPACE_HEATING_STORAGE).replaced_by_asset_classes
+        assert not register.find(ComponentType.DOMESTIC_HOT_WATER_STORAGE).replaced_by_asset_classes
+        assert register.find(ComponentType.THERMAL_ENERGY_STORAGE) is None
+
+    def test_every_registered_part_is_in_the_mapping_report(self) -> None:
+        """Nothing the builder does is silent: each entry is an approximated line with its figures."""
+        translated = _translated(_oil_house("heating_system"))
+        lines = {line["path"]: line for line in translated.report.to_json()["fields"]}
+
+        line = lines["economic_context.existing_assets.SimpleHotWaterStorage"]
+        assert line["status"] == "approximated"
+        assert line["value"]["asset_class"] == "SPACE_HEATING_STORAGE"
+        assert line["value"]["replaced_by_asset_classes"] == ["SPACE_HEATING_STORAGE"]
+        assert "economic_context.existing_assets.ElectricityMeter" in lines
+
+    def test_every_equipment_row_names_a_class_the_cost_adapter_extracts(self) -> None:
+        """The register reads sizes through the adapter's own table, so every row must be in it."""
+        from hisim.economics.adapter import FactsExtractors
+
+        for equipment in TwinEquipment.ALL:
+            assert equipment.component_class in FactsExtractors.BY_CLASS_NAME, equipment
+            if equipment.measure_id is not None:
+                assert MeasureRegistry.function_for(equipment.measure_id) is not None, equipment

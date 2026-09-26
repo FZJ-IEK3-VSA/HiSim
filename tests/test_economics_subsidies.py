@@ -39,6 +39,7 @@ from hisim.economics.subsidies import (
     SubsidyContext,
     SubsidyContextFields,
     SubsidyDataError,
+    SubsidyPackageContext,
     SubsidyScheme,
     TaxCreditBenefit,
     Tier,
@@ -610,6 +611,31 @@ class TestConditionAstAndFieldVocabulary:
         with pytest.raises(SubsidyDataError, match="TEST: unknown op"):
             parse_condition({"field": "building.dwelling_units", "op": "=~", "value": 1}, "TEST")
 
+    @pytest.mark.parametrize(
+        "fieldname, op, value, misspelled",
+        [
+            ("package.installed_asset_classes", "contains", "Heatpump", "Heatpump"),
+            ("building.existing_heating.asset_class", "==", "HEAT_PUMP", "HEAT_PUMP"),
+            ("building.existing_heating.replaced_by_asset_classes", "contains", "HeatPumps", "HeatPumps"),
+            ("measure.asset_class", "in", ["HeatPump", "OilHeatr"], "OilHeatr"),
+        ],
+    )
+    def test_parse_rejects_a_value_that_is_not_an_asset_class(self, fieldname, op, value, misspelled):
+        """An asset-class field compares ComponentType values: a misspelled one would never match."""
+        with pytest.raises(SubsidyDataError, match=f"TEST: condition on '{fieldname}'.*{misspelled}"):
+            parse_condition({"field": fieldname, "op": op, "value": value}, "TEST")
+
+    def test_parse_accepts_asset_class_values_and_exists_without_one(self):
+        """The ComponentType values themselves parse, and ``exists`` has no value to check."""
+        parse_condition({"field": "package.installed_asset_classes", "op": "contains", "value": "HeatPump"}, "T")
+        parse_condition({"field": "measure.asset_class", "op": "in", "value": ["HeatPump", "OilHeater"]}, "T")
+        parse_condition({"field": "building.existing_heating.asset_class", "op": "exists"}, "T")
+
+    @pytest.mark.parametrize("country", ["AT", "DE", "IE"])
+    def test_every_shipped_catalog_names_only_real_asset_classes(self, country):
+        """The refusal runs at load, so every shipped catalogue loading is the check."""
+        assert SubsidyCatalog.load(country).schemes
+
     def test_evaluation_semantics_are_tri_state(self):
         """Leaf/all/any/not semantics, unchanged by the split (§5.7)."""
         context = SubsidyContext(
@@ -1023,7 +1049,8 @@ class TestScenarioDataOverlays:
         entry = overlaid.get_device_entry(ComponentType.HEAT_PUMP, 2024, "DE")
         assert entry.specific_investment.best_estimate == pytest.approx(1100.0)
         # The shipped database is untouched.
-        assert database.get_device_entry(ComponentType.HEAT_PUMP, 2024, "DE").specific_investment.best_estimate == 1600.0
+        entry = database.get_device_entry(ComponentType.HEAT_PUMP, 2024, "DE")
+        assert entry.specific_investment.best_estimate == 1600.0
         assert overlaid.overlay_records and overlaid.overlay_records[0].detail == "cheap_hp"
 
     def test_an_override_that_breaks_the_parameters_is_refused(self):
@@ -1055,3 +1082,33 @@ class TestScenarioDataOverlays:
         database = CostDatabase()
         with pytest.raises(CostDataError, match="is not overlayable"):
             database.with_overlays({"devices_DE.HEAT_PUMP.legacy_flat_subsidy_share": 0.0}, "no_subsidy")
+
+
+class TestThePackageRoot:
+    """``package.*``: what the evaluation installs beside the measure (owner decision 2026-09-26).
+
+    The smallest general way to say "a heat pump is installed in the same package": one computed
+    field the evaluator fills, addressed with the existing ``contains`` operator.
+    """
+
+    LEAF = {"field": "package.installed_asset_classes", "op": "contains", "value": "HeatPump"}
+
+    def test_the_field_is_part_of_the_vocabulary_and_computed(self):
+        """The catalog loader accepts it and the questionnaire never asks it."""
+        assert "package.installed_asset_classes" in SubsidyContextFields.KNOWN_CONTEXT_FIELDS
+        assert SubsidyContextFields.is_computed("package.installed_asset_classes")
+        assert SubsidyContextFields.is_computed("measure.technical_attributes.scop")
+        assert not SubsidyContextFields.is_computed("building.existing_heating.asset_class")
+        assert parse_condition(self.LEAF, "S").fieldname == "package.installed_asset_classes"
+
+    def test_it_holds_exactly_when_the_package_installs_the_class(self):
+        """True with a heat pump in the package, False without one, UNDETERMINED when nobody said."""
+        condition = parse_condition(self.LEAF, "S")
+
+        def verdict(installed):
+            context = SubsidyContext(package=SubsidyPackageContext(installed_asset_classes=installed))
+            return evaluate_condition(condition, context, None)
+
+        assert verdict(("Conventional Radiator", "HeatPump")) == (True, [])
+        assert verdict(("Conventional Radiator",)) == (False, [])
+        assert verdict(None) == (None, ["package.installed_asset_classes"])

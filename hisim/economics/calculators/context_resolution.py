@@ -50,6 +50,7 @@ from hisim.economics.provenance import ParameterOrigin, ParameterProvenance, Pro
 from hisim.economics.results import AnywayBasisKinds
 from hisim.economics.timeline import CashFlowEntry, CostCategory
 from hisim.economics.uncertainty import UncertainValue
+from hisim.loadtypes import ComponentType
 
 
 class ContextResolutionConstants:
@@ -162,6 +163,106 @@ class ReplacedAssetOutcome:
     #: decided here and nowhere else, so the caption that words the multiplication reads the
     #: answer rather than re-deriving it from a coupled-cost share it does not have.
     credit_basis_kind: str = AnywayBasisKinds.LIKE_FOR_LIKE
+
+
+@dataclass(frozen=True)
+class InstallationVerdict:
+    """Whether one asset class is bought, kept or replacing something, before any price (§4.1).
+
+    Three outcomes, and the fields say which one without contradiction: a **replacement** is a new
+    investment with the register entry it replaces; a **kept** asset is no investment and names the
+    register entry it is; anything else is either a new investment of nothing registered
+    (GREENFIELD, or BROWNFIELD without a matching entry) or, under STATUS_QUO, no investment of
+    nothing registered. A replacement is always a new investment: STATUS_QUO carries out no
+    replacement, so its verdict never names one (:func:`installation_verdict`).
+
+    Attributes:
+        is_new_investment: Whether the subject is charged at year 0.
+        replaced_asset: The register entry the subject replaces, if it replaces one.
+        kept_asset: The register entry the subject *is*, if it is a kept existing asset (under
+            BROWNFIELD or STATUS_QUO with a matching register entry that nothing replaces, or
+            under STATUS_QUO with any matching register entry).
+
+    Raises:
+        ValueError: On a verdict that is a replacement and not an investment, or kept and an
+            investment, or both a replacement and kept.
+    """
+
+    is_new_investment: bool
+    replaced_asset: Optional[ExistingAsset] = None
+    kept_asset: Optional[ExistingAsset] = None
+
+    def __post_init__(self) -> None:
+        """Refuse the combinations :func:`installation_verdict` never produces."""
+        if self.replaced_asset is not None and self.kept_asset is not None:
+            raise ValueError("an installation verdict is a replacement or a kept asset, never both")
+        if self.replaced_asset is not None and not self.is_new_investment:
+            raise ValueError("a replacement is a new investment; a verdict that is not one replaces nothing")
+        if self.kept_asset is not None and self.is_new_investment:
+            raise ValueError("a kept existing asset is not a new investment")
+
+
+def installation_verdict(
+    asset_class: ComponentType,
+    context: InstallationContext,
+    register: Optional[ExistingAssetRegister],
+) -> InstallationVerdict:
+    """Decide the §4.1 installation context of one asset class, touching no price and no ledger.
+
+    Under BROWNFIELD the replacement check runs FIRST, so a like-for-like measure (new windows
+    replacing old windows, same asset class) is charged as an investment instead of being
+    "kept". Under STATUS_QUO nothing is a new investment and so nothing is replaced: the register's
+    replacements are the measures the do-nothing reference does not carry out, and a matching
+    entry is a kept asset that ages toward its like-for-like replacement. Split out of
+    :func:`resolve_device` so the evaluator can ask, before it prices anything, which asset classes
+    an evaluation installs -- what the subsidy conditions' ``package.*`` fields report -- with
+    exactly the rule the pricing uses.
+
+    Before 2026-09-26 STATUS_QUO ran the replacement check too and returned "not a new investment,
+    replacing X": every consumer gates the replaced asset on ``is_new_investment``, so the removal,
+    write-off and credit it names were never booked, but it hid the kept asset of a like-for-like
+    replacement, whose first replacement then fell at a full service life instead of at its
+    remaining life.
+
+    Args:
+        asset_class: The subject's asset class.
+        context: The perspective's installation context.
+        register: The existing-asset register, or ``None`` for a greenfield run.
+
+    Returns:
+        The verdict.
+
+    Raises:
+        ValueError: When more than one register entry is declared replaced by ``asset_class``.
+            One subject replaces one asset; with two, the first match would silently decide whose
+            removal, write-off and anyway credit the subject carries and the other would be kept.
+    """
+    replaced_asset: Optional[ExistingAsset] = None
+    kept_asset: Optional[ExistingAsset] = None
+    is_new_investment = True
+    if context == InstallationContext.BROWNFIELD and register is not None:
+        replaced = [asset for asset in register.assets if asset_class in asset.replaced_by_asset_classes]
+        if len(replaced) > 1:
+            raise ValueError(
+                f"{len(replaced)} register entries are replaced by {asset_class.value!r}: "
+                + " and ".join(
+                    f"{asset.asset_class.value!r} ({asset.size:g} {asset.size_unit.value}, installed "
+                    f"{asset.installation_year})"
+                    for asset in replaced
+                )
+                + "; one subject replaces one asset, so the register must name one."
+            )
+        replaced_asset = replaced[0] if replaced else None
+    if context in (InstallationContext.BROWNFIELD, InstallationContext.STATUS_QUO) and register is not None:
+        if replaced_asset is None:
+            kept_asset = register.find(asset_class)
+            if kept_asset is not None:
+                is_new_investment = False
+    if context == InstallationContext.STATUS_QUO:
+        is_new_investment = False
+    return InstallationVerdict(
+        is_new_investment=is_new_investment, replaced_asset=replaced_asset, kept_asset=kept_asset
+    )
 
 
 def resolve_device(
@@ -299,42 +400,26 @@ def resolve_device(
     else:
         embodied_co2 = 0.0
 
-    # Installation context: matched-kept vs new measure vs replacement (§4.1). The
-    # replacement check runs FIRST so like-for-like measures (new windows replacing old
-    # windows, same asset class) are charged as investments instead of "kept".
+    # Installation context: matched-kept vs new measure vs replacement (§4.1), decided by
+    # `installation_verdict`; only the replacement schedule of a kept asset is computed here.
     register = existing_assets
-    is_new_investment = True
+    verdict = installation_verdict(facts.asset_class, context, register)
+    is_new_investment = verdict.is_new_investment
+    replaced_asset = verdict.replaced_asset
     first_replacement_year = int(round(service_life))
-    replaced_asset: Optional[ExistingAsset] = None
-    if context in (InstallationContext.BROWNFIELD, InstallationContext.STATUS_QUO) and register is not None:
-        replaced_asset = next(
-            (
-                asset
-                for asset in register.assets
-                if facts.asset_class in asset.replaced_by_asset_classes
-            ),
-            None,
-        )
-        if replaced_asset is None:
-            matched = register.find(facts.asset_class)
-            if matched is not None:
-                # Kept asset: no investment; first replacement at service_life - current_age.
-                # Ages anchor on the price basis year (the economic "today", like scheme
-                # validity and the CO2 path), not the possibly historical weather year.
-                is_new_investment = False
-                age = matched.age_in_years(price_basis_year)
-                first_replacement_year = max(1, int(round(service_life - age)))
-    elif context == InstallationContext.STATUS_QUO and register is None:
-        is_new_investment = False
+    if verdict.kept_asset is not None:
+        # Kept asset: no investment; first replacement at service_life - current_age.
+        # Ages anchor on the price basis year (the economic "today", like scheme
+        # validity and the CO2 path), not the possibly historical weather year.
+        age = verdict.kept_asset.age_in_years(price_basis_year)
+        first_replacement_year = max(1, int(round(service_life - age)))
+    if context == InstallationContext.STATUS_QUO and register is None:
         log.warning(
             f"STATUS_QUO without an existing-asset register: treating {subject} "
             "as an existing asset of age 0."
         )
-
-    if context == InstallationContext.STATUS_QUO:
-        is_new_investment = False
-        if register is not None and register.find(facts.asset_class) is None:
-            first_replacement_year = int(round(service_life))
+    if context == InstallationContext.STATUS_QUO and register is not None and register.find(facts.asset_class) is None:
+        first_replacement_year = int(round(service_life))
 
     removal_cost = UncertainValue.exact(0.0)
     if is_new_investment and replaced_asset is not None:

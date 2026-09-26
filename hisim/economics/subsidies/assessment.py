@@ -37,7 +37,9 @@ from hisim.economics.subsidies.catalog import (
 from hisim.economics.subsidies.context import (
     ApplicantProfile,
     SubsidyBuildingContext,
+    SubsidyContextFields,
     SubsidyDataError,
+    SubsidyPackageContext,
     question_targets,
 )
 
@@ -60,6 +62,9 @@ class SubsidyContext:
 
     applicant: ApplicantProfile = field(default_factory=ApplicantProfile)
     building: SubsidyBuildingContext = field(default_factory=SubsidyBuildingContext)
+    #: What the evaluation installs beside the measure under assessment. Filled by the evaluator
+    #: per evaluation and never stored: ``economic_inputs.json`` carries the answers, not this.
+    package: SubsidyPackageContext = field(default_factory=SubsidyPackageContext)
 
     def resolve_field(self, dotted: str, measure: Optional[ComponentCostFacts]) -> Tuple[bool, Any]:
         """Resolves a condition field; returns (known, value).
@@ -96,6 +101,8 @@ class SubsidyContext:
             value: Any = self.applicant
         elif root == "building":
             value = self.building
+        elif root == "package":
+            value = self.package
         elif root == "measure":
             if measure is None:
                 return False, None
@@ -628,8 +635,8 @@ def required_questions(
                 field_to_schemes.setdefault(fieldname, []).append(scheme.id)
     questions: List[Question] = []
     for fieldname, scheme_ids in field_to_schemes.items():
-        if fieldname.startswith("measure."):
-            continue  # known from the simulation / cost facts, never asked
+        if SubsidyContextFields.is_computed(fieldname):
+            continue  # known from the simulation, the cost facts or the package, never asked
         known, _value = context.resolve_field(fieldname, None)
         if known:
             continue

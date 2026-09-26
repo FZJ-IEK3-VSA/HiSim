@@ -228,6 +228,54 @@ class TestTheDocumentShape:
         assert rows[SyntheticPlan.ENVELOPE_SUBJECT]["stage"] == 1
         assert rows[SyntheticPlan.HEAT_PUMP_SUBJECT]["stage"] == 2
 
+    def test_every_row_splits_its_investment_by_the_stage_that_bought_it(self, document):
+        """A stage filter must not count an earlier stage's purchase (renovisorissues #48).
+
+        The envelope measure is bought by stage 1 in year 0 and the heat pump by stage 2 in year 4,
+        at the price of that year (the synthetic plan escalates investments at 2 % a year). The
+        boiler is the house's own and kept, so no stage bought it and its row lists nothing.
+        """
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        envelope = rows[SyntheticPlan.ENVELOPE_SUBJECT]["investment_by_stage"]
+        heat_pump = rows[SyntheticPlan.HEAT_PUMP_SUBJECT]["investment_by_stage"]
+
+        assert [entry["stage"] for entry in envelope] == [1]
+        assert envelope[0]["investment_in_euro"] == rows[SyntheticPlan.ENVELOPE_SUBJECT]["investment_in_euro"]
+        assert [entry["stage"] for entry in heat_pump] == [2]
+        assert heat_pump[0]["investment_in_euro"]["best"] == pytest.approx(
+            SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * 1.02**4
+        )
+        assert rows[SyntheticPlan.BOILER_SUBJECT]["investment_by_stage"] == []
+
+    def test_the_reference_is_not_staged(self, document):
+        """One state over the whole horizon: no stage, no split, no measure."""
+        for row in document["reference"]["by_subject"]:
+            assert row["stage"] is None
+            assert row["investment_by_stage"] == []
+            assert row["measure_id"] is None
+
+    def test_a_reference_row_carries_no_measure_the_plan_carries_out(self, tmp_path, parameters, database):
+        """A subject both variants have is the house's own in the reference (renovisorissues #48).
+
+        The measure map is merged over every stage's mapping report, so the buffer a plan's
+        heating_system replaces used to be stamped ``heating_system`` in the reference too, where
+        it is the vessel the house already has.
+        """
+        perspective = brownfield_perspective()
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0)], parameters, perspective
+        )
+        path = tmp_path / StagedDocument.FILE_NAME
+        StagedDocument(
+            result, parameters, perspective, measure_ids={SyntheticPlan.BOILER_SUBJECT: "heating_system"}
+        ).write(path)
+        written = json.loads(path.read_text(encoding="utf-8"))
+
+        reference = {row["subject"]: row for row in written["reference"]["by_subject"]}
+        plan = {row["subject"]: row for row in written["plan"]["by_subject"]}
+        assert reference[SyntheticPlan.BOILER_SUBJECT]["measure_id"] is None
+        assert plan[SyntheticPlan.BOILER_SUBJECT]["measure_id"] == "heating_system"
+
     def test_an_unpriced_subject_says_so_rather_than_disappearing(self, document):
         """A measure with no price behind it is in the document, flagged (step 10 §1)."""
         rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
@@ -373,19 +421,22 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_two(self, document):
-        """Version 2: awarded subsidy rows state their amount by year, and the monthly headline.
+    def test_the_document_states_schema_version_three(self, document):
+        """Version 3: every by_subject row states its investment by stage.
 
-        A literal for the same reason as the economics version above. Version 2 is the format
-        with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys, and a
-        document of that shape stating 1 would tell a consumer it could skip both.
+        A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
+        the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
+        version 3 (2026-09-26, hisim-fig7) adds the required ``investment_by_stage`` of every
+        ``by_subject`` row. A document of that shape stating 1 or 2 would tell a consumer it could
+        skip what the later versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 2
+        assert document["schema_version"] == 3
         StagedDocument.validate(document)
-        with pytest.raises(jsonschema.ValidationError):
-            StagedDocument.validate({**document, "schema_version": 1})
+        for older in (1, 2):
+            with pytest.raises(jsonschema.ValidationError):
+                StagedDocument.validate({**document, "schema_version": older})
 
 
 class TestTheParametersBlock:

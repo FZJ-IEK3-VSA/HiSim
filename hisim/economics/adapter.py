@@ -220,14 +220,21 @@ class FactsExtractors:
             kpi_tag=KpiTagEnumClass.ELECTRIC_HEATING,
         ),
         "HeatDistribution": _hds_facts,
+        # The two vessels are two asset classes, priced alike (the rows were copied from the one
+        # THERMAL_ENERGY_STORAGE row, hisim-4wo2 tracks a price law of their own), because the
+        # existing-asset register matches by class: a RenoVisor heating_system measure replaces the
+        # buffer with the new generator and keeps the hot-water cylinder, and with one class for
+        # both the register could not say which of the two was kept. The components' own legacy
+        # capex path (`SimpleHotWaterStorage.get_cost_capex`, `SimpleDHWStorage.get_cost_capex`)
+        # keeps THERMAL_ENERGY_STORAGE, and with it the report goldens (renovisorissues #48).
         "SimpleHotWaterStorage": lambda config: ComponentCostFacts(
-            asset_class=ComponentType.THERMAL_ENERGY_STORAGE,
+            asset_class=ComponentType.SPACE_HEATING_STORAGE,
             size=concrete(config.volume_heating_water_storage_in_liter),
             size_unit=Units.LITER,
             kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
         ),
         "SimpleDHWStorage": lambda config: ComponentCostFacts(
-            asset_class=ComponentType.THERMAL_ENERGY_STORAGE,
+            asset_class=ComponentType.DOMESTIC_HOT_WATER_STORAGE,
             size=concrete(config.volume_heating_water_storage_in_liter),
             size_unit=Units.LITER,
             kpi_tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,

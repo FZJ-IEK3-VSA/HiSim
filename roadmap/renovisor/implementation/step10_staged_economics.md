@@ -72,7 +72,11 @@ equals `EconomicEvaluator` on that stage, entry for entry" holds by construction
    `ANYWAY_COST_CREDIT`) of stage `k` are taken from stage `k`'s own year-0 entries for the
    subjects new in `k` (present in `S_k`, absent from `S_{k-1}` under the same asset class, or
    larger: the increment), moved to `from_year_k` and escalated with the investment escalation
-   rate to that year. Subjects carried over are not charged again.
+   rate to that year. Subjects carried over are not charged again. The increment is only for a
+   device the house keeps and enlarges: a subject whose asset class stage `k`'s register newly
+   declares replaced is a new purchase, charged whole (owner decision 2026-09-26, renovisorissues
+   #48; the same day's buffer-only limit was reversed because it left a same-size replacement of
+   the same class, a heat pump for a heat pump or a cylinder for a cylinder, free).
 4. **Aging across stages**: before evaluating stage `k > 0`, its `EvaluationInputs.existing_assets`
    is the inventory register merged with one `ExistingAsset` per subject charged in an earlier
    stage `j` (`installation_year = simulation_year + from_year_j`, `asset_class` from the subject's
@@ -120,6 +124,10 @@ report's `subjects` map (§4).
 > `subsidies[]` rows state `amount_by_year_in_euro` and an amount (hisim-cyc.5), and `totals` /
 > `comparison` carry the required `monthly_equivalent_cost_in_euro` /
 > `monthly_equivalent_cost_delta_in_euro` (hisim-cyc.6).
+>
+> **Note (2026-09-26, hisim-fig7).** The document is at `schema_version: 3` since: every
+> `by_subject` row carries the required `investment_by_stage`, the subject's investment split by
+> the stage that bought it (renovisorissues #48); `investment_in_euro` stays the year-0 investment.
 
 ## 4. Translator integration (`hisim/renovisor/`, E-spec §4)
 

@@ -91,8 +91,9 @@ def parse_condition(raw: dict, scheme_id: str) -> Condition:
         The parsed node; children are parsed depth-first, so the returned tree is complete.
 
     Raises:
-        SubsidyDataError: On an unknown operator, an unknown field name, or a node that is neither
-            an ``all``/``any``/``not`` combinator nor a leaf.
+        SubsidyDataError: On an unknown operator, an unknown field name, a value on an asset-class
+            field that is not a ``ComponentType`` value, or a node that is neither an
+            ``all``/``any``/``not`` combinator nor a leaf.
     """
     if "all" in raw:
         return Condition(kind="all", children=tuple(parse_condition(child, scheme_id) for child in raw["all"]))
@@ -107,8 +108,43 @@ def parse_condition(raw: dict, scheme_id: str) -> Condition:
             raise SubsidyDataError(f"Scheme {scheme_id}: unknown op {operator!r} in condition on {fieldname!r}.")
         if not (fieldname in SubsidyContextFields.KNOWN_CONTEXT_FIELDS or fieldname.startswith("measure.")):
             raise SubsidyDataError(f"Scheme {scheme_id} references unknown field {fieldname!r}.")
+        if operator != "exists" and _is_asset_class_field(fieldname):
+            _check_asset_class_values(raw.get("value"), fieldname, scheme_id)
         return Condition(kind="leaf", fieldname=fieldname, op=operator, value=raw.get("value"))
     raise SubsidyDataError(f"Scheme {scheme_id}: condition node {raw!r} is neither all/any/not nor a leaf.")
+
+
+def _is_asset_class_field(fieldname: str) -> bool:
+    """Whether a condition field holds asset classes, compared as ``ComponentType`` values.
+
+    Every such field of the vocabulary is named for it -- ``measure.asset_class``,
+    ``building.existing_heating.asset_class``, ``building.existing_heating.replaced_by_asset_classes``,
+    ``package.installed_asset_classes`` -- so the rule is the name, and a field added under the
+    same convention is checked without being listed here.
+    """
+    last = fieldname.rsplit(".", 1)[-1]
+    return last.endswith("asset_class") or last.endswith("asset_classes")
+
+
+def _check_asset_class_values(value: Any, fieldname: str, scheme_id: str) -> None:
+    """Refuse a condition value on an asset-class field that is not a ``ComponentType`` value.
+
+    The context compares these fields as ``ComponentType`` *values* ("HeatPump", "OilHeater"), so a
+    misspelled class in the catalog would never match and the scheme would quietly never apply --
+    or, under ``!=`` or ``not``, always apply. A list value (``in``) is checked item by item.
+
+    Raises:
+        SubsidyDataError: Naming the scheme, the field and every value that is not a class.
+    """
+    known = {member.value for member in ComponentType}
+    values = value if isinstance(value, list) else [value]
+    unknown = [item for item in values if not isinstance(item, str) or item not in known]
+    if unknown:
+        raise SubsidyDataError(
+            f"Scheme {scheme_id}: condition on {fieldname!r} compares against {unknown!r}, which "
+            "is not a ComponentType value; the field holds asset classes such as "
+            f"{ComponentType.HEAT_PUMP.value!r}."
+        )
 
 
 def referenced_fields(condition: Condition) -> List[str]:

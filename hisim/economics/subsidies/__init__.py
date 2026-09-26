@@ -75,6 +75,7 @@ from hisim.economics.subsidies.context import (
     SubsidyBuildingContext,
     SubsidyContextFields,
     SubsidyDataError,
+    SubsidyPackageContext,
     question_targets,
 )
 from hisim.economics.subsidies.solver import _combination_awards, _eligible_cost_basis  # noqa: F401 — unit-tested directly
@@ -116,6 +117,7 @@ __all__ = [
     "SubsidyContextFields",
     "SubsidyDataError",
     "SubsidyDecision",
+    "SubsidyPackageContext",
     "SubsidyScheme",
     "SubsidySchemeLabels",
     "TaxCreditBenefit",

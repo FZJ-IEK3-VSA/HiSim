@@ -438,3 +438,64 @@ class TestDeletedDeadSurfaceInTheEngine:
         stale_payload: Dict[str, Any] = {"refinance_replacements": True}
         with pytest.raises(TypeError):
             FinancingPlan(**stale_payload)  # pylint: disable=unexpected-keyword-arg
+
+
+class TestTheEvaluatorStatesWhatThePackageInstalls:
+    """``package.installed_asset_classes`` is every new investment of one evaluation (§4.1 rule)."""
+
+    def test_new_and_replacing_subjects_are_listed_and_kept_ones_are_not(self):
+        """A heat pump replacing a kept register's boiler is listed; the kept radiators are not."""
+        from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
+        from hisim.economics.facts import ExistingAssetRegister
+        from hisim.economics.perspectives import InstallationContext
+
+        def facts(asset_class: ComponentType) -> ComponentCostFacts:
+            return ComponentCostFacts(asset_class=asset_class, size=10.0, size_unit=Units.KILOWATT)
+
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[
+                SubjectCostFacts("HeatPump", facts(ComponentType.HEAT_PUMP)),
+                SubjectCostFacts("Radiators", facts(ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR)),
+                SubjectCostFacts("Array", facts(ComponentType.PV)),
+            ],
+            existing_assets=ExistingAssetRegister(
+                assets=[
+                    ExistingAsset(ComponentType.OIL_HEATER, 15.0, Units.KILOWATT, 2005,
+                                  replaced_by_asset_classes=[ComponentType.HEAT_PUMP]),
+                    ExistingAsset(ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR, 140.0, Units.SQUARE_METER, 2005),
+                ]
+            ),
+        )
+        # pylint: disable=protected-access  # the pre-pass has no public surface of its own
+        brownfield = EconomicEvaluator._with_package(inputs, InstallationContext.BROWNFIELD)
+        greenfield = EconomicEvaluator._with_package(inputs, InstallationContext.GREENFIELD)
+        status_quo = EconomicEvaluator._with_package(inputs, InstallationContext.STATUS_QUO)
+
+        assert brownfield.package.installed_asset_classes == ("HeatPump", "PV")
+        assert greenfield.package.installed_asset_classes == ("Conventional Radiator", "HeatPump", "PV")
+        assert status_quo.package.installed_asset_classes == ()
+        assert inputs.subsidy_context.package.installed_asset_classes is None, "the caller's inputs are untouched"
+
+    def test_a_subject_configured_at_zero_size_is_not_listed(self):
+        """A 0 kWp array is declared but not built: it installs nothing a condition could read."""
+        from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
+        from hisim.economics.perspectives import InstallationContext
+
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[
+                SubjectCostFacts(
+                    "HeatPump",
+                    ComponentCostFacts(asset_class=ComponentType.HEAT_PUMP, size=8.0, size_unit=Units.KILOWATT),
+                ),
+                SubjectCostFacts(
+                    "Array", ComponentCostFacts(asset_class=ComponentType.PV, size=0.0, size_unit=Units.KILOWATT)
+                ),
+            ],
+        )
+        # pylint: disable=protected-access  # the pre-pass has no public surface of its own
+        package = EconomicEvaluator._with_package(inputs, InstallationContext.GREENFIELD).package
+        assert package.installed_asset_classes == ("HeatPump",)

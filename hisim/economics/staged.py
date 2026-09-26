@@ -640,6 +640,21 @@ class StagedEvaluator:
         absent from the returned mapping rather than present with a zero, so "did this stage buy
         this" is one membership test.
 
+        The increment is only for something the house *keeps* and enlarges. Anything the stage's
+        inventory declares *replaced*, where the stage before declared no such replacement
+        (:meth:`_newly_replaced_classes`), is a new purchase bought whole in this stage, however
+        large the old one was: a generator, a buffer, a cylinder, the emitters, a PV array, a
+        battery, a collector. The stage's own evaluation already prices it so -- the full new
+        price, the old one's removal, its written-off book value and the anyway credit
+        (``cost_spec.md`` §4.1) -- and charging only the size increment of that would book a
+        fraction of a replacement. A heating_system measure that replaces a 430-litre buffer with a
+        970-litre one buys a 970-litre vessel, not 540 litres of one (renovisorissues #48).
+
+        An owner decision of 2026-09-26 first limited this to the space-heating buffer; it was
+        reversed later that day, because under the increment rule every same-class replacement
+        of the same size or smaller was free -- a hot_water_system measure replacing a cylinder
+        with one of the same size, a heat pump replacing a heat pump.
+
         Args:
             stages: The plan as given.
             index: The stage to answer for.
@@ -652,10 +667,11 @@ class StagedEvaluator:
         if index == 0:
             return {subject: 1.0 for subject in current}
         previous = {facts.subject: facts.facts for facts in stages[index - 1].inputs.cost_facts}
+        replaced = cls._newly_replaced_classes(stages, index)
         charged: Dict[str, float] = {}
         for subject, facts in current.items():
             before = previous.get(subject)
-            if before is None or before.asset_class != facts.asset_class:
+            if before is None or before.asset_class != facts.asset_class or facts.asset_class in replaced:
                 charged[subject] = 1.0
                 continue
             if before.size <= 0.0:
@@ -667,6 +683,32 @@ class StagedEvaluator:
             elif facts.size > before.size:
                 charged[subject] = (facts.size - before.size) / facts.size
         return charged
+
+    @classmethod
+    def _newly_replaced_classes(cls, stages: Tuple[Stage, ...], index: int) -> FrozenSet[ComponentType]:
+        """The asset classes stage ``index``'s inventory replaces and the stage before did not.
+
+        A stage's inventory is the house as its translator declared it, and each entry names the
+        classes that replace it (``ExistingAsset.replaced_by_asset_classes``). A replacement that
+        the previous stage already declared was carried out there -- a plan's stages each carry
+        every measure before them -- so only the difference is this stage's own.
+
+        Args:
+            stages: The plan as given.
+            index: The stage to answer for, at least 1.
+
+        Returns:
+            The asset classes this stage replaces for the first time.
+        """
+
+        def declared(stage: Stage) -> Set[ComponentType]:
+            return {
+                asset_class
+                for asset in cls._inventory(stage.inputs)
+                for asset_class in asset.replaced_by_asset_classes
+            }
+
+        return frozenset(declared(stages[index]) - declared(stages[index - 1]))
 
     @classmethod
     def _carried_over_subjects(

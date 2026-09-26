@@ -252,6 +252,23 @@ class TestTheEndToEndDocument:
         amount = awarded["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"]["amount_in_euro"]
         assert amount["best"] == pytest.approx(-6500.0)
 
+    def test_no_row_asks_what_the_house_heats_with(self, document) -> None:
+        """The request states it, so the heat-pump schemes decide on it (renovisorissues #50).
+
+        The mockup's gas boiler is replaced by a heat pump, which is what SEAI's renewable heat
+        bonus pays 4,000 EUR for; before the subsidy context carried the existing heating, the row
+        was undetermined and asked for the boiler's class and carrier.
+        """
+        rows = document["plan"]["subsidies"]
+        asked = {name for row in rows for name in row["open_questions"]}
+        assert not {name for name in asked if name.startswith("building.existing_heating.")}, sorted(asked)
+        awarded = {
+            (row["scheme"], row["measure_id"]): row for row in rows if row["status"] == "awarded"
+        }
+        assert ("IE_SEAI_RENEWABLE_HEAT_BONUS", "heating_system") in awarded, sorted(awarded)
+        amount = awarded[("IE_SEAI_RENEWABLE_HEAT_BONUS", "heating_system")]["amount_in_euro"]
+        assert amount["best"] == pytest.approx(-4000.0)
+
     def test_the_solar_pv_grant_is_the_tiered_formula_on_the_arrays_cost_facts_size(self, runs, document) -> None:
         """hisim-cyc.3 through the production wiring: the grant prices the size the stage extracted.
 
@@ -373,6 +390,171 @@ class TestTheEndToEndDocument:
     def test_the_run_still_leaves_no_costs_block_in_the_payload(self, document) -> None:
         """The other half of the split: one implementation of the money, and this is it."""
         assert document["plan"]["totals"]["npv_in_euro"]["best"] != 0.0
+
+
+class TestTheEquipmentTheHouseAlreadyHas:
+    """renovisorissues #48 and hisim-fig7 on a real run: the house's own vessels, emitters and meter.
+
+    The mockup's gas house has a buffer, a hot-water cylinder, radiators, a gas meter and an
+    electricity meter, none of which the request describes. Before they were in the register the
+    do-nothing reference bought all of them in year 0 and was awarded SEAI's central-heating grant
+    for its own radiators, and the plan's buffer row stamped stage 1 carried stage 0's purchase.
+    """
+
+    def test_the_reference_buys_nothing_in_year_zero(self, document) -> None:
+        """Doing nothing buys nothing: every part of the reference is already in the house."""
+        reference = document["reference"]
+        assert reference["totals"]["investment_year0_in_euro"]["best"] == pytest.approx(0.0)
+        for row in reference["by_subject"]:
+            assert row["investment_in_euro"]["best"] == pytest.approx(0.0), row["subject"]
+
+    def test_the_reference_is_awarded_no_central_heating_grant(self, document) -> None:
+        """hisim-fig7: the radiators are kept, so no scheme is even asked about them."""
+        schemes = {row["scheme"] for row in document["reference"]["subsidies"]}
+        assert "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE" not in schemes
+
+    def test_the_new_emitters_are_the_heating_installations_and_so_is_their_grant(self, document) -> None:
+        """The mockup's heating_installation replaces the radiators; the grant follows the measure."""
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        assert rows["HeatDistributionSystem"]["measure_id"] == "heating_installation"
+        grants = [
+            row for row in document["plan"]["subsidies"] if row["scheme"] == "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE"
+        ]
+        assert [(row["status"], row["measure_id"], row["stage"]) for row in grants] == [
+            ("awarded", "heating_installation", 1)
+        ]
+
+    def test_the_buffer_is_a_new_vessel_bought_by_the_heating_system_in_stage_one(self, runs, document) -> None:
+        """The whole heat-pump vessel at its price, in stage 1 only, the old one credited.
+
+        The price is the cost database's own for the package's vessel size, so the row is the new
+        vessel and not the increment over the old one that the splice used to charge.
+        """
+        from hisim.economics.database import CostDatabase
+        from hisim.loadtypes import ComponentType
+
+        _directory, _baseline, package = runs
+        extract = json.loads((package / "results" / "economic_inputs.json").read_text(encoding="utf-8"))
+        (facts,) = [entry["facts"] for entry in extract["cost_facts"] if entry["subject"] == "SimpleHotWaterStorage"]
+        assert facts["asset_class"] == "SPACE_HEATING_STORAGE"
+        entry = CostDatabase(None).get_device_entry(
+            ComponentType.SPACE_HEATING_STORAGE, document["parameters"]["price_basis_year"], "IE"
+        )
+        price = entry.investment_for_size(facts["size"])
+
+        row = {row["subject"]: row for row in document["plan"]["by_subject"]}["SimpleHotWaterStorage"]
+        assert row["measure_id"] == "heating_system"
+        assert row["stage"] == 1
+        assert [stage["stage"] for stage in row["investment_by_stage"]] == [1]
+        assert row["investment_by_stage"][0]["investment_in_euro"]["best"] == pytest.approx(price.best_estimate)
+        assert row["investment_in_euro"]["best"] == pytest.approx(price.best_estimate)
+        # What the row's NPV holds beyond the columns it lists is the anyway credit for the old
+        # vessel, which the house would have had to replace within the threshold anyway.
+        listed = sum(
+            row[column]["best"]
+            for column in (
+                "investment_in_euro",
+                "subsidy_in_euro",
+                "replacements_in_euro",
+                "maintenance_in_euro",
+                "residual_value_in_euro",
+            )
+        )
+        assert row["npv_in_euro"]["best"] - listed < 0.0
+
+    def test_the_cylinder_the_radiators_and_the_meters_are_kept(self, document) -> None:
+        """Kept equipment carries no measure and no purchase in any stage."""
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        for subject in ("DHWStorage", "ElectricityMeter"):
+            assert rows[subject]["measure_id"] is None, subject
+            assert rows[subject]["investment_by_stage"] == [], subject
+
+    def test_every_plan_row_splits_its_investment_by_stage(self, document) -> None:
+        """Both stages start in year 0, so each row's split sums to its plan-wide figure."""
+        for row in document["plan"]["by_subject"]:
+            for slot in ("min", "best", "max"):
+                split = sum(stage["investment_in_euro"][slot] for stage in row["investment_by_stage"])
+                assert split == pytest.approx(row["investment_in_euro"][slot], abs=0.01), (row["subject"], slot)
+
+
+#: The measures of the co-installation cases: the mockup's own two heating measures.
+HEAT_PUMP = {"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"}}
+RADIATORS = {"id": "heating_installation", "options": {"type_of_system": "low_temperature_radiator"}}
+
+
+@pytest.fixture(name="heating_plans", scope="module")
+def fixture_heating_plans(tmp_path_factory, parameters_file):
+    """Price a house heated by one generator against one package, each pair run at most once.
+
+    Returns:
+        A function ``(generator, package name) -> document``; the package names are
+        ``"radiators"`` (heating_installation alone) and ``"heat_pump_and_radiators"``.
+    """
+    directory = tmp_path_factory.mktemp("heating_plans")
+    packages = {"radiators": [RADIATORS], "heat_pump_and_radiators": [HEAT_PUMP, RADIATORS]}
+    jobs: Dict[str, Path] = {}
+    documents: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    def job(generator: str, package: str) -> Path:
+        name = f"{generator}-{package}"
+        if name not in jobs:
+            document = _document(with_measures=False)
+            document["house"]["heating"] = {"type_of_system": generator}
+            document["measures"] = copy.deepcopy(packages.get(package, []))
+            jobs[name] = _run(document, directory, name)
+        return jobs[name]
+
+    def priced(generator: str, package: str) -> Dict[str, Any]:
+        if (generator, package) not in documents:
+            documents[(generator, package)] = _price(
+                [f"{job(generator, 'baseline')}:0:baseline", f"{job(generator, package)}:0:package"],
+                parameters_file,
+                directory / f"{generator}-{package}-{StagedDocument.FILE_NAME}",
+            )
+        return documents[(generator, package)]
+
+    return priced
+
+
+def _grant_rows(document: Dict[str, Any], scheme: str) -> List[Tuple[str, Any, Any]]:
+    """``(status, measure_id, stage)`` of every plan row of one scheme."""
+    return [
+        (row["status"], row["measure_id"], row["stage"])
+        for row in document["plan"]["subsidies"]
+        if row["scheme"] == scheme
+    ]
+
+
+class TestTheHeatPumpGrantsFollowWhatThePackageInstalls:
+    """Owner decisions 2026-09-26 on the Irish heat-pump grants, on real runs of three houses.
+
+    The central-heating grant is for emitters installed *beside a heat pump* (its legal basis), which
+    the catalogue now states with ``package.installed_asset_classes contains HeatPump``; the unit
+    grant, like the central-heating one, is not for a house that already heats with a heat pump.
+    """
+
+    @pytest.mark.parametrize("generator", ["conventional_oil_heating", "conventional_gas_heating"])
+    def test_new_radiators_on_a_boiler_get_no_central_heating_grant(self, heating_plans, generator) -> None:
+        """heating_installation alone: the emitters are replaced, and nothing heats them with a heat pump."""
+        rows = _grant_rows(heating_plans(generator, "radiators"), "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE")
+        assert rows == [("ineligible", "heating_installation", 1)]
+
+    @pytest.mark.parametrize("generator", ["conventional_oil_heating", "conventional_gas_heating"])
+    def test_new_radiators_beside_a_new_heat_pump_get_it(self, heating_plans, generator) -> None:
+        """heating_system and heating_installation in one stage: the grant is awarded, once."""
+        document = heating_plans(generator, "heat_pump_and_radiators")
+        assert _grant_rows(document, "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE") == [
+            ("awarded", "heating_installation", 1)
+        ]
+        assert _grant_rows(document, "IE_SEAI_HEAT_PUMP_UNIT_HOUSE") == [("awarded", "heating_system", 1)]
+
+    def test_a_heat_pump_replacing_a_heat_pump_gets_neither_grant(self, heating_plans) -> None:
+        """A house that already heats with a heat pump: no unit grant and no central-heating grant."""
+        document = heating_plans("air_source_heat_pump", "heat_pump_and_radiators")
+        assert _grant_rows(document, "IE_SEAI_HEAT_PUMP_UNIT_HOUSE") == [("ineligible", "heating_system", 1)]
+        assert _grant_rows(document, "IE_SEAI_HEAT_PUMP_CENTRAL_HEATING_HOUSE") == [
+            ("ineligible", "heating_installation", 1)
+        ]
 
 
 class TestTheBackendsStageLayout:

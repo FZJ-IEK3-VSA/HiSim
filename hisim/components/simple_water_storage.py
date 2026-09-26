@@ -1195,7 +1195,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     def get_cost_capex(
         config: SimpleHotWaterStorageConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
-        """Returns investment cost, CO2 emissions and lifetime."""
+        """Returns investment cost, CO2 emissions and lifetime.
+
+        This legacy capex path prices the buffer as ``THERMAL_ENERGY_STORAGE``, while the
+        lifecycle cost engine's adapter (``hisim/economics/adapter.py``) declares it
+        ``SPACE_HEATING_STORAGE``, a class of its own so the existing-asset register can tell the
+        buffer from the hot-water cylinder (renovisorissues #48). The two classes are priced alike;
+        this path and the report goldens keep the old class so that no golden moves.
+        """
         kpi_tag = KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING
         component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
         unit = lt.Units.LITER
@@ -1957,7 +1964,14 @@ class SimpleDHWStorage(SimpleWaterStorage):
     def get_cost_capex(
         config: SimpleDHWStorageConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
-        """Returns investment cost, CO2 emissions and lifetime."""
+        """Returns investment cost, CO2 emissions and lifetime.
+
+        This legacy capex path prices the cylinder as ``THERMAL_ENERGY_STORAGE``, while the
+        lifecycle cost engine's adapter (``hisim/economics/adapter.py``) declares it
+        ``DOMESTIC_HOT_WATER_STORAGE``, a class of its own so the existing-asset register can tell
+        the cylinder from the space-heating buffer (renovisorissues #48). The two classes are priced
+        alike; this path and the report goldens keep the old class so that no golden moves.
+        """
         kpi_tag = KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
         component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
         unit = lt.Units.LITER

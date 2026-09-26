@@ -39,6 +39,7 @@ from hisim.economics.database import CostDatabase, SourceRegistry
 from hisim.economics.subsidies import (
     PerUnitBenefit,
     SubsidyCatalog,
+    SubsidyContextFields,
     SubsidyScheme,
     TaxCreditBenefit,
     TieredPerUnitBenefit,
@@ -382,7 +383,7 @@ def validate_subsidy_catalog(
     asked: Set[str] = set()
     for scheme in catalog.schemes:
         for fieldname in scheme_context_fields(scheme):
-            if fieldname and not fieldname.startswith("measure."):
+            if fieldname and not SubsidyContextFields.is_computed(fieldname):
                 asked.update(question_targets(fieldname))
     for fieldname in sorted(asked):
         entry = catalog.questions.get(fieldname)

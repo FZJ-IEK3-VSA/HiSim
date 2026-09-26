@@ -230,7 +230,9 @@ class TestHandComputedExamples:
             billing=[BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=5000.0)],
         )
         result = evaluator.evaluate(inputs, GREENFIELD_GROSS)
-        price = database.get_energy_price(EnergyCarrier.ELECTRICITY, 2024, "DE").working_price_in_euro_per_kwh.best_estimate
+        price = database.get_energy_price(
+            EnergyCarrier.ELECTRICITY, 2024, "DE"
+        ).working_price_in_euro_per_kwh.best_estimate
         assert result.total_npv_in_euro.best_estimate == pytest.approx(5000.0 * price * 10)
 
     def test_feed_in_is_negative_and_fixed_nominal(self, database):
@@ -272,7 +274,9 @@ class TestSlotProperties:
     def test_every_total_satisfies_low_avg_high(self, database):
         """LOW <= BEST_ESTIMATE <= HIGH on every result figure."""
         evaluator = EconomicEvaluator(database, zero_rate_parameters())
-        band_facts = make_facts(investment_band=UncertainValue(best_estimate=1000, minimum=800, maximum=1400), lifetime=10.0)
+        band_facts = make_facts(
+            investment_band=UncertainValue(best_estimate=1000, minimum=800, maximum=1400), lifetime=10.0
+        )
         inputs = EvaluationInputs(
             simulation_year=2024,
             simulated_period_fraction=1.0,
@@ -724,3 +728,55 @@ class TestNegativeFlexibilityValue:
             for finding in run_plausibility_checks(matrix)
             if finding.check_id == CheckIds.CHECK_FLEXIBILITY_VALUE
         ]
+
+
+class TestTheInstallationVerdict:
+    """The §4.1 verdict names one replaced asset, and only where something is bought."""
+
+    @staticmethod
+    def _asset(asset_class: ComponentType, replaced_by: Optional[ComponentType] = None) -> ExistingAsset:
+        """A 15 kW asset of 2010, replaced by ``replaced_by`` when one is given."""
+        return ExistingAsset(
+            asset_class=asset_class,
+            size=15.0,
+            size_unit=Units.KILOWATT,
+            installation_year=2010,
+            replaced_by_asset_classes=[replaced_by] if replaced_by is not None else [],
+        )
+
+    def test_two_assets_replaced_by_one_class_are_refused_by_name(self):
+        """First match used to decide whose removal and write-off the heat pump carried."""
+        from hisim.economics.calculators.context_resolution import installation_verdict
+
+        register = ExistingAssetRegister(
+            assets=[
+                self._asset(ComponentType.OIL_HEATER, ComponentType.HEAT_PUMP),
+                self._asset(ComponentType.GAS_HEATER, ComponentType.HEAT_PUMP),
+            ]
+        )
+        with pytest.raises(ValueError, match="'OilHeater'.*and 'GasHeater'"):
+            installation_verdict(ComponentType.HEAT_PUMP, InstallationContext.BROWNFIELD, register)
+
+    def test_status_quo_replaces_nothing_and_keeps_the_like_for_like_asset(self):
+        """The do-nothing reference carries out no replacement, so the old boiler is kept and ages."""
+        from hisim.economics.calculators.context_resolution import installation_verdict
+
+        boiler = self._asset(ComponentType.GAS_HEATER, ComponentType.GAS_HEATER)
+        register = ExistingAssetRegister(assets=[boiler])
+
+        verdict = installation_verdict(ComponentType.GAS_HEATER, InstallationContext.STATUS_QUO, register)
+        assert (verdict.is_new_investment, verdict.replaced_asset, verdict.kept_asset) == (False, None, boiler)
+        brownfield = installation_verdict(ComponentType.GAS_HEATER, InstallationContext.BROWNFIELD, register)
+        assert (brownfield.is_new_investment, brownfield.replaced_asset, brownfield.kept_asset) == (True, boiler, None)
+
+    def test_a_contradictory_verdict_cannot_be_built(self):
+        """A replacement is an investment, a kept asset is not, and no verdict is both."""
+        from hisim.economics.calculators.context_resolution import InstallationVerdict
+
+        boiler = self._asset(ComponentType.GAS_HEATER)
+        with pytest.raises(ValueError, match="a replacement is a new investment"):
+            InstallationVerdict(is_new_investment=False, replaced_asset=boiler)
+        with pytest.raises(ValueError, match="a kept existing asset is not a new investment"):
+            InstallationVerdict(is_new_investment=True, kept_asset=boiler)
+        with pytest.raises(ValueError, match="never both"):
+            InstallationVerdict(is_new_investment=True, replaced_asset=boiler, kept_asset=boiler)

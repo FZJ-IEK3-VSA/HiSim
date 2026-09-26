@@ -6,14 +6,16 @@
     "levy_rate_per_year": 0.08,
     "heating_levy_rate_per_year": 0.10,
     "heating_cap_in_euro_per_m2_per_month": 0.5,
-    "heating_measure_component_types_comment": "ComponentType names levied under §559e instead of §559 (cost_spec.md §6.4, D27): heat-supply measures that satisfy the §71 GEG 65-%-renewable options - electric heat pump (§71 Abs. 3 Nr. 2), connection to a heat network (Nr. 1), solar thermal (§71e), biomass boilers (§71g) - plus the heat storage installed as part of such a measure. Deliberately excluded and therefore levied at 8 %: fossil gas and oil boilers (not §71-compliant), hydrogen-ready and direct-electric heating (compliant only under further conditions this engine does not model), heat emitters and the whole building envelope.",
+    "heating_measure_component_types_comment": "ComponentType names levied under §559e instead of §559 (cost_spec.md §6.4, D27): heat-supply measures that satisfy the §71 GEG 65-%-renewable options - electric heat pump (§71 Abs. 3 Nr. 2), connection to a heat network (Nr. 1), solar thermal (§71e), biomass boilers (§71g) - plus the heat storage installed as part of such a measure (THERMAL_ENERGY_STORAGE, and the space-heating buffer and the hot-water cylinder it was split into). Deliberately excluded and therefore levied at 8 %: fossil gas and oil boilers (not §71-compliant), hydrogen-ready and direct-electric heating (compliant only under further conditions this engine does not model), heat emitters and the whole building envelope.",
     "heating_measure_component_types": [
       "HEAT_PUMP",
       "DISTRICT_HEATING",
       "SOLAR_THERMAL_SYSTEM",
       "PELLET_HEATER",
       "WOOD_CHIP_HEATER",
-      "THERMAL_ENERGY_STORAGE"
+      "THERMAL_ENERGY_STORAGE",
+      "SPACE_HEATING_STORAGE",
+      "DOMESTIC_HOT_WATER_STORAGE"
     ],
     "cap_in_euro_per_m2_per_month": 3.0,
     "cap_low_rent_in_euro_per_m2_per_month": 2.0,

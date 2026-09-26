@@ -260,6 +260,64 @@
       "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
     },
     {
+      "component_type": "SPACE_HEATING_STORAGE",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 16.1061,
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5958,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_19",
+        "src_capex_20",
+        "src_capex_32",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band). The space-heating buffer vessel's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
+    },
+    {
+      "component_type": "DOMESTIC_HOT_WATER_STORAGE",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 16.1061,
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5958,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_19",
+        "src_capex_20",
+        "src_capex_32",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band). The domestic-hot-water cylinder's row, copied unchanged from THERMAL_ENERGY_STORAGE when the buffer and the hot-water cylinder became two asset classes (the existing-asset register matches by class); a price law of its own is hisim-4wo2."
+    },
+    {
       "component_type": "SOLAR_THERMAL_SYSTEM",
       "valid_from_year": 2025,
       "specific_investment": {

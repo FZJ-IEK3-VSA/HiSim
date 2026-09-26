@@ -2566,6 +2566,11 @@
               "SEMI_DETACHED_OR_END_TERRACE",
               "MID_TERRACE"
             ]
+          },
+          {
+            "field": "building.existing_heating.asset_class",
+            "op": "!=",
+            "value": "HeatPump"
           }
         ]
       },
@@ -2636,6 +2641,11 @@
             "field": "building.dwelling_type",
             "op": "==",
             "value": "APARTMENT"
+          },
+          {
+            "field": "building.existing_heating.asset_class",
+            "op": "!=",
+            "value": "HeatPump"
           }
         ]
       },
@@ -2717,6 +2727,11 @@
             "field": "building.existing_heating.asset_class",
             "op": "!=",
             "value": "HeatPump"
+          },
+          {
+            "field": "package.installed_asset_classes",
+            "op": "contains",
+            "value": "HeatPump"
           }
         ]
       },
@@ -2793,6 +2808,11 @@
           {
             "field": "building.existing_heating.asset_class",
             "op": "!=",
+            "value": "HeatPump"
+          },
+          {
+            "field": "package.installed_asset_classes",
+            "op": "contains",
             "value": "HeatPump"
           }
         ]

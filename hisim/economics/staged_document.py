@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from hisim.economics.calculators.financing_application import FinancingConstants
+from hisim.economics.carriers import bill_subjects
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
@@ -800,8 +801,9 @@ class StagedDocument:
             quantities = result.annual_energy_quantities_by_carrier[carrier]
             cost = UncertainValue.exact(0.0)
             revenue = UncertainValue.exact(0.0)
+            subjects = bill_subjects(carrier)
             for entry in scoped.entries:
-                if entry.year != 1 or entry.subject != carrier:
+                if entry.year != 1 or entry.subject not in subjects:
                     continue
                 if entry.category in CategoryRules.BILL_CATEGORIES:
                     cost = cost + entry.amount_in_euro

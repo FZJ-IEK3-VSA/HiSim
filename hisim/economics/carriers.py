@@ -19,7 +19,7 @@ and `LoadTypes` (the adapter and the meter components make that mapping where th
 from __future__ import annotations
 
 import enum
-from typing import Dict
+from typing import Dict, FrozenSet
 
 
 @enum.unique
@@ -96,6 +96,44 @@ class UsefulHeatKind(str, enum.Enum):
 
     ROOM_HEATING = "ROOM_HEATING"
     HOT_WATER = "HOT_WATER"
+
+
+#: The carriers whose sold kilowatt hours are booked under a subject other than their own: the
+#: electricity fed into the grid is priced by the ``ELECTRICITY_FEED_IN`` row and booked under that
+#: subject. Every other carrier books a feed-in credit, if its contract grants one, under itself.
+_REVENUE_SUBJECT_BY_CARRIER: Dict[str, str] = {
+    EnergyCarrier.ELECTRICITY.value: EnergyCarrier.ELECTRICITY_FEED_IN.value,
+}
+
+
+def revenue_subject(carrier: str) -> str:
+    """Names the timeline subject a carrier's ``FEED_IN_REVENUE`` entries are booked under.
+
+    The one place that says where the revenue for sold energy lands: the energy calculator books
+    under it, and every view that reads a carrier's year-1 bill back gathers it through
+    `bill_subjects`, so the booking and the reading cannot drift apart (renovisorissues #47).
+
+    Args:
+        carrier: An `EnergyCarrier` or its value, as the per-carrier quantities key it.
+
+    Returns:
+        The subject's value; the carrier's own value for every carrier without a separate one.
+    """
+    key = carrier.value if isinstance(carrier, EnergyCarrier) else carrier
+    return _REVENUE_SUBJECT_BY_CARRIER.get(key, key)
+
+
+def bill_subjects(carrier: str) -> FrozenSet[str]:
+    """Lists every timeline subject a carrier's bill is booked under: its own and its revenue's.
+
+    Args:
+        carrier: An `EnergyCarrier` or its value.
+
+    Returns:
+        The carrier's own value and `revenue_subject` of it (one element when they coincide).
+    """
+    key = carrier.value if isinstance(carrier, EnergyCarrier) else carrier
+    return frozenset((key, revenue_subject(key)))
 
 
 def validate_energy_attribution(attribution: Dict[str, Dict[str, float]], context: str) -> None:

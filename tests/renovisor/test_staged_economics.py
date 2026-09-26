@@ -296,6 +296,23 @@ class TestTheEndToEndDocument:
         """Doing nothing has a price too: twenty years of gas, maintenance and replacements."""
         assert document["reference"]["totals"]["npv_in_euro"]["best"] > 0
 
+    def test_every_row_that_sells_states_a_negative_revenue(self, document) -> None:
+        """Sold kilowatt hours earn money, and money arriving is negative (spec §3, renovisorissues #47).
+
+        The package's array feeds in at the Irish ``ELECTRICITY_FEED_IN`` rate; the row used to
+        report the kWh it sold and a revenue of zero, because the engine books that revenue under
+        the feed-in subject and the row read only the carrier's own.
+        """
+        selling = [row for row in document["plan"]["energy_year1"] if row["sold_in_kwh"] > 0]
+        assert selling, "the package's array sells nothing, so this case would prove nothing"
+        for variant in ("reference", "plan"):
+            for row in document[variant]["energy_year1"]:
+                revenue = row["revenue_in_euro"]
+                if row["sold_in_kwh"] > 0:
+                    assert revenue["best"] < 0 and revenue["max"] <= 0, (variant, row)
+                else:
+                    assert revenue == {"min": 0.0, "best": 0.0, "max": 0.0}, (variant, row)
+
     def test_the_stacks_add_up_on_the_written_file(self, document) -> None:
         """The document's own promise, on a real run rather than on a synthetic plan."""
         for variant in ("reference", "plan"):

@@ -17,11 +17,13 @@ from typing import Any, Dict
 
 import pytest
 
+from hisim.economics.carriers import revenue_subject
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.staged import StagedEvaluator
 from hisim.economics.staged_document import CostGroup, CostGroups, StagedDocument
 from hisim.economics.subsidies import PayoutKind
 from hisim.economics.timeline import CostCategory
+from hisim.economics.views import carrier_year_one_bills
 from hisim.loadtypes import ComponentType
 
 from tests.economics.synthetic_stages import (
@@ -860,3 +862,110 @@ class TestTheEmissionsAreOnePhysicalFact:
 
         assert series[0] == series[1] == series[2]
         assert any(mass > 0 for mass in series[0]), "a house that burns nothing would prove nothing"
+
+
+class TestTheFeedInRevenueReachesTheElectricityRow:
+    """``plan.energy_year1``'s electricity row states the revenue for the kWh it says were sold.
+
+    The engine books feed-in revenue under the ``ELECTRICITY_FEED_IN`` subject, not under
+    ``ELECTRICITY``; the row used to gather only the carrier's own subject and so reported sold
+    kilowatt hours earning nothing (renovisorissues #47). The plan here has the heat pump from
+    year 0 feed :attr:`SyntheticPlan.SOLD_ELECTRICITY_IN_KWH` into the grid, so year 1 sells.
+    """
+
+    @pytest.fixture(name="selling", scope="class")
+    def fixture_selling(self, tmp_path_factory):
+        """The selling plan's staged result and its written document, read back from disk."""
+        directory = tmp_path_factory.mktemp("selling_plan")
+        database = write_database(str(directory / "database"))
+        parameters = EconomicParameters(
+            observation_period_in_years=SyntheticPlan.HORIZON,
+            interest_rate=SyntheticPlan.INTEREST_RATE,
+            country=SyntheticPlan.COUNTRY,
+            price_basis_year=SyntheticPlan.YEAR,
+            co2_price_scenario="none",
+            apply_subsidies=False,
+        )
+        perspective = brownfield_perspective()
+        stages = [
+            baseline_stage(),
+            heat_pump_stage(0, electricity_sold_in_kwh=SyntheticPlan.SOLD_ELECTRICITY_IN_KWH),
+        ]
+        result = StagedEvaluator(database).evaluate(stages, parameters, perspective)
+        path = directory / StagedDocument.FILE_NAME
+        StagedDocument(result, parameters, perspective).write(path)
+        return result, json.loads(path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _electricity_row(document: Dict[str, Any]) -> Dict[str, Any]:
+        """The plan's year-1 electricity row."""
+        rows = [row for row in document["plan"]["energy_year1"] if row["carrier"] == "ELECTRICITY"]
+        assert len(rows) == 1
+        row: Dict[str, Any] = rows[0]
+        return row
+
+    def test_the_row_sells_what_the_stage_fed_in(self, selling):
+        """The precondition: the row reports the sold kilowatt hours at all."""
+        _, document = selling
+        assert self._electricity_row(document)["sold_in_kwh"] == pytest.approx(
+            SyntheticPlan.SOLD_ELECTRICITY_IN_KWH
+        )
+
+    def test_the_revenue_is_the_sold_kwh_at_the_feed_in_rate_and_negative(self, selling):
+        """Best is minus sold times the best rate; min and max come from the rate band, mirrored."""
+        _, document = selling
+        revenue = self._electricity_row(document)["revenue_in_euro"]
+        sold = SyntheticPlan.SOLD_ELECTRICITY_IN_KWH
+        low_rate, best_rate, high_rate = SyntheticPlan.FEED_IN_RATE_IN_EURO_PER_KWH
+
+        assert revenue["best"] == pytest.approx(-sold * best_rate)
+        assert revenue["min"] == pytest.approx(-sold * high_rate)
+        assert revenue["max"] == pytest.approx(-sold * low_rate)
+        assert revenue["min"] <= revenue["best"] <= revenue["max"] < 0
+
+    def test_the_revenue_equals_the_year_one_timeline_entries(self, selling):
+        """The row states exactly what the timeline booked as year-1 feed-in revenue."""
+        result, document = selling
+        booked = [
+            entry.amount_in_euro
+            for entry in result.plan.scoped_timeline().entries
+            if entry.year == 1 and entry.category == CostCategory.FEED_IN_REVENUE
+        ]
+        assert booked, "the plan must book feed-in revenue, or the row has nothing to agree with"
+        assert {
+            entry.subject
+            for entry in result.plan.scoped_timeline().entries
+            if entry.year == 1 and entry.category == CostCategory.FEED_IN_REVENUE
+        } == {revenue_subject("ELECTRICITY")}
+        revenue = self._electricity_row(document)["revenue_in_euro"]
+
+        assert revenue["best"] == pytest.approx(sum(amount.best_estimate for amount in booked))
+        assert revenue["min"] == pytest.approx(sum(amount.minimum for amount in booked))
+        assert revenue["max"] == pytest.approx(sum(amount.maximum for amount in booked))
+
+    def test_the_revenue_agrees_with_the_year_one_bill_view(self, selling):
+        """The document and `views.carrier_year_one_bills` read the same subjects of one bill."""
+        result, document = selling
+        bill = carrier_year_one_bills(result.plan)["ELECTRICITY"]
+        row = self._electricity_row(document)
+
+        assert row["revenue_in_euro"]["best"] == pytest.approx(
+            bill.by_category_in_euro[CostCategory.FEED_IN_REVENUE]
+        )
+        assert row["cost_in_euro"]["best"] == pytest.approx(bill.total_excluding_feed_in_in_euro)
+
+    def test_the_revenue_does_not_leak_into_the_cost_or_the_price(self, selling):
+        """The cost and the effective price are the purchase alone: a credit is not a kWh's price."""
+        _, document = selling
+        row = self._electricity_row(document)
+        bought_cost = SyntheticPlan.RENOVATED_ELECTRICITY_IN_KWH * SyntheticPlan.ELECTRICITY_PRICE_IN_EURO_PER_KWH
+
+        assert row["cost_in_euro"]["best"] == pytest.approx(bought_cost)
+        assert row["effective_price_in_euro_per_kwh"]["best"] == pytest.approx(
+            SyntheticPlan.ELECTRICITY_PRICE_IN_EURO_PER_KWH
+        )
+
+    def test_the_selling_document_validates(self, selling):
+        """A row with revenue still matches the shipped schema."""
+        _, document = selling
+        StagedDocument.validate(document)

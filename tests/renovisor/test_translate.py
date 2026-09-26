@@ -619,6 +619,43 @@ class TestTheEconomicsOnlyLeaves:
             assert line.target == Translator.ECONOMICS_TARGET
             assert line.value == value
 
+    @pytest.mark.parametrize(
+        "element, measure, status",
+        [
+            ("facade", True, ReportStatus.USED),
+            ("facade", False, ReportStatus.APPROXIMATED),
+            ("roof", False, ReportStatus.APPROXIMATED),
+        ],
+    )
+    def test_an_envelope_year_is_used_only_where_a_measure_touches_the_element(
+        self, element: str, measure: bool, status: ReportStatus
+    ) -> None:
+        """hisim-glv7: the mockup insulates its facade (which has an area) and leaves its roof alone."""
+        document = copy.deepcopy(ContractFiles.request_mockup())
+        document["house"]["building"][element]["installation_year"] = 1995
+        if not measure:
+            document["measures"] = [m for m in document["measures"] if m["id"] != "external_insulation"]
+
+        line = translate(document).report.line(f"house.building.{element}.installation_year")
+
+        assert line is not None
+        assert line.status is status
+        assert line.value == 1995
+
+    def test_an_omitted_applicant_role_is_reported_defaulted(self) -> None:
+        """hisim-p6uq: the mockup names no role, and the schema's default is a line, not silence."""
+        system = translate(copy.deepcopy(ContractFiles.request_mockup()))
+
+        line = system.report.line("applicant.role")
+
+        assert line is not None
+        assert line.status is ReportStatus.DEFAULTED
+        assert line.value == "owner_occupier"
+        assert all(
+            system.report.line(f"applicant.{key}") is None
+            for key in ("taxable_household_income_in_euro", "household_size", "receives_means_tested_benefit")
+        )
+
     def test_an_envelope_measures_cost_block_is_used(self) -> None:
         """The mockup prices its facade layer: the band is read into the economic context."""
         document = copy.deepcopy(ContractFiles.request_mockup())

@@ -957,6 +957,10 @@ class Translator:
         for path, value, note in built.approximations:
             if not report.has(path):
                 report.approximated(path, note, value=value)
+        # A stated leaf the early accounting called used, which no figure of this package reads:
+        # its line is replaced, so the report does not claim an effect it cannot have (hisim-glv7).
+        for path, value, note in built.unread:
+            report.approximated(path, note, value=value)
         translated = TranslatedSystem(
             model=model,
             base_file_name=base_file_name,

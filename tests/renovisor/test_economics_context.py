@@ -465,6 +465,84 @@ class TestTheMappingReportHalf:
         ]
 
 
+class TestTheEnvelopeInstallationYears:
+    """hisim-glv7: an element's stated year counts only where a measure replaces or insulates it.
+
+    The engine reads a register row's age for the asset a measure replaces (the sunk cost and the
+    anyway-cost credit) and for a kept asset a cost subject matches; a kept envelope element matches
+    no subject, because only a measure creates one. So the year is read exactly when the element
+    has a row and a measure of the package touches it, and the builder says so otherwise.
+    """
+
+    #: A valid window replacement, as the catalogue requires its options.
+    WINDOW_REPLACEMENT: Dict[str, Any] = {
+        "id": "window_replacement",
+        "options": {"glazing_panes": 3, "frame_material": "wood", "low_emissivity_coating": True},
+    }
+
+    @staticmethod
+    def _unread(built: Any) -> Dict[str, Any]:
+        """The builder's unread leaves, path -> (value, sentence)."""
+        return {path: (value, note) for path, value, note in built.unread}
+
+    def test_a_year_on_an_insulated_element_is_read(self) -> None:
+        """The mockup insulates its facade, whose row carries the stated year and is replaced."""
+        document = _mockup()
+        document["house"]["building"]["facade"]["installation_year"] = 1995
+        built = _built(document)
+
+        facade = built.context.existing_assets.find(EnvelopeAssets.of_element(ThermalElement.FACADE))
+        assert facade is not None and facade.replaced_by_asset_classes
+        assert facade.installation_year == 1995
+        assert "house.building.facade.installation_year" not in self._unread(built)
+
+    def test_a_year_on_a_kept_element_is_recorded_on_its_row_and_read_by_nothing(self) -> None:
+        """Without the facade measure the row keeps the year, and the report must not call it used."""
+        document = _mockup()
+        document["house"]["building"]["facade"]["installation_year"] = 1995
+        document["measures"] = [m for m in document["measures"] if m["id"] != "external_insulation"]
+        built = _built(document)
+
+        facade = built.context.existing_assets.find(EnvelopeAssets.of_element(ThermalElement.FACADE))
+        assert facade is not None and not facade.replaced_by_asset_classes
+        assert facade.installation_year == 1995
+        assert self._unread(built)["house.building.facade.installation_year"] == (
+            1995,
+            EconomicContextBuilder.ENVELOPE_YEAR_KEPT_NOTE,
+        )
+
+    def test_a_year_on_an_element_without_an_area_lands_nowhere(self) -> None:
+        """The mockup's window has no area, so no row exists for the year to date, measure or not."""
+        document = _mockup()
+        document["house"]["building"]["window"]["installation_year"] = 1990
+        document["measures"].append(self.WINDOW_REPLACEMENT)
+        built = _built(document)
+
+        assert built.context.existing_assets.find(EnvelopeAssets.of_element(ThermalElement.WINDOW)) is None
+        assert self._unread(built)["house.building.window.installation_year"] == (
+            1990,
+            EconomicContextBuilder.ENVELOPE_YEAR_UNREGISTERED_NOTE,
+        )
+
+    def test_a_year_on_a_replaced_element_with_an_area_is_read(self) -> None:
+        """A window replacement over a window with an area replaces the row that carries the year."""
+        document = _mockup()
+        document["house"]["building"]["window"]["installation_year"] = 1990
+        document["measures"].append(self.WINDOW_REPLACEMENT)
+        built = _built(document, _building(facade_area_in_m2=173.0, window_area_in_m2=29.0))
+
+        window = built.context.existing_assets.find(EnvelopeAssets.of_element(ThermalElement.WINDOW))
+        assert window is not None and window.replaced_by_asset_classes
+        assert window.installation_year == 1990
+        assert "house.building.window.installation_year" not in self._unread(built)
+
+    def test_an_unstated_year_is_never_unread(self) -> None:
+        """An omitted year is no request leaf, so there is nothing to call used or unread."""
+        document = _mockup()
+        document["measures"] = []
+        assert not _built(document).unread
+
+
 class TestTheSubsidyContext:
     """Who is applying, and what stays unanswered rather than false."""
 
@@ -572,6 +650,24 @@ class TestTheSubsidyContext:
 
         assert context.applicant.actor is ApplicantActor.OWNER_OCCUPIER
         assert context.applicant.household_size == 4
+
+    def test_an_omitted_role_is_a_defaulted_line_and_no_other_omitted_key_is(self) -> None:
+        """hisim-p6uq: the schema defaults the role; every other omitted key stays a question."""
+        built = _built(_mockup())
+        applicant = [(path, value, note) for path, value, note in built.defaults if path.startswith("applicant.")]
+
+        assert applicant == [
+            ("applicant.role", "owner_occupier", EconomicContextBuilder.APPLICANT_ROLE_DEFAULTED_NOTE)
+        ]
+        assert ApplicantActor(applicant[0][1].upper()) is built.context.subsidy_context.applicant.actor
+
+    def test_a_stated_role_is_no_default(self) -> None:
+        """A stated role is the translator's early used line, never a default beside it."""
+        document = _mockup()
+        document["applicant"] = {"role": "owner_occupier", "main_residence": True}
+        built = _built(document)
+
+        assert all(not path.startswith("applicant.") for path, _value, _note in built.defaults)
 
     def test_the_dwelling_type_comes_from_the_building_type(self) -> None:
         """The mockup is a detached house, which is the band nearly every SEAI grant pays most for."""

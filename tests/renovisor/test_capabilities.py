@@ -15,15 +15,18 @@ battery.
 """
 
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Iterator, Mapping, Optional
+from typing import Any, ClassVar, Dict, Iterator, List, Mapping, Optional
 
 import copy
 import pytest
+from jsonschema import Draft202012Validator
 
 from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.capabilities import (
     Aggregation,
     CapabilityDocument,
+    FieldShape,
+    MaterialRows,
     MeasureStatus,
     NoteAggregation,
     Observation,
@@ -34,6 +37,7 @@ from hisim.renovisor.capabilities import (
     ProbeSet,
     RequestSchemaBounds,
     ResultsSection,
+    SchemaLeaves,
     unlisted_lines,
 )
 from hisim.renovisor.contract import ContractFiles
@@ -84,7 +88,7 @@ class TestTheProbeSet:
         assert anchor["house"]["heating"]["type_of_system"] == "conventional_gas_heating"
 
     def test_the_probe_material_is_the_mockups_external_insulation_row(self) -> None:
-        """No material is typed twice: a re-vendored mockup row is the row every probe sends."""
+        """No material is typed twice: a re-vendored mockup row is the row every measure probe carries."""
         mockup = ContractFiles.request_mockup()
         row = next(measure for measure in mockup["measures"] if measure["id"] == "external_insulation")
         expected = row["options"][CatalogueTable.MATERIAL]
@@ -102,6 +106,52 @@ class TestTheProbeSet:
 
         with pytest.raises(ValueError, match="calculation-request.mockup-1.yaml carries no 'external_insulation'"):
             ProbeSet.material(mockup)
+
+    def test_the_probe_material_is_the_rule_applied_to_its_materials_yaml_row(self) -> None:
+        """calculation-request.md §4.3 applied to eps_rigid_board gives the mockup's object, key order included."""
+        derived = MaterialRows.material_object(MaterialRows.row(ProbeSet.material()["asp_id"]))
+
+        assert derived == ProbeSet.material()
+        assert list(derived or {}) == list(ProbeSet.material())
+
+    def test_every_material_probe_sends_a_second_real_row_for_its_measure(self) -> None:
+        """hisim-8mjc: the row is one the measure's reverse lookup names, with another conductivity."""
+        base = ProbeSet.material()
+        probed = {
+            str(probe.subject).split(".", maxsplit=1)[0]: probe.value
+            for probe in ProbeSet.build()
+            if probe.kind is ProbeKind.OPTION and str(probe.subject).endswith(f".{CatalogueTable.MATERIAL}")
+        }
+        with_material = [
+            measure_id for measure_id in CatalogueTable.ids() if CatalogueTable.material_option(measure_id)
+        ]
+
+        assert sorted(probed) == sorted(with_material)
+        for measure_id, material in probed.items():
+            row = MaterialRows.row(material["asp_id"])
+            assert measure_id in row["measures"]
+            assert material == MaterialRows.material_object(row)
+            assert material["thermal_conductivity_w_mk"] != base["thermal_conductivity_w_mk"]
+
+    def test_a_range_is_its_midpoint_and_an_open_range_is_omitted(self) -> None:
+        """Scalars verbatim, ``{min, max}`` as the midpoint, ``max: .inf`` left out (§4.3)."""
+        row = {
+            "asp_id": "probe_row",
+            "thermal_conductivity_w_mk": 0.04,
+            "density_kg_m3": {"min": 10, "max": 30},
+            "lifespan_years": {"min": 50, "max": float("inf")},
+            "measures": ["external_insulation"],
+        }
+
+        assert MaterialRows.material_object(row) == {
+            "asp_id": "probe_row", "thermal_conductivity_w_mk": 0.04, "density_kg_m3": 20.0,
+        }
+
+    def test_a_row_without_a_conductivity_has_no_object_and_a_text_value_is_refused(self) -> None:
+        """The schema requires the conductivity; anything but a number or a range fails by name."""
+        assert MaterialRows.material_object({"asp_id": "no_lambda", "heat_capacity_j_kgk": 1000}) is None
+        with pytest.raises(ValueError, match="text_row.thermal_conductivity_w_mk"):
+            MaterialRows.material_object({"asp_id": "text_row", "thermal_conductivity_w_mk": "0.04"})
 
     def test_the_bare_baseline_carries_no_optional_block_at_all(self) -> None:
         """The request the defect of c02bc801 was never exercised by, now probed every time."""
@@ -127,6 +177,74 @@ class TestTheProbeSet:
     def test_the_set_is_bigger_than_the_catalogue_and_smaller_than_a_test_suite(self) -> None:
         """A few hundred probes is what a pure translator buys: the whole set runs in a second."""
         assert 200 < len(ProbeSet.build()) < 600
+
+    def test_every_settable_leaf_of_the_request_schema_is_varied(self) -> None:
+        """hisim-qzyv: a field added to the schema is probed without anybody writing a probe."""
+        varied = ProbeSet.varied_fields()
+
+        for path, leaf in SchemaLeaves.settable():
+            if "const" in leaf or path in ProbeSet.NOT_VARIED:
+                continue
+            assert ProbeSet.concrete(path) in varied, path
+
+    def test_every_probe_passes_the_request_schema(self) -> None:
+        """A probe the schema refuses would report a malformed request rather than a capability.
+
+        The semantic checks may refuse a probe -- ``ES`` has no TABULA typology, and a request may
+        not carry ``added_insulation`` -- which is what such a probe is there to show; the schema may
+        not, and neither may the prelude a field probe is measured from.
+        """
+        validator = Draft202012Validator(ContractFiles.request_schema())
+        anchor = ProbeSet.anchor()
+        requests = [probe.document(anchor) for probe in ProbeSet.build()]
+        requests.extend(ProbeSet.prelude(path).document(anchor) for path in ProbeSet.varied_fields())
+
+        for request in requests:
+            assert not [error.message for error in validator.iter_errors(request)]
+
+    def test_the_inventory_tables_come_first_and_keep_their_values(self) -> None:
+        """The hand-chosen points win over the schema's, and the generated leaves follow them."""
+        plan = ProbeSet.field_plan()
+        tables = [
+            *((f"{ProbeSet.HOUSE_PREFIX}{path}", values, FieldShape.ENUMERATED)
+              for path, values in ProbeSet.FIELD_VALUES.items()),
+            *((f"{ProbeSet.HOUSE_PREFIX}{path}", points, FieldShape.NUMERIC)
+              for path, points in ProbeSet.FIELD_PROBE_POINTS.items()),
+        ]
+
+        assert list(plan)[: len(tables)] == [path for path, _, _ in tables]
+        for path, values, shape in tables:
+            assert plan[path] == (tuple(values), shape), path
+
+    def test_a_point_inside_an_exclusive_bound_is_derived_from_the_range(self) -> None:
+        """An inclusive bound is probed at itself, an exclusive one just inside it; an open end is a choice."""
+        assert ProbeSet.derived_points("u", {"type": "number", "exclusiveMinimum": 0, "maximum": 10}) == (0.01, 10)
+        assert ProbeSet.derived_points("n", {"type": "integer", "exclusiveMinimum": 0, "maximum": 5}) == (1, 5)
+        assert ProbeSet.derived_points("y", {"type": "integer", "minimum": 1900, "maximum": 2100}) == (1900, 2100)
+        with pytest.raises(KeyError, match="OPEN_END_POINTS"):
+            ProbeSet.derived_points("open", {"type": "number", "minimum": 0})
+
+    def test_a_new_schema_leaf_is_probed_or_named(self) -> None:
+        """A boolean the schema adds is probed at both values; a string nobody chose values for stops the build."""
+        schema = copy.deepcopy(ContractFiles.request_schema())
+        schema["$defs"]["applicant"]["properties"]["owns_a_dog"] = {"type": "boolean"}
+
+        assert ProbeSet.field_plan(schema)["applicant.owns_a_dog"] == ((True, False), FieldShape.ENUMERATED)
+
+        schema["$defs"]["applicant"]["properties"]["nickname"] = {"type": "string"}
+        with pytest.raises(KeyError, match="applicant.nickname"):
+            ProbeSet.field_plan(schema)
+
+    def test_a_cost_probe_keeps_the_cheap_end_at_or_below_the_expensive_one(self) -> None:
+        """``measure.cost.band_invalid`` is the semantic check a band probe must not trip by accident."""
+        anchor = ProbeSet.anchor()
+        cost_probes = [probe for probe in ProbeSet.build() if str(probe.subject).startswith("measures[")]
+
+        assert len(cost_probes) == 5
+        for probe in cost_probes:
+            (entry,) = probe.document(anchor)["measures"]
+            assert entry["id"] == ProbeSet.COST_MEASURE
+            assert entry["cost"]["min_in_euro_per_m2"] <= entry["cost"]["max_in_euro_per_m2"], probe.name
 
 
 @pytest.mark.base
@@ -335,6 +453,18 @@ class TestTheDocument:
 @pytest.mark.base
 class TestTheRunner:
     """Every probe goes through validate, apply and translate, and nothing else."""
+
+    def test_a_probe_of_added_insulation_is_refused_by_the_semantic_check_alone(
+        self, document: CapabilityDocument
+    ) -> None:
+        """Owner decision of 2026-09-26: the schema admits the layer, only ``apply`` may write one."""
+        layers = [
+            result for result in document.results if ".added_insulation." in str(result.probe.subject)
+        ]
+
+        assert len(layers) == 3 * 26
+        for result in layers:
+            assert result.refused == ("added_insulation.not_allowed",), result.probe.name
 
     def test_a_refused_probe_is_a_result_rather_than_an_exception(self) -> None:
         """``ES`` has no TABULA typology; that is a refusal the document records, not a crash."""
@@ -564,6 +694,27 @@ class TestTheSchemaIsStrict:
 BOUND_KEYWORDS = ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "enum")
 
 
+def _shape(path: str) -> Optional[FieldShape]:
+    """Return what the probe set varies one request path as, or ``None`` when it does not vary it."""
+    return ProbeSet.field_shapes().get(path)
+
+
+def _published(document: CapabilityDocument) -> List[str]:
+    """Return the varied request paths some probe of the document's run translated, cost lines aside.
+
+    Those are the paths the document has to carry an entry for: a leaf all of whose probes the
+    request's checks refused (``added_insulation``) never reached a mapping report.
+    """
+    translated = {
+        str(result.probe.subject) for result in document.results
+        if result.probe.kind is ProbeKind.FIELD and not result.refused
+    }
+    return [
+        path for path in ProbeSet.varied_fields()
+        if path in translated and not path.startswith(Aggregation.PACKAGE_PREFIX)
+    ]
+
+
 def _request_schema_leaf(path: str) -> Optional[Dict[str, Any]]:
     """Return what the request schema declares about one dotted path, over refs and alternatives.
 
@@ -574,6 +725,9 @@ def _request_schema_leaf(path: str) -> Optional[Dict[str, Any]]:
     derives (``house.heating.installation_year``) that a request cannot carry.
     """
     schema = ContractFiles.request_schema()
+    if path.startswith("measures["):
+        # A cost leaf, ``measures[id=<id>].cost.<name>``: the same leaf of every package entry.
+        path = f"measures.{path.split('].', 1)[1]}"
 
     def expand(node: Mapping[str, Any]) -> Iterator[Mapping[str, Any]]:
         yield node
@@ -655,9 +809,10 @@ class TestNumericFields:
     def test_a_numeric_field_publishes_exactly_the_schemas_bounds(self, document: CapabilityDocument) -> None:
         """Each of the four bound keywords the schema declares, under its own name; nothing invented, no ``values``."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
-        for path in ProbeSet.FIELD_PROBE_POINTS:
-            full = f"{ProbeSet.HOUSE_PREFIX}{path}"
-            entry, declared = fields[full], _request_schema_leaf(full)
+        numeric = [path for path in _published(document) if _shape(path) is FieldShape.NUMERIC]
+        assert {f"{ProbeSet.HOUSE_PREFIX}{path}" for path in ProbeSet.FIELD_PROBE_POINTS} <= set(numeric)
+        for path in numeric:
+            entry, declared = fields[path], _request_schema_leaf(path)
             assert declared is not None, path
             assert "values" not in entry, path
             assert "enum" not in declared, path
@@ -682,7 +837,7 @@ class TestNumericFields:
 
     def test_only_a_probed_numeric_field_carries_bounds(self, document: CapabilityDocument) -> None:
         """A bound on any other entry would be one nobody derived from the schema."""
-        numeric = {f"{ProbeSet.HOUSE_PREFIX}{path}" for path in ProbeSet.FIELD_PROBE_POINTS}
+        numeric = {path for path, shape in ProbeSet.field_shapes().items() if shape is FieldShape.NUMERIC}
         for entry in document.body["fields"]:
             if set(entry) & {"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}:
                 assert entry["path"] in numeric, entry["path"]
@@ -703,14 +858,40 @@ class TestNumericFields:
         """An inventory enum the document lists without ``values`` would hide which values run."""
         for entry in document.body["fields"]:
             path = entry["path"]
-            declared = _request_schema_leaf(path) if path.startswith(ProbeSet.HOUSE_PREFIX) else None
+            declared = _request_schema_leaf(path)
             if declared is not None and "enum" in declared:
-                assert path.removeprefix(ProbeSet.HOUSE_PREFIX) in ProbeSet.FIELD_VALUES, path
+                assert _shape(path) is FieldShape.ENUMERATED, path
+                accepted = [value["value"] for value in entry["values"]]
+                assert accepted == [value for value in declared["enum"] if value in accepted], path
+
+    def test_a_country_without_a_typology_is_left_out_of_the_countrys_values(
+        self, document: CapabilityDocument
+    ) -> None:
+        """``ES`` is refused (``location.country.unsupported``), so the document lists the two that run."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+
+        assert [value["value"] for value in fields["location.country"]["values"]] == ["IE", "NL"]
+
+    def test_a_free_text_field_publishes_neither_values_nor_bounds(self, document: CapabilityDocument) -> None:
+        """The TABULA override is a string: its probe counts towards the field's status and nothing else."""
+        entry = {entry["path"]: entry for entry in document.body["fields"]}["house.building.tabula_building_code"]
+
+        assert entry["status"] == ReportStatus.USED.value
+        assert not set(entry) & {"values", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}
+
+    def test_every_varied_leaf_some_probe_translated_is_in_the_document(self, document: CapabilityDocument) -> None:
+        """Only a leaf whose every probe was refused (``added_insulation``) is absent; a cost line never shows."""
+        fields = {entry["path"] for entry in document.body["fields"]}
+
+        assert set(_published(document)) <= fields
+        assert not {path for path in fields if path.startswith(Aggregation.PACKAGE_PREFIX)}
 
     def test_every_probe_point_lies_inside_the_schema(self) -> None:
         """A probe the schema refuses would report a refusal rather than a capability."""
-        for path, points in ProbeSet.FIELD_PROBE_POINTS.items():
-            declared = _request_schema_leaf(f"{ProbeSet.HOUSE_PREFIX}{path}")
+        numeric = [path for path, shape in ProbeSet.field_shapes().items() if shape is FieldShape.NUMERIC]
+        for path in numeric:
+            points = ProbeSet.varied_fields()[path]
+            declared = _request_schema_leaf(path)
             assert declared is not None, path
             for point in points:
                 assert point >= declared.get("minimum", point), (path, point)
@@ -741,7 +922,11 @@ class TestNumericFields:
     def test_a_path_is_either_enumerated_or_numeric(self) -> None:
         """The two tables are disjoint, so neither silently shadows the other in the probe set."""
         assert not set(ProbeSet.FIELD_VALUES) & set(ProbeSet.FIELD_PROBE_POINTS)
-        assert len(ProbeSet.varied_fields()) == len(ProbeSet.FIELD_VALUES) + len(ProbeSet.FIELD_PROBE_POINTS)
+        shapes = ProbeSet.field_shapes()
+        for path in ProbeSet.FIELD_VALUES:
+            assert shapes[f"{ProbeSet.HOUSE_PREFIX}{path}"] is FieldShape.ENUMERATED, path
+        for path in ProbeSet.FIELD_PROBE_POINTS:
+            assert shapes[f"{ProbeSet.HOUSE_PREFIX}{path}"] is FieldShape.NUMERIC, path
 
     def test_an_enumerated_field_keeps_one_entry_per_value(self, document: CapabilityDocument) -> None:
         """Enumerations, booleans and the glazing-pane counts still list their values."""

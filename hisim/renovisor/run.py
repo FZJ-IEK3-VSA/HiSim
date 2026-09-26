@@ -124,7 +124,8 @@ class RequestFile:
                         code=ProblemCode.TYPE_INVALID,
                         message=f"the request file cannot be read as JSON or YAML: {error}",
                     )
-                ]
+                ],
+                structural=True,
             ) from error
 
 

@@ -6,11 +6,12 @@ pin, so a hand edit or a half-done refresh fails the build. They also parse each
 that is not valid YAML or JSON -- or a request schema that lost the definitions the validator
 resolves -- is caught before any translation code reads it.
 
-One of the four pinned files comes from the contract repository -- the measure catalogue -- and
+Two of the five pinned files come from the contract repository -- the measure catalogue and the
+material database, vendored again since 2026-09-26 for the capability probes (hisim-8mjc) -- and
 three from the specs repository (``renovisorissues``, where the shared specifications live since
 2026-09-23), each at a named commit. The contract repository's superseded v0.3 draft,
 ``openapi.yaml``, and the ``homeinventory.yaml`` it references are not vendored since 2026-09-25
-(hisim-4p3n), and neither is its material database. Every file in the directory is a pinned copy:
+(hisim-4p3n). Every file in the directory is a pinned copy:
 HiSim's former proposal for the capability document's ``results`` section is part of the shared
 ``measure-capabilities.openapi.yaml`` since 2026-09-23.
 """
@@ -120,33 +121,36 @@ class TestVendoredContract:
 
 
 @pytest.mark.base
-class TestTheMaterialDatabaseIsNotVendored:
-    """No ``materials.yaml`` is vendored here, and the pin has no entry for one.
+class TestTheMaterialDatabase:
+    """``materials.yaml`` is vendored beside the catalogue it generates the ``material`` options of.
 
-    The translator reads no material data at run time: rule 5 of the contract has the request
-    carry a material's physical properties, and its ``asp_id`` travels as provenance only. A
-    vendored copy of the material database would therefore be a file nothing reads, kept in step
-    with the contract for nothing. The one thing worth checking about it -- that every ``material``
-    option value of ``measures.yaml`` resolves to exactly one material row -- is a fact about two
-    files of the contract repository, so the owner's decision of 2026-09-20 put that check with
-    both files in the contract repository and dropped the copy from HiSim. This test is what would
-    notice a refresh quietly bringing it back.
+    The translator reads no material data (rule 5); the capability probe set does, to send real rows
+    rather than invented materials (owner decision 2026-09-26, hisim-8mjc). The hash is checked with
+    every other pinned file above; here, that the copy is the catalogue's own revision and has the
+    shape the probe set reads.
     """
 
-    #: The file name this package deliberately does not hold, spelled out because there is no
-    #: ``ContractFiles`` attribute for it any more.
-    MATERIALS_FILENAME: ClassVar[str] = "materials.yaml"
+    def test_it_is_pinned_at_the_catalogue_revision(self) -> None:
+        """Both contract files come from one commit, so the reverse lookup and the catalogue agree."""
+        files = ContractFiles.pinned()["files"]
+        materials, measures = files[ContractFiles.MATERIALS_FILENAME], files[ContractFiles.MEASURES_FILENAME]
+        assert materials["repository"] == ContractSources.CONTRACT_REPOSITORY
+        assert materials["commit"] == measures["commit"]
 
-    def test_the_vendored_directory_holds_no_material_database(self) -> None:
-        """No ``materials.yaml`` beside the other vendored copies."""
-        assert not (ContractFiles.DIRECTORY / self.MATERIALS_FILENAME).exists(), (
-            f"{self.MATERIALS_FILENAME} is vendored again; the translator reads no material data "
-            "and the resolution check lives in the contract repository's CI"
-        )
-
-    def test_the_pin_records_no_material_database(self) -> None:
-        """``PINNED.yaml`` has no entry for it either, so no refresh would write one back."""
-        assert self.MATERIALS_FILENAME not in ContractFiles.pinned()["files"]
+    def test_every_row_has_an_id_and_the_measures_it_may_go_into(self) -> None:
+        """Each row names its ``asp_id`` once and lists only catalogue measures with a ``material`` option."""
+        rows = ContractFiles.materials()["materials"]
+        assert rows, "materials.yaml has no material rows"
+        with_material = {
+            measure["id"]
+            for measure in ContractFiles.measures()["measures"]
+            if any(option.get("name") == "material" for option in measure["options"])
+        }
+        ids = [row["asp_id"] for row in rows]
+        assert len(ids) == len(set(ids)), "an asp_id appears twice"
+        for row in rows:
+            unknown = set(row.get("measures") or []) - with_material
+            assert not unknown, f"{row['asp_id']} names measures without a material option: {sorted(unknown)}"
 
 
 @pytest.mark.base

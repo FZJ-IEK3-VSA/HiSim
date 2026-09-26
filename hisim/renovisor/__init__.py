@@ -29,7 +29,7 @@ here runs a simulation.
 
 *the run* -- :mod:`~hisim.renovisor.simulation` (the release's own parameters) and
 :mod:`~hisim.renovisor.run` (validate, translate, simulate, assemble), which
-:mod:`hisim.renovisor.__main__` exposes as five commands.
+:mod:`hisim.renovisor.__main__` exposes as six commands.
 
 *the result* -- :mod:`~hisim.renovisor.result`, :mod:`~hisim.renovisor.kpis`,
 :mod:`~hisim.renovisor.costs`, :mod:`~hisim.renovisor.layers` and
@@ -37,7 +37,9 @@ here runs a simulation.
 
 *the announcement* -- :mod:`~hisim.renovisor.capabilities` runs the whole probe set through the
 pure layers and aggregates it into the document the backend serves per image;
-:mod:`~hisim.renovisor.map` renders the same probe run as one committed HTML page.
+:mod:`~hisim.renovisor.map` renders the same probe run as one committed HTML page, and
+:mod:`~hisim.renovisor.verify` diffs every probe against its base, stage by stage (path
+verification, tier 1).
 
 The rule the whole package rests on: **fail loudly, except for what is written down.** An
 invalid request is refused by name with every problem at once; a feature the translator has not

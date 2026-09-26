@@ -13,7 +13,8 @@ written on its command line (owner decision 2026-09-24).
 Every vendored file comes from a git repository at a ref, and the script reads it there with
 ``git show``, recording the commit the ref resolved to and its date. Since 2026-09-23 there are two
 repositories. The **contract repository** (``renovisor-api-contract``, the positional checkout)
-holds the contract files at its root, of which HiSim vendors one: the measure catalogue. The
+holds the contract files at its root, of which HiSim vendors two: the measure catalogue and the
+material database. The
 **specs repository** (``renovisorissues`` on jugit, ``--specs``) holds, under ``specs/``, the shared
 specifications all packages read, among them the request schema the translator validates against,
 the worked example and the capability document's schema. They moved there from the contract
@@ -36,10 +37,11 @@ The sources are class attributes of :class:`ContractSources` so that a file movi
 path, branch or repository is a one-line change here and nowhere else. A file dropped from those
 attributes is dropped from the pin as well: the pin is written from the sources every run, so a
 vendored copy stops being recorded the moment it stops being a source. That is what happened to
-``materials.yaml`` on 2026-09-20, when HiSim stopped vendoring the material database it never
-reads, and to ``openapi.yaml`` and ``homeinventory.yaml`` on 2026-09-25 (hisim-4p3n), when it
-stopped vendoring the v0.3 draft the request schema supersedes: a copy kept only for the record is
-a file nothing reads, and the record is the contract repository's own history.
+``openapi.yaml`` and ``homeinventory.yaml`` on 2026-09-25 (hisim-4p3n), when HiSim stopped
+vendoring the v0.3 draft the request schema supersedes: a copy kept only for the record is a file
+nothing reads, and the record is the contract repository's own history. ``materials.yaml`` went the
+same way on 2026-09-20 and came back on 2026-09-26 (hisim-8mjc), when the capability probes began
+sending real material rows out of it.
 """
 
 import argparse
@@ -80,6 +82,7 @@ class ContractSources:
     #: vendored file name -> (git ref, path inside the contract repository)
     CONTRACT_BY_FILENAME: ClassVar[Dict[str, Tuple[str, str]]] = {
         ContractFiles.MEASURES_FILENAME: ("origin/main", "measures.yaml"),
+        ContractFiles.MATERIALS_FILENAME: ("origin/main", "materials.yaml"),
     }
 
     #: vendored file name -> (git ref, path inside the specs repository)

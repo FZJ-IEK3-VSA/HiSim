@@ -1,4 +1,4 @@
-"""T-CLI: the five commands, the four exit codes, and what each of them leaves on disk.
+"""T-CLI: the six commands, the four exit codes, and what each of them leaves on disk.
 
 The command line is the whole interface the backend's worker has, so every way a calculation can
 end has to be a file and a number rather than a traceback. Exit 0 writes everything of §2.2, exit
@@ -227,7 +227,7 @@ class TestExitFive:
 
 @pytest.mark.base
 class TestTheCommandLineItself:
-    """Five commands, one subcommand deep, and no ``--variant``."""
+    """Six commands, one subcommand deep, and no ``--variant``."""
 
     def test_the_parser_declares_the_commands_the_backend_calls(self) -> None:
         """A command that quietly disappeared would be found by the backend, not by a test."""
@@ -240,6 +240,7 @@ class TestTheCommandLineItself:
             "validate",
             "capabilities",
             "map",
+            "verify",
         }
 
     def test_run_takes_a_period_and_nothing_takes_a_variant(self) -> None:

@@ -119,11 +119,17 @@ class RequestError(Exception):
 
     Args:
         problems: The problems found, in the order they were found.
+        structural: Whether the document is refused for its structure -- by the JSON Schema
+            (:class:`SchemaProblems`), or because it cannot be read at all -- rather than by a
+            semantic check (:class:`SemanticChecks`). The two never mix: the semantic checks run
+            only on a document the schema accepts. The path-verification harness tells a broken
+            probe (structural) from an intended refusal (semantic) by it.
     """
 
-    def __init__(self, problems: Sequence[Problem]) -> None:
+    def __init__(self, problems: Sequence[Problem], structural: bool = False) -> None:
         """Store the problems and build the one-line message the command line prints."""
         self.problems: Tuple[Problem, ...] = tuple(problems)
+        self.structural = structural
         count = len(self.problems)
         super().__init__(f"{count} problem{'' if count == 1 else 's'} in the calculation request")
 
@@ -1155,7 +1161,7 @@ class Request:
         """
         structural = SchemaProblems.of(document)
         if structural:
-            raise RequestError(structural)
+            raise RequestError(structural, structural=True)
         semantic = SemanticChecks.of(document)
         if semantic:
             raise RequestError(semantic)
@@ -1181,9 +1187,24 @@ class Request:
         Returns:
             Sixteen lowercase hexadecimal characters.
         """
+        return self.hash_of(self.document)
+
+    @staticmethod
+    def hash_of(document: Any) -> str:
+        """Return :meth:`content_hash` of a raw document, valid or not.
+
+        The one place the recipe is written, so a document the validation refuses -- which the
+        path-verification harness caches by the same key -- has a key as well.
+
+        Args:
+            document: The request body.
+
+        Returns:
+            Sixteen lowercase hexadecimal characters.
+        """
         import hashlib
 
-        canonical = json.dumps(self.document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        canonical = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 

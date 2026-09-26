@@ -31,7 +31,8 @@ pair       the anchor; a pair is the spec's §7 combination, two changes on purp
 Where a probe sends the value its natural base already carries -- ``building_type=detached_sfh``
 on an anchor that is detached, the first value of an option that ``measure:<id>`` already sends --
 the diff would be empty, and the probe is measured from its **sibling** instead: the first probe
-of the same kind and subject that sends a different value from the same natural base. The change
+of the same kind and subject that sends a different value from the same natural base, and of those
+the first the request validation accepts, where one does. The change
 is then the probe's own path with the sibling's value on the left (``semi_detached_sfh ->
 detached_sfh``), which is still one change. A probe with no such sibling keeps its natural base,
 and its empty diff is reported as what it is. The ``material`` option is not such a probe any more:
@@ -45,12 +46,13 @@ that sends the same request wherever one does.
 
 import copy
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.renovisor.capabilities import Probe, ProbeKind, ProbeSet, SchemaLeaves
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.request import CatalogueTable, ValueType
-from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, diff, request_hash
+from hisim.renovisor.request import CatalogueTable, Request, RequestError, ValueType
+from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, diff, same_value
 
 
 @dataclass(frozen=True)
@@ -100,8 +102,22 @@ class VerificationProbe:
             return "combination"
         return "anchor"
 
+    @cached_property
+    def request_hash(self) -> str:
+        """Return the probe request's cache key, computed once (:meth:`Request.hash_of`)."""
+        return Request.hash_of(self.document)
+
+    @cached_property
+    def base_request_hash(self) -> Optional[str]:
+        """Return the base request's cache key, computed once; ``None`` for the anchor."""
+        return None if self.base_document is None else Request.hash_of(self.base_document)
+
+    @cached_property
     def stage_one(self) -> Tuple[Change, ...]:
-        """Return the request diff from the base to the probe (stage 1)."""
+        """Return the request diff from the base to the probe (stage 1), computed once.
+
+        The runner's verdict and :class:`Completeness` both read it.
+        """
         if self.base_document is None:
             return ()
         return diff(RequestLeaves.of(self.base_document), RequestLeaves.of(self.document))
@@ -118,23 +134,14 @@ class VerificationProbe:
             for change in changes
             if not any(
                 RequestLeaves.is_under(change.path, declared)
-                or (RequestLeaves.is_under(declared, change.path) and _empty_container(change))
+                or (RequestLeaves.is_under(declared, change.path) and change.is_empty_container)
                 for declared in self.changes
             )
         )
 
 
-def _empty_container(change: Change) -> bool:
-    """Return whether a change is an empty mapping appearing or disappearing."""
-    sides = (change.before, change.after)
-    return any(side is ABSENT for side in sides) and any(side == {} for side in sides if side is not ABSENT)
-
-
 class ProbeBases:
     """Chooses each probe's base, per the table of the module docstring."""
-
-    #: The name of the anchor, as a base.
-    ANCHOR: ClassVar[str] = "anchor"
 
     @classmethod
     def build(
@@ -161,7 +168,7 @@ class ProbeBases:
         documents = {name: probe.document(root) for name, probe in known.items()}
         names_by_hash: Dict[str, str] = {}
         for name in (probe.name for probe in (*everything, *chosen)):
-            names_by_hash.setdefault(request_hash(documents[name]), name)
+            names_by_hash.setdefault(Request.hash_of(documents[name]), name)
         return tuple(cls._one(probe, root, known, documents, names_by_hash) for probe in chosen)
 
     @classmethod
@@ -181,7 +188,7 @@ class ProbeBases:
                 base_reason="the anchor is the root every base descends from",
             )
         base, reason = cls.natural_base(probe, anchor)
-        if request_hash(base) == request_hash(document):
+        if Request.hash_of(base) == Request.hash_of(document):
             sibling = cls._sibling(probe, anchor, known, documents)
             if sibling is not None:
                 base = documents[sibling]
@@ -191,7 +198,7 @@ class ProbeBases:
                 )
             else:
                 reason = f"{reason}; no sibling sends another value, so the probe changes nothing"
-        name = names_by_hash.get(request_hash(base), f"({reason})")
+        name = names_by_hash.get(Request.hash_of(base), f"({reason})")
         return VerificationProbe(
             probe=probe,
             document=document,
@@ -236,17 +243,35 @@ class ProbeBases:
         known: Mapping[str, Probe],
         documents: Mapping[str, Dict[str, Any]],
     ) -> Optional[str]:
-        """Return the first probe of the same kind and subject that differs only in the probe's own value."""
-        own_base = request_hash(cls.natural_base(probe, anchor)[0])
-        own = request_hash(documents[probe.name])
-        for name, other in known.items():
-            if name == probe.name or other.kind is not probe.kind or other.subject != probe.subject:
-                continue
-            if request_hash(documents[name]) == own:
-                continue
-            if request_hash(cls.natural_base(other, anchor)[0]) == own_base:
-                return name
-        return None
+        """Return the first probe of the same kind and subject that differs only in the probe's own value.
+
+        A sibling the request validation accepts is preferred to one it refuses, which would be a
+        base that does not translate and leave stage 3 nothing to compare with
+        (``location.country=NL`` rather than ``=ES`` for ``location.country=IE``, since ES has no
+        TABULA typology). A refused sibling is taken only when every sibling is refused -- the
+        ``added_insulation`` probes, which the semantic checks refuse on purpose.
+        """
+        own_base = Request.hash_of(cls.natural_base(probe, anchor)[0])
+        own = Request.hash_of(documents[probe.name])
+        siblings = [
+            name
+            for name, other in known.items()
+            if name != probe.name
+            and other.kind is probe.kind
+            and other.subject == probe.subject
+            and Request.hash_of(documents[name]) != own
+            and Request.hash_of(cls.natural_base(other, anchor)[0]) == own_base
+        ]
+        return next((name for name in siblings if cls._accepted(documents[name])), siblings[0] if siblings else None)
+
+    @staticmethod
+    def _accepted(document: Mapping[str, Any]) -> bool:
+        """Return whether the request validation accepts a request."""
+        try:
+            Request.parse(document)
+        except RequestError:
+            return False
+        return True
 
     @classmethod
     def declared_changes(cls, probe: Probe) -> Tuple[str, ...]:
@@ -326,7 +351,7 @@ class Completeness:
         """
         seen: Dict[str, List[Any]] = {}
         for probe in probes:
-            for change in probe.stage_one():
+            for change in probe.stage_one:
                 if change.after is ABSENT:
                     continue
                 seen.setdefault(cls._generic(change.path), []).append(change.after)
@@ -351,16 +376,24 @@ class Completeness:
         if "const" in leaf:
             return []
         if "enum" in leaf:
-            return [MissingProbe(path, repr(value)) for value in leaf["enum"] if not _contains(values, value)]
+            return [
+                MissingProbe(path, repr(value))
+                for value in leaf["enum"]
+                if not any(same_value(seen, value) for seen in values)
+            ]
         types = leaf.get("type")
         types = set(types) if isinstance(types, list) else {types}
         if "boolean" in types:
-            return [MissingProbe(path, repr(value)) for value in (True, False) if not _contains(values, value)]
+            return [
+                MissingProbe(path, repr(value))
+                for value in (True, False)
+                if not any(same_value(seen, value) for seen in values)
+            ]
         if types & {"number", "integer"}:
             gaps = [
                 MissingProbe(path, f"its {keyword} {leaf[keyword]!r}")
                 for keyword in ("minimum", "maximum")
-                if keyword in leaf and not _contains(values, leaf[keyword])
+                if keyword in leaf and not any(same_value(seen, leaf[keyword]) for seen in values)
             ]
             distinct = {float(value) for value in values if isinstance(value, (int, float))}
             open_end = "minimum" not in leaf or "maximum" not in leaf
@@ -376,7 +409,7 @@ class Completeness:
         """Return the measures never switched on and the option values never sent."""
         switched_on: Set[str] = set()
         for probe in probes:
-            for change in probe.stage_one():
+            for change in probe.stage_one:
                 if change.before is ABSENT and change.path.startswith(f"{RequestLeaves.MEASURES}[id="):
                     switched_on.add(change.path.split("]")[0] + "]")
         gaps: List[MissingProbe] = []
@@ -392,18 +425,11 @@ class Completeness:
                         gaps.append(MissingProbe(path, "any other material"))
                 elif option.values or option.value_type is ValueType.BOOLEAN:
                     wanted = option.values or (True, False)
-                    gaps.extend(MissingProbe(path, repr(value)) for value in wanted if not _contains(values, value))
+                    gaps.extend(
+                        MissingProbe(path, repr(value))
+                        for value in wanted
+                        if not any(same_value(seen, value) for seen in values)
+                    )
                 elif len({repr(value) for value in values}) < 2:
                     gaps.append(MissingProbe(path, "two different values"))
         return gaps
-
-
-def _contains(values: Sequence[Any], wanted: Any) -> bool:
-    """Return whether *wanted* is among *values*, with ``True`` never equal to ``1``."""
-    for value in values:
-        if isinstance(value, bool) or isinstance(wanted, bool):
-            if isinstance(value, bool) and isinstance(wanted, bool) and value == wanted:
-                return True
-        elif value == wanted:
-            return True
-    return False

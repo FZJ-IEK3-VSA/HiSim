@@ -8,9 +8,11 @@ the capability probe set (:class:`hisim.renovisor.capabilities.ProbeSet`)::
     python -m hisim.renovisor verify --out path-report
 
 writes ``report.json``, ``index.html`` (the matrix, one row per probe, columns ``req | map | sys``)
-and one page per probe. The exit code is :attr:`VerifyExitCode.PASSED` or, when anything under
-``failures`` is listed, :attr:`VerifyExitCode.FAILED`; findings ("no effect", and a pair's
-conditional status below the announced one until ``hisim-5dfc``) never fail it.
+and one page per probe, and HiSim's own log (:mod:`hisim.log`, which a component the translation
+builds may write to) under ``logs/`` beside them rather than in the working directory's ``../logs``.
+The exit code is :attr:`VerifyExitCode.PASSED` or, when anything under ``failures`` is listed,
+:attr:`VerifyExitCode.FAILED`; findings ("no effect", and a pair's conditional status below the
+announced one until ``hisim-5dfc``) never fail it.
 
 Modules: :mod:`~hisim.renovisor.verify.leaves` (the artefacts as flat tables and their diffs),
 :mod:`~hisim.renovisor.verify.probes` (each probe's base, and the completeness check),
@@ -18,10 +20,13 @@ Modules: :mod:`~hisim.renovisor.verify.leaves` (the artefacts as flat tables and
 :mod:`~hisim.renovisor.verify.render` (the files).
 """
 
+import contextlib
 import time
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
+
+from hisim import log
 
 
 class VerifyExitCode(IntEnum):
@@ -34,6 +39,14 @@ class VerifyExitCode(IntEnum):
 
     PASSED = 0
     FAILED = 4
+
+
+#: Where under the report directory HiSim's log of the run is written.
+LOG_DIRECTORY = "logs"
+
+
+#: The attributes of :class:`hisim.log.Logger` that :meth:`~hisim.log.Logger.setup` changes.
+_LOGGER_STATE = ("logging_path", "logging_level", "before_result_dir_created", "log_buffer", "profile_buffer")
 
 
 def verify(out: Path, base_files_directory: Optional[Path] = None) -> VerifyExitCode:
@@ -51,7 +64,8 @@ def verify(out: Path, base_files_directory: Optional[Path] = None) -> VerifyExit
     from hisim.renovisor.verify.runner import VerificationRunner  # pylint: disable=import-outside-toplevel
 
     started = time.perf_counter()
-    report = VerificationRunner(base_files_directory).run()
+    with hisim_log_in(out / LOG_DIRECTORY):
+        report = VerificationRunner(base_files_directory).run()
     document = ReportWriter.write(report, out)
     elapsed = time.perf_counter() - started
     summary = document["summary"]
@@ -66,3 +80,27 @@ def verify(out: Path, base_files_directory: Optional[Path] = None) -> VerifyExit
         where = f"{issue['probe']}: " if issue.get("probe") else ""
         print(f"FAILED {issue['code']}: {where}{issue['message']}")
     return VerifyExitCode.FAILED if summary["failures"] else VerifyExitCode.PASSED
+
+
+@contextlib.contextmanager
+def hisim_log_in(directory: Path) -> Iterator[None]:
+    """Point HiSim's process-wide logger at *directory* for the duration, then put it back.
+
+    :mod:`hisim.log` writes to ``../logs`` relative to the working directory until
+    :meth:`~hisim.log.Logger.setup` names a directory, which a simulation does and a translation
+    does not; a probe whose translation builds a component that logs (the load-profile connector
+    of a battery probe) would otherwise write there, and raise where that is not writable.
+    ``setup`` is the supported way to name the directory. The logger is one object per process,
+    so its state is restored afterwards, whatever it was.
+
+    Args:
+        directory: Where ``hisim_simulation.log`` is written; created when missing.
+    """
+    logger = log.logger
+    saved = {name: getattr(logger, name) for name in _LOGGER_STATE}
+    logger.setup(str(directory))
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(logger, name, value)

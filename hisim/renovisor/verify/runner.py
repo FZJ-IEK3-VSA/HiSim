@@ -16,15 +16,20 @@ Artefacts are cached by request hash (:class:`ArtefactCache`), the recipe the ba
 jobs by, so a probe that is another probe's base is translated once.
 
 What fails the run (spec §6, what applies without expectations) is an :class:`Issue` under
-``failures``: a settable thing no probe changes, a stage-1 diff that is not the probe's change, a
-changed leaf whose status is ``defaulted`` or ``not_implemented_yet`` although the capability
-document announces ``used`` or ``approximated`` for it, and a translation that raised. What does
-not fail it is a finding: "no effect", and -- the bridge of :data:`CONDITIONAL_PROBE_KINDS`, until
-``hisim-5dfc`` -- a pair probe whose status is below the announced one, because a combination's
-status is conditional and the capability document cannot say so yet.
+``failures`` (:class:`IssueCode`): a settable thing no probe changes, a stage-1 diff that is not the
+probe's change, a changed leaf whose status is below the one the capability document announces for
+it (``approximated``, ``defaulted`` or ``not_implemented_yet`` under an announced ``used``;
+``defaulted`` or ``not_implemented_yet`` under an announced ``approximated``), a translation that
+raised, a probe the request *schema* refuses (the probe is broken), and a base that did not
+translate. A probe a *semantic* check refuses (``added_insulation.not_allowed``,
+``location.country.unsupported``) is refused on purpose: its ``map`` cell is ◐ with the problem code.
+What does not fail the run is a finding: "no effect", and -- the bridge of
+:data:`CONDITIONAL_PROBE_KINDS`, until ``hisim-5dfc`` -- a pair probe whose status is below the
+announced one, because a combination's status is conditional and the capability document cannot say
+so yet.
 """
 
-import json
+import traceback
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -32,12 +37,10 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.renovisor import TRANSLATOR_VERSION
-from hisim.renovisor.apply import apply
-from hisim.renovisor.capabilities import Aggregation, Probe, ProbeKind, ProbeResult, ProbeRunner
+from hisim.renovisor.capabilities import Aggregation, Probe, ProbeKind, ProbeResult, ProbeRunner, value_key
 from hisim.renovisor.report import HiSimCommit
-from hisim.renovisor.request import Request, RequestError
-from hisim.renovisor.translate import Translator
-from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, SystemLeaves, edit_sources, request_hash
+from hisim.renovisor.request import Problem, Request, RequestError
+from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, SystemLeaves, edit_sources
 from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases, VerificationProbe
 from hisim.renovisor.vocabulary import ReportStatus
 from hisim.renovisor.whitelist import Whitelist
@@ -83,13 +86,15 @@ class CellState(str, Enum):
         """Return what the legend says the symbol means."""
         return {
             CellState.AS_EXPECTED: "as expected",
-            CellState.AS_LISTED: "approximated / not_implemented_yet / defaulted, as listed" + (
+            CellState.AS_LISTED: "approximated / not_implemented_yet / defaulted, as listed; a request a "
+            "semantic check refuses, as intended" + (
                 f"; or a combination's conditional status below the announced one ({CONDITIONAL_STATUS_BEAD})"
                 if CONDITIONAL_PROBE_KINDS else ""
             ),
             CellState.NO_EFFECT: "no effect",
             CellState.FAILED: "failed",
-            CellState.NOT_RUN: "not run",
+            CellState.NOT_RUN: "not run: the anchor's system, a request identical to its base, or a system a "
+            "semantic check left untranslated",
         }[self]
 
 
@@ -101,59 +106,134 @@ class Stage(str, Enum):
     SYSTEM = "sys"
 
 
+class IssueCode(str, Enum):
+    """What kind of failure or finding an :class:`Issue` is; the value is what ``report.json`` carries."""
+
+    MISSING_PROBE = "missing_probe"
+    REQUEST_DIFF = "request_diff"
+    STATUS_BELOW_ANNOUNCED = "status_below_announced"
+    TRANSLATION_ERROR = "translation_error"
+    PROBE_REFUSED_BY_SCHEMA = "probe_refused_by_schema"
+    BASE_NOT_TRANSLATED = "base_not_translated"
+    NO_EFFECT = "no_effect"
+    CONDITIONAL_STATUS = "conditional_status"
+
+    @property
+    def is_failure(self) -> bool:
+        """Return whether an issue of this kind fails the run; the other kinds are findings."""
+        return self not in (IssueCode.NO_EFFECT, IssueCode.CONDITIONAL_STATUS)
+
+
 @dataclass(frozen=True)
 class Issue:
     """One failure or finding, named.
 
     Args:
-        code: What kind: ``missing_probe``, ``request_diff``, ``status_below_announced``,
-            ``translation_error`` (failures), ``no_effect`` or ``conditional_status`` (findings).
+        code: What kind (:class:`IssueCode`).
         message: One sentence a person reads.
         probe: The probe it is about, when it is about one.
     """
 
-    code: str
+    code: IssueCode
     message: str
     probe: Optional[str] = None
 
     def to_json(self) -> Dict[str, Any]:
         """Return the issue as ``report.json`` carries it."""
-        row: Dict[str, Any] = {"code": self.code, "message": self.message}
+        row: Dict[str, Any] = {"code": self.code.value, "message": self.message}
         if self.probe is not None:
             row["probe"] = self.probe
         return row
 
 
 @dataclass(frozen=True)
+class Refusal:
+    """Why the request validation refused a request.
+
+    Args:
+        problems: The problems, as ``problems.json`` would carry them.
+        structural: Whether the JSON Schema refused it (:attr:`RequestError.structural`) -- a
+            broken probe -- rather than a semantic check, which refuses a request on purpose.
+    """
+
+    problems: Tuple[Problem, ...]
+    structural: bool
+
+    @property
+    def codes(self) -> Tuple[str, ...]:
+        """Return the problem codes, in order."""
+        return tuple(problem.code.value for problem in self.problems)
+
+    @property
+    def by(self) -> str:
+        """Return who refused: ``schema`` or ``semantic_check``."""
+        return "schema" if self.structural else "semantic_check"
+
+    def describe(self) -> str:
+        """Return every problem as ``code at path: message``, joined."""
+        return "; ".join(f"{problem.code.value} at {problem.path}: {problem.message}" for problem in self.problems)
+
+    def to_json(self) -> Dict[str, Any]:
+        """Return the refusal as ``report.json`` carries it."""
+        return {"by": self.by, "problems": [problem.to_json() for problem in self.problems]}
+
+
+@dataclass(frozen=True)
 class Artefacts:
-    """What the translation layer produced for one request.
+    """What the translation layer produced for one request: a refusal, an error, or a translation.
 
     Args:
         request_hash: The cache key.
-        refused: The problem codes of a request the validation refused; empty otherwise.
+        refusal: Why the validation refused the request; ``None`` otherwise.
         error: ``Type: message`` of a translation that raised; ``None`` otherwise.
+        traceback: The whole traceback of that error.
         report: ``mapping_report.json``, when the translation finished.
         system: The translated file and its economic context, flattened.
         sources: Edit location -> the request path that asked for it.
         hits: The whitelist entries the translation matched.
+
+    Raises:
+        ValueError: When more than one of the three outcomes is set, or a translation is half there.
     """
 
     request_hash: str
-    refused: Tuple[str, ...] = ()
+    refusal: Optional[Refusal] = None
     error: Optional[str] = None
+    traceback: Optional[str] = None
     report: Optional[Dict[str, Any]] = None
     system: Optional[SystemLeaves] = None
     sources: Dict[str, str] = field(default_factory=dict)
     hits: Tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Refuse artefacts that are refused and raised, or refused (or raised) and translated."""
+        translated = self.report is not None or self.system is not None
+        outcomes = [self.refusal is not None, self.error is not None, translated]
+        if sum(outcomes) != 1:
+            raise ValueError(f"artefacts of {self.request_hash} must be exactly one of refused, raised, translated")
+        if translated and not self.finished:
+            raise ValueError(f"artefacts of {self.request_hash} carry a report or a system but not both")
+        if self.traceback is not None and self.error is None:
+            raise ValueError(f"artefacts of {self.request_hash} carry a traceback without an error")
 
     @property
     def finished(self) -> bool:
         """Return whether the translation produced a file and a report."""
         return self.report is not None and self.system is not None
 
+    def outcome(self) -> str:
+        """Return what happened to the request in a few words, for a remark."""
+        if self.refusal is not None:
+            return f"refused by the {self.refusal.by.replace('_', ' ')}: {', '.join(self.refusal.codes)}"
+        if self.error is not None:
+            return f"raised {self.error}"
+        return "translated"
+
 
 class ArtefactCache:
     """Translates requests, one translation per distinct request hash.
+
+    Each translation is :meth:`ProbeRunner.translate`, the capability run's own pipeline.
 
     Args:
         base_files_directory: Where the recorded twins live.
@@ -163,8 +243,7 @@ class ArtefactCache:
 
     def __init__(self, base_files_directory: Optional[Path] = None, whitelist: Optional[Whitelist] = None) -> None:
         """Create an empty cache; nothing is translated until :meth:`get`."""
-        self._whitelist = whitelist if whitelist is not None else Whitelist.load()
-        self._translator = Translator(base_files_directory or ProbeRunner.DEFAULT_BASE_FILES, self._whitelist)
+        self._runner = ProbeRunner(base_files_directory, whitelist)
         self._artefacts: Dict[str, Artefacts] = {}
         self.lookups = 0
 
@@ -173,33 +252,39 @@ class ArtefactCache:
         """Return how many distinct requests were translated."""
         return len(self._artefacts)
 
-    def get(self, document: Mapping[str, Any]) -> Artefacts:
-        """Return the artefacts of one request, translating it the first time it is asked for."""
+    def get(self, document: Mapping[str, Any], key: Optional[str] = None) -> Artefacts:
+        """Return the artefacts of one request, translating it the first time it is asked for.
+
+        Args:
+            document: The request body.
+            key: Its hash (:meth:`Request.hash_of`) when the caller holds it already, as a
+                :class:`~hisim.renovisor.verify.probes.VerificationProbe` does, so a hit costs no
+                hashing; computed from *document* when omitted.
+        """
         self.lookups += 1
-        key = request_hash(document)
+        if key is None:
+            key = Request.hash_of(document)
         if key not in self._artefacts:
             self._artefacts[key] = self._translate(key, document)
         return self._artefacts[key]
 
     def _translate(self, key: str, document: Mapping[str, Any]) -> Artefacts:
-        """Run ``validate`` + ``apply`` + ``translate`` on one request."""
-        self._whitelist.forget_hits()
+        """Run the capability pipeline on one request and keep what the harness compares."""
         try:
-            request = Request.parse(document)
-        except RequestError as error:
-            return Artefacts(request_hash=key, refused=tuple(problem.code.value for problem in error.problems))
-        try:
-            applied = apply(request.document["house"], request.measures, self._whitelist)
-            translated = self._translator.translate(request, applied)
+            translated = self._runner.translate(document)
             rendered = EnergySystemEmitter.to_document(translated.model)
+        except RequestError as error:
+            return Artefacts(request_hash=key, refusal=Refusal(problems=error.problems, structural=error.structural))
         except Exception as error:  # pylint: disable=broad-except  # every failure is reported by name
-            return Artefacts(request_hash=key, error=f"{type(error).__name__}: {error}")
+            return Artefacts(
+                request_hash=key, error=f"{type(error).__name__}: {error}", traceback=traceback.format_exc()
+            )
         return Artefacts(
             request_hash=key,
             report=translated.report.to_json(),
             system=SystemLeaves.of(rendered, translated.economic_context, translated.base_file_name),
             sources=edit_sources(translated.edits),
-            hits=self._whitelist.hits(),
+            hits=self._runner.whitelist.hits(),
         )
 
 
@@ -219,11 +304,11 @@ class Announcements:
             status = str(entry["status"])
             self._measures[entry["measure_id"]] = ReportStatus.USED.value if status == "supported" else status
             for option in entry["options"]:
-                values = {_value_key(value["value"]): str(value["status"]) for value in option.get("values", [])}
+                values = {value_key(value["value"]): str(value["status"]) for value in option.get("values", [])}
                 self._options[(entry["measure_id"], option["name"])] = (str(option["status"]), values)
         self._fields: Dict[str, Tuple[str, Dict[str, str]]] = {}
         for entry in Aggregation.fields(results):
-            values = {_value_key(value["value"]): str(value["status"]) for value in entry.get("values", [])}
+            values = {value_key(value["value"]): str(value["status"]) for value in entry.get("values", [])}
             self._fields[entry["path"]] = (str(entry["status"]), values)
 
     def measure(self, measure_id: str) -> Optional[str]:
@@ -235,19 +320,14 @@ class Announcements:
         entry = self._options.get((measure_id, name))
         if entry is None:
             return None
-        return entry[1].get(_value_key(value), entry[0])
+        return entry[1].get(value_key(value), entry[0])
 
     def field(self, path: str, value: Any) -> Optional[str]:
         """Return the status announced for one inventory path at one value: the value's own, else the field's."""
         entry = self._fields.get(path)
         if entry is None:
             return None
-        return entry[1].get(_value_key(value), entry[0])
-
-
-def _value_key(value: Any) -> str:
-    """Return a hashable key for one probed value; a material object is keyed by its JSON."""
-    return json.dumps(value, sort_keys=True)
+        return entry[1].get(value_key(value), entry[0])
 
 
 @dataclass(frozen=True)
@@ -265,6 +345,11 @@ class StatusLine:
         announced: The status the capability document announces for the leaf at this value.
         removed: Whether the probe removes the leaf rather than setting it; a removed leaf is
             expected to be ``defaulted`` and is not held to the announcement.
+
+    A line is below its announcement (:attr:`below_announcement`) when its status ranks under the
+    announced one in :attr:`RANK`: ``approximated``, ``defaulted`` or ``not_implemented_yet`` under
+    an announced ``used`` (the approximated case by owner decision, 2026-09-26), ``defaulted`` or
+    ``not_implemented_yet`` under an announced ``approximated``.
     """
 
     path: str
@@ -276,16 +361,21 @@ class StatusLine:
     announced: Optional[str] = None
     removed: bool = False
 
-    #: The statuses that fail a changed leaf the document announces better for.
-    SILENT: ClassVar[Tuple[str, ...]] = (ReportStatus.DEFAULTED.value, ReportStatus.NOT_IMPLEMENTED_YET.value)
-
-    #: The announcements a silent status contradicts.
-    PROMISED: ClassVar[Tuple[str, ...]] = (ReportStatus.USED.value, ReportStatus.APPROXIMATED.value)
+    #: How much of a leaf a status acts on; an announcement not ranked here promises nothing.
+    RANK: ClassVar[Dict[str, int]] = {
+        ReportStatus.USED.value: 2,
+        ReportStatus.APPROXIMATED.value: 1,
+        ReportStatus.DEFAULTED.value: 0,
+        ReportStatus.NOT_IMPLEMENTED_YET.value: 0,
+    }
 
     @property
     def below_announcement(self) -> bool:
-        """Return whether the report is silent about a leaf the document promises to act on."""
-        return not self.removed and self.status in self.SILENT and self.announced in self.PROMISED
+        """Return whether the report acts on a leaf less than the document announces it does."""
+        if self.removed or self.status is None or self.announced is None:
+            return False
+        promised = self.RANK.get(self.announced, 0)
+        return promised > 0 and self.RANK.get(self.status, 0) < promised
 
     def conditional_message(self) -> str:
         """Return what the finding of a combination's status below the announced one says."""
@@ -327,7 +417,9 @@ class StatusLines:
 
         Returns:
             The lines, one per report entry: the leaves of one material object share their
-            option's line.
+            option's line. An empty container that appears or disappears beside a leaf inside it
+            -- ``measures[id=battery_system].options`` giving way to its first option -- is
+            structure, not a setting, and reaches no line: it is not the measure removed.
         """
         fields = {row["path"]: row for row in report.get("fields", [])}
         measures = {row["id"]: row for row in report.get("measures", [])}
@@ -336,6 +428,10 @@ class StatusLines:
         }
         lines: Dict[str, StatusLine] = {}
         for change in changes:
+            if change.is_empty_container and any(
+                other.path != change.path and RequestLeaves.is_under(other.path, change.path) for other in changes
+            ):
+                continue
             line = cls._line(change, fields, measures, positions, announcements)
             lines.setdefault(line.line, line)
         return tuple(lines.values())
@@ -449,6 +545,22 @@ class ProbeVerdict:
     remarks: Dict[Stage, str]
     conditional: Tuple[StatusLine, ...] = ()
 
+    @property
+    def base_is_broken(self) -> bool:
+        """Return whether the base failed to translate in a way that is not intended.
+
+        A base that raised or that the request schema refuses is broken. A base a semantic check
+        refuses is broken only under a probe that translates, since the probe then has nothing to
+        be compared with; under a probe the semantic checks refuse as well -- an
+        ``added_insulation`` leaf measured from another -- both refusals are the intended ones.
+        """
+        base = self.base
+        if base is None or base.finished:
+            return False
+        if base.refusal is None or base.refusal.structural:
+            return True
+        return self.tested.refusal is None
+
     def to_json(self) -> Dict[str, Any]:
         """Return the probe as ``report.json`` carries it."""
         probe = self.probe
@@ -477,10 +589,11 @@ class ProbeVerdict:
             "stage4": "not run (tier 2)",
             "stage5": "not run (tier 2)",
         }
-        if self.tested.refused:
-            row["refused"] = list(self.tested.refused)
-        if self.tested.error:
+        if self.tested.refusal is not None:
+            row["refused"] = self.tested.refusal.to_json()
+        if self.tested.error is not None:
             row["error"] = self.tested.error
+            row["traceback"] = self.tested.traceback
         return row
 
 
@@ -495,6 +608,9 @@ class VerificationReport:
             is only meaningful for.
         translations: How many distinct requests were translated.
         lookups: How many artefact lookups the run made, bases included.
+
+    Raises:
+        ValueError: When *missing* lists gaps although completeness was not checked.
     """
 
     verdicts: Tuple[ProbeVerdict, ...]
@@ -506,17 +622,35 @@ class VerificationReport:
     #: The tier this report is.
     TIER: ClassVar[int] = 1
 
+    def __post_init__(self) -> None:
+        """Refuse gaps that were never looked for."""
+        if self.missing and not self.completeness_checked:
+            raise ValueError("a report lists missing probes only when completeness was checked")
+
     def failures(self) -> Tuple[Issue, ...]:
         """Return every failure: completeness first, then per probe in probe order."""
-        issues: List[Issue] = [Issue("missing_probe", gap.message()) for gap in self.missing]
+        issues: List[Issue] = [Issue(IssueCode.MISSING_PROBE, gap.message()) for gap in self.missing]
         for verdict in self.verdicts:
             name = verdict.probe.name
+            tested = verdict.tested
             if verdict.cells[Stage.REQUEST] is CellState.FAILED:
-                issues.append(Issue("request_diff", verdict.remarks[Stage.REQUEST], name))
-            if verdict.tested.error:
-                issues.append(Issue("translation_error", verdict.tested.error, name))
+                issues.append(Issue(IssueCode.REQUEST_DIFF, verdict.remarks[Stage.REQUEST], name))
+            if tested.error is not None:
+                issues.append(Issue(IssueCode.TRANSLATION_ERROR, tested.error, name))
+            elif tested.refusal is not None and tested.refusal.structural:
+                issues.append(Issue(
+                    IssueCode.PROBE_REFUSED_BY_SCHEMA,
+                    f"the request schema refuses the probe: {tested.refusal.describe()}",
+                    name,
+                ))
             elif verdict.cells[Stage.MAPPING] is CellState.FAILED:
-                issues.append(Issue("status_below_announced", verdict.remarks[Stage.MAPPING], name))
+                issues.append(Issue(IssueCode.STATUS_BELOW_ANNOUNCED, verdict.remarks[Stage.MAPPING], name))
+            if verdict.base is not None and verdict.base_is_broken:
+                issues.append(Issue(
+                    IssueCode.BASE_NOT_TRANSLATED,
+                    f"its base {verdict.probe.base_name} did not translate: {verdict.base.outcome()}",
+                    name,
+                ))
         return tuple(issues)
 
     def findings(self) -> Tuple[Issue, ...]:
@@ -530,9 +664,9 @@ class VerificationReport:
             name = verdict.probe.name
             if verdict.conditional:
                 message = "; ".join(line.conditional_message() for line in verdict.conditional)
-                issues.append(Issue("conditional_status", message, name))
+                issues.append(Issue(IssueCode.CONDITIONAL_STATUS, message, name))
             if verdict.cells[Stage.SYSTEM] is CellState.NO_EFFECT:
-                issues.append(Issue("no_effect", verdict.remarks[Stage.SYSTEM], name))
+                issues.append(Issue(IssueCode.NO_EFFECT, verdict.remarks[Stage.SYSTEM], name))
         return tuple(issues)
 
     def tally(self) -> Dict[str, Dict[str, int]]:
@@ -599,9 +733,9 @@ class VerificationRunner:
         cache = ArtefactCache(self._directory, self._whitelist)
         results: List[ProbeResult] = []
         for probe in verification_probes:
-            artefacts = cache.get(probe.document)
-            if artefacts.refused:
-                results.append(ProbeResult(probe=probe.probe, refused=artefacts.refused))
+            artefacts = cache.get(probe.document, probe.request_hash)
+            if artefacts.refusal is not None:
+                results.append(ProbeResult(probe=probe.probe, refused=artefacts.refusal.codes))
             elif artefacts.report is not None:
                 results.append(ProbeResult.of_report(probe.probe, artefacts.report, artefacts.hits))
         announcements = Announcements(results)
@@ -618,9 +752,9 @@ class VerificationRunner:
     @classmethod
     def _verdict(cls, probe: VerificationProbe, cache: ArtefactCache, announcements: Announcements) -> ProbeVerdict:
         """Compare one probe with its base, stage by stage."""
-        tested = cache.get(probe.document)
-        base = cache.get(probe.base_document) if probe.base_document is not None else None
-        stage_one = probe.stage_one()
+        tested = cache.get(probe.document, probe.request_hash)
+        base = cache.get(probe.base_document, probe.base_request_hash) if probe.base_document is not None else None
+        stage_one = probe.stage_one
         stray = probe.stray_changes(stage_one)
         cells: Dict[Stage, CellState] = {}
         remarks: Dict[Stage, str] = {}
@@ -681,11 +815,21 @@ class VerificationRunner:
         return CellState.AS_EXPECTED, f"{len(stage_one)} leaf/leaves changed, all under {', '.join(probe.changes)}"
 
     @staticmethod
-    def _unfinished(tested: Artefacts) -> Optional[Tuple[CellState, str]]:
-        """Return the state of a column whose probe was refused or raised, or ``None`` when it translated."""
-        if tested.refused:
-            return CellState.NOT_RUN, f"refused by validation: {', '.join(tested.refused)}"
-        if tested.error:
+    def _unfinished(tested: Artefacts, stage: Stage) -> Optional[Tuple[CellState, str]]:
+        """Return the state of a column whose probe was refused or raised, or ``None`` when it translated.
+
+        A refusal by the request schema is a broken probe, ✖ in both columns. A refusal by a
+        semantic check is intended: the ``map`` column is ◐ with the problem code, and the ``sys``
+        column, which has no system to show, is not run.
+        """
+        refusal = tested.refusal
+        if refusal is not None and refusal.structural:
+            return CellState.FAILED, f"refused by the request schema: {refusal.describe()}"
+        if refusal is not None:
+            if stage is Stage.MAPPING:
+                return CellState.AS_LISTED, f"refused by a semantic check, as intended: {', '.join(refusal.codes)}"
+            return CellState.NOT_RUN, f"nothing translated: refused by a semantic check ({', '.join(refusal.codes)})"
+        if tested.error is not None:
             return CellState.FAILED, f"the translation raised {tested.error}"
         return None
 
@@ -709,7 +853,7 @@ class VerificationRunner:
         A line below the announcement fails the cell, unless it is one of *conditional*: then the
         cell is ◐ and its remark says why (:data:`CONDITIONAL_PROBE_KINDS`).
         """
-        unfinished = cls._unfinished(tested)
+        unfinished = cls._unfinished(tested, Stage.MAPPING)
         if unfinished is not None:
             return unfinished
         problems = [f"the mapping report carries no line for {line.path}" for line in lines if line.status is None]
@@ -748,11 +892,11 @@ class VerificationRunner:
         """
         if base is None:
             return CellState.NOT_RUN, "the anchor has no base to compare with"
-        unfinished = cls._unfinished(tested)
+        unfinished = cls._unfinished(tested, Stage.SYSTEM)
         if unfinished is not None:
             return unfinished
         if not base.finished:
-            return CellState.NOT_RUN, f"the base did not translate ({base.error or ', '.join(base.refused)})"
+            return CellState.FAILED, f"the base {in_base[0]} did not translate: {base.outcome()}"
         if changes:
             return CellState.AS_EXPECTED, f"{len(changes)} field(s) differ (shown, not judged)"
         used = [line for line in lines if line.status == ReportStatus.USED.value and not line.removed]

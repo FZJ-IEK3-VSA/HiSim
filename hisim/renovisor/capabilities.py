@@ -60,7 +60,7 @@ from hisim.renovisor.request import (
     SemanticChecks,
     ValueType,
 )
-from hisim.renovisor.translate import Translator
+from hisim.renovisor.translate import TranslatedSystem, Translator
 from hisim.renovisor.vocabulary import ReportStatus
 from hisim.renovisor.whitelist import Whitelist
 
@@ -183,13 +183,11 @@ class RequestSchemaBounds:
     under the schema's own keyword: an inclusive one as ``minimum``/``maximum``, an exclusive one as
     ``exclusiveMinimum``/``exclusiveMaximum`` (measure-capabilities 0.4.0, renovisorissues !18),
     and an end the schema leaves open publishes nothing -- never a probe point standing in for it.
+    The schema is walked by :class:`SchemaLeaves`, the one walker over it.
     """
 
     #: The four bound keywords of JSON Schema, which are also the document's keys.
     KEYWORDS: ClassVar[Tuple[str, ...]] = ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum")
-
-    #: The keywords whose alternatives are searched, e.g. a nullable ``oneOf``.
-    ALTERNATIVES: ClassVar[Tuple[str, ...]] = ("oneOf", "anyOf", "allOf")
 
     @classmethod
     def of(cls, path: str, schema: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
@@ -214,7 +212,7 @@ class RequestSchemaBounds:
             child = next(
                 (
                     candidate["properties"][part]
-                    for candidate in cls._candidates(node, root)
+                    for candidate in SchemaLeaves.candidates(root, node, items=True)
                     if part in candidate.get("properties", {})
                 ),
                 None,
@@ -223,7 +221,7 @@ class RequestSchemaBounds:
                 raise KeyError(f"the request schema has no field {path!r} (stuck at {part!r})")
             node = child
         declared: Dict[str, Any] = {}
-        for candidate in cls._candidates(node, root):
+        for candidate in SchemaLeaves.candidates(root, node, items=True):
             for keyword in cls.KEYWORDS:
                 if keyword not in candidate:
                     continue
@@ -233,44 +231,15 @@ class RequestSchemaBounds:
                 declared[keyword] = candidate[keyword]
         return {keyword: declared[keyword] for keyword in cls.KEYWORDS if keyword in declared}
 
-    @classmethod
-    def _candidates(cls, node: Mapping[str, Any], root: Mapping[str, Any]) -> List[Mapping[str, Any]]:
-        """Return *node* and every subschema it stands for: ``$ref`` targets, alternatives, ``items``."""
-        found: List[Mapping[str, Any]] = []
-        pending: List[Mapping[str, Any]] = [node]
-        while pending:
-            current = pending.pop(0)
-            if any(current is seen for seen in found):
-                continue
-            found.append(current)
-            if "$ref" in current:
-                pending.append(cls._resolve(str(current["$ref"]), root))
-            for keyword in cls.ALTERNATIVES:
-                pending.extend(current.get(keyword, []))
-            if isinstance(current.get("items"), Mapping):
-                pending.append(current["items"])
-        return found
-
-    @staticmethod
-    def _resolve(reference: str, root: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Return the subschema a local ``$ref`` (``#/$defs/...``) points at."""
-        if not reference.startswith("#"):
-            raise ValueError(f"only local references are resolved, not {reference!r}")
-        target: Any = root
-        for token in reference.lstrip("#").strip("/").split("/"):
-            if token:
-                target = target[token.replace("~1", "/").replace("~0", "~")]
-        return cast(Mapping[str, Any], target)
-
 
 class SchemaLeaves:
-    """A small walker over the vendored request JSON Schema: local ``$ref``, alternatives, properties.
+    """The one walker over the vendored request JSON Schema: local ``$ref``, alternatives, properties.
 
     It enumerates every settable leaf of a request (:meth:`settable`), which two readers need: the
     probe set, which generates a probe for every leaf its tables do not name
     (:meth:`ProbeSet.varied_fields`), and the path-verification harness, which checks that some probe
-    changes each of them (:class:`hisim.renovisor.verify.probes.Completeness`). Separate from
-    :class:`RequestSchemaBounds`, which looks one path up.
+    changes each of them (:class:`hisim.renovisor.verify.probes.Completeness`). :class:`RequestSchemaBounds`
+    looks one path's bounds up with it.
     """
 
     #: The keywords whose alternatives are merged into one node.
@@ -282,28 +251,49 @@ class SchemaLeaves:
     #: How the cost block of any measure is spelled, since it is the same leaf on every measure.
     COST_PATH: ClassVar[str] = "measures[id=*].cost"
 
-    @classmethod
-    def resolve(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Return the node a local ``$ref`` points at, or *node* itself."""
-        while "$ref" in node:
-            target: Any = root
-            for token in str(node["$ref"]).lstrip("#").strip("/").split("/"):
-                target = target[token]
-            node = target
-        return node
+    @staticmethod
+    def resolve(reference: str, root: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Return the subschema a local ``$ref`` (``#/$defs/...``) points at.
+
+        Raises:
+            ValueError: For a reference outside the document, which the vendored schema has none of.
+        """
+        if not reference.startswith("#"):
+            raise ValueError(f"only local references are resolved, not {reference!r}")
+        target: Any = root
+        for token in reference.lstrip("#").strip("/").split("/"):
+            if token:
+                target = target[token.replace("~1", "/").replace("~0", "~")]
+        return cast(Mapping[str, Any], target)
 
     @classmethod
-    def candidates(cls, root: Mapping[str, Any], node: Mapping[str, Any]) -> List[Mapping[str, Any]]:
-        """Return *node* and every alternative it stands for, references resolved."""
+    def candidates(
+        cls, root: Mapping[str, Any], node: Mapping[str, Any], items: bool = False
+    ) -> List[Mapping[str, Any]]:
+        """Return *node* and every subschema it stands for: ``$ref`` targets and alternatives.
+
+        Args:
+            root: The whole schema, which references are resolved in.
+            node: The subschema.
+            items: Whether an array's ``items`` stands for the array as well, which a path lookup
+                that runs through a list wants and the leaf enumeration, which stops at a list, does not.
+
+        Returns:
+            The subschemas, breadth first, *node* itself first, each once.
+        """
         found: List[Mapping[str, Any]] = []
-        pending = [node]
+        pending: List[Mapping[str, Any]] = [node]
         while pending:
-            current = cls.resolve(root, pending.pop(0))
+            current = pending.pop(0)
             if any(current is seen for seen in found):
                 continue
             found.append(current)
+            if "$ref" in current:
+                pending.append(cls.resolve(str(current["$ref"]), root))
             for keyword in cls.ALTERNATIVES:
                 pending.extend(current.get(keyword, []))
+            if items and isinstance(current.get("items"), Mapping):
+                pending.append(current["items"])
         return found
 
     @classmethod
@@ -319,7 +309,9 @@ class SchemaLeaves:
         """Return the keywords of every alternative of a leaf, merged into one mapping."""
         merged: Dict[str, Any] = {}
         for candidate in cls.candidates(root, node):
-            merged.update({key: value for key, value in candidate.items() if key not in cls.ALTERNATIVES})
+            merged.update(
+                {key: value for key, value in candidate.items() if key not in cls.ALTERNATIVES and key != "$ref"}
+            )
         return merged
 
     @classmethod
@@ -353,8 +345,8 @@ class SchemaLeaves:
         leaves: List[Tuple[str, Dict[str, Any]]] = []
         for block in cls.BLOCKS:
             leaves.extend(cls.walk(root, root["properties"][block], block))
-        measure = cls.resolve(root, root["properties"]["measures"]["items"])
-        for name, node in cls.properties(root, measure["properties"]["cost"]).items():
+        measure = cls.properties(root, root["properties"]["measures"]["items"])
+        for name, node in cls.properties(root, measure["cost"]).items():
             leaves.append((f"{cls.COST_PATH}.{name}", cls.merged(root, node)))
         return leaves
 
@@ -1280,6 +1272,7 @@ class ProbeRunner:
         """Store the directory and the list; nothing runs until :meth:`run`."""
         self._directory = base_files_directory or self.DEFAULT_BASE_FILES
         self._whitelist = whitelist if whitelist is not None else Whitelist.load()
+        self._translator = Translator(self._directory, self._whitelist)
 
     @property
     def whitelist(self) -> Whitelist:
@@ -1300,24 +1293,38 @@ class ProbeRunner:
                 is the whole point of the exercise: the build fails before an image ships.
         """
         anchor = ProbeSet.anchor()
-        translator = Translator(self._directory, self._whitelist)
-        results: List[ProbeResult] = []
-        for probe in probes if probes is not None else ProbeSet.build():
-            results.append(self._one(probe, anchor, translator))
-        return tuple(results)
+        return tuple(self._one(probe, anchor) for probe in (probes if probes is not None else ProbeSet.build()))
 
-    def _one(self, probe: Probe, anchor: Mapping[str, Any], translator: Translator) -> ProbeResult:
-        """Run one probe, turning a refusal into a result rather than into an exception."""
+    def translate(self, document: Mapping[str, Any]) -> TranslatedSystem:
+        """Run ``validate`` + ``apply`` + ``translate`` on one request, with a fresh hit record.
+
+        The one pipeline both the capability run and the path-verification harness
+        (:class:`hisim.renovisor.verify.runner.ArtefactCache`) translate a probe with;
+        :attr:`whitelist` ``.hits()`` afterwards is what this translation matched.
+
+        Args:
+            document: The request body.
+
+        Returns:
+            The translated system: file, mapping report, edits and economic context.
+
+        Raises:
+            RequestError: When the validation refuses the request.
+            TranslatorError: When the translation hits an item that is neither mapped nor listed.
+        """
         self._whitelist.forget_hits()
-        document = probe.document(anchor)
+        request = Request.parse(document)
+        applied = apply(request.document["house"], request.measures, self._whitelist)
+        return self._translator.translate(request, applied)
+
+    def _one(self, probe: Probe, anchor: Mapping[str, Any]) -> ProbeResult:
+        """Run one probe, turning a refusal into a result rather than into an exception."""
         try:
-            request = Request.parse(document)
+            translated = self.translate(probe.document(anchor))
         except RequestError as error:
             return ProbeResult(
                 probe=probe, refused=tuple(problem.code.value for problem in error.problems)
             )
-        applied = apply(request.document["house"], request.measures, self._whitelist)
-        translated = translator.translate(request, applied)
         return ProbeResult.of_report(probe, translated.report.to_json(), self._whitelist.hits())
 
 
@@ -1467,7 +1474,7 @@ class Aggregation:
                 )
                 for name, (option_status, option_note) in options.items():
                     if own == f"{measure_id}.{name}" and name in valued:
-                        value_statuses.setdefault(name, {})[_key(result.probe.value)] = (
+                        value_statuses.setdefault(name, {})[value_key(result.probe.value)] = (
                             option_status,
                             option_note,
                         )
@@ -1524,7 +1531,7 @@ class Aggregation:
             if spec.values is not None:
                 entry["accepted_values"] = list(spec.values)
                 entry["values"] = [
-                    cls._value(value, values.get(spec.name, {}).get(_key(value)))
+                    cls._value(value, values.get(spec.name, {}).get(value_key(value)))
                     for value in spec.values
                 ]
             if spec.values is None and spec.value_type in (ValueType.INTEGER, ValueType.NUMBER):
@@ -1594,7 +1601,7 @@ class Aggregation:
                 if path.startswith(cls.PACKAGE_PREFIX):
                     continue
                 if path == own and shapes.get(path) is FieldShape.ENUMERATED:
-                    per_value.setdefault(path, {})[_key(probe.value)] = (status, note)
+                    per_value.setdefault(path, {})[value_key(probe.value)] = (status, note)
                 elif probe.kind is not ProbeKind.PAIR:
                     observed.setdefault(path, []).append(Observation(status, note))
         entries: List[Dict[str, Any]] = []
@@ -1635,8 +1642,13 @@ class Aggregation:
         return counts
 
 
-def _key(value: Any) -> Any:
-    """Return a hashable key for one probed value, so a material object can index a dictionary."""
+def value_key(value: Any) -> Any:
+    """Return a hashable key for one probed value, so a material object can index a dictionary.
+
+    The capability document and the path-verification harness's announcements
+    (:class:`hisim.renovisor.verify.runner.Announcements`) key values by it, so both read a value
+    the same way.
+    """
     if isinstance(value, Mapping):
         return json.dumps(value, sort_keys=True)
     return value

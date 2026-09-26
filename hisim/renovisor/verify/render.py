@@ -317,10 +317,20 @@ class ProbePage:
     @staticmethod
     def _lines(probe: Mapping[str, Any]) -> str:
         """Return the mapping report's lines for the changed leaves."""
-        if probe.get("refused"):
-            return f"<p>refused by validation: <code>{_escape(', '.join(probe['refused']))}</code></p>"
+        refused = probe.get("refused")
+        if refused:
+            items = "".join(
+                f"<li><code>{_escape(problem['code'])}</code> at <code>{_escape(problem['path'])}</code>: "
+                f"{_escape(problem['message'])}</li>"
+                for problem in refused["problems"]
+            )
+            who = "the request schema" if refused["by"] == "schema" else "a semantic check"
+            return f"<p>refused by {who}:</p><ul>{items}</ul>"
         if probe.get("error"):
-            return f"<p class=\"failed\">{_escape(probe['error'])}</p>"
+            return (
+                f"<p class=\"failed\">{_escape(probe['error'])}</p>"
+                f"<div class=\"wrap\"><pre><code>{_escape(probe.get('traceback') or '')}</code></pre></div>"
+            )
         lines = probe["stage2"]
         if not lines:
             return '<p class="muted">no changed leaf</p>'

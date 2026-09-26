@@ -25,8 +25,6 @@ leaf. The flattening is where the granularity is decided:
 """
 
 import dataclasses
-import hashlib
-import json
 from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
@@ -66,6 +64,16 @@ class Change:
     after: Any
     source: Optional[str] = None
 
+    @property
+    def is_empty_container(self) -> bool:
+        """Return whether the change is an empty mapping appearing or disappearing.
+
+        That is structure, not a setting: ``measures[id=battery_system].options`` is the leaf ``{}``
+        while the package carries no option, and stops being one when a probe sets the first.
+        """
+        sides = (self.before, self.after)
+        return any(side is ABSENT for side in sides) and any(side == {} for side in sides if side is not ABSENT)
+
     def to_json(self) -> Dict[str, Any]:
         """Return the change as ``report.json`` carries it: an absent side is a missing key."""
         row: Dict[str, Any] = {"path": self.path}
@@ -93,33 +101,16 @@ def diff(before: Mapping[str, Any], after: Mapping[str, Any]) -> Tuple[Change, .
     for path in sorted(set(before) | set(after)):
         old = before.get(path, ABSENT)
         new = after.get(path, ABSENT)
-        if old is ABSENT or new is ABSENT or not _same(old, new):
+        if old is ABSENT or new is ABSENT or not same_value(old, new):
             changes.append(Change(path=path, before=old, after=new))
     return tuple(changes)
 
 
-def _same(first: Any, second: Any) -> bool:
+def same_value(first: Any, second: Any) -> bool:
     """Return whether two leaf values are the same value, ``1`` and ``1.0`` included, ``True`` and ``1`` not."""
     if isinstance(first, bool) or isinstance(second, bool):
         return isinstance(first, bool) and isinstance(second, bool) and first == second
     return bool(first == second)
-
-
-def request_hash(document: Mapping[str, Any]) -> str:
-    """Return the cache key of one request body: :meth:`Request.content_hash`'s recipe.
-
-    The same recipe as the translator's own and the backend's job id -- keys sorted recursively,
-    no insignificant whitespace, UTF-8, the first sixteen hexadecimal characters of the SHA-256 --
-    computed on the raw document, so a request the validation refuses has a key as well.
-
-    Args:
-        document: The request body.
-
-    Returns:
-        Sixteen lowercase hexadecimal characters.
-    """
-    canonical = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
 def flatten(value: Any, prefix: str, into: Dict[str, Any]) -> None:

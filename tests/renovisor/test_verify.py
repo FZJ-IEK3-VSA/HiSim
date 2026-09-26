@@ -18,12 +18,22 @@ from hisim.renovisor.capabilities import Probe, ProbeKind, ProbeSet
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import Request
 from hisim.renovisor.translate import Translator
-from hisim.renovisor.verify import VerifyExitCode, verify
-from hisim.renovisor.verify.leaves import ABSENT, RequestLeaves, request_hash
+from hisim import log
+from hisim.renovisor.verify import LOG_DIRECTORY, VerifyExitCode, hisim_log_in, verify
+from hisim.renovisor.verify.leaves import ABSENT, RequestLeaves
 from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases
 from hisim.renovisor.verify.render import ReportWriter
 from hisim.renovisor.verify import runner as runner_module
-from hisim.renovisor.verify.runner import Announcements, CellState, Stage, VerificationReport, VerificationRunner
+from hisim.renovisor.verify.runner import (
+    Announcements,
+    Artefacts,
+    CellState,
+    IssueCode,
+    Refusal,
+    Stage,
+    VerificationReport,
+    VerificationRunner,
+)
 from hisim.renovisor.whitelist import TranslatorError
 
 #: The probe of the spec's own worked example: the external insulation's thickness.
@@ -43,6 +53,12 @@ SCOP_ON_HEAT_PUMP = "pair:seasonal_efficiency_on_heat_pump"
 
 #: The single-change probe that makes the capability document announce the SCOP as approximated.
 SCOP = "field:heating.seasonal_efficiency_in_percent=400"
+
+#: An option probe whose base, ``measure:battery_system``, carries the measure with no option at all.
+BATTERY_CAPACITY = "option:battery_system.capacity_in_kwh=200"
+
+#: A country the semantic checks refuse on purpose: it has no TABULA typology.
+SPAIN = "field:location.country=ES"
 
 
 def _probes(*names: str) -> Sequence[Probe]:
@@ -82,14 +98,14 @@ class TestTheAnchorAndTheBases:
         probe = ProbeBases.build(_probes(THICKNESS))[0]
 
         assert probe.base_name == "measure:external_insulation"
-        assert [change.path for change in probe.stage_one()] == [
+        assert [change.path for change in probe.stage_one] == [
             "measures[id=external_insulation].options.thickness_in_mm"
         ]
 
     def test_a_value_the_base_already_carries_is_measured_from_its_sibling(self) -> None:
         """The anchor is detached, so detached_sfh is measured from semi_detached_sfh."""
         probe = ProbeBases.build(_probes(DETACHED))[0]
-        (change,) = probe.stage_one()
+        (change,) = probe.stage_one
 
         assert probe.base_name == "field:building.building_type=semi_detached_sfh"
         assert (change.path, change.before, change.after) == (
@@ -101,7 +117,7 @@ class TestTheAnchorAndTheBases:
         probe = ProbeBases.build(_probes(AZIMUTH))[0]
 
         assert probe.base_name == "block:pv_system"
-        assert [change.path for change in probe.stage_one()] == ["house.pv_system.azimuth"]
+        assert [change.path for change in probe.stage_one] == ["house.pv_system.azimuth"]
 
     def test_building_a_request_leaves_the_probe_as_it_was(self) -> None:
         """Probe.document used to write a shared prelude block into the request and then mutate it."""
@@ -119,7 +135,14 @@ class TestTheAnchorAndTheBases:
         """One recipe for the harness, the file name and the backend's job id."""
         anchor = ProbeSet.anchor()
 
-        assert request_hash(anchor) == Request.parse(anchor).content_hash()
+        assert Request.hash_of(anchor) == Request.parse(anchor).content_hash()
+        assert ProbeBases.build(_probes("anchor"))[0].request_hash == Request.hash_of(anchor)
+
+    def test_a_sibling_the_validation_accepts_is_preferred(self) -> None:
+        """IE is the anchor's own country; ES would be the first sibling but is refused, so NL is the base."""
+        probe = ProbeBases.build(_probes("field:location.country=IE"))[0]
+
+        assert probe.base_name == "field:location.country=NL"
 
     def test_a_package_is_keyed_by_measure_id(self) -> None:
         """Adding a measure in front of another must not read as a change of the other."""
@@ -196,7 +219,41 @@ class TestTheThreeStages:
 
         assert verdict.cells[Stage.MAPPING] is CellState.FAILED
         assert verdict.cells[Stage.SYSTEM] is CellState.FAILED
-        assert [(issue.code, issue.probe) for issue in report.failures()] == [("translation_error", AZIMUTH)]
+        assert [(issue.code, issue.probe) for issue in report.failures()] == [(IssueCode.TRANSLATION_ERROR, AZIMUTH)]
+        row = verdict.to_json()
+        assert row["error"] == "TranslatorError: broken on purpose"
+        assert "Traceback (most recent call last)" in row["traceback"]
+        assert "refusing_the_azimuth" in row["traceback"]
+
+    def test_a_base_that_does_not_translate_is_a_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The azimuth probe translates, its base block:pv_system raises: ✖ in sys and a failure naming the base."""
+        original = Translator.translate
+
+        def refusing_the_base(self: Translator, request: Request, applied: Any) -> Any:
+            pv_system = request.document["house"].get("pv_system") or {}
+            if pv_system and pv_system.get("azimuth") != 0:
+                raise TranslatorError("the base is broken on purpose")
+            return original(self, request, applied)
+
+        monkeypatch.setattr(Translator, "translate", refusing_the_base)
+        report = VerificationRunner().run(_probes(AZIMUTH))
+        verdict = report.verdicts[0]
+
+        assert verdict.tested.finished
+        assert verdict.cells[Stage.SYSTEM] is CellState.FAILED
+        ((code, probe, message),) = [(issue.code, issue.probe, issue.message) for issue in report.failures()]
+        assert (code, probe) == (IssueCode.BASE_NOT_TRANSLATED, AZIMUTH)
+        assert "block:pv_system" in message and "the base is broken on purpose" in message
+
+    def test_an_option_added_to_an_empty_options_block_leaves_the_measure_in_place(self) -> None:
+        """The disappearing ``options: {}`` is structure: the measure is not reported removed; the option is read."""
+        verdict = _verdict(_run(BATTERY_CAPACITY), BATTERY_CAPACITY)
+        option = "measures[id=battery_system].options.capacity_in_kwh"
+
+        assert [change.path for change in verdict.stage_one] == ["measures[id=battery_system].options", option]
+        assert [(line.line, line.removed) for line in verdict.stage_two] == [(option, False)]
+        assert verdict.stage_two[0].status == "used"
+        assert verdict.cells[Stage.MAPPING] is CellState.AS_EXPECTED
 
     def test_a_probe_that_changes_two_things_fails_stage_one(self) -> None:
         """A probe generator that slips a second change in is caught by the request diff."""
@@ -255,6 +312,43 @@ class TestTheThreeStages:
 
 
 @pytest.mark.base
+class TestRefusals:
+    """A probe the request schema refuses is broken; one a semantic check refuses is refused on purpose."""
+
+    def test_a_probe_the_schema_refuses_is_a_failure_naming_the_schema_error(self) -> None:
+        """A construction year that is not a number: ✖ and probe_refused_by_schema, with the code and the path."""
+        broken = Probe(
+            name="field:building.construction_year=not-a-year",
+            kind=ProbeKind.FIELD,
+            house={"building.construction_year": "not-a-year"},
+            subject="house.building.construction_year",
+            value="not-a-year",
+        )
+        report = VerificationRunner().run([broken])
+        verdict = report.verdicts[0]
+
+        assert verdict.tested.refusal is not None and verdict.tested.refusal.structural
+        assert verdict.cells[Stage.MAPPING] is CellState.FAILED
+        assert verdict.cells[Stage.SYSTEM] is CellState.FAILED
+        ((code, probe, message),) = [(issue.code, issue.probe, issue.message) for issue in report.failures()]
+        assert (code, probe) == (IssueCode.PROBE_REFUSED_BY_SCHEMA, broken.name)
+        assert "type.invalid at house.building.construction_year" in message
+        assert verdict.to_json()["refused"]["by"] == "schema"
+
+    def test_a_probe_a_semantic_check_refuses_is_drawn_half_with_its_code(self) -> None:
+        """ES has no TABULA typology: ◐ in map with location.country.unsupported, not run in sys, no failure."""
+        report = _run(SPAIN)
+        verdict = _verdict(report, SPAIN)
+
+        assert verdict.tested.refusal is not None and not verdict.tested.refusal.structural
+        assert verdict.cells[Stage.MAPPING] is CellState.AS_LISTED
+        assert "location.country.unsupported" in verdict.remarks[Stage.MAPPING]
+        assert verdict.cells[Stage.SYSTEM] is CellState.NOT_RUN
+        assert not report.failures()
+        assert verdict.to_json()["refused"]["by"] == "semantic_check"
+
+
+@pytest.mark.base
 class TestConditionalStatuses:
     """The bridge until hisim-5dfc: a pair below the announced status is a finding, a single change still fails."""
 
@@ -296,6 +390,29 @@ class TestConditionalStatuses:
         assert [(issue.code, issue.probe) for issue in report.failures()] == [("status_below_announced", SHADING)]
         assert not report.findings()
 
+    def test_a_single_change_approximated_where_used_is_announced_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Owner rule of 2026-09-26: approximated under an announced used is below it, as defaulted would be."""
+        monkeypatch.setattr(Announcements, "field", lambda self, path, value: "used")
+        report = _run(SCOP)
+        verdict = _verdict(report, SCOP)
+        (line,) = verdict.stage_two
+
+        assert (line.status, line.announced) == ("approximated", "used")
+        assert line.below_announcement
+        assert verdict.cells[Stage.MAPPING] is CellState.FAILED
+        assert [(issue.code, issue.probe) for issue in report.failures()] == [
+            (IssueCode.STATUS_BELOW_ANNOUNCED, SCOP)
+        ]
+
+    def test_approximated_as_announced_is_listed_not_failed(self) -> None:
+        """The same probe against the document's own announcement, approximated: ◐ and no failure."""
+        report = _run(SCOP)
+        verdict = _verdict(report, SCOP)
+
+        assert (verdict.stage_two[0].status, verdict.stage_two[0].announced) == ("approximated", "approximated")
+        assert verdict.cells[Stage.MAPPING] is CellState.AS_LISTED
+        assert not report.failures()
+
 
 @pytest.mark.base
 class TestCompleteness:
@@ -324,7 +441,7 @@ class TestCompleteness:
         """Its base is its prelude, or a sibling where the prelude already carries the value: one change either way."""
         for probe in ProbeBases.build():
             if probe.probe.kind is ProbeKind.FIELD:
-                assert [change.path for change in probe.stage_one()] == [probe.probe.subject], probe.name
+                assert [change.path for change in probe.stage_one] == [probe.probe.subject], probe.name
 
     def test_an_applicant_and_a_cost_leaf_are_measured_from_their_preludes(self) -> None:
         """The applicant needs no prelude; a cost bound needs the priced measure with a band that stays valid."""
@@ -334,7 +451,7 @@ class TestCompleteness:
 
         assert role.base_name == "anchor"
         assert role.category == "applicant"
-        (change,) = cost.stage_one()
+        (change,) = cost.stage_one
         assert (change.path, change.before, change.after) == (
             "measures[id=external_insulation].cost.max_in_euro_per_m2", 70, 0
         )
@@ -377,6 +494,58 @@ class TestTheReport:
 
         assert verdict.stage_one[0].before is ABSENT
         assert "before" not in verdict.stage_one[0].to_json()
+
+    def test_findings_alone_never_fail_the_run(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """A no-effect finding and a conditional-status finding, no failure: exit 0, both findings in the report."""
+        original_write = translate_module._TranslationState.write  # pylint: disable=protected-access
+
+        def ignoring_the_azimuth(self: Any, component: str, field_name: str, *arguments: Any, **keywords: Any) -> bool:
+            if field_name == "azimuth":
+                return True
+            return bool(original_write(self, component, field_name, *arguments, **keywords))
+
+        monkeypatch.setattr(
+            translate_module._TranslationState, "write", ignoring_the_azimuth  # pylint: disable=protected-access
+        )
+        original_run = VerificationRunner.run
+
+        def a_subset(self: VerificationRunner, probes: Any = None, completeness: Any = None) -> VerificationReport:
+            del probes, completeness
+            return original_run(self, _probes(AZIMUTH, SCOP, SCOP_ON_HEAT_PUMP), completeness=False)
+
+        monkeypatch.setattr(VerificationRunner, "run", a_subset)
+
+        assert verify(tmp_path) is VerifyExitCode.PASSED
+        written = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+        assert written["failures"] == []
+        assert sorted(finding["code"] for finding in written["findings"]) == ["conditional_status", "no_effect"]
+        assert all(not IssueCode(finding["code"]).is_failure for finding in written["findings"])
+
+    def test_the_run_logs_under_the_report_and_restores_the_logger(self, tmp_path: Path) -> None:
+        """hisim.log writes to ../logs of the working directory unless set up; verify points it at DIR/logs."""
+        before = (log.logger.logging_path, log.logger.before_result_dir_created)
+        with hisim_log_in(tmp_path / LOG_DIRECTORY):
+            log.information("written by the path-verification test")
+            assert log.logger.logging_path == str(tmp_path / LOG_DIRECTORY)
+        assert (log.logger.logging_path, log.logger.before_result_dir_created) == before
+        assert "written by the path-verification test" in (
+            tmp_path / LOG_DIRECTORY / "hisim_simulation.log"
+        ).read_text(encoding="utf-8")
+
+    def test_the_report_types_refuse_impossible_states(self) -> None:
+        """Artefacts are one of refused, raised or translated; gaps are listed only when completeness was checked."""
+        refusal = Refusal(problems=(), structural=False)
+        with pytest.raises(ValueError):
+            Artefacts(request_hash="x", refusal=refusal, error="E: both")
+        with pytest.raises(ValueError):
+            Artefacts(request_hash="x", refusal=refusal, report={})
+        with pytest.raises(ValueError):
+            Artefacts(request_hash="x")
+        with pytest.raises(ValueError):
+            VerificationReport(
+                verdicts=(), missing=(MissingProbe("house.x", "any value"),), completeness_checked=False,
+                translations=0, lookups=0,
+            )
 
     def test_verify_exits_four_on_a_failure_and_zero_without(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

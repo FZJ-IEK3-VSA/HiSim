@@ -1,5 +1,35 @@
 # Tier 1 of the golden-reference gate: re-runs the short (one-week) pairs on every
-# PR and push to main, comparing KPIs against the committed golden references.
+# PR and push to main, comparing KPIs against the committed golden references, first
+# from the Python setups and then from their recorded '.energy_system.yaml' twins.
+#
+# SHARDS. The pairs run as a handful of shards (scripts/golden_matrix.py --shards), each
+# job running its pairs several at a time (golden_check.py --jobs, a child process per
+# pair). One job per pair paid about a minute of container, checkout, install and cache
+# save for 6 to 250 s of simulation, used one of four cores, and queued the pull request
+# behind 44 such jobs on the organisation's 20 slots. How many pairs a job runs at once
+# is set by memory (PAIRS_AT_ONCE in golden_matrix.py); how the pairs are spread over the
+# shards is set by their measured durations ('seconds' in golden_config.json).
+#
+# THE YAML TWIN (formerly its own workflow, golden-yaml-check; AC-P3.2). Beside each Python
+# setup, in the same pool of child processes (golden_check.py --mode both), the job runs
+# its recorded twin through the declarative executor with the *same* parameters, and
+# compares its KPIs against the same committed golden references. Each mode keeps its own
+# report (results/golden-ref-check/ and results/golden-ref-check-yaml/), and both are
+# always reported. Running the two side by side rather than one mode after the other is
+# what keeps a shard near five minutes: its wall time is its longest pair, not twice that. That proves the declarative path reproduces the setups it
+# was recorded from; together with the energy-system freshness gate (the twins are what
+# recording produces) it is what lets the golden suites run on files. The oracle is the
+# KPI set, deliberately: the legacy and declarative paths name aggregator result columns
+# differently (C-P3.2 of the P3 requirements), so comparing result columns by name would
+# need the parity rig's renaming table. Do not "fix" this by comparing CSVs. One KPI
+# family carries a port name itself — the energy-management system's "Priority for
+# Input_..." — and is excluded from both sides in YAML mode (PORT_NAMED_KPIS in
+# golden_check.py, printed per pair); the parity rig compares that family exactly.
+#
+# Gate: BLOCKING. Any KPI divergence or run error, in either mode, fails its shard and the
+# summary job. Because golden-year waits for this workflow to succeed, a YAML twin that
+# diverges from its golden also keeps the full-year tier from running: the twins gate
+# golden-year too, deliberately (decided 2026-09-27).
 #
 # The heavier full-year pairs run separately, in golden-year.yml, once all the other
 # CI for the commit is green. This workflow completing is one of the three events
@@ -18,7 +48,14 @@ on:
   # requests that target main. A stacked pull request — one whose base is the branch below it
   # in a chain — therefore gets no run at all, and a whole stack can reach main having never
   # been tested. Dispatching this workflow against such a branch is how that is avoided.
+  # A dispatch can also choose the full year, for a heavier parity run of both modes.
   workflow_dispatch:
+    inputs:
+      horizon:
+        description: "Parameter horizon to check (both the Python setups and their recorded YAML twins)"
+        type: choice
+        default: week
+        options: [ week, year ]
 
 permissions:
   contents: read
@@ -30,7 +67,7 @@ concurrency:
 
 jobs:
   discover:
-    name: discover week pairs
+    name: discover golden shards
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
@@ -42,8 +79,15 @@ jobs:
         with:
           mode: start
       - id: gen
+        # week for automatic triggers; the chosen horizon for a manual dispatch.
         # golden_matrix.py is stdlib-only, so no dependency install is needed here.
-        run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon week)" >> "$GITHUB_OUTPUT"
+        env:
+          HORIZON: ${{ inputs.horizon || 'week' }}
+        run: |
+          echo "horizon=$HORIZON"
+          matrix="$(python3 scripts/golden_matrix.py --horizon "$HORIZON" --shards 4 --with-yaml)"
+          echo "$matrix" | python3 -m json.tool
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -53,7 +97,7 @@ jobs:
           mode: report
 
   golden:
-    name: golden ${{ matrix.setup }} / ${{ matrix.param }}
+    name: golden ${{ matrix.name }} (${{ matrix.count }} pairs)
     needs: discover
     runs-on: ubuntu-latest
     container:
@@ -64,6 +108,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    env:
+      # Space-separated setup:param tokens, split on purpose where they are used. Passed
+      # through the environment rather than interpolated into the scripts.
+      PAIRS: ${{ matrix.pairs }}
+      JOBS: ${{ matrix.jobs }}
     steps:
       - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
@@ -71,25 +120,35 @@ jobs:
         uses: ./.github/actions/resource-monitor
         with:
           mode: start
-          scope: ${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ matrix.name }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
       # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+      # Scoped by shard: a pair that moves to another shard recomputes its profiles once.
       - name: Restore the HiSim inputs cache
         uses: ./.github/actions/hisim-cache
         with:
           mode: restore
-          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
-      - name: Golden KPI check
-        run: python scripts/golden_check.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+          scope: ${{ github.workflow }}-${{ matrix.name }}
+      # Both modes from one pool of `jobs` child processes: each pair's Python setup and its
+      # YAML twin run side by side. One report per mode; a failure in either fails the step.
+      - name: Golden KPI check (Python setups and recorded YAML twins)
+        run: |
+          # shellcheck disable=SC2086  # PAIRS is split into one argument per pair on purpose
+          python scripts/golden_check.py --mode both --jobs "$JOBS" --pairs $PAIRS
+      # Failure-only: a passing check needs no annotation, and the artifact carries the
+      # detail when it fails. It holds both modes' reports (golden-ref-check/ is the Python
+      # run, golden-ref-check-yaml/ the twins) and every child's log.
       - name: Upload deviation report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: golden-report-${{ matrix.setup }}-${{ matrix.param }}
-          path: results/golden-ref-check/report.*
+          name: golden-report-${{ matrix.name }}
+          path: |
+            results/golden-ref-check*/report.*
+            results/golden-ref-check*/_children/*.log
           if-no-files-found: warn
       # Kept even when the job failed; see the action for why that is safe.
       - name: Save the HiSim inputs cache
@@ -97,7 +156,7 @@ jobs:
         uses: ./.github/actions/hisim-cache
         with:
           mode: save
-          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ github.workflow }}-${{ matrix.name }}
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -105,7 +164,7 @@ jobs:
         uses: ./.github/actions/resource-monitor
         with:
           mode: report
-          scope: ${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ matrix.name }}
 
   summary:
     name: golden-check summary
@@ -113,5 +172,5 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Fail if any pair diverged
+      - name: Fail if any pair diverged or failed to run, in either mode
         run: '[ "${{ needs.golden.result }}" = "success" ] || exit 1'

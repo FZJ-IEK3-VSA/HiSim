@@ -26,6 +26,7 @@ for inspection, but locally produced goldens are not the canonical committed one
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import sys
 from dataclasses import dataclass
@@ -46,6 +47,7 @@ try:  # run as a script from scripts/ ...
         environment_metadata,
         filter_config,
         load_config,
+        parse_pair,
         run_all,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_update (tests)
@@ -56,6 +58,7 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_update (tests)
         environment_metadata,
         filter_config,
         load_config,
+        parse_pair,
         run_all,
     )
 
@@ -284,6 +287,7 @@ def main(
     manifest_only: bool = False,
     force_rewrite: bool = False,
     run_fn: RunFn = run_all,
+    pairs: Optional[list[tuple[str, str]]] = None,
 ) -> int:
     """Run the (filtered) pairs, write golden files + manifest. Return exit code.
 
@@ -292,7 +296,8 @@ def main(
     assembled per-pair goldens from artifacts. ``force_rewrite`` disables the
     sticky merge and dumps every fresh mapping verbatim. Returns non-zero if any
     pair errored — a failed run, or a stored golden that cannot be merged onto —
-    so a bless run fails visibly.
+    so a bless run fails visibly. ``pairs`` restricts the bless to exactly those pairs, in
+    that order (a CI shard).
     """
     config = load_config(config_path)  # fail hard on a missing/invalid config
 
@@ -301,7 +306,7 @@ def main(
         print(f"Golden update (manifest only): wrote {manifest_path}")
         return 0
 
-    config = filter_config(config, setup_id=setup_id, param_id=param_id)
+    config = filter_config(config, setup_id=setup_id, param_id=param_id, pairs=pairs)
     results = run_fn(config, results_root, repo_root, "golden-update")
 
     rewritten = 0
@@ -344,6 +349,20 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--setup", dest="setup_id", default=None, help="Only bless this setup id.")
     parser.add_argument("--param", dest="param_id", default=None, help="Only bless this parameter-set id.")
     parser.add_argument(
+        "--pairs",
+        nargs="+",
+        type=parse_pair,
+        default=None,
+        metavar="SETUP:PARAM",
+        help="Bless exactly these pairs, in this order (a CI shard from golden_matrix.py --shards).",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="How many pairs run at once, each in a child process of its own (default 1).",
+    )
+    parser.add_argument(
         "--manifest-only", action="store_true", help="Only (re)write manifest.json from existing goldens."
     )
     parser.add_argument(
@@ -355,7 +374,10 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
             "a golden that has become unreadable is repaired."
         ),
     )
-    return parser.parse_args(argv)
+    parsed = parser.parse_args(argv)
+    if parsed.jobs < 1:
+        parser.error("--jobs must be at least 1")
+    return parsed
 
 
 if __name__ == "__main__":
@@ -370,5 +392,7 @@ if __name__ == "__main__":
             param_id=args.param_id,
             manifest_only=args.manifest_only,
             force_rewrite=args.force_rewrite,
+            run_fn=functools.partial(run_all, jobs=args.jobs),
+            pairs=args.pairs,
         )
     )

@@ -8,10 +8,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from scripts.golden_matrix import HORIZON_FACTORIES, build_matrix
+from scripts.golden_matrix import (
+    DEFAULT_PAIR_SECONDS,
+    HORIZON_FACTORIES,
+    PAIRS_AT_ONCE,
+    build_matrix,
+    build_shards,
+    main,
+    pair_seconds,
+)
 
 pytestmark = pytest.mark.base
 
@@ -158,3 +167,136 @@ def test_a_setup_restricted_to_the_week_never_enters_the_year_matrix() -> None:
     for setup_id in week_only:
         assert setup_id not in year_setups
         assert setup_id in week_setups
+
+
+# --------------------------------------------------------------------------- #
+# --shards: the cells the golden workflows fan out over
+# --------------------------------------------------------------------------- #
+def _weighted_config() -> dict:
+    """Six week setups with measured seconds (one unmeasured), two of them also run the year."""
+    weights = {"heavy": 250, "big": 240, "mid1": 120, "mid2": 110, "small": 20}
+    setups: list[dict[str, Any]] = [
+        {"id": sid, "path": "x", "seconds": {"one_week_60s": s}, "horizons": ["week"]} for sid, s in weights.items()
+    ]
+    setups.append({"id": "unmeasured", "path": "x", "horizons": ["week"]})
+    setups[0]["horizons"] = ["week", "year"]
+    setups[0]["seconds"] = {"one_week_60s": 250, "full_year_60s": 470}
+    setups[1]["horizons"] = ["week", "year"]
+    return {
+        "setups": setups,
+        "parameter_sets": [
+            {"id": "one_week_60s", "factory": "one_week_only"},
+            {"id": "full_year_60s", "factory": "full_year"},
+        ],
+    }
+
+
+def _pairs_of(cell: dict) -> list[tuple[str, str]]:
+    return [tuple(token.split(":")) for token in cell["pairs"].split()]  # type: ignore[misc]
+
+
+def test_shards_cover_every_pair_exactly_once_and_never_mix_horizons() -> None:
+    """Catches a shard dropping or duplicating a pair, which would shrink or double the gate silently."""
+    config = _weighted_config()
+    cells = build_shards(config, 2)["include"]
+
+    emitted = [pair for cell in cells for pair in _pairs_of(cell)]
+    expected = [(p["setup"], p["param"]) for p in build_matrix(config)["include"]]
+    assert sorted(emitted) == sorted(expected)
+    assert len(emitted) == len(set(emitted))
+    for cell in cells:
+        params = {param for _, param in _pairs_of(cell)}
+        assert len(params) == 1
+        assert cell["name"].startswith(cell["horizon"] + "-")
+        assert cell["count"] == len(_pairs_of(cell))
+
+
+def test_shards_run_as_many_pairs_at_once_as_the_horizon_memory_allows() -> None:
+    """A week shard runs four pairs at once, a full-year shard two (about 6 GiB each on a 16 GB runner)."""
+    cells = build_shards(_weighted_config(), 3)["include"]
+    assert {cell["horizon"]: cell["jobs"] for cell in cells} == {"week": 4, "year": 2}
+    assert PAIRS_AT_ONCE["week"] == 4 and PAIRS_AT_ONCE["year"] == 2
+
+
+def test_shards_separate_the_heaviest_pairs_and_list_them_first() -> None:
+    """The two longest week pairs land in different shards, each shard starting with its heaviest.
+
+    Catches the balance ignoring the weights (both long pairs in one shard would double its wall
+    time) and a shard listing a short pair first, which would start the long one last.
+    """
+    week = [cell for cell in build_shards(_weighted_config(), 2)["include"] if cell["horizon"] == "week"]
+    firsts = {_pairs_of(cell)[0][0] for cell in week}
+    assert firsts == {"heavy", "big"}
+    assert {cell["seconds"] for cell in week} == {250, 240}
+
+
+def test_a_pair_without_measured_seconds_weighs_the_default() -> None:
+    """A new setup needs no measurement to join a shard; a measured one weighs its seconds."""
+    assert pair_seconds({"id": "s"}, "one_week_60s") == DEFAULT_PAIR_SECONDS
+    assert pair_seconds({"id": "s", "seconds": {"one_week_60s": 7}}, "one_week_60s") == 7
+
+
+def test_more_shards_than_pairs_gives_no_empty_shard() -> None:
+    """An empty shard would still pay a container start for nothing, and pass vacuously."""
+    cells = build_shards(_weighted_config(), 10)["include"]
+    assert all(cell["count"] >= 1 for cell in cells)
+    assert len([cell for cell in cells if cell["horizon"] == "year"]) == 2
+
+
+@pytest.mark.parametrize(
+    "seconds, message",
+    [
+        ({"one_week_60s": 0}, "positive"),
+        ([60], "positive"),
+        ({"one_week_60s": True}, "positive"),
+        ({"typo_60s": 60}, "typo_60s"),
+    ],
+)
+def test_a_malformed_weight_is_refused(seconds: object, message: str) -> None:
+    """A typo'd weight fails the discover job instead of silently weighing the default."""
+    config = _weighted_config()
+    config["setups"][2]["seconds"] = seconds
+    with pytest.raises(ValueError, match=message):
+        build_shards(config, 2)
+
+
+def test_zero_shards_is_refused() -> None:
+    """Zero shards would emit an empty matrix: a gate that runs nothing and stays green."""
+    with pytest.raises(ValueError, match="shards"):
+        build_shards(_weighted_config(), 0)
+
+
+def test_the_shipped_config_shards_into_four_week_and_four_year_jobs() -> None:
+    """The workflows' own call: 22 week pairs and 8 full-year pairs, four shards each."""
+    config = json.loads(REAL_CONFIG.read_text())
+    week = build_shards(config, 4, horizon="week")["include"]
+    year = build_shards(config, 4, horizon="year")["include"]
+    assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
+    assert len(year) == 4 and sum(cell["count"] for cell in year) == 8
+
+
+def test_the_cli_prints_shards_as_one_json_line(capsys: pytest.CaptureFixture[str]) -> None:
+    """The discover jobs write the output into ``$GITHUB_OUTPUT``, which takes one line."""
+    assert main(["--horizon", "year", "--shards", "4"]) == 0
+    printed = capsys.readouterr().out
+    assert printed.count("\n") == 1
+    assert json.loads(printed)["include"][0]["name"] == "year-1"
+
+
+def test_with_yaml_counts_each_pair_twice_on_two_lanes() -> None:
+    """golden-check runs each pair's YAML twin beside it: the shard's lanes carry both runs.
+
+    Catches the balance ignoring the twins, which would pack a shard as if it had half the work.
+    With two shards of four lanes, the 250 s pair takes two lanes of one shard and the 240 s pair
+    two of the other; the rest fill in without lengthening either.
+    """
+    config = _weighted_config()
+    single = [c for c in build_shards(config, 2)["include"] if c["horizon"] == "week"]
+    double = [c for c in build_shards(config, 2, with_yaml=True)["include"] if c["horizon"] == "week"]
+
+    assert sorted(c["seconds"] for c in double) == [240, 250]
+    assert sum(c["count"] for c in double) == sum(c["count"] for c in single) == 6
+    assert {_pairs_of(c)[0][0] for c in double} == {"heavy", "big"}
+    one_lane_year = build_shards(config, 1, horizon="year", with_yaml=True)["include"]
+    # Two year pairs (470 s, and 120 s unmeasured) with their twins on the year's two lanes: 590 each.
+    assert one_lane_year[0]["seconds"] == 470 + DEFAULT_PAIR_SECONDS

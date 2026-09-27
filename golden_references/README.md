@@ -40,23 +40,32 @@ python scripts/golden_validate.py --scan-all # probe every system_setups/*.py
 
 ```bash
 python scripts/golden_check.py                              # all pairs
-python scripts/golden_check.py --setup <id> --param <id>    # one pair (CI slice)
+python scripts/golden_check.py --setup <id> --param <id>    # one pair
+python scripts/golden_check.py --pairs <id>:<id> ... --jobs 4 # a CI shard, four pairs at once
+python scripts/golden_check.py --mode yaml ...               # the recorded YAML twins
+python scripts/golden_check.py --mode both ...               # both, side by side, one report each
 ```
 
 Re-runs the pairs, compares KPIs to the goldens here, writes
-`results/golden-ref-check/report.{txt,json}`, and exits non-zero on any deviation,
+`results/golden-ref-check/report.{txt,json}` (`golden-ref-check-yaml/` in YAML mode), and exits non-zero on any deviation,
 missing golden, or run failure. Missing goldens fail **before** running, so they
 never waste compute.
 
 In CI this runs as two tiers (see `.github/workflows/`):
 
-- **`golden-check.yml`** — one-week pairs, on every PR and push to `main`.
+- **`golden-check.yml`** — one-week pairs, on every PR and push to `main`, each pair's Python
+  setup and its recorded YAML twin side by side (`golden_check.py --mode both`, one report per
+  mode), in four shards (`scripts/golden_matrix.py --shards 4 --with-yaml`) that run four
+  simulations at once each. A diverging YAML twin fails it, and so also holds back `golden-year`. The shards are
+  balanced by each pair's measured duration, `"seconds"` in `scripts/golden_config.json`;
+  `report.json` records a fresh `duration_s` per pair when they need refreshing.
 - **`golden-year.yml`** — full-year pairs, for PRs to `main` **only after** `quality`,
   `tests`, and `golden-check` have all gone green for the commit (no wasted
   full-year compute when a cheaper check already failed). It is triggered by those
   workflows completing (`workflow_run`), not by the pull request itself, so that
   waiting for them costs no runner; its result reaches the pull request as a
-  `golden-year` commit status rather than as an entry in the checks list.
+  `golden-year` commit status rather than as an entry in the checks list. Four shards of
+  two pairs each, since a full-year pair needs about 6 GiB.
 
 ## Blessing (updating the goldens)
 

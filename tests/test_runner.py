@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ import pytest
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from scripts.runner import (
+    ChildRuns,
     GoldenConfig,
     ParameterSetConfig,
     RunResult,
@@ -26,10 +28,12 @@ from scripts.runner import (
     environment_metadata,
     filter_config,
     load_config,
+    parse_pair,
     resolve_twin_path,
     resolve_setup_path,
     run_all,
     run_all_yaml,
+    run_modes,
     run_one,
     select_pairs,
 )
@@ -360,3 +364,134 @@ def test_filter_config_refuses_an_explicitly_requested_excluded_pair() -> None:
 
     narrowed = filter_config(config, setup_id="week_only", param_id="one_week_60s")
     assert [setup.id for setup in narrowed.setups] == ["week_only"]
+
+
+# --------------------------------------------------------------------------- #
+# Explicit pair lists (a CI shard) and child-process runs (--jobs)
+# --------------------------------------------------------------------------- #
+def test_parse_pair_splits_setup_and_param() -> None:
+    """A shard token is ``setup:param``; anything else is refused rather than half-parsed."""
+    assert parse_pair("s1:p1") == ("s1", "p1")
+    for wrong in ("s1", ":p1", "s1:", "s1:p1:x"):
+        with pytest.raises(ValueError, match="setup:param"):
+            parse_pair(wrong)
+
+
+def test_an_explicit_pair_list_runs_exactly_those_pairs_in_its_order() -> None:
+    """A shard lists its heaviest pair first, and the runner must start it first."""
+    config = filter_config(_sample_config(), pairs=[("s2", "p2"), ("s1", "p1")])
+    assert [(s.id, p.id) for s, p in select_pairs(config)] == [("s2", "p2"), ("s1", "p1")]
+
+
+@pytest.mark.parametrize(
+    "pairs, message",
+    [
+        ([("ghost", "p1")], "ghost"),
+        ([("s1", "nope")], "nope"),
+        ([("s1", "p1"), ("s1", "p1")], "repeats"),
+        ([], "at least one"),
+    ],
+)
+def test_a_bad_pair_list_is_refused(pairs: list, message: str) -> None:
+    """An unknown id, a repeat or an empty list fails loudly instead of running less than asked."""
+    with pytest.raises(ValueError, match=message):
+        filter_config(_sample_config(), pairs=pairs)
+
+
+def test_a_pair_list_cannot_be_combined_with_setup_or_param() -> None:
+    """Two selections at once would leave it unclear which one ran."""
+    with pytest.raises(ValueError, match="not both"):
+        filter_config(_sample_config(), setup_id="s1", pairs=[("s1", "p1")])
+
+
+def test_a_pair_the_horizons_exclude_is_refused_in_a_list_too() -> None:
+    """A shard naming a pair the gate never runs is a mistake, as with --setup/--param."""
+    config = GoldenConfig(
+        check_subdir="c",
+        setups=[SetupConfig("w", "w.py", horizons=["week"])],
+        parameter_sets=[ParameterSetConfig("p2", "full_year", 2021, 60, ["COMPUTE_KPIS"])],
+    )
+    with pytest.raises(ValueError, match="does not run"):
+        filter_config(config, pairs=[("w", "p2")])
+
+
+def test_parallel_run_all_returns_each_child_result_in_pair_order(tmp_path: Path) -> None:
+    """Two real children, two at once: each pair's result comes back from its own process, in pair order.
+
+    The setups do not exist, so each child's ``run_one`` reports a ``FileNotFoundError`` without
+    simulating anything; what is under test is the round trip, not HiSim.
+    """
+    config = filter_config(_sample_config(), pairs=[("s2", "p1"), ("s1", "p1")])
+    results = run_all(config, tmp_path, REPO_ROOT, "check", jobs=2)
+
+    assert [(r.setup_id, r.parameter_set_id) for r in results] == [("s2", "p1"), ("s1", "p1")]
+    for result in results:
+        assert result.error is not None and "FileNotFoundError" in result.error
+        assert result.duration_s is not None and result.duration_s > 0
+    assert (tmp_path / "check" / ChildRuns.WORK_SUBDIR / "s2__p1.log").exists()
+
+
+def test_a_child_that_dies_is_a_run_error_of_its_pair(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A child killed before reporting (the OOM killer's way) fails its own pair with the log tail, not the run."""
+    suicide = "import os, signal; print('dying', flush=True); os.kill(os.getpid(), signal.SIGKILL)"
+    monkeypatch.setattr(ChildRuns, "command", classmethod(lambda cls, payload: [sys.executable, "-c", suicide]))
+    config = filter_config(_sample_config(), pairs=[("s1", "p1"), ("s2", "p1")])
+    results = run_all(config, tmp_path, REPO_ROOT, "check", jobs=2)
+
+    assert len(results) == 2
+    for result in results:
+        assert result.error is not None
+        assert "killed by signal 9" in result.error and "out-of-memory" in result.error
+        assert "dying" in result.error
+
+
+def test_run_modes_runs_each_pair_in_every_mode_side_by_side(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pair's Python run and its YAML twin are queued next to each other, each in its mode's own directory.
+
+    Catches the pool running all Python pairs before any twin (a shard would then take its
+    longest pair twice over) and two modes sharing a result directory, where one could read the
+    other's ``all_kpis.json``.
+    """
+    calls: list[tuple[str, str, str]] = []
+
+    def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):
+        calls.append((setup.id, mode, result_directory))
+        return RunResult(setup.id, param.id, result_directory, kpis={"mode": mode})
+
+    monkeypatch.setattr("scripts.runner.run_one", fake_run_one)
+    config = filter_config(_sample_config(), pairs=[("s2", "p1"), ("s1", "p1")])
+    results = run_modes(config, tmp_path, REPO_ROOT, {"python": "check", "yaml": "check-yaml"})
+
+    assert [(setup_id, mode) for setup_id, mode, _ in calls] == [
+        ("s2", "python"), ("s2", "yaml"), ("s1", "python"), ("s1", "yaml"),
+    ]
+    assert {Path(rd).parts[-3] for _, mode, rd in calls if mode == "yaml"} == {"check-yaml"}
+    assert [r.setup_id for r in results["yaml"]] == ["s2", "s1"]
+    assert all(r.kpis == {"mode": "python"} for r in results["python"])
+
+
+def test_both_modes_share_one_pool_of_children(tmp_path: Path) -> None:
+    """Two real children at once, one per mode, each result filed under its own mode."""
+    config = filter_config(_sample_config(), pairs=[("s1", "p1")])
+    results = run_modes(config, tmp_path, REPO_ROOT, {"python": "check", "yaml": "check-yaml"}, jobs=2)
+
+    assert [len(results["python"]), len(results["yaml"])] == [1, 1]
+    assert "resolve_setup_path" in (results["python"][0].error or "")
+    assert "resolve_twin_path" in (results["yaml"][0].error or "")
+    assert (tmp_path / "check-yaml" / ChildRuns.WORK_SUBDIR / "s1__p1.log").exists()
+
+
+def test_a_relative_results_root_reaches_the_child_as_an_absolute_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The child runs in the repository root, so a relative results root must not be passed to it as is.
+
+    Catches the child writing its result file relative to its own working directory (or failing to),
+    which turned every pair of a ``--results-root <relative>`` run into a run error.
+    """
+    monkeypatch.chdir(tmp_path)
+    config = filter_config(_sample_config(), pairs=[("s1", "p1")])
+    results = run_all(config, Path("relative"), REPO_ROOT, "check", jobs=2)
+
+    assert "FileNotFoundError" in (results[0].error or ""), results[0].error
+    assert "without reporting a result" not in (results[0].error or "")

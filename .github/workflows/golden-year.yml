@@ -5,7 +5,7 @@
 # golden-check had finished for the commit. A gate is an ordinary job, so it held a
 # runner for the whole wait: 28 idle minutes in a good run, 60 when it timed out. On
 # 2026-09-12 eight pull requests re-ran at once; eight idle gates occupied the very
-# runners the ~22-job golden-check matrices were queued behind, golden-check stayed
+# runners the ~22-job golden-check matrices (sharded since) were queued behind, golden-check stayed
 # queued past the hour, every gate timed out and the full-year tier never ran at all.
 # So the wait is now the trigger. Every completion of a prerequisite fires this
 # workflow and the gate decides in seconds, from one `gh run list` query per
@@ -55,6 +55,17 @@
 # request whose prerequisites were in fact all green. The workflow copy and its helpers
 # must not come apart. It is also the safer arrangement: the job holding the
 # status-writing token now runs nothing that came from the head commit.
+#
+# THE YAML TWINS GATE THIS TIER TOO. golden-check runs every week pair's recorded
+# '.energy_system.yaml' twin beside its Python setup, and fails when either diverges, so
+# a YAML twin that no longer reproduces its golden keeps the full-year tier from starting.
+# That is deliberate (decided 2026-09-27): the declarative path is a first-class input.
+# The full-year pairs themselves run the Python setups only.
+#
+# SHARDS. The full-year pairs run as four shards of two (golden_matrix.py --shards 4):
+# a full-year pair peaks at about 6 GiB, so a 16 GB runner holds two at once
+# (golden_check.py --jobs 2, a child process per pair). Same wall time as a job per
+# pair, half the jobs, and one container start, install and cache save per two pairs.
 #
 # EDITING THIS FILE. `workflow_run` always uses the copy of the workflow that is on
 # the default branch, so changes here do nothing on the pull request that makes
@@ -188,7 +199,7 @@ jobs:
         id: gen
         if: steps.decide.outputs.proceed == 'true'
         run: |
-          echo "matrix=$(python3 scripts/golden_matrix.py --horizon year \
+          echo "matrix=$(python3 scripts/golden_matrix.py --horizon year --shards 4 \
             --config under-test/scripts/golden_config.json)" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
@@ -199,7 +210,7 @@ jobs:
           mode: report
 
   golden-year:
-    name: golden-year ${{ matrix.setup }} / ${{ matrix.param }}
+    name: golden-year ${{ matrix.name }} (${{ matrix.count }} pairs)
     # Skipped when `gate` fails, and when the gate decided this trigger was too early
     # or a duplicate, so the heavy compute runs exactly once per commit and only with
     # every prerequisite green.
@@ -214,6 +225,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.gate.outputs.matrix) }}
+    env:
+      # Space-separated setup:param tokens, split on purpose where they are used. Passed
+      # through the environment rather than interpolated into the script: they come from
+      # the commit under test's golden_config.json.
+      PAIRS: ${{ matrix.pairs }}
+      JOBS: ${{ matrix.jobs }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -223,7 +240,7 @@ jobs:
         uses: ./.github/actions/resource-monitor
         with:
           mode: start
-          scope: ${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ matrix.name }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -233,15 +250,31 @@ jobs:
         uses: ./.github/actions/hisim-cache
         with:
           mode: restore
-          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ github.workflow }}-${{ matrix.name }}
+      # This job runs the head commit's golden_check.py under the default branch's copy of this
+      # workflow (see EDITING THIS FILE). A branch cut before the checker learned --pairs gets
+      # its pairs one at a time instead; drop the fallback once no open branch is that old.
       - name: Golden KPI check (full year)
-        run: python scripts/golden_check.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+        run: |
+          if python scripts/golden_check.py --help | grep -q -- '--pairs'; then
+            # shellcheck disable=SC2086  # PAIRS is split into one argument per pair on purpose
+            python scripts/golden_check.py --jobs "$JOBS" --pairs $PAIRS
+          else
+            echo "::notice title=golden-year::This branch's golden_check.py predates --pairs; running the shard's pairs one by one."
+            status=0
+            for pair in $PAIRS; do
+              python scripts/golden_check.py --setup "${pair%%:*}" --param "${pair#*:}" || status=1
+            done
+            exit "$status"
+          fi
       - name: Upload deviation report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: golden-year-report-${{ matrix.setup }}-${{ matrix.param }}
-          path: results/golden-ref-check/report.*
+          name: golden-year-report-${{ matrix.name }}
+          path: |
+            results/golden-ref-check/report.*
+            results/golden-ref-check/_children/*.log
           if-no-files-found: warn
       # Kept even when the job failed; see the action for why that is safe.
       - name: Save the HiSim inputs cache
@@ -249,7 +282,7 @@ jobs:
         uses: ./.github/actions/hisim-cache
         with:
           mode: save
-          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ github.workflow }}-${{ matrix.name }}
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -257,7 +290,7 @@ jobs:
         uses: ./.github/actions/resource-monitor
         with:
           mode: report
-          scope: ${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ matrix.name }}
 
   summary:
     name: golden-year summary

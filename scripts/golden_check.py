@@ -7,6 +7,13 @@ Re-runs the configured ``(setup, parameter_set)`` pairs, flattens each run's
 missing golden, or run failure. Writes a human-readable ``report.txt`` and a
 machine-readable ``report.json``. Read-only: never writes golden references
 (that is ``golden_update.py``'s job).
+
+A CI job checks one *shard*: ``--pairs setup:param ...`` (from ``golden_matrix.py --shards``)
+with ``--jobs N``, which runs N pairs at once, each in a child process of its own; the results
+still land in the one report, and a pair that diverges or fails to run fails the whole check.
+``--mode both`` runs every pair's Python setup and its recorded YAML twin side by side in that
+one pool and writes one report per mode: YAML mode writes to ``<check_subdir>-yaml``, so the two
+never share a result directory or read each other's ``all_kpis.json``.
 """
 from __future__ import annotations
 
@@ -16,7 +23,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Sequence
 
 # Make the repo root importable whether invoked as ``python scripts/golden_check.py``
 # or imported as ``scripts.golden_check`` (so ``hisim`` and siblings both resolve).
@@ -31,8 +38,9 @@ try:  # run as a script from scripts/ ...
         RunResult,
         filter_config,
         load_config,
+        parse_pair,
         run_all,
-        run_all_yaml,
+        run_modes,
         select_pairs,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
@@ -42,8 +50,9 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
         RunResult,
         filter_config,
         load_config,
+        parse_pair,
         run_all,
-        run_all_yaml,
+        run_modes,
         select_pairs,
     )
 
@@ -78,6 +87,8 @@ class PairReport:
     status: str  # "pass" | "fail" | "advisory" | "missing_golden" | "run_error"
     nondeterministic: bool = False
     deviations: list[str] = field(default_factory=list)
+    #: Wall time of the pair's run in seconds; the source of ``golden_config.json``'s weights.
+    duration_s: Optional[float] = None
 
 
 @dataclass
@@ -148,76 +159,58 @@ def _write_reports(report: ComparisonReport, out_dir: Path) -> None:
     for pair in report.pairs:
         tag = pair.status.upper()
         note = " [advisory: nondeterministic]" if pair.status == "advisory" else ""
-        lines.append(f"[{tag}] {pair.setup_id} / {pair.parameter_set_id}{note}")
+        took = f" ({pair.duration_s} s)" if pair.duration_s is not None else ""
+        lines.append(f"[{tag}] {pair.setup_id} / {pair.parameter_set_id}{took}{note}")
         for dev in pair.deviations:
             lines.append(f"    - {dev}")
     (out_dir / "report.txt").write_text("\n".join(lines) + "\n")
 
 
-def main(
-    config_path: Path = DEFAULT_CONFIG_PATH,
-    golden_dir: Path = DEFAULT_GOLDEN_DIR,
-    results_root: Path = DEFAULT_RESULTS_ROOT,
-    repo_root: Path = DEFAULT_REPO_ROOT,
-    setup_id: Optional[str] = None,
-    param_id: Optional[str] = None,
-    rel_tol: float = REL_TOL,
-    abs_tol: float = ABS_TOL,
-    run_fn: RunFn = run_all,
-    advisory: bool = False,
-    ignore_kpis: Optional[re.Pattern] = None,
-) -> int:
-    """Run the (filtered) pairs and compare KPIs to committed goldens.
+#: Each mode's result subdirectory suffix (appended to the config's ``check_subdir``) and the KPI
+#: names it excludes from the comparison.
+MODE_SUFFIX = {"python": "", "yaml": "-yaml"}
+MODE_IGNORED_KPIS: dict[str, Optional[re.Pattern]] = {"python": None, "yaml": PORT_NAMED_KPIS}
 
-    Returns ``0`` if every compared pair matches (advisory-only mismatches on
-    ``nondeterministic`` pairs still pass), ``1`` otherwise. Bails **before**
-    running any simulation if a required golden file is missing, so a missing
-    reference never wastes compute.
+ModesRunFn = Callable[[GoldenConfig, Path, Path, dict[str, str], int], dict[str, list[RunResult]]]
 
-    ``ignore_kpis`` drops matching KPI names from both the run and the reference before
-    comparing; YAML mode passes :data:`PORT_NAMED_KPIS` for it, and every exclusion is
-    printed with its pair so a shrinking comparison is never silent.
 
-    When ``advisory`` is ``True`` the full comparison still runs and the reports
-    are written exactly as usual, but the process return code is forced to ``0`` so
-    the check can surface divergences without blocking a gate that is still burning
-    in. The written ``report.json`` still records the true ``passed`` verdict.
-    """
-    config = load_config(config_path)
-    config = filter_config(config, setup_id=setup_id, param_id=param_id)
-    out_dir = results_root / config.check_subdir
-
-    pairs = select_pairs(config)
+def _missing_goldens(config: GoldenConfig, golden_dir: Path) -> Optional[ComparisonReport]:
+    """Return the failing report of every pair without a committed golden, or ``None`` if none is missing."""
     missing = [
         (setup, param)
-        for setup, param in pairs
+        for setup, param in select_pairs(config)
         if not (golden_dir / golden_filename(setup.id, param.id)).exists()
     ]
-    if missing:
-        report = ComparisonReport(
-            passed=False,
-            pairs=[
-                PairReport(
-                    setup_id=setup.id,
-                    parameter_set_id=param.id,
-                    status="missing_golden",
-                    nondeterministic=param.nondeterministic,
-                    deviations=[
-                        f"no golden at {golden_dir / golden_filename(setup.id, param.id)} "
-                        "(run golden_update.py / golden-update.yml)"
-                    ],
-                )
-                for setup, param in missing
-            ],
-        )
-        _write_reports(report, out_dir)
-        print(report.summary_line())
-        _print_failure_details(report, out_dir, advisory)
-        return 0 if advisory else 1
+    if not missing:
+        return None
+    return ComparisonReport(
+        passed=False,
+        pairs=[
+            PairReport(
+                setup_id=setup.id,
+                parameter_set_id=param.id,
+                status="missing_golden",
+                nondeterministic=param.nondeterministic,
+                deviations=[
+                    f"no golden at {golden_dir / golden_filename(setup.id, param.id)} "
+                    "(run golden_update.py / golden-update.yml)"
+                ],
+            )
+            for setup, param in missing
+        ],
+    )
 
+
+def _evaluate(
+    config: GoldenConfig,
+    results: list[RunResult],
+    golden_dir: Path,
+    rel_tol: float,
+    abs_tol: float,
+    ignore_kpis: Optional[re.Pattern],
+) -> ComparisonReport:
+    """Compare each run's KPIs with its golden and return the verdicts of all of them."""
     param_by_id = {p.id: p for p in config.parameter_sets}
-    results = run_fn(config, results_root, repo_root, config.check_subdir)
-
     pair_reports: list[PairReport] = []
     passed = True
     for result in results:
@@ -228,7 +221,9 @@ def main(
         if result.error is not None:
             passed = False
             pair_reports.append(
-                PairReport(result.setup_id, result.parameter_set_id, "run_error", nondet, [result.error])
+                PairReport(
+                    result.setup_id, result.parameter_set_id, "run_error", nondet, [result.error], result.duration_s
+                )
             )
             continue
 
@@ -251,14 +246,106 @@ def main(
         else:
             status = "fail"
             passed = False
-        pair_reports.append(PairReport(result.setup_id, result.parameter_set_id, status, nondet, deviations))
+        pair_reports.append(
+            PairReport(result.setup_id, result.parameter_set_id, status, nondet, deviations, result.duration_s)
+        )
+    return ComparisonReport(passed=passed, pairs=pair_reports)
 
-    report = ComparisonReport(passed=passed, pairs=pair_reports)
+
+def _conclude(report: ComparisonReport, out_dir: Path, advisory: bool) -> int:
+    """Write and print one report; return its exit code."""
     _write_reports(report, out_dir)
     print(report.summary_line())
-    if not passed:
+    if not report.passed:
         _print_failure_details(report, out_dir, advisory)
-    return 0 if (passed or advisory) else 1
+    return 0 if (report.passed or advisory) else 1
+
+
+def main(
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    golden_dir: Path = DEFAULT_GOLDEN_DIR,
+    results_root: Path = DEFAULT_RESULTS_ROOT,
+    repo_root: Path = DEFAULT_REPO_ROOT,
+    setup_id: Optional[str] = None,
+    param_id: Optional[str] = None,
+    rel_tol: float = REL_TOL,
+    abs_tol: float = ABS_TOL,
+    run_fn: RunFn = run_all,
+    advisory: bool = False,
+    ignore_kpis: Optional[re.Pattern] = None,
+    pairs: Optional[list[tuple[str, str]]] = None,
+    subdir_suffix: str = "",
+) -> int:
+    """Run the (filtered) pairs and compare KPIs to committed goldens.
+
+    Returns ``0`` if every compared pair matches (advisory-only mismatches on
+    ``nondeterministic`` pairs still pass), ``1`` otherwise. Bails **before**
+    running any simulation if a required golden file is missing, so a missing
+    reference never wastes compute.
+
+    ``ignore_kpis`` drops matching KPI names from both the run and the reference before
+    comparing; YAML mode passes :data:`PORT_NAMED_KPIS` for it, and every exclusion is
+    printed with its pair so a shrinking comparison is never silent.
+
+    When ``advisory`` is ``True`` the full comparison still runs and the reports
+    are written exactly as usual, but the process return code is forced to ``0`` so
+    the check can surface divergences without blocking a gate that is still burning
+    in. The written ``report.json`` still records the true ``passed`` verdict.
+
+    ``pairs`` restricts the check to exactly those pairs, in that order (a CI shard).
+    ``subdir_suffix`` is appended to the config's ``check_subdir`` for both the runs and the
+    report; YAML mode passes ``-yaml``. :func:`check_modes` is the same for several modes
+    run side by side.
+    """
+    config = load_config(config_path)
+    config = filter_config(config, setup_id=setup_id, param_id=param_id, pairs=pairs)
+    subdir = config.check_subdir + subdir_suffix
+    out_dir = results_root / subdir
+
+    missing = _missing_goldens(config, golden_dir)
+    if missing is not None:
+        return _conclude(missing, out_dir, advisory)
+    results = run_fn(config, results_root, repo_root, subdir)
+    return _conclude(_evaluate(config, results, golden_dir, rel_tol, abs_tol, ignore_kpis), out_dir, advisory)
+
+
+def check_modes(
+    modes: Sequence[str],
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    golden_dir: Path = DEFAULT_GOLDEN_DIR,
+    results_root: Path = DEFAULT_RESULTS_ROOT,
+    repo_root: Path = DEFAULT_REPO_ROOT,
+    setup_id: Optional[str] = None,
+    param_id: Optional[str] = None,
+    rel_tol: float = REL_TOL,
+    abs_tol: float = ABS_TOL,
+    advisory: bool = False,
+    pairs: Optional[list[tuple[str, str]]] = None,
+    jobs: int = 1,
+    run_modes_fn: ModesRunFn = run_modes,
+) -> int:
+    """Check the pairs in every mode of ``modes`` from one pool of runs, one report per mode.
+
+    Each mode is judged exactly as :func:`main` judges it — its own result directory
+    (:data:`MODE_SUFFIX`), its own excluded KPIs (:data:`MODE_IGNORED_KPIS`), its own
+    ``report.*`` — but the runs of all modes share one pool of ``jobs`` child processes, so a
+    CI shard runs a pair's Python setup and its YAML twin side by side. Returns ``1`` if any
+    mode's check fails (subject to ``advisory``), else ``0``; every mode is always reported.
+    """
+    config = load_config(config_path)
+    config = filter_config(config, setup_id=setup_id, param_id=param_id, pairs=pairs)
+    subdirs = {mode: config.check_subdir + MODE_SUFFIX[mode] for mode in modes}
+
+    missing = _missing_goldens(config, golden_dir)
+    if missing is not None:
+        return max(_conclude(missing, results_root / subdir, advisory) for subdir in subdirs.values())
+    results = run_modes_fn(config, results_root, repo_root, subdirs, jobs)
+    exit_code = 0
+    for mode, subdir in subdirs.items():
+        print(f"\n== {mode} ==")
+        report = _evaluate(config, results[mode], golden_dir, rel_tol, abs_tol, MODE_IGNORED_KPIS[mode])
+        exit_code = max(exit_code, _conclude(report, results_root / subdir, advisory))
+    return exit_code
 
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -269,28 +356,47 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--repo-root", type=Path, default=DEFAULT_REPO_ROOT)
     parser.add_argument("--setup", dest="setup_id", default=None, help="Only check this setup id.")
     parser.add_argument("--param", dest="param_id", default=None, help="Only check this parameter-set id.")
+    parser.add_argument(
+        "--pairs",
+        nargs="+",
+        type=parse_pair,
+        default=None,
+        metavar="SETUP:PARAM",
+        help="Check exactly these pairs, in this order (a CI shard from golden_matrix.py --shards).",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="How many pairs run at once, each in a child process of its own (default 1: one after "
+        "another, in this process).",
+    )
     parser.add_argument("--rel-tol", type=float, default=REL_TOL)
     parser.add_argument("--abs-tol", type=float, default=ABS_TOL)
     parser.add_argument(
         "--mode",
-        choices=("python", "yaml"),
+        choices=("python", "yaml", "both"),
         default="python",
         help="Run the '.py' setups (python) or their recorded '.energy_system.yaml' twins "
-        "through the declarative executor (yaml). Both compare against the same committed "
-        "golden references.",
+        "through the declarative executor (yaml), or both side by side from one pool of runs "
+        "(both; one report per mode). All compare against the same committed golden references.",
     )
     parser.add_argument(
         "--advisory",
         action="store_true",
         help="Report divergences but always exit 0 (never block).",
     )
-    return parser.parse_args(argv)
+    parsed = parser.parse_args(argv)
+    if parsed.jobs < 1:
+        parser.error("--jobs must be at least 1")
+    return parsed
 
 
 if __name__ == "__main__":
     args = _parse_args()
     sys.exit(
-        main(
+        check_modes(
+            ["python", "yaml"] if args.mode == "both" else [args.mode],
             config_path=args.config,
             golden_dir=args.golden_dir,
             results_root=args.results_root,
@@ -299,8 +405,8 @@ if __name__ == "__main__":
             param_id=args.param_id,
             rel_tol=args.rel_tol,
             abs_tol=args.abs_tol,
-            run_fn={"yaml": run_all_yaml}.get(args.mode, run_all),
             advisory=args.advisory,
-            ignore_kpis=PORT_NAMED_KPIS if args.mode == "yaml" else None,
+            pairs=args.pairs,
+            jobs=args.jobs,
         )
     )

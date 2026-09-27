@@ -1747,8 +1747,13 @@ class EconomicContextBuilder:
         The size is the element's area (:meth:`_element_area`) in square metres, except for the
         door, which the cost database lists per door (``per_unit: null``), so it is one door.
 
+        Each subject enters the report's ``subjects`` map with no measure (``None``), as every
+        subject of the house as it was, so every unpriced subject is a named one and the result
+        document stamps no ``measure_id`` on its row.
+
         Args:
-            result: The result being assembled, for the unpriced flags and their notes.
+            result: The result being assembled, for the subject map, the unpriced flags and their
+                notes.
 
         Returns:
             The kept elements' cost subjects, in :class:`ThermalElement` order.
@@ -1773,6 +1778,8 @@ class EconomicContextBuilder:
                     country=country,
                 )
             )
+            # A subject of the house as it was: named in the report's map, stamped with no measure.
+            result.subjects[subject] = None
             result.unpriced_subjects.append(subject)
             result.subject_notes[subject] = note
             facts.append(

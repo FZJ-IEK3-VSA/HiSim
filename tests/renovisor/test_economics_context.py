@@ -1834,6 +1834,10 @@ class TestTheReferenceRenewsTheFabric:
         rows = {row["subject"]: row for row in plan["document"]["plan"]["by_subject"]}
         assert rows["external_insulation"]["replaces_subjects"] == ["envelope_facade"]
         assert rows["envelope_roof"]["replaces_subjects"] == []
+        # A kept element is a subject of the house as it was: named in the map, stamped with no measure.
+        assert plan["insulated"].subjects["envelope_roof"] is None
+        assert rows["envelope_roof"]["measure_id"] is None
+        assert rows["external_insulation"]["measure_id"] == "external_insulation"
 
     def test_an_old_report_without_the_field_derives_it_from_the_stored_inputs(self, plan, tmp_path) -> None:
         """A mapping report written before hisim-ryw1: the translator's rule over the stages' inputs."""

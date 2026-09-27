@@ -14,7 +14,7 @@ from typing import Any, Dict, Sequence
 import pytest
 
 from hisim.renovisor import translate as translate_module
-from hisim.renovisor.capabilities import Probe, ProbeKind, ProbeSet
+from hisim.renovisor.capabilities import Conditions, Probe, ProbeKind, ProbeSet
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import Request
 from hisim.renovisor.translate import Translator
@@ -23,8 +23,8 @@ from hisim.renovisor.verify import LOG_DIRECTORY, VerifyExitCode, hisim_log_in, 
 from hisim.renovisor.verify.leaves import ABSENT, RequestLeaves
 from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases
 from hisim.renovisor.verify.render import ReportWriter
-from hisim.renovisor.verify import runner as runner_module
 from hisim.renovisor.verify.runner import (
+    Announced,
     Announcements,
     Artefacts,
     CellState,
@@ -350,49 +350,78 @@ class TestRefusals:
 
 @pytest.mark.base
 class TestConditionalStatuses:
-    """The bridge until hisim-5dfc: a pair below the announced status is a finding, a single change still fails."""
+    """A pair is held to the status its condition announces; a single change to the unconditional one."""
 
-    def test_a_pair_below_the_announced_status_is_a_finding(self) -> None:
-        """The SCOP is approximated on its own and not_implemented_yet beside a heat pump: ◐, pointing to hisim-5dfc."""
+    def test_a_pair_is_held_to_its_condition(self) -> None:
+        """The SCOP is approximated on its own and announced not_implemented_yet beside a heat pump: ◐, no failure."""
         report = _run(SCOP, SCOP_ON_HEAT_PUMP)
         verdict = _verdict(report, SCOP_ON_HEAT_PUMP)
         line = next(line for line in verdict.stage_two if line.path == "house.heating.seasonal_efficiency_in_percent")
 
-        assert (line.status, line.announced) == ("not_implemented_yet", "approximated")
-        assert verdict.conditional == (line,)
+        assert (line.status, line.announced) == ("not_implemented_yet", "not_implemented_yet")
+        (condition,) = line.conditions
+        assert condition["when"] == [{"path": "house.heating.type_of_system", "in": ["air_source_heat_pump"]}]
+        assert not line.below_announcement
         assert verdict.cells[Stage.MAPPING] is CellState.AS_LISTED
-        assert "hisim-5dfc" in verdict.remarks[Stage.MAPPING]
+        assert "where house.heating.type_of_system" in verdict.remarks[Stage.MAPPING]
         assert not report.failures()
-        (finding,) = [issue for issue in report.findings() if issue.code == "conditional_status"]
-        assert finding.probe == SCOP_ON_HEAT_PUMP
-        assert "conditional" in finding.message and "hisim-5dfc" in finding.message
-        assert "not_implemented_yet" in finding.message and "announces approximated" in finding.message
+        assert not report.findings()
+        row = next(row for row in verdict.to_json()["stage2"] if row["path"] == line.path)
+        assert row["conditions"] == [dict(condition)]
 
-    def test_without_the_bridge_the_same_pair_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Retiring the bridge is emptying CONDITIONAL_PROBE_KINDS; the pair then fails as a single change does."""
-        monkeypatch.setattr(runner_module, "CONDITIONAL_PROBE_KINDS", ())
+    def test_the_single_change_is_held_to_the_unconditional_status(self) -> None:
+        """The same leaf in a request without a heat pump: no condition holds, approximated is announced."""
+        verdict = _verdict(_run(SCOP), SCOP)
+        (line,) = verdict.stage_two
+
+        assert (line.status, line.announced, line.conditions) == ("approximated", "approximated", ())
+
+    def test_a_condition_better_than_the_unconditional_status_is_as_expected(self) -> None:
+        """The flow temperature is not_implemented_yet on a boiler and used on a heat pump: ● for the pair."""
+        name = "pair:flow_temperature_on_heat_pump"
+        verdict = _verdict(_run("field:heating.flow_temperature_in_celsius=20", name), name)
+        line = next(line for line in verdict.stage_two if line.path == "house.heating.flow_temperature_in_celsius")
+
+        assert (line.status, line.announced) == ("used", "used")
+        assert verdict.cells[Stage.MAPPING] is CellState.AS_EXPECTED
+
+    def test_without_its_condition_the_same_pair_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A document that announced no conditions holds the pair to the unconditional status, and it fails."""
+        monkeypatch.setattr(Conditions, "attach", lambda measures, fields, results: None)
         report = _run(SCOP, SCOP_ON_HEAT_PUMP)
 
         assert _verdict(report, SCOP_ON_HEAT_PUMP).cells[Stage.MAPPING] is CellState.FAILED
         assert [(issue.code, issue.probe) for issue in report.failures()] == [
             ("status_below_announced", SCOP_ON_HEAT_PUMP)
         ]
-        assert not [issue for issue in report.findings() if issue.code == "conditional_status"]
+
+    def test_a_pair_worse_than_its_condition_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A condition that promised more than the combination reports is a failure naming the condition."""
+        promise = {"when": [{"path": "house.heating.type_of_system", "in": ["air_source_heat_pump"]}],
+                   "status": "approximated", "note": "a promise the pair does not keep"}
+        monkeypatch.setattr(
+            Announcements, "field", lambda self, path, value, document: Announced("approximated", (promise,))
+        )
+        report = _run(SCOP_ON_HEAT_PUMP)
+        verdict = _verdict(report, SCOP_ON_HEAT_PUMP)
+
+        assert verdict.cells[Stage.MAPPING] is CellState.FAILED
+        assert "announces approximated (where house.heating.type_of_system" in verdict.remarks[Stage.MAPPING]
+        assert [issue.code for issue in report.failures()] == [IssueCode.STATUS_BELOW_ANNOUNCED]
 
     def test_a_single_change_below_the_announced_status_still_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Shading is not_implemented_yet; announced as used, its field probe is ✖ and a failure, not a finding."""
-        monkeypatch.setattr(Announcements, "field", lambda self, path, value: "used")
+        monkeypatch.setattr(Announcements, "field", lambda self, path, value, document: Announced("used"))
         report = _run(SHADING)
         verdict = _verdict(report, SHADING)
 
         assert verdict.cells[Stage.MAPPING] is CellState.FAILED
-        assert verdict.conditional == ()
         assert [(issue.code, issue.probe) for issue in report.failures()] == [("status_below_announced", SHADING)]
         assert not report.findings()
 
     def test_a_single_change_approximated_where_used_is_announced_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Owner rule of 2026-09-26: approximated under an announced used is below it, as defaulted would be."""
-        monkeypatch.setattr(Announcements, "field", lambda self, path, value: "used")
+        monkeypatch.setattr(Announcements, "field", lambda self, path, value, document: Announced("used"))
         report = _run(SCOP)
         verdict = _verdict(report, SCOP)
         (line,) = verdict.stage_two
@@ -496,7 +525,7 @@ class TestTheReport:
         assert "before" not in verdict.stage_one[0].to_json()
 
     def test_findings_alone_never_fail_the_run(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """A no-effect finding and a conditional-status finding, no failure: exit 0, both findings in the report."""
+        """A no-effect finding and a pair held to its condition, no failure: exit 0, the finding in the report."""
         original_write = translate_module._TranslationState.write  # pylint: disable=protected-access
 
         def ignoring_the_azimuth(self: Any, component: str, field_name: str, *arguments: Any, **keywords: Any) -> bool:
@@ -518,7 +547,7 @@ class TestTheReport:
         assert verify(tmp_path) is VerifyExitCode.PASSED
         written = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
         assert written["failures"] == []
-        assert sorted(finding["code"] for finding in written["findings"]) == ["conditional_status", "no_effect"]
+        assert [finding["code"] for finding in written["findings"]] == ["no_effect"]
         assert all(not IssueCode(finding["code"]).is_failure for finding in written["findings"])
 
     def test_the_run_logs_under_the_report_and_restores_the_logger(self, tmp_path: Path) -> None:
@@ -571,6 +600,8 @@ class TestTheReport:
         chosen["probes"] = _probes(SCOP, SCOP_ON_HEAT_PUMP)
         assert verify(tmp_path / "conditional") is VerifyExitCode.PASSED
         written = json.loads((tmp_path / "conditional" / "report.json").read_text(encoding="utf-8"))
-        assert [finding["code"] for finding in written["findings"]] == ["conditional_status"]
-        assert "hisim-5dfc" in written["legend"]["as_listed"]["meaning"]
-        assert "hisim-5dfc" in (tmp_path / "conditional" / "index.html").read_text(encoding="utf-8")
+        assert written["failures"] == [] and written["findings"] == []
+        pages = "".join(
+            page.read_text(encoding="utf-8") for page in (tmp_path / "conditional").rglob("*.html")
+        )
+        assert "(where house.heating.type_of_system = &quot;air_source_heat_pump&quot;)" in pages

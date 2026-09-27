@@ -64,8 +64,8 @@ The house is one TABULA row (`hisim/renovisor/tabula.py`): its country, typology
 come from `location.country`, `building.building_type` and `building.construction_year`, and its
 refurbishment variant — the code's last three digits — from `building.retrofit_status`:
 `unrenovated` → `001`, `usual_refurb` → `002`, `advanced_refurb` → `003`, absent → `001`. A band
-without the wanted variant (the newest Irish, Dutch and Belgian bands have no `002`) takes `001`, reported
-`approximated` with the missing variant and every band without it named; since a request cannot know
+without the wanted variant (IE SFH and AB band 10, NL band 06 and BE band 05 have no `002`) takes `001`,
+reported `approximated` with the missing variant and every band without it named; since a request cannot know
 which band it lands in, the capability document announces `usual_refurb` `approximated` everywhere. An
 expert `tabula_building_code` skips the derivation; its variant stands when `retrofit_status` is absent
 (a variant none of the three statuses selects, such as `011`, is reported as it is, with a note saying

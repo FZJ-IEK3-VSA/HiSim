@@ -60,9 +60,8 @@ from hisim.renovisor.request import (
     SemanticChecks,
     ValueType,
 )
-from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.translate import TranslatedSystem, Translator
-from hisim.renovisor.vocabulary import ReportStatus
+from hisim.renovisor.vocabulary import ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import Whitelist
 
 
@@ -568,7 +567,7 @@ class ProbeSet:
     #: The five envelope elements, each of whose U-value the bare probe leaves out: since the retrofit
     #: status (calculation-request §3.4) an element the request does not describe takes the TABULA
     #: row's, and that default is part of what "nothing optional" means.
-    ELEMENTS: ClassVar[Tuple[str, ...]] = ("roof", "facade", "floor", "window", "door")
+    ELEMENTS: ClassVar[Tuple[str, ...]] = tuple(element.value for element in ThermalElement)
 
     #: The optional blocks a request may carry, each with the smallest body the schema accepts.
     BLOCKS: ClassVar[Dict[str, Dict[str, Any]]] = {
@@ -1355,12 +1354,7 @@ class ProbeRunner:
         """
         self._whitelist.forget_hits()
         request = Request.parse(document)
-        applied = apply(
-            request.document["house"],
-            request.measures,
-            self._whitelist,
-            archetype=ArchetypeEnvelope.for_request(request),
-        )
+        applied = apply(request, request.measures, self._whitelist)
         return self._translator.translate(request, applied)
 
     def _one(self, probe: Probe, anchor: Mapping[str, Any]) -> ProbeResult:

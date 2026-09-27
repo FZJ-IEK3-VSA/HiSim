@@ -18,7 +18,9 @@ import pytest
 
 from hisim.renovisor.constants import DesignTemperatures
 from hisim.renovisor.tabula import (
+    AgeBand,
     ArchetypeEnvelope,
+    BuildingCode,
     BuildingCodeSelector,
     TabulaIndex,
     TabulaTypology,
@@ -167,7 +169,7 @@ class TestTheVariant:
     def test_a_band_without_the_wanted_variant_takes_the_existing_state_with_a_note(
         self, country: str, building_type: BuildingType
     ) -> None:
-        """The newest Irish, Dutch and Belgian bands have no ``002``: ``001`` stands in, and the note names the gap."""
+        """IE SFH band 10 and NL TH band 06 have no ``002``: ``001`` stands in, and the note names the gap."""
         selection = select(building_type, 2015, country=country, retrofit_status=RetrofitStatus.USUAL_REFURB)
 
         assert selection.code.endswith(".Gen.ReEx.001.001")
@@ -175,7 +177,7 @@ class TestTheVariant:
         assert "no variant 002 (usual_refurb)" in selection.variant_note
         assert not selection.is_approximated(), "the band and the typology were not approximated"
 
-    def test_the_bands_without_the_usual_refurbishment_are_the_newest_irish_dutch_and_belgian_ones(self) -> None:
+    def test_the_bands_without_the_usual_refurbishment_are_ie_10_nl_06_and_be_05(self) -> None:
         """The capability document announces ``usual_refurb`` approximated because of exactly these bands."""
         expected = (
             "BE.N.AB.05", "BE.N.MFH.05", "BE.N.SFH.05", "BE.N.TH.05",
@@ -225,6 +227,23 @@ class TestTheVariant:
 
 
 @pytest.mark.base
+class TestTheTypesKeepTheirWord:
+    """What a docstring promises about a value, the type enforces."""
+
+    def test_a_band_without_its_existing_state_is_refused(self) -> None:
+        """A band is indexed through its ``001`` row, so an ``AgeBand`` cannot lack it."""
+        with pytest.raises(ValueError, match="001"):
+            AgeBand(band="05", year_start=1967, year_end=1977, variants=frozenset({"002", "003"}))
+
+    def test_a_codes_variant_is_its_last_three_digits(self) -> None:
+        """``BuildingCode`` has one source for the variant: the code."""
+        code = BuildingCode(code="IE.N.SFH.05.Gen.ReEx.001.003", typology="SFH", notes=())
+
+        assert code.variant == "003"
+        assert code.retrofit_status is RetrofitStatus.ADVANCED_REFURB
+
+
+@pytest.mark.base
 class TestTheArchetypeEnvelope:
     """What the ``Building`` makes of a row, asked of the ``Building`` itself.
 
@@ -264,13 +283,31 @@ class TestTheArchetypeEnvelope:
             assert door.u_value_in_watt_per_m2_per_kelvin > 0
             assert "mean U_Actual_Door_1" in door.origin
             assert f"variant {variant}" in door.origin
+            assert not door.adjustment_factor_from_row
+
+    def test_the_estimated_door_of_the_mockups_row_is_the_irish_national_mean(self) -> None:
+        """With no door area stated, IE.N.SFH.05's 001 door is the mean of Ireland's national 001 doors."""
+        door = ArchetypeEnvelope.of("IE.N.SFH.05.Gen.ReEx.001.001", 140).elements[ThermalElement.DOOR]
+
+        assert door.u_value_in_watt_per_m2_per_kelvin == pytest.approx(2.872571428571429, abs=1e-12)
+        assert door.origin.startswith("mean U_Actual_Door_1 of the IE national TABULA rows of variant 001")
+        assert door.adjustment_factor == 1.0
 
     def test_the_floor_keeps_the_rows_adjustment_factor(self) -> None:
-        """An element left to the row keeps the row's b_Transmission, not the fixed 0.5 of a stated floor."""
+        """An element left to the row keeps the row's b_Transmission 0.5, not a fixed factor."""
         floor = ArchetypeEnvelope.of("IE.N.SFH.05.Gen.ReEx.001.001", 140).elements[ThermalElement.FLOOR]
 
         assert "U_Actual_Floor_1" in floor.origin
-        assert floor.adjustment_factor > 0
+        assert floor.adjustment_factor == 0.5
+        assert floor.adjustment_factor_from_row
+
+    @pytest.mark.parametrize("code", ["IE.N.SFH.10.Gen.ReEx.001.002", "IE.N.SFH.99.Gen.ReEx.001.001"])
+    def test_a_code_the_table_lacks_is_refused(self, code: str) -> None:
+        """Every entry point refuses it as unresolvable, not with the Building's IndexError."""
+        with pytest.raises(TabulaUnresolvable, match=code.replace(".", r"\.")):
+            ArchetypeEnvelope.of(code, 140)
+        with pytest.raises(TabulaUnresolvable, match=code.replace(".", r"\.")):
+            ArchetypeEnvelope.for_code(BuildingCode(code=code, typology="SFH", notes=()), 140)
 
     def test_a_written_u_value_switches_to_the_fixed_factor_whatever_the_rows(self) -> None:
         """AT.N.SFH.01's floor has b_Transmission 1; a stated or insulated floor uses the fixed 0.5 instead.
@@ -333,6 +370,13 @@ class TestEveryRowIsSelectable:
         """
         with pytest.raises(TabulaUnresolvable, match="IE.N.SFH.05.Gen.ReEx.001.009"):
             select(BuildingType.DETACHED_SFH, 1975, requested_code="IE.N.SFH.05.Gen.ReEx.001.009")
+
+    def test_a_code_of_a_band_without_an_existing_state_row_is_refused(self) -> None:
+        """``IE.N.TH.10`` has only variants 031-053 and no ``001``, so it is no band of the index."""
+        assert "IE.N.TH.10.Gen.ReEx.001.031" in TabulaIndex.codes()
+
+        with pytest.raises(TabulaUnresolvable, match="no age band"):
+            select(BuildingType.TERRACED_SFH, 2015, requested_code="IE.N.TH.10.Gen.ReEx.001.031")
 
     def test_an_existing_refurbishment_variant_is_accepted(self) -> None:
         """The lookup is by whole code, so a variant the table does carry stays an override."""

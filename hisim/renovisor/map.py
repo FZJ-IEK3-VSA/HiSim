@@ -36,7 +36,6 @@ from hisim.renovisor.apply import apply
 from hisim.renovisor.capabilities import CapabilityDocument
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import Request
-from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.translate import Translator
 from hisim.renovisor.whitelist import Whitelist
 
@@ -188,9 +187,7 @@ class TraceExample:
         directory = base_files_directory or (Path(__file__).resolve().parents[2] / "energy_systems")
         whitelist = Whitelist.load()
         request = Request.parse(ContractFiles.request_mockup())
-        applied = apply(
-            request.document["house"], request.measures, whitelist, archetype=ArchetypeEnvelope.for_request(request)
-        )
+        applied = apply(request, request.measures, whitelist)
         translated = Translator(directory, whitelist).translate(request, applied)
         return cls(
             request=request.document,

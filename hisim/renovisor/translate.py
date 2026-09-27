@@ -56,7 +56,7 @@ from hisim.renovisor.constants import (
 )
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import House, Request
-from hisim.renovisor.tabula import ArchetypeEnvelope, BuildingCode, BuildingCodeSelector
+from hisim.renovisor.tabula import ArchetypeEnvelope, BuildingCode
 from hisim.renovisor.vocabulary import (
     HeatDistributionType,
     HeatGenerator,
@@ -947,7 +947,10 @@ class Translator:
             _building_config(model),
             generator_component=BaseFiles.generator_component(base_file_name),
             heating_reference_temperature_in_celsius=_design_temperature(model),
-            baseline_twin=plan_twin if not request.measures else RealizedTwin.of(self._baseline_model(request)),
+            baseline_twin=(
+                plan_twin if not request.measures
+                else RealizedTwin.of(self._baseline_model(request, applied.code))
+            ),
             plan_twin=plan_twin,
         ).build()
         report.set_subjects(built.subjects)
@@ -1030,7 +1033,7 @@ class Translator:
         _unmodelled(state)
         return _Stages(base=base, base_file_name=base_file_name, editor=editor, report=report, edits=edits)
 
-    def _baseline_model(self, request: Request) -> EnergySystemFile:
+    def _baseline_model(self, request: Request, code: BuildingCode) -> EnergySystemFile:
         """The twin of the request's house as it stands, before any measure of its package.
 
         The equipment the house already has -- its buffer, its cylinder, its emitters, its meters
@@ -1042,13 +1045,12 @@ class Translator:
 
         Args:
             request: The validated request, whose ``house`` is written without its measures.
+            code: The TABULA code the translation already selected for *request*.
 
         Returns:
             The edited energy-system document of the unrenovated house.
         """
-        original = apply(
-            request.document["house"], (), self._whitelist, archetype=ArchetypeEnvelope.for_request(request)
-        )
+        original = apply(request, (), self._whitelist, code=code)
         return self._run_stages(request, original).editor.build()
 
     def _cost_blocks(self, request: Request, house: Mapping[str, Any], report: MappingReport) -> None:
@@ -1291,8 +1293,8 @@ def _envelope(state: _TranslationState) -> None:
     the house its row's air infiltration and thermal-bridge surcharge.
     """
     building = state.house.building
-    code = BuildingCodeSelector.for_request(state.request)
-    archetype = ArchetypeEnvelope.for_request(state.request)
+    code = state.applied.code
+    archetype = state.applied.archetype
     arguments: Dict[str, Any] = {
         "building_code": code.code,
         "absolute_conditioned_floor_area_in_m2": building.absolute_conditioned_floor_area_in_m2,
@@ -1408,9 +1410,19 @@ def _element(state: _TranslationState, element: ThermalElement, archetype: Arche
     u_target = Targets.describe(Targets.BUILDING, Targets.element_u_value(element))
     layer_note = state.applied.element_note(element)
     row = archetype.elements[element]
+    factor = (
+        f"the row's transmission adjustment factor {row.adjustment_factor:g}"
+        if row.adjustment_factor_from_row
+        else f"HiSim's fixed transmission adjustment factor {row.adjustment_factor:g}"
+    )
     row_note = (
         f"the TABULA row {archetype.code}'s {row.u_value_in_watt_per_m2_per_kelvin:g} W/(m2K) ({row.origin}), "
-        f"with the row's transmission adjustment factor {row.adjustment_factor:g}"
+        f"with {factor}"
+    )
+    switch = (
+        f"the factor switches from the row's {row.adjustment_factor:g} to the fixed {row.fixed_adjustment_factor:g}"
+        if row.adjustment_factor_from_row
+        else f"the factor stays HiSim's fixed {row.fixed_adjustment_factor:g}"
     )
     if block.u_value_in_watt_per_m2_per_kelvin is not None:
         state.write(
@@ -1430,8 +1442,7 @@ def _element(state: _TranslationState, element: ThermalElement, archetype: Arche
                 block.u_value_in_watt_per_m2_per_kelvin,
                 note=(
                     f"absent from the request, where the Building would keep {row_note}; {written}; "
-                    f"{Translator.ADJUSTMENT_NOTE}: the factor switches from the row's "
-                    f"{row.adjustment_factor:g} to the fixed {row.fixed_adjustment_factor:g}"
+                    f"{Translator.ADJUSTMENT_NOTE}: {switch}"
                 ),
                 target=u_target,
             )

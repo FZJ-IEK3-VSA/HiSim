@@ -7,8 +7,9 @@ Series resistance and nothing else (§4.3 of the calculation-request specificati
 
 ``U_existing`` is the request's own element U-value, or, when the request leaves it out, the
 U-value of the TABULA row of the variant ``building.retrofit_status`` selects -- as the
-``Building`` computes it, the area-weighted average of the row's sub-elements (§4.3). The note
-then names that origin. Layers stack in the order the measures added them,
+``Building`` computes it, the area-weighted average of the row's sub-elements (§4.3), except for
+a door the row states no U-value for but that has an area, which takes the ``Building``'s
+estimated door U-value instead. The note then names that origin. Layers stack in the order the measures added them,
 so a facade that gets external insulation and then cavity fill is one wall with two layers rather
 than two competing answers.
 

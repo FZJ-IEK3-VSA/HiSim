@@ -24,7 +24,6 @@ from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, Roof
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import Request
-from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.translate import BaseFiles, Targets, TranslatedSystem, Translator
 from hisim.renovisor.vocabulary import HeatGenerator, ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import Whitelist
@@ -36,9 +35,7 @@ def translate(document: Mapping[str, Any]) -> TranslatedSystem:
     """Validate, apply and translate one request document."""
     whitelist = Whitelist.load()
     request = Request.parse(copy.deepcopy(dict(document)))
-    applied = apply(
-        request.document["house"], request.measures, whitelist, archetype=ArchetypeEnvelope.for_request(request)
-    )
+    applied = apply(request, request.measures, whitelist)
     return Translator(BASE_FILES, whitelist).translate(request, applied)
 
 

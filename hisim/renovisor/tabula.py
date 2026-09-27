@@ -25,8 +25,8 @@ unrenovated.
 
 Every variant of the table is indexed, per band, but a band is selectable only through its
 ``001`` row, the existing state every other variant falls back to. A band without the wanted
-variant -- TABULA has no ``002`` for the newest Irish, Dutch and Belgian bands -- takes ``001`` and the
-note names the missing variant. A band with no ``001`` row at all (``IE.N.TH.10``) is not a band
+variant -- TABULA has no ``002`` for IE SFH and AB band 10, NL band 06 and BE band 05 -- takes ``001``
+and the note names the missing variant. A band with no ``001`` row at all (``IE.N.TH.10``) is not a band
 of the index, and an expert code naming one of its rows is refused like a code the table
 lacks.
 
@@ -50,13 +50,11 @@ import csv
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import TYPE_CHECKING, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Tuple
+from typing import ClassVar, Dict, FrozenSet, List, Mapping, Optional, Tuple
 
 from hisim import utils
+from hisim.components.building import BuildingConfig, BuildingInformation
 from hisim.renovisor.vocabulary import BuildingType, RetrofitStatus, ThermalElement
-
-if TYPE_CHECKING:  # pragma: no cover - the request module imports this one lazily
-    from hisim.renovisor.request import Request
 
 
 class TabulaUnresolvable(Exception):
@@ -93,6 +91,11 @@ class AgeBand:
     year_end: int
     variants: FrozenSet[str] = frozenset({"001"})
 
+    def __post_init__(self) -> None:
+        """Refuse a band without its existing-state variant ``001``, through which every band is indexed."""
+        if "001" not in self.variants:
+            raise ValueError(f"age band {self.band} lacks the existing-state variant 001: {sorted(self.variants)}")
+
     def covers(self, year: int) -> bool:
         """Return whether a construction year falls inside this band's range."""
         return self.year_start <= year <= self.year_end
@@ -119,7 +122,6 @@ class BuildingCode:
         typology: The typology the code carries, for the note.
         notes: One sentence per approximation of the typology or the band; empty when the code
             is the exact band of the exact typology.
-        variant: The code's refurbishment variant, its last three digits.
         variant_note: The sentence naming a variant the band lacks, which the selection
             replaced by ``001``; ``None`` when the wanted variant was used.
     """
@@ -127,8 +129,12 @@ class BuildingCode:
     code: str
     typology: str
     notes: Tuple[str, ...]
-    variant: str = "001"
     variant_note: Optional[str] = None
+
+    @property
+    def variant(self) -> str:
+        """Return the code's refurbishment variant, its last three digits."""
+        return self.code.rsplit(".", 1)[-1]
 
     def is_approximated(self) -> bool:
         """Return whether the typology or the band was approximated; the variant has its own note."""
@@ -265,18 +271,6 @@ class TabulaIndex:
         )
 
     @classmethod
-    def variant_of(cls, code: str) -> str:
-        """Return a generic-example code's refurbishment variant, its last three digits.
-
-        Raises:
-            TabulaUnresolvable: When the code is not a generic-example code.
-        """
-        match = cls.CODE_PATTERN.match(code)
-        if match is None:
-            raise TabulaUnresolvable(f"'{code}' is not a generic-example row of the processed TABULA table")
-        return match.group("variant")
-
-    @classmethod
     def _rows(cls) -> List[Tuple["re.Match[str]", Dict[str, str]]]:
         """Return every generic-example row of the processed table with its parsed code."""
         rows: List[Tuple["re.Match[str]", Dict[str, str]]] = []
@@ -347,25 +341,7 @@ class BuildingCodeSelector:
         status = retrofit_status if retrofit_status is not None else RetrofitStatus.UNRENOVATED
         variant, variant_note = cls._variant(band, status, f"{country}.N.{typology}.{band.band}")
         code = f"{country}.N.{typology}.{band.band}.Gen.ReEx.001.{variant}"
-        return BuildingCode(
-            code=code,
-            typology=typology,
-            notes=tuple(notes),
-            variant=variant,
-            variant_note=variant_note,
-        )
-
-    @classmethod
-    def for_request(cls, request: "Request") -> BuildingCode:
-        """Return the code a validated request's house is simulated as."""
-        building = request.house.building
-        return cls.select(
-            country=request.country.value,
-            building_type=building.building_type,
-            construction_year=building.construction_year,
-            requested_code=building.tabula_building_code,
-            retrofit_status=building.retrofit_status,
-        )
+        return BuildingCode(code=code, typology=typology, notes=tuple(notes), variant_note=variant_note)
 
     @classmethod
     def _requested(cls, code: str, retrofit_status: Optional[RetrofitStatus]) -> BuildingCode:
@@ -387,12 +363,7 @@ class BuildingCodeSelector:
                 f"tabula_building_code '{code}' is variant {variant}, but retrofit_status "
                 f"'{retrofit_status.value}' selects variant {retrofit_status.variant}"
             )
-        return BuildingCode(
-            code=code,
-            typology=typology,
-            notes=(),
-            variant=variant,
-        )
+        return BuildingCode(code=code, typology=typology, notes=())
 
     @classmethod
     def _variant(cls, band: AgeBand, status: RetrofitStatus, stem: str) -> Tuple[str, Optional[str]]:
@@ -430,17 +401,20 @@ class ElementDefault:
 
     Args:
         u_value_in_watt_per_m2_per_kelvin: The U-value the simulation uses.
-        adjustment_factor: The transmission adjustment factor it is paired with, the row's own.
+        adjustment_factor: The transmission adjustment factor it is paired with.
+        adjustment_factor_from_row: Whether that factor is the row's own ``b_Transmission``
+            (floor, facade, roof) rather than HiSim's fixed one (window, door).
         origin: Where the U-value comes from, in a phrase the report can quote.
-        fixed_adjustment_factor: The factor the ``Building`` uses instead once the element's
-            U-value is written -- stated or insulated --, which is HiSim's fixed one (floor 0.5,
-            others 1) rather than the row's ``b_Transmission`` (owner decision, 2026-09-26).
+        fixed_adjustment_factor: The factor the ``Building`` uses once the element's U-value is
+            written -- stated or insulated --, which is HiSim's fixed one (floor 0.5, others 1)
+            rather than the row's ``b_Transmission`` (owner decision, 2026-09-26).
     """
 
     u_value_in_watt_per_m2_per_kelvin: float
     adjustment_factor: float
+    adjustment_factor_from_row: bool
     origin: str
-    fixed_adjustment_factor: float = 1.0
+    fixed_adjustment_factor: float
 
 
 @dataclass(frozen=True)
@@ -448,10 +422,11 @@ class ArchetypeEnvelope:
     """The envelope one TABULA row gives the ``Building``, as the ``Building`` itself computes it.
 
     Built by one ``BuildingInformation`` over a configuration that states the archetype, the floor
-    area and the request's door area and leaves every U-value unset, so each value here is the
-    one the simulation will use for an element the request does not describe: the area-weighted
-    average of the row's sub-element U-values with the row's adjustment factor, and for a row
-    whose door U-value is ``0`` the ``Building``'s estimated door (§3.4).
+    area and the request's door area and leaves every U-value unset, and read off its
+    :py:meth:`~hisim.components.building.BuildingInformation.element_values`, so each value here is
+    the one the simulation will use for an element the request does not describe: the area-weighted
+    average of the row's sub-element U-values with the adjustment factor the ``Building`` pairs it
+    with, and for a row whose door U-value is ``0`` the ``Building``'s estimated door (§3.4).
 
     Args:
         code: The TABULA code.
@@ -470,13 +445,14 @@ class ArchetypeEnvelope:
     #: sizes the maximum heating load, which nothing here reads; the envelope does not depend on it.
     DESIGN_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 0.0
 
-    #: The ``BuildingInformation`` element descriptor of each request element, by attribute name.
-    DESCRIPTORS: ClassVar[Dict[ThermalElement, str]] = {
-        ThermalElement.ROOF: "ROOF_ELEMENT",
-        ThermalElement.FACADE: "WALL_ELEMENT",
-        ThermalElement.FLOOR: "FLOOR_ELEMENT",
-        ThermalElement.WINDOW: "WINDOW_ELEMENT",
-        ThermalElement.DOOR: "DOOR_ELEMENT",
+    #: The ``Building``'s own name of each request element, as
+    #: :py:meth:`BuildingInformation.element_values` keys it; only the facade is named differently.
+    BUILDING_ELEMENT_NAMES: ClassVar[Dict[ThermalElement, str]] = {
+        ThermalElement.ROOF: "roof",
+        ThermalElement.FACADE: "wall",
+        ThermalElement.FLOOR: "floor",
+        ThermalElement.WINDOW: "window",
+        ThermalElement.DOOR: "door",
     }
 
     def u_value(self, element: ThermalElement) -> float:
@@ -484,14 +460,14 @@ class ArchetypeEnvelope:
         return self.elements[element].u_value_in_watt_per_m2_per_kelvin
 
     @classmethod
-    def for_request(cls, request: "Request") -> "ArchetypeEnvelope":
-        """Return the envelope of the row a validated request's house is simulated as."""
-        building = request.house.building
-        return cls.of(
-            BuildingCodeSelector.for_request(request).code,
-            building.absolute_conditioned_floor_area_in_m2,
-            building.door.area_in_m2,
-        )
+    def for_code(
+        cls,
+        code: BuildingCode,
+        absolute_conditioned_floor_area_in_m2: float,
+        door_area_in_m2: Optional[float] = None,
+    ) -> "ArchetypeEnvelope":
+        """Return the envelope of a selected code's row; see :meth:`of` for the arguments."""
+        return cls.of(code.code, absolute_conditioned_floor_area_in_m2, door_area_in_m2)
 
     @classmethod
     def of(
@@ -514,7 +490,12 @@ class ArchetypeEnvelope:
         Returns:
             The envelope, cached per argument tuple: the capability probes ask for the same one
             hundreds of times.
+
+        Raises:
+            TabulaUnresolvable: When the code is not a generic-example row of the table.
         """
+        if code not in TabulaIndex.codes():
+            raise TabulaUnresolvable(f"'{code}' is not a generic-example row of the processed TABULA table")
         area = None if door_area_in_m2 is None else float(door_area_in_m2)
         return cls._cached(code, float(absolute_conditioned_floor_area_in_m2), area)
 
@@ -527,13 +508,6 @@ class ArchetypeEnvelope:
         door_area_in_m2: Optional[float],
     ) -> "ArchetypeEnvelope":
         """Build the envelope once per argument tuple; see :meth:`of`."""
-        # Function-local: the building package pulls pandas and the TABULA frame in with it, and
-        # the request checks import this module without needing either.
-        from hisim.components.building import (  # pylint: disable=import-outside-toplevel
-            BuildingConfig,
-            BuildingInformation,
-        )
-
         config = BuildingConfig.for_tabula_code(
             name="Building",
             building_code=code,
@@ -543,20 +517,16 @@ class ArchetypeEnvelope:
         config.door_area_in_m2 = door_area_in_m2
         config.heating_reference_temperature_in_celsius = cls.DESIGN_TEMPERATURE_IN_CELSIUS
         information = BuildingInformation(config)
+        values = information.element_values()
         elements: Dict[ThermalElement, ElementDefault] = {}
-        for element, descriptor_name in cls.DESCRIPTORS.items():
-            descriptor = getattr(BuildingInformation, descriptor_name)
-            if element is ThermalElement.DOOR:
-                origin = information.door_u_value_origin
-            else:
-                origin = "the row's area-weighted " + " / ".join(descriptor.u_value_columns)
+        for element, name in cls.BUILDING_ELEMENT_NAMES.items():
+            used = values[name]
             elements[element] = ElementDefault(
-                u_value_in_watt_per_m2_per_kelvin=float(
-                    getattr(information, f"{element.value}_u_value_in_watt_per_m2_per_kelvin")
-                ),
-                adjustment_factor=float(getattr(information, f"{element.value}_adjustment_factor_from_tabula")),
-                origin=origin,
-                fixed_adjustment_factor=float(descriptor.fixed_adjustment_factor),
+                u_value_in_watt_per_m2_per_kelvin=float(used.u_value_in_watt_per_m2_per_kelvin),
+                adjustment_factor=float(used.adjustment_factor),
+                adjustment_factor_from_row=used.adjustment_factor_from_tabula_row,
+                origin=used.u_value_origin,
+                fixed_adjustment_factor=float(used.fixed_adjustment_factor),
             )
         return cls(
             code=code,

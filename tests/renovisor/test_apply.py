@@ -20,7 +20,6 @@ from hisim.renovisor.capabilities import ProbeSet
 from hisim.renovisor.constants import BatteryLaw, LayerDefaults, OpeningUValues
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import CatalogueTable, Measure, Request
-from hisim.renovisor.tabula import ArchetypeEnvelope
 from hisim.renovisor.vocabulary import ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
@@ -33,6 +32,16 @@ def whitelist() -> Whitelist:
 def anchor_house() -> Dict[str, Any]:
     """Return the house of the vendored mockup, with no package applied."""
     return copy.deepcopy(ContractFiles.request_mockup()["house"])
+
+
+def request_of(house: Mapping[str, Any]) -> Request:
+    """Return the vendored mockup validated with *house* in place of its own, as ``apply`` takes it."""
+    return Request.parse(dict(copy.deepcopy(ContractFiles.request_mockup()), house=copy.deepcopy(dict(house))))
+
+
+def anchor() -> Request:
+    """Return the vendored mockup as a validated request, whose house is :func:`anchor_house`."""
+    return request_of(anchor_house())
 
 
 def measures_of(*entries: Mapping[str, Any]) -> Tuple[Measure, ...]:
@@ -150,7 +159,7 @@ class TestEveryRowOfTheTable:
         before = anchor_house()
         entry = ProbeSet.package(measure_id)
 
-        applied = apply(before, measures_of(entry), whitelist())
+        applied = apply(request_of(before), measures_of(entry), whitelist())
 
         assert collapse(difference(before, applied.house)) <= TOUCHED[measure_id]
 
@@ -161,7 +170,7 @@ class TestEveryRowOfTheTable:
         """Every measure leaves a mark on the house, or the value it wrote was already set."""
         before = anchor_house()
 
-        applied = apply(before, measures_of(ProbeSet.package(measure_id)), whitelist())
+        applied = apply(request_of(before), measures_of(ProbeSet.package(measure_id)), whitelist())
 
         changed = collapse(difference(before, applied.house))
         already = {path for path in TOUCHED[measure_id] if path in leaves(before)}
@@ -170,17 +179,17 @@ class TestEveryRowOfTheTable:
     @pytest.mark.parametrize("measure_id", sorted(CatalogueTable.ids()))
     def test_the_original_house_is_never_mutated(self, measure_id: str) -> None:
         """``apply`` works on a deep copy; the probe set depends on it and so does the caller."""
-        before = anchor_house()
-        untouched = copy.deepcopy(before)
+        request = anchor()
+        untouched = copy.deepcopy(request.document["house"])
 
-        apply(before, measures_of(ProbeSet.package(measure_id)), whitelist())
+        apply(request, measures_of(ProbeSet.package(measure_id)), whitelist())
 
-        assert before == untouched
+        assert request.document["house"] == untouched
 
     @pytest.mark.parametrize("measure_id", sorted(CatalogueTable.ids()))
     def test_every_measure_produces_exactly_one_report_entry(self, measure_id: str) -> None:
         """One line per measure, with one option line per option the request carried."""
-        applied = apply(anchor_house(), measures_of(ProbeSet.package(measure_id)), whitelist())
+        applied = apply(anchor(), measures_of(ProbeSet.package(measure_id)), whitelist())
 
         assert len(applied.measures) == 1
         line = applied.measures[0]
@@ -194,34 +203,30 @@ class TestInsulationLayers:
     """Layers stack in list order, defaults are reported, and the arithmetic is the composer's."""
 
     def test_a_layer_on_an_element_without_a_u_value_starts_from_the_archetype(self) -> None:
-        """§4.3: ``U_existing`` is the TABULA row's when the request leaves the U-value out."""
+        """§4.3: ``U_existing`` is the TABULA row's when the request leaves the U-value out.
+
+        The mockup's house is IE.N.SFH.05; usual_refurb selects variant 002, whose facade is 0.32
+        W/(m2K) in the processed TABULA table.
+        """
         house = anchor_house()
         del house["building"]["facade"]["u_value_in_watt_per_m2_per_kelvin"]
-        archetype = ArchetypeEnvelope.of("IE.N.SFH.05.Gen.ReEx.001.002", 140)
+        house["building"]["retrofit_status"] = "usual_refurb"
         entry = ProbeSet.package("external_insulation")
 
-        applied = apply(house, measures_of(entry), whitelist(), archetype=archetype)
+        applied = apply(request_of(house), measures_of(entry), whitelist())
 
+        assert applied.code.code == "IE.N.SFH.05.Gen.ReEx.001.002"
         layer = applied.layers[0]
-        expected = 1 / (1 / archetype.u_value(ThermalElement.FACADE) + layer.thickness_in_mm / 1000
-                        / layer.material.thermal_conductivity_w_mk)
+        expected = 1 / (1 / 0.32 + layer.thickness_in_mm / 1000 / layer.material.thermal_conductivity_w_mk)
         assert applied.house["building"]["facade"]["u_value_in_watt_per_m2_per_kelvin"] == pytest.approx(expected)
         assert "not in the request: TABULA IE.N.SFH.05.Gen.ReEx.001.002" in str(
             applied.element_note(ThermalElement.FACADE)
         )
 
-    def test_a_layer_on_an_element_without_a_u_value_and_no_archetype_is_a_translator_error(self) -> None:
-        """Without a row to start from there is no arithmetic, and guessing one would be silent."""
-        house = anchor_house()
-        del house["building"]["facade"]["u_value_in_watt_per_m2_per_kelvin"]
-
-        with pytest.raises(TranslatorError, match="no TABULA archetype"):
-            apply(house, measures_of(ProbeSet.package("external_insulation")), whitelist())
-
     def test_two_measures_on_one_element_stack(self) -> None:
         """External insulation then cavity fill is one wall with two layers, not two answers."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of(
                 ProbeSet.package("external_insulation"),
                 ProbeSet.package("cavity_wall_insulation"),
@@ -237,7 +242,7 @@ class TestInsulationLayers:
     def test_the_list_order_is_the_order_the_layers_were_added(self) -> None:
         """The second layer is applied to the result of the first, so order is part of the answer."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of(
                 ProbeSet.package("cavity_wall_insulation"),
                 ProbeSet.package("external_insulation"),
@@ -250,7 +255,7 @@ class TestInsulationLayers:
 
     def test_an_absent_thickness_is_defaulted_and_the_default_is_reported(self) -> None:
         """Every default is a report line with the value, never a silent number."""
-        applied = apply(anchor_house(), measures_of(ProbeSet.package("warm_roof_insulation")), whitelist())
+        applied = apply(anchor(), measures_of(ProbeSet.package("warm_roof_insulation")), whitelist())
 
         line = next(
             option for option in applied.measures[0].options if option.name == "thickness_in_mm"
@@ -270,7 +275,7 @@ class TestInsulationLayers:
         """
         assert CatalogueTable.option(measure_id, "thickness_in_mm") is not None
         stated = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": measure_id, "options": {"material": ProbeSet.material(), "thickness_in_mm": 140}}),
             whitelist(),
         )
@@ -280,7 +285,7 @@ class TestInsulationLayers:
         assert not stated.layers[0].thickness_defaulted
         assert stated.measures[0].status is ReportStatus.USED
 
-        absent = apply(anchor_house(), measures_of(ProbeSet.package(measure_id)), whitelist())
+        absent = apply(anchor(), measures_of(ProbeSet.package(measure_id)), whitelist())
         default = LayerDefaults.thickness_of(measure_id)
         line = next(option for option in absent.measures[0].options if option.name == "thickness_in_mm")
         assert line.status is ReportStatus.DEFAULTED
@@ -292,7 +297,7 @@ class TestInsulationLayers:
     def test_a_cavity_deeper_than_the_cavity_is_capped_and_said_so(self) -> None:
         """A cavity cannot be filled deeper than it is wide; the cap is an approximation."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "cavity_wall_insulation", "options": {
                 "material": ProbeSet.material(), "thickness_in_mm": 400}}),
             whitelist(),
@@ -315,7 +320,7 @@ class TestInsulationLayers:
         and the measure are ``used``, and nothing about it is approximated.
         """
         material = dict(ProbeSet.material(), asp_id="stone_wool", thermal_conductivity_w_mk=0.036)
-        applied = apply(anchor_house(), measures_of({"id": measure_id, "options": {"material": material}}), whitelist())
+        applied = apply(anchor(), measures_of({"id": measure_id, "options": {"material": material}}), whitelist())
 
         assert applied.layers[0].material.asp_id == "stone_wool"
         assert applied.layers[0].material.thermal_conductivity_w_mk == 0.036
@@ -329,13 +334,13 @@ class TestInsulationLayers:
         measure = Measure(id="external_insulation", options={CatalogueTable.MATERIAL: "EPS"})
 
         with pytest.raises(TranslatorError) as raised:
-            apply(anchor_house(), (measure,), whitelist())
+            apply(anchor(), (measure,), whitelist())
         assert "without a material object" in raised.value.message
 
     def test_the_element_note_carries_the_arithmetic_with_its_numbers(self) -> None:
         """A reader has to be able to redo the division, which is what the note is for."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "external_insulation", "options": {
                 "material": ProbeSet.material(), "thickness_in_mm": 120}}),
             whitelist(),
@@ -353,7 +358,7 @@ class TestOpenings:
     def test_a_replaced_window_without_an_expert_value_uses_the_table(self) -> None:
         """Two panes without a coating is 1.4 W/(m2K) in the translator's own table."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of(
                 {
                     "id": "window_replacement",
@@ -370,7 +375,7 @@ class TestOpenings:
     def test_an_expert_u_value_wins_over_the_table(self) -> None:
         """The only way to get a ``used`` line out of a replacement is to state the number."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of(
                 {
                     "id": "window_replacement",
@@ -396,7 +401,7 @@ class TestOpenings:
     def test_a_replaced_door_takes_its_value_from_the_pane_count(self) -> None:
         """A solid door and a glazed one are different doors, which the table knows."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "door_replacement", "options": {"glazing_panes": 0, "frame_material": "wood"}}),
             whitelist(),
         )
@@ -421,7 +426,7 @@ class TestReplacementsAndRemovals:
         )
 
         applied = apply(
-            house,
+            request_of(house),
             measures_of({"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"}}),
             whitelist(),
         )
@@ -435,7 +440,7 @@ class TestReplacementsAndRemovals:
         house["pv_system"] = {"power_in_watt": 3000, "azimuth": 200, "tilt": 25}
 
         applied = apply(
-            house,
+            request_of(house),
             measures_of({"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 80}}),
             whitelist(),
         )
@@ -452,7 +457,7 @@ class TestReplacementsAndRemovals:
         house["pv_system"] = {"power_in_watt": 3000, "azimuth": 200, "tilt": 25}
 
         applied = apply(
-            house,
+            request_of(house),
             measures_of({"id": "photovoltaic_system", "options": {
                 "size_in_percent_of_roof_area": 60, "power_in_watt": 5500,
                 "azimuth_in_degree": 170, "tilt_in_degree": 35}}),
@@ -476,7 +481,7 @@ class TestReplacementsAndRemovals:
     def test_the_shading_loss_is_copied_into_the_array_and_not_implemented(self) -> None:
         """§4.2: the measure writes the loss into pv_system; the array is simulated unshaded all the same."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "photovoltaic_system", "options": {
                 "size_in_percent_of_roof_area": 60, "shading_losses_in_percent": 8}}),
             whitelist(),
@@ -494,7 +499,7 @@ class TestReplacementsAndRemovals:
         house["battery"] = {"custom_battery_capacity_generic_in_kilowatt_hour": 5, "installation_year": 2015}
 
         applied = apply(
-            house,
+            request_of(house),
             measures_of({"id": "battery_system", "options": {"capacity_in_kwh": 10, "power_in_watt": 4000}}),
             whitelist(),
         )
@@ -510,7 +515,7 @@ class TestReplacementsAndRemovals:
     def test_an_absent_battery_power_is_the_catalogue_s_half_c_rule(self) -> None:
         """The catalogue: power from the capacity at 0.5 C when unset; reported defaulted with the rule."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "battery_system", "options": {"capacity_in_kwh": 8}}),
             whitelist(),
         )
@@ -524,7 +529,7 @@ class TestReplacementsAndRemovals:
     def test_an_absent_battery_capacity_is_read_back_from_a_stated_power(self) -> None:
         """The same 0.5 C rule, the other way round: 3000 W is a 6 kWh battery."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "battery_system", "options": {"power_in_watt": 3000}}),
             whitelist(),
         )
@@ -538,7 +543,7 @@ class TestReplacementsAndRemovals:
 
     def test_a_battery_measure_stating_neither_number_is_sized_like_the_frontend_sizes_one(self) -> None:
         """One day of the simulated household's electricity, and the measure says it approximated."""
-        applied = apply(anchor_house(), measures_of({"id": "battery_system", "options": {}}), whitelist())
+        applied = apply(anchor(), measures_of({"id": "battery_system", "options": {}}), whitelist())
 
         assert applied.house["battery"] == {"days_to_cover": BatteryLaw.DAYS_TO_COVER_WHEN_UNSIZED}
         assert applied.measures[0].status is ReportStatus.APPROXIMATED
@@ -557,7 +562,7 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
         (hisim-7hq9): the value is approximated with a substitution sentence, not used.
         """
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of(
                 {"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"}},
                 {"id": "hot_water_system", "options": {"supply": "separate_heat_pump"}},
@@ -576,7 +581,7 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
     def test_the_same_measure_is_not_implemented_on_a_boiler_house(self) -> None:
         """No separate domestic-hot-water heat pump component exists for a boiler."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "hot_water_system", "options": {"supply": "separate_heat_pump"}}),
             whitelist(),
         )
@@ -588,7 +593,7 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
     def test_the_supply_every_twin_simulates_selects_nothing(self) -> None:
         """``together_with_heating_system`` is what every twin does anyway, so it is no ``used``."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "hot_water_system", "options": {"supply": "together_with_heating_system"}}),
             whitelist(),
         )
@@ -612,7 +617,7 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
     def test_the_collectors_supplies_select_nothing(self, supplies: str, status: ReportStatus, note: str) -> None:
         """Both solar-thermal twins feed the hot-water storage alone (hisim-l56w)."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of({"id": "solar_thermal_system", "options": {"supplies": supplies}}),
             whitelist(),
         )
@@ -624,7 +629,7 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
     def test_an_installation_year_is_recorded_and_carries_its_note(self) -> None:
         """Six measures have it and no HiSim parameter takes it."""
         applied = apply(
-            anchor_house(),
+            anchor(),
             measures_of(
                 {"id": "battery_system", "options": {"capacity_in_kwh": 8, "installation_year": 2020}}
             ),
@@ -642,7 +647,7 @@ class TestTheWhitelistIsAskedOfTheRenovatedHouse:
         empty = Whitelist([])
 
         with pytest.raises(TranslatorError):
-            apply(anchor_house(), measures_of(ProbeSet.package("outside_shading")), empty)
+            apply(anchor(), measures_of(ProbeSet.package("outside_shading")), empty)
 
 
 @pytest.mark.base
@@ -657,7 +662,7 @@ class TestTheRegistryAndTheCatalogueAgree:
         """The worked example both sides point at, end to end through the measure layer."""
         request = Request.parse(copy.deepcopy(ContractFiles.request_mockup()))
 
-        applied = apply(request.document["house"], request.measures, whitelist())
+        applied = apply(request, request.measures, whitelist())
 
         assert [line.id for line in applied.measures] == [
             measure.id for measure in request.measures

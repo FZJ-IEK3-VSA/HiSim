@@ -1,5 +1,6 @@
-# Runs the full pytest suite (one parallel job per marker) inside the prebuilt
-# HiSim test image, then combines coverage from all of them in a single run.
+# Runs the full pytest suite (one parallel job per marker, each spread over pytest-xdist
+# workers) inside the prebuilt HiSim test image, then combines coverage from all of them in a
+# single run.
 
 name: tests
 
@@ -35,25 +36,51 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # workers: pytest-xdist processes for the shard (-n, always with --dist loadfile, so all of a
+        # module's tests run on one worker: module fixtures and the stray-file guard's per-module window
+        # stay whole). The runner has 4 cores and 16 GB; the peaks quoted are the resource monitor's
+        # job-wide cgroup figure on main (run 36303671417, 2026-09-27), of which ~1.4 GB is the idle
+        # container. 0 runs the shard in one process as before: xdist is off, and loadfile could not
+        # spread a single module anyway.
         include:
           - name: base
             marker: "base"
+            # 2.5 GB peak (~1.1 GB above idle) for one process: four fit easily; ~7,300 tests in
+            # ~200 modules, so loadfile spreads well.
+            workers: 4
           - name: buildingtest
             marker: "buildingtest"
+            # 2.2 GB peak; seven modules, bounded by test_building_scalability_with_factor (62 s).
+            workers: 4
           - name: extendedbase
             marker: "extendedbase"
+            # 6.9 GB peak (~5.5 GB above idle) for one process; four could pass 16 GB. Bounded by
+            # test_p3_parity.py (two 220 s cases in one module, which loadfile keeps on one worker).
+            workers: 2
           - name: extendedbase2
             marker: "extendedbase2"
+            # One module (test_hisim_main_python.py), so loadfile has nothing to spread, and it peaks at
+            # 11.3 GB: a second process beside it would risk the 16 GB limit.
+            workers: 0
           - name: postprocessingoptions
             marker: "postprocessingoptions"
             durations: "40"
+            # One module (test_postprocessing_options.py), about a minute: nothing to spread.
+            workers: 0
           - name: system-setups
             marker: "system_setups"
+            # 3.5 GB peak (~2.1 GB above idle): four processes stay near 10 GB; 16 modules.
+            workers: 4
           - name: utsp
             marker: "utsp"
+            # One test (test_occupancy_scaling_with_local_lpg, 328 s) at 11.5 GB peak: nothing to spread.
+            workers: 0
           - name: others
             marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions"
             allow_empty: "true"
+            # 1.9 GB peak, 35 s: two workers are the most the short shard gains from, and they leave the
+            # HPC-harness worker-pool tests, which time child processes, cores to spare.
+            workers: 2
 
     steps:
     - uses: actions/checkout@v7
@@ -90,7 +117,13 @@ jobs:
         durations="${{ matrix.durations }}"
         durations="${durations:-20}"
         ret=0
-        coverage run --parallel-mode --source=../hisim -m pytest -m "${{ matrix.marker }}" --durations="$durations" || ret=$?
+        # pytest-cov starts coverage in every xdist worker (a bare 'coverage run' would follow only the
+        # controller) and combines the workers' data into $COVERAGE_FILE when the run ends; its name
+        # matches the upload glob below, and so do the workers' own files should the combine not happen.
+        # --cov-report= writes no report here: the combine coverage job reports once over all shards.
+        export COVERAGE_FILE=".coverage.${{ matrix.name }}"
+        pytest -m "${{ matrix.marker }}" -n "${{ matrix.workers }}" --dist loadfile \
+          --cov=../hisim --cov-report= --durations="$durations" || ret=$?
         # pytest exit code 5 means "no tests collected"; only the catch-all
         # "others" job is allowed to legitimately select zero tests.
         if [ "${{ matrix.allow_empty }}" = "true" ] && [ "$ret" = "5" ]; then

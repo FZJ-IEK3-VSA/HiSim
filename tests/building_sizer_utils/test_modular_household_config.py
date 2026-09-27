@@ -4,8 +4,7 @@ Covers GitLab issue #733: the deterministic, side-effect-free
 ``get_default_config_for_household_*`` classmethods and the ``get_hash``
 instance method of
 :class:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig`
-were previously untested. The file-writing helper ``write_config`` is intentionally
-not exercised here.
+were previously untested.
 
 The last family of tests covers ``read_in_configs`` and the line it draws between
 "no config was given" and "a config was given but cannot be read": the first answers

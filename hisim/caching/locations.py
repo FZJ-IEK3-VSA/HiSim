@@ -18,7 +18,7 @@ import os
 from typing import Optional, Sequence, Tuple
 
 from hisim import log
-from hisim.write_guard import WriteGuard
+from hisim.write_guard import CalculationDirectories
 
 
 class CacheLocationsError(ValueError):
@@ -55,9 +55,10 @@ class CacheLocations:
             )
         self._directories: Tuple[str, ...] = tuple(directories)
         # Every cache reader and writer of a calculation goes through a CacheLocations, which makes
-        # it the one place that knows the calculation's cache directories: a running write guard
-        # (hisim.write_guard) allows writes below them from here on. Outside a calculation, no-op.
-        WriteGuard.admit_cache_directories(self._directories)
+        # it the place that learns the calculation's cache directories: they are registered with
+        # the running calculation (hisim.write_guard.CalculationDirectories), whose guard allows
+        # writes below them from here on. Outside a calculation, no-op.
+        CalculationDirectories.register_cache_directories(self._directories)
 
     @property
     def directories(self) -> Tuple[str, ...]:

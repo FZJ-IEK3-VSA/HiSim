@@ -114,12 +114,15 @@ python -m hisim.economics report <results_dir> [--compare <reference_results_dir
 
 # Price a renovation plan spread over several years out of finished jobs (E-spec §6):
 python -m hisim.economics staged --stage <dir0>:0:baseline --stage <dir1>:3:"stage 2" \
-    --parameters economics.json --out economics_result.json
+    --parameters economics.json --out results/economics_result.json
 ```
 
 `staged` writes `cost_provenance.json` beside `--out`: the one provenance ledger the reference,
 every stage and the spliced plan recorded into, in an ordinary run's format under the plan's
-perspective id, so every `provenance_ids` entry of the plan resolves in it.
+perspective id, so every `provenance_ids` entry of the plan resolves in it. `--out` has to name a
+directory (`results/economics_result.json`, or an absolute path): that directory is the command's
+result directory, and a bare file name, which would write into the working directory, is refused
+with exit 2.
 
 `staged` is the exception to the paragraph below: its `--parameters` file is **not** an
 `EconomicParameters` record but the `economics_result.json` document's own `parameters` block, so

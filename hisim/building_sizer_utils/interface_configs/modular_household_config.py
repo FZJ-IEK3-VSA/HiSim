@@ -44,7 +44,7 @@ classification of the European building stock. The ``get_default_config_for_hous
 classmethods pair such a default archetype with each available heating system.
 Configurations are exchanged as :mod:`dataclasses_json` JSON objects whose structure
 mirrors the nested ``energy_system_config_`` and ``archetype_config_`` fields:
-:func:`write_config` serializes a configuration to a caller-supplied JSON path, and
+:meth:`ModularHouseholdConfig.to_json` serializes a configuration, and
 :func:`read_in_configs` reads a configuration from a caller-supplied JSON path. That reader keeps
 "no config was given" apart from "a config was given but cannot be read": the first answers ``None``
 so the calling setup falls back to its own default household, the second raises and names the path
@@ -322,22 +322,6 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         config_str = json.dumps(household_config.to_dict())
         config_str_hash = hash(config_str)
         return config_str_hash
-
-
-def write_config(config: ModularHouseholdConfig, path: str) -> None:
-    """Write a :class:`ModularHouseholdConfig` as JSON to *path*.
-
-    The configuration is serialized with :meth:`ModularHouseholdConfig.to_json` and written to the
-    caller's path, overwriting any existing file. The file name used to be fixed to
-    ``modular_example_config.json`` in the current working directory, which made the working
-    directory an output location nobody chose (bead hisim-epc.23).
-
-    Args:
-        config (ModularHouseholdConfig): The modular household configuration to serialize and write.
-        path (str): Where the JSON file goes.
-    """
-    with open(path, "w", encoding="utf-8") as file:
-        file.write(config.to_json())  # type: ignore
 
 
 def read_in_configs(pathname: Optional[str]) -> Optional[ModularHouseholdConfig]:

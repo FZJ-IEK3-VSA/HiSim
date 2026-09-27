@@ -22,7 +22,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Optional, Union
 
-from hisim.write_guard import WriteGuard
+from hisim.write_guard import CalculationDirectories
 
 
 class RunMode(enum.Enum):
@@ -174,6 +174,23 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         #: layout would compute a different one on a second call (the index enumeration counts
         #: existing directories, and the calculation's own directory is one of them by then).
         self.claimed_directory: Optional[str] = None
+        #: True when :attr:`claimed_directory` is a directory the caller named (:meth:`adopt_directory`)
+        #: rather than one the calculation created for itself (:meth:`claim_fresh_directory`).
+        self.directory_adopted: bool = False
+
+    @classmethod
+    def reset_if_stale(cls) -> None:
+        """Drop what an earlier calculation left behind, keep what a caller configured for the next one.
+
+        A configuration a previous simulator derived from its own setup module, or a directory a
+        previous calculation claimed or adopted, belongs to that calculation and is dropped. A
+        configuration a caller made deliberately and nothing has used yet -- a test choosing its
+        directory, a building-sizer harness choosing a hash layout -- is kept for the calculation
+        about to start. :class:`hisim.calculation_scope.CalculationScope` calls this as it opens.
+        """
+        provider = cls()
+        if provider.configured_by_simulator or provider.claimed_directory is not None:
+            cls.reset()
 
     @classmethod
     def reset(cls) -> None:
@@ -237,6 +254,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         # A deliberate configuration by a caller; the simulator must honour it as it stands.
         self.configured_by_simulator = False
         self.claimed_directory = None
+        self.directory_adopted = False
 
     @staticmethod
     def _validate_configure_arguments(run_mode: RunMode, provided_arguments: dict[str, Optional[Union[str, SortingOptionEnum]]]) -> None:
@@ -283,6 +301,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.set_further_result_folder_description(further_result_folder_description=further_result_folder_description)
         self.configured_by_simulator = False
         self.claimed_directory = None
+        self.directory_adopted = False
 
     def configure_for_simulator_run(self, module_directory: str, model_name: str) -> None:
         """Derive the path from the setup module the simulator is about to run, flat layout.
@@ -351,51 +370,48 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
     #: unique; :meth:`claim_fresh_directory` makes them unique by creating them exclusively.
     TIMESTAMPED_LAYOUTS: tuple = (SortingOptionEnum.FLAT, SortingOptionEnum.DEEP)
 
-    def claim_fresh_directory(self) -> Optional[str]:
-        """Create the configured directory exclusively and fix it for the running calculation.
+    def claim_fresh_directory(self, claimant: str = "the result path provider's caller") -> Optional[str]:
+        """Create the configured directory and fix it for the running calculation.
 
         The flat and the deep layout name a directory by the model and a timestamp to the second,
         so two calculations of the same model started in the same second -- two runs in one reused
         process, two workers on one volume -- would share a directory and overwrite each other.
-        Here the directory is created with ``os.mkdir``, which fails for a directory that exists,
-        and on a collision ``_2``, ``_3`` ... is appended until the creation succeeds. The layouts a
-        caller names on purpose -- the test layout and the two mass-simulation enumerations, whose
-        hash layout is deterministic so that ``skip_finished_results`` can find a finished run again
-        -- are created if missing and otherwise used as they stand: their uniqueness is the caller's.
+        Those are created exclusively, with a suffix on a collision; the layouts a caller names on
+        purpose -- the test layout and the two mass-simulation enumerations, whose hash layout is
+        deterministic so that ``skip_finished_results`` can find a finished run again -- are created
+        if missing and otherwise used as they stand: their uniqueness is the caller's. The creation
+        itself, and the registration with the running calculation that has to go with it, is
+        :meth:`hisim.write_guard.CalculationDirectories.create_result_directory`; this method only
+        supplies the name.
+
+        Args:
+            claimant: Who asks -- a simulator names itself -- so that a second simulator of one
+                calculation is refused with both names.
 
         Returns:
             The claimed directory, created; ``None`` when the provider is not configured.
+
+        Raises:
+            hisim.write_guard.CalculationDirectoryError: When another claimant of the running
+                calculation already has its result directory.
         """
         if self.claimed_directory is not None:
+            if not self.directory_adopted:
+                CalculationDirectories.confirm_claim(claimant)
             return self.claimed_directory
         directory = self.get_result_directory_name()
         if directory is None:
             return None
-        if self.run_mode == RunMode.TEST or self.sorting_option not in self.TIMESTAMPED_LAYOUTS:
-            WriteGuard.admit_result_directory(directory)
-            os.makedirs(directory, exist_ok=True)
-            self.claimed_directory = directory
-            return directory
-        candidate = directory
-        suffix = 1
-        while True:
-            # The running calculation's guard has to allow the directory before it is created; a
-            # candidate that turns out to be taken is withdrawn again, since it is another run's.
-            WriteGuard.admit_result_directory(candidate)
-            os.makedirs(os.path.dirname(candidate) or ".", exist_ok=True)
-            try:
-                os.mkdir(candidate)
-                break
-            except FileExistsError:
-                WriteGuard.withdraw_result_directory(candidate)
-                suffix += 1
-                candidate = f"{directory}_{suffix}"
-        check_path_length(path=candidate)
-        self.claimed_directory = candidate
-        return candidate
+        unique = self.run_mode != RunMode.TEST and self.sorting_option in self.TIMESTAMPED_LAYOUTS
+        claimed = CalculationDirectories.create_result_directory(directory, unique=unique, claimant=claimant)
+        check_path_length(path=claimed)
+        self.claimed_directory = claimed
+        return claimed
 
     def adopt_directory(self, directory: Union[str, Path]) -> str:
         """Fix a directory the caller chose -- a RenoVisor job directory -- for the running calculation.
+
+        It is registered with the running calculation as its result directory and created.
 
         Args:
             directory: The directory; created when missing.
@@ -404,9 +420,10 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             The directory as a string.
         """
         path = str(directory)
-        WriteGuard.admit_result_directory(path)
+        CalculationDirectories.register_result_directory(path)
         os.makedirs(path, exist_ok=True)
         self.claimed_directory = path
+        self.directory_adopted = True
         self.configured_by_simulator = False
         return path
 

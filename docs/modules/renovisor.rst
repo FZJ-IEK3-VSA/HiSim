@@ -41,7 +41,7 @@ applicant -- and the whole of the money is produced afterwards by
 
     python -m hisim.economics staged \
         --stage jobs/baseline:0:baseline --stage jobs/package:0:"stage 1" \
-        --out economics_result.json
+        --out results/economics_result.json
 
 That writes ``economics_result.json`` (:mod:`hisim.economics.staged_document`,
 validated against ``hisim/economics/economics_result.schema.json``), and

@@ -67,7 +67,7 @@ class EconomicsDocument:
     #: How it is produced: one invocation over the finished jobs of a plan.
     COMMAND: ClassVar[str] = (
         "python -m hisim.economics staged --stage <dir>:<from_year>:<label> ... --out "
-        "economics_result.json"
+        "<dir>/economics_result.json"
     )
 
     #: Which key of it answers each cost field ``result.json`` no longer carries. Four keys are the

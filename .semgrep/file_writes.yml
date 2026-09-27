@@ -74,7 +74,7 @@ rules:
         - /hisim/components/pylpg_workspace.py
         # Developer tools, never part of a calculation: each writes the file or directory its
         # caller names (recording, schema export, the RenoVisor map, capability document, contract
-        # refresh and verification report, the profiler, the code overview, a config export).
+        # refresh and verification report, the profiler, the code overview).
         - /hisim/cli_grouping.py
         - /hisim/energy_system/recording/
         - /hisim/energy_system/schema_export.py
@@ -84,7 +84,6 @@ rules:
         - /hisim/renovisor/verify/
         - /hisim/hisim_with_profiler.py
         - /hisim/project_code_overview_generator.py
-        - /hisim/building_sizer_utils/interface_configs/modular_household_config.py
 
   - id: hisim-direct-file-write
     languages: [python]

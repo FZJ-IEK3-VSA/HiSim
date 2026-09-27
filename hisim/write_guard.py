@@ -7,45 +7,64 @@ hisim-epc.23):
 * **its result directory**, the fresh directory :class:`~hisim.result_path_provider.ResultPathProviderSingleton`
   hands out for it (or the directory its caller named: a RenoVisor job directory, a test's
   directory). Nothing the next calculation needs may live there, so the caller can delete it whole
-  once it has copied what it wants;
+  once it has copied what it wants. A result directory below ``hisim/inputs`` is refused: the
+  shipped data is nobody's output;
 * **the cache directories**, which are shared between calculations on purpose: the parameters'
   ``cache_locations()`` (``cache_dir_path``, the ordered ``cache_directories`` a container maps in
   through ``HISIM_CACHE_DIRECTORIES``) and the ``HISIM_CACHE_DIR`` / ``HISIM_CACHE_SHARED_DIR``
   overrides of the cache client.
 
-Everything else -- the repository tree, ``hisim/inputs``, the working directory, the home
-directory, the system temporary directory, an installed package -- is a *stray write*, and this
-module refuses it at runtime.
+Everything else -- the repository tree, ``hisim/inputs`` (bar the default cache below it), the
+working directory, the home directory, the system temporary directory, an installed package -- is a
+*stray write*, and this module refuses it at runtime.
+
+**The registry.** Where a calculation may write is one list, :class:`CalculationDirectories`, which
+the calculation owns: :class:`hisim.calculation_scope.CalculationScope` creates one per
+calculation and hands it to the guard, and the code that learns a directory registers it there --
+the result path provider its fresh or adopted result directory
+(:meth:`CalculationDirectories.create_result_directory`, :meth:`CalculationDirectories.register_result_directory`),
+the simulator and :class:`hisim.caching.locations.CacheLocations` the cache directories
+(:meth:`CalculationDirectories.register_cache_directories`). Outside a calculation every
+registration does nothing. The guard keeps no list of its own: what it allows is computed from the
+registry at each check, and so are the library redirects below.
 
 **How.** :func:`sys.addaudithook` reports every write-shaped operation the interpreter performs:
 ``open`` with a writing flag (``open()``, ``os.open``, ``Path.write_text``, pandas' and numpy's
 writers, matplotlib's ``savefig`` -- they all end in one of those), ``os.mkdir``, ``os.rename`` and
 ``os.replace``, ``os.remove``/``os.unlink``, ``os.rmdir``, the metadata writes ``os.chmod``,
-``os.utime`` and ``os.chown``, links, ``os.truncate``, and the ``shutil`` copy, move, remove and
-archive functions. The hook cannot be removed again, so it is installed once, lazily, the first time
-a guard is switched on -- a process that never runs a calculation (a plain unit test) never gets it
--- and it consults a context-local *active guard* that :meth:`WriteGuard.calculation` sets for the
-length of one calculation. Without an active guard the hook returns at once. Reading is never
-restricted.
+``os.utime`` and ``os.chown``, links, ``os.truncate``, the ``shutil`` copy, move, remove and
+archive functions, and ``sqlite3.connect`` (allowed outside the registry's directories only when
+the database is opened read-only, ``file:...?mode=ro``). Writing to a device file (``os.devnull``,
+a character or block device below ``/dev``) is allowed; anything else below ``/dev`` -- ``/dev/shm``
+is an ordinary directory -- is not. The hook cannot be removed again, so it is installed once,
+lazily, the first time a guard is switched on -- a process that never runs a calculation (a plain
+unit test) never gets it -- and it consults a context-local *active guard* that
+:meth:`WriteGuard.calculation` sets for the length of one calculation. Without an active guard the
+hook returns at once. Reading is never restricted.
 
 **What a stray write does.** In the default ``enforce`` mode the offending operation raises
 :class:`StrayWriteError` at the point of the write, so the traceback ends in the line that tried it.
 Because a ``try``/``except Exception`` somewhere between the writer and the run could swallow that
 error, every stray write is also recorded, and a calculation that recorded any fails when it ends
 even if its body completed. With ``HISIM_WRITE_GUARD=collect`` nothing is raised at the write: the
-calculation runs to its end and then fails with the full list, which is what a survey wants. There
-is deliberately no ``off``.
+calculation runs to its end and then fails with the full list, each ``(event, path)`` once, which
+is what a survey wants. There is deliberately no ``off``.
 
 **What the guard does for the libraries.** Some writes are nobody's output: they are made by the
-interpreter or a library on its own account. The guard does not allow them; it removes them:
+interpreter or a library on its own account. The guard does not allow them; it removes them, and
+each redirect is derived from the registry whenever it changes:
 
 * bytecode: ``sys.dont_write_bytecode`` is set for the length of a calculation, so a module first
   imported mid-run is compiled in memory instead of writing a ``.pyc`` into the source tree or the
   installed package;
 * matplotlib's configuration and font cache: ``MPLCONFIGDIR`` is pointed at ``matplotlib`` below the
-  first cache directory as soon as the calculation knows one, when the variable is unset and
-  matplotlib has not been imported yet (post-processing imports it mid-run), so a cold machine
-  builds its font cache in the shared cache instead of ``~/.cache``;
+  first *writable* cache directory (a read-only seed listed first is skipped, as
+  :meth:`hisim.caching.locations.CacheLocations.write_directory` skips it), or below the result
+  directory when the calculation has no cache directory (the economics CLI), so a cold machine never
+  builds its font cache in ``~/.config`` or ``~/.cache``. The variable is only read when matplotlib
+  is imported, so it is set only when nobody set it and matplotlib is not imported yet: **a
+  matplotlib imported before the first calculation of the process is not redirected**, and keeps
+  the directory it chose then;
 * the temporary directory: :data:`tempfile.tempdir` is pointed at the result directory once the
   calculation's result directory is known, so every ``tempfile`` call of the calculation lands
   where the calculation's files belong and is deleted with them. Before that point -- while a
@@ -54,12 +73,15 @@ interpreter or a library on its own account. The guard does not allow them; it r
   first ``tempfile.gettempdir()`` of a process creates and deletes a file there) is made before the
   guard switches on, because it is not the calculation's and leaves nothing behind.
 
-Subprocesses are outside the hook's reach: a child process writes without an audit event. HiSim
-starts two during a calculation, and both are pointed at the calculation's directories: the local
-LoadProfileGenerator, which computes in its own directory below the cache directory, next to the
-binaries it is copied from (see :mod:`hisim.components.pylpg_workspace`), and Graphviz's ``dot``,
-which writes the system chart straight into the result directory
-(:meth:`hisim.postprocessing.system_chart.SystemChart.render_png`).
+**What the guard cannot see.** Subprocesses are outside the hook's reach: a child process writes
+without an audit event. HiSim starts two during a calculation, and both are pointed at the
+calculation's directories: the local LoadProfileGenerator, which computes in its own directory below
+the cache directory, next to the binaries it is copied from (see
+:mod:`hisim.components.pylpg_workspace`), and Graphviz's ``dot``, which writes the system chart
+straight into the result directory (:meth:`hisim.postprocessing.system_chart.SystemChart.render_png`).
+Nor are writes through a file descriptor opened *before* the calculation started: the check is made
+when a file is opened, so a descriptor opened earlier and written during the calculation passes
+unseen.
 
 **Threads.** The active guard is a :class:`contextvars.ContextVar`, so a thread started inside a
 calculation starts without it (Python does not copy the context into a new thread unless asked to).
@@ -72,13 +94,15 @@ import contextlib
 import dataclasses
 import enum
 import os
+import stat
 import sys
 import sysconfig
 import tempfile
 import threading
+import urllib.parse
 from contextvars import ContextVar
 from types import FrameType
-from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
 
 __authors__ = "Noah Pflugradt"
 __copyright__ = "Copyright 2021-2026, FZJ-IEK-3 "
@@ -115,6 +139,16 @@ class StrayWriteError(RuntimeError):
         super().__init__(message)
 
 
+class CalculationDirectoryError(ValueError):
+
+    """A calculation was given a result directory it may not have.
+
+    Raised when a result directory below ``hisim/inputs`` is registered, and when a second
+    simulator of one calculation claims a result directory of its own: one calculation, one result
+    directory.
+    """
+
+
 @dataclasses.dataclass(frozen=True)
 class StrayWrite:
 
@@ -128,7 +162,6 @@ class StrayWrite:
         caller: ``file:line in function`` of the innermost frame outside the standard library and
             the installed packages -- the HiSim line that asked for the write -- or ``None`` when it
             is the writer itself.
-        stack: The whole stack as ``file:line in function`` lines, outermost first.
         allowed: The directories the guard allowed at the time.
     """
 
@@ -136,7 +169,6 @@ class StrayWrite:
     path: str
     writer: str
     caller: Optional[str]
-    stack: Tuple[str, ...]
     allowed: Tuple[str, ...]
 
     def describe(self) -> str:
@@ -157,13 +189,237 @@ class GuardMode(str, enum.Enum):
     COLLECT = "collect"
 
 
+def _normalize(path: Union[str, "os.PathLike[str]"]) -> str:
+    """Return the canonical absolute spelling of a path, symlinks resolved."""
+    return os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path))))
+
+
+class CalculationDirectories:
+
+    """The registry of the directories one calculation may write in -- the only list the guard reads.
+
+    :class:`hisim.calculation_scope.CalculationScope` creates one per calculation. Its result
+    directories come first (the calculation's own, and a directory a caller adopted into it); its
+    cache directories follow, in the order they were registered. Code that learns a directory
+    registers it through the class methods, which find the running calculation's registry and do
+    nothing outside a calculation; the scope and the tests may use the instance methods directly.
+    """
+
+    #: Where HiSim keeps the data it ships. A result directory below it is refused; the default
+    #: cache below it (``hisim/inputs/cache``) is a cache directory, which is the one exception.
+    INPUTS_DIRECTORY: ClassVar[str] = _normalize(os.path.join(os.path.dirname(os.path.abspath(__file__)), "inputs"))
+
+    def __init__(self) -> None:
+        """Start with no directory at all."""
+        self._result_directories: List[str] = []
+        self._cache_directories: List[str] = []
+        #: ``(directory, claimant)`` of the fresh result directory the calculation created itself.
+        self._claim: Optional[Tuple[str, str]] = None
+        #: The library settings before the calculation, while it runs; ``None`` otherwise.
+        self._saved: Optional[Dict[str, Any]] = None
+
+    # ----------------------------------------------------------------------------------------------
+    # What the calculation may write
+    # ----------------------------------------------------------------------------------------------
+
+    @property
+    def result_directories(self) -> Tuple[str, ...]:
+        """The result directories, canonical spelling, the calculation's own first."""
+        return tuple(self._result_directories)
+
+    @property
+    def cache_directories(self) -> Tuple[str, ...]:
+        """The cache directories, canonical spelling, in registration order."""
+        return tuple(self._cache_directories)
+
+    @property
+    def allowed_directories(self) -> Tuple[str, ...]:
+        """Every directory the calculation may write below: the result directories, then the caches."""
+        return tuple(dict.fromkeys(self._result_directories + self._cache_directories))
+
+    def result_directory(self) -> Optional[str]:
+        """The calculation's result directory, once it is known."""
+        return self._result_directories[0] if self._result_directories else None
+
+    def writable_cache_directory(self) -> Optional[str]:
+        """The first cache directory a write can go to, as ``CacheLocations.write_directory`` picks it.
+
+        An existing directory qualifies when the process may write into it; a missing one when its
+        nearest existing ancestor is a directory the process may write into. Nothing is created.
+        """
+        for directory in self._cache_directories:
+            if os.path.isdir(directory):
+                if os.access(directory, os.W_OK):
+                    return directory
+                continue
+            ancestor = directory
+            while not os.path.exists(ancestor) and os.path.dirname(ancestor) != ancestor:
+                ancestor = os.path.dirname(ancestor)
+            if os.path.isdir(ancestor) and os.access(ancestor, os.W_OK):
+                return directory
+        return None
+
+    # ----------------------------------------------------------------------------------------------
+    # Registering
+    # ----------------------------------------------------------------------------------------------
+
+    def add_result_directory(self, directory: Union[str, "os.PathLike[str]"]) -> str:
+        """Register a result directory of this calculation; the first one is *the* result directory.
+
+        Raises:
+            CalculationDirectoryError: When the directory lies below ``hisim/inputs``.
+        """
+        root = _normalize(directory)
+        if root == self.INPUTS_DIRECTORY or root.startswith(self.INPUTS_DIRECTORY + os.sep):
+            raise CalculationDirectoryError(
+                f"The result directory '{directory}' lies below '{self.INPUTS_DIRECTORY}', the data HiSim "
+                "ships; a calculation's results go to a directory of their own. Point the run's "
+                "result_directory elsewhere."
+            )
+        if root not in self._result_directories:
+            self._result_directories.append(root)
+            self._changed()
+        return root
+
+    def add_cache_directories(self, directories: Iterable[Optional[Union[str, "os.PathLike[str]"]]]) -> None:
+        """Register cache directories of this calculation; empty entries are skipped."""
+        for directory in directories:
+            if not directory:
+                continue
+            root = _normalize(directory)
+            if root not in self._cache_directories:
+                self._cache_directories.append(root)
+        self._changed()
+
+    def _take_claim(self, claimant: str) -> None:
+        """Refuse a claim by a second claimant: one calculation, one result directory."""
+        if self._claim is not None and self._claim[1] != claimant:
+            raise CalculationDirectoryError(
+                f"{claimant} asked for a result directory, but this calculation already created "
+                f"'{self._claim[0]}' for {self._claim[1]}: one calculation has one result directory. Run "
+                "the second simulation as a calculation of its own, or give it a result_directory."
+            )
+
+    def create_directory(self, desired: str, unique: bool, claimant: str) -> str:
+        """Create the calculation's fresh result directory and register it; the one place that does.
+
+        With *unique*, the directory is created with ``os.mkdir``, which fails for a directory that
+        exists, and on a collision ``_2``, ``_3`` ... is appended until the creation succeeds, so
+        two calculations started in the same second get two directories. Each candidate is
+        registered while its creation is attempted, which is what lets the way to it be built, and
+        taken out again when it turns out to be another run's. Without *unique* the directory is
+        created if missing and otherwise used as it stands.
+
+        Args:
+            desired: The directory name the result path provider's layout computed.
+            unique: Whether the name has to be made unique.
+            claimant: Who asks, for the message when a second one does.
+
+        Returns:
+            The directory created, as *desired* spelled it (plus the suffix).
+
+        Raises:
+            CalculationDirectoryError: When another claimant of this calculation already created
+                one, or the directory lies below ``hisim/inputs``.
+        """
+        self._take_claim(claimant)
+        candidate = desired
+        suffix = 1
+        while True:
+            registered_before = _normalize(candidate) in self._result_directories
+            root = self.add_result_directory(candidate)
+            if not unique:
+                os.makedirs(candidate, exist_ok=True)
+                break
+            os.makedirs(os.path.dirname(candidate) or ".", exist_ok=True)
+            try:
+                os.mkdir(candidate)
+                break
+            except FileExistsError:
+                # Another run's: it must not stay writable for this one.
+                if not registered_before:
+                    self._result_directories.remove(root)
+                    self._changed()
+                suffix += 1
+                candidate = f"{desired}_{suffix}"
+        self._claim = (candidate, claimant)
+        return candidate
+
+    # ----------------------------------------------------------------------------------------------
+    # The running calculation's registry; every method is a no-op outside a calculation
+    # ----------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def running() -> Optional["CalculationDirectories"]:
+        """Return the registry of the calculation running in this context, if any."""
+        guard = WriteGuard.active()
+        return guard.directories if guard is not None else None
+
+    @classmethod
+    def register_result_directory(cls, directory: Optional[Union[str, "os.PathLike[str]"]]) -> None:
+        """Register a result directory with the running calculation; no-op outside one."""
+        registry = cls.running()
+        if registry is not None and directory:
+            registry.add_result_directory(directory)
+
+    @classmethod
+    def register_cache_directories(cls, directories: Iterable[Optional[Union[str, "os.PathLike[str]"]]]) -> None:
+        """Register cache directories with the running calculation; no-op outside one."""
+        registry = cls.running()
+        if registry is not None:
+            registry.add_cache_directories(directories)
+
+    @classmethod
+    def create_result_directory(cls, desired: str, unique: bool, claimant: str) -> str:
+        """Create a fresh result directory, registered with the running calculation if there is one.
+
+        Outside a calculation the directory is created by the same rules and registered nowhere.
+        See :meth:`create_directory`.
+        """
+        registry = cls.running()
+        return (registry if registry is not None else cls()).create_directory(desired, unique, claimant)
+
+    @classmethod
+    def confirm_claim(cls, claimant: str) -> None:
+        """Refuse a second claimant of the running calculation's fresh result directory; no-op outside one.
+
+        The result path provider hands its claimed directory out again on every later request, so
+        this is where a second simulator of one calculation is caught when the provider still holds
+        the first one's directory.
+        """
+        registry = cls.running()
+        if registry is not None:
+            registry._take_claim(claimant)  # pylint: disable=protected-access
+
+    # ----------------------------------------------------------------------------------------------
+    # The library redirects, derived from the registry
+    # ----------------------------------------------------------------------------------------------
+
+    def activate(self) -> None:
+        """Save the library settings and apply the redirects; the guard calls this as it switches on."""
+        self._saved = _LibraryRedirects.save()
+        sys.dont_write_bytecode = True
+        self._changed()
+
+    def deactivate(self) -> None:
+        """Restore the library settings saved by :meth:`activate`."""
+        if self._saved is not None:
+            _LibraryRedirects.restore(self._saved)
+            self._saved = None
+
+    def _changed(self) -> None:
+        """Derive the redirects again from the directories, while the calculation runs."""
+        if self._saved is not None:
+            _LibraryRedirects.derive(self, self._saved)
+
+
 class _Targets:
 
     """Which argument of each audit event names the path that is written.
 
     The tuples are ``(path index, dir_fd index)`` pairs; a ``dir_fd`` index of ``None`` means the
-    event carries none. ``open`` is special-cased in :meth:`WriteGuard._targets` because whether it
-    writes depends on its flags.
+    event carries none. ``open`` and ``sqlite3.connect`` are special-cased in
+    :meth:`WriteGuard._targets`: whether they write depends on their flags or their URI.
     """
 
     WRITE_FLAGS: ClassVar[int] = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
@@ -188,10 +444,9 @@ class _Targets:
         "shutil.chown": ((0, None),),
         "shutil.make_archive": ((0, None),),
         "shutil.unpack_archive": ((1, None),),
-        "sqlite3.connect": ((0, None),),
     }
 
-    EVENTS: ClassVar[frozenset] = frozenset(BY_EVENT) | {"open"}
+    EVENTS: ClassVar[frozenset] = frozenset(BY_EVENT) | {"open", "sqlite3.connect"}
 
 
 class _Frames:
@@ -242,48 +497,43 @@ class _Frames:
         return f"{frame.f_code.co_filename}:{frame.f_lineno} in {frame.f_code.co_name}"
 
     @classmethod
-    def attribute(cls, frame: Optional[FrameType]) -> Tuple[str, Optional[str], Tuple[str, ...]]:
-        """Return the writer, the HiSim caller and the whole stack, starting from *frame*.
+    def attribute(cls, frame: Optional[FrameType]) -> Tuple[str, Optional[str]]:
+        """Return the writer and the HiSim caller, walking outwards from *frame*.
 
         Args:
             frame: The innermost frame of the write, the hook's caller.
 
         Returns:
-            ``(writer, caller, stack)``: see :class:`StrayWrite`.
+            ``(writer, caller)``: see :class:`StrayWrite`.
         """
-        frames: List[FrameType] = []
-        while frame is not None:
-            frames.append(frame)
-            frame = frame.f_back
+        innermost = frame
         writer: Optional[FrameType] = None
         caller: Optional[FrameType] = None
-        for candidate in frames:
-            filename = candidate.f_code.co_filename
-            if cls._is_standard_library(filename):
-                continue
-            if writer is None:
-                writer = candidate
-            if not cls._is_installed_package(filename):
-                caller = candidate
-                break
-        stack = tuple(cls._describe(candidate) for candidate in reversed(frames))
+        while frame is not None:
+            filename = frame.f_code.co_filename
+            if not cls._is_standard_library(filename):
+                if writer is None:
+                    writer = frame
+                if not cls._is_installed_package(filename):
+                    caller = frame
+                    break
+            frame = frame.f_back
         if writer is None:
-            writer = frames[0] if frames else None
+            writer = innermost
         writer_text = cls._describe(writer) if writer is not None else "an unknown frame"
         caller_text = cls._describe(caller) if caller is not None and caller is not writer else None
-        return writer_text, caller_text, stack
+        return writer_text, caller_text
 
 
 class WriteGuard:
 
-    """The allowed directories of one calculation, and the stray writes it made.
+    """Checks one calculation's writes against its :class:`CalculationDirectories`, and records the stray ones.
 
-    Use :meth:`calculation` to run one; the lifecycle code of a run tells the active guard about its
-    result directory and its cache directories through :meth:`admit_result_directory` and
-    :meth:`admit_cache_directories`, which do nothing when no calculation is running.
+    Use :meth:`calculation` to run one; :class:`hisim.calculation_scope.CalculationScope` does.
 
     Args:
         label: What the calculation is, for the messages (a setup module, a request file).
+        directories: The calculation's registry, which decides what is allowed.
         mode: What a stray write does.
     """
 
@@ -293,48 +543,46 @@ class WriteGuard:
     #: The cache-client variables that name a directory the cache writes to (``hisim.caching.settings``).
     CACHE_DIRECTORY_VARIABLES: ClassVar[Tuple[str, ...]] = ("HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR")
 
-    #: Files that are not files: writing to them leaves nothing on disk.
-    DEVICE_FILES: ClassVar[Tuple[str, ...]] = (os.devnull,)
-
     _active: ClassVar[ContextVar[Optional["WriteGuard"]]] = ContextVar("hisim_write_guard", default=None)
     _hook_installed: ClassVar[bool] = False
     _install_lock: ClassVar[threading.Lock] = threading.Lock()
     _inside_hook: ClassVar[threading.local] = threading.local()
 
-    def __init__(self, label: str, mode: GuardMode = GuardMode.ENFORCE) -> None:
-        """Start with no allowed directory at all."""
+    def __init__(
+        self, label: str, directories: CalculationDirectories, mode: Union[GuardMode, str] = GuardMode.ENFORCE
+    ) -> None:
+        """Start with no stray write."""
         self.label = label
-        self.mode = mode
-        self._roots: List[str] = []
-        self.stray_writes: List[StrayWrite] = []
-        self.result_directories: List[str] = []
-        self.cache_directories: List[str] = []
-        #: The system temporary directory, where :data:`tempfile.tempdir` points until the
-        #: calculation's result directory is known.
-        self.system_tempdir: Optional[str] = None
+        self.directories = directories
+        self.mode = GuardMode(mode)
+        #: Every stray write, once per ``(event, path)``, in the order they were first made.
+        self._recorded: Dict[Tuple[str, str], StrayWrite] = {}
 
-    # ----------------------------------------------------------------------------------------------
-    # The allowed directories
-    # ----------------------------------------------------------------------------------------------
-
-    @staticmethod
-    def _normalize(path: str) -> str:
-        """Return the canonical absolute spelling of a path, symlinks resolved."""
-        return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+    @property
+    def stray_writes(self) -> List[StrayWrite]:
+        """The stray writes so far, each ``(event, path)`` once."""
+        return list(self._recorded.values())
 
     @property
     def allowed_directories(self) -> Tuple[str, ...]:
-        """Every directory the calculation may write below, canonical spelling."""
-        return tuple(self._roots)
+        """Every directory the calculation may write below, from its registry."""
+        return self.directories.allowed_directories
 
-    def _admit(self, directory: str) -> None:
-        """Add one directory to the allowed ones."""
-        root = self._normalize(directory)
-        if root not in self._roots:
-            self._roots.append(root)
+    @staticmethod
+    def _is_device(path: str) -> bool:
+        """Whether *path* is ``os.devnull`` or an existing character or block device."""
+        if path == os.devnull:
+            return True
+        if os.name != "posix" or not path.startswith("/dev/"):
+            return False
+        try:
+            mode = os.stat(path).st_mode
+        except OSError:
+            return False
+        return stat.S_ISCHR(mode) or stat.S_ISBLK(mode)
 
     def permits(self, path: str, event: str) -> bool:
-        """Whether writing *path* with *event* stays inside the allowed directories.
+        """Whether writing *path* with *event* stays inside the registry's directories.
 
         Creating a directory is also permitted when it is an ancestor of an allowed directory (the
         way to the result directory has to be built) or already exists (``os.makedirs`` and
@@ -347,21 +595,19 @@ class WriteGuard:
         Returns:
             True when the operation is allowed.
         """
-        if path in self.DEVICE_FILES or (os.name == "posix" and path.startswith("/dev/")):
+        if self._is_device(path):
             return True
-        target = self._normalize(path)
-        for root in self._roots:
+        target = _normalize(path)
+        roots = self.directories.allowed_directories
+        for root in roots:
             if target == root or target.startswith(root + os.sep):
                 return True
         if event == "os.mkdir":
             if os.path.isdir(target):
                 return True
-            for root in self._roots:
+            for root in roots:
                 if root.startswith(target + os.sep):
                     return True
-        if event == "sqlite3.connect" and os.path.exists(target):
-            # Opening an existing database is how a reader starts; only creating one is a write.
-            return True
         return False
 
     # ----------------------------------------------------------------------------------------------
@@ -390,7 +636,7 @@ class WriteGuard:
             refused = guard._check(event, arguments)  # pylint: disable=protected-access
         finally:
             cls._inside_hook.busy = False
-        if refused is not None and guard.mode is GuardMode.ENFORCE:
+        if refused is not None and guard.mode == GuardMode.ENFORCE:
             raise StrayWriteError([refused])
 
     @classmethod
@@ -406,6 +652,9 @@ class WriteGuard:
             )
             path = cls._as_path(arguments[0], None)
             return [path] if writes and path is not None else []
+        if event == "sqlite3.connect":
+            database = cls._sqlite_database(arguments[0]) if arguments else None
+            return [database] if database is not None else []
         targets: List[str] = []
         for path_index, directory_index in _Targets.BY_EVENT[event]:
             if path_index >= len(arguments):
@@ -419,6 +668,33 @@ class WriteGuard:
             if path is not None:
                 targets.append(path)
         return targets
+
+    @staticmethod
+    def _sqlite_database(value: Any) -> Optional[str]:
+        """Return the file a ``sqlite3.connect`` may write, or ``None`` when it writes no file.
+
+        An in-memory database writes nothing, and neither does a database opened read-only through
+        a URI (``file:<path>?mode=ro``). Every other connection may write -- a new database is
+        created, an existing one may be changed -- so it is checked like any other write.
+        """
+        try:
+            text = os.fsdecode(os.fspath(value))
+        except TypeError:
+            return None
+        if text in ("", ":memory:"):
+            return None
+        if not text.startswith("file:"):
+            return os.path.abspath(text)
+        location, _, query = text[len("file:"):].partition("?")
+        parameters = urllib.parse.parse_qs(query)
+        if parameters.get("mode", [""])[-1] in ("ro", "memory"):
+            return None
+        if location.startswith("//"):
+            # file://host/path: the authority is empty or localhost, and the path starts at the next slash.
+            slash = location.find("/", 2)
+            location = location[slash:] if slash >= 0 else ""
+        location = urllib.parse.unquote(location)
+        return os.path.abspath(location) if location and location != ":memory:" else None
 
     @staticmethod
     def _as_path(value: Any, directory_fd: Any) -> Optional[str]:
@@ -435,7 +711,7 @@ class WriteGuard:
             text = os.fsdecode(os.fspath(value))
         except TypeError:
             return None
-        if text == ":memory:" or text.startswith("file:") or text == "":
+        if text == "":
             return None
         if not os.path.isabs(text) and isinstance(directory_fd, int) and directory_fd >= 0:
             descriptor_link = f"/proc/self/fd/{directory_fd}"
@@ -453,20 +729,15 @@ class WriteGuard:
         for path in self._targets(event, arguments):
             if self.permits(path, event):
                 continue
-            for earlier in self.stray_writes:
-                if earlier.event == event and earlier.path == path:
-                    # A log file appended to a thousand times is one finding, not a thousand.
-                    return earlier
-            writer, caller, stack = _Frames.attribute(sys._getframe(2))  # pylint: disable=protected-access
+            key = (event, path)
+            if key in self._recorded:
+                # A log file appended to a thousand times is one finding, not a thousand.
+                return self._recorded[key]
+            writer, caller = _Frames.attribute(sys._getframe(2))  # pylint: disable=protected-access
             stray = StrayWrite(
-                event=event,
-                path=path,
-                writer=writer,
-                caller=caller,
-                stack=stack,
-                allowed=self.allowed_directories,
+                event=event, path=path, writer=writer, caller=caller, allowed=self.allowed_directories
             )
-            self.stray_writes.append(stray)
+            self._recorded[key] = stray
             return stray
         return None
 
@@ -494,74 +765,21 @@ class WriteGuard:
             raise ValueError(f"{cls.MODE_VARIABLE}={value!r} is not one of {accepted}") from None
 
     @classmethod
-    def admit_result_directory(cls, directory: Optional[str]) -> None:
-        """Tell the running calculation where its result directory is; no-op outside one.
-
-        The first result directory also becomes the calculation's temporary directory
-        (:data:`tempfile.tempdir`), so a library's temporary file lands with the calculation's
-        other files instead of in the system temporary directory.
-        """
-        guard = cls._active.get()
-        if guard is None or not directory:
-            return
-        guard._admit(directory)  # pylint: disable=protected-access
-        if guard._normalize(directory) not in guard.result_directories:  # pylint: disable=protected-access
-            guard.result_directories.append(guard._normalize(directory))  # pylint: disable=protected-access
-        if len(guard.result_directories) == 1:
-            # The temporary files of the calculation go where its other files go, and are deleted
-            # with them; nothing is created for them, the result directory exists already.
-            tempfile.tempdir = guard.result_directories[0]
-
-    @classmethod
-    def withdraw_result_directory(cls, directory: str) -> None:
-        """Take back a result directory admitted a moment ago that turned out to be another run's.
-
-        :meth:`~hisim.result_path_provider.ResultPathProviderSingleton.claim_fresh_directory` admits
-        a candidate before it creates it exclusively; when the creation finds the directory taken,
-        the candidate belongs to a different calculation and must not stay writable for this one.
-        """
-        guard = cls._active.get()
-        if guard is None:
-            return
-        root = guard._normalize(directory)  # pylint: disable=protected-access
-        if root in guard._roots:  # pylint: disable=protected-access
-            guard._roots.remove(root)  # pylint: disable=protected-access
-        if root in guard.result_directories:
-            guard.result_directories.remove(root)
-            if tempfile.tempdir == root:
-                tempfile.tempdir = guard.result_directories[0] if guard.result_directories else guard.system_tempdir
-
-    @classmethod
-    def admit_cache_directories(cls, directories: Iterable[Optional[str]]) -> None:
-        """Tell the running calculation which cache directories it uses; no-op outside one."""
-        guard = cls._active.get()
-        if guard is None:
-            return
-        for directory in directories:
-            if not directory:
-                continue
-            guard._admit(directory)  # pylint: disable=protected-access
-            if guard._normalize(directory) not in guard.cache_directories:  # pylint: disable=protected-access
-                guard.cache_directories.append(guard._normalize(directory))  # pylint: disable=protected-access
-        _LibraryRedirects.point_matplotlib(guard)
-
-    @classmethod
     @contextlib.contextmanager
     def calculation(
         cls,
         label: str,
-        result_directories: Sequence[Optional[str]] = (),
-        cache_directories: Sequence[Optional[str]] = (),
-        mode: Optional[GuardMode] = None,
+        directories: CalculationDirectories,
+        mode: Optional[Union[GuardMode, str]] = None,
     ) -> Iterator["WriteGuard"]:
-        """Run the body as one guarded calculation.
+        """Run the body as one guarded calculation over the registry *directories*.
+
+        The cache overrides of the environment (:attr:`CACHE_DIRECTORY_VARIABLES`) are registered
+        first; everything else is registered by the code that learns it.
 
         Args:
             label: What the calculation is, for the messages.
-            result_directories: Directories already known to belong to the calculation (a job
-                directory its caller named). The simulator adds the result directory it resolves.
-            cache_directories: Cache directories already known; the environment's cache overrides
-                and the simulation parameters' cache locations are added as they become known.
+            directories: The calculation's registry.
             mode: What a stray write does; ``HISIM_WRITE_GUARD`` when omitted.
 
         Yields:
@@ -571,23 +789,17 @@ class WriteGuard:
             StrayWriteError: When the body completed but made a stray write that was swallowed on
                 the way, or made any at all in ``collect`` mode.
         """
-        guard = cls(label=label, mode=mode or cls.mode_from_environment())
+        guard = cls(label=label, directories=directories, mode=cls.mode_from_environment() if mode is None else mode)
         cls._install_hook()
         # The first gettempdir() of a process probes the candidate directories by creating and
         # deleting a file in each; a library imported mid-calculation (portalocker evaluates it as a
         # default argument) would otherwise make that probe the calculation's write. It is the
         # interpreter's, it leaves nothing behind, and it happens here, before the guard is on.
-        guard.system_tempdir = tempfile.gettempdir()
-        saved = _LibraryRedirects.save()
+        tempfile.gettempdir()
         token = cls._active.set(guard)
+        directories.activate()
         try:
-            cls.admit_cache_directories(
-                [os.environ.get(variable) for variable in cls.CACHE_DIRECTORY_VARIABLES]
-            )
-            cls.admit_cache_directories(cache_directories)
-            for directory in result_directories:
-                cls.admit_result_directory(directory)
-            _LibraryRedirects.apply(guard)
+            directories.add_cache_directories(os.environ.get(variable) for variable in cls.CACHE_DIRECTORY_VARIABLES)
             try:
                 yield guard
             except BaseException as error:
@@ -597,7 +809,7 @@ class WriteGuard:
             if guard.stray_writes:
                 raise StrayWriteError(guard.stray_writes)
         finally:
-            _LibraryRedirects.restore(saved)
+            directories.deactivate()
             cls._active.reset(token)
 
 
@@ -609,7 +821,7 @@ class _LibraryRedirects:
 
     @classmethod
     def save(cls) -> Dict[str, Any]:
-        """Return the settings :meth:`apply` changes, for :meth:`restore`."""
+        """Return the settings :meth:`derive` changes, for :meth:`restore`."""
         return {
             "dont_write_bytecode": sys.dont_write_bytecode,
             "tempdir": tempfile.tempdir,
@@ -617,30 +829,27 @@ class _LibraryRedirects:
         }
 
     @classmethod
-    def apply(cls, guard: WriteGuard) -> None:
-        """Switch off bytecode writing and point matplotlib at the cache, as the module docstring says."""
-        sys.dont_write_bytecode = True
-        cls.point_matplotlib(guard)
+    def derive(cls, directories: CalculationDirectories, saved: Dict[str, Any]) -> None:
+        """Point the temporary directory and matplotlib's configuration where the registry says.
 
-    @classmethod
-    def point_matplotlib(cls, guard: WriteGuard) -> None:
-        """Point ``MPLCONFIGDIR`` below the first cache directory, once one is known.
-
-        Post-processing imports matplotlib in the middle of a calculation, and matplotlib creates
-        its configuration directory and builds its font cache in ``~/.config`` and ``~/.cache`` on
-        first import. The variable is read at that import, so it is set as soon as the calculation
-        knows a cache directory and only when nobody set it and matplotlib is not imported yet.
+        The temporary directory is the result directory once it is known, the one saved before
+        the calculation until then. ``MPLCONFIGDIR`` is ``matplotlib`` below the first writable
+        cache directory, or below the result directory without one, and is only touched when
+        nobody set it before the calculation and matplotlib is not imported yet (it is read at the
+        import; post-processing imports matplotlib mid-run).
         """
-        if (
-            os.environ.get(cls.MATPLOTLIB_VARIABLE) is None
-            and "matplotlib" not in sys.modules
-            and guard.cache_directories
-        ):
-            os.environ[cls.MATPLOTLIB_VARIABLE] = os.path.join(guard.cache_directories[0], "matplotlib")
+        tempfile.tempdir = directories.result_directory() or saved["tempdir"]
+        if saved[cls.MATPLOTLIB_VARIABLE] is not None or "matplotlib" in sys.modules:
+            return
+        home = directories.writable_cache_directory() or directories.result_directory()
+        if home is None:
+            os.environ.pop(cls.MATPLOTLIB_VARIABLE, None)
+        else:
+            os.environ[cls.MATPLOTLIB_VARIABLE] = os.path.join(home, "matplotlib")
 
     @classmethod
     def restore(cls, saved: Dict[str, Any]) -> None:
-        """Undo :meth:`apply` and the temporary-directory redirect."""
+        """Undo every redirect."""
         sys.dont_write_bytecode = saved["dont_write_bytecode"]
         tempfile.tempdir = saved["tempdir"]
         previous = saved[cls.MATPLOTLIB_VARIABLE]

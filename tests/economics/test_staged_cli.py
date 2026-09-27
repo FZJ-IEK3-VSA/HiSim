@@ -389,6 +389,31 @@ class TestTheHappyPath:
         assert document["comparison"]["npv_delta_in_euro"]["best"] == pytest.approx(0.0, abs=0.01)
 
 
+class TestTheOutArgument:
+    """``--out`` names the document's directory, which is the command's result directory."""
+
+    def test_a_bare_file_name_is_refused_and_nothing_is_written(self, workspace, monkeypatch, capsys):
+        """No directory, no result directory: exit 2 with the reason, and the working directory untouched.
+
+        The one exit 2 without a ``problems.json``: the file would have had to go to the working
+        directory, which is the refusal.
+        """
+        monkeypatch.chdir(workspace)
+        before = sorted(path.name for path in workspace.iterdir())
+        arguments = _arguments(workspace, Path("economics_result.json"))
+        assert main(arguments) == StagedCli.PLAN_REFUSED
+        error = capsys.readouterr().err
+        assert "--out 'economics_result.json' names no directory" in error
+        assert sorted(path.name for path in workspace.iterdir()) == before
+
+    def test_a_relative_path_with_a_directory_works(self, workspace, monkeypatch):
+        """``results/economics_result.json`` is relative to the working directory, and written there."""
+        monkeypatch.chdir(workspace)
+        assert main(_arguments(workspace, Path("results") / "economics_result.json")) == 0
+        assert (workspace / "results" / "economics_result.json").is_file()
+        assert (workspace / "results" / ExportFileNames.PROVENANCE_FILE_NAME).is_file()
+
+
 class TestTheRefusals:
     """Exit 2 with a ``problems.json``: everything the caller can fix by sending another plan."""
 

@@ -24,7 +24,7 @@ from hisim import utils
 from hisim import postprocessingoptions
 from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION
 from hisim.result_path_provider import ResultPathProviderSingleton
-from hisim.write_guard import WriteGuard
+from hisim.write_guard import CalculationDirectories
 
 
 def _has_cost_facts_source(component_class: type) -> bool:
@@ -137,7 +137,7 @@ class Simulator:
                 my_simulation_parameters.log_connections = True
             self._simulation_parameters = my_simulation_parameters
             log.logger.logging_level = self._simulation_parameters.logging_level
-        self.admit_run_locations()
+        self.register_run_locations()
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
 
@@ -176,7 +176,7 @@ class Simulator:
             if self._force_log_connections:
                 self._simulation_parameters.log_connections = True
             log.logger.logging_level = self._simulation_parameters.logging_level
-            self.admit_run_locations()
+            self.register_run_locations()
 
     def get_simulation_parameters(self) -> SimulationParameters:
         """Returns the simulation parameters for exporting them to JSON.
@@ -366,7 +366,7 @@ class Simulator:
                 )
                 ResultPathProviderSingleton.reset()
             # check if result path is already set somewhere manually
-            result_directory = ResultPathProviderSingleton().claim_fresh_directory()
+            result_directory = ResultPathProviderSingleton().claim_fresh_directory(self.describe_as_claimant())
             if result_directory is not None:
                 self._simulation_parameters.result_directory = result_directory
                 log.information(
@@ -378,7 +378,7 @@ class Simulator:
                 ResultPathProviderSingleton().configure_for_simulator_run(
                     module_directory=self.module_directory, model_name=self.module_filename
                 )
-                result_directory = ResultPathProviderSingleton().claim_fresh_directory()
+                result_directory = ResultPathProviderSingleton().claim_fresh_directory(self.describe_as_claimant())
                 if result_directory is None:
                     raise ValueError("Result path provider did not return a result directory.")
                 self._simulation_parameters.result_directory = result_directory
@@ -387,8 +387,8 @@ class Simulator:
                     + " which is set by the simulator."
                 )
 
-        # The directory is the calculation's own; a running write guard allows it from here on.
-        self.admit_run_locations()
+        # The directory is the calculation's own; the calculation's registry lists it from here on.
+        self.register_run_locations()
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
 
@@ -396,19 +396,26 @@ class Simulator:
             self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
         )
 
-    def admit_run_locations(self) -> None:
-        """Tell a running write guard where this simulation writes: its result and cache directories.
+    def describe_as_claimant(self) -> str:
+        """Name this simulator for the refusal of a second result directory in one calculation."""
+        return f"the simulator {id(self):#x} of '{self.module_directory}/{self.module_filename}'"
 
-        Outside a calculation (:class:`hisim.calculation_scope.CalculationScope`) this does nothing.
+    def register_run_locations(self) -> None:
+        """Register where this simulation writes -- its result and cache directories -- with the calculation.
+
+        The registry is the running calculation's :class:`hisim.write_guard.CalculationDirectories`;
+        outside a calculation (:class:`hisim.calculation_scope.CalculationScope`) this does nothing.
         Called whenever the parameters that decide those locations are set or the result directory
         is resolved, because a Python setup may replace the parameters after the simulator exists.
+        (Building the parameters' :class:`~hisim.caching.locations.CacheLocations` registers the
+        cache directories itself.)
         """
         parameters = getattr(self, "_simulation_parameters", None)
         if parameters is None:
             return
-        WriteGuard.admit_cache_directories(parameters.cache_locations().directories)
+        parameters.cache_locations()
         if parameters.result_directory:
-            WriteGuard.admit_result_directory(parameters.result_directory)
+            CalculationDirectories.register_result_directory(parameters.result_directory)
 
     def check_cost_declarations(self) -> None:
         """Refuses a lifecycle-cost run this fleet's components cannot be described for (§9.1/§9.2).
@@ -507,7 +514,7 @@ class Simulator:
             return
         # Starts time counter
         start_counter = time.perf_counter()
-        self.admit_run_locations()
+        self.register_run_locations()
         self.prepare_calculation()
         # Connects all components
         self.connect_all_components()

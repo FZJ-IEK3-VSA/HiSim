@@ -177,6 +177,35 @@ jobs:
       with:
         mode: report
 
+  # The static half of the write guard (hisim/write_guard.py is the runtime half): no new direct
+  # file write in hisim/ outside the sanctioned writer modules listed in .semgrep/file_writes.yml.
+  # Deliberately not in the prebuilt test image: semgrep needs nothing HiSim installs, and a plain
+  # runner with setup-python avoids depending on the image's interpreter for its wheels.
+  semgrep:
+    name: semgrep (file writes)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    # Wall time, CPU time and peak memory for this job; see the action.
+    - name: Start the resource monitor
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: start
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+    - name: Install semgrep
+      run: python -m pip install semgrep
+    - name: Check for direct file writes outside the sanctioned writers
+      run: semgrep --config .semgrep/ --error --metrics=off hisim/
+    # Kept on failure too: a job killed for running out of memory is the one
+    # whose measurement matters most.
+    - name: Report the resource usage
+      if: always()
+      uses: ./.github/actions/resource-monitor
+      with:
+        mode: report
+
   basic-execution:
     name: basic execution
     runs-on: ubuntu-latest

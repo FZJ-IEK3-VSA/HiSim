@@ -12,6 +12,8 @@ as a pure method that only reads ``self.ppdt`` and returns the assembled
 # These tests deliberately exercise the private graph-assembly method ``_build_graph``.
 # pylint: disable=protected-access
 
+import shutil
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Iterable, Optional, cast
 
@@ -19,11 +21,15 @@ import pandas as pd
 import pydot
 import pytest
 
+from hisim.calculation_scope import CalculationScope
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.config import ComponentID
 from hisim.loadtypes import LoadTypes, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
+from hisim.postprocessing import system_chart
 from hisim.postprocessing.system_chart import SystemChart
+from hisim.result_path_provider import ResultPathProviderSingleton
+from hisim.write_guard import GuardMode
 
 
 class _FakeComponent:
@@ -494,3 +500,45 @@ def test_compute_result_annotation_none_source_output_returns_none() -> None:
     """A ``None`` source output yields no annotation (``None``)."""
     chart = SystemChart(_make_ppdt(wrapped_components=[], results_cumulative=pd.DataFrame()))
     assert chart._compute_result_annotation(None) is None
+
+
+def _chart_writing_into(result_directory: Path) -> SystemChart:
+    """The two-component chart, with a result directory to render into."""
+    ppdt = _two_component_setup()
+    ppdt.simulation_parameters = SimpleNamespace(result_directory=str(result_directory))  # type: ignore[assignment]
+    return SystemChart(ppdt)
+
+
+@pytest.mark.base
+@pytest.mark.skipif(shutil.which("dot") is None, reason="Graphviz's dot is not installed")
+def test_the_chart_is_rendered_into_the_result_directory_without_a_stray_write(tmp_path: Path) -> None:
+    """``make_graphviz_chart`` writes its PNG under an enforcing write guard and nothing anywhere else.
+
+    pydot's ``write_png`` went through a temporary file in the system temporary directory, which the
+    guard refused (CI: ``open of '/tmp/<x>' by pydot/_vendor/tempfile.py``); ``dot`` now writes the PNG
+    to its final path itself.
+    """
+    run = tmp_path / "run"
+    ResultPathProviderSingleton.reset()
+    try:
+        with CalculationScope.open("chart", run_directory=run, mode=GuardMode.ENFORCE) as guard:
+            entry = _chart_writing_into(run).make_graphviz_chart(
+                with_labels=True, with_class_names=True, filename="chart.png", caption="chart", with_results=False
+            )
+            assert not guard.stray_writes
+    finally:
+        ResultPathProviderSingleton.reset()
+    assert entry is not None
+    assert (run / "chart.png").read_bytes().startswith(b"\x89PNG")
+    assert sorted(path.name for path in run.iterdir()) == ["chart.png"]
+
+
+@pytest.mark.base
+def test_a_missing_graphviz_leaves_the_chart_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without ``dot`` on ``PATH`` the chart is logged as failed and left out, as it always was."""
+    monkeypatch.setattr(system_chart.shutil, "which", lambda _name: None)
+    entry = _chart_writing_into(tmp_path).make_graphviz_chart(
+        with_labels=False, with_class_names=False, filename="chart.png", caption="chart"
+    )
+    assert entry is None
+    assert not (tmp_path / "chart.png").exists()

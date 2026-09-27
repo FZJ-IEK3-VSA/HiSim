@@ -1,7 +1,6 @@
 """Contains a component that uses the UTSP to provide LoadProfileGenerator data."""
 
 import datetime
-import errno
 import io
 import json
 import os
@@ -431,7 +430,7 @@ class UtspLpgConnector(cp.Component):
         self.name_of_predefined_loadprofile: Optional[str] = config.name_of_predefined_loadprofile
         self.predefined_loadprofile_filepaths: Optional[str] = config.predefined_loadprofile_filepaths
 
-        # The base index decides which pylpg/C<index> directories this process computes in. It used
+        # The base index decides which C<index> directories (below the cache) this process computes in. It used
         # to default to the constant 1, so every local-LPG run in one virtual environment shared one
         # directory; the default is now derived from the process instead. See PylpgWorkspace.
         self.calculation_index_for_local_lpg: int = (
@@ -858,38 +857,6 @@ class UtspLpgConnector(cp.Component):
             low_activity_file,
         )
 
-    def save_result_file(self, name: str, content: str) -> str:
-        """Saves a result file in the folder specified in the config object.
-
-        :param name: the name for the file
-        :type name: str
-        :param content: the content that will be written into the file
-        :type content: str
-        :return: path of the file that was saved
-        :rtype: str
-        """
-        try:
-            filepath = os.path.join(self.utsp_config.result_dir_path, name)
-        except Exception as exc:
-            raise NameError(
-                f"Could not create a filepath from config result_path {self.utsp_config.result_dir_path} and name {name}."
-            ) from exc
-
-        directory = os.path.dirname(filepath)
-        # Create the directory if it does not exist
-        try:
-            os.makedirs(directory)
-        except OSError as exc:
-            if exc.errno == errno.EEXIST and os.path.isdir(directory):
-                pass
-            else:
-                raise
-        # Create the result file
-        with open(filepath, "w", encoding="utf-8") as result_file:
-            result_file.write(content)
-
-        return filepath
-
     def describe_unreachable_profile_source(self) -> str:
         """Builds the guidance printed when the configured profile source cannot deliver a profile.
 
@@ -1227,7 +1194,7 @@ class UtspLpgConnector(cp.Component):
                         # directories are resolved from the indices claimed above, which are known
                         # before the calculation starts, so a failure cannot leave debris for the
                         # next run to trip over.
-                        PylpgWorkspace.release(self.claimed_pylpg_calculation_indices)
+                        PylpgWorkspace.release(self.claimed_pylpg_calculation_indices, self.pylpg_work_root())
                         self.claimed_pylpg_calculation_indices.clear()
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
@@ -1355,6 +1322,26 @@ class UtspLpgConnector(cp.Component):
 
         return guid_list
 
+    def pylpg_cache_directory(self) -> str:
+        """Returns the cache directory this component's local LoadProfileGenerator runs use.
+
+        The directory its cache entries are written to: the profile is built while the component is
+        constructed, before the run's result directory exists, and the installed ``pylpg`` package is
+        not a place a calculation may write to. Both the binaries (``PylpgWorkspace.binary_root``)
+        and the calculation directories (``PylpgWorkspace.work_root``) live below it.
+        """
+        # A missing entry's path names the write directory; an existing one may sit in a read-only seed.
+        missing = [path for exists, path in self.list_of_file_exists_and_cache_files if not exists]
+        cache_filepath = missing[0] if missing else self.list_of_file_exists_and_cache_files[0][1]
+        return str(os.path.dirname(cache_filepath))
+
+    def pylpg_work_root(self) -> Path:
+        """Returns where this component's local LoadProfileGenerator calculations compute.
+
+        See ``PylpgWorkspace.work_root`` and :meth:`pylpg_cache_directory`.
+        """
+        return PylpgWorkspace.work_root(self.pylpg_cache_directory())
+
     def execute_local_lpg_single_household(self,
                                            calculation_index,
                                            household: JsonReference,
@@ -1442,17 +1429,19 @@ class UtspLpgConnector(cp.Component):
                 # and starts writing: a directory that already exists belongs either to a run still
                 # using it or to one that died, and both deserve a named failure rather than a shared
                 # folder.
-                # Before the executor exists, because LPGExecutor.__init__ is what installs the
-                # binaries when they are missing, and doing that in several processes at once is
+                # Before the executor exists, and into the cache directory rather than the installed
+                # package (hisim.write_guard): LPGExecutor.__init__ would install the binaries into
+                # the package when they are missing, and doing that in several processes at once is
                 # how one of them ends up writing the executable another is running (ETXTBSY).
-                PylpgWorkspace.install_binaries_if_missing()
-                PylpgWorkspace.claim(calculation_index)
+                cache_directory = self.pylpg_cache_directory()
+                PylpgWorkspace.install_binaries_if_missing(cache_directory)
+                PylpgWorkspace.claim(calculation_index, PylpgWorkspace.work_root(cache_directory))
                 self.claimed_pylpg_calculation_indices.append(calculation_index)
-                lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)
-                # The executor has just copied the whole toolchain into this calculation's own
-                # directory and would then run the shared original regardless, next to the one
-                # sqlite database every other calculation is also using. Run the copy.
-                PylpgWorkspace.run_the_copy_not_the_original(lpe)
+                # Built by the workspace rather than by LPGExecutor(...), whose constructor copies the
+                # toolchain into the installed package; this copies it from the binaries below the
+                # cache directory to a calculation directory beside them, and runs that copy rather
+                # than the shared original.
+                lpe: lpg_execution.LPGExecutor = PylpgWorkspace.start_executor(calculation_index, cache_directory)
 
                 request = lpe.make_default_lpg_settings(self.my_simulation_parameters.year)
                 if random_seed is not None and request.CalcSpec is not None:

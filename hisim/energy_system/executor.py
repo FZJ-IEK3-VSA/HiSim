@@ -35,6 +35,7 @@ import yaml
 
 from hisim import log
 from hisim import simulator as sim
+from hisim.calculation_scope import CalculationScope
 from hisim.energy_system.audit import build_audit, write_audit
 from hisim.energy_system.bindings import ClassBindings
 from hisim.energy_system.classes import validate_classes
@@ -550,25 +551,31 @@ def run_energy_system(
         The built system, after the simulation has finished; its simulator's parameters carry
         the result directory the run actually wrote to.
 
+    The whole call is one calculation (:class:`~hisim.calculation_scope.CalculationScope`): a
+    fresh result directory, and a write guard that refuses every write outside it and the cache
+    directories.
+
     Raises:
         EnergySystemError: For any condition of the error catalogue, raised before the first
             component is constructed wherever the condition allows it.
+        StrayWriteError: When the run wrote outside its result directory and the cache directories.
     """
-    parameters = SimulationParametersReader.read(Path(simulation_parameters_path))
-    if result_directory is not None:
-        parameters.result_directory = result_directory
-        os.makedirs(result_directory, exist_ok=True)
-    built = build_energy_system(
-        energy_system_path,
-        parameters,
-        rerun=rerun,
-        simulation_parameters_path=simulation_parameters_path,
-    )
-    write_records(built, built.simulator.get_simulation_parameters().result_directory)
-    log.information(f"Starting the simulation of '{built.model.name}'.")
-    built.simulator.run_all_timesteps()
-    log.information(
-        f"Finished the simulation of '{built.model.name}'; results are in "
-        f"{built.simulator.get_simulation_parameters().result_directory}."
-    )
-    return built
+    with CalculationScope.open(label=str(energy_system_path), run_directory=result_directory):
+        parameters = SimulationParametersReader.read(Path(simulation_parameters_path))
+        if result_directory is not None:
+            parameters.result_directory = result_directory
+            os.makedirs(result_directory, exist_ok=True)
+        built = build_energy_system(
+            energy_system_path,
+            parameters,
+            rerun=rerun,
+            simulation_parameters_path=simulation_parameters_path,
+        )
+        write_records(built, built.simulator.get_simulation_parameters().result_directory)
+        log.information(f"Starting the simulation of '{built.model.name}'.")
+        built.simulator.run_all_timesteps()
+        log.information(
+            f"Finished the simulation of '{built.model.name}'; results are in "
+            f"{built.simulator.get_simulation_parameters().result_directory}."
+        )
+        return built

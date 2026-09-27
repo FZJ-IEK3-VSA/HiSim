@@ -1,0 +1,156 @@
+# Static half of the write guard (bead hisim-epc.23; the runtime half is hisim/write_guard.py).
+#
+# During a calculation HiSim may write only into the run's result directory and the cache
+# directories. The runtime guard enforces that for what a run actually does; these rules keep new
+# direct writes from appearing anywhere in hisim/ unnoticed. A module that is a sanctioned writer --
+# a result writer, a cache manager, a developer tool that writes the file it is asked for -- is listed
+# in ALLOWLIST below (shared by both rules through the YAML anchor), each group with its reason. A
+# finding elsewhere is fixed by routing the write through one of those modules, or by adding the
+# module to the list in the same change and saying why.
+#
+# Run:  semgrep --config .semgrep/ --error --metrics=off hisim/
+rules:
+  - id: hisim-open-for-writing
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Direct file-system write. During a calculation HiSim may write only into the run's result
+      directory (ResultPathProviderSingleton / SimulationParameters.result_directory) or into the
+      cache directories (SimulationParameters.cache_locations()); hisim.write_guard refuses anything
+      else at runtime. Write through one of the sanctioned writer modules listed under
+      `paths.exclude` in .semgrep/file_writes.yml, or -- when this module is itself a result writer or
+      a cache manager -- add it to that list in the same change, with the reason.
+    patterns:
+      - pattern-either:
+          - pattern: open($F, "$MODE", ...)
+          - pattern: open($F, mode="$MODE", ...)
+          - pattern: io.open($F, "$MODE", ...)
+          - pattern: $P.open("$MODE", ...)
+          - pattern: $P.open(mode="$MODE", ...)
+      - metavariable-regex:
+          metavariable: $MODE
+          regex: ^.*[wax+].*$
+    paths: &paths
+      include:
+        - /hisim/
+      # ALLOWLIST: the sanctioned writers. Paths are anchored at the repository root.
+      exclude: &allowlist
+        # The run's own plumbing: the guard, the result directory, the log, the simulator's
+        # iteration log and flag, the component's creation of its result directory.
+        - /hisim/write_guard.py
+        - /hisim/result_path_provider.py
+        - /hisim/log.py
+        - /hisim/simulator.py
+        - /hisim/component.py
+        # Result writers: everything they write goes below SimulationParameters.result_directory
+        # or the directory a CLI command was pointed at.
+        - /hisim/postprocessing/
+        - /hisim/energy_system/executor.py
+        - /hisim/energy_system/audit.py
+        - /hisim/energy_system/comments.py
+        - /hisim/economics/__main__.py
+        - /hisim/economics/audit.py
+        - /hisim/economics/bridge.py
+        - /hisim/economics/exports.py
+        - /hisim/economics/input_audit.py
+        - /hisim/economics/report_plots.py
+        - /hisim/economics/reporting/
+        - /hisim/economics/scenarios.py
+        - /hisim/economics/serialization.py
+        - /hisim/economics/staged_document.py
+        - /hisim/renovisor/run.py
+        - /hisim/renovisor/simulation.py
+        # Cache managers: entries go to SimulationParameters.cache_locations() through
+        # hisim.caching.atomic_cache_write; the LoadProfileGenerator's binaries are installed and
+        # its calculations computed below the cache directory (PylpgWorkspace.binary_root and
+        # PylpgWorkspace.work_root).
+        - /hisim/caching/
+        - /hisim/components/building/building.py
+        - /hisim/components/generic_car.py
+        - /hisim/components/generic_pv_system/pv_system.py
+        - /hisim/components/solar_thermal_system.py
+        - /hisim/components/weather/weather.py
+        - /hisim/components/loadprofilegenerator_utsp_connector.py
+        - /hisim/components/pylpg_workspace.py
+        # Developer tools, never part of a calculation: each writes the file or directory its
+        # caller names (recording, schema export, the RenoVisor map, capability document, contract
+        # refresh and verification report, the profiler, the code overview, a config export).
+        - /hisim/cli_grouping.py
+        - /hisim/energy_system/recording/
+        - /hisim/energy_system/schema_export.py
+        - /hisim/renovisor/capabilities.py
+        - /hisim/renovisor/contract/refresh.py
+        - /hisim/renovisor/map.py
+        - /hisim/renovisor/verify/
+        - /hisim/hisim_with_profiler.py
+        - /hisim/project_code_overview_generator.py
+        - /hisim/building_sizer_utils/interface_configs/modular_household_config.py
+
+  - id: hisim-direct-file-write
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Direct file-system write. During a calculation HiSim may write only into the run's result
+      directory (ResultPathProviderSingleton / SimulationParameters.result_directory) or into the
+      cache directories (SimulationParameters.cache_locations()); hisim.write_guard refuses anything
+      else at runtime. Write through one of the sanctioned writer modules listed under
+      `paths.exclude` in .semgrep/file_writes.yml, or -- when this module is itself a result writer or
+      a cache manager -- add it to that list in the same change, with the reason.
+    patterns:
+      - pattern-either:
+          - pattern: os.open(...)
+          - pattern: os.fdopen(...)
+          # pathlib
+          - pattern: $P.write_text(...)
+          - pattern: $P.write_bytes(...)
+          - pattern: $P.touch(...)
+          - pattern: $P.mkdir(...)
+          - pattern: $P.unlink(...)
+          - pattern: $P.rmdir(...)
+          - pattern: $P.rename($X)
+          - pattern: $P.replace($X)
+          # os / shutil
+          - pattern: os.mkdir(...)
+          - pattern: os.makedirs(...)
+          - pattern: os.rename(...)
+          - pattern: os.replace(...)
+          - pattern: os.remove(...)
+          - pattern: os.unlink(...)
+          - pattern: os.rmdir(...)
+          - pattern: os.removedirs(...)
+          - pattern: shutil.copy(...)
+          - pattern: shutil.copy2(...)
+          - pattern: shutil.copyfile(...)
+          - pattern: shutil.copytree(...)
+          - pattern: shutil.move(...)
+          - pattern: shutil.rmtree(...)
+          - pattern: shutil.make_archive(...)
+          - pattern: tempfile.mkstemp(...)
+          - pattern: tempfile.mkdtemp(...)
+          - pattern: tempfile.NamedTemporaryFile(...)
+          - pattern: tempfile.TemporaryDirectory(...)
+          # serialisers handed a file
+          - pattern: json.dump($OBJ, $F, ...)
+          - pattern: yaml.dump($OBJ, $F, ...)
+          - pattern: yaml.safe_dump($OBJ, $F, ...)
+          - pattern: pickle.dump($OBJ, $F, ...)
+          # pandas / numpy / matplotlib
+          - pattern: $DF.to_csv($PATH, ...)
+          - pattern: $DF.to_csv(path_or_buf=$PATH, ...)
+          - pattern: $DF.to_json($PATH, ...)
+          - pattern: $DF.to_json(path_or_buf=$PATH, ...)
+          - pattern: $DF.to_excel(...)
+          - pattern: $DF.to_parquet(...)
+          - pattern: $DF.to_pickle(...)
+          - pattern: $DF.to_feather(...)
+          - pattern: $DF.to_hdf(...)
+          - pattern: pd.ExcelWriter(...)
+          - pattern: np.save(...)
+          - pattern: np.savez(...)
+          - pattern: np.savez_compressed(...)
+          - pattern: np.savetxt(...)
+          - pattern: $X.savefig(...)
+      # dataclasses.replace copies a dataclass; it touches no file
+      - pattern-not: dc.replace(...)
+      - pattern-not: dataclasses.replace(...)
+    paths: *paths

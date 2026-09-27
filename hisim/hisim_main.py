@@ -11,6 +11,7 @@ from pydantic import TypeAdapter
 from dotenv import load_dotenv
 
 try:
+    from hisim.calculation_scope import CalculationScope
     from hisim.energy_system.executor import SimulationParametersReader, run_energy_system
     from hisim.postprocessingoptions import PostProcessingOptions
     import hisim.simulator as sim
@@ -399,13 +400,14 @@ def main_cli() -> None:
 
     module_file = get_required_config_value(config, "module_file")
     print(f"Calling setup_function from {module_file}")
-    my_sim = initialize_from_python(
-        path_to_module=module_file,
-        my_simulation_parameters=config["my_simulation_parameters"],
-        my_module_config=config["module_config"],
-    )
+    with CalculationScope.open(label=module_file):
+        my_sim = initialize_from_python(
+            path_to_module=module_file,
+            my_simulation_parameters=config["my_simulation_parameters"],
+            my_module_config=config["module_config"],
+        )
 
-    run_simulation(my_sim, path_to_module=module_file)
+        run_simulation(my_sim, path_to_module=module_file)
 
 
 def main(
@@ -436,17 +438,22 @@ def main(
         my_module_config: Optional config string forwarded to the setup
             function.
 
+    The whole call is one calculation (:class:`~hisim.calculation_scope.CalculationScope`): a
+    fresh result directory, and a write guard that refuses every write outside it and the cache
+    directories with a :class:`~hisim.write_guard.StrayWriteError`.
+
     Returns:
         The absolute path of the directory the simulation wrote its results to.
     """
 
-    my_sim = initialize_from_python(
-        path_to_module=path_to_module,
-        my_simulation_parameters=my_simulation_parameters,
-        my_module_config=my_module_config,
-    )
-    run_simulation(my_sim, path_to_module=path_to_module)
-    return my_sim.get_simulation_parameters().result_directory
+    with CalculationScope.open(label=path_to_module):
+        my_sim = initialize_from_python(
+            path_to_module=path_to_module,
+            my_simulation_parameters=my_simulation_parameters,
+            my_module_config=my_module_config,
+        )
+        run_simulation(my_sim, path_to_module=path_to_module)
+        return my_sim.get_simulation_parameters().result_directory
 
 
 if __name__ == "__main__":

@@ -18,8 +18,11 @@ a Python program::
 The last line on standard error for exit 3 and 5 is one line, because the backend shows it as
 the job's error message.
 
-Nothing is written outside ``--out`` but the cache directory a container maps in, which is
-shared state rather than output (decision Q25) and is the one documented exception.
+Nothing is written outside ``--out`` but the cache directories a container maps in, which are
+shared state rather than output (decision Q25) and the one documented exception. That is enforced,
+not only promised: the calculation runs inside :class:`hisim.calculation_scope.CalculationScope`,
+whose write guard fails it (exit 5) on any write elsewhere, and ``--out`` holds nothing a later
+calculation needs, so the backend may delete it whole once it has copied the artifacts.
 """
 
 import json
@@ -33,6 +36,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Protocol, Tuple
 
 import yaml
 
+from hisim.calculation_scope import CalculationScope
 from hisim.energy_system.executor import build_energy_system, write_records
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import apply
@@ -44,7 +48,6 @@ from hisim.renovisor.simulation import EconomicSetup, Period, SimulationSetup
 from hisim.renovisor.translate import TranslatedSystem, Translator
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 from hisim.simulationparameters import SimulationParameters
-from hisim.result_path_provider import ResultPathProviderSingleton
 
 
 class ExitCode(IntEnum):
@@ -282,7 +285,14 @@ class Calculation:
         """Run one stage, turning every way it can fail into a file and an exit code."""
         self._output.mkdir(parents=True, exist_ok=True)
         try:
-            work()
+            # One calculation: the output directory is its result directory, adopted into the
+            # result path provider, and nothing may be written outside it and the cache directories.
+            with CalculationScope.open(
+                label=str(self._request_path),
+                run_directory=self._output,
+                cache_directories=[str(self._cache)] if self._cache is not None else [],
+            ):
+                work()
         except RequestError as error:
             self._write_json(Outputs.PROBLEMS, error.to_json())
             return ExitCode.REQUEST_INVALID
@@ -329,7 +339,6 @@ class Calculation:
 
     def _calculate(self) -> None:
         """Translate, run and assemble, in that order."""
-        ResultPathProviderSingleton.reset()
         request, applied, translated = self._translate_and_write()
         parameters = SimulationSetup.parameters(
             self._period, self._output, self._cache, country=request.country.value

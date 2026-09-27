@@ -7,8 +7,9 @@ is never written to and the volume accumulates what the seed lacks. The cache is
 deterministic, which is what makes reading across directories safe: an entry found in a later
 directory is the same artifact the first would have produced.
 
-This module belongs to the cache package and imports only the standard library and ``hisim.log``
--- the same layer rule the rest of the package follows, checked in a fresh interpreter.
+This module belongs to the cache package and imports only the standard library, ``hisim.log`` and
+``hisim.write_guard`` (itself standard library only) -- the same layer rule the rest of the package
+follows, checked in a fresh interpreter.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import os
 from typing import Optional, Sequence, Tuple
 
 from hisim import log
+from hisim.write_guard import WriteGuard
 
 
 class CacheLocationsError(ValueError):
@@ -52,6 +54,10 @@ class CacheLocations:
                 "cache_directories is empty; a calculation needs at least one cache directory"
             )
         self._directories: Tuple[str, ...] = tuple(directories)
+        # Every cache reader and writer of a calculation goes through a CacheLocations, which makes
+        # it the one place that knows the calculation's cache directories: a running write guard
+        # (hisim.write_guard) allows writes below them from here on. Outside a calculation, no-op.
+        WriteGuard.admit_cache_directories(self._directories)
 
     @property
     def directories(self) -> Tuple[str, ...]:

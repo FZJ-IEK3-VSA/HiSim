@@ -228,6 +228,14 @@ OSError: [Errno 26] Text file busy: '.../pylpg/LPG_linux/simengine2'
 *"Text" is the old Unix name for a program's code segment; the error is about the file being executed, not
 about its contents.*
 
+*(2026-09-26, hisim-epc.23)* Neither the calculations nor the installation live in the package any more.
+The write guard refuses every write into an installed package, so HiSim builds the executor itself: the
+binaries are installed into the cache directory, `<cache>/pylpg/<release>/LPG_linux/` (the release,
+`LPG10.10.0` today, read from pylpg's download URL), and each calculation computes in
+`<cache>/pylpg_work/<host>/C<index>/`. The install extracts into a staging directory and moves it into place
+with one `rename`, so even two environments sharing one cache volume cannot write one installation at once.
+An installation left in `site-packages/pylpg/LPG_linux` by an older HiSim is ignored.
+
 **What remains unexplained.** Running the copy instead of the original took a cold parallel regeneration from
 two failures to one — and the survivor still died with `database is locked`. So the generator reaches a
 shared database by some route other than its own directory, and that route was never found. F13 works around
@@ -661,7 +669,9 @@ fault here that corrupts data for components that have nothing to do with load p
 
 `PylpgWorkspace.ensure_binaries_installed` — since renamed `install_binaries_if_missing` — makes the check
 and the install atomic with respect to every other process, using an exclusive `flock` on a file beside the
-installation. The first process installs while the others wait; by the time they look the executable is
+installation. *(Since hisim-epc.23 the flock is taken on the pylpg package directory opened read-only, the
+installation lives below the cache directory, and a staging directory plus one `rename` keep the install
+atomic across environments that share a cache; see the note at the end of §4a.)* The first process installs while the others wait; by the time they look the executable is
 there and `pylpg`'s own check short-circuits without writing. Concurrent *execution* is not locked and needs
 no lock: many processes may run one binary, and only writing to a running one is refused.
 

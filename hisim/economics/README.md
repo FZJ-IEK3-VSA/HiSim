@@ -142,7 +142,10 @@ year, which the document publishes as `weather_year` (`simulation_year` up to sc
 renovisorissues #57). With neither the stages nor the file stating a `price_basis_year`, a stated
 `plan_start_year` anchors the price basis year, clamped to the earliest year the country's device
 data covers — the one clamp `effective_price_basis_year` applies to the CLI and the Python API alike
-— and `origins.price_basis_year` says `plan_start_year`. `escalation.energy` names a
+— and `origins.price_basis_year` says `plan_start_year`. The plan's year 0 is `plan_start_year`, else
+the price basis year: every asset the house already has is aged at it (its replacements, the book
+value a measure writes off), and a subject a stage buys counts as installed in year 0 + the stage's
+`from_year`, which is its published `installation_year` (hisim-dutz, hisim-nl6j). `escalation.energy` names a
 per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
 then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
 (renovisorissues #52), per carrier —

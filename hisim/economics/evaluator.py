@@ -809,6 +809,7 @@ class EconomicEvaluator:
         parameters: EconomicParameters,
         subsidy_catalog: Optional[SubsidyCatalog] = None,
         plan_year_zero: Optional[int] = None,
+        book_anyway_credit: bool = True,
     ) -> None:
         """The catalog is optional: without one no subsidy is booked (the §10.1 flat shim is retired).
 
@@ -824,8 +825,19 @@ class EconomicEvaluator:
         timeline is in: every amount is escalated from the price basis year to it
         (`YearZeroPriceLevel`, renovisorissues #62). `None`, every other path, ages and prices at
         the price basis year exactly as before.
+
+        `book_anyway_credit` decides whether the anyway-cost credit of a replaced asset (§4.1) is
+        booked as an ``ANYWAY_COST_CREDIT`` flow of the evaluation. It is on for a standalone
+        evaluation, whose only counterfactual is that credit. The staged evaluator turns it off
+        (owner decision 2026-09-27, full-cost method, hisim-ryw1): its plan is compared against a
+        reference that pays every end-of-life renewal itself, so the avoided renewal is already
+        in the comparison, and crediting it on the plan too counted it twice. Off, the credit is
+        still computed and still enters the modernisation-levy basis
+        (`ModernizationLevyBasis.avoided_maintenance` and its per-subject split), where the
+        avoided maintenance share is a legal deduction and not a flow of the plan.
         """
         self.database = cost_database
+        self.book_anyway_credit = book_anyway_credit
         self.parameters = parameters
         self.subsidy_catalog = subsidy_catalog
         self._plan_year_zero = plan_year_zero
@@ -1167,7 +1179,8 @@ class EconomicEvaluator:
                 )
                 sunk_cost = sunk_cost + replaced_outcome.sunk_cost
                 if replaced_outcome.credit_entry is not None:
-                    timeline.add(replaced_outcome.credit_entry)
+                    if self.book_anyway_credit:
+                        timeline.add(replaced_outcome.credit_entry)
                     credit_factor = level.add_credit(
                         subject,
                         like_for_like=replaced_outcome.credit_basis_kind == AnywayBasisKinds.LIKE_FOR_LIKE,
@@ -1179,14 +1192,17 @@ class EconomicEvaluator:
                             credit_amount=replaced_outcome.credit_amount.scale(credit_factor),
                             credit_basis_in_euro=replaced_outcome.credit_basis_in_euro * credit_factor,
                         )
-                    anyway_share_by_subject[subject] = replaced_outcome.anyway_share
-                    # The cost the share was applied to, so the credit is a visible
-                    # multiplication rather than a figure with a percentage beside it — and what
-                    # that cost *is*, because the two branches (§4.1 like-for-like, Q7 coupled)
-                    # credit different quantities and a caption that names only the first
-                    # describes the wrong one in half the runs.
-                    anyway_basis_by_subject[subject] = replaced_outcome.credit_basis_in_euro
-                    anyway_basis_kind_by_subject[subject] = replaced_outcome.credit_basis_kind
+                    if self.book_anyway_credit:
+                        anyway_share_by_subject[subject] = replaced_outcome.anyway_share
+                        # The cost the share was applied to, so the credit is a visible
+                        # multiplication rather than a figure with a percentage beside it — and
+                        # what that cost *is*, because the two branches (§4.1 like-for-like, Q7
+                        # coupled) credit different quantities and a caption that names only the
+                        # first describes the wrong one in half the runs.
+                        anyway_basis_by_subject[subject] = replaced_outcome.credit_basis_in_euro
+                        anyway_basis_kind_by_subject[subject] = replaced_outcome.credit_basis_kind
+                    # The levy basis keeps the credit whether or not the evaluation books it: the
+                    # avoided maintenance share is a deduction of the law (§6.4), not a plan flow.
                     anyway_credit_total = anyway_credit_total + replaced_outcome.credit_amount
                     levy_credit_by_subject[subject] = (
                         levy_credit_by_subject[subject] + replaced_outcome.credit_amount

@@ -960,6 +960,7 @@ class Translator:
         report.set_unpriced_subjects(built.unpriced_subjects)
         report.set_costless_subjects(built.costless_subjects)
         report.set_subject_notes(built.subject_notes)
+        report.set_replaces_subjects(built.replaces_subjects)
         for path, value, note in built.defaults:
             if not report.has(path):
                 report.defaulted(path, value, note)

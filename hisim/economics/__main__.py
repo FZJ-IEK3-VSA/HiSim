@@ -102,9 +102,9 @@ import importlib.util
 import json
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.calculation_scope import CalculationScope
 from hisim.economics.calculators.energy import StatedPriceError
@@ -161,7 +161,13 @@ from hisim.economics.staged_parameters import (
     StagedParameters,
 )
 from hisim.loadtypes import ComponentType
-from hisim.renovisor.economics import EconomicContextBuilder, MainSubjectError, MainSubjects, MeasureSubjects
+from hisim.renovisor.economics import (
+    EconomicContextBuilder,
+    MainSubjectError,
+    MainSubjects,
+    MeasureSubjects,
+    ReplacedSubjects,
+)
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import CatalogueTable
 from hisim.economics.subsidies import SubsidyCatalog
@@ -693,12 +699,15 @@ class StageMapping:
         unpriced: The subjects with no price behind them.
         costless: The subjects of a measure that costs nothing to carry out.
         notes: Subject -> the sentence its ``by_subject`` row carries as ``note``.
+        replaces: Measure subject -> the reference subjects it replaces, which its ``by_subject``
+            row carries as ``replaces_subjects``.
     """
 
     measure_ids: Dict[str, Optional[str]]
     unpriced: List[str]
     costless: List[str]
     notes: Dict[str, str]
+    replaces: Dict[str, List[str]] = field(default_factory=dict)
 
 
 class StagedCli:
@@ -810,6 +819,9 @@ class StagedCli:
 
     #: Its key holding the sentence a subject's row carries as its ``note``.
     NOTES_KEY: ClassVar[str] = MappingReport.SUBJECT_NOTES_FIELD
+
+    #: Its key naming the reference subjects each measure subject replaces (hisim-ryw1).
+    REPLACES_KEY: ClassVar[str] = MappingReport.REPLACES_SUBJECTS_FIELD
 
     #: Its key holding the measure lines, taken from the writer for the same reason.
     MEASURES_KEY: ClassVar[str] = MappingReport.MEASURES_FIELD
@@ -970,7 +982,12 @@ class StagedCli:
         return None
 
     @classmethod
-    def read_mapping(cls, directories: List[str], arguments: Optional[List[str]] = None) -> "StageMapping":
+    def read_mapping(
+        cls,
+        directories: List[str],
+        arguments: Optional[List[str]] = None,
+        stages: Optional[Sequence[Stage]] = None,
+    ) -> "StageMapping":
         """The subject-to-measure map and the subjects without a price, over every stage directory.
 
         Every stage directory must carry the translator's ``mapping_report.json``, in itself or
@@ -979,6 +996,9 @@ class StagedCli:
         Its ``costless_subjects`` and ``subject_notes`` (renovisorissues #58) say which subjects
         stand for a measure that costs nothing, and why a row has no price or costs nothing; a
         report written before they existed has neither, and reads as empty.
+        Its ``replaces_subjects`` (hisim-ryw1) names the reference subjects each measure subject
+        replaces; for a report written before it existed the same rule is applied to the stage's
+        stored inputs (:meth:`_replaced_from_inputs`) when ``stages`` are given.
         Later stages win over earlier ones, because a subject a later stage re-declares is the
         later stage's.
 
@@ -992,6 +1012,9 @@ class StagedCli:
             directories: The stage directories, in stage order.
             arguments: The ``--stage`` arguments they came from, for the refusal message; the
                 directories themselves when the caller does not pass them.
+            stages: The stages read from the same directories, in the same order, for the
+                ``replaces_subjects`` of a report that predates it; without them such a report
+                contributes none.
 
         Returns:
             The :class:`StageMapping`.
@@ -1005,6 +1028,7 @@ class StagedCli:
         unpriced: List[str] = []
         costless: List[str] = []
         notes: Dict[str, str] = {}
+        replaces: Dict[str, List[str]] = {}
         for index, directory in enumerate(directories):
             path = cls.mapping_report_path(directory)
             if path is None:
@@ -1033,7 +1057,44 @@ class StagedCli:
                 notes.update(stated_notes)
             if cls.COSTLESS_KEY not in report or cls.NOTES_KEY not in report:
                 cls._declared_from_translator(report, measures, unpriced, costless, notes)
-        return StageMapping(measure_ids=measures, unpriced=unpriced, costless=costless, notes=notes)
+            stated_replaces = report.get(cls.REPLACES_KEY)
+            if isinstance(stated_replaces, dict):
+                replaces.update({subject: list(names) for subject, names in stated_replaces.items()})
+            elif stages is not None and index < len(stages):
+                replaces.update(cls._replaced_from_inputs(stages[index], stages[0], measures))
+        return StageMapping(
+            measure_ids=measures, unpriced=unpriced, costless=costless, notes=notes, replaces=replaces
+        )
+
+    @staticmethod
+    def _replaced_from_inputs(
+        stage: Stage, reference: Stage, measures: Mapping[str, Optional[str]]
+    ) -> Dict[str, List[str]]:
+        """The ``replaces_subjects`` a report written before hisim-ryw1 would carry.
+
+        The translator's rule (:class:`~hisim.renovisor.economics.ReplacedSubjects`) over what the
+        stage's stored inputs hold: the register the translator wrote, with its
+        ``replaced_by_asset_classes``, the stage's subjects a measure created, and the reference
+        stage's subjects. A reference evaluated before its fabric had subjects names no envelope
+        element, because it holds no such row.
+
+        Args:
+            stage: The stage whose report lacks the field.
+            reference: ``stages[0]``, the do-nothing reference.
+            measures: The subject-to-measure map merged so far, this stage's report included.
+
+        Returns:
+            Measure subject -> the reference subjects it replaces.
+        """
+        return ReplacedSubjects.derive(
+            {
+                facts.subject: facts.facts.asset_class
+                for facts in stage.inputs.cost_facts
+                if measures.get(facts.subject)
+            },
+            stage.inputs.existing_assets,
+            {facts.subject: facts.facts.asset_class for facts in reference.inputs.cost_facts},
+        )
 
     @classmethod
     def _declared_from_translator(
@@ -1537,7 +1598,7 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         return StagedCli.ENGINE_FAILED
 
     try:
-        mapping = StagedCli.read_mapping(directories, args.stage)
+        mapping = StagedCli.read_mapping(directories, args.stage, stages)
         overrides = StagedCli.investment_overrides(parsed, stages, mapping)
         result = StagedEvaluator(database).evaluate(
             stages,
@@ -1565,6 +1626,7 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         cost_provenance=ExportFileNames.PROVENANCE_FILE_NAME,
         costless_subjects=mapping.costless,
         subject_notes=mapping.notes,
+        replaces_subjects=mapping.replaces,
     )
     try:
         document.write(Path(args.out))

@@ -272,6 +272,10 @@ class ComponentCostFacts:
     # Provenance of the overrides (§3.10). Mandatory whenever any override is set
     # (enforced in strict mode, §9.3); recorded in the provenance ledger.
     override_source: Optional[str] = None
+    # True when `lifetime_override_in_years` is not a lifetime anybody stated but the engine's
+    # fallback, standing in because the cost database has no entry for the class (hisim-ryw1): the
+    # result document then says `engine_fallback` rather than calling it the request's.
+    lifetime_is_engine_fallback: bool = False
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).
     technical_attributes: Dict[str, Any] = field(default_factory=dict)
 
@@ -335,6 +339,8 @@ class ComponentCostFacts:
                 raise ValueError(f"{band_name} must be non-negative in every slot.")
         if self.lifetime_override_in_years is not None and self.lifetime_override_in_years <= 0:
             raise ValueError("lifetime_override_in_years must be > 0.")
+        if self.lifetime_is_engine_fallback and self.lifetime_override_in_years is None:
+            raise ValueError("lifetime_is_engine_fallback needs the fallback in lifetime_override_in_years.")
         try:
             json.dumps(self.technical_attributes)
         except (TypeError, ValueError) as err:
@@ -491,9 +497,11 @@ class InstallationYearOrigin(str, enum.Enum):
     document's spelling, which is why the members are lower-case strings.
 
     ``REQUEST`` is a year the request states. ``MID_LIFE_DEFAULT`` is the mid-life year the
-    RenoVisor translator assumes for an undated device (price basis year less half its service
-    life, never before the construction year; ``hisim.renovisor.economics.UnknownAge``), and
-    ``CONSTRUCTION_YEAR_DEFAULT`` the construction year an undated envelope element takes.
+    RenoVisor translator assumes for an undated device or, since 2026-09-27 (hisim-ryw1), an
+    undated envelope element (price basis year less half its service life, never before the
+    construction year; ``hisim.renovisor.economics.UnknownAge``). ``CONSTRUCTION_YEAR_DEFAULT`` is
+    the construction year an undated envelope element took before that; the translator no longer
+    writes it, and it stays so that a register stored earlier still reads.
     ``STAGE`` is not a value a request's register states: it is what the document says of a
     subject a stage of the plan bought, installed in the calendar year that stage starts in -- the
     plan's year 0 plus the stage's ``from_year`` (hisim-dutz). The staging machinery writes it into

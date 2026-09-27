@@ -113,6 +113,8 @@ class TestExitZero:
             # subjects that cost nothing, and why a row is unpriced or costs nothing.
             "costless_subjects",
             "subject_notes",
+            # The reference subjects each measure subject replaces (hisim-ryw1).
+            "replaces_subjects",
         }
         assert report["fields"] and all("status" in line for line in report["fields"])
 

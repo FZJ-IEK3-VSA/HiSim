@@ -778,8 +778,12 @@ class TestAReplacedBufferIsBoughtWhole:
         # pylint: disable=protected-access
         assert StagedEvaluator(database)._charged_subjects(stages, 2) == {}
 
-    def test_the_plan_books_the_new_vessel_at_its_price_and_credits_the_old_one(self, database, parameters):
-        """The whole new price in the stage's year, and the anyway credit of the worn-out vessel."""
+    def test_the_plan_books_the_new_vessel_at_its_price_and_no_credit_for_the_old_one(self, database, parameters):
+        """The whole new price in the stage's year, and no anyway credit (full-cost method, hisim-ryw1).
+
+        Until 2026-09-27 the worn-out vessel was credited here; the reference now pays its renewal
+        itself, so the credit would count the avoided renewal twice.
+        """
         stages = [self._stage(self.OLD_SIZE, False, 0, "baseline"), self._stage(self.NEW_SIZE, True, 0, "package")]
         result = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective())
 
@@ -789,13 +793,7 @@ class TestAReplacedBufferIsBoughtWhole:
                 key = (entry.category, result.stage_of_timeline_entry(position), entry.year)
                 booked[key] = booked.get(key, 0.0) + entry.amount_in_euro.best_estimate
         assert booked[(CostCategory.INVESTMENT, 1, 0)] == pytest.approx(self.NEW_PRICE_IN_EURO)
-        # The credit falls in the year the worn-out vessel would have been replaced anyway.
-        credited = [
-            amount
-            for (category, stage, _year), amount in booked.items()
-            if category is CostCategory.ANYWAY_COST_CREDIT and stage == 1
-        ]
-        assert len(credited) == 1 and credited[0] < 0.0
+        assert not [key for key in booked if key[0] is CostCategory.ANYWAY_COST_CREDIT]
         # The baseline keeps its vessel, so it books no purchase of its own.
         assert not [key for key in booked if key[0] is CostCategory.INVESTMENT and key[1] == 0]
 
@@ -1544,6 +1542,10 @@ class TestOnePlanYearZero:
             remaining life               = L - age          = 5   <= 5: the anyway credit is due
             written-off book value       = 9 x 5 / 10       = 4.50 EUR   (not 9 x 10 / 10 = 9)
             anyway credit, stage year    = remaining        = 5          (none at all with age 0)
+
+        The staged evaluator books no anyway credit (full-cost method, hisim-ryw1), so the credit's
+        year is read off the modernisation-levy basis, which still deducts it: it is due, in the
+        year the old unit would have been replaced, only because its age is 5.
         """
         database = write_database(str(tmp_path / "with_a_heat_pump_entry"), heat_pump_legacy_flat_subsidy_share=0.1)
         replacing = state_inputs(
@@ -1564,12 +1566,23 @@ class TestOnePlanYearZero:
         result = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective())
         replacing_stage = result.per_stage[2]
         assert replacing_stage.sunk_cost_written_off_in_euro.best_estimate == pytest.approx(4.5)
-        credit_years = [
-            entry.year
-            for entry in replacing_stage.timeline.entries
-            if entry.subject == "HeatPumpAgain" and entry.category is CostCategory.ANYWAY_COST_CREDIT
+        assert not [
+            entry for entry in replacing_stage.timeline.entries if entry.category is CostCategory.ANYWAY_COST_CREDIT
         ]
-        assert credit_years == [5]
+        # The same stage evaluated by an engine that books the credit, over the register the
+        # staged evaluator hands it: the credit is due in year 5.
+        staged = StagedEvaluator(database)
+        # pylint: disable=protected-access
+        charged = [staged._charged_subjects(tuple(stages), index) for index in range(2)]
+        inputs = staged._staged_inputs(tuple(stages), 2, charged, self.BASIS_YEAR)
+        booked = EconomicEvaluator(database, parameters, plan_year_zero=self.BASIS_YEAR).evaluate(
+            inputs, brownfield_perspective()
+        )
+        assert [
+            entry.year
+            for entry in booked.timeline.entries
+            if entry.subject == "HeatPumpAgain" and entry.category is CostCategory.ANYWAY_COST_CREDIT
+        ] == [5]
 
     def test_a_plan_stating_no_year_zero_is_refused(self, database, gap_parameters):
         """Neither a price basis year nor a start year: year 0 would be the weather year, refused."""
@@ -1583,3 +1596,64 @@ class TestOnePlanYearZero:
         """``plan_start_year`` when stated, else the price basis year; never a weather year."""
         assert StagedEvaluator.plan_year_zero(2029, 2026) == 2029
         assert StagedEvaluator.plan_year_zero(None, 2026) == 2026
+
+
+class TestTheFullCostMethod:
+    """Owner decision 2026-09-27 (hisim-ryw1): the plan books no anyway credit for what it replaces.
+
+    The reference pays every end-of-life renewal itself, so a heat pump replacing the ageing boiler
+    is compared against a reference that renews that boiler; crediting the avoided renewal on the
+    plan as well counted it twice. The credit stays in the modernisation-levy basis, a deduction of
+    the law rather than a flow of the plan.
+    """
+
+    @pytest.fixture(name="due_parameters")
+    def fixture_due_parameters(self, parameters) -> EconomicParameters:
+        """A threshold wide enough that the synthetic boiler (2010, 20-year life) is due for a credit."""
+        due: EconomicParameters = replace(parameters, anyway_threshold_years=10.0)
+        return due
+
+    def test_a_standalone_evaluation_books_the_credit(self, database, due_parameters):
+        """The switch's other side: the stage alone, as the bridge prices it, does credit the boiler."""
+        result = EconomicEvaluator(database, due_parameters).evaluate(
+            heat_pump_stage(0).inputs, brownfield_perspective()
+        )
+        assert result.npv_by_category[CostCategory.ANYWAY_COST_CREDIT].best_estimate < 0.0
+
+    def test_the_plan_replacing_the_boiler_books_no_anyway_credit(self, database, due_parameters):
+        """No ANYWAY_COST_CREDIT flow in any stage or in the plan's totals."""
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(0)], due_parameters, brownfield_perspective()
+        )
+        for evaluation in (result.plan, *result.per_stage):
+            assert not [e for e in evaluation.timeline.entries if e.category is CostCategory.ANYWAY_COST_CREDIT]
+            assert evaluation.npv_by_category.get(CostCategory.ANYWAY_COST_CREDIT, UncertainValue.exact(0.0)) == (
+                UncertainValue.exact(0.0)
+            )
+
+    def test_the_delta_is_the_references_renewal_against_the_plans_cost(self, database, due_parameters):
+        """Plan minus reference, category by category, with no credit term left over to count twice.
+
+        The reference renews the boiler (a REPLACEMENT flow of its own) and the plan buys the heat
+        pump; the NPV delta is exactly the sum of the category deltas, none of which is a credit.
+        """
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(0)], due_parameters, brownfield_perspective()
+        )
+        reference, plan = result.reference, result.plan
+        assert reference.npv_by_category[CostCategory.REPLACEMENT].best_estimate > 0.0
+        categories = set(reference.npv_by_category) | set(plan.npv_by_category)
+        assert CostCategory.ANYWAY_COST_CREDIT not in {
+            category
+            for category in categories
+            if plan.npv_by_category.get(category, UncertainValue.exact(0.0)).best_estimate != 0.0
+        }
+        delta = sum(
+            plan.npv_by_category.get(category, UncertainValue.exact(0.0)).best_estimate
+            - reference.npv_by_category.get(category, UncertainValue.exact(0.0)).best_estimate
+            for category in categories
+        )
+        assert result.comparison.npv_delta_in_euro.best_estimate == pytest.approx(delta)
+        assert plan.total_npv_in_euro.best_estimate - reference.total_npv_in_euro.best_estimate == pytest.approx(
+            delta
+        )

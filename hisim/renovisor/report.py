@@ -18,7 +18,8 @@ Its shape is §6 of the calculation-request specification::
       "subjects": {"<cost subject>": "<measure id or null>"},
       "unpriced_subjects": ["<cost subject>"],
       "costless_subjects": ["<cost subject>"],
-      "subject_notes": {"<cost subject>": "<sentence>"}
+      "subject_notes": {"<cost subject>": "<sentence>"},
+      "replaces_subjects": {"<cost subject>": ["<reference cost subject>"]}
     }
 
 :meth:`MappingReport.assert_complete` is the invariant as a check rather than as a promise: it
@@ -243,6 +244,10 @@ class MappingReport:
     COSTLESS_SUBJECTS_FIELD: ClassVar[str] = "costless_subjects"
     SUBJECT_NOTES_FIELD: ClassVar[str] = "subject_notes"
 
+    #: The key naming, per subject a measure created, the do-nothing reference's subjects it
+    #: replaces (hisim-ryw1): the external insulation replaces ``envelope_facade``.
+    REPLACES_SUBJECTS_FIELD: ClassVar[str] = "replaces_subjects"
+
     #: The key of the measure half, one entry per measure of the package in package order.
     MEASURES_FIELD: ClassVar[str] = "measures"
 
@@ -273,6 +278,7 @@ class MappingReport:
         self._unpriced_subjects: List[str] = []
         self._costless_subjects: List[str] = []
         self._subject_notes: Dict[str, str] = {}
+        self._replaces_subjects: Dict[str, List[str]] = {}
         self.base_file: Optional[str] = None
         self.energy_system_file: Optional[str] = None
 
@@ -391,6 +397,19 @@ class MappingReport:
         """Return the note of every subject that has one, sorted by subject."""
         return {subject: self._subject_notes[subject] for subject in sorted(self._subject_notes)}
 
+    def set_replaces_subjects(self, replaces: Mapping[str, Sequence[str]]) -> None:
+        """Store, per subject a measure created, the reference subjects it replaces.
+
+        Args:
+            replaces: Subject -> the do-nothing reference's subjects it replaces, which its
+                ``by_subject`` row carries as ``replaces_subjects``.
+        """
+        self._replaces_subjects = {subject: list(names) for subject, names in replaces.items()}
+
+    def replaces_subjects(self) -> Dict[str, List[str]]:
+        """Return the replaced reference subjects of every measure subject, sorted by subject."""
+        return {subject: list(self._replaces_subjects[subject]) for subject in sorted(self._replaces_subjects)}
+
     def to_json(self) -> Dict[str, Any]:
         """Return the whole document, ready to be written."""
         return {
@@ -409,6 +428,7 @@ class MappingReport:
             self.UNPRICED_SUBJECTS_FIELD: list(self._unpriced_subjects),
             self.COSTLESS_SUBJECTS_FIELD: list(self._costless_subjects),
             self.SUBJECT_NOTES_FIELD: self.subject_notes(),
+            self.REPLACES_SUBJECTS_FIELD: self.replaces_subjects(),
         }
 
     def legacy_factors(self) -> str:

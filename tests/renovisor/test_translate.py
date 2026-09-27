@@ -22,6 +22,7 @@ from hisim.energy_system.loader import load_energy_system
 from hisim.renovisor.apply import SelectsNothing, apply
 from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, RoofDefaults, StorageDefaults
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.layers import SimulatedEnvelope
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import Request
 from hisim.renovisor.translate import BaseFiles, Targets, TranslatedSystem, Translator
@@ -826,21 +827,36 @@ class TestTheEconomicsOnlyLeaves:
             assert line.value == value
 
     @pytest.mark.parametrize(
-        "element, measure, status",
+        "element, measure, has_area, status",
         [
-            ("facade", True, ReportStatus.USED),
-            ("facade", False, ReportStatus.APPROXIMATED),
-            ("roof", False, ReportStatus.APPROXIMATED),
+            ("facade", True, True, ReportStatus.USED),
+            # hisim-ryw1: the kept facade is a subject of its own, renewed from this year.
+            ("facade", False, True, ReportStatus.USED),
+            # The mockup states no roof area; the Building's own TABULA area gives it a row (#851).
+            ("roof", False, True, ReportStatus.USED),
+            # An element with no area anywhere has no register row, so its year dates nothing.
+            ("roof", False, False, ReportStatus.APPROXIMATED),
         ],
     )
-    def test_an_envelope_year_is_used_only_where_a_measure_touches_the_element(
-        self, element: str, measure: bool, status: ReportStatus
+    def test_an_envelope_year_is_used_wherever_the_element_has_a_row(
+        self, element: str, measure: bool, has_area: bool, status: ReportStatus, monkeypatch
     ) -> None:
-        """hisim-glv7: the mockup insulates its facade (which has an area) and leaves its roof alone."""
+        """hisim-glv7/ryw1: a year is used wherever the element has an area, and only there."""
         document = copy.deepcopy(ContractFiles.request_mockup())
         document["house"]["building"][element]["installation_year"] = 1995
         if not measure:
             document["measures"] = [m for m in document["measures"] if m["id"] != "external_insulation"]
+        if not has_area:
+            # The mockup states no roof area, so a Building roof area of zero leaves it none at all.
+            assert "area_in_m2" not in document["house"]["building"][element]
+            simulated = SimulatedEnvelope.information
+
+            def without_the_area(envelope: SimulatedEnvelope) -> Any:
+                information = copy.copy(simulated(envelope))
+                setattr(information, SimulatedEnvelope.config_field(ThermalElement(element)), 0.0)
+                return information
+
+            monkeypatch.setattr(SimulatedEnvelope, "information", without_the_area)
 
         line = translate(document).report.line(f"house.building.{element}.installation_year")
 

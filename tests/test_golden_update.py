@@ -17,6 +17,7 @@ import pytest
 from scripts.golden_update import (
     MAX_NAMED_KEYS,
     MergeRecord,
+    _parse_args,
     golden_filename,
     main,
     merge_into_golden,
@@ -324,3 +325,12 @@ def test_force_rewrite_repairs_an_unusable_golden(tmp_path: Path) -> None:
     assert _bless(tmp_path, golden_dir, {"BUI1.General.x": 1.0}, force_rewrite=True) == 0
 
     assert json.loads(path.read_text()) == {"BUI1.General.x": 1.0}
+
+
+def test_cli_blesses_a_shard_several_pairs_at_once() -> None:
+    """golden-update.yml's shard command line: its pairs as setup:param tokens and how many run at once."""
+    parsed = _parse_args(["--pairs", "a:one_week_60s", "b:one_week_60s", "--jobs", "2", "--force-rewrite"])
+    assert parsed.pairs == [("a", "one_week_60s"), ("b", "one_week_60s")]
+    assert parsed.jobs == 2 and parsed.force_rewrite
+    with pytest.raises(SystemExit):
+        _parse_args(["--jobs", "0"])

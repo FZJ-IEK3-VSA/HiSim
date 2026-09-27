@@ -10,6 +10,9 @@
 # longer produces stays in its golden and the gate goes on reporting it as missing.
 # The force_rewrite input dumps the fresh values verbatim instead — the way to clear
 # accumulated noise, to retire a KPI, and to repair an unreadable golden.
+#
+# The pairs run in shards, like the gates' (golden_matrix.py --shards 4 cuts each horizon
+# into four): four week pairs or two full-year pairs at once per job, as memory allows.
 
 name: golden-update
 
@@ -33,7 +36,7 @@ permissions:
 
 jobs:
   discover:
-    name: discover all pairs
+    name: discover all shards
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
@@ -45,7 +48,7 @@ jobs:
         with:
           mode: start
       - id: gen
-        run: echo "matrix=$(python3 scripts/golden_matrix.py)" >> "$GITHUB_OUTPUT"
+        run: echo "matrix=$(python3 scripts/golden_matrix.py --shards 4)" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage
@@ -55,7 +58,7 @@ jobs:
           mode: report
 
   update:
-    name: regenerate ${{ matrix.setup }} / ${{ matrix.param }}
+    name: regenerate ${{ matrix.name }} (${{ matrix.count }} pairs)
     needs: discover
     runs-on: ubuntu-latest
     container:
@@ -66,6 +69,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    env:
+      # Space-separated setup:param tokens, split on purpose where they are used.
+      PAIRS: ${{ matrix.pairs }}
+      JOBS: ${{ matrix.jobs }}
     steps:
       - uses: actions/checkout@v7
       # Wall time, CPU time and peak memory for this job; see the action.
@@ -73,20 +80,33 @@ jobs:
         uses: ./.github/actions/resource-monitor
         with:
           mode: start
-          scope: ${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ matrix.name }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
-      - name: Regenerate golden for this pair
-        run: >-
-          python scripts/golden_update.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
-          ${{ inputs.force_rewrite && '--force-rewrite' || '' }}
-      - name: Upload regenerated golden
+      - name: Regenerate the goldens of this shard
+        env:
+          FORCE: ${{ inputs.force_rewrite && '--force-rewrite' || '' }}
+        run: |
+          # shellcheck disable=SC2086  # PAIRS and FORCE are split into arguments on purpose
+          python scripts/golden_update.py --jobs "$JOBS" --pairs $PAIRS $FORCE
+      # Exactly this shard's files: the checkout holds every other golden too, unchanged, and
+      # collect merges all artifacts into one directory, so an unchanged copy uploaded here
+      # could overwrite the fresh one another shard produced.
+      - name: List this shard's goldens
+        id: files
+        run: |
+          {
+            echo "paths<<EOF"
+            for pair in $PAIRS; do echo "golden_references/${pair%%:*}__${pair#*:}.json"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Upload regenerated goldens
         uses: actions/upload-artifact@v7
         with:
-          name: golden-${{ matrix.setup }}-${{ matrix.param }}
-          path: golden_references/${{ matrix.setup }}__${{ matrix.param }}.json
+          name: golden-${{ matrix.name }}
+          path: ${{ steps.files.outputs.paths }}
           if-no-files-found: error
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
@@ -95,7 +115,7 @@ jobs:
         uses: ./.github/actions/resource-monitor
         with:
           mode: report
-          scope: ${{ matrix.setup }}-${{ matrix.param }}
+          scope: ${{ matrix.name }}
 
   collect:
     name: assemble goldens and open PR

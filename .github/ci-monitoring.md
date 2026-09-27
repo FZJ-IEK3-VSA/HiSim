@@ -73,6 +73,14 @@ unless it is the last completion with everything green. Because `workflow_run` r
 from a pull request's checks list, the result comes back as a `golden-year` commit status on the
 head commit instead. A wait that costs a runner is a bug, not a cost.
 
+The golden gates run as shards (`scripts/golden_matrix.py --shards 4`): four week jobs, each
+running four pairs at once, every pair's Python setup and its recorded YAML twin side by side in
+one pool (`golden_check.py --mode both`), and four full-year jobs of two pairs. A shard is
+expected to use all four cores, so "holding a runner idle" on one of them means a pair ran far
+past its weight (`"seconds"` in `scripts/golden_config.json`), and a shard near the memory limit
+means a pair outgrew its horizon's `PAIRS_AT_ONCE`. Since the YAML twins are part of
+`golden-check`, a diverging twin also keeps `golden-year` from starting — deliberately.
+
 Both a proportional and an absolute threshold have to be crossed, and only successful runs
 form a baseline. Shared runners vary by tens of percent for reasons nobody controls, a
 cancelled run says nothing about cost, and a report that flags either is one people stop
@@ -100,7 +108,8 @@ during the last sweep), prunes to the window and uploads it again. An hour in wh
 was pushed costs a handful of requests, and the request cap is 500.
 
 Hourly rather than nightly because of the artifacts. Memory artifacts are the expensive half —
-one download each, and the three golden workflows alone upload 66 per push to `main` — so a
+one download each, and the golden workflows uploaded 66 per push to `main` before they were
+sharded (about ten since) — so a
 single sweep a day could never keep up with them, and they are collected for `main` and for
 flagged jobs rather than for everything. Pull-request jobs still produce and print their own
 numbers; they just don't feed the trend.

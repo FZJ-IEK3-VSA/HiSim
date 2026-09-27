@@ -11,17 +11,26 @@ The pure helpers (``load_config``, ``build_simulation_parameters``,
 :func:`run_one` executes a real simulation, and it is isolated so that
 :func:`run_all` (which drives every ``(setup, parameter_set)`` pair) can be
 unit-tested with a monkeypatched ``run_one``.
+
+With ``jobs`` above one, :func:`run_all` runs each pair in a child process of its own instead
+(:class:`ChildRuns`), several at once: setups mutate module state, so two pairs must not share an
+interpreter, and a pair that crashes or is killed for memory then fails alone, as a ``run_error``
+of its own pair. The child is this file, run as a script with :data:`ChildRuns.CHILD_FLAG`.
 """
 from __future__ import annotations
 
 import datetime
 import hashlib
 import json
+import os
 import platform
 import subprocess
-from dataclasses import dataclass
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Optional, Sequence, cast
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
@@ -90,6 +99,9 @@ class GoldenConfig:
     check_subdir: str
     setups: list[SetupConfig]
     parameter_sets: list[ParameterSetConfig]
+    #: An explicit ``(setup id, parameter set id)`` list, in the order to run it, or ``None`` for
+    #: every pair the horizons allow. Set by :func:`filter_config` for a CI shard.
+    pairs: Optional[list[tuple[str, str]]] = None
 
 
 @dataclass
@@ -101,6 +113,8 @@ class RunResult:
     result_directory: str
     kpis: dict[str, Any]
     error: Optional[str] = None
+    #: Wall time of the run in seconds; what ``golden_config.json``'s ``seconds`` weights come from.
+    duration_s: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------
@@ -194,17 +208,53 @@ def load_config(config_path: Path) -> GoldenConfig:
 # ---------------------------------------------------------------------------
 # Filtering (CI slices: --setup / --param)
 # ---------------------------------------------------------------------------
+def parse_pair(token: str) -> tuple[str, str]:
+    """Split one ``setup:param`` token, as a CI shard lists its pairs.
+
+    Raises:
+        ValueError: if the token is not two non-empty ids joined by one colon.
+    """
+    setup_id, sep, param_id = token.partition(":")
+    if not sep or not setup_id or not param_id or ":" in param_id:
+        raise ValueError(f"A pair is written 'setup:param', not {token!r}.")
+    return setup_id, param_id
+
+
 def filter_config(
-    config: GoldenConfig, setup_id: Optional[str] = None, param_id: Optional[str] = None
+    config: GoldenConfig,
+    setup_id: Optional[str] = None,
+    param_id: Optional[str] = None,
+    pairs: Optional[Sequence[tuple[str, str]]] = None,
 ) -> GoldenConfig:
-    """Return a copy of ``config`` restricted to the given setup and/or param id.
+    """Return a copy of ``config`` restricted to the given setup and/or param id, or to ``pairs``.
+
+    ``pairs`` is a CI shard: exactly those pairs, run in the given order. It cannot be combined
+    with ``setup_id`` / ``param_id``.
 
     Raises:
         ValueError: if a requested id matches no entry (a typo should fail loudly,
             not silently run nothing), or if both ids are given and the setup's
             ``horizons`` exclude that parameter set — asking explicitly for a pair
-            the gate never runs is a mistake, not an empty run.
+            the gate never runs is a mistake, not an empty run. The same holds for
+            every entry of ``pairs``, which must also not repeat a pair.
     """
+    if pairs is not None:
+        if setup_id is not None or param_id is not None:
+            raise ValueError("Pass either an explicit pair list or --setup/--param, not both.")
+        if not pairs:
+            raise ValueError("An explicit pair list must name at least one pair.")
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(f"The pair list repeats a pair: {list(pairs)}.")
+        for pair_setup, pair_param in pairs:
+            filter_config(config, setup_id=pair_setup, param_id=pair_param)  # refuses an unknown or excluded pair
+        setup_ids = {pair_setup for pair_setup, _ in pairs}
+        param_ids = {pair_param for _, pair_param in pairs}
+        return GoldenConfig(
+            check_subdir=config.check_subdir,
+            setups=[s for s in config.setups if s.id in setup_ids],
+            parameter_sets=[p for p in config.parameter_sets if p.id in param_ids],
+            pairs=list(pairs),
+        )
     setups = [s for s in config.setups if setup_id in (None, s.id)]
     params = [p for p in config.parameter_sets if param_id in (None, p.id)]
     if setup_id is not None and not setups:
@@ -228,8 +278,13 @@ def select_pairs(config: GoldenConfig) -> list[tuple[SetupConfig, ParameterSetCo
 
     A setup that restricts its horizons is simply absent from the other horizons' pairs;
     the golden matrix applies the identical rule, so CI slices and a full local run agree
-    on what the gate covers.
+    on what the gate covers. An explicit :attr:`GoldenConfig.pairs` list is returned as given,
+    in its order (:func:`filter_config` has already checked every entry).
     """
+    if config.pairs is not None:
+        setups = {s.id: s for s in config.setups}
+        params = {p.id: p for p in config.parameter_sets}
+        return [(setups[setup_id], params[param_id]) for setup_id, param_id in config.pairs]
     return [
         (setup, param)
         for setup in config.setups
@@ -369,32 +424,211 @@ def run_one(
         )
 
 
+@dataclass
+class PairTask:
+    """One run to make: a pair in one mode, where its results and its child's files go."""
+
+    setup: SetupConfig
+    parameter_set: ParameterSetConfig
+    result_directory: str
+    mode: str
+    work_dir: Path
+
+
+def run_modes(
+    config: GoldenConfig, base_root: Path, repo_root: Path, subdirs: dict[str, str], jobs: int = 1
+) -> dict[str, list[RunResult]]:
+    """Run every pair of ``config`` in each mode of ``subdirs`` (mode -> result subdirectory).
+
+    A pair's result directory is ``base_root/<subdir of the mode>/<setup_id>/<param_id>/``. The
+    runs are ordered pair by pair, each pair's modes side by side (the Python setup, then its
+    YAML twin), so with ``jobs`` above one a pair's two runs go into the one pool of child
+    processes together and the heaviest pair — first in a CI shard — starts both at once. With
+    ``jobs`` of one everything runs in this process, one after another. Returns each mode's
+    results in pair order.
+    """
+    tasks: list[PairTask] = []
+    for setup, param_set in select_pairs(config):
+        for mode, subdir in subdirs.items():
+            result_directory = base_root / subdir / setup.id / param_set.id
+            result_directory.mkdir(parents=True, exist_ok=True)
+            tasks.append(
+                PairTask(setup, param_set, str(result_directory), mode, base_root / subdir / ChildRuns.WORK_SUBDIR)
+            )
+    if jobs > 1:
+        results = ChildRuns.run_many(tasks, repo_root, jobs)
+    else:
+        results = []
+        for task in tasks:
+            started = time.monotonic()
+            result = run_one(task.setup, task.parameter_set, task.result_directory, repo_root, mode=task.mode)
+            result.duration_s = round(time.monotonic() - started, 1)
+            results.append(result)
+    return {mode: [r for t, r in zip(tasks, results) if t.mode == mode] for mode in subdirs}
+
+
 def run_all(
-    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str, mode: str = "python"
+    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str, mode: str = "python", jobs: int = 1
 ) -> list[RunResult]:
-    """Run every ``(setup, parameter_set)`` pair in ``config``.
+    """Run every ``(setup, parameter_set)`` pair in ``config`` in one mode.
 
     For each pair, sets ``result_directory = base_root/subdir/<setup_id>/<param_id>/``,
     creates parent directories, and calls :func:`run_one` in the given ``mode``
-    (``"python"`` or ``"yaml"``). Returns one :class:`RunResult` per pair.
+    (``"python"`` or ``"yaml"``). With ``jobs`` above one the pairs run in child processes,
+    ``jobs`` at a time (:class:`ChildRuns`). Returns one :class:`RunResult` per pair, in pair
+    order either way. :func:`run_modes` is the same for several modes at once.
     """
-    results: list[RunResult] = []
-    for setup, param_set in select_pairs(config):
-        result_directory = str(base_root / subdir / setup.id / param_set.id)
-        Path(result_directory).mkdir(parents=True, exist_ok=True)
-        results.append(run_one(setup, param_set, result_directory, repo_root, mode=mode))
-    return results
+    return run_modes(config, base_root, repo_root, {mode: subdir}, jobs)[mode]
 
 
 def run_all_yaml(
-    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str
+    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str, jobs: int = 1
 ) -> list[RunResult]:
     """Run every pair via its recorded ``.energy_system.yaml`` twin (YAML mode).
 
     Thin ``mode="yaml"`` wrapper around :func:`run_all` so it can be injected as
     ``golden_check.main``'s ``run_fn`` (which expects the 4-argument signature).
     """
-    return run_all(config, base_root, repo_root, subdir, mode="yaml")
+    return run_all(config, base_root, repo_root, subdir, mode="yaml", jobs=jobs)
+
+
+class ChildRuns:
+    """Runs pairs in child processes, a few at a time, the way ``record_all_setups.py --jobs`` does.
+
+    Each child is this file run as a script with :data:`CHILD_FLAG` and one JSON argument naming
+    the pair; it calls :func:`run_one` and writes the :class:`RunResult` to a file the parent
+    reads back. Everything the child prints goes to ``<pair>.log`` in :data:`WORK_SUBDIR`, and a
+    child that ends without writing its result — a crash of the interpreter, or the kernel's
+    out-of-memory killer — becomes a ``run_error`` of that pair carrying the log's last lines.
+
+    The children keep the process-id default of the LoadProfileGenerator base index
+    (``PylpgWorkspace.default_base_index``) rather than borrowing from an ``LpgBaseIndexPool``:
+    a child killed mid-calculation leaves its ``C<index>`` directory behind, and with a pool the
+    next child borrowing that index would refuse to start in it.
+    """
+
+    #: The argument that makes this file run one pair instead of being a library.
+    CHILD_FLAG = "--run-pair"
+    #: Where the children's logs and result files go, below the check's own result directory.
+    WORK_SUBDIR = "_children"
+    #: How much of a failed child's log its ``run_error`` carries.
+    LOG_TAIL_LINES = 40
+
+    @classmethod
+    def command(cls, payload: str) -> list[str]:
+        """Return the command line of one child; a seam the tests replace."""
+        return [sys.executable, str(Path(__file__).resolve()), cls.CHILD_FLAG, payload]
+
+    @classmethod
+    def run_in_child(
+        cls,
+        setup: SetupConfig,
+        parameter_set: ParameterSetConfig,
+        result_directory: str,
+        repo_root: Path,
+        mode: str,
+        work_dir: Path,
+    ) -> RunResult:
+        """Run one pair in a child process and return its result. **Never raises** for the child's sake.
+
+        Every path handed to the child is absolute, because the child runs in ``repo_root`` and a
+        relative ``--results-root`` would otherwise name a different directory there.
+        """
+        work_dir = work_dir.resolve()
+        work_dir.mkdir(parents=True, exist_ok=True)
+        stem = f"{setup.id}__{parameter_set.id}"
+        log_path = work_dir / f"{stem}.log"
+        out_path = work_dir / f"{stem}.result.json"
+        out_path.unlink(missing_ok=True)
+        payload = json.dumps(
+            {
+                "setup": asdict(setup),
+                "parameter_set": asdict(parameter_set),
+                "result_directory": str(Path(result_directory).resolve()),
+                "repo_root": str(repo_root.resolve()),
+                "mode": mode,
+                "out": str(out_path),
+            }
+        )
+        # The child imports hisim and its sibling scripts; neither has to be installed for it.
+        env = dict(os.environ)
+        repo_of_this_file = str(Path(__file__).resolve().parent.parent)
+        env["PYTHONPATH"] = os.pathsep.join(p for p in (repo_of_this_file, env.get("PYTHONPATH", "")) if p)
+        started = time.monotonic()
+        with log_path.open("w", encoding="utf-8") as log:
+            completed = subprocess.run(
+                cls.command(payload), stdout=log, stderr=subprocess.STDOUT, cwd=repo_root, env=env, check=False
+            )
+        duration = round(time.monotonic() - started, 1)
+        if completed.returncode == 0 and out_path.exists():
+            result = RunResult(**json.loads(out_path.read_text(encoding="utf-8")))
+            result.duration_s = duration
+            return result
+        code = completed.returncode
+        how = f"was killed by signal {-code}" if code < 0 else f"exited with {code}"
+        if code in (-9, 137):
+            how += " (SIGKILL: on a CI runner, most likely the out-of-memory killer)"
+        lines = [line for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
+        tail = "\n".join(lines[-cls.LOG_TAIL_LINES:]) or "(the child wrote nothing)"
+        return RunResult(
+            setup_id=setup.id,
+            parameter_set_id=parameter_set.id,
+            result_directory=result_directory,
+            kpis={},
+            error=f"The child process running this pair {how} without reporting a result. "
+            f"Last lines of {log_path}:\n{tail}\n",
+            duration_s=duration,
+        )
+
+    @classmethod
+    def run_many(cls, tasks: Sequence[PairTask], repo_root: Path, jobs: int) -> list[RunResult]:
+        """Run the tasks ``jobs`` at a time in one pool, printing each verdict as it arrives.
+
+        The tasks start in the given order — a CI shard lists its heaviest pair first — and the
+        results come back in that order too, however the children were scheduled.
+        """
+        results: list[Optional[RunResult]] = [None] * len(tasks)
+        finished = 0
+        modes = sorted({task.mode for task in tasks})
+        print(f"Running {len(tasks)} run(s) ({', '.join(modes)}), {jobs} at a time.", flush=True)
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            futures = {
+                pool.submit(
+                    cls.run_in_child,
+                    task.setup,
+                    task.parameter_set,
+                    task.result_directory,
+                    repo_root,
+                    task.mode,
+                    task.work_dir,
+                ): position
+                for position, task in enumerate(tasks)
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                results[futures[future]] = result
+                finished += 1
+                status = "RAN  " if result.error is None else "ERROR"
+                print(
+                    f"[{finished}/{len(tasks)}] {status} {tasks[futures[future]].mode:6} "
+                    f"{result.setup_id} / {result.parameter_set_id} ({result.duration_s} s)",
+                    flush=True,
+                )
+        return [result for result in results if result is not None]
+
+    @classmethod
+    def child_main(cls, payload: str) -> int:
+        """The child's side: run the one pair the payload names and write its result file."""
+        data = json.loads(payload)
+        result = run_one(
+            SetupConfig(**data["setup"]),
+            ParameterSetConfig(**data["parameter_set"]),
+            data["result_directory"],
+            Path(data["repo_root"]),
+            mode=data["mode"],
+        )
+        Path(data["out"]).write_text(json.dumps(asdict(result)), encoding="utf-8")
+        return 0
 
 
 # ---------------------------------------------------------------------------
@@ -432,3 +666,9 @@ def environment_metadata(config_path: Path) -> dict[str, str]:
         "config_sha256": config_hash(config_path),
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3 or sys.argv[1] != ChildRuns.CHILD_FLAG:
+        sys.exit(f"usage: runner.py {ChildRuns.CHILD_FLAG} <pair as JSON>  (the child of a --jobs run)")
+    sys.exit(ChildRuns.child_main(sys.argv[2]))

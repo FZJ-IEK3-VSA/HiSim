@@ -11,8 +11,9 @@
 # 150 runs a day it would take some 9000 API requests to re-read the last month, against the
 # 1000 an hour GITHUB_TOKEN allows, so each sweep downloads the previous sweep's index, reads
 # only what is newer, and uploads the index again: an hour in which nothing was pushed costs a
-# handful of requests. Hourly rather than nightly because of the artifacts -- the four golden
-# workflows upload 88 of them per push to main, far more than one sweep a day can collect, and
+# handful of requests. Hourly rather than nightly because of the artifacts -- the golden
+# workflows uploaded 88 of them per push to main before they were sharded, and the rest of CI
+# still uploads far more than one sweep a day can collect, and
 # a record whose artifact is still uncollected a day later is given up on. The first run after
 # the index expires or is deleted starts cold and covers only as far back as its request
 # budget reaches; the following sweeps fill in from there.

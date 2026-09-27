@@ -11,7 +11,7 @@ temperature forecast and the yearly arrays the PV system reads.
 
 import datetime
 import math
-from typing import Any, ClassVar, Dict, List, Mapping, Optional
+from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional
 
 import pandas as pd
 
@@ -54,6 +54,16 @@ https://github.com/FZJ-IEK3-VSA/tsib
 """
 
 
+class WeatherYearNotImplementedError(NotImplementedError):
+    """A run sets ``SimulationParameters.weather_year``, which the weather cannot honour yet.
+
+    Selecting the rows of one year from a weather file and remapping them onto the calendar year is
+    PR C of ``roadmap/weather_year.md`` (hisim-wps1.3). Until it lands the parameter is accepted,
+    keyed and recorded, and the weather component refuses to build rather than silently reading the
+    file by position as if the parameter were unset.
+    """
+
+
 class Weather(Component):
     """Provide thermal and solar conditions of local weather."""
 
@@ -87,6 +97,12 @@ class Weather(Component):
     #: the series themselves as payload, so that the two keys chain Merkle-style and any change to the
     #: weather, its code included, moves every key downstream of it.
     SERIES_ARTIFACT_KEY: str = "weather_series_artifact_key"
+
+    #: The key this component publishes the year of the weather it delivers under: the run's
+    #: ``weather_year`` when set, otherwise the single year the data file declares, otherwise ``None``
+    #: (a test reference year, or a file declaring several years). The economics echo it
+    #: (``roadmap/weather_year.md``, decision 6).
+    WEATHER_YEAR_EFFECTIVE_KEY: str = "weather_year_effective"
 
     # Keys under which this component publishes its full-year series into the per-simulation
     # repository (``self.simulation_repository``). They live here, on the writer, so that the
@@ -142,6 +158,14 @@ class Weather(Component):
         """
         if my_simulation_parameters is None:
             raise ValueError("my_simulation_parameters was None")
+        if my_simulation_parameters.weather_year is not None:
+            raise WeatherYearNotImplementedError(
+                f"The simulation parameters set weather_year={my_simulation_parameters.weather_year}, but "
+                "selecting a weather year from the data file and remapping it onto the calendar year "
+                f"{my_simulation_parameters.year} is not implemented yet (hisim-wps1.3, "
+                "roadmap/weather_year.md). Leave weather_year unset to lay the file onto the calendar "
+                "year by position, as every run so far has."
+            )
         if my_display_config is None:
             my_display_config = DisplayConfig()
         self.last_timestep_with_update = -1
@@ -316,6 +340,7 @@ class Weather(Component):
             source_enum=self.weather_config.data_source,
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
+        self.publish_weather_year()
 
         calculation_inputs = self.build_calculation_inputs(location_dict)
         key = self.series_cache_key(calculation_inputs)
@@ -360,6 +385,65 @@ class Weather(Component):
         # own cache key without knowing anything about how they were made (spec §3.1). The digest is
         # enough: it already stands for the producer's code, its libraries and every input.
         self.simulation_repository.set_entry(self.SERIES_ARTIFACT_KEY, key.digest)
+
+    def publish_weather_year(self) -> None:
+        """Publish the year of the weather this run reads, and say when it is not the calendar year.
+
+        The readers lay the file's rows onto the calendar year by position and read no year from it
+        (``roadmap/weather_year.md``). The year the file itself declares is published under
+        :attr:`WEATHER_YEAR_EFFECTIVE_KEY` when it declares exactly one, and a file whose rows declare
+        years the calendar year is not among is said so at INFO: it is how every run so far has
+        worked, and not a fault.
+        """
+        calendar_year = self.my_simulation_parameters.year
+        weather_year = self.my_simulation_parameters.weather_year
+        try:
+            declared = WeatherSourceFiles.data_years(self.weather_config.data_source, self.weather_config.source_path)
+        except (ValueError, UnicodeDecodeError) as error:
+            # Unset, the year is only reported, never used: a file whose year cannot be read runs as it
+            # always has, with its year unknown.
+            log.information(f"the weather data file declares no readable year ({error}); its year is unknown")
+            declared = None
+        self.simulation_repository.set_entry(
+            self.WEATHER_YEAR_EFFECTIVE_KEY, self.effective_weather_year(weather_year, declared)
+        )
+        if weather_year is None and declared is not None and calendar_year not in declared:
+            log.information(self.positional_weather_note(declared, calendar_year))
+
+    @staticmethod
+    def effective_weather_year(weather_year: Optional[int], declared: Optional[FrozenSet[int]]) -> Optional[int]:
+        """The year of the weather a run delivers.
+
+        Args:
+            weather_year: the run's ``weather_year``, or ``None``.
+            declared: the years the data file declares, or ``None`` for a source with no data year.
+
+        Returns:
+            Optional[int]: ``weather_year`` when set; otherwise the file's year when it declares exactly
+            one; otherwise ``None``.
+        """
+        if weather_year is not None:
+            return weather_year
+        if declared is not None and len(declared) == 1:
+            return next(iter(declared))
+        return None
+
+    @staticmethod
+    def positional_weather_note(declared: FrozenSet[int], calendar_year: int) -> str:
+        """The one line that says a file's weather is laid onto another calendar year by position.
+
+        Args:
+            declared: the years the data file declares.
+            calendar_year: the run's calendar year.
+
+        Returns:
+            str: the note.
+        """
+        years = ", ".join(str(year) for year in sorted(declared))
+        return (
+            f"weather of {years} laid onto {calendar_year} by position; set weather_year to select a year "
+            "(hisim-wps1.3)"
+        )
 
     def build_calculation_inputs(self, location_dict: Dict[str, Any]) -> WeatherSeriesInputs:
         """Build the DTO the weather producer is a pure function of.

@@ -1,7 +1,7 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 from __future__ import annotations
 import os
-from typing import Any, List, Optional, Sequence
+from typing import Any, ClassVar, List, Optional, Sequence, Tuple
 import enum
 
 import datetime
@@ -10,6 +10,15 @@ from dataclasses import dataclass
 from hisim import log
 from hisim.caching.locations import CacheLocations
 from hisim.postprocessingoptions import PostProcessingOptions
+
+
+class WeatherYearError(ValueError):
+    """A ``weather_year`` that is not a year HiSim can select weather data for.
+
+    Raised by :class:`SimulationParameters` when the value is not an ``int`` (a ``bool`` included,
+    which Python would otherwise accept as one) or lies outside
+    :attr:`SimulationParameters.WEATHER_YEAR_RANGE`.
+    """
 
 
 @dataclass()
@@ -44,6 +53,7 @@ class SimulationParameters:
         multiple_buildings: bool = False,
         log_connections: bool = False,
         cache_directories: Optional[Sequence[str]] = None,
+        weather_year: Optional[int] = None,
     ):
         """Initialize the SimulationParameters.
 
@@ -79,6 +89,11 @@ class SimulationParameters:
                 first writable one, for a container that maps a read-only seed directory and a writable
                 one in (hisim-epc.22). Empty (the default) means the single
                 ``cache_dir_path``, exactly as before.
+            weather_year: The year whose weather the run reads, when it is not the calendar year
+                (``roadmap/weather_year.md``). ``None`` (the default) means today's behaviour: the
+                weather file's rows are laid onto the calendar year by position. ``self.year``
+                stays the calendar year either way. An int from 1900 to 2100; anything else raises
+                :class:`WeatherYearError`.
         """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
@@ -112,6 +127,39 @@ class SimulationParameters:
         # Whether a failed lifecycle cost engine fails the run (see require_lifecycle_costs). A
         # plain attribute for the same round-trip reason as the two above.
         self.lifecycle_costs_required: bool = False
+        # The year whose weather the run reads (roadmap/weather_year.md). A plain attribute rather
+        # than a dataclass field for the same round-trip reason as the three above: unset, every
+        # key, record and file this object produces stays byte-identical.
+        self.weather_year: Optional[int] = self.validated_weather_year(weather_year)
+
+    #: The years a ``weather_year`` may name, inclusive.
+    WEATHER_YEAR_RANGE: ClassVar[Tuple[int, int]] = (1900, 2100)
+
+    @classmethod
+    def validated_weather_year(cls, weather_year: Any) -> Optional[int]:
+        """Returns ``weather_year`` unchanged when it is ``None`` or a year in range, else refuses it.
+
+        Args:
+            weather_year: The value handed to the constructor.
+
+        Returns:
+            The value itself.
+
+        Raises:
+            WeatherYearError: When the value is not an int, is a bool, or lies outside
+                :attr:`WEATHER_YEAR_RANGE`.
+        """
+        if weather_year is None:
+            return None
+        first, last = cls.WEATHER_YEAR_RANGE
+        if isinstance(weather_year, bool) or not isinstance(weather_year, int):
+            raise WeatherYearError(
+                f"weather_year must be an int from {first} to {last}, not {weather_year!r} "
+                f"({type(weather_year).__name__})."
+            )
+        if not first <= weather_year <= last:
+            raise WeatherYearError(f"weather_year must lie from {first} to {last}, not {weather_year}.")
+        return weather_year
 
     def require_lifecycle_costs(self) -> None:
         """Makes a failure of the lifecycle cost engine fail the run instead of being logged.
@@ -363,7 +411,7 @@ class SimulationParameters:
                 self.timesteps,
                 self.country,
             )
-        )
+        ) + ("" if self.weather_year is None else f"###weather={self.weather_year}")
 
     def get_unique_key_as_list(self) -> List[str]:
         """Gets unique key from a simulation parameter class as list."""
@@ -374,7 +422,7 @@ class SimulationParameters:
             f"Seconds per timestep: {self.seconds_per_timestep}",
             f"Total number of timesteps: {self.timesteps}",
             f"Country: {self.country}",
-        ]
+        ] + ([] if self.weather_year is None else [f"Weather year: {self.weather_year}"])
 
     def cache_locations(self) -> "CacheLocations":
         """The ordered cache directories this calculation reads, and the first writable one it writes.

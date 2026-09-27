@@ -2,9 +2,11 @@
 
 import datetime
 from typing import Any
+import numpy as np
 import pandas as pd
+import pvlib
 import pytest
-from oemof.thermal.solar_thermal_collector import flat_plate_precalc
+from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate, flat_plate_precalc
 from hisim import sim_repository, component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
 from hisim.loadtypes import LoadTypes, Units
@@ -308,3 +310,154 @@ def test_the_timestep_reads_the_resolved_area() -> None:
         f"a 12 m2 collector gave {power_of[triplex]} W where a 4 m2 one gave "
         f"{power_of[single_family]} W; i_simulate is not reading the resolved area"
     )
+
+
+def _collector_heat_the_series_way(
+    config: solar_thermal_system.SolarThermalSystemConfig,
+    apparent_zenith: float,
+    solar_azimuth: float,
+    global_horizontal_irradiance_w_m2: float,
+    diffuse_horizontal_irradiance_w_m2: float,
+    ambient_air_temperature_deg_c: float,
+    temperature_collector_inlet_deg_c: float,
+) -> Any:
+    """The collector heat in W/m² exactly as i_simulate computed it before hisim-e194.
+
+    One-element pandas Series through ``pvlib.irradiance.dni``, ``get_total_irradiance`` and oemof's
+    ``calc_eta_c_flate_plate``: correct, and about 7 ms a call. Kept here as the reference the fast
+    path must equal bit for bit.
+    """
+    time_ind = datetime.datetime(2021, 1, 1)
+    apparent_zenith_series = pd.Series(apparent_zenith, index=[time_ind])
+    ghi = pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind])
+    dhi = pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind])
+    dni = pvlib.irradiance.dni(ghi=ghi, dhi=dhi, zenith=apparent_zenith_series)
+    total_irradiation = pvlib.irradiance.get_total_irradiance(
+        surface_tilt=config.tilt,
+        surface_azimuth=config.azimuth,
+        solar_zenith=apparent_zenith_series,
+        solar_azimuth=pd.Series(solar_azimuth, index=[time_ind]),
+        dni=dni.fillna(0),
+        ghi=ghi,
+        dhi=dhi,
+    )
+    collector_efficiency = calc_eta_c_flate_plate(
+        config.eta_0,
+        config.a_1_w_m2_k,
+        config.a_2_w_m2_k,
+        temperature_collector_inlet_deg_c,
+        config.delta_temperature_n_k,
+        pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
+        total_irradiation["poa_global"],
+    )
+    return (collector_efficiency * total_irradiation["poa_global"]).iloc[0]
+
+
+def _bits(value: Any) -> bytes:
+    """The float64 bit pattern of a value: tells 0.0 from -0.0 and one NaN from a number."""
+    return np.float64(value).tobytes()
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "apparent_zenith, solar_azimuth, ghi, dhi, ambient_deg_c, inlet_deg_c",
+    [
+        (28.3, 180.0, 870.0, 120.0, 25.0, 40.0),  # summer noon: the collector works
+        (28.3, 180.0, 870.0, 120.0, 25.0, 95.0),  # so hot an inlet the efficiency clips at zero
+        (75.0, 110.0, 140.0, 60.0, -3.0, 20.0),  # low winter morning sun
+        (89.2, 60.0, 4.0, 3.0, 5.0, 30.0),  # past the 88° zenith: pvlib drops the DNI as NaN
+        (60.0, 250.0, 100.0, 180.0, 12.0, 30.0),  # DHI above GHI: a negative DNI, dropped as NaN
+        (120.0, 0.0, 0.0, 0.0, 2.0, 30.0),  # night
+        (50.0, 200.0, 300.0, 300.0, 18.5, 18.5),  # overcast, no beam at all
+        (95.0, 320.0, -0.4, 0.0, 1.0, 45.0),  # a slightly negative night GHI in the weather file
+    ],
+)
+def test_the_fast_collector_equals_the_series_path(
+    apparent_zenith: float,
+    solar_azimuth: float,
+    ghi: float,
+    dhi: float,
+    ambient_deg_c: float,
+    inlet_deg_c: float,
+) -> None:
+    """The scalar collector calculation gives the old Series result bit for bit, edge cases included."""
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+
+    poa = solar_thermal_system.plane_of_array_irradiance_w_m2(
+        config.tilt, config.azimuth, apparent_zenith, solar_azimuth, ghi, dhi
+    )
+    fast = solar_thermal_system.flat_plate_collector_heat_w_m2(
+        config.eta_0,
+        config.a_1_w_m2_k,
+        config.a_2_w_m2_k,
+        inlet_deg_c,
+        config.delta_temperature_n_k,
+        ambient_deg_c,
+        poa,
+    )
+    reference = _collector_heat_the_series_way(
+        config, apparent_zenith, solar_azimuth, ghi, dhi, ambient_deg_c, inlet_deg_c
+    )
+
+    assert _bits(fast) == _bits(reference), f"fast path gave {fast!r}, the Series path {reference!r}"
+
+
+@pytest.mark.base
+def test_the_timestep_output_equals_the_series_path() -> None:
+    """``i_simulate``'s thermal power equals the old Series path at hand-picked steps of a real year.
+
+    Every hour of a summer and a winter day in Aachen, each at three inlet temperatures simulated
+    one after the other within the same timestep -- the way convergence iterations call it -- so
+    the per-timestep reuse of the plane-of-array irradiance is exercised against a changing storage.
+    """
+    repo = sim_repository.SimRepository()
+    mysim = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=3600)
+    my_weather = weather.Weather(config=weather.WeatherConfig.preset_aachen("Weather"), my_simulation_parameters=mysim)
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
+
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    config.area_m2 = 4
+    my_sts = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=mysim)
+    my_sts.set_sim_repo(repo)
+    my_sts.i_prepare_simulation()
+
+    fake_outputs = [
+        component.ComponentOutput(
+            "Fake", name, LoadTypes.ANY, Units.ANY, component_id=ComponentID("Fake" + name)
+        )
+        for name in ("ControlSignal", "InletTemperature")
+    ]
+    control, inlet = fake_outputs
+    my_sts.control_signal_channel.source_output = control
+    my_sts.water_temperature_input_channel.source_output = inlet
+    my_sts.t_out_channel.source_output = my_weather.air_temperature_output
+    my_sts.dhi_channel.source_output = my_weather.dhi_output
+    my_sts.ghi_channel.source_output = my_weather.ghi_output
+    fft.add_global_index_of_components([my_weather, my_sts, control, inlet])
+    stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_weather, my_sts, control, inlet]))
+    stsv.values[control.global_index] = 1
+
+    compared = 0
+    for day in (15, 183):
+        for hour in range(24):
+            timestep = day * 24 + hour
+            my_weather.i_simulate(timestep, stsv, False)
+            for inlet_deg_c in (20.0, 55.0, 35.5):
+                stsv.values[inlet.global_index] = inlet_deg_c
+                my_sts.i_simulate(timestep, stsv, False)
+                reference = config.area_m2 * _collector_heat_the_series_way(
+                    config,
+                    my_sts.solar_position["apparent_zenith"].iloc[timestep],
+                    my_sts.solar_position["azimuth"].iloc[timestep],
+                    stsv.values[my_weather.ghi_output.global_index],
+                    stsv.values[my_weather.dhi_output.global_index],
+                    stsv.values[my_weather.air_temperature_output.global_index],
+                    inlet_deg_c,
+                )
+                fast = stsv.values[my_sts.thermal_power_w_output_channel.global_index]
+                assert _bits(fast) == _bits(reference), (
+                    f"timestep {timestep}, inlet {inlet_deg_c} °C: {fast!r} against the Series path's {reference!r}"
+                )
+                compared += 1
+    assert compared == 2 * 24 * 3

@@ -2,12 +2,12 @@
 
 from copy import deepcopy
 import datetime
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Tuple
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
+import numpy as np
 import pandas as pd
 import pvlib
-from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate
 from hisim.component import (
     CapexCostDataClass,
     Component,
@@ -37,6 +37,69 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
+
+
+def plane_of_array_irradiance_w_m2(
+    surface_tilt: float,
+    surface_azimuth: float,
+    apparent_zenith: float,
+    solar_azimuth: float,
+    global_horizontal_irradiance_w_m2: float,
+    diffuse_horizontal_irradiance_w_m2: float,
+) -> np.float64:
+    """Return the irradiance on the collector plane of one instant, as pvlib works it out.
+
+    The same two pvlib calls the collector has always made -- ``pvlib.irradiance.dni`` and
+    ``pvlib.irradiance.get_total_irradiance`` with the isotropic sky -- fed one-element numpy arrays
+    instead of one-element pandas Series. pvlib applies the same numpy ufuncs to both and pandas
+    hands its arithmetic on so small a Series straight to numpy, so the result is bit for bit the
+    value the Series path gives, at a fraction of its cost (the Series path spent most of its
+    ~7 ms per call building indexes and DataFrames). ``tests/test_solar_thermal_system.py`` pins
+    the equality against the Series path.
+    """
+    zenith = np.array([apparent_zenith], dtype=np.float64)
+    ghi = np.array([global_horizontal_irradiance_w_m2], dtype=np.float64)
+    dhi = np.array([diffuse_horizontal_irradiance_w_m2], dtype=np.float64)
+    # pandas silences numpy's floating point warnings for Series arithmetic; so does this.
+    with np.errstate(all="ignore"):
+        direct_normal_irradiance = pvlib.irradiance.dni(ghi=ghi, dhi=dhi, zenith=zenith)
+        total_irradiation = pvlib.irradiance.get_total_irradiance(
+            surface_tilt=surface_tilt,
+            surface_azimuth=surface_azimuth,
+            solar_zenith=zenith,
+            solar_azimuth=np.array([solar_azimuth], dtype=np.float64),
+            # What Series.fillna(0) did: a NaN DNI (dark or below the horizon) counts as none.
+            dni=np.where(np.isnan(direct_normal_irradiance), 0.0, direct_normal_irradiance),
+            ghi=ghi,
+            dhi=dhi,
+        )
+    return np.float64(total_irradiation["poa_global"][0])
+
+
+def flat_plate_collector_heat_w_m2(
+    eta_0: float,
+    a_1: float,
+    a_2: float,
+    temperature_collector_inlet_deg_c: float,
+    delta_temperature_n_k: float,
+    ambient_air_temperature_deg_c: float,
+    collector_irradiance_w_m2: np.float64,
+) -> np.float64:
+    """Return the heat one square metre of flat plate collector delivers, in W/m².
+
+    ``oemof.thermal.solar_thermal_collector.calc_eta_c_flate_plate`` times the irradiance, for one
+    instant, written out in scalars. The operations and their order are oemof's, down to squaring
+    the temperature difference as a numpy float64 (which is what oemof's Series element is), so the
+    result is bit for bit what the Series call gave; ``tests/test_solar_thermal_system.py`` pins
+    that. An efficiency is clipped at zero, and with no irradiance it is zero.
+    """
+    delta_t = np.float64(temperature_collector_inlet_deg_c + delta_temperature_n_k - ambient_air_temperature_deg_c)
+    efficiency: float = 0
+    if collector_irradiance_w_m2 > 0:
+        eta = eta_0 - a_1 * delta_t / collector_irradiance_w_m2 - a_2 * delta_t**2 / collector_irradiance_w_m2
+        if eta > 0:
+            efficiency = eta
+    return np.float64(efficiency * collector_irradiance_w_m2)
 
 
 @dataclass_json
@@ -208,6 +271,14 @@ class SolarThermalSystem(Component):
         # Where the sun will be at every timestep, filled in i_prepare_simulation from the cache or
         # from pvlib. Nothing downstream of the sun is stored: see i_prepare_simulation.
         self.solar_position: pd.DataFrame = pd.DataFrame()
+        # The same two columns as plain arrays, for the per-timestep lookup in i_simulate.
+        self.apparent_zenith: np.ndarray = np.empty(0)
+        self.solar_azimuth: np.ndarray = np.empty(0)
+        # The plane-of-array irradiance of the timestep last calculated, keyed by the timestep and
+        # the weather it came from. It depends on the weather and the sun alone, not on the storage,
+        # so the convergence iterations of one timestep share one pvlib call.
+        self.plane_of_array_key: Optional[Tuple[int, float, float]] = None
+        self.plane_of_array_irradiance_w_m2: np.float64 = np.float64(0)
         self.cache_filepath: Optional[str] = None
 
         # Add inputs
@@ -657,6 +728,9 @@ class SolarThermalSystem(Component):
                 # forcing more digits does not help, because what loses precision is the read. See
                 # the note beside the read above.
                 self.solar_position.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
+        self.apparent_zenith = self.solar_position["apparent_zenith"].to_numpy(dtype=np.float64)
+        self.solar_azimuth = self.solar_position["azimuth"].to_numpy(dtype=np.float64)
+        self.plane_of_array_key = None
 
     def i_simulate(
         self,
@@ -673,46 +747,41 @@ class SolarThermalSystem(Component):
         temperature_collector_inlet_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
         # The collector is calculated every timestep, from this timestep's weather and this
         # timestep's storage temperature. Only the sun's position comes from the precomputation, and
-        # the three lines below are the body of oemof.thermal's flat_plate_precalc with its first
+        # the two stages below are the body of oemof.thermal's flat_plate_precalc with its first
         # stage lifted out -- see i_prepare_simulation for why that stage and no other.
         # Some more info on the equation:
         # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
-        time_ind = self.my_simulation_parameters.start_date + datetime.timedelta(
-            0,
-            self.my_simulation_parameters.seconds_per_timestep * timestep,
+        # The irradiance on the collector plane needs the weather and the sun only, so it is worked
+        # out once per timestep and shared by the timestep's convergence iterations.
+        plane_of_array_key = (timestep, global_horizontal_irradiance_w_m2, diffuse_horizontal_irradiance_w_m2)
+        if plane_of_array_key != self.plane_of_array_key:
+            self.plane_of_array_irradiance_w_m2 = plane_of_array_irradiance_w_m2(
+                surface_tilt=self.config.tilt,
+                surface_azimuth=self.config.azimuth,
+                apparent_zenith=self.apparent_zenith[timestep],
+                solar_azimuth=self.solar_azimuth[timestep],
+                global_horizontal_irradiance_w_m2=global_horizontal_irradiance_w_m2,
+                diffuse_horizontal_irradiance_w_m2=diffuse_horizontal_irradiance_w_m2,
+            )
+            self.plane_of_array_key = plane_of_array_key
+        # The efficiency depends on the storage's inlet temperature, so it is calculated every call.
+        collectors_heat_w_m2 = flat_plate_collector_heat_w_m2(
+            eta_0=self.config.eta_0,  # optical efficiency of the collector
+            a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
+            a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
+            temperature_collector_inlet_deg_c=temperature_collector_inlet_deg_c,
+            # difference between collector inlet and mean temperature
+            delta_temperature_n_k=self.config.delta_temperature_n_k,
+            ambient_air_temperature_deg_c=ambient_air_temperature_deg_c,
+            collector_irradiance_w_m2=self.plane_of_array_irradiance_w_m2,
         )
-        apparent_zenith = pd.Series(self.solar_position["apparent_zenith"].iloc[timestep], index=[time_ind])
-        azimuth = pd.Series(self.solar_position["azimuth"].iloc[timestep], index=[time_ind])
-        global_horizontal_irradiance = pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind])
-        diffuse_horizontal_irradiance = pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind])
 
-        direct_normal_irradiance = pvlib.irradiance.dni(
-            ghi=global_horizontal_irradiance, dhi=diffuse_horizontal_irradiance, zenith=apparent_zenith
-        )
-        total_irradiation = pvlib.irradiance.get_total_irradiance(
-            surface_tilt=self.config.tilt,
-            surface_azimuth=self.config.azimuth,
-            solar_zenith=apparent_zenith,
-            solar_azimuth=azimuth,
-            dni=direct_normal_irradiance.fillna(0),  # fill NaN values with '0'
-            ghi=global_horizontal_irradiance,
-            dhi=diffuse_horizontal_irradiance,
-        )
-        collector_efficiency = calc_eta_c_flate_plate(
-            self.config.eta_0,  # optical efficiency of the collector
-            self.config.a_1_w_m2_k,  # thermal loss parameter 1
-            self.config.a_2_w_m2_k,  # thermal loss parameter 2
-            temperature_collector_inlet_deg_c,  # collectors inlet temperature
-            self.config.delta_temperature_n_k,  # difference between collector inlet and mean temperature
-            pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
-            total_irradiation["poa_global"],
-        )
-        collectors_heat = collector_efficiency * total_irradiation["poa_global"]
+        thermal_power_output_w: float = collectors_heat_w_m2 * self.area_m2
 
-        thermal_power_output_w = collectors_heat.iloc[0] * self.area_m2
-
-        thermal_energy_output_wh = thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
-        required_mass_flow_output_kg_s = thermal_power_output_w / (
+        thermal_energy_output_wh: float = (
+            thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+        )
+        required_mass_flow_output_kg_s: float = thermal_power_output_w / (
             PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=loadtypes.LoadTypes.WATER
             ).specific_heat_capacity_in_joule_per_kg_per_kelvin
@@ -732,7 +801,7 @@ class SolarThermalSystem(Component):
         if control_signal == 0:
             # If the controller signals 'off', the solar pump does not pump the solar fluid from
             # the collector to the storage
-            mass_flow_output_kg_s = 0
+            mass_flow_output_kg_s: float = 0
             thermal_power_output_w = 0
             thermal_energy_output_wh = 0
             electric_power_demand_solar_pump_w = 0

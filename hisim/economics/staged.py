@@ -1499,7 +1499,7 @@ class StagedEvaluator:
             if facts is None:
                 continue
             year = last_install[subject]
-            life = self._service_life(facts, price_basis_year, parameters)
+            life, _origin = self._service_life(facts, price_basis_year, parameters)
             fraction = InvestmentDating.residual_fraction(year, life, horizon)
             if fraction <= 0.0:
                 continue
@@ -1526,8 +1526,8 @@ class StagedEvaluator:
 
     def _service_life(
         self, facts: ComponentCostFacts, price_basis_year: int, parameters: EconomicParameters
-    ) -> float:
-        """One subject's service life in years, by the same chain the engine's pricing uses.
+    ) -> Tuple[float, LifeOrigin]:
+        """One subject's service life in years and where it came from, by the engine's chain.
 
         An explicit ``lifetime_override_in_years`` wins, exactly as it does in
         ``calculators/context_resolution.py``; otherwise the cost database's entry for the
@@ -1541,15 +1541,17 @@ class StagedEvaluator:
             parameters: The assumptions, for the country whose device file is read.
 
         Returns:
-            The service life in years.
+            ``(years, origin)``: the service life, and :attr:`LifeOrigin.REQUEST` for the override
+            or :attr:`LifeOrigin.COST_DATABASE` for the database's entry -- decided in the same
+            branch that picks the number, so the two cannot disagree.
 
         Raises:
             hisim.economics.database.CostDataError: If neither source states one.
         """
         if facts.lifetime_override_in_years is not None:
-            return float(facts.lifetime_override_in_years)
+            return float(facts.lifetime_override_in_years), LifeOrigin.REQUEST
         entry = self.database.get_device_entry(facts.asset_class, price_basis_year, parameters.country)
-        return float(entry.service_life_in_years)
+        return float(entry.service_life_in_years), LifeOrigin.COST_DATABASE
 
     def _subject_lives(
         self,
@@ -1594,11 +1596,10 @@ class StagedEvaluator:
                 ).kept_asset
                 if kept is not None:
                     year, year_origin = kept.installation_year, kept.installation_year_origin
+            service_life_years, service_life_origin = self._service_life(facts, price_basis_year, parameters)
             lives[subject_facts.subject] = SubjectLife(
-                service_life_years=self._service_life(facts, price_basis_year, parameters),
-                service_life_origin=(
-                    LifeOrigin.REQUEST if facts.lifetime_override_in_years is not None else LifeOrigin.COST_DATABASE
-                ),
+                service_life_years=service_life_years,
+                service_life_origin=service_life_origin,
                 installation_year=year,
                 installation_year_origin=year_origin,
             )

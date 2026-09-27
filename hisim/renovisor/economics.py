@@ -36,7 +36,7 @@ a reviewed constant of :mod:`hisim.renovisor.constants`.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
 from hisim.economics.adapter import FactsExtractors
 from hisim.economics.bridge import EconomicContext
@@ -62,6 +62,7 @@ from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
+from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import House, Measure, Request
 from hisim.renovisor.simulation import SimulationSetup
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ReportStatus, ThermalElement
@@ -428,9 +429,8 @@ class MeasureSubjects:
     """
 
     #: The statuses of a measure the translation acts on -- the ones a stage's ``measures`` list
-    #: carries (``hisim.economics.__main__.StagedCli.STAGE_MEASURE_STATUSES``, which
-    #: ``tests/renovisor/test_economics_context.py`` pins equal to these).
-    ACTED_ON: ClassVar[Tuple[ReportStatus, ...]] = (ReportStatus.USED, ReportStatus.APPROXIMATED)
+    #: carries; defined once, on the mapping report.
+    ACTED_ON: ClassVar[Tuple[ReportStatus, ...]] = MappingReport.ACTED_ON_STATUSES
 
     #: Measures that cost nothing to carry out -> the note their row carries.
     COSTLESS: ClassVar[Dict[str, str]] = {
@@ -472,17 +472,50 @@ class MeasureSubjects:
             result: The result being assembled; its ``subjects``, ``unpriced_subjects``,
                 ``costless_subjects`` and ``subject_notes`` are extended.
         """
-        for measure_id in cls.acted_on(applied):
-            if measure_id in result.subjects.values():
+        cls.declare(
+            cls.acted_on(applied),
+            result.subjects,
+            unpriced=result.unpriced_subjects,
+            costless=result.costless_subjects,
+            notes=result.subject_notes,
+        )
+
+    @classmethod
+    def declare(
+        cls,
+        measure_ids: Iterable[str],
+        subjects: Dict[str, Optional[str]],
+        unpriced: List[str],
+        costless: List[str],
+        notes: Dict[str, str],
+    ) -> None:
+        """Sort acted-on measures into the costless and the unpriced ones, each with its note.
+
+        The one place the declarations become subjects: the translator calls it through
+        :meth:`record`, and the staged command calls it for a mapping report written before
+        renovisorissues #58, which is what a re-translation of that stage would write. A measure
+        that already stands for a subject, or that is not declared, is left alone.
+
+        Args:
+            measure_ids: The ids of the measures acted on.
+            subjects: Subject -> measure; a declared measure gets a subject named by its id.
+            unpriced: The unpriced subjects; extended in place.
+            costless: The costless subjects; extended in place.
+            notes: Subject -> note; a note already there is kept.
+        """
+        for measure_id in measure_ids:
+            if measure_id in subjects.values():
                 continue
             if measure_id in cls.COSTLESS:
-                result.subjects[measure_id] = measure_id
-                result.costless_subjects.append(measure_id)
-                result.subject_notes[measure_id] = cls.COSTLESS[measure_id]
+                flagged, note = costless, cls.COSTLESS[measure_id]
             elif measure_id in cls.UNPRICED:
-                result.subjects[measure_id] = measure_id
-                result.unpriced_subjects.append(measure_id)
-                result.subject_notes[measure_id] = cls.UNPRICED[measure_id]
+                flagged, note = unpriced, cls.UNPRICED[measure_id]
+            else:
+                continue
+            subjects[measure_id] = measure_id
+            if measure_id not in flagged:
+                flagged.append(measure_id)
+            notes.setdefault(measure_id, note)
 
     @classmethod
     def assert_every_measure_has_subject(cls, applied: Any, result: "EconomicContextResult") -> None:
@@ -1359,7 +1392,8 @@ class EconomicContextBuilder:
                     replaced = [successor[1].asset_class]
                 else:
                     removed = self.EQUIPMENT_REMOVED_NOTE.format(measure=equipment.measure_id)
-            stated = self._stated_year(self._raw_original.get(equipment.dated_by)) if equipment.dated_by else None
+            block = self._raw_original.get(equipment.dated_by) if equipment.dated_by else None
+            stated = self._stated_year(block)
             if stated is not None:
                 year = stated
                 dated = f"house.{equipment.dated_by}.{self.INSTALLATION_YEAR_KEY} as the request states it"
@@ -1375,9 +1409,7 @@ class EconomicContextBuilder:
                     installation_year=year,
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
-                    installation_year_origin=(
-                        InstallationYearOrigin.MID_LIFE_DEFAULT if stated is None else InstallationYearOrigin.REQUEST
-                    ),
+                    installation_year_origin=self._year_origin(block, InstallationYearOrigin.MID_LIFE_DEFAULT),
                 )
             )
             if result is not None:

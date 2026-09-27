@@ -761,7 +761,10 @@ class TestAMeasureWithoutAPricedSubject:
 
     def test_an_old_report_is_completed_from_the_translators_declarations(self, workspace):
         """A cached job's report from before #58 carries neither key; the declarations stand in."""
-        from hisim.renovisor.economics import MeasureSubjects  # pylint: disable=import-outside-toplevel
+        from hisim.renovisor.economics import (  # pylint: disable=import-outside-toplevel
+            EconomicContextBuilder,
+            MeasureSubjects,
+        )
         from hisim.renovisor.report import MappingReport  # pylint: disable=import-outside-toplevel
 
         lagging = "hot_water_tank_and_pipe_insulation"
@@ -784,7 +787,10 @@ class TestAMeasureWithoutAPricedSubject:
         assert setting["note"] == MeasureSubjects.COSTLESS[self.MEASURE]
         assert (lagged["measure_id"], lagged["unpriced"]) == (lagging, True)
         assert lagged["note"] == MeasureSubjects.UNPRICED[lagging]
-        assert rows[SyntheticPlan.ENVELOPE_SUBJECT]["unpriced"] is True
+        envelope = rows[SyntheticPlan.ENVELOPE_SUBJECT]
+        assert envelope["unpriced"] is True
+        # The report names the unpriced envelope subject without a note; the translator's stands in.
+        assert envelope["note"] == EconomicContextBuilder.UNPRICED_NOTE
 
     def test_an_old_report_with_an_undeclared_measure_is_still_refused(self, workspace, capsys):
         """The fallback covers the declared measures only; anything else is still exit 3."""

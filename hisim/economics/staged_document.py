@@ -237,7 +237,9 @@ class SubjectKindNames:
     rest of the document's own enumerations (statuses, event kinds) use.
     """
 
-    #: A device or an envelope measure — something that was bought.
+    #: A device or an envelope measure — something that was bought — and also the zero row of a
+    #: measure the engine prices no subject for (a setting, a measure HiSim holds no price for),
+    #: which is carried out rather than billed.
     COMPONENT: ClassVar[str] = "component"
 
     #: An energy carrier — something that was billed.
@@ -557,8 +559,8 @@ class StagedDocument:
                             "does not grant."
                         )
 
-    @classmethod
-    def assert_every_measure_has_row(cls, document: Mapping[str, Any]) -> None:
+    @staticmethod
+    def assert_every_measure_has_row(document: Mapping[str, Any]) -> None:
         """Raise unless every measure a stage carries out has a ``by_subject`` row naming it.
 
         The plan carries out every measure of every stage's ``measures``, the reference those of
@@ -761,7 +763,8 @@ class StagedDocument:
         register year, from which its replacements are scheduled, or the start of the stage that
         bought it -- and ``installation_year_origin`` where that came from
         (:class:`~hisim.economics.facts.InstallationYearOrigin`). All four are ``null`` on a
-        carrier row and on a measure-only row, which have no lifetime (renovisorissues #58).
+        carrier row, on a synthetic subject's row (financing, replacement reserve, CO2 damage) and
+        on a measure-only row, which have no lifetime the engine prices (renovisorissues #58).
         ``note`` says why a row has no price or costs nothing, and is ``null`` otherwise.
 
         A measure the engine prices no subject for -- a setting, or one HiSim holds no price for
@@ -779,35 +782,19 @@ class StagedDocument:
             if not staged and measure_id not in reference_measures:
                 measure_id = None
             rows.append(
-                {
-                    "subject": subject,
-                    "kind": SubjectKindNames.of(breakdown.subject_kind),
-                    "asset_class": breakdown.asset_class.value if breakdown.asset_class else None,
-                    "measure_id": measure_id,
-                    "stage": self._result.stage_of_subject(subject) if staged else None,
-                    "unpriced": subject in self._unpriced,
-                    "npv_in_euro": self._band(breakdown.total_npv_in_euro),
-                    "investment_in_euro": self._band(breakdown.investment_gross_in_euro),
-                    "investment_by_stage": [
-                        {"stage": stage, "investment_in_euro": self._band(amount)}
-                        for stage, amount in sorted(by_stage.get(subject, {}).items())
-                    ],
-                    "subsidy_in_euro": self._band(
-                        categories.get(CostCategory.SUBSIDY, UncertainValue.exact(0.0))
-                    ),
-                    "replacements_in_euro": self._band(
-                        categories.get(CostCategory.REPLACEMENT, UncertainValue.exact(0.0))
-                    ),
-                    "maintenance_in_euro": self._band(
-                        categories.get(CostCategory.MAINTENANCE, UncertainValue.exact(0.0))
-                    ),
-                    "residual_value_in_euro": self._band(
-                        categories.get(CostCategory.RESIDUAL_VALUE, UncertainValue.exact(0.0))
-                    ),
-                    **self._life_fields(subject, staged),
-                    "replacement_years": replacements.get(subject, []),
-                    "note": self._notes.get(subject),
-                }
+                self._row(
+                    subject,
+                    kind=SubjectKindNames.of(breakdown.subject_kind),
+                    asset_class=breakdown.asset_class.value if breakdown.asset_class else None,
+                    measure_id=measure_id,
+                    stage=self._result.stage_of_subject(subject) if staged else None,
+                    npv=breakdown.total_npv_in_euro,
+                    investment=breakdown.investment_gross_in_euro,
+                    investment_by_stage=sorted(by_stage.get(subject, {}).items()),
+                    categories=categories,
+                    life=self._life_fields(subject, staged),
+                    replacement_years=replacements.get(subject, []),
+                )
             )
         rows.extend(self._measure_only_rows(result, staged))
         return sorted(rows, key=lambda row: row["subject"])
@@ -843,7 +830,9 @@ class StagedDocument:
         its breakdown row instead and gets none here, and so does one any stage has cost facts for:
         if the engine lost such a subject's row, :meth:`assert_every_measure_has_row` says so.
         Every band is an exact zero, so every sum the document states is unchanged; lifetime and
-        age are ``null``: nothing was installed that ages. On the plan the row's ``stage`` is the
+        age are ``null`` because nothing prices the measure, so no life is read for it: a setting
+        installs nothing, and the lagging of the cylinder does age, but HiSim holds no price and
+        so no lifetime for it. On the plan the row's ``stage`` is the
         first stage carrying the measure out and ``investment_by_stage`` states that stage's zero,
         as an unpriced envelope row does; on the reference a row exists only for a measure
         ``stages[0]`` itself carries out.
@@ -855,7 +844,7 @@ class StagedDocument:
         Returns:
             The rows, unsorted.
         """
-        zero = self._band(UncertainValue.exact(0.0))
+        zero = UncertainValue.exact(0.0)
         rows: List[Dict[str, Any]] = []
         stages = self._result.stages if staged else self._result.stages[:1]
         priced = {facts.subject for stage in self._result.stages for facts in stage.inputs.cost_facts}
@@ -868,28 +857,75 @@ class StagedDocument:
                 continue
             stage = carried_out[0] if staged else None
             rows.append(
-                {
-                    "subject": subject,
-                    "kind": SubjectKindNames.COMPONENT,
-                    "asset_class": None,
-                    "measure_id": measure_id,
-                    "stage": stage,
-                    "unpriced": subject in self._unpriced,
-                    "npv_in_euro": zero,
-                    "investment_in_euro": zero,
-                    "investment_by_stage": (
-                        [{"stage": stage, "investment_in_euro": zero}] if stage is not None else []
-                    ),
-                    "subsidy_in_euro": zero,
-                    "replacements_in_euro": zero,
-                    "maintenance_in_euro": zero,
-                    "residual_value_in_euro": zero,
-                    **self.NO_LIFE,
-                    "replacement_years": [],
-                    "note": self._notes.get(subject),
-                }
+                self._row(
+                    subject,
+                    kind=SubjectKindNames.COMPONENT,
+                    asset_class=None,
+                    measure_id=measure_id,
+                    stage=stage,
+                    npv=zero,
+                    investment=zero,
+                    investment_by_stage=[(stage, zero)] if stage is not None else [],
+                    categories={},
+                    life=self.NO_LIFE,
+                    replacement_years=[],
+                )
             )
         return rows
+
+    def _row(
+        self,
+        subject: str,
+        kind: str,
+        asset_class: Optional[str],
+        measure_id: Optional[str],
+        stage: Optional[int],
+        npv: UncertainValue,
+        investment: UncertainValue,
+        investment_by_stage: Iterable[Tuple[int, UncertainValue]],
+        categories: Mapping[CostCategory, UncertainValue],
+        life: Mapping[str, Any],
+        replacement_years: List[int],
+    ) -> Dict[str, Any]:
+        """One ``by_subject`` row: the one place its key set is written.
+
+        Args:
+            subject: The cost subject.
+            kind: Its :class:`SubjectKindNames` word.
+            asset_class: Its asset class's value, or ``None``.
+            measure_id: The measure that created it, or ``None``.
+            stage: The stage it is attributed to, or ``None`` off the plan.
+            npv: Its net present value.
+            investment: Its gross investment.
+            investment_by_stage: ``(stage, amount)`` per stage that paid into it, ascending.
+            categories: Its NPV by cost category; a category it lacks is an exact zero.
+            life: The four lifetime and age fields (:meth:`_life_fields`, :attr:`NO_LIFE`).
+            replacement_years: The years its replacements fall in.
+
+        Returns:
+            The row, in the key order of the schema.
+        """
+        zero = UncertainValue.exact(0.0)
+        return {
+            "subject": subject,
+            "kind": kind,
+            "asset_class": asset_class,
+            "measure_id": measure_id,
+            "stage": stage,
+            "unpriced": subject in self._unpriced,
+            "npv_in_euro": self._band(npv),
+            "investment_in_euro": self._band(investment),
+            "investment_by_stage": [
+                {"stage": index, "investment_in_euro": self._band(amount)} for index, amount in investment_by_stage
+            ],
+            "subsidy_in_euro": self._band(categories.get(CostCategory.SUBSIDY, zero)),
+            "replacements_in_euro": self._band(categories.get(CostCategory.REPLACEMENT, zero)),
+            "maintenance_in_euro": self._band(categories.get(CostCategory.MAINTENANCE, zero)),
+            "residual_value_in_euro": self._band(categories.get(CostCategory.RESIDUAL_VALUE, zero)),
+            **life,
+            "replacement_years": replacement_years,
+            "note": self._notes.get(subject),
+        }
 
     def _investment_by_stage(self, result: LifecycleCostResult) -> Dict[str, Dict[int, UncertainValue]]:
         """Each subject's gross purchase on the plan's timeline, split by the stage that made it.

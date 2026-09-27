@@ -958,7 +958,8 @@ class Translator:
         MeasureSubjects.assert_every_measure_has_subject(applied, built)
         report.set_subjects(built.subjects)
         report.set_unpriced_subjects(built.unpriced_subjects)
-        report.set_costless_subjects(built.costless_subjects, built.subject_notes)
+        report.set_costless_subjects(built.costless_subjects)
+        report.set_subject_notes(built.subject_notes)
         for path, value, note in built.defaults:
             if not report.has(path):
                 report.defaulted(path, value, note)

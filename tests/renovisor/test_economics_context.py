@@ -65,7 +65,9 @@ from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalEleme
 from hisim.renovisor.translate import Targets, Translator
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
-pytestmark = pytest.mark.base
+# No module-level mark: every class carries ``base`` itself, except the one test that translates
+# the whole catalogue, which is ``extendedbase`` (a test carries exactly one of the shard marks,
+# and a module-level mark cannot be taken back for one test).
 
 
 def _mockup() -> Dict[str, Any]:
@@ -152,6 +154,7 @@ def _builder(document: Dict[str, Any], with_cost_block: bool = False) -> Economi
     )
 
 
+@pytest.mark.base
 class TestTheRegister:
     """What was already in the building, how old it is, and what supersedes it."""
 
@@ -342,6 +345,7 @@ class TestTheRegister:
         assert array.replaced_by_asset_classes == [ComponentType.PV]
 
 
+@pytest.mark.base
 class TestTheEnvelopeCostSubjects:
     """One cost subject per envelope measure, priced from the request or flagged unpriced."""
 
@@ -405,6 +409,7 @@ class TestTheEnvelopeCostSubjects:
         assert facts["external_insulation"].size_unit is Units.SQUARE_METER
 
 
+@pytest.mark.base
 class TestTheMappingReportHalf:
     """The two maps the staged evaluator reads back out of ``mapping_report.json``."""
 
@@ -472,6 +477,7 @@ class TestTheMappingReportHalf:
         ]
 
 
+@pytest.mark.base
 class TestTheEnvelopeInstallationYears:
     """hisim-glv7: an element's stated year counts only where a measure replaces or insulates it.
 
@@ -550,6 +556,7 @@ class TestTheEnvelopeInstallationYears:
         assert not _built(document).unread
 
 
+@pytest.mark.base
 class TestTheSubsidyContext:
     """Who is applying, and what stays unanswered rather than false."""
 
@@ -770,6 +777,7 @@ def _heat_pump_assessments(context: SubsidyContext) -> Dict[str, SchemeAssessmen
     return assessments
 
 
+@pytest.mark.base
 class TestTheExistingHeating:
     """The generator the package replaces answers the subsidy questions about it (renovisorissues #50).
 
@@ -824,6 +832,7 @@ class TestTheExistingHeating:
         assert not {name for name in asked if name.startswith("building.existing_heating.")}
 
 
+@pytest.mark.base
 class TestTheTechnicalAttributes:
     """What a subsidy condition may ask about a subject that its asset class does not say."""
 
@@ -891,6 +900,7 @@ class TestTheTechnicalAttributes:
         assert all("scop" not in path for path, _value, _note in leaves)
 
 
+@pytest.mark.base
 class TestTheCatalogueTheRunIsPointedAt:
     """Step 11 §3.12: a country whose catalogue ships is evaluated against it, not at NONE.
 
@@ -931,6 +941,7 @@ class TestTheCatalogueTheRunIsPointedAt:
         assert economic.subsidy_catalog_path is None
 
 
+@pytest.mark.base
 class TestTheTables:
     """The two naming tables, which are the translation and not a calculation."""
 
@@ -1110,6 +1121,7 @@ def _realized(model: Any, component: str) -> Any:
     raise KeyError(component)
 
 
+@pytest.mark.base
 class TestTheEquipmentTheHouseAlreadyHas:
     """renovisorissues #48 and hisim-fig7: the buffer, the cylinder, the emitters and the meters.
 
@@ -1330,6 +1342,7 @@ class TestEveryMeasureHasASubject:
                 priced[name] = facts.asset_class.name
         return priced
 
+    @pytest.mark.extendedbase  # one translation per catalogue measure, ~12 s: not unit-scale
     def test_every_measure_the_translator_acts_on_yields_a_row(self) -> None:
         """A priced subject, or a declared costless or unpriced one -- and the declarations are exact."""
         from hisim.renovisor.request import CatalogueTable  # pylint: disable=import-outside-toplevel
@@ -1353,6 +1366,7 @@ class TestEveryMeasureHasASubject:
                 assert all(subject in report["subject_notes"] for subject in subjects), measure_id
         assert declared_only == set(MeasureSubjects.COSTLESS) | set(MeasureSubjects.UNPRICED)
 
+    @pytest.mark.base
     def test_the_setting_is_costless_and_the_lagging_unpriced(self) -> None:
         """The two declared measures, each with its own subject, flag and note."""
         setting = self._probe("change_room_temperature").report.to_json()
@@ -1369,19 +1383,98 @@ class TestEveryMeasureHasASubject:
         assert "hisim-5j3h" in lagging["subject_notes"][subject]
         assert "renovisorissues #39" in lagging["subject_notes"][subject]
 
+    @pytest.mark.base
     def test_an_undeclared_measure_without_a_subject_fails_the_translation(self, monkeypatch) -> None:
         """Fail loudly: the translation is refused rather than a row silently missing."""
         monkeypatch.setattr(MeasureSubjects, "COSTLESS", {})
         with pytest.raises(TranslatorError, match="change_room_temperature"):
             self._probe("change_room_temperature")
 
-    def test_the_acted_on_statuses_are_the_ones_a_stage_lists(self) -> None:
-        """The staged command lists a stage's measures by the same statuses the check walks."""
-        from hisim.economics.__main__ import StagedCli  # pylint: disable=import-outside-toplevel
 
-        assert tuple(status.value for status in MeasureSubjects.ACTED_ON) == StagedCli.STAGE_MEASURE_STATUSES
+@pytest.mark.base
+class TestAnUnpricedEnvelopeRowSaysWhy:
+    """The translator's note on an unpriced envelope subject reaches its ``by_subject`` row."""
+
+    def test_the_documents_row_carries_the_translators_note(self, tmp_path) -> None:
+        """A real translation's report, read as the staged command reads it, into a written document.
+
+        The envelope measure carries no cost block, so the translator flags its subject unpriced
+        and notes why; the stage prices the translator's own subject facts beside the synthetic
+        boiler, so the row's subject is the one the translator named.
+        """
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.__main__ import StagedCli
+        from hisim.economics.parameters import EconomicParameters
+        from hisim.economics.staged import StagedEvaluator
+        from hisim.economics.staged_document import StagedDocument
+        from tests.economics.synthetic_stages import (
+            SyntheticPlan,
+            baseline_stage,
+            brownfield_perspective,
+            envelope_stage,
+            write_database,
+        )
+
+        document = _mockup()
+        del next(measure for measure in document["measures"] if measure["id"] == "external_insulation")["cost"]
+        translated = _translated(document)
+        envelope = next(
+            facts for facts in translated.economic_context.extra_cost_facts if facts.subject == "external_insulation"
+        )
+        # The synthetic database prices no device, so what the translator leaves to the real one
+        # is stated as the synthetic subjects state it; subject, class, size and the unpriced zero
+        # investment stay the translator's.
+        envelope = dataclasses.replace(
+            envelope,
+            facts=dataclasses.replace(
+                envelope.facts,
+                lifetime_override_in_years=SyntheticPlan.LIFETIME_IN_YEARS,
+                maintenance_rate_override=UncertainValue.exact(SyntheticPlan.MAINTENANCE_RATE),
+                fixed_operation_cost_override_in_euro_per_year=UncertainValue.exact(0.0),
+                embodied_co2_override_in_kg=0.0,
+            ),
+        )
+        stage_directory = tmp_path / "stage"
+        stage_directory.mkdir()
+        (stage_directory / StagedCli.MAPPING_REPORT_FILE_NAME).write_text(
+            json.dumps(translated.report.to_json()), encoding="utf-8"
+        )
+        mapping = StagedCli.read_mapping([str(stage_directory)])
+        assert "external_insulation" in mapping.unpriced
+
+        baseline = baseline_stage()
+        stage = dataclasses.replace(
+            envelope_stage(0),
+            inputs=dataclasses.replace(baseline.inputs, cost_facts=[*baseline.inputs.cost_facts, envelope]),
+            measures=("external_insulation",),
+        )
+        parameters = EconomicParameters(
+            observation_period_in_years=SyntheticPlan.HORIZON,
+            interest_rate=SyntheticPlan.INTEREST_RATE,
+            country=SyntheticPlan.COUNTRY,
+            price_basis_year=SyntheticPlan.YEAR,
+            co2_price_scenario="none",
+            apply_subsidies=False,
+        )
+        perspective = brownfield_perspective()
+        database = write_database(str(tmp_path / "database"))
+        result = StagedEvaluator(database).evaluate([baseline, stage], parameters, perspective)
+        written = StagedDocument(
+            result,
+            parameters,
+            perspective,
+            measure_ids=mapping.measure_ids,
+            unpriced_subjects=mapping.unpriced,
+            costless_subjects=mapping.costless,
+            subject_notes=mapping.notes,
+        ).write(tmp_path / StagedDocument.FILE_NAME)
+
+        row = {row["subject"]: row for row in written["plan"]["by_subject"]}["external_insulation"]
+        assert (row["measure_id"], row["unpriced"]) == ("external_insulation", True)
+        assert row["note"] == EconomicContextBuilder.UNPRICED_NOTE
 
 
+@pytest.mark.base
 class TestTheRegisterSaysWhereEachYearCameFrom:
     """Every register entry says whether its year was stated or assumed (renovisorissues #58)."""
 

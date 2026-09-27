@@ -150,6 +150,37 @@ class TestTheSchema:
         broken["plan"]["subsidies"][0].update(amount_in_euro=zero, amount_by_year_in_euro=[])
         StagedDocument.validate(broken)
 
+    #: One by_subject row edit per pairing the schema's descriptions promise, each breaking only it.
+    #: ``priced`` edits a row with a lifetime, ``lifeless`` one with all four life fields null.
+    BROKEN_LIFE_PAIRINGS = [
+        ("priced", {"service_life_origin": None}),
+        ("lifeless", {"service_life_origin": "cost_database"}),
+        ("priced", {"installation_year": None, "installation_year_origin": None}),
+        ("lifeless", {"installation_year": 2024}),
+        ("lifeless", {"installation_year_origin": "stage"}),
+    ]
+
+    @pytest.mark.parametrize("which, edit", BROKEN_LIFE_PAIRINGS)
+    def test_a_row_breaking_a_life_pairing_is_rejected(self, document, which, edit):
+        """Life and origin, life and year, year and its origin: null together, as the schema says."""
+        import jsonschema
+
+        broken = json.loads(json.dumps(document))
+        rows = broken["plan"]["by_subject"]
+        row = next(
+            row for row in rows if (row["service_life_years"] is None) == (which == "lifeless")
+        )
+        row.update(edit)
+        with pytest.raises(jsonschema.ValidationError):
+            StagedDocument.validate(broken)
+
+    def test_a_year_whose_origin_the_register_did_not_say_is_accepted(self, document):
+        """The one pairing the schema leaves open: a stated year beside a null origin."""
+        edited = json.loads(json.dumps(document))
+        row = next(row for row in edited["plan"]["by_subject"] if row["installation_year"] is not None)
+        row["installation_year_origin"] = None
+        StagedDocument.validate(edited)
+
 
 class TestTheStacksAddUp:
     """E-spec §0: every breakdown sums to its total per slot, to the cent, on the written file.

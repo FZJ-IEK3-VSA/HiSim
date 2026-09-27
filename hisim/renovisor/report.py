@@ -221,6 +221,13 @@ class MappingReport:
     #: The key of the measure half, one entry per measure of the package in package order.
     MEASURES_FIELD: ClassVar[str] = "measures"
 
+    #: The statuses of a measure line the translation acts on. A measure whose line reads
+    #: ``not_implemented_yet`` is accepted and acted on by nothing; ``defaulted`` is not a measure
+    #: status at all. The one definition: the translator's check that every such measure has a
+    #: cost subject (``hisim.renovisor.economics.MeasureSubjects``) and the staged command's
+    #: reading of a stage's ``measures`` (``hisim.economics.__main__.StagedCli``) both use it.
+    ACTED_ON_STATUSES: ClassVar[Tuple[ReportStatus, ...]] = (ReportStatus.USED, ReportStatus.APPROXIMATED)
+
     #: What the header says about the legacy per-year fuel-price, emission-factor and device-cost
     #: tables of ``hisim/components/configuration.py``. ``reviewed`` is a country with sourced
     #: rows; ``placeholder`` is one registered with the sentinel ``-1e9`` in every number, which
@@ -335,8 +342,8 @@ class MappingReport:
         """Return the cost subjects with no price behind them, in package order."""
         return tuple(self._unpriced_subjects)
 
-    def set_costless_subjects(self, subjects: Sequence[str], notes: Mapping[str, str]) -> None:
-        """Store the subjects of measures that cost nothing, and the note every subject's row carries.
+    def set_costless_subjects(self, subjects: Sequence[str]) -> None:
+        """Store the subjects of measures that cost nothing.
 
         A measure that changes a setting buys nothing; its row in ``economics_result.json`` is a
         real zero, where an unpriced row is an unknown one, and the two are told apart by these
@@ -344,14 +351,16 @@ class MappingReport:
 
         Args:
             subjects: The costless subjects, in package order.
-            notes: Subject -> the sentence its ``by_subject`` row carries as ``note``.
         """
         self._costless_subjects = list(subjects)
-        self._subject_notes = dict(notes)
 
-    def costless_subjects(self) -> Tuple[str, ...]:
-        """Return the cost subjects of measures that cost nothing, in package order."""
-        return tuple(self._costless_subjects)
+    def set_subject_notes(self, notes: Mapping[str, str]) -> None:
+        """Store the note every subject's row carries -- why it is unpriced, why it costs nothing.
+
+        Args:
+            notes: Subject -> the sentence its ``by_subject`` row carries as ``note``.
+        """
+        self._subject_notes = dict(notes)
 
     def subject_notes(self) -> Dict[str, str]:
         """Return the note of every subject that has one, sorted by subject."""

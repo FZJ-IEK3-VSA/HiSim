@@ -151,7 +151,7 @@ from hisim.economics.staged_parameters import (
     ParameterProblemCodes,
     StagedParameters,
 )
-from hisim.renovisor.economics import MeasureSubjects
+from hisim.renovisor.economics import EconomicContextBuilder, MeasureSubjects
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import CatalogueTable
 from hisim.economics.subsidies import SubsidyCatalog
@@ -804,11 +804,13 @@ class StagedCli:
     #: Its key holding the measure lines, taken from the writer for the same reason.
     MEASURES_KEY: ClassVar[str] = MappingReport.MEASURES_FIELD
 
-    #: The measure statuses a stage's ``measures`` list carries. A measure whose line reads
-    #: ``not_implemented_yet`` is accepted and acted on by nothing, so naming it would tell the
-    #: stage timeline the stage changed something it did not; ``defaulted`` is not a measure
-    #: status at all.
-    STAGE_MEASURE_STATUSES: ClassVar[Tuple[str, ...]] = ("used", "approximated")
+    #: The measure statuses a stage's ``measures`` list carries: the ones the translation acts on
+    #: (:attr:`MappingReport.ACTED_ON_STATUSES`, as the words the report spells them with). A
+    #: measure whose line reads ``not_implemented_yet`` is acted on by nothing, so naming it would
+    #: tell the stage timeline the stage changed something it did not.
+    STAGE_MEASURE_STATUSES: ClassVar[Tuple[str, ...]] = tuple(
+        status.value for status in MappingReport.ACTED_ON_STATUSES
+    )
 
     #: What a stage directory with stored inputs but no mapping report is refused with.
     MISSING_MAPPING_MESSAGE: ClassVar[str] = (
@@ -1039,8 +1041,12 @@ class StagedCli:
         the cylinder would have no row for it and be refused. The translator's own declarations
         (:class:`~hisim.renovisor.economics.MeasureSubjects`) are what a re-translation would write,
         so they stand in (owner decision of 2026-09-26): for every declared measure the stage acts
-        on, the measure-named subject, its unpriced or costless flag and its note. A measure that is
-        neither declared nor has a subject stays without a row, and the document still refuses it.
+        on, the measure-named subject, its unpriced or costless flag and its note
+        (:meth:`~hisim.renovisor.economics.MeasureSubjects.declare`). An unpriced subject the report
+        names without a note -- an envelope measure the request carried no price for -- gets the
+        note the translator gives it (:attr:`EconomicContextBuilder.UNPRICED_NOTE`), so no unpriced
+        row is published without one. A measure that is neither declared nor has a subject stays
+        without a row, and the document still refuses it.
 
         Args:
             report: One stage's mapping report, as read.
@@ -1054,17 +1060,9 @@ class StagedCli:
             for entry in report.get(cls.MEASURES_KEY) or ()
             if isinstance(entry, dict) and entry.get("status") in cls.STAGE_MEASURE_STATUSES
         ]
-        for measure_id in acted_on:
-            if measure_id in MeasureSubjects.COSTLESS:
-                flagged, note = costless, MeasureSubjects.COSTLESS[measure_id]
-            elif measure_id in MeasureSubjects.UNPRICED:
-                flagged, note = unpriced, MeasureSubjects.UNPRICED[measure_id]
-            else:
-                continue
-            measures.setdefault(measure_id, measure_id)
-            if measure_id not in flagged:
-                flagged.append(measure_id)
-            notes.setdefault(measure_id, note)
+        MeasureSubjects.declare(acted_on, measures, unpriced=unpriced, costless=costless, notes=notes)
+        for subject in report.get(cls.UNPRICED_KEY) or []:
+            notes.setdefault(subject, EconomicContextBuilder.UNPRICED_NOTE)
 
     @classmethod
     def mapping_report_path(cls, directory: str) -> Optional[str]:
@@ -1454,7 +1452,7 @@ def _cmd_staged(args: argparse.Namespace) -> int:
     try:
         document.write(Path(args.out))
     except (SubsidyReconciliationError, BandOrderError, MeasureWithoutRowError) as error:
-        # Both are ValueErrors, which `main` would report as a mistyped invocation (exit 2). They
+        # All three are ValueErrors, which `main` would report as a mistyped invocation (exit 2). They
         # are engine bugs by their own definition, and write() refuses before the file exists.
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED

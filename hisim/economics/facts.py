@@ -455,8 +455,10 @@ class InstallationYearOrigin(str, enum.Enum):
     RenoVisor translator assumes for an undated device (price basis year less half its service
     life, never before the construction year; ``hisim.renovisor.economics.UnknownAge``), and
     ``CONSTRUCTION_YEAR_DEFAULT`` the construction year an undated envelope element takes.
-    ``STAGE`` is not a register value: it is what the document says of a subject a stage of the
-    plan bought, installed in the calendar year that stage starts in.
+    ``STAGE`` is not a value a request's register states: it is what the document says of a
+    subject a stage of the plan bought, installed in the calendar year that stage starts in. The
+    staging machinery writes it into the aged register it hands a later stage
+    (``hisim.economics.staged``), so it is read back off a register there.
     """
 
     REQUEST = "request"
@@ -520,10 +522,12 @@ class ExistingAsset:
         """Validation: normalizes the replacement-cost override and rejects impossible inputs.
 
         Raises:
-            ValueError: If the size is not finite and greater than zero, or if `anyway_share` is
+            ValueError: If the size is not finite and greater than zero, if `anyway_share` is
                 outside `(0, 1]` — a share of zero is spelled by not declaring the asset as
                 replaced at all, and a share above one would credit the renovation with more than
-                the measure costs.
+                the measure costs — or if `installation_year_origin` is neither `None` nor an
+                `InstallationYearOrigin` (a bare string would fail only when the document is
+                written).
         """
         self.replacement_cost_override_in_euro = _coerce_uncertain(self.replacement_cost_override_in_euro)
         if self.size <= 0 or not math.isfinite(self.size):
@@ -533,6 +537,13 @@ class ExistingAsset:
                 f"ExistingAsset.anyway_share must be in (0, 1], got {self.anyway_share!r} for "
                 f"{self.asset_class.value}: it is the share of the new measure's cost the "
                 "counterfactual would truly have spent (§4.1)."
+            )
+        if self.installation_year_origin is not None and not isinstance(
+            self.installation_year_origin, InstallationYearOrigin
+        ):
+            raise ValueError(
+                f"ExistingAsset.installation_year_origin must be None or an InstallationYearOrigin, got "
+                f"{self.installation_year_origin!r} for {self.asset_class.value}."
             )
 
     def age_in_years(self, reference_year: int) -> int:

@@ -555,11 +555,16 @@ class TestTheEquipmentTheHouseAlreadyHas:
             assert row["replacement_years"][0] == round(due) == 2, variant
 
     def test_the_meters_are_dated_at_mid_life(self, document) -> None:
-        """The request dates no meter, so the translator's mid-life year stands, and the row says so."""
+        """The request dates no meter, so the translator's mid-life year stands, and the row says so.
+
+        The cost database gives a meter 16 years, so a meter of unknown age counts as installed in
+        2026 - 16 / 2 = 2018: literals, so a change to the life or the rule shows up here.
+        """
         row = {row["subject"]: row for row in document["reference"]["by_subject"]}["ElectricityMeter"]
         assert row["installation_year_origin"] == "mid_life_default"
-        basis = document["parameters"]["price_basis_year"]
-        assert row["installation_year"] == basis - round(row["service_life_years"] / 2)
+        assert (row["service_life_years"], row["service_life_origin"]) == (16.0, "cost_database")
+        assert document["parameters"]["price_basis_year"] == 2026
+        assert row["installation_year"] == 2018
 
     def test_what_the_package_buys_is_installed_in_its_stages_year(self, document) -> None:
         """The heat pump is bought by the package stage, which starts in the simulation year."""

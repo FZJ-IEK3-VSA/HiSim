@@ -18,7 +18,7 @@
 openapi: 3.1.0
 info:
   title: RenoVisor simulation backend — implemented measures (proposal)
-  version: 0.4.0
+  version: 0.5.0
   description: |
     The measure capabilities of one registered engine version.
 
@@ -44,6 +44,12 @@ info:
     so a key it starts to emit fails its build until this file declares it: the
     schema cannot fall behind the served document again, as it had with
     `fields`, `substitution`, `results` and `translator.version`.
+
+    CONDITIONAL STATUSES SINCE 0.5.0 (2026-09-26). A measure, option, field or
+    value may carry `conditions`: the status it has instead when the request
+    also states something else (see `OptionCondition`). The key is optional,
+    so a 0.4.0 document is a valid 0.5.0 document, and a consumer that ignores
+    it reads the unconditional status as before.
 servers:
   - url: https://host.example/renosfh-backend/api/v1/hisim
     description: The backend; {version} below is resolved from GET /versions → channels.<track>.
@@ -73,8 +79,10 @@ paths:
           second catalogue parser on this side and would reject every request
           after any unrelated catalogue edit.
         - The statuses are the `mapping_report` vocabulary, so what is announced
-          here and what a run reports can be compared one to one. A run that
-          reports an option WORSE than announced here (announced `used`,
+          here and what a run reports can be compared one to one. What is
+          announced for a request is the status the `conditions` that apply to
+          it give, or the unconditional `status` when none applies. A run that
+          reports an option WORSE than announced for it (announced `used`,
           reported `not_implemented_yet`) is a translator bug.
         - A submission holding a measure announced here as `not_implemented_yet`
           is accepted and simulated without it; the run's mapping report carries
@@ -174,7 +182,15 @@ components:
             not_implemented_yet — the measure itself is listed: accepted, no effect on
                                   the simulation, its note carried here.
             `experts` options and individual values carry their own status and never
-            change the measure's.
+            change the measure's. This is the unconditional status: the one that holds
+            when none of `conditions` applies.
+        conditions:
+          type: array
+          description: |
+            Where the measure's status differs in combination with another request
+            leaf (the solar-thermal measure on an oil-heated house). Absent when it
+            never does.
+          items: { $ref: '#/components/schemas/MeasureCondition' }
         options:
           type: array
           description: One entry per option the catalogue declares for this measure.
@@ -203,7 +219,12 @@ components:
           enum: [used, approximated, defaulted, not_implemented_yet]
           description: |
             The option's own status: how the option as a whole is mapped. Individual
-            values carry their own status in `values` and do not change it.
+            values carry their own status in `values` and do not change it. This is the
+            unconditional status: the one that holds when none of `conditions` applies.
+        conditions:
+          type: array
+          description: "Where the option's status differs in combination with another request leaf; absent when it never does."
+          items: { $ref: '#/components/schemas/OptionCondition' }
         accepted_values:
           type: array
           description: |
@@ -241,7 +262,13 @@ components:
         status:
           type: string
           enum: [used, approximated, defaulted, not_implemented_yet]
-          description: The field's own status; its values' statuses do not change it.
+          description: |
+            The field's own status; its values' statuses do not change it. This is the
+            unconditional status: the one that holds when none of `conditions` applies.
+        conditions:
+          type: array
+          description: "Where the field's status differs in combination with another request leaf; absent when it never does."
+          items: { $ref: '#/components/schemas/OptionCondition' }
         values:
           type: array
           description: For enumerated fields — one entry per value with its own status.
@@ -262,8 +289,111 @@ components:
         status:
           type: string
           enum: [used, approximated, not_implemented_yet]
+          description: "The value's unconditional status: the one that holds when none of `conditions` applies."
+        conditions:
+          type: array
+          description: "Where this value's status differs in combination with another request leaf; absent when it never does."
+          items: { $ref: '#/components/schemas/ValueCondition' }
         substitution: { $ref: '#/components/schemas/Substitution' }
         note: { type: string }
+    OptionCondition:
+      type: object
+      description: |
+        One entry of the `conditions` of an option or an inventory field. It says:
+        when the request ALSO states everything `when` lists, the status is
+        `status` instead of the unconditional one, for the reason `note` gives.
+        `MeasureCondition` and `ValueCondition` are the same entry in the
+        vocabulary of their level.
+
+        - `when` is a conjunction: the entry applies only if every term holds.
+        - The entries are alternatives. When more than one applies, the WORST of
+          their statuses wins, in the order the aggregation uses
+          (calculation-request.md §8 step 4: `used` < `defaulted` < `approximated`
+          < `not_implemented_yet`; on a measure `supported` < `approximated` <
+          `not_implemented_yet`), and the notes of every applying
+          entry at that status are shown together.
+        - An entry may be better or worse than the unconditional status (a flow
+          temperature is `not_implemented_yet` on a boiler and `used` on a heat
+          pump): it states the status the combination has, nothing else.
+        - A combination no entry names has the unconditional status. The entries
+          come from the probe set's combination probes, so a combination no probe
+          tries is not announced.
+
+        A condition carries no `substitution` (owner decision 2026-09-26: a
+        stand-in is announced properly or not at all); its `note` says what the
+        combination does.
+
+        The same word as `ResultField.conditions` on purpose: there, sentences
+        that change a published provenance; here, the terms that change an
+        announced status.
+      required: [when, status, note]
+      additionalProperties: false
+      properties:
+        when: { $ref: '#/components/schemas/ConditionTerms' }
+        status:
+          type: string
+          enum: [used, approximated, defaulted, not_implemented_yet]
+        note:
+          type: string
+          description: "The translator's sentence for this combination: the note a run's mapping report carries when the entry applies."
+    MeasureCondition:
+      type: object
+      description: "One entry of a measure's `conditions`, as OptionCondition, in the measure level's vocabulary."
+      required: [when, status, note]
+      additionalProperties: false
+      properties:
+        when: { $ref: '#/components/schemas/ConditionTerms' }
+        status:
+          type: string
+          enum: [supported, approximated, not_implemented_yet]
+        note: { type: string }
+    ValueCondition:
+      type: object
+      description: "One entry of an enumerated value's `conditions`, as OptionCondition, in the value level's vocabulary."
+      required: [when, status, note]
+      additionalProperties: false
+      properties:
+        when: { $ref: '#/components/schemas/ConditionTerms' }
+        status:
+          type: string
+          enum: [used, approximated, not_implemented_yet]
+        note: { type: string }
+    ConditionTerms:
+      type: array
+      description: The terms of one condition, all of which must hold.
+      minItems: 1
+      items: { $ref: '#/components/schemas/ConditionTerm' }
+    ConditionTerm:
+      type: object
+      description: |
+        One leaf of the same request and the values that make the term hold. The
+        term holds when the request states `path` and its value is one of `in`,
+        compared as JSON values. A leaf the request does not state does not match,
+        even where the translator would default it, and neither does an option of
+        a measure the package does not hold. The leaf is read as the request
+        states it, not as its measures leave the house: where a measure can set
+        the leaf the translator decides on (a `heating_system` measure sets the
+        generator), the document carries one entry per spelling. There is no
+        negation: a condition on "every generator but these three" lists the
+        others in `in`. Negation, absence and numeric ranges wait for a real
+        case that needs them.
+      required: [path, in]
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: |
+            A request path in the mapping report's spelling, which `fields` uses too:
+            `house.<leaf>` or `location.<leaf>` for the inventory, and
+            `measures[id=<measure_id>].options.<option>` for an option of the
+            package's entry with that id (a package holds each id at most once).
+          pattern: '^((house|location)(\.[a-z0-9_]+)+|measures\[id=[a-z0-9_]+\]\.options\.[a-z0-9_]+)$'
+          examples: [house.heating.type_of_system, 'measures[id=heating_system].options.type_of_system']
+        in:
+          type: array
+          minItems: 1
+          description: "The values that make the term hold; a single entry for plain equality."
+          items: {}
     Substitution:
       type: boolean
       description: |

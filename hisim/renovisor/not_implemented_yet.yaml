@@ -178,7 +178,7 @@
 
 - path: house.ventilation.air_tightness
   except: [as_built]
-  note: No infiltration parameter on Building.
+  note: No infiltration parameter on Building; the air infiltration is the TABULA row's of the variant building.retrofit_status selects.
   tracked: hisim-4g9.6
 
 # --- Solar thermal ----------------------------------------------------------------------------

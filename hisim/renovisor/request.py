@@ -46,6 +46,7 @@ from hisim.renovisor.vocabulary import (
     HeatDistributionType,
     HeatGenerator,
     HotWaterSupply,
+    RetrofitStatus,
     RoofShape,
     SolarThermalSupplies,
     TemperatureControl,
@@ -78,6 +79,7 @@ class ProblemCode(str, Enum):
     LOCATION_COUNTRY_UNSUPPORTED = "location.country.unsupported"
     HOT_WATER_CONFLICTING_VOLUMES = "hot_water.conflicting_volumes"
     TABULA_UNRESOLVABLE = "tabula.unresolvable"
+    TABULA_VARIANT_CONFLICT = "tabula.variant_conflict"
     MEASURE_COST_BAND_INVALID = "measure.cost.band_invalid"
     HEATING_SCOP_NOT_A_HEAT_PUMP = "heating.scop.not_a_heat_pump"
     HEATING_SCOP_W55_ABOVE_W35 = "heating.scop.w55_above_w35"
@@ -695,13 +697,14 @@ class Layer:
 class Element:
     """One of the five envelope elements, as the renovated house carries it.
 
-    Every element has a U-value, because the frontend derives it from its country pack and the
-    schema requires it (rule 5); every other field is optional and several of them belong to one
-    element only. An absent ``area_in_m2`` keeps the TABULA archetype's area, scaled to the
-    conditioned floor area.
+    Every field is optional, and several belong to one element only. An absent
+    ``u_value_in_watt_per_m2_per_kelvin`` keeps the U-value of the TABULA row of the variant
+    ``building.retrofit_status`` selects (§3.4); an absent ``area_in_m2`` keeps the archetype's
+    area, scaled to the conditioned floor area.
 
     Args:
-        u_value_in_watt_per_m2_per_kelvin: W/(m²·K) of the element as it stands after the measures.
+        u_value_in_watt_per_m2_per_kelvin: W/(m²·K) of the element as it stands after the measures,
+            or ``None`` to leave it to the TABULA row.
         area_in_m2: The element's area, or ``None`` to leave it to the TABULA row.
         added_insulation: The layers the measures added, in the order they were added.
         shape: ``roof`` only: pitched or flat, which sets the photovoltaic tilt.
@@ -712,7 +715,7 @@ class Element:
         thermocover: ``window`` only; no HiSim parameter.
     """
 
-    u_value_in_watt_per_m2_per_kelvin: float
+    u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
     area_in_m2: Optional[float] = None
     added_insulation: Tuple[Layer, ...] = ()
     shape: Optional[RoofShape] = None
@@ -729,7 +732,11 @@ class Element:
         if isinstance(layers, Mapping):
             layers = [layers]
         return cls(
-            u_value_in_watt_per_m2_per_kelvin=float(raw["u_value_in_watt_per_m2_per_kelvin"]),
+            u_value_in_watt_per_m2_per_kelvin=(
+                None
+                if raw.get("u_value_in_watt_per_m2_per_kelvin") is None
+                else float(raw["u_value_in_watt_per_m2_per_kelvin"])
+            ),
             area_in_m2=None if raw.get("area_in_m2") is None else float(raw["area_in_m2"]),
             added_insulation=tuple(Layer.from_dict(layer) for layer in layers),
             shape=_member(RoofShape, raw.get("shape")),
@@ -754,6 +761,8 @@ class Building:
         roof, facade, floor, window, door: The five envelope elements.
         number_of_storeys: Recorded; the archetype's own storey count is used.
         tabula_building_code: The expert override that skips the derivation entirely.
+        retrofit_status: Which TABULA variant the archetype is; ``None`` when the request leaves
+            it out (``unrenovated``, or a stated code's own variant).
     """
 
     building_type: BuildingType
@@ -767,6 +776,7 @@ class Building:
     door: Element
     number_of_storeys: Optional[int] = None
     tabula_building_code: Optional[str] = None
+    retrofit_status: Optional[RetrofitStatus] = None
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Building":
@@ -785,6 +795,7 @@ class Building:
             door=Element.from_dict(raw["door"]),
             number_of_storeys=None if storeys is None else int(storeys),
             tabula_building_code=None if code is None else str(code),
+            retrofit_status=_member(RetrofitStatus, raw.get("retrofit_status")),
         )
 
 
@@ -1660,21 +1671,32 @@ class SemanticChecks:
 
     @classmethod
     def _tabula(cls, document: Mapping[str, Any]) -> List[Problem]:
-        """Refuse a dwelling the TABULA index cannot place, which no later step could recover from."""
-        from hisim.renovisor.tabula import BuildingCodeSelector, TabulaUnresolvable
+        """Refuse a dwelling the TABULA index cannot place, and a code that contradicts the retrofit status.
+
+        Both are faults no later step could recover from. A ``tabula_building_code`` whose variant
+        (its last three digits) is not the one a stated ``retrofit_status`` selects is refused on
+        ``house.building.retrofit_status`` with both named (§5.3); with the status absent the
+        code's variant stands.
+        """
+        from hisim.renovisor.tabula import (  # pylint: disable=import-outside-toplevel
+            BuildingCodeSelector,
+            TabulaIndex,
+            TabulaUnresolvable,
+            TabulaVariantConflict,
+        )
 
         building = document["house"]["building"]
         country = str(document["location"]["country"])
-        from hisim.renovisor.tabula import TabulaIndex
-
         if country not in TabulaIndex.countries():
             return []
+        status = building.get("retrofit_status")
         try:
             BuildingCodeSelector.select(
                 country=country,
                 building_type=BuildingType(building["building_type"]),
                 construction_year=int(building["construction_year"]),
                 requested_code=building.get("tabula_building_code"),
+                retrofit_status=None if status is None else RetrofitStatus(status),
             )
         except TabulaUnresolvable as error:
             return [
@@ -1683,6 +1705,14 @@ class SemanticChecks:
                     if building.get("tabula_building_code") is not None
                     else "house.building.construction_year",
                     code=ProblemCode.TABULA_UNRESOLVABLE,
+                    message=str(error),
+                )
+            ]
+        except TabulaVariantConflict as error:
+            return [
+                Problem(
+                    path="house.building.retrofit_status",
+                    code=ProblemCode.TABULA_VARIANT_CONFLICT,
                     message=str(error),
                 )
             ]

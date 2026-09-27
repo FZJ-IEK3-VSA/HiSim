@@ -78,7 +78,7 @@ class TestTheSchemaIsTheTruth:
             ("house.building", "construction_year"),
             ("house.building", "absolute_conditioned_floor_area_in_m2"),
             ("house.building", "set_heating_temperature_in_celsius"),
-            ("house.building.facade", "u_value_in_watt_per_m2_per_kelvin"),
+            ("house.building.window", "glazing_panes"),
             ("house.occupancy", "number_of_residents"),
             ("house.heating", "type_of_system"),
             ("house.heat_distribution", "type_of_system"),
@@ -333,6 +333,55 @@ class TestTheSemanticChecks:
             "house.building.tabula_building_code",
             ProblemCode.TABULA_UNRESOLVABLE.value,
         ) in codes_of(document)
+
+    def test_every_element_u_value_may_be_left_out(self) -> None:
+        """Since the retrofit status (§3.4), an element the household cannot describe takes the variant's U-value."""
+        document = mockup()
+        for element in ("roof", "facade", "floor", "window", "door"):
+            del document["house"]["building"][element]["u_value_in_watt_per_m2_per_kelvin"]
+
+        assert codes_of(document) == []
+        assert Request.parse(document).house.building.facade.u_value_in_watt_per_m2_per_kelvin is None
+
+    def test_a_code_whose_variant_contradicts_the_stated_retrofit_status_is_refused(self) -> None:
+        """``tabula.variant_conflict`` on the status, naming both variants (§5.3)."""
+        document = mockup()
+        document["house"]["building"]["tabula_building_code"] = "IE.N.SFH.05.Gen.ReEx.001.002"
+        document["house"]["building"]["retrofit_status"] = "advanced_refurb"
+
+        problems = SemanticChecks.of(document)
+
+        assert [(problem.path, problem.code.value) for problem in problems] == [
+            ("house.building.retrofit_status", ProblemCode.TABULA_VARIANT_CONFLICT.value)
+        ]
+        assert "002" in problems[0].message and "003" in problems[0].message
+
+    def test_a_code_agreeing_with_the_stated_retrofit_status_is_accepted(self) -> None:
+        """Stating both is allowed when they name the same variant."""
+        document = mockup()
+        document["house"]["building"]["tabula_building_code"] = "IE.N.SFH.05.Gen.ReEx.001.002"
+        document["house"]["building"]["retrofit_status"] = "usual_refurb"
+
+        assert codes_of(document) == []
+
+    def test_a_code_without_a_stated_retrofit_status_keeps_its_own_variant(self) -> None:
+        """With the status absent there is nothing to contradict."""
+        document = mockup()
+        document["house"]["building"]["tabula_building_code"] = "IE.N.SFH.05.Gen.ReEx.001.003"
+
+        assert codes_of(document) == []
+
+    def test_a_variant_conflict_is_reported_beside_the_other_problems(self) -> None:
+        """All problems are reported, not just the first."""
+        document = mockup()
+        document["house"]["building"]["tabula_building_code"] = "IE.N.SFH.05.Gen.ReEx.001.001"
+        document["house"]["building"]["retrofit_status"] = "usual_refurb"
+        document["measures"] = [{"id": "electric_vehicle", "options": {"number": 5}}]
+
+        problems = codes_of(document)
+
+        assert ("house.building.retrofit_status", ProblemCode.TABULA_VARIANT_CONFLICT.value) in problems
+        assert ("measures[0].options.number", ProblemCode.RANGE_EXCEEDED.value) in problems
 
     def test_a_measure_pushing_a_value_past_its_range_is_refused(self) -> None:
         """Two ranges a measure can break that the schema cannot see: cars and the set point."""

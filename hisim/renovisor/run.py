@@ -324,7 +324,7 @@ class Calculation:
         document = RequestFile.read(self._request_path)
         request = Request.parse(document)
         whitelist = Whitelist.load()
-        applied = apply(request.document["house"], request.measures, whitelist)
+        applied = apply(request, request.measures, whitelist)
         translated = Translator(self._base_files, whitelist).translate(request, applied)
         return request, applied, translated
 

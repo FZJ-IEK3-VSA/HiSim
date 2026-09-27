@@ -108,7 +108,7 @@ def _built(document: Dict[str, Any], building_config: Optional[Dict[str, Any]] =
         The :class:`~hisim.renovisor.economics.EconomicContextResult`.
     """
     request = Request.parse(document)
-    applied = apply(request.document["house"], request.measures, Whitelist.load())
+    applied = apply(request, request.measures, Whitelist.load())
     config = building_config if building_config is not None else _building(facade_area_in_m2=173.0)
     return EconomicContextBuilder(
         request,
@@ -136,7 +136,7 @@ def _builder(document: Dict[str, Any], with_cost_block: bool = False) -> Economi
             if measure.get("id") == "external_insulation":
                 measure["cost"] = {"min_in_euro_per_m2": 100.0, "max_in_euro_per_m2": 200.0, "source": "a test"}
     request = Request.parse(document)
-    applied = apply(request.document["house"], request.measures, Whitelist.load())
+    applied = apply(request, request.measures, Whitelist.load())
     return EconomicContextBuilder(
         request,
         applied,
@@ -869,7 +869,7 @@ class TestTheTechnicalAttributes:
         # One envelope measure is kept, so the attributes below have a subject to be empty of SCOP.
         document["measures"] = [measure for measure in document["measures"] if measure["id"] == "external_insulation"]
         request = Request.parse(document)
-        applied = apply(request.document["house"], request.measures, Whitelist.load())
+        applied = apply(request, request.measures, Whitelist.load())
         attributes = EconomicContextBuilder(
             request,
             applied,
@@ -1035,7 +1035,7 @@ class TestTheTables:
     def test_a_configuration_without_a_design_temperature_is_refused(self) -> None:
         """The design temperature belongs to the weather, and the load cannot be had without it."""
         request = Request.parse(_mockup())
-        applied = apply(request.document["house"], request.measures, Whitelist.load())
+        applied = apply(request, request.measures, Whitelist.load())
         with pytest.raises(TranslatorError, match="heating_reference_temperature_in_celsius"):
             EconomicContextBuilder(request, applied, _building()).build()
 
@@ -1068,7 +1068,7 @@ def _translated(document: Dict[str, Any]) -> Any:
     """
     whitelist = Whitelist.load()
     request = Request.parse(document)
-    applied = apply(request.document["house"], request.measures, whitelist)
+    applied = apply(request, request.measures, whitelist)
     return Translator(BASE_FILES, whitelist).translate(request, applied)
 
 

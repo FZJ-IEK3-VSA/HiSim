@@ -1,6 +1,6 @@
 """Applying one package of catalogue measures to one house, and saying what each of them did.
 
-``apply(house, measures)`` writes every measure into a **deep copy** of the request's house, in
+``apply(request, measures)`` writes every measure into a **deep copy** of the request's house, in
 list order, and returns the renovated house together with one report line per measure and per
 option. The original is never touched, which is what lets a test deep-diff the two and what lets
 the capability document run hundreds of probes off one anchor request.
@@ -37,7 +37,8 @@ from hisim.renovisor.constants import (
     Placement,
 )
 from hisim.renovisor.envelope import LayerNote, UValueComposer
-from hisim.renovisor.request import CatalogueTable, Material, Measure, SemanticChecks
+from hisim.renovisor.request import CatalogueTable, Material, Measure, Request, SemanticChecks
+from hisim.renovisor.tabula import ArchetypeEnvelope, BuildingCode, BuildingCodeSelector
 from hisim.renovisor.vocabulary import ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError, Unmapped, Whitelist, WhitelistEntry
 
@@ -235,19 +236,28 @@ class Effects:
     Args:
         house: The working copy of the request's house. It is mutated in place; the caller has
             already deep-copied it.
+        archetype: The envelope of the TABULA row the house is simulated as. An element the
+            request gives no U-value starts from the row's (§4.3's ``U_existing``).
     """
 
-    def __init__(self, house: Dict[str, Any]) -> None:
+    def __init__(self, house: Dict[str, Any], archetype: ArchetypeEnvelope) -> None:
         """Store the working house and remember every element's U-value before any measure."""
         self._house = house
+        self._archetype = archetype
         self._layers: List[AddedLayer] = []
         self._original_u_values: Dict[ThermalElement, float] = {}
+        self._original_origins: Dict[ThermalElement, str] = {}
         self._written: List[str] = []
         self._removed: List[str] = []
         for element in ThermalElement:
             value = self.read(HousePaths.u_value(element))
-            if isinstance(value, (int, float)):
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
                 self._original_u_values[element] = float(value)
+            else:
+                self._original_u_values[element] = archetype.u_value(element)
+                self._original_origins[element] = (
+                    f"not in the request: TABULA {archetype.code}, {archetype.elements[element].origin}"
+                )
 
     @property
     def house(self) -> Dict[str, Any]:
@@ -266,9 +276,9 @@ class Effects:
         """Return every house path a measure removed, in removal order."""
         return tuple(self._removed)
 
-    def original_u_value(self, element: ThermalElement) -> Optional[float]:
-        """Return one element's U-value as the request stated it, before any layer."""
-        return self._original_u_values.get(element)
+    def original_u_value(self, element: ThermalElement) -> float:
+        """Return one element's U-value before any layer: the request's, else the TABULA row's."""
+        return self._original_u_values[element]
 
     def read(self, path: str) -> Any:
         """Return the value at one dotted house path, or ``None`` when the house lacks it."""
@@ -348,8 +358,11 @@ class Effects:
             existing = [existing]
         existing.append(layer.to_house())
         element[HousePaths.ADDED_INSULATION] = existing
+        current = element.get(HousePaths.U_VALUE)
+        if not isinstance(current, (int, float)) or isinstance(current, bool):
+            current = self._original_u_values[layer.element]
         composed = UValueComposer.compose(
-            float(element[HousePaths.U_VALUE]),
+            float(current),
             [UValueComposer.resistance(layer.thickness_in_mm, layer.material.thermal_conductivity_w_mk)],
         )
         element[HousePaths.U_VALUE] = composed
@@ -372,7 +385,7 @@ class Effects:
             if layer.element is element
         ]
         composed = float(self._element_block(element)[HousePaths.U_VALUE])
-        return LayerNote.of(existing, layers, composed)
+        return LayerNote.of(existing, layers, composed, origin=self._original_origins.get(element))
 
     def _element_block(self, element: ThermalElement) -> Dict[str, Any]:
         """Return the mutable block of one envelope element."""
@@ -962,6 +975,8 @@ class AppliedPackage:
         written_paths: Every house path a measure wrote, so the report can say which values are
             the package's rather than the request's.
         removed_paths: Every house path a measure removed.
+        code: The TABULA code the house is simulated as, selected once from the request.
+        archetype: That row's envelope, which every element without a U-value started from.
     """
 
     house: Dict[str, Any]
@@ -969,6 +984,8 @@ class AppliedPackage:
     layers: Tuple[AddedLayer, ...]
     written_paths: Tuple[str, ...]
     removed_paths: Tuple[str, ...]
+    code: BuildingCode
+    archetype: ArchetypeEnvelope
 
     def element_note(self, element: ThermalElement) -> Optional[str]:
         """Return the U-value arithmetic note for one element, or ``None`` when it got no layer."""
@@ -1013,25 +1030,41 @@ class MeasureStatusRules:
         return status
 
 
-def apply(house: Mapping[str, Any], measures: Sequence[Measure], whitelist: Whitelist) -> AppliedPackage:
-    """Apply one package to one house and say what every measure and option came to.
+def apply(
+    request: Request,
+    measures: Sequence[Measure],
+    whitelist: Whitelist,
+    code: Optional[BuildingCode] = None,
+) -> AppliedPackage:
+    """Apply one package to one request's house and say what every measure and option came to.
+
+    The house and its TABULA archetype both come from *request*, so they cannot come from two
+    different requests: an insulation layer on an element without a stated U-value starts from
+    that archetype's U-value (§4.3's ``U_existing``).
 
     Args:
-        house: The ``house`` block of a validated request. It is deep-copied and never mutated.
-        measures: The package, in the order it is applied.
+        request: The validated request. Its ``house`` is deep-copied and never mutated.
+        measures: The package, in the order it is applied -- the request's own, or none for the
+            house as it stands.
         whitelist: The parsed ``not_implemented_yet.yaml``, asked once at the end about every
             item no measure function could map.
+        code: The TABULA code a caller has already selected for *request*, so a translation
+            selects it once; ``None`` selects it here.
 
     Returns:
-        The renovated house and the measure half of the mapping report.
+        The renovated house, the code and archetype it is simulated as, and the measure half of
+        the mapping report.
 
     Raises:
         TranslatorError: When a measure, an option or a value is neither mapped nor listed. That
             is a fault in this package, not in the request: exit 3, never exit 2.
     """
+    if code is None:
+        code = building_code_of(request)
+    archetype = archetype_of(request, code)
     MeasureRegistry.assert_complete()
-    working: Dict[str, Any] = copy.deepcopy(dict(house))
-    effects = Effects(working)
+    working: Dict[str, Any] = copy.deepcopy(dict(request.document["house"]))
+    effects = Effects(working, archetype)
     contexts: List[MeasureContext] = []
     for measure in measures:
         line = MeasureLine(id=measure.id)
@@ -1051,7 +1084,29 @@ def apply(house: Mapping[str, Any], measures: Sequence[Measure], whitelist: Whit
         layers=effects.layers(),
         written_paths=effects.written_paths(),
         removed_paths=effects.removed_paths(),
+        code=code,
+        archetype=archetype,
         _notes=notes,
+    )
+
+
+def building_code_of(request: Request) -> BuildingCode:
+    """Return the TABULA code a validated request's house is simulated as."""
+    building = request.house.building
+    return BuildingCodeSelector.select(
+        country=request.country.value,
+        building_type=building.building_type,
+        construction_year=building.construction_year,
+        requested_code=building.tabula_building_code,
+        retrofit_status=building.retrofit_status,
+    )
+
+
+def archetype_of(request: Request, code: BuildingCode) -> ArchetypeEnvelope:
+    """Return the envelope of *code*'s row for a request's floor area and door area."""
+    building = request.house.building
+    return ArchetypeEnvelope.for_code(
+        code, building.absolute_conditioned_floor_area_in_m2, building.door.area_in_m2
     )
 
 

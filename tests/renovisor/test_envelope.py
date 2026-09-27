@@ -79,6 +79,14 @@ class TestTheNote:
         assert "1/(1/1.1 + 0.12/0.0355)" in note
         assert f"{composed:.4g}" in note
 
+    def test_a_starting_value_the_request_did_not_state_names_its_origin(self) -> None:
+        """A U_existing taken from the TABULA row says so, in brackets after the number."""
+        note = LayerNote.of(0.32, [("external_insulation", 120.0, "eps_rigid_board", 0.0355)], 0.1537,
+                            origin="not in the request: TABULA IE.N.SFH.05.Gen.ReEx.001.002")
+
+        assert note.startswith("0.32 W/(m2K) (not in the request: TABULA IE.N.SFH.05.Gen.ReEx.001.002) + ")
+        assert "1/(1/0.32 + 0.12/0.0355)" in note
+
     def test_two_layers_are_both_named_and_both_in_the_division(self) -> None:
         """A wall with two measures on it says which measure put which layer on."""
         resistances = [UValueComposer.resistance(100, 0.035), UValueComposer.resistance(60, 0.022)]

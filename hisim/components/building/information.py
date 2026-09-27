@@ -152,6 +152,27 @@ class BuildingInformation:
         #: so the kept raw U-value is the material's property, unused by the physics.
         keep_u_value_when_reference_area_is_zero: bool = False
 
+    @dataclass(frozen=True)
+    class ElementValues:
+        """What the building uses for one envelope element, and where each value came from.
+
+        One per element, recorded by :py:meth:`get_building_heat_transfer_parameters` from the
+        very values its conductances multiply, and handed out by :py:meth:`element_values`.
+        """
+
+        #: The U-value [W/(m2 K)] the conductance uses.
+        u_value_in_watt_per_m2_per_kelvin: float
+        #: The transmission adjustment factor the conductance uses.
+        adjustment_factor: float
+        #: The descriptor's fixed factor, the one used whenever the U-value is configured.
+        fixed_adjustment_factor: float
+        #: Whether :py:attr:`adjustment_factor` is the row's largest ``b_Transmission`` column
+        #: rather than the fixed factor: true for floor, wall and roof with a U-value from TABULA.
+        adjustment_factor_from_tabula_row: bool
+        #: Where the U-value came from: ``configured``, the TABULA row's columns, or for a door
+        #: the row does not state the estimate that replaced it.
+        u_value_origin: str
+
     # The envelope-element table: one descriptor per element, consumed by the explicit
     # area and heat-transfer pipelines in get_building_area_parameters and
     # get_building_heat_transfer_parameters. Adding an element means adding a descriptor
@@ -314,6 +335,41 @@ class BuildingInformation:
     def u_value_roof(self) -> float:
         """Actual U-value of the roof element from the TABULA reference data [W/(m2 K)]."""
         return float(self.buildingdata_ref["U_Actual_Roof_1"].values[0])
+
+    def element_values(self) -> Dict[str, "BuildingInformation.ElementValues"]:
+        """Return what the building uses for each envelope element, by the descriptor's ``element_name``.
+
+        The values are the ones :py:meth:`get_building_heat_transfer_parameters` multiplied into
+        the conductances, not a recomputation, so a caller naming them -- the RenoVisor
+        translator reports the U-value of every element a request leaves out -- names exactly
+        what the simulation uses.
+
+        Returns:
+            ``floor``, ``wall``, ``roof``, ``window`` and ``door`` -> :py:class:`ElementValues`.
+        """
+        return dict(self._element_values)
+
+    @property
+    def air_infiltration_rate_per_hour(self) -> float:
+        """Air infiltration rate [1/h] of the TABULA row (``n_air_infiltration``).
+
+        The ventilation conductance adds it to the row's use-related air exchange rate.
+        """
+        return float(self.buildingdata_ref["n_air_infiltration"].values[0])
+
+    @property
+    def thermal_bridging_surcharge_in_watt_per_m2_per_kelvin(self) -> float:
+        """Thermal-bridging surcharge delta_U [W/(m2 K)] the building uses.
+
+        The TABULA row's ``delta_U_ThermalBridging``, or
+        :py:attr:`THERMAL_BRIDGING_DELTA_U_WHEN_TABULA_IS_ZERO_IN_WATT_PER_M2_PER_KELVIN` for a
+        row that reports 0 (findings log entry 6). The thermal-bridging conductance is this
+        surcharge times the total envelope area.
+        """
+        delta_u_thermalbridging_from_tabula = self.buildingdata_ref["delta_U_ThermalBridging"].values[0]
+        if delta_u_thermalbridging_from_tabula == 0:
+            return self.THERMAL_BRIDGING_DELTA_U_WHEN_TABULA_IS_ZERO_IN_WATT_PER_M2_PER_KELVIN
+        return float(delta_u_thermalbridging_from_tabula)
 
     @property
     def door_report_lines(self) -> List[str]:
@@ -543,27 +599,30 @@ class BuildingInformation:
         requires :py:meth:`get_building_area_parameters` to have run, because the
         conductances multiply with the element areas derived there.
         """
-        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.FLOOR_ELEMENT)
+        self._element_values: Dict[str, BuildingInformation.ElementValues] = {}
+
+        u_value, b_factor = self._recorded_element_values(self.FLOOR_ELEMENT)
         self.floor_u_value_in_watt_per_m2_per_kelvin = u_value
         self.floor_adjustment_factor_from_tabula = b_factor
         self.heat_conductance_floor_in_watt_per_kelvin = u_value * self.floor_area_in_m2 * b_factor
 
-        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.WALL_ELEMENT)
+        u_value, b_factor = self._recorded_element_values(self.WALL_ELEMENT)
         self.facade_u_value_in_watt_per_m2_per_kelvin = u_value
         self.facade_adjustment_factor_from_tabula = b_factor
         self.heat_conductance_facade_in_watt_per_kelvin = u_value * self.facade_area_in_m2 * b_factor
 
-        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.ROOF_ELEMENT)
+        u_value, b_factor = self._recorded_element_values(self.ROOF_ELEMENT)
         self.roof_u_value_in_watt_per_m2_per_kelvin = u_value
         self.roof_adjustment_factor_from_tabula = b_factor
         self.heat_conductance_roof_in_watt_per_kelvin = u_value * self.roof_area_in_m2 * b_factor
 
-        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.WINDOW_ELEMENT)
+        u_value, b_factor = self._recorded_element_values(self.WINDOW_ELEMENT)
         self.window_u_value_in_watt_per_m2_per_kelvin = u_value
         self.window_adjustment_factor_from_tabula = b_factor
         self.heat_conductance_window_in_watt_per_kelvin = u_value * self.window_area_in_m2 * b_factor
 
         u_value, b_factor, self._door_u_value_origin = self._door_u_value_adjustment_factor_and_origin()
+        self._record_element_values(self.DOOR_ELEMENT, u_value, b_factor, self._door_u_value_origin)
         self.door_u_value_in_watt_per_m2_per_kelvin = u_value
         self.door_adjustment_factor_from_tabula = b_factor
         self.heat_conductance_door_in_watt_per_kelvin = u_value * self.door_area_in_m2 * b_factor
@@ -808,6 +867,33 @@ class BuildingInformation:
             "U-value, so the U-value of TABULA's Irish door construction IE.Door.ReEx.01.01 is used"
         )
 
+    def _recorded_element_values(self, element: EnvelopeElement) -> Tuple[float, float]:
+        """Return one element's U-value and adjustment factor, recording them for :py:meth:`element_values`.
+
+        The door has its own origin rules and records itself through
+        :py:meth:`_record_element_values`.
+        """
+        u_value, adjustment_factor = self._element_u_value_and_adjustment_factor(element)
+        if getattr(self.buildingconfig, element.configured_u_value_field) is not None:
+            origin = "configured"
+        else:
+            origin = f"TABULA row, area-weighted {' / '.join(element.u_value_columns)}"
+        self._record_element_values(element, u_value, adjustment_factor, origin)
+        return u_value, adjustment_factor
+
+    def _record_element_values(
+        self, element: EnvelopeElement, u_value: float, adjustment_factor: float, origin: str
+    ) -> None:
+        """Record what the building uses for one element, as :py:meth:`element_values` hands it out."""
+        configured = getattr(self.buildingconfig, element.configured_u_value_field) is not None
+        self._element_values[element.element_name] = self.ElementValues(
+            u_value_in_watt_per_m2_per_kelvin=u_value,
+            adjustment_factor=adjustment_factor,
+            fixed_adjustment_factor=element.fixed_adjustment_factor,
+            adjustment_factor_from_tabula_row=bool(element.transmission_adjustment_columns) and not configured,
+            u_value_origin=origin,
+        )
+
     def _element_u_value_and_adjustment_factor(self, element: EnvelopeElement) -> Tuple[float, float]:
         """Return the U-value [W/(m2 K)] and transmission adjustment factor of one element.
 
@@ -867,13 +953,7 @@ class BuildingInformation:
         explicit local value instead; whether the 0.1 W/(m2 K) surcharge is good physics
         is a design-review question, not changed here.
         """
-        delta_u_thermalbridging_from_tabula = self.buildingdata_ref["delta_U_ThermalBridging"].values[0]
-        if delta_u_thermalbridging_from_tabula == 0:
-            delta_u_thermalbridging = self.THERMAL_BRIDGING_DELTA_U_WHEN_TABULA_IS_ZERO_IN_WATT_PER_M2_PER_KELVIN
-        else:
-            delta_u_thermalbridging = float(delta_u_thermalbridging_from_tabula)
-
-        return delta_u_thermalbridging * self.building_total_area_in_m2
+        return self.thermal_bridging_surcharge_in_watt_per_m2_per_kelvin * self.building_total_area_in_m2
 
     def _ventilation_conductance_in_watt_per_kelvin(self) -> float:
         """Return the ventilation heat-transfer conductance of the building [W/K].
@@ -887,7 +967,7 @@ class BuildingInformation:
             self.HEAT_CAPACITY_OF_AIR_PER_VOLUME_IN_WATT_HOUR_PER_M3_PER_KELVIN
             * (
                 float(self.buildingdata_ref["n_air_use"].values[0])
-                + float(self.buildingdata_ref["n_air_infiltration"].values[0])
+                + self.air_infiltration_rate_per_hour
             )
             * float(self.buildingdata_ref["h_room"].values[0])
             * self.scaled_conditioned_floor_area_in_m2

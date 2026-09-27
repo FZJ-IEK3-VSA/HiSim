@@ -187,7 +187,7 @@ class TraceExample:
         directory = base_files_directory or (Path(__file__).resolve().parents[2] / "energy_systems")
         whitelist = Whitelist.load()
         request = Request.parse(ContractFiles.request_mockup())
-        applied = apply(request.document["house"], request.measures, whitelist)
+        applied = apply(request, request.measures, whitelist)
         translated = Translator(directory, whitelist).translate(request, applied)
         return cls(
             request=request.document,

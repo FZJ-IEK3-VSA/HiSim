@@ -1097,7 +1097,8 @@ class EconomicContextBuilder:
         "the element is kept and renewed like-for-like at the end of its service life, but the "
         "renewal is unpriced: HiSim prices no envelope work itself, and the request carries no cost "
         "band for renewing this element (a band travels only on the cost block of a measure acting "
-        "on the element, and no measure of the package does); its renewals are unknown, not free"
+        "on the element, and no measure of the package does); its renewals' cost and embodied CO2 are "
+        "unknown, not zero, and are left out of every total"
     )
 
     #: What that note adds when the cost database has no entry for the element's class either.
@@ -1737,10 +1738,11 @@ class EconomicContextBuilder:
         (:meth:`_measure_price`); a measure acting on the element replaces it, so a kept element
         never has one. The subject therefore carries an investment of exactly zero, flagged
         unpriced with :attr:`KEPT_ELEMENT_UNPRICED_NOTE` -- never the cost database's
-        insulation price. Its **service life** is still the cost database's for the class (a
-        life, not a price), and where the database has no entry for the class the engine's
-        fallback, marked as such (``lifetime_is_engine_fallback``), so the row's due years are
-        stated either way.
+        insulation price -- and, by the same decision, an embodied CO2 of zero per renewal: the
+        renewal's carbon is as unknown as its cost, and the note covers both. Its **service
+        life** is still the cost database's for the class (a life, not a price), and where the
+        database has no entry for the class the engine's fallback, marked as such
+        (``lifetime_is_engine_fallback``), so the row's due years are stated either way.
 
         The size is the element's area (:meth:`_element_area`) in square metres, except for the
         door, which the cost database lists per door (``per_unit: null``), so it is one door.
@@ -1784,6 +1786,8 @@ class EconomicContextBuilder:
                         installation_cost_override_in_euro=zero,
                         maintenance_rate_override=zero,
                         fixed_operation_cost_override_in_euro_per_year=zero,
+                        # Unknown, like the money: never the cost database's estimate for the class.
+                        embodied_co2_override_in_kg=0.0,
                         lifetime_override_in_years=(
                             None if has_life else ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS
                         ),

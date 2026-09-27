@@ -1812,6 +1812,22 @@ class TestTheReferenceRenewsTheFabric:
             assert row["replacements_in_euro"]["best"] == 0.0
             assert (row["measure_id"], row["replaces_subjects"], row["unpriced"]) == (None, [], True)
 
+    def test_a_renewal_inside_the_horizon_adds_no_embodied_co2(self, plan) -> None:
+        """The window (2010, 35 years) is renewed in year 19, and its carbon is unknown, not estimated.
+
+        The reference holds nothing but the five kept elements and the meter, so its embodied CO2
+        is exactly zero although a renewal falls inside the horizon.
+        """
+        reference = plan["document"]["reference"]
+        window = {row["subject"]: row for row in reference["by_subject"]}["envelope_window"]
+        assert window["replacement_years"] == [19]
+        assert window["unpriced"] and "embodied CO2" in window["note"]
+        assert reference["co2"]["embodied_in_kg"] == {"min": 0.0, "best": 0.0, "max": 0.0}
+        facts = {entry.subject: entry.facts for entry in plan["stages"][0].inputs.cost_facts}
+        assert all(
+            facts[EnvelopeAssets.subject_of(element)].embodied_co2_override_in_kg == 0.0 for element in ThermalElement
+        )
+
     def test_the_insulation_names_the_facade_it_replaces(self, plan) -> None:
         """The plan row of the measure states the reference subject it takes over."""
         assert plan["insulated"].replaces_subjects == {"external_insulation": ["envelope_facade"]}

@@ -62,7 +62,12 @@ from hisim.economics.calculators.financing_application import (
 )
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
-from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, effective_price_basis_year
+from hisim.economics.evaluator import (
+    EconomicEvaluator,
+    EvaluationInputs,
+    YearZeroPriceLevel,
+    effective_price_basis_year,
+)
 from hisim.economics.financing import FinancingPlan
 from hisim.economics.facts import (
     ComponentCostFacts,
@@ -172,6 +177,11 @@ class StagedCategories:
       active in the entry's own year, which is what makes "year y of the plan is year y of
       whichever state the house is in" literally true.
 
+    Every stage's own evaluation is already in the money of the plan's year 0: the engine escalates
+    all of its amounts from the price basis year to ``plan_start_year`` before the splice sees them
+    (:class:`~hisim.economics.evaluator.YearZeroPriceLevel`, renovisorissues #62), with the same
+    exemptions, so the splice's own escalation is only the one from year 0 to the stage's year.
+
     ``RESIDUAL_VALUE`` is in none of the three sets, because no stage's residual entry is ever
     taken: a stage writes its own purchase down from *its* year 0, which is the wrong year in a
     plan, and a stage that ends the horizon holding an earlier stage's asset writes it down not at
@@ -203,9 +213,7 @@ class StagedCategories:
     #: price, or of the quote as stated -- and a soft loan's repayment grant follows the principal
     #: it is a share of. OPERATIONAL entries are paid after year 0 and are never escalated anyway;
     #: the kind is listed so its maximum is not escalated either.
-    FIXED_AMOUNT_BENEFITS: FrozenSet[BenefitKind] = frozenset(
-        {BenefitKind.LUMP_SUM, BenefitKind.PER_UNIT, BenefitKind.TIERED_PER_UNIT, BenefitKind.OPERATIONAL}
-    )
+    FIXED_AMOUNT_BENEFITS: FrozenSet[BenefitKind] = YearZeroPriceLevel.FIXED_AMOUNT_BENEFITS
 
     #: Shifted by the stage's start year and escalated to it, but only for the subjects the stage
     #: pays for: the wear-out of its own purchases.
@@ -979,11 +987,7 @@ class StagedEvaluator:
         Their awards are booked unescalated in whatever year their stage starts
         (:attr:`StagedCategories.FIXED_AMOUNT_BENEFITS`); empty without a catalogue.
         """
-        if catalog is None:
-            return frozenset()
-        return frozenset(
-            scheme.id for scheme in catalog.schemes if scheme.benefit_kind in StagedCategories.FIXED_AMOUNT_BENEFITS
-        )
+        return YearZeroPriceLevel.fixed_amount_schemes(catalog)
 
     @staticmethod
     def plan_year_zero(plan_start_year: Optional[int], price_basis_year: int) -> int:
@@ -995,8 +999,11 @@ class StagedEvaluator:
         and a subject a stage buys counts as installed in ``plan_year_zero + from_year``, which is
         also the ``installation_year`` the document publishes for it. The document's
         ``calendar_year`` is ``plan_start_year + year`` and null without a start year, so whenever
-        it is stated it agrees with this year. Prices are still read at the price basis year; the
-        stages' ``simulation_year`` is the year of their weather and dates nothing.
+        it is stated it agrees with this year. Prices are still read at the price basis year, and
+        every amount is escalated from it to this year with the rate it escalates with later
+        (renovisorissues #62, :class:`~hisim.economics.evaluator.YearZeroPriceLevel`), so year 0
+        is in its own calendar year's money; the stages' ``simulation_year`` is the year of their
+        weather and dates nothing.
 
         Args:
             plan_start_year: The calendar year the plan starts in, or ``None``.

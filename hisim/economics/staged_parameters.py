@@ -117,6 +117,16 @@ class ParameterKeys:
     #: ignored on input: it describes the run, it is not an assumption a caller may state.
     ORIGINS: ClassVar[str] = "origins"
 
+    #: Under :attr:`ORIGINS`: the years every amount of the document was escalated between, written
+    #: only when ``plan_start_year`` differs from ``price_basis_year`` (renovisorissues #62).
+    PRICE_LEVEL: ClassVar[str] = "price_level"
+
+    #: Under :attr:`PRICE_LEVEL`: the year the prices were read at, the price basis year.
+    PRICE_LEVEL_FROM: ClassVar[str] = "from_year"
+
+    #: Under :attr:`PRICE_LEVEL`: the year whose money the amounts are in, the plan's start year.
+    PRICE_LEVEL_TO: ClassVar[str] = "to_year"
+
     #: Which catalogue produced a document. Accepted and ignored on input (see the class docstring
     #: of :class:`StagedParameters`): the catalogue comes from the shipped directory or from
     #: ``--subsidy-catalog``.
@@ -1790,6 +1800,8 @@ class StagedParameters:
             price_basis_year_origin: :attr:`EchoOrigin.PLAN_START_YEAR` when the plan's start year
                 supplied ``parameters.price_basis_year``, written as ``origins.price_basis_year``;
                 None (the key absent) whenever the stages or the parameters stated the year.
+                ``origins.price_level`` (:meth:`price_level`) is derived from ``price_basis_year``
+                and ``plan_start_year`` and written whenever the two differ.
             investment_overrides: The reader's quotes the plan was priced with, each in the shape
                 the file states it (:meth:`StatedQuote.to_json`); ``[]`` without any
                 (renovisorissues #53, schema version 6). Fed back in, they price the same plan.
@@ -1811,6 +1823,9 @@ class StagedParameters:
         }
         if price_basis_year_origin is not None:
             origins[ParameterKeys.PRICE_BASIS_YEAR] = price_basis_year_origin.value
+        level = cls.price_level(parameters.price_basis_year, plan_start_year)
+        if level is not None:
+            origins[ParameterKeys.PRICE_LEVEL] = level
         return {
             ParameterKeys.HORIZON_YEARS: parameters.observation_period_in_years,
             ParameterKeys.INTEREST_RATE: parameters.interest_rate,
@@ -1835,6 +1850,29 @@ class StagedParameters:
             ParameterKeys.SUBSIDY_CATALOG: subsidy_catalog,
             ParameterKeys.ORIGINS: origins,
         }
+
+    @staticmethod
+    def price_level(price_basis_year: Optional[int], plan_start_year: Optional[int]) -> Optional[Dict[str, int]]:
+        """``origins.price_level``: the years the document's amounts were escalated between (#62).
+
+        Prices are read at ``price_basis_year``; when the plan starts in another calendar year every
+        amount is escalated from it to ``plan_start_year`` -- de-escalated for an earlier start --
+        with the rate it escalates with in later years, except a reader's quote and a fixed-amount
+        grant (:class:`~hisim.economics.evaluator.YearZeroPriceLevel`). The echoed year-1 prices of
+        ``energy_prices`` stay the ones read at the price basis year, so the block still reads back
+        into the same run.
+
+        Args:
+            price_basis_year: The year the plan was priced at.
+            plan_start_year: The calendar year of the plan's year 0, or None.
+
+        Returns:
+            ``{"from_year": price_basis_year, "to_year": plan_start_year}``, or None when nothing
+            was escalated (no start year, or one equal to the price basis year).
+        """
+        if price_basis_year is None or plan_start_year is None or plan_start_year == price_basis_year:
+            return None
+        return {ParameterKeys.PRICE_LEVEL_FROM: price_basis_year, ParameterKeys.PRICE_LEVEL_TO: plan_start_year}
 
     @staticmethod
     def _band_of(value: UncertainValue) -> Dict[str, float]:

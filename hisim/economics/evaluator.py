@@ -28,7 +28,7 @@ without HiSim.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim import log
 from hisim.economics.actors import (
@@ -44,6 +44,7 @@ from hisim.economics.calculators.aggregation import (
 )
 from hisim.economics.calculators.annualization import annualize_optional
 from hisim.economics.calculators.context_resolution import (
+    DeviceCosting,
     installation_verdict,
     resolve_device,
     resolve_replaced_asset,
@@ -61,6 +62,8 @@ from hisim.economics.calculators.financing_application import (
     resolve_loan_plan,
 )
 from hisim.economics.calculators.escalation import (
+    carrier_escalation_rate,
+    escalation_factor,
     resolve_carrier_escalation_rate,
     resolve_investment_escalation_rate,
 )
@@ -71,7 +74,7 @@ from hisim.economics.calculators.subsidy_application import (
     build_subsidy_flows,
     nominal_support_from_entries,
 )
-from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind
+from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind, revenue_subject
 from hisim.economics.database import CostDatabase, CostDataError
 from hisim.economics.facts import (
     BillingDeterminants,
@@ -89,6 +92,7 @@ from hisim.economics.perspectives import (
 )
 from hisim.economics.provenance import ParameterOrigin, ParameterProvenance, ProvenanceLedger, ResolvedSource
 from hisim.economics.results import (
+    AnywayBasisKinds,
     EconomicAssumptions,
     EmbodiedCo2Basis,
     EvaluationMatrix,
@@ -100,7 +104,13 @@ from hisim.economics.results import (
     ResolvedRate,
     TariffAssumption,
 )
-from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext, SubsidyDecision, SubsidyPackageContext
+from hisim.economics.subsidies import (
+    BenefitKind,
+    SubsidyCatalog,
+    SubsidyContext,
+    SubsidyDecision,
+    SubsidyPackageContext,
+)
 from hisim.economics.tariffs import TariffContract
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -509,6 +519,224 @@ class TimelineBuildResult:
     replacement_flows: List[Tuple[str, int, UncertainValue]] = field(default_factory=list)
 
 
+@dataclass
+class YearZeroPriceLevel:
+    """Carries one timeline from the price basis year's money into the money of its year 0 (#62).
+
+    Prices are read at the price basis year. When a staged plan's year 0 is a different calendar
+    year (``plan_start_year``, cmf 2026-09-27), every amount is escalated by the
+    ``years = year 0 - price basis year`` years in between, each with the rate it already
+    escalates with in later years, so year 0 is in the money of the year every date is counted
+    from. It is one shift of the escalation exponent, ``(1 + r)**(n + years)`` for every flow whose
+    year-``n`` amount is ``(1 + r)**n`` times a basis-year price, applied here as the factor
+    ``(1 + r)**years`` on the finished amounts instead of at the dozen sites that compute them:
+
+    * the year-0 purchase (investment, planning, removal), its replacements, its residual value,
+      a share-of-cost subsidy and a coupled-cost anyway credit: the subject's investment rate;
+    * a like-for-like anyway credit: the replaced asset's investment rate, which escalates it;
+    * maintenance, fixed operation and the standing charge: the general rate; the capacity charge:
+      the grid-fee rate; the working price: the carrier rate on the volume effect and the spread
+      rate on the flexibility correction, exactly as the energy calculator splits them; feed-in
+      revenue: the feed-in rate once its nominal-fixed duration is over, nothing before;
+    * the CO2 price: the path is read ``years`` later, since it is a calendar trajectory;
+    * the CO2 damage cost: nothing, it is a flat shadow price.
+
+    Exempt, as in the splice: a stated purchase price (a reader's quote, the subjects bought
+    within it and a quoted purchase with no cost facts), with the residual value and the
+    coupled-cost credit computed from it, and every award of a fixed-amount scheme
+    (:attr:`FIXED_AMOUNT_BENEFITS`). ``years`` may be negative, a plan starting before the year
+    its prices are read at: the same law de-escalates. ``years == 0`` -- no plan start year, or
+    one equal to the price basis year -- touches nothing, so such a timeline is bit-identical to
+    one built without this class. The loan is taken out afterwards on the shifted year-0 net
+    investment, and the levy basis and the subsidy maxima are shifted with the flows they sum.
+
+    Attributes:
+        years: The shift, ``year 0 - price basis year``; 0 leaves every amount as it is.
+        parameters: The general, grid-fee, spread and feed-in rates.
+        database: For the carrier rates, resolved by the energy calculator's own chain.
+        price_basis_year: Where the CO2 price path is read for year 1.
+        fixed_schemes: The ids of the schemes paying a fixed nominal amount.
+        subject_rates: Subject -> its investment escalation rate, filled per costed subject.
+        credit_factors: Subject -> the factor its anyway credit (and the credit's basis) is shifted by.
+        stated: Subjects whose year-0 purchase is a stated price, never shifted.
+        stated_residuals: Subjects whose residual value is written down from that stated price.
+        carriers: Carrier subject -> (carrier rate, spread rate, flexibility value in euro).
+        feed_in: Revenue subject -> (feed-in rate, nominal-fixed duration in years).
+    """
+
+    #: Benefit kinds that pay a fixed nominal amount (in total, per unit of size, or per kWh): a
+    #: grant of EUR 6,500 is EUR 6,500 in whichever year it is paid (owner decision 2026-09-27).
+    #: The other kinds are a share of a cost and follow it.
+    FIXED_AMOUNT_BENEFITS: ClassVar[FrozenSet[BenefitKind]] = frozenset(
+        {BenefitKind.LUMP_SUM, BenefitKind.PER_UNIT, BenefitKind.TIERED_PER_UNIT, BenefitKind.OPERATIONAL}
+    )
+
+    years: int
+    parameters: EconomicParameters
+    database: CostDatabase
+    price_basis_year: int
+    fixed_schemes: FrozenSet[str] = frozenset()
+    subject_rates: Dict[str, float] = field(default_factory=dict)
+    credit_factors: Dict[str, float] = field(default_factory=dict)
+    stated: Set[str] = field(default_factory=set)
+    stated_residuals: Set[str] = field(default_factory=set)
+    carriers: Dict[str, Tuple[float, float, float]] = field(default_factory=dict)
+    feed_in: Dict[str, Tuple[float, int]] = field(default_factory=dict)
+
+    @classmethod
+    def fixed_amount_schemes(cls, catalog: Optional[SubsidyCatalog]) -> FrozenSet[str]:
+        """The ids of the catalogue's schemes that pay a fixed nominal amount; empty without one."""
+        if catalog is None:
+            return frozenset()
+        return frozenset(scheme.id for scheme in catalog.schemes if scheme.benefit_kind in cls.FIXED_AMOUNT_BENEFITS)
+
+    @property
+    def shifts(self) -> bool:
+        """Whether any amount moves at all; False keeps the timeline bit-identical."""
+        return self.years != 0
+
+    def factor(self, rate: float) -> float:
+        """``(1 + rate)**years``: one rate's price level of year 0 relative to the price basis year."""
+        return escalation_factor(rate, self.years)
+
+    def purchase(self, subject: str) -> float:
+        """The factor of one subject's year-0 purchase and of what is a share of it."""
+        if subject in self.stated:
+            return 1.0
+        return self.factor(self.subject_rates[subject])
+
+    def add_subject(self, costing: DeviceCosting, asset_rate: float, replaced: bool) -> None:
+        """Record one costed subject: its rate and whether its purchase is a stated price.
+
+        Args:
+            costing: The subject's resolved costing.
+            asset_rate: Its investment escalation rate.
+            replaced: Whether its investment schedule re-buys it inside the horizon.
+        """
+        self.subject_rates[costing.subject] = asset_rate
+        if costing.purchase_override is not None and costing.is_new_investment:
+            self.stated.add(costing.subject)
+            if not replaced:
+                self.stated_residuals.add(costing.subject)
+
+    def add_credit(self, subject: str, like_for_like: bool, replaced_rate: float) -> float:
+        """Record the factor of one subject's anyway credit and return it.
+
+        Args:
+            subject: The measure's subject.
+            like_for_like: Whether the credit is the replaced asset's own escalated price rather
+                than the coupled-cost share of the measure.
+            replaced_rate: The replaced asset's investment rate, used on the like-for-like branch.
+
+        Returns:
+            The factor.
+        """
+        factor = self.factor(replaced_rate) if like_for_like else self.purchase(subject)
+        self.credit_factors[subject] = factor
+        return factor
+
+    def add_energy(
+        self, contracts: Sequence[TariffContract], flexibility_by_carrier: Mapping[str, float]
+    ) -> None:
+        """Record every billed carrier's rates the way the energy calculator resolved them.
+
+        Args:
+            contracts: The contract each carrier was billed under, in billing order.
+            flexibility_by_carrier: The raw flexibility value per carrier (clamped at 0 here, as the
+                calculator clamps it).
+        """
+        params = self.parameters
+        for contract in contracts:
+            carrier = contract.carrier
+            rate = carrier_escalation_rate(carrier, params, self.database)
+            spread = params.spread_escalation_rate if params.spread_escalation_rate is not None else rate
+            flexibility = max(0.0, flexibility_by_carrier.get(carrier.value, 0.0))
+            self.carriers[carrier.value] = (rate, spread, flexibility)
+            duration = contract.feed_in.duration_in_years
+            self.feed_in[revenue_subject(carrier)] = (params.feed_in_escalation_rate, duration)
+
+    def decision(self, decision: SubsidyDecision) -> SubsidyDecision:
+        """One subsidy decision with its share-of-cost maxima shifted like the awards."""
+        if not self.shifts or not decision.maximum_by_scheme:
+            return decision
+        factor = self.purchase(decision.measure_subject)
+        maxima = {
+            scheme: (
+                maximum
+                if scheme in self.fixed_schemes or maximum.amount_in_euro is None
+                else replace(maximum, amount_in_euro=maximum.amount_in_euro.scale(factor))
+            )
+            for scheme, maximum in decision.maximum_by_scheme.items()
+        }
+        return replace(decision, maximum_by_scheme=maxima)
+
+    def timeline(self, timeline: CashFlowTimeline) -> CashFlowTimeline:
+        """The timeline with every entry in year-0 money; the same object when nothing shifts."""
+        if not self.shifts:
+            return timeline
+        shifted = CashFlowTimeline(validate=timeline.validate)
+        shifted.extend(self.entry(entry) for entry in timeline.entries)
+        return shifted
+
+    def entry(self, entry: CashFlowEntry) -> CashFlowEntry:
+        """One entry in year-0 money, by the rate its category escalates with (class docstring).
+
+        Raises:
+            ValueError: For a category this shift does not know: the loan, the levy and the
+                replacement reserve are built after it, from shifted figures, so meeting one here
+                is a defect.
+        """
+        category, subject, params = entry.category, entry.subject, self.parameters
+        if category in (CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REMOVAL):
+            factor = self.purchase(subject)
+        elif category is CostCategory.REPLACEMENT:
+            factor = self.factor(self.subject_rates[subject])
+        elif category is CostCategory.RESIDUAL_VALUE:
+            factor = 1.0 if subject in self.stated_residuals else self.factor(self.subject_rates[subject])
+        elif category is CostCategory.ANYWAY_COST_CREDIT:
+            factor = self.credit_factors[subject]
+        elif category is CostCategory.SUBSIDY:
+            factor = 1.0 if entry.subsidy_scheme_id in self.fixed_schemes else self.purchase(subject)
+        elif category in (CostCategory.MAINTENANCE, CostCategory.FIXED_OPERATION, CostCategory.ENERGY_STANDING):
+            factor = self.factor(params.general_price_escalation_rate)
+        elif category is CostCategory.ENERGY_CAPACITY_CHARGE:
+            grid = params.grid_fee_escalation_rate
+            factor = self.factor(grid if grid is not None else params.general_price_escalation_rate)
+        elif category is CostCategory.ENERGY_WORKING:
+            return self._working(entry)
+        elif category is CostCategory.FEED_IN_REVENUE:
+            rate, duration = self.feed_in[subject]
+            factor = 1.0 if entry.year <= duration else self.factor(rate)
+        elif category is CostCategory.ENERGY_CO2_PRICE:
+            factor = self._co2_price_factor(entry.year)
+        elif category is CostCategory.CO2_DAMAGE:
+            factor = 1.0
+        else:
+            raise ValueError(f"{category.value} is not shifted to year-0 money: it is built after the shift")
+        return replace(entry, amount_in_euro=entry.amount_in_euro.scale(factor))
+
+    def _working(self, entry: CashFlowEntry) -> CashFlowEntry:
+        """The working-price entry: the volume effect at the carrier rate, the correction at the spread rate.
+
+        The calculator books ``V (1+c)**(t-1) - F (1+s)**(t-1)``; shifted, that is
+        ``(1+c)**d`` times the entry plus ``F (1+s)**(t-1) ((1+c)**d - (1+s)**d)``.
+        """
+        rate, spread, flexibility = self.carriers[entry.subject]
+        amount = entry.amount_in_euro.scale(self.factor(rate))
+        if flexibility:
+            correction = flexibility * escalation_factor(spread, entry.year - 1)
+            amount = amount + UncertainValue.exact(correction * (self.factor(rate) - self.factor(spread)))
+        return replace(entry, amount_in_euro=amount)
+
+    def _co2_price_factor(self, year: int) -> float:
+        """The CO2 path read ``years`` later than the calculator read it for plan year ``year``."""
+        path = self.database.get_co2_price_path(self.parameters.country, self.parameters.co2_price_scenario)
+        if path is None:
+            return 1.0
+        read = path.price(self.price_basis_year + year - 1)
+        return path.price(self.price_basis_year + self.years + year - 1) / read if read else 1.0
+
+
 def _levy_summary(outcome: Optional[ModernizationLevyOutcome]) -> Optional[ModernizationLevySummary]:
     """The result-side record of a ruleset's levy outcome, or None when there is no levy.
 
@@ -592,8 +820,9 @@ class EconomicEvaluator:
         `plan_year_zero` is the calendar year of year 0 of the timeline, the year every kept or
         replaced register asset is aged at (`ageing_reference_year`). Only the staged evaluator
         states it: a plan's year 0 is its `plan_start_year`, else its price basis year
-        (hisim-dutz, hisim-nl6j). `None`, every other path, ages at the price basis year exactly
-        as before.
+        (hisim-dutz, hisim-nl6j). It is also the year whose money the timeline is in: every amount
+        is escalated from the price basis year to it (`YearZeroPriceLevel`, renovisorissues #62).
+        `None`, every other path, ages and prices at the price basis year exactly as before.
         """
         self.database = cost_database
         self.parameters = parameters
@@ -641,6 +870,15 @@ class EconomicEvaluator:
         if self.plan_year_zero is not None:
             return self.plan_year_zero
         return self.price_basis_year(inputs)
+
+    def price_level_years(self, inputs: EvaluationInputs) -> int:
+        """How many years every amount is escalated by, from the price basis year to year 0 (#62).
+
+        ``plan_year_zero - price basis year`` when the evaluator was given a year 0 (a staged plan
+        with a ``plan_start_year``), else 0. Negative for a plan starting before the year its prices
+        are read at, which de-escalates by the same law (:class:`YearZeroPriceLevel`).
+        """
+        return self.ageing_reference_year(inputs) - self.price_basis_year(inputs)
 
     def effective_parameters(self, inputs: EvaluationInputs) -> EconomicParameters:
         """The parameters as actually used, with the resolved price basis year filled in.
@@ -855,6 +1093,16 @@ class EconomicEvaluator:
         replacement_flows_for_reserve: List[Tuple[int, UncertainValue]] = []
         replacement_flows_by_subject: List[Tuple[str, int, UncertainValue]] = []
         subsidy_context = self._with_package(inputs, context)
+        # Year 0 in the money of its own calendar year (#62): every amount below is computed at the
+        # price basis year, and the side figures are shifted as they are summed; the entries are
+        # shifted once, after the energy bills. Zero years shifts nothing.
+        level = YearZeroPriceLevel(
+            years=self.price_level_years(inputs),
+            parameters=params,
+            database=self.database,
+            price_basis_year=price_basis_year,
+            fixed_schemes=YearZeroPriceLevel.fixed_amount_schemes(self.subsidy_catalog),
+        )
 
         for subject_facts in inputs.cost_facts:
             costing = resolve_device(
@@ -877,8 +1125,11 @@ class EconomicEvaluator:
 
             # --- year-0 investment, replacements and residual value (§3.6 rules 1-3)
             schedule = build_investment_schedule(costing, gross, asset_rate, horizon, include_investment)
+            level.add_subject(costing, asset_rate, replaced=bool(schedule.reserve_flows))
             timeline.extend(schedule.year_zero_entries)
             for addend in schedule.modernization_cost_addends:
+                if level.shifts:
+                    addend = addend.scale(level.purchase(subject))
                 modernization_cost = modernization_cost + addend
                 levy_cost_by_subject[subject] = levy_cost_by_subject[subject] + addend
             accumulate_embodied_co2(co2_result, subject, schedule.embodied_co2_addends)
@@ -900,10 +1151,11 @@ class EconomicEvaluator:
                     per_installation_in_kg=costing.embodied_co2_kg,
                     installations=len(schedule.embodied_co2_addends),
                 )
-            replacement_flows_for_reserve.extend(schedule.reserve_flows)
-            replacement_flows_by_subject.extend(
-                (subject, repl_year, amount) for repl_year, amount in schedule.reserve_flows
-            )
+            reserve_flows = schedule.reserve_flows
+            if level.shifts:
+                reserve_flows = [(year, amount.scale(level.factor(asset_rate))) for year, amount in reserve_flows]
+            replacement_flows_for_reserve.extend(reserve_flows)
+            replacement_flows_by_subject.extend((subject, repl_year, amount) for repl_year, amount in reserve_flows)
 
             # --- replaced asset: sunk cost and anyway-cost credit (§4.1)
             if include_investment and costing.is_new_investment and costing.replaced_asset is not None:
@@ -922,6 +1174,17 @@ class EconomicEvaluator:
                 sunk_cost = sunk_cost + replaced_outcome.sunk_cost
                 if replaced_outcome.credit_entry is not None:
                     timeline.add(replaced_outcome.credit_entry)
+                    credit_factor = level.add_credit(
+                        subject,
+                        like_for_like=replaced_outcome.credit_basis_kind == AnywayBasisKinds.LIKE_FOR_LIKE,
+                        replaced_rate=self.investment_escalation_rate(costing.replaced_asset.asset_class),
+                    )
+                    if level.shifts:
+                        replaced_outcome = replace(
+                            replaced_outcome,
+                            credit_amount=replaced_outcome.credit_amount.scale(credit_factor),
+                            credit_basis_in_euro=replaced_outcome.credit_basis_in_euro * credit_factor,
+                        )
                     anyway_share_by_subject[subject] = replaced_outcome.anyway_share
                     # The cost the share was applied to, so the credit is a visible
                     # multiplication rather than a figure with a percentage beside it — and what
@@ -965,12 +1228,13 @@ class EconomicEvaluator:
                     price_basis_year=price_basis_year,
                 )
                 if subsidy_result.decision is not None:
-                    decisions.append(subsidy_result.decision)
+                    decisions.append(level.decision(subsidy_result.decision))
                 timeline.extend(subsidy_result.entries)
 
         # --- purchases priced whole by a stated amount, with no cost facts behind them (#53)
         if include_investment:
             for purchase in quoted_purchases:
+                level.stated.add(purchase.subject)
                 provenance = ledger.record(
                     ParameterProvenance(
                         parameter=f"{purchase.subject}.quoted_purchase_in_euro",
@@ -1009,6 +1273,11 @@ class EconomicEvaluator:
         )
         timeline.extend(energy_result.entries)
         accumulate_operational_emissions(energy_result, co2_result, horizon)
+
+        # --- year 0 in its own calendar year's money (#62): the one shift of every entry so far;
+        # the reserve, the CO2 damage and the loan below are built from shifted figures.
+        level.add_energy(energy_result.tariffs_applied, energy_result.raw_flexibility_value_by_carrier)
+        timeline = level.timeline(timeline)
 
         # --- operating view: replacement reserve instead of investment categories (§4.2)
         if context == InstallationContext.OPERATING_ONLY and replacement_flows_for_reserve:

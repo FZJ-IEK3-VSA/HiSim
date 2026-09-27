@@ -191,7 +191,12 @@ Subsidies on eligible cost and the coupled-cost anyway credit see the quote; a l
 like-for-like anyway credit (the old asset's price) do not. A quote is taken exactly as stated,
 never escalated: a stage starting in year 3 books its 11,800 as 11,800 nominal in year 3, since
 whoever quoted for that year has already accounted for inflation (owner decision 2026-09-27); the
-database price it replaces would have been escalated. A measure HiSim holds no price for
+database price it replaces would have been escalated. A later stage's loan finances exactly what the
+stage books: its principal is the financed share of the stage's booked year-0 net investment (the
+quote as stated, database prices escalated, grants as booked), never the stage's own loan escalated.
+Fixed-amount grants (`LUMP_SUM`, `PER_UNIT`, `TIERED_PER_UNIT`) are booked nominal in their stage's
+year, quoted or not, and so is their `max_amount_in_euro`; share-of-cost grants follow the cost they
+are a share of, and a soft loan's repayment grant follows the principal. A measure HiSim holds no price for
 (`hot_water_tank_and_pipe_insulation`) becomes priced: one year-0 purchase, never replaced,
 maintained or written down. A stage the plan does not have
 (`parameters.investment_overrides.stage.unknown`), a measure the stage does not carry out or

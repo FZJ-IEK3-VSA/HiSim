@@ -38,7 +38,7 @@ import json
 import os
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.carriers import bill_subjects
@@ -1212,9 +1212,24 @@ class StagedDocument:
         claimed: Set[AwardKey] = set()
         for stage, decision in self._decisions(result, staged):
             measure_id = self._measure_ids.get(decision.measure_subject)
-            scale = self._result.stage_start_scale(stage, decision.measure_subject)
-            rows.extend(self._decision_rows(decision, stage, measure_id, awarded, claimed, scale))
+            rows.extend(
+                self._decision_rows(
+                    decision, stage, measure_id, awarded, claimed, self._scale_of(stage, decision.measure_subject)
+                )
+            )
         return rows
+
+    def _scale_of(self, stage: Optional[int], subject: str) -> Callable[[Optional[str]], float]:
+        """Scheme id -> the factor a stage's year-0 award of that scheme for one subject is booked with.
+
+        Escalated with the cost for a share of it, the share paid alone for a fixed-amount scheme
+        (:meth:`~hisim.economics.staged.StagedResult.subsidy_scale`).
+        """
+
+        def scale(scheme_id: Optional[str]) -> float:
+            return self._result.subsidy_scale(stage, subject, scheme_id)
+
+        return scale
 
     @classmethod
     def _maximum(cls, decision: SubsidyDecision, scheme_id: Optional[str], scale: float) -> Tuple[Any, Optional[str]]:
@@ -1222,7 +1237,8 @@ class StagedDocument:
 
         The maximum is the subsidy layer's (:func:`~hisim.economics.subsidies.scheme_maximum`),
         moved into the plan exactly as the stage's own year-0 award is (share paid times the price
-        level of the stage's year) and signed as a credit, like ``amount_in_euro``.
+        level of the stage's year; the share alone for a fixed-amount scheme, which is never
+        escalated) and signed as a credit, like ``amount_in_euro``.
 
         Args:
             decision: The decision the row belongs to.
@@ -1313,15 +1329,15 @@ class StagedDocument:
         measure_id: Optional[str],
         awarded: Mapping[AwardKey, Mapping[int, UncertainValue]],
         claimed: Set[AwardKey],
-        scale: float = 1.0,
+        scale: Optional[Callable[[Optional[str]], float]] = None,
     ) -> List[Dict[str, Any]]:
         """The rows of one measure's subsidy decision: awarded, refused and undecided.
 
         The awarded amount is read off the plan's own timeline rather than off the award record,
         so what the document publishes as support is exactly what the NPV was computed with — a
-        staged award is escalated and moved into its stage's year, and re-reading the award would
-        state the unmoved figure. An awarded row always carries an amount: a benefit that books no
-        cash states a zero band and says where its money is instead.
+        staged award is moved into its stage's year (and escalated, unless it is a fixed amount),
+        and re-reading the award would state the unmoved figure. An awarded row always carries an
+        amount: a benefit that books no cash states a zero band and says where its money is instead.
 
         A soft loan's repayment grant is booked under the financing subject rather than under any
         measure, because the loan is taken out against the stage's investment as a whole. The
@@ -1335,12 +1351,14 @@ class StagedDocument:
             measure_id: The catalogue measure behind the decision's subject.
             awarded: What :meth:`_awarded_amounts` read off the timeline.
             claimed: The financing keys whose grant a row already states; updated in place.
-            scale: The factor the stage books the subject's year-0 figures with, which the rows'
-                ``max_amount_in_euro`` is moved by (:meth:`_maximum`).
+            scale: Scheme id -> the factor the stage books that scheme's year-0 award for the
+                subject with, which the row's ``max_amount_in_euro`` is moved by
+                (:meth:`_maximum`, :meth:`_scale_of`); ``None`` for 1.0 (the reference).
 
         Returns:
             The rows, awarded first. Every row states ``max_amount_in_euro``, whatever its status.
         """
+        factor = scale or (lambda _scheme: 1.0)
         rows: List[Dict[str, Any]] = []
         for award in decision.applied:
             by_year: Dict[int, UncertainValue] = dict(
@@ -1360,7 +1378,7 @@ class StagedDocument:
             elif award.payout_kind in cls.NON_CASH_NOTES and not by_year:
                 notes.append(cls.NON_CASH_NOTES[award.payout_kind])
             binding = sorted(slot for slot, bound in award.caps_binding_per_slot.items() if bound)
-            maximum, maximum_note = cls._maximum(decision, award.scheme_id, scale)
+            maximum, maximum_note = cls._maximum(decision, award.scheme_id, factor(award.scheme_id))
             rows.append(
                 {
                     "scheme": award.scheme_id,
@@ -1378,7 +1396,7 @@ class StagedDocument:
                 }
             )
         for rejected in decision.rejected:
-            maximum, maximum_note = cls._maximum(decision, rejected.get("scheme_id"), scale)
+            maximum, maximum_note = cls._maximum(decision, rejected.get("scheme_id"), factor(rejected.get("scheme_id")))
             rows.append(
                 {
                     "scheme": rejected.get("scheme_id"),
@@ -1396,7 +1414,8 @@ class StagedDocument:
                 }
             )
         for undetermined in decision.undetermined:
-            maximum, maximum_note = cls._maximum(decision, undetermined.get("scheme_id"), scale)
+            scheme_id = undetermined.get("scheme_id")
+            maximum, maximum_note = cls._maximum(decision, scheme_id, factor(scheme_id))
             rows.append(
                 {
                     "scheme": undetermined.get("scheme_id"),

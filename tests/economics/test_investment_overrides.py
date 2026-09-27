@@ -651,6 +651,115 @@ class TestAQuoteInALaterStage:
         assert _entries(quoted, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT) == [(0, QUOTE)]
 
 
+class TestALaterStagesLoanAndFixedGrants:
+    """A later stage's loan finances what the stage books; a fixed-amount grant is never escalated.
+
+    Owner decisions of 2026-09-27: the loan principal is the financed share of the quote as stated
+    (database prices escalated as before), and a grant of EUR 2,000 is EUR 2,000 when it is paid,
+    quoted or not, while a share-of-cost grant follows the cost it is a share of.
+    """
+
+    FROM_YEAR = 4
+    RATE = 0.02
+    FINANCED_SHARE = 0.8
+    TERM = 6  # years: a year-4 loan is repaid in full inside the 12-year horizon
+    LUMP_SUM = 2000.0
+
+    def _later(self, database, perspective, catalog, overrides=()) -> StagedResult:
+        """The plan with its heat-pump stage in year 4 under a 2 % investment escalation."""
+        stages = _stages()
+        stages[2] = replace(stages[2], from_year=self.FROM_YEAR)
+        parameters = replace(_parameters(), investment_price_escalation_rate=self.RATE)
+        return StagedEvaluator(database).evaluate(
+            stages, parameters, perspective, catalog, investment_overrides=overrides
+        )
+
+    def _financed(self, subsidies: bool = False):
+        """The brownfield perspective with 80 % of the year-0 net investment financed."""
+        from hisim.economics.financing import FinancingPlan  # pylint: disable=import-outside-toplevel
+
+        return replace(
+            brownfield_perspective(subsidies=subsidies),
+            financing=FinancingPlan(financed_share=self.FINANCED_SHARE, term_in_years=self.TERM),
+        )
+
+    def _lump_sum_catalog(self):
+        """One lump sum of EUR 2,000 every synthetic measure qualifies for."""
+        return synthetic_catalog(
+            [
+                always_eligible_scheme(
+                    "LUMP", BenefitKind.LUMP_SUM, LumpSumBenefit(amount=self.LUMP_SUM), PayoutKind.UPFRONT_GRANT
+                )
+            ]
+        )
+
+    @staticmethod
+    def _principal(result: StagedResult, year: int) -> float:
+        """The loan disbursed in one plan year, as a positive best estimate."""
+        (principal,) = [
+            amount for at, amount in _entries(result, "financing", CostCategory.LOAN_DISBURSEMENT) if at == year
+        ]
+        return float(-principal)
+
+    def test_a_quoted_heat_pumps_loan_finances_the_quote_as_stated(self, database) -> None:
+        """80 % of 11,800, not of 11,800 escalated to year 4 (the buffer is bought within the quote)."""
+        quoted = self._later(database, self._financed(), None, [HEATING_QUOTE])
+        assert self._principal(quoted, self.FROM_YEAR) == pytest.approx(self.FINANCED_SHARE * QUOTE)
+
+    def test_an_unquoted_measures_loan_is_escalated_as_before(self, database) -> None:
+        """80 % of the database prices escalated to year 4."""
+        plain = self._later(database, self._financed(), None)
+        factor = (1.0 + self.RATE) ** self.FROM_YEAR
+        booked = SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO + BUFFER_INVESTMENT_IN_EURO
+        assert self._principal(plain, self.FROM_YEAR) == pytest.approx(self.FINANCED_SHARE * booked * factor)
+
+    def test_the_debt_service_repays_exactly_the_principal(self, database) -> None:
+        """The later stage's schedule repays its own principal, from the year after it is taken out."""
+        quoted = self._later(database, self._financed(), None, [HEATING_QUOTE])
+        repaid = [
+            (entry.year, entry.amount_in_euro.best_estimate)
+            for entry, stage in zip(quoted.plan.timeline.entries, quoted.stage_by_entry)
+            if stage == 2 and entry.category is CostCategory.LOAN_PRINCIPAL
+        ]
+        assert min(year for year, _amount in repaid) == self.FROM_YEAR + 1
+        assert sum(amount for _year, amount in repaid) == pytest.approx(self.FINANCED_SHARE * QUOTE)
+
+    @pytest.mark.parametrize("overrides", [(), (HEATING_QUOTE,)], ids=["unquoted", "quoted"])
+    def test_a_lump_sum_in_a_later_stage_books_exactly_its_amount(self, database, overrides) -> None:
+        """EUR 2,000 in year 4, whether the heat pump is quoted or priced from the database."""
+        result = self._later(database, brownfield_perspective(subsidies=True), self._lump_sum_catalog(), overrides)
+        assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, -self.LUMP_SUM)
+        ]
+
+    def test_the_loan_is_net_of_the_nominal_lump_sum(self, database) -> None:
+        """80 % of (11,800 - 2,000): the grant the stage books is the one the loan is net of."""
+        quoted = self._later(database, self._financed(subsidies=True), self._lump_sum_catalog(), [HEATING_QUOTE])
+        assert self._principal(quoted, self.FROM_YEAR) == pytest.approx(
+            self.FINANCED_SHARE * (QUOTE - self.LUMP_SUM)
+        )
+
+    def test_the_lump_sums_maximum_is_not_escalated_either(self, database) -> None:
+        """The row's cap is EUR 2,000, its amount (both signed as a credit)."""
+        result = self._later(database, brownfield_perspective(subsidies=True), self._lump_sum_catalog())
+        document = StagedDocument(result, _parameters(), brownfield_perspective(subsidies=True)).to_json()
+        (row,) = [
+            subsidy
+            for subsidy in document["plan"]["subsidies"]
+            if subsidy["stage"] == 2 and subsidy["status"] == "awarded"
+        ]
+        assert row["amount_in_euro"]["best"] == pytest.approx(-self.LUMP_SUM)
+        assert row["max_amount_in_euro"]["best"] == pytest.approx(-self.LUMP_SUM)
+
+    def test_a_share_of_cost_grant_on_an_unquoted_measure_still_escalates(self, database) -> None:
+        """30 % of the database price escalated to year 4."""
+        result = self._later(database, brownfield_perspective(subsidies=True), always_eligible_catalog(0.3))
+        factor = (1.0 + self.RATE) ** self.FROM_YEAR
+        assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, pytest.approx(-0.3 * SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * factor))
+        ]
+
+
 class TestTheEngineGuards:
     """The evaluator refuses a quote it cannot place, whoever built it."""
 

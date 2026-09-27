@@ -157,7 +157,8 @@ under `roadmap/renovisor/implementation/`. One page of usage: `hisim/renovisor/h
 
 Commands: `python -m hisim.renovisor {run|translate|validate|capabilities|map|verify}`. Exit codes 0 finished,
 2 the request is not a request (`problems.json` lists every fault), 3 a translator error
-(`translator_error.json`), 5 HiSim refused the file or the simulation raised. `verify --out DIR` is tier 1
+(`translator_error.json`), 5 HiSim refused the file, the simulation raised or the lifecycle cost engine failed
+(a RenoVisor run requires the costs: `SimulationParameters.require_lifecycle_costs`; plain HiSim only logs). `verify --out DIR` is tier 1
 of the path verification (`hisim/renovisor/verify/`): every capability probe translated and diffed against
 its base (request, mapping report, energy system), written as `report.json` + an HTML matrix; it exits 4 when
 the report lists a failure. CI uploads it as the artifact `path-verification-report`.

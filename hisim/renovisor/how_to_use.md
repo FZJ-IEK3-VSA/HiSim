@@ -78,7 +78,7 @@ cache volume saves that download, and nothing is ever written into the installed
 | 0 | finished |
 | 2 | the request is not a valid request; `problems.json` lists every fault at once |
 | 3 | a translator error: something the translator cannot map and nobody wrote down |
-| 5 | HiSim refused the energy-system file, or the simulation raised |
+| 5 | HiSim refused the energy-system file, the simulation raised, or the lifecycle cost engine failed (its error named) |
 
 The last line on standard error for 3 and 5 is one line, which the backend shows as the job's
 error message.

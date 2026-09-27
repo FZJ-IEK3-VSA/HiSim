@@ -109,6 +109,20 @@ class SimulationParameters:
         # envelope measures, tenancy data and scenario sets a system setup declares for the
         # lifecycle cost engine (see system_setups/economic_example/).
         self.economic_context: Optional[Any] = None
+        # Whether a failed lifecycle cost engine fails the run (see require_lifecycle_costs). A
+        # plain attribute for the same round-trip reason as the two above.
+        self.lifecycle_costs_required: bool = False
+
+    def require_lifecycle_costs(self) -> None:
+        """Makes a failure of the lifecycle cost engine fail the run instead of being logged.
+
+        A plain HiSim simulation treats the cost engine as an addition: when it fails, the error
+        is logged and the legacy outputs are written as always. A caller whose answer *is* the
+        money -- a RenoVisor calculation, whose frontend cannot show a result without it -- calls
+        this before the run, and postprocessing then re-raises the engine's error as a
+        `LifecycleCostEngineError` naming it (owner decision 2026-09-27, renovisorissues #66).
+        """
+        self.lifecycle_costs_required = True
 
     def set_economic_parameters(self, economic_parameters: Any) -> None:
         """Attaches EconomicParameters for the lifecycle cost engine (cost_spec.md §3.2).

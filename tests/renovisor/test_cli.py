@@ -14,13 +14,14 @@ import copy
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict
 
 import pytest
 
 from hisim.renovisor.__main__ import RenovisorCommandLine
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.run import Calculation, ExitCode, Outputs
+from hisim.renovisor.run import Calculation, ExitCode, LifecycleCosts, Outputs
 from hisim.renovisor.simulation import SimulationParameters
 
 BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
@@ -29,10 +30,48 @@ BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
 class SilentRunner:
     """A simulation that does nothing, so the output collection can be tested in milliseconds."""
 
-    def run(self, _energy_system_path: Path, _parameters: SimulationParameters, record_directory: Path) -> None:
-        """Write the three records HiSim would write, and run no timestep."""
+    def run(self, _energy_system_path: Path, parameters: SimulationParameters, record_directory: Path) -> None:
+        """Write the records and the cost engine's export HiSim would write, and run no timestep."""
         for name in Outputs.RECORDS:
             (record_directory / name).write_text("# a stand-in for HiSim's own record\n", encoding="utf-8")
+        (Path(parameters.result_directory) / LifecycleCosts.FILE_NAME).write_text("{}\n", encoding="utf-8")
+
+
+class CostlessRunner:
+    """A simulation that finishes without the cost engine having written anything."""
+
+    def run(self, _energy_system_path: Path, _parameters: SimulationParameters, record_directory: Path) -> None:
+        """Write the records only."""
+        for name in Outputs.RECORDS:
+            (record_directory / name).write_text("# a stand-in for HiSim's own record\n", encoding="utf-8")
+
+
+class FailingCostEngineRunner:
+    """A simulation whose postprocessing runs the real lifecycle-cost step against an engine that raises."""
+
+    #: The #66 error, as the engine raised it.
+    ENGINE_ERROR: str = (
+        "Timeline entry violates the §3.9 sign convention: LOAN_DISBURSEMENT entry for 'financing' in "
+        "year 0 (payer system) should be non-positive but is (-4800.0, -0.0, 3900.0)"
+    )
+
+    def run(self, _energy_system_path: Path, parameters: SimulationParameters, _record_directory: Path) -> None:
+        """Hand the calculation's own parameters to ``PostProcessor.compute_lifecycle_costs``."""
+        from unittest import mock
+
+        from hisim.postprocessing.postprocessing_main import PostProcessor
+
+        ppdt = SimpleNamespace(
+            wrapped_components=[],
+            all_outputs=[],
+            results=None,
+            simulation_parameters=parameters,
+            post_processing_options=list(parameters.post_processing_options),
+        )
+        with mock.patch(
+            "hisim.economics.bridge.compute_lifecycle_costs", side_effect=ValueError(self.ENGINE_ERROR)
+        ):
+            PostProcessor().compute_lifecycle_costs(ppdt)  # type: ignore[arg-type]
 
 
 class CrashingRunner:
@@ -227,6 +266,56 @@ class TestExitFive:
         stderr = capsys.readouterr().err.strip().splitlines()
         assert len(stderr) == 1
         assert "water temperature" in stderr[0]
+
+    def test_a_failing_cost_engine_is_exit_five_naming_its_error(self, tmp_path: Path, capsys: Any) -> None:
+        """No money is a failed calculation, and the one line says why (renovisorissues #66).
+
+        The runner hands the calculation's own parameters to the real postprocessing step, so
+        this proves both halves: the RenoVisor run requires the lifecycle costs, and a required
+        engine that raises fails the run with its error named (owner decision 2026-09-27).
+        """
+        request = write_request(tmp_path / "request.json", measures=[])
+        out = tmp_path / "out"
+
+        assert calculation(request, out, FailingCostEngineRunner()).run() == ExitCode.SIMULATION_ERROR
+
+        assert Outputs.RESULT not in {path.name for path in out.iterdir()}
+        stderr = capsys.readouterr().err.strip().splitlines()
+        assert len(stderr) == 1
+        assert "the lifecycle cost engine failed: ValueError: " in stderr[0]
+        assert FailingCostEngineRunner.ENGINE_ERROR in stderr[0]
+
+    def test_a_run_without_a_cost_export_is_exit_five(self, tmp_path: Path, capsys: Any) -> None:
+        """A simulation that never reached the engine is no finished calculation either."""
+        request = write_request(tmp_path / "request.json", measures=[])
+        out = tmp_path / "out"
+
+        assert calculation(request, out, CostlessRunner()).run() == ExitCode.SIMULATION_ERROR
+
+        assert Outputs.RESULT not in {path.name for path in out.iterdir()}
+        stderr = capsys.readouterr().err.strip().splitlines()
+        assert len(stderr) == 1
+        assert LifecycleCosts.FILE_NAME in stderr[0]
+
+
+@pytest.mark.base
+class TestAPlainSimulationKeepsItsLeniency:
+    """Outside RenoVisor a failing cost engine stays a log line: the legacy outputs are unaffected."""
+
+    def test_an_unrequired_engine_failure_does_not_raise(self) -> None:
+        """Same postprocessing step, parameters that did not require the costs: no exception."""
+        from unittest import mock
+
+        from hisim.postprocessing.postprocessing_main import PostProcessor
+
+        parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=900)
+        assert parameters.lifecycle_costs_required is False
+        ppdt = SimpleNamespace(
+            wrapped_components=[], all_outputs=[], results=None, simulation_parameters=parameters,
+            post_processing_options=[],
+        )
+        with mock.patch("hisim.economics.bridge.compute_lifecycle_costs", side_effect=ValueError("boom")):
+            PostProcessor().compute_lifecycle_costs(ppdt)  # type: ignore[arg-type]
 
 
 @pytest.mark.base

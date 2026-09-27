@@ -13,7 +13,8 @@ a Python program::
 | 0    | success                                                 | everything in :class:`Outputs`   |
 | 2    | the request is not a valid request                      | ``problems.json`` and nothing else |
 | 3    | the translator could not map something nobody listed    | ``translator_error.json``        |
-| 5    | HiSim refused the file, or the simulation raised        | whatever HiSim wrote             |
+| 5    | HiSim refused the file, the simulation raised, or the   | whatever HiSim wrote             |
+|      | lifecycle cost engine failed or wrote nothing           |                                  |
 
 The last line on standard error for exit 3 and 5 is one line, because the backend shows it as
 the job's error message.
@@ -56,7 +57,8 @@ class ExitCode(IntEnum):
     ``FINISHED`` is a run that produced every output. ``REQUEST_INVALID`` is a request that is
     not a request, with ``problems.json`` naming every fault. ``TRANSLATOR_ERROR`` is a bug in
     this package, which a released translator cannot reach because T-NIY runs the whole probe
-    set. ``SIMULATION_ERROR`` is HiSim refusing the file or the simulation raising.
+    set. ``SIMULATION_ERROR`` is HiSim refusing the file, the simulation raising, or the lifecycle
+    cost engine failing, whose error the one line on standard error then names.
     """
 
     FINISHED = 0
@@ -176,6 +178,40 @@ class EnergySystemSimulationRunner:
         built = build_energy_system(energy_system_path, parameters)
         write_records(built, str(record_directory))
         built.simulator.run_all_timesteps()
+
+
+class LifecycleCostsMissingError(RuntimeError):
+    """The simulation finished but the lifecycle cost engine left no answer behind.
+
+    A failing engine normally ends the run on its own, with its error named
+    (``SimulationParameters.require_lifecycle_costs``); this is the check behind that one, for a
+    run that never reached the engine at all. Either way the calculation is a failure (exit 5)
+    rather than a finished job without money and emissions (owner decision 2026-09-27,
+    renovisorissues #66).
+    """
+
+
+class LifecycleCosts:
+    """What a finished simulation must have written for the payload to carry its money."""
+
+    #: The engine's primary export, in the run's result directory.
+    FILE_NAME: ClassVar[str] = "lifecycle_costs.json"
+
+    @classmethod
+    def require(cls, results_directory: Path) -> None:
+        """Refuse a run whose result directory holds no lifecycle cost export.
+
+        Args:
+            results_directory: The simulation's own result directory.
+
+        Raises:
+            LifecycleCostsMissingError: When ``lifecycle_costs.json`` is not there.
+        """
+        if not (results_directory / cls.FILE_NAME).is_file():
+            raise LifecycleCostsMissingError(
+                f"the lifecycle cost engine wrote no {cls.FILE_NAME}, so the calculation has no "
+                "costs and no lifecycle emissions; the simulation log in results/ names the cause"
+            )
 
 
 @dataclass(frozen=True)
@@ -352,6 +388,7 @@ class Calculation:
             parameters.set_economic_context(translated.economic_context)
         energy_system_path = self._output / translated.file_name
         self._runner.run(energy_system_path, parameters, self._output)
+        LifecycleCosts.require(self._output / Outputs.RESULTS_DIRECTORY)
         self._written.extend(Outputs.RECORDS)
         self._written.append(f"{Outputs.RESULTS_DIRECTORY}/")
         document = ResultBuilder(

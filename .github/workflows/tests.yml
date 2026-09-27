@@ -54,8 +54,9 @@ jobs:
             workers: 4
           - name: extendedbase
             marker: "extendedbase"
-            # 6.9 GB peak (~5.5 GB above idle) for one process; four could pass 16 GB. Bounded by
-            # test_p3_parity.py (two 220 s cases in one module, which loadfile keeps on one worker).
+            # 6.9 GB peak (~5.5 GB above idle) for one process; four could pass 16 GB. Its two 220 s
+            # participant canaries sit in one module each (test_p3_parity_participants_*.py), so
+            # loadfile can give them a worker each.
             workers: 2
           - name: extendedbase2
             marker: "extendedbase2"

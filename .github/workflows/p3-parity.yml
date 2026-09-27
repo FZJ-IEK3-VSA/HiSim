@@ -16,8 +16,8 @@
 #
 # THIS FILE IS DELETED IN PHASE P6, together with scripts/p3_parity_check.py,
 # scripts/p3_parity_runs.py, scripts/p3_parity_verdicts.py, scripts/p3_parity_renamings.py,
-# scripts/p3_parity_matrix.py and tests/test_p3_parity.py (R11.8 amended and AC-P3.20 deferred
-# to P6, 2026-08-31). Whatever earns a place in the permanent gate moves into golden_config.json
+# scripts/p3_parity_matrix.py, tests/test_p3_parity.py and tests/test_p3_parity_participants_*.py
+# (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31). Whatever earns a place in the permanent gate moves into golden_config.json
 # at that point; nothing here is meant to survive.
 
 name: p3-parity

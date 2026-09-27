@@ -124,15 +124,17 @@
 
 - path: house.heat_distribution.type_of_system
   when: heating.type_of_system == electric_heating
-  note: Electric heating has no heat distribution system.
+  note: The emitter is not used because direct electric heating has no water circuit.
   tracked: hisim-mgsn
 
 # The emitter itself is modelled -- HiSim has a LOW_TEMPERATURE_RADIATOR member -- but the cost
 # database has no row for it, and an unpriced subject aborts the whole lifecycle evaluation
 # (cost specification D7, `hisim/economics/adapter.py` `_hds_facts`). So the translator writes
 # floor heating instead, which is the heat pump's other low-temperature emitter and is priced.
+# Direct electric heating has no water circuit, so on it every emitter takes the entry above.
 - path: house.heat_distribution.type_of_system
   except: [surface_heating, conventional_radiator]
+  when: heating.type_of_system != electric_heating
   note: No cost row for a low-temperature radiator in the cost database yet; modelled as surface
     heating (floor heating), the heat pump's other low-temperature emitter.
   tracked: hisim-epc.1

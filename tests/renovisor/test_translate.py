@@ -521,6 +521,38 @@ class TestAValueThatSelectsNothingIsNotUsed:
         assert line.note == SelectsNothing.HOT_WATER_SEPARATE_HEAT_PUMP
 
 
+class TestTheEmitterOnDirectElectricHeating:
+    """hisim-vdbp: the schema requires an emitter, which direct electric heating has no water circuit for."""
+
+    NOTE = "The emitter is not used because direct electric heating has no water circuit."
+
+    @pytest.mark.parametrize("emitter", ["surface_heating", "low_temperature_radiator", "conventional_radiator"])
+    def test_every_emitter_is_reported_as_not_used(self, emitter: str) -> None:
+        """Including the low-temperature radiator, whose surface-heating substitution does not apply here."""
+        document = baseline(
+            heating={"type_of_system": "electric_heating"}, heat_distribution={"type_of_system": emitter}
+        )
+        system = translate(document)
+
+        system.report.assert_complete(document)
+        line = system.report.line("house.heat_distribution.type_of_system")
+        assert line is not None
+        assert (line.status, line.value, line.note) == (ReportStatus.NOT_IMPLEMENTED_YET, emitter, self.NOTE)
+        assert not config_of(system, Targets.HEAT_DISTRIBUTION_CONTROLLER)
+
+    @pytest.mark.parametrize(
+        "emitter, member", [("surface_heating", "FLOORHEATING"), ("conventional_radiator", "RADIATOR")]
+    )
+    def test_a_heat_pump_still_uses_it(self, emitter: str, member: str) -> None:
+        """A generator with a water circuit is unchanged."""
+        system = translate(
+            baseline(heating={"type_of_system": "air_source_heat_pump"}, heat_distribution={"type_of_system": emitter})
+        )
+
+        line = system.report.line("house.heat_distribution.type_of_system")
+        assert line is not None and (line.status, line.value) == (ReportStatus.USED, member)
+
+
 #: The five elements, by their request names.
 ELEMENTS = tuple(element.value for element in ThermalElement)
 

@@ -53,6 +53,11 @@ class ParameterNormalisation:
     #: It is compared but never written, because the reader rebuilds it and would reject the key.
     YEAR_KEY: ClassVar[str] = "year"
 
+    #: Key holding the weather year (``roadmap/weather_year.md``). Present in a normalised mapping,
+    #: and written to a file, only when the parameters set it, so that every parameter set without
+    #: one normalises, names and renders exactly as it did before the key existed.
+    WEATHER_YEAR_KEY: ClassVar[str] = "weather_year"
+
     #: Fields deliberately left out of the comparison, each because it describes the machine or
     #: the invocation rather than the simulation. ``cache_dir_path`` is the one that matters:
     #: eleven setups point it at a cluster directory behind an existence probe, so keeping it
@@ -74,7 +79,8 @@ class ParameterNormalisation:
 
         Returns:
             A mapping of plain values: the two dates as ISO strings, the resolution, the country,
-            the logging level, the sorted option names and the year.
+            the logging level, the sorted option names and the year, and the weather year when
+            the parameters set one.
         """
         reduced: Dict[str, Any] = {}
         for field in cls.COMPARED_FIELDS:
@@ -82,6 +88,8 @@ class ParameterNormalisation:
             reduced[field] = value.isoformat() if isinstance(value, datetime.datetime) else value
         reduced[cls.OPTIONS_KEY] = cls.option_names(parameters.post_processing_options)
         reduced[cls.YEAR_KEY] = int(parameters.year)
+        if parameters.weather_year is not None:
+            reduced[cls.WEATHER_YEAR_KEY] = int(parameters.weather_year)
         return reduced
 
     @classmethod
@@ -204,6 +212,9 @@ class ParameterFileName:
     #: Separator between the three parts of a name.
     SEPARATOR: ClassVar[str] = "_"
 
+    #: Prefix of the part a set weather year appends to the purpose, as in ``2021_hourly_kpis_weather2019``.
+    WEATHER_PREFIX: ClassVar[str] = "weather"
+
     @classmethod
     def stem(cls, normalised: Mapping[str, Any]) -> str:
         """Builds the file stem describing one normalised parameter set.
@@ -212,13 +223,17 @@ class ParameterFileName:
             normalised: The parameter set as :meth:`ParameterNormalisation.normalise` reduced it.
 
         Returns:
-            A stem such as ``one_week_minutely_kpis``, without the format suffix.
+            A stem such as ``one_week_minutely_kpis``, without the format suffix, and
+            ``one_week_minutely_kpis_weather2019`` when the set names a weather year.
         """
         parts = [
             cls.horizon(normalised["start_date"], normalised["end_date"]),
             cls.resolution(int(normalised["seconds_per_timestep"])),
             cls.purpose(tuple(normalised[ParameterNormalisation.OPTIONS_KEY])),
         ]
+        weather_year = normalised.get(ParameterNormalisation.WEATHER_YEAR_KEY)
+        if weather_year is not None:
+            parts.append(f"{cls.WEATHER_PREFIX}{weather_year}")
         return cls.SEPARATOR.join(parts)
 
     @classmethod
@@ -363,6 +378,9 @@ class ParameterFileWriter:
             f'end_date: "{normalised["end_date"]}"',
         ]
         lines += [f"{key}: {cls.scalar(normalised[key])}" for key in cls.SCALAR_KEYS]
+        weather_year = normalised.get(ParameterNormalisation.WEATHER_YEAR_KEY)
+        if weather_year is not None:
+            lines.append(f"{ParameterNormalisation.WEATHER_YEAR_KEY}: {cls.scalar(weather_year)}")
         lines.append(f"{ParameterNormalisation.OPTIONS_KEY}:{'' if options else ' []'}")
         lines += [f"  - {name}" for name in options]
         return header + "\n".join(lines) + "\n"

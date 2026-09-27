@@ -38,6 +38,7 @@ from the component's world is passed as a plain value through the DTO instead --
 
 import csv
 import datetime
+import functools
 import hashlib
 import math
 import os
@@ -181,6 +182,92 @@ class WeatherSourceFiles:
                 f"exists; looked for: {candidates}."
             )
         return digest.hexdigest()
+
+    #: Where each data source declares the year its rows belong to: the name of the year column and
+    #: the number of lines above the column header, as the source's reader skips them. ``None`` for a
+    #: source that declares no year -- a DWD test reference year is a synthetic year of month, day and
+    #: hour rows (MEZ) that belongs to no calendar year.
+    YEAR_COLUMNS: ClassVar[Mapping[WeatherDataSourceEnum, Optional[Tuple[str, int]]]] = {
+        WeatherDataSourceEnum.DWD_TRY: None,
+        WeatherDataSourceEnum.NSRDB: ("Year", 11),
+        WeatherDataSourceEnum.NSRDB_15MIN: ("Year", 2),
+        WeatherDataSourceEnum.DWD_10MIN: ("year", 2),
+        WeatherDataSourceEnum.DWD_15MIN: ("year", 2),
+        WeatherDataSourceEnum.ERA5: ("year", 2),
+    }
+
+    @classmethod
+    def data_years(cls, data_source: WeatherDataSourceEnum, source_path: str) -> Optional[FrozenSet[int]]:
+        """Return the years the rows of this source's data file declare, or ``None`` if it declares none.
+
+        Every reader lays the file's rows onto the simulated calendar year by position and reads no year
+        from it; this is where the file's own year is read, so that a run can say when the two differ
+        (``roadmap/weather_year.md``). Only the year column is parsed, and the answer is kept per
+        ``(path, mtime, size)`` for the life of the process (:func:`_declared_years`), so a second
+        weather component, or a second run in the same process, over the same file costs a ``stat``.
+
+        Args:
+            data_source: the data source the configuration names.
+            source_path: the configured path, with or without an extension depending on the source.
+
+        Returns:
+            Optional[FrozenSet[int]]: the distinct years of the file's rows; ``None`` for a source with no
+            data year (:attr:`YEAR_COLUMNS`).
+
+        Raises:
+            ValueError: if the data source has no entry in :attr:`YEAR_COLUMNS`, or the file lacks the
+                year column or holds no year in it.
+            FileNotFoundError: if the data file does not exist.
+        """
+        if data_source not in cls.YEAR_COLUMNS:
+            raise ValueError(
+                f"The weather data source {data_source!r} does not say where its data year is, so the years "
+                f"of its file cannot be read; add it to {cls.__name__}.YEAR_COLUMNS."
+            )
+        layout = cls.YEAR_COLUMNS[data_source]
+        if layout is None:
+            return None
+        column, skipped_lines = layout
+        # Every source that declares a year reads exactly one file, the first (and only) candidate.
+        _, path = cls.candidates(data_source, source_path)[0]
+        status = os.stat(path)
+        return _declared_years(path, status.st_mtime_ns, status.st_size, column, skipped_lines)
+
+
+@functools.lru_cache(maxsize=64)
+def _declared_years(path: str, mtime_ns: int, size: int, column: str, skipped_lines: int) -> FrozenSet[int]:
+    """Read the distinct values of one data file's year column, cached per file state.
+
+    An in-process cache rather than an entry in :mod:`hisim.caching`: the answer is a handful of
+    integers, reading one column of the largest shipped file takes a fraction of a second, and a disk
+    entry would cost a key, a metadata file and a write for less than it saves. ``mtime_ns`` and
+    ``size`` are part of the cache key only, so that a file rewritten in place is read again.
+
+    Args:
+        path: the data file.
+        mtime_ns: the file's modification time in nanoseconds; key material only.
+        size: the file's size in bytes; key material only.
+        column: the year column's name.
+        skipped_lines: the lines above the column header.
+
+    Returns:
+        FrozenSet[int]: the distinct years in the column.
+
+    Raises:
+        ValueError: if the file has no such column, or no year in it.
+    """
+    del mtime_ns, size
+    try:
+        years = pd.read_csv(path, sep=",", skiprows=skipped_lines, usecols=[column], encoding="utf-8")[column]
+    except ValueError as error:
+        raise ValueError(
+            f"The weather data file {path!r} has no year column {column!r} below its first {skipped_lines} "
+            f"lines, which is where its data source declares the year of its rows: {error}"
+        ) from error
+    declared = frozenset(int(year) for year in years.dropna().unique())
+    if not declared:
+        raise ValueError(f"The year column {column!r} of the weather data file {path!r} holds no year.")
+    return declared
 
 
 @dataclass(frozen=True)

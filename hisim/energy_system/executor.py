@@ -54,7 +54,7 @@ from hisim.energy_system.record import realize, verify_rerun
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.simulationparameters import SimulationParameters
+from hisim.simulationparameters import SimulationParameters, WeatherYearError
 
 
 class SimulationParametersReader:
@@ -131,8 +131,8 @@ class SimulationParametersReader:
             The parameters of the run.
 
         Raises:
-            EnergySystemFormatError: ``EF-07`` if a date or an option cannot be interpreted, or
-                if a key is not a parameter at all.
+            EnergySystemFormatError: ``EF-07`` if a date or an option cannot be interpreted, if
+                a key is not a parameter at all, or if ``weather_year`` is not a year in range.
         """
         prepared = dict(values)
         for key in cls.DATE_KEYS:
@@ -141,7 +141,7 @@ class SimulationParametersReader:
         prepared[cls.OPTIONS_KEY] = cls._options(prepared.get(cls.OPTIONS_KEY) or [], location)
         try:
             return SimulationParameters(**prepared)
-        except TypeError as error:
+        except (TypeError, WeatherYearError) as error:
             raise EnergySystemFormatError(
                 EnergySystemErrorId.MALFORMED_BLOCK,
                 location,

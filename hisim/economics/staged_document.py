@@ -15,7 +15,9 @@ Four conventions hold throughout, and the schema enforces the first three:
   residual value and an anyway-cost credit are all negative, which is the engine's own rule
   (``cost_spec.md`` §3.6) carried through unchanged.
 * **Relative years.** Years are ``0..T`` with ``calendar_year`` given on every row, so a reader
-  never has to add ``simulation_year`` themselves.
+  never has to add anything themselves. It is ``parameters.plan_start_year + year``, and ``null``
+  on every row when the plan names no start year; ``parameters.weather_year`` is the year of the
+  stages' weather and dates nothing (renovisorissues #57).
 * **Ids, not labels.** Subjects, asset classes, measure ids, scheme ids and perspective ids are
   written as they are; the frontend labels them from its own catalogue and country pack.
 
@@ -34,6 +36,7 @@ from __future__ import annotations
 import enum
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -259,7 +262,7 @@ class StagedDocument:
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 4
+    SCHEMA_VERSION: ClassVar[int] = 5
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -546,13 +549,22 @@ class StagedDocument:
         which is also the table of keys ``--parameters`` reads. One table for both directions is
         what makes this block a legal input file: a reader can copy it out of a document, hand it
         back over the same stages and get the same run.
+
+        ``price_basis_year`` is the year the plan was *priced at*, as the evaluator resolved it
+        (:attr:`~hisim.economics.staged.StagedResult.price_basis_year`), not the caller's record,
+        which may leave it unset for the evaluator to derive from ``plan_start_year``.
         """
+        parameters = self._parameters
+        if self._result.price_basis_year is not None:
+            parameters = replace(parameters, price_basis_year=self._result.price_basis_year)
         return StagedParameters.to_document_block(
-            parameters=self._parameters,
+            parameters=parameters,
             perspective=self._perspective,
-            simulation_year=self._result.plan.simulation_year,
+            weather_year=self._result.plan.simulation_year,
             subsidy_catalog=self._catalog_id,
             energy=self._result.energy_echo,
+            plan_start_year=self._result.plan_start_year,
+            price_basis_year_origin=self._result.price_basis_year_origin,
         )
 
     def _stages(self) -> List[Dict[str, Any]]:
@@ -775,8 +787,14 @@ class StagedDocument:
         return {subject: sorted(found) for subject, found in years.items()}
 
     def _annual(self, result: LifecycleCostResult, staged: bool, horizon: int) -> List[Dict[str, Any]]:
-        """The year-by-year series chart V1 draws, with its group stack and its markers."""
-        simulation_year = result.simulation_year
+        """The year-by-year series chart V1 draws, with its group stack and its markers.
+
+        ``calendar_year`` is the plan's start year plus the relative year, and ``null`` when the
+        plan names no start year: the stages' ``simulation_year`` is the year of their weather,
+        and dating a plan priced in 2026 from a 2019 weather file put its payback in 2021
+        (renovisorissues #57).
+        """
+        start = self._result.plan_start_year
         by_year_group: Dict[int, Dict[CostGroup, UncertainValue]] = {
             year: {group: UncertainValue.exact(0.0) for group in CostGroup}
             for year in range(horizon + 1)
@@ -793,7 +811,7 @@ class StagedDocument:
             rows.append(
                 {
                     "year": year,
-                    "calendar_year": (simulation_year + year) if simulation_year is not None else None,
+                    "calendar_year": (start + year) if start is not None else None,
                     "stage": self._result.stage_of_year(year) if staged else 0,
                     "total_nominal_in_euro": self._band(nominal),
                     "total_discounted_in_euro": self._band(

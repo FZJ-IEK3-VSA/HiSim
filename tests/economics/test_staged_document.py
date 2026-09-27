@@ -22,7 +22,7 @@ from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.staged import StagedEvaluator
 from hisim.economics.staged_document import CostGroup, CostGroups, StagedDocument
-from hisim.economics.staged_parameters import StagedParameters
+from hisim.economics.staged_parameters import PlanYearBounds, StagedParameters
 from hisim.economics.subsidies import PayoutKind
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -303,13 +303,35 @@ class TestTheDocumentShape:
         assert stages[2]["job_id"] == "job-heat-pump"
         assert stages[2]["measures"] == ["heating_system"]
 
-    def test_every_year_knows_its_calendar_year_and_its_stage(self, document):
-        """Relative years plus one anchor: nothing downstream adds the simulation year itself."""
-        for row in document["plan"]["annual"]:
-            assert row["calendar_year"] == SyntheticPlan.YEAR + row["year"]
+    def test_every_year_knows_its_stage_and_no_calendar_year_without_a_start_year(self, document):
+        """A plan that names no start year dates nothing — least of all from its weather year.
+
+        The stages' ``simulation_year`` is the year of the weather they were simulated with; a
+        2026 plan dated from it put its payback in 2021 (renovisorissues #57).
+        """
+        assert document["parameters"]["plan_start_year"] is None
+        assert document["parameters"]["weather_year"] == SyntheticPlan.YEAR
+        for variant in ("reference", "plan"):
+            assert all(row["calendar_year"] is None for row in document[variant]["annual"])
         stages = {row["year"]: row["stage"] for row in document["plan"]["annual"]}
         assert stages[0] == 1
         assert stages[4] == 2
+
+    def test_a_start_year_dates_every_row_and_leaves_the_weather_year_alone(self, tmp_path, parameters, database):
+        """``calendar_year`` is ``plan_start_year + year`` on both evaluations; ``weather_year`` stays."""
+        perspective = brownfield_perspective()
+        start = SyntheticPlan.YEAR + 7
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0), heat_pump_stage(4)], parameters, perspective, plan_start_year=start
+        )
+        document = StagedDocument(result, parameters, perspective).write(tmp_path / "dated.json")
+        assert document["parameters"]["plan_start_year"] == start
+        assert document["parameters"]["weather_year"] == SyntheticPlan.YEAR
+        for variant in ("reference", "plan"):
+            assert [row["calendar_year"] for row in document[variant]["annual"]] == [
+                start + row["year"] for row in document[variant]["annual"]
+            ]
+        assert document["plan"]["annual"][0]["calendar_year"] == start
 
     def test_the_stage_start_of_a_later_stage_is_an_event(self, document):
         """Chart V9's timeline reads the markers rather than re-deriving them from the stages."""
@@ -424,23 +446,25 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_four(self, document):
-        """Version 4: the parameters block echoes the energy rates and prices used, with origins.
+    def test_the_document_states_schema_version_five(self, document):
+        """Version 5: ``weather_year`` and ``plan_start_year`` replace ``simulation_year`` (#57).
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
         the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
         version 3 (2026-09-26, hisim-fig7) adds the required ``investment_by_stage`` of every
         ``by_subject`` row; version 4 (2026-09-26, renovisorissues #52) changes what
         ``parameters.escalation.energy`` means — every carrier priced, not only the stated ones —
-        and requires ``parameters.energy_prices`` and ``parameters.origins``. A document of that
-        shape stating an older version would tell a consumer it could skip what the later
-        versions require.
+        and requires ``parameters.energy_prices`` and ``parameters.origins``; version 5
+        (2026-09-26, renovisorissues #57) renames ``parameters.simulation_year`` to
+        ``weather_year``, requires ``parameters.plan_start_year`` and dates ``annual[]`` from it
+        alone. A document of that shape stating an older version would tell a consumer it could
+        skip what the later versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 4
+        assert document["schema_version"] == 5
         StagedDocument.validate(document)
-        for older in (1, 2, 3):
+        for older in (1, 2, 3, 4):
             with pytest.raises(jsonschema.ValidationError):
                 StagedDocument.validate({**document, "schema_version": older})
 
@@ -468,6 +492,56 @@ class TestTheParametersBlock:
         from hisim.economics.staged_parameters import ParameterKeys
 
         assert set(document["parameters"]) == set(ParameterKeys.ACCEPTED)
+
+    @pytest.mark.parametrize("required", ["weather_year", "plan_start_year"])
+    def test_version_five_requires_the_weather_year_and_the_plan_start_year(self, document, required):
+        """A block missing either key is not a version 5 block — whatever else it carries.
+
+        This pins the two required keys and nothing more: the schema leaves the block open to
+        further keys, so a stray ``simulation_year`` is refused by ``staged --parameters``
+        (``parameters.unknown_key``), not by the schema.
+        """
+        import jsonschema
+
+        missing = json.loads(json.dumps(document))
+        missing["parameters"].pop(required)
+        with pytest.raises(jsonschema.ValidationError):
+            StagedDocument.validate(missing)
+
+    def test_the_schema_bounds_of_the_plan_start_year_are_the_parsers(self):
+        """``economics_result.schema.json`` and :class:`PlanYearBounds` state one range, not two."""
+        schema = json.loads(StagedDocument.schema_path().read_text(encoding="utf-8"))
+        declared = schema["properties"]["parameters"]["properties"]["plan_start_year"]
+        assert declared["minimum"] == PlanYearBounds.MINIMUM
+        assert declared["maximum"] == PlanYearBounds.MAXIMUM
+
+    def test_it_publishes_the_basis_year_the_plan_was_priced_at(self, tmp_path, parameters, database, monkeypatch):
+        """Priced from the start year, the block states the resolved year and says where it came from.
+
+        The caller's record leaves ``price_basis_year`` unset; publishing that ``null`` would hide
+        the year every figure of the document was priced at.
+        """
+        from hisim import log
+
+        # The evaluator warns that the start year supplied the basis year; kept out of ../logs.
+        monkeypatch.setattr(log, "warning", lambda *_args, **_kwargs: None)
+        unstated = replace(parameters, price_basis_year=None)
+        perspective = brownfield_perspective()
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(4)], unstated, perspective, plan_start_year=SyntheticPlan.YEAR
+        )
+        document = StagedDocument(result, unstated, perspective).write(tmp_path / "resolved.json")
+        assert document["parameters"]["price_basis_year"] == SyntheticPlan.YEAR
+        assert document["parameters"]["origins"]["price_basis_year"] == "plan_start_year"
+        read_back = StagedParameters.from_mapping(document["parameters"], None, stored_country=SyntheticPlan.COUNTRY)
+        assert not read_back.problems
+        assert read_back.parameters is not None
+        assert read_back.parameters.price_basis_year == SyntheticPlan.YEAR
+
+    def test_a_stated_basis_year_leaves_no_origin(self, document):
+        """``origins.price_basis_year`` exists only when the start year supplied the year."""
+        assert document["parameters"]["price_basis_year"] == SyntheticPlan.YEAR
+        assert "price_basis_year" not in document["parameters"]["origins"]
 
 
 class TestFinancing:

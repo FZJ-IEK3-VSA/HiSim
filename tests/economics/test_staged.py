@@ -21,13 +21,14 @@ import pytest
 from hisim.economics.calculators.energy import StatedPriceError, StatedPrices
 from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.database import CostDatabase
-from hisim.economics.evaluator import EconomicEvaluator
+from hisim import log
+from hisim.economics.evaluator import EconomicEvaluator, _PriceBasisYearWarnings, effective_price_basis_year
 from hisim.economics.facts import BillingDeterminants, ExistingAsset, ExistingAssetRegister
 from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.provenance import ParameterOrigin
 from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
-from hisim.economics.staged_parameters import EchoOrigin
+from hisim.economics.staged_parameters import EchoOrigin, ParameterKeys, PlanYearBounds, StagedParameters
 from hisim.economics.tariffs import SupplyKind, TariffContract, TariffSupply
 from hisim.economics.timeline import Actor, CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -1231,3 +1232,166 @@ class TestStatedPricesAgainstTheCarbonPath:
             "parameters.energy_prices.NATURAL_GAS.working_price_in_euro_per_kwh.invalid"
         ]
         assert f"{carbon:.6g}" in caught.value.problems[0]["message"]
+
+
+class TestThePlanStartYear:
+    """The weather year and the plan's calendar are different things (renovisorissues #57).
+
+    The stages' ``simulation_year`` is the year of the weather they were simulated with. A plan
+    that states when it starts is dated and — when nothing states a price basis year — priced
+    from that year, never from its weather.
+    """
+
+    #: A weather year no price data covers, so a basis year re-derived from it would show.
+    WEATHER_YEAR = SyntheticPlan.YEAR + 6
+
+    @pytest.fixture(name="warnings", autouse=True)
+    def fixture_warnings(self, monkeypatch) -> List[str]:
+        """Every ``log.warning`` of the test, captured instead of appended to ``../logs``.
+
+        The warn-once cache is emptied too, so a warning an earlier test already emitted is
+        emitted again here and the test does not depend on the order it runs in.
+        """
+        captured: List[str] = []
+        monkeypatch.setattr(log, "warning", lambda message, *_args, **_kwargs: captured.append(message))
+        monkeypatch.setattr(_PriceBasisYearWarnings, "WARNED", set())
+        return captured
+
+    @classmethod
+    def _stages(cls) -> List[Stage]:
+        """The baseline and a heat pump in year 3, simulated with the weather of another year."""
+        return [
+            replace(stage, inputs=replace(stage.inputs, simulation_year=cls.WEATHER_YEAR))
+            for stage in (baseline_stage(), heat_pump_stage(3))
+        ]
+
+    def test_the_basis_year_falls_back_to_the_plan_start_year(self, database, parameters):
+        """No ``price_basis_year`` stated: every evaluation of the plan prices at its start year."""
+        unstated = replace(parameters, price_basis_year=None)
+        result = StagedEvaluator(database).evaluate(
+            self._stages(), unstated, brownfield_perspective(), plan_start_year=SyntheticPlan.YEAR
+        )
+        assert result.plan_start_year == SyntheticPlan.YEAR
+        for evaluated in (result.reference, result.plan, *result.per_stage):
+            assert evaluated.parameters.price_basis_year == SyntheticPlan.YEAR
+            assert evaluated.simulation_year == self.WEATHER_YEAR
+
+    def test_a_stated_basis_year_wins_over_the_plan_start_year(self, database, parameters):
+        """The start year dates the plan; it does not overrule a basis year the caller named."""
+        result = StagedEvaluator(database).evaluate(
+            self._stages(), parameters, brownfield_perspective(), plan_start_year=SyntheticPlan.YEAR + 2
+        )
+        assert result.plan.parameters.price_basis_year == SyntheticPlan.YEAR
+        assert result.plan_start_year == SyntheticPlan.YEAR + 2
+
+    def test_without_a_start_year_the_result_states_none(self, database, parameters):
+        """Nothing is invented: no start year in, no start year out."""
+        result = StagedEvaluator(database).evaluate([baseline_stage()], parameters, brownfield_perspective())
+        assert result.plan_start_year is None
+
+    def test_the_policy_itself(self, database):
+        """Stated basis year, else the plan start year, else the simulation year; clamped to the data."""
+        unstated = EconomicParameters(country=SyntheticPlan.COUNTRY)
+        later = SyntheticPlan.YEAR + 6
+        assert effective_price_basis_year(unstated, database, later) == later
+        assert effective_price_basis_year(unstated, database, later, plan_start_year=later + 1) == later + 1
+        assert effective_price_basis_year(unstated, database, 1990, plan_start_year=later) == later
+        stated = replace(unstated, price_basis_year=SyntheticPlan.YEAR)
+        assert effective_price_basis_year(stated, database, later, plan_start_year=later + 1) == SyntheticPlan.YEAR
+
+    def test_a_start_year_before_the_data_moves_to_the_earliest_covered_year(self):
+        """The clamp the simulation year always had applies to the start year the same way."""
+
+        class _DataFrom2024(CostDatabase):
+            """A database whose device data begins in 2024; nothing else of it is read."""
+
+            def __init__(self) -> None:  # pylint: disable=super-init-not-called
+                """Skip loading any file: only :meth:`earliest_device_year` is asked."""
+
+            def earliest_device_year(self, country: str) -> Optional[int]:
+                """The first year the stub prices devices at."""
+                return 2024
+
+        unstated = EconomicParameters(country=SyntheticPlan.COUNTRY)
+        assert effective_price_basis_year(unstated, _DataFrom2024(), 2030, plan_start_year=2000) == 2024
+        assert effective_price_basis_year(unstated, _DataFrom2024(), 2030, plan_start_year=2026) == 2026
+
+    def test_the_warn_once_key_tells_the_two_anchors_apart(self, warnings):
+        """A clamped start year and a clamped simulation year of the same value each warn once."""
+
+        class _DataFrom2024(CostDatabase):
+            """A database whose device data begins in 2024; nothing else of it is read."""
+
+            def __init__(self) -> None:  # pylint: disable=super-init-not-called
+                """Skip loading any file: only :meth:`earliest_device_year` is asked."""
+
+            def earliest_device_year(self, country: str) -> Optional[int]:
+                """The first year the stub prices devices at."""
+                return 2024
+
+        unstated = EconomicParameters(country=SyntheticPlan.COUNTRY)
+        for _repeat in range(2):
+            effective_price_basis_year(unstated, _DataFrom2024(), 2000)
+            effective_price_basis_year(unstated, _DataFrom2024(), 2030, plan_start_year=2000)
+        assert len(warnings) == 2
+        assert "simulation year 2000" in warnings[0]
+        assert "plan start year 2000" in warnings[1]
+
+    def test_one_clamp_for_the_cli_and_the_python_api(self, database, parameters, warnings, monkeypatch):
+        """A start year before the data prices at the earliest covered year, whichever way it came in.
+
+        The CLI reads ``plan_start_year`` out of a ``--parameters`` block over stages that state
+        no basis year; the Python API passes it to :meth:`StagedEvaluator.evaluate` directly. Both
+        end in the one clamp of ``effective_price_basis_year`` and price at the same year.
+        """
+        # The synthetic data is keyed so that it states no earliest year; this test gives it one,
+        # the year it does price at, so the clamp has somewhere to move a too-early start year to.
+        earliest = SyntheticPlan.YEAR
+        monkeypatch.setattr(database, "earliest_device_year", lambda _country: earliest)
+        start = earliest - 3
+        unstated = replace(parameters, price_basis_year=None)
+
+        through_api = StagedEvaluator(database).evaluate(
+            self._stages(), unstated, brownfield_perspective(), plan_start_year=start
+        )
+        parsed = StagedParameters.from_mapping({ParameterKeys.PLAN_START_YEAR: start}, unstated)
+        assert not parsed.problems and parsed.parameters is not None
+        through_cli = StagedEvaluator(database).evaluate(
+            self._stages(), parsed.parameters, brownfield_perspective(), plan_start_year=parsed.plan_start_year
+        )
+        for result in (through_api, through_cli):
+            assert result.price_basis_year == earliest
+            assert result.plan.parameters.price_basis_year == earliest
+            assert result.price_basis_year_origin is EchoOrigin.PLAN_START_YEAR
+            assert result.plan_start_year == start
+        assert any(f"plan start year {start}" in message for message in warnings)
+
+    def test_a_basis_year_from_the_start_year_is_recorded_and_warned(self, database, parameters, warnings):
+        """The result says the start year supplied the basis year, and the log says so once per plan."""
+        unstated = replace(parameters, price_basis_year=None)
+        result = StagedEvaluator(database).evaluate(
+            self._stages(), unstated, brownfield_perspective(), plan_start_year=SyntheticPlan.YEAR
+        )
+        assert result.price_basis_year == SyntheticPlan.YEAR
+        assert result.price_basis_year_origin is EchoOrigin.PLAN_START_YEAR
+        assert [message for message in warnings if "taken from plan_start_year" in message] == [
+            f"No price basis year stated by the stages or the parameters; the plan is priced at "
+            f"{SyntheticPlan.YEAR}, taken from plan_start_year {SyntheticPlan.YEAR}."
+        ]
+
+    def test_a_stated_basis_year_has_no_origin_and_no_warning(self, database, parameters, warnings):
+        """Nothing changes where the parameters state the year: no origin recorded, nothing logged."""
+        result = StagedEvaluator(database).evaluate(
+            self._stages(), parameters, brownfield_perspective(), plan_start_year=SyntheticPlan.YEAR + 2
+        )
+        assert result.price_basis_year == SyntheticPlan.YEAR
+        assert result.price_basis_year_origin is None
+        assert not [message for message in warnings if "plan_start_year" in message]
+
+    @pytest.mark.parametrize("year", [PlanYearBounds.MINIMUM - 1, PlanYearBounds.MAXIMUM + 1, 26])
+    def test_a_start_year_outside_the_bounds_is_a_value_error(self, database, parameters, year):
+        """The Python API refuses what ``staged --parameters`` refuses, with the bounds named."""
+        with pytest.raises(ValueError, match=f"plan_start_year {year}"):
+            StagedEvaluator(database).evaluate(
+                self._stages(), parameters, brownfield_perspective(), plan_start_year=year
+            )

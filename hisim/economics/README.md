@@ -133,9 +133,9 @@ a reader can feed a document's assumptions back in unchanged. Every key is optio
  "financing": {"kind": "cash"}, "subsidy_mode": "full"}
 ```
 
-— plus `country`, `price_basis_year`, `plan_start_year`, `escalation` and `energy_prices`, which
-are read. Only three keys are accepted and ignored: `weather_year`, `subsidy_catalog` and
-`origins`. `plan_start_year`
+— plus `country`, `price_basis_year`, `plan_start_year`, `escalation`, `energy_prices` and
+`investment_overrides`, which are read. Only three keys are accepted and ignored: `weather_year`,
+`subsidy_catalog` and `origins`. `plan_start_year`
 (1900–2100) is the calendar year of the plan's year 0: every `annual[].calendar_year` of the
 document is `plan_start_year + year`, and `null` when the plan states none — never the weather
 year, which the document publishes as `weather_year` (`simulation_year` up to schema version 4;
@@ -176,6 +176,32 @@ only checked against theirs, and a plan whose stages state neither anywhere and 
 neither is refused — never priced as German, and never at a basis year re-derived from the
 simulation year. Naming `price_basis_year` in the file is how a plan over extracts written before
 the key existed is priced.
+
+`investment_overrides` states the reader's quoted prices (renovisorissues #53, schema version 6):
+`[{"stage": 1, "measure_id": "heating_system", "amount_in_euro": 11800, "source": "installer quote"}]`,
+a total in euro for one measure of one stage, installed, exact. The quote replaces the year-0
+investment — investment, planning and removal, split in the database's proportions — of the
+measure's **main** subject in that stage (`hisim.renovisor.economics.MainSubjects`: the generator
+for `heating_system`, the subject named by the measure id for an envelope measure, the array, the
+battery, …); the measure's other subjects in that stage (the buffer a `heating_system` installs) are
+bought at zero, keep their lifetimes and their later, database-priced replacements. The engine
+carries it as the facts field `purchase_cost_override_in_euro`, which prices that one purchase
+only: replacements, the maintenance base and the residual of a replaced unit stay the database's.
+Subsidies on eligible cost and the coupled-cost anyway credit see the quote; a lump sum and the
+like-for-like anyway credit (the old asset's price) do not. A later stage's quote is escalated to
+its year like the price it replaces. A measure HiSim holds no price for
+(`hot_water_tank_and_pipe_insulation`) becomes priced: one year-0 purchase, never replaced,
+maintained or written down. A stage the plan does not have
+(`parameters.investment_overrides.stage.unknown`), a measure the stage does not carry out or
+only carries over (`….measure_id.not_in_stage`), a costless one (`….measure_id.costless`), an
+id outside the catalogue (`….measure_id.invalid`) and a second quote for one measure of one stage
+(`….duplicate`) are refused, exit 2; a quote whose main subject cannot be determined is exit 3.
+The document echoes the quotes in `parameters.investment_overrides` and says on every `by_subject`
+row where its investment came from (`investment_origin`: `reader_quote` |
+`included_in_reader_quote` | `request` | `cost_database`, with `investment_source`); the ledger
+records the quote as a `CONFIG_OVERRIDE` citing its source. Every `subsidies[]` row states
+`max_amount_in_euro`, the most the scheme can pay for its subject whatever the row's status
+(renovisorissues #54, `hisim.economics.subsidies.scheme_maximum`).
 
 The subsidy catalogue is the one input a stage does not carry, so `staged` resolves it the way
 the RenoVisor translator does: `--subsidy-catalog` wins, then a `subsidy_catalog_path` in the

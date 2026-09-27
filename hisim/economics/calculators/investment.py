@@ -6,7 +6,8 @@ whole dated capital-expenditure picture over the observation period.
 * **Year 0** (cost_spec.md §3.6 rule 1) — device + installation as one INVESTMENT entry, with
   PLANNING and REMOVAL split off when non-zero. Charged only when the perspective includes
   investment *and* the installation context says this is a new investment; a kept existing
-  asset costs nothing today.
+  asset costs nothing today. A stated purchase price (``purchase_cost_override_in_euro``, a
+  reader's quote) replaces the three: they carry the quote, split in the database's proportions.
 * **Replacements** (§3.6 rule 2) — one escalated re-purchase of the gross investment every
   service life, starting at the first replacement year (which is shortened for a kept asset
   by its current age). Note that replacements are counted for the replacement *reserve* and for
@@ -222,7 +223,29 @@ def build_investment_schedule(
     subject = costing.subject
 
     # --- year-0 investment (§3.6 rule 1)
-    if include_investment and costing.is_new_investment:
+    if include_investment and costing.is_new_investment and costing.purchase_override is not None:
+        # A stated purchase price (a reader's quote, renovisorissues #53) is the whole job: the
+        # same three year-0 categories, carrying the quote in the database's proportions
+        # (`DeviceCosting.purchase_blocks`), and that quote in the levy basis.
+        investment, planning, removal = costing.purchase_blocks()
+        for amount, category, always in (
+            (investment, CostCategory.INVESTMENT, True),
+            (planning, CostCategory.PLANNING, False),
+            (removal, CostCategory.REMOVAL, False),
+        ):
+            if always or amount.maximum > 0:
+                schedule.year_zero_entries.append(
+                    CashFlowEntry(
+                        year=0,
+                        amount_in_euro=amount,
+                        category=category,
+                        subject=subject,
+                        provenance_ids=costing.provenance_ids,
+                    )
+                )
+        schedule.modernization_cost_addends.extend([costing.purchased_gross, removal])
+        schedule.embodied_co2_addends.append(costing.embodied_co2_kg)
+    elif include_investment and costing.is_new_investment:
         schedule.year_zero_entries.append(
             CashFlowEntry(
                 year=0,
@@ -290,7 +313,14 @@ def build_investment_schedule(
             last_install_year, costing.service_life_years, horizon
         )
         if fraction > 0:
-            escalated_price = escalate(gross, asset_rate, last_install_year)
+            # The last installation is the year-0 purchase when nothing was replaced since, and a
+            # stated purchase price is what that purchase cost.
+            purchased = (
+                costing.purchased_gross
+                if costing.purchase_override is not None and costing.is_new_investment and not replacement_years
+                else gross
+            )
+            escalated_price = escalate(purchased, asset_rate, last_install_year)
             residual = escalated_price.scale(fraction)
             schedule.residual_entry = CashFlowEntry(
                 year=horizon,

@@ -91,6 +91,22 @@ class ParameterKeys:
     #: Cash or one annuity loan per buying stage.
     FINANCING: ClassVar[str] = "financing"
 
+    #: The reader's quoted prices, one per measure of a stage (renovisorissues #53): a list of
+    #: ``{"stage", "measure_id", "amount_in_euro", "source"}``.
+    INVESTMENT_OVERRIDES: ClassVar[str] = "investment_overrides"
+
+    #: The stage index a quote is for, inside one :attr:`INVESTMENT_OVERRIDES` entry.
+    OVERRIDE_STAGE: ClassVar[str] = "stage"
+
+    #: The catalogue measure a quote is for.
+    OVERRIDE_MEASURE_ID: ClassVar[str] = "measure_id"
+
+    #: The quoted total in euro, installed: a positive number, exact.
+    OVERRIDE_AMOUNT: ClassVar[str] = "amount_in_euro"
+
+    #: Where the quote comes from, as the reader states it; echoed on the priced subject.
+    OVERRIDE_SOURCE: ClassVar[str] = "source"
+
     #: The escalation rates, as a nested block.
     ESCALATION: ClassVar[str] = "escalation"
 
@@ -160,6 +176,7 @@ class ParameterKeys:
         FINANCING,
         ESCALATION,
         ENERGY_PRICES,
+        INVESTMENT_OVERRIDES,
         SUBSIDY_CATALOG,
         ORIGINS,
     )
@@ -174,6 +191,13 @@ class ParameterKeys:
             "years of the rows are dated by `plan_start_year`."
         ),
     }
+    #: Every key one :attr:`INVESTMENT_OVERRIDES` entry has, all of them required.
+    ACCEPTED_OVERRIDE: ClassVar[Tuple[str, ...]] = (
+        OVERRIDE_STAGE,
+        OVERRIDE_MEASURE_ID,
+        OVERRIDE_AMOUNT,
+        OVERRIDE_SOURCE,
+    )
 
     #: Every key the :attr:`ESCALATION` block accepts.
     ACCEPTED_ESCALATION: ClassVar[Tuple[str, ...]] = (
@@ -430,6 +454,19 @@ class ParameterProblemCodes:
 
     #: The ``--parameters`` file itself: not there, not JSON, or not a JSON object.
     UNREADABLE: ClassVar[str] = "{path}.unreadable"
+
+    #: A value naming something the plan does not have: a quote's stage index (#53).
+    UNKNOWN: ClassVar[str] = "{path}.unknown"
+
+    #: A quote for a measure the stage does not carry out -- not among its measures, or carried
+    #: over from an earlier stage so that the stage buys nothing for it.
+    NOT_IN_STAGE: ClassVar[str] = "{path}.not_in_stage"
+
+    #: A quote for a measure that costs nothing to carry out (a setting, not a purchase).
+    COSTLESS: ClassVar[str] = "{path}.costless"
+
+    #: A second quote for the same measure of the same stage.
+    DUPLICATE: ClassVar[str] = "{path}.duplicate"
 
 
 @dataclass(frozen=True)
@@ -739,6 +776,39 @@ class ParameterReader:
 
 
 @dataclass(frozen=True)
+class StatedQuote:
+    """One entry of ``investment_overrides`` as the file states it (renovisorissues #53).
+
+    Structurally checked by :meth:`StagedParameters.from_mapping`; whether the stage exists and
+    carries the measure out is checked against the stages by the staged command
+    (:meth:`StagedParameters.check_quotes`), which then resolves the measure to the subject it
+    prices.
+
+    Args:
+        stage: The stage index.
+        measure_id: The catalogue measure.
+        amount_in_euro: The quoted total, installed, in euro: positive and exact.
+        source: Where the quote comes from.
+        position: The entry's index in the list, for the problem paths.
+    """
+
+    stage: int
+    measure_id: str
+    amount_in_euro: float
+    source: str
+    position: int = 0
+
+    def to_json(self) -> Dict[str, Any]:
+        """The entry as the document echoes it, which is also how the file states it."""
+        return {
+            ParameterKeys.OVERRIDE_STAGE: self.stage,
+            ParameterKeys.OVERRIDE_MEASURE_ID: self.measure_id,
+            ParameterKeys.OVERRIDE_AMOUNT: self.amount_in_euro,
+            ParameterKeys.OVERRIDE_SOURCE: self.source,
+        }
+
+
+@dataclass(frozen=True)
 class StagedParameters:
     """A parsed ``--parameters`` file of ``python -m hisim.economics staged``.
 
@@ -769,6 +839,8 @@ class StagedParameters:
         subsidy_mode: The subsidy mode the file asked for, or None when it said nothing.
         plan_start_year: The calendar year the plan starts in, or None when the file names none —
             in which case the document dates nothing (renovisorissues #57).
+        investment_overrides: The reader's quotes, structurally checked (renovisorissues #53);
+            empty when the file states none.
         problems: Every fault found, in the order they were found.
     """
 
@@ -783,6 +855,7 @@ class StagedParameters:
     financing_given: bool = False
     subsidy_mode: Optional[SubsidyModeName] = None
     plan_start_year: Optional[int] = None
+    investment_overrides: Tuple[StatedQuote, ...] = ()
     problems: Tuple[ParameterProblem, ...] = ()
 
     @classmethod
@@ -860,6 +933,7 @@ class StagedParameters:
         perspective_id = reader.text(ParameterKeys.PERSPECTIVE_ID)
         subsidy_mode = cls._read_subsidy_mode(reader)
         financing_given, financing = cls._read_financing(reader, problems)
+        quotes = cls._read_investment_overrides(reader, problems)
 
         if problems:
             return cls(
@@ -869,6 +943,7 @@ class StagedParameters:
                 financing_given=financing_given,
                 subsidy_mode=subsidy_mode,
                 plan_start_year=plan_start_year,
+                investment_overrides=quotes,
                 problems=tuple(problems),
             )
         # With no stored parameters the record is built from the overrides alone, so no field
@@ -882,7 +957,208 @@ class StagedParameters:
             financing_given=financing_given,
             subsidy_mode=subsidy_mode,
             plan_start_year=plan_start_year,
+            investment_overrides=quotes,
         )
+
+    #: The path a list entry's problem is reported at, and the path its code is built from: the
+    #: row names the entry, the code the key, so a backend branches on one code per fault.
+    OVERRIDE_ENTRY_PATH: ClassVar[str] = f"{ParameterKeys.ROOT_PATH}.{ParameterKeys.INVESTMENT_OVERRIDES}"
+
+    @classmethod
+    def _read_investment_overrides(
+        cls, reader: ParameterReader, problems: List[ParameterProblem]
+    ) -> Tuple[StatedQuote, ...]:
+        """Read ``investment_overrides``: the reader's quoted prices (renovisorissues #53).
+
+        A list of entries with exactly the four keys of :attr:`ParameterKeys.ACCEPTED_OVERRIDE`:
+        ``stage`` a whole number from 0, ``measure_id`` a string, ``amount_in_euro`` a number above
+        0 (a quote is exact, so a band is refused), ``source`` a non-empty string. A
+        second entry for the same stage and measure is refused as
+        ``parameters.investment_overrides.duplicate``. Each problem's path names the entry
+        (``parameters.investment_overrides[1].amount_in_euro``); its code names the key
+        (``parameters.investment_overrides.amount_in_euro.invalid``). Whether the stage exists and
+        carries the measure out, and whether the catalogue has it at all, is checked with the stages
+        (:meth:`check_quotes`).
+
+        Args:
+            reader: The top-level block's reader.
+            problems: The shared problem list.
+
+        Returns:
+            The entries that read, in file order; empty when the key is absent.
+        """
+        if not reader.has(ParameterKeys.INVESTMENT_OVERRIDES):
+            return ()
+        raw = reader.raw[ParameterKeys.INVESTMENT_OVERRIDES]
+        if not isinstance(raw, list):
+            reader.refuse(
+                ParameterKeys.INVESTMENT_OVERRIDES,
+                ParameterProblemCodes.INVALID,
+                f"{raw!r} is not a list of quotes; each quote is an object with "
+                f"{', '.join(ParameterKeys.ACCEPTED_OVERRIDE)}.",
+            )
+            return ()
+        quotes: List[StatedQuote] = []
+        seen: Dict[Tuple[int, str], int] = {}
+        for position, entry in enumerate(raw):
+            entry_path = f"{cls.OVERRIDE_ENTRY_PATH}[{position}]"
+            if not isinstance(entry, Mapping):
+                problems.append(
+                    ParameterProblem(
+                        path=entry_path,
+                        code=ParameterProblemCodes.INVALID.format(path=cls.OVERRIDE_ENTRY_PATH),
+                        message=f"{entry!r} is not a quote; a quote is an object with "
+                        f"{', '.join(ParameterKeys.ACCEPTED_OVERRIDE)}.",
+                        accepted=ParameterKeys.ACCEPTED_OVERRIDE,
+                    )
+                )
+                continue
+            quote = cls._read_quote(entry, entry_path, position, problems)
+            if quote is None:
+                continue
+            key = (quote.stage, quote.measure_id)
+            if key in seen:
+                problems.append(
+                    ParameterProblem(
+                        path=entry_path,
+                        code=ParameterProblemCodes.DUPLICATE.format(path=cls.OVERRIDE_ENTRY_PATH),
+                        message=f"a second quote for {quote.measure_id!r} in stage {quote.stage} "
+                        f"(the first is entry {seen[key]}); one measure of one stage has one quote.",
+                    )
+                )
+                continue
+            seen[key] = position
+            quotes.append(quote)
+        return tuple(quotes)
+
+    @classmethod
+    def _read_quote(
+        cls,
+        entry: Mapping[str, Any],
+        entry_path: str,
+        position: int,
+        problems: List[ParameterProblem],
+    ) -> Optional[StatedQuote]:
+        """Read one ``investment_overrides`` entry, or None when any of its keys is refused.
+
+        Args:
+            entry: The entry as parsed.
+            entry_path: Its path, ``parameters.investment_overrides[<position>]``.
+            position: Its index.
+            problems: The shared problem list.
+
+        Returns:
+            The quote, or None.
+        """
+        local: List[ParameterProblem] = []
+        fields = ParameterReader(entry, entry_path, ParameterKeys.ACCEPTED_OVERRIDE, local, noun="key of a quote")
+        fields.refuse_unknown_keys()
+        for key in ParameterKeys.ACCEPTED_OVERRIDE:
+            if key not in entry:
+                fields.refuse(key, ParameterProblemCodes.MISSING, f"a quote states its {key}.")
+        stage = fields.integer(ParameterKeys.OVERRIDE_STAGE, minimum=0)
+        measure_id = fields.text(ParameterKeys.OVERRIDE_MEASURE_ID)
+        amount = fields.number(ParameterKeys.OVERRIDE_AMOUNT, above=0.0)
+        source = fields.text(ParameterKeys.OVERRIDE_SOURCE)
+        if source is not None and not source.strip():
+            fields.refuse(
+                ParameterKeys.OVERRIDE_SOURCE,
+                ParameterProblemCodes.INVALID,
+                "a quote names where it comes from; the source is echoed beside the price it sets.",
+            )
+            source = None
+        # The codes name the key, not the entry: `parameters.investment_overrides.stage.invalid`.
+        # An unknown key is a fault of the entry, the others of one key.
+        for problem in local:
+            suffix = problem.code.rsplit(".", 1)[-1]
+            key = problem.path[len(entry_path) + 1:] if problem.path != entry_path else ""
+            if key and suffix != "unknown_key":
+                code = f"{cls.OVERRIDE_ENTRY_PATH}.{key}.{suffix}"
+            else:
+                code = f"{cls.OVERRIDE_ENTRY_PATH}.{suffix}"
+            problems.append(replace(problem, code=code))
+        if local or stage is None or measure_id is None or amount is None or source is None:
+            return None
+        return StatedQuote(stage=stage, measure_id=measure_id, amount_in_euro=amount, source=source, position=position)
+
+    @classmethod
+    def check_quotes(
+        cls,
+        quotes: Sequence[StatedQuote],
+        stage_measures: Sequence[Sequence[str]],
+        costless_measures: Sequence[str],
+        catalogue_measures: Sequence[str],
+    ) -> List[ParameterProblem]:
+        """Check the quotes against the stages of the plan they are for (renovisorissues #53).
+
+        A quote for a stage index the plan does not have is
+        ``parameters.investment_overrides.stage.unknown``; one for a measure the catalogue does not
+        have is ``parameters.investment_overrides.measure_id.invalid``; one for a measure the stage does
+        not carry out is ``parameters.investment_overrides.measure_id.not_in_stage``; one for a
+        measure that costs nothing to carry out is
+        ``parameters.investment_overrides.measure_id.costless``. Every priced catalogue measure a
+        stage carries out accepts a quote, an unpriced one included.
+
+        Args:
+            quotes: The structurally checked quotes.
+            stage_measures: Per stage, in stage order, the measures it carries out -- for a
+                RenoVisor plan the measures new in that stage, or the stage's own for stage 0.
+            costless_measures: The measures that cost nothing to carry out.
+            catalogue_measures: Every measure id of the catalogue.
+
+        Returns:
+            One problem per refused quote, in file order; empty when every quote fits the plan.
+        """
+        problems: List[ParameterProblem] = []
+        for quote in quotes:
+            entry_path = f"{cls.OVERRIDE_ENTRY_PATH}[{quote.position}]"
+            if quote.stage >= len(stage_measures):
+                problems.append(
+                    ParameterProblem(
+                        path=f"{entry_path}.{ParameterKeys.OVERRIDE_STAGE}",
+                        code=ParameterProblemCodes.UNKNOWN.format(
+                            path=f"{cls.OVERRIDE_ENTRY_PATH}.{ParameterKeys.OVERRIDE_STAGE}"
+                        ),
+                        message=f"the plan has {len(stage_measures)} stage(s), 0 to {len(stage_measures) - 1}; "
+                        f"there is no stage {quote.stage} to quote for.",
+                        accepted=tuple(range(len(stage_measures))),
+                    )
+                )
+                continue
+            measure_path = f"{entry_path}.{ParameterKeys.OVERRIDE_MEASURE_ID}"
+            code_path = f"{cls.OVERRIDE_ENTRY_PATH}.{ParameterKeys.OVERRIDE_MEASURE_ID}"
+            if quote.measure_id not in catalogue_measures:
+                problems.append(
+                    ParameterProblem(
+                        path=measure_path,
+                        code=ParameterProblemCodes.INVALID.format(path=code_path),
+                        message=f"{quote.measure_id!r} is no measure of the catalogue.",
+                        accepted=tuple(catalogue_measures),
+                    )
+                )
+                continue
+            if quote.measure_id in costless_measures:
+                problems.append(
+                    ParameterProblem(
+                        path=measure_path,
+                        code=ParameterProblemCodes.COSTLESS.format(path=code_path),
+                        message=f"{quote.measure_id!r} costs nothing to carry out (a setting, not a purchase), "
+                        "so there is no price a quote could replace.",
+                    )
+                )
+                continue
+            carried_out = tuple(stage_measures[quote.stage])
+            if quote.measure_id not in carried_out:
+                problems.append(
+                    ParameterProblem(
+                        path=measure_path,
+                        code=ParameterProblemCodes.NOT_IN_STAGE.format(path=code_path),
+                        message=f"stage {quote.stage} does not carry out {quote.measure_id!r}, so it buys nothing "
+                        "a quote could price.",
+                        accepted=carried_out,
+                    )
+                )
+        return problems
 
     @classmethod
     def _read_plan_start_year(cls, reader: ParameterReader) -> Optional[int]:
@@ -1482,6 +1758,7 @@ class StagedParameters:
         energy: Optional[EnergyEcho] = None,
         plan_start_year: Optional[int] = None,
         price_basis_year_origin: Optional[EchoOrigin] = None,
+        investment_overrides: Sequence[Mapping[str, Any]] = (),
     ) -> Dict[str, Any]:
         """The ``parameters`` block ``economics_result.json`` publishes.
 
@@ -1513,6 +1790,9 @@ class StagedParameters:
             price_basis_year_origin: :attr:`EchoOrigin.PLAN_START_YEAR` when the plan's start year
                 supplied ``parameters.price_basis_year``, written as ``origins.price_basis_year``;
                 None (the key absent) whenever the stages or the parameters stated the year.
+            investment_overrides: The reader's quotes the plan was priced with, each in the shape
+                the file states it (:meth:`StatedQuote.to_json`); ``[]`` without any
+                (renovisorissues #53, schema version 6). Fed back in, they price the same plan.
 
         Returns:
             The block, with the keys in the order the document writes them.
@@ -1551,6 +1831,7 @@ class StagedParameters:
                 carrier.value: {key: cls._band_of(value) for key, value, _origin in price.fields()}
                 for carrier, price in prices
             },
+            ParameterKeys.INVESTMENT_OVERRIDES: [dict(quote) for quote in investment_overrides],
             ParameterKeys.SUBSIDY_CATALOG: subsidy_catalog,
             ParameterKeys.ORIGINS: origins,
         }

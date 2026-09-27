@@ -227,7 +227,10 @@ class ComponentCostFacts:
 
     Three properties are worth a reviewer's attention. Overrides are **per field**, so quoting a real
     installer price for the device no longer forces the caller to also invent a lifetime and a
-    maintenance rate. `override_source` is mandatory whenever any override is set (strict mode,
+    maintenance rate. `purchase_cost_override_in_euro` is the one override that prices a single
+    purchase rather than the subject: the year-0 purchase as a whole (a reader's quote, covering
+    device, installation, planning and removal), every later purchase priced as without it.
+    `override_source` is mandatory whenever any override is set (strict mode,
     §9.3) and lands in the provenance ledger, so an overridden number stays as traceable as a
     database one. And `technical_attributes` is the free-form channel subsidy eligibility conditions
     read (§5.4) — an SCOP, a refrigerant, an achieved U-value — which is why it must be
@@ -261,11 +264,27 @@ class ComponentCostFacts:
     maintenance_rate_override: Optional[UncertainValue] = None
     fixed_operation_cost_override_in_euro_per_year: Optional[UncertainValue] = None
     embodied_co2_override_in_kg: Optional[float] = None
+    # The whole year-0 purchase as one stated amount -- device, installation, planning and the
+    # removal of what it replaces -- e.g. a reader's quote for a measure (renovisorissues #53).
+    # Unlike `investment_cost_override_in_euro` it prices that one purchase only: replacements,
+    # maintenance and the lifetime stay what the database (or the other overrides) state.
+    purchase_cost_override_in_euro: Optional[UncertainValue] = None
     # Provenance of the overrides (§3.10). Mandatory whenever any override is set
     # (enforced in strict mode, §9.3); recorded in the provenance ledger.
     override_source: Optional[str] = None
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).
     technical_attributes: Dict[str, Any] = field(default_factory=dict)
+
+    #: The per-field overrides, in declaration order: the authoritative list `has_overrides` reads.
+    OVERRIDE_FIELDS: ClassVar[Tuple[str, ...]] = (
+        "investment_cost_override_in_euro",
+        "installation_cost_override_in_euro",
+        "lifetime_override_in_years",
+        "maintenance_rate_override",
+        "fixed_operation_cost_override_in_euro_per_year",
+        "embodied_co2_override_in_kg",
+        "purchase_cost_override_in_euro",
+    )
 
     def __post_init__(self) -> None:
         """Local fail-fast validation (§9.3).
@@ -291,6 +310,7 @@ class ComponentCostFacts:
         """
         self.investment_cost_override_in_euro = _coerce_uncertain(self.investment_cost_override_in_euro)
         self.installation_cost_override_in_euro = _coerce_uncertain(self.installation_cost_override_in_euro)
+        self.purchase_cost_override_in_euro = _coerce_uncertain(self.purchase_cost_override_in_euro)
         self.maintenance_rate_override = _coerce_uncertain(self.maintenance_rate_override)
         self.fixed_operation_cost_override_in_euro_per_year = _coerce_uncertain(
             self.fixed_operation_cost_override_in_euro_per_year
@@ -309,7 +329,7 @@ class ComponentCostFacts:
             )
         if self.count < 1:
             raise ValueError("count must be >= 1.")
-        for band_name in ("maintenance_rate_override",):
+        for band_name in ("maintenance_rate_override", "purchase_cost_override_in_euro"):
             band = getattr(self, band_name)
             if band is not None and band.minimum < 0:
                 raise ValueError(f"{band_name} must be non-negative in every slot.")
@@ -338,21 +358,40 @@ class ComponentCostFacts:
         """True if any per-field override is set (then `override_source` is required in strict mode).
 
         Used by the completeness/strictness checks and by the input audit, which flags a row whose
-        price came from an override that cites nothing. The tuple below is the authoritative list of
-        override fields; `override_source` and `technical_attributes` are deliberately not in it,
+        price came from an override that cites nothing. :attr:`OVERRIDE_FIELDS` is the authoritative
+        list of override fields; `override_source` and `technical_attributes` are deliberately not in it,
         because neither replaces a database value.
         """
-        return any(
-            getattr(self, name) is not None
-            for name in (
-                "investment_cost_override_in_euro",
-                "installation_cost_override_in_euro",
-                "lifetime_override_in_years",
-                "maintenance_rate_override",
-                "fixed_operation_cost_override_in_euro_per_year",
-                "embodied_co2_override_in_kg",
-            )
-        )
+        return any(getattr(self, name) is not None for name in self.OVERRIDE_FIELDS)
+
+
+@dataclass(frozen=True)
+class QuotedPurchase:
+    """A purchase the engine holds no cost facts for, priced whole by a stated amount.
+
+    A measure HiSim has no price and no asset class for -- lagging a hot-water cylinder -- becomes
+    a cost subject only when somebody states what it costs, e.g. a reader's quote
+    (renovisorissues #53). With no asset class there is no lifetime, no maintenance rate and no
+    subsidy scheme to assess it for, so it is what it says: one INVESTMENT entry in year 0 of the
+    evaluation that buys it, never replaced, never maintained, never written down. It is booked
+    before financing, so a loan covers it like any other year-0 purchase.
+
+    Args:
+        subject: The cost subject it is booked under (the measure id).
+        amount_in_euro: The stated amount, a band; exact for a quote.
+        source: Where the amount comes from, recorded in the provenance ledger (§3.10).
+    """
+
+    subject: str
+    amount_in_euro: UncertainValue
+    source: str
+
+    def __post_init__(self) -> None:
+        """Refuse a negative amount and a purchase that cites nothing."""
+        if self.amount_in_euro.minimum < 0:
+            raise ValueError(f"QuotedPurchase {self.subject!r}: the amount must be non-negative in every slot.")
+        if not self.source:
+            raise ValueError(f"QuotedPurchase {self.subject!r}: a stated amount cites its source (§3.10).")
 
 
 @dataclass

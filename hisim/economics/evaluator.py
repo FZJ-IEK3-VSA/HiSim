@@ -77,6 +77,7 @@ from hisim.economics.facts import (
     BillingDeterminants,
     ComponentCostFacts,
     ExistingAssetRegister,
+    QuotedPurchase,
 )
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import (
@@ -86,7 +87,7 @@ from hisim.economics.perspectives import (
     Perspective,
     SubsidyModeKind,
 )
-from hisim.economics.provenance import ProvenanceLedger, ResolvedSource
+from hisim.economics.provenance import ParameterOrigin, ParameterProvenance, ProvenanceLedger, ResolvedSource
 from hisim.economics.results import (
     EconomicAssumptions,
     EmbodiedCo2Basis,
@@ -101,7 +102,7 @@ from hisim.economics.results import (
 )
 from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext, SubsidyDecision, SubsidyPackageContext
 from hisim.economics.tariffs import TariffContract
-from hisim.economics.timeline import CashFlowTimeline, CostCategory
+from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
 
@@ -753,6 +754,7 @@ class EconomicEvaluator:
         inputs: EvaluationInputs,
         perspective: Perspective,
         ledger: ProvenanceLedger,
+        quoted_purchases: Sequence[QuotedPurchase] = (),
     ) -> TimelineBuildResult:
         """Builds the canonical timeline for one perspective, plus its non-cash outputs.
 
@@ -817,6 +819,10 @@ class EconomicEvaluator:
             ledger: Provenance ledger; **mutated** — every database lookup made along the way
                 records itself here, which is what makes `LifecycleCostResult.explain` possible
                 (§3.10).
+            quoted_purchases: Purchases with no cost facts, priced whole by a stated amount
+                (:class:`~hisim.economics.facts.QuotedPurchase`): one year-0 INVESTMENT entry each,
+                in the levy basis, before financing; empty on every path but a staged plan with a
+                reader's quote for a measure HiSim holds no price for (renovisorissues #53).
 
         Returns:
             A `TimelineBuildResult`: the timeline in nominal, undiscounted euro bands (discounting
@@ -903,7 +909,10 @@ class EconomicEvaluator:
             if include_investment and costing.is_new_investment and costing.replaced_asset is not None:
                 replaced_outcome = resolve_replaced_asset(
                     costing=costing,
-                    gross=gross,
+                    # The coupled-cost credit is a share of what this measure costs; a stated
+                    # purchase price (a reader's quote) is that cost. The like-for-like credit
+                    # reads the replaced asset's own price and is not touched by it.
+                    gross=costing.purchased_gross,
                     database=self.database,
                     parameters=params,
                     price_basis_year=price_basis_year,
@@ -958,6 +967,33 @@ class EconomicEvaluator:
                 if subsidy_result.decision is not None:
                     decisions.append(subsidy_result.decision)
                 timeline.extend(subsidy_result.entries)
+
+        # --- purchases priced whole by a stated amount, with no cost facts behind them (#53)
+        if include_investment:
+            for purchase in quoted_purchases:
+                provenance = ledger.record(
+                    ParameterProvenance(
+                        parameter=f"{purchase.subject}.quoted_purchase_in_euro",
+                        value=purchase.amount_in_euro,
+                        origin=ParameterOrigin.CONFIG_OVERRIDE,
+                        source_ids=(f"inline:{purchase.source}",),
+                        detail=purchase.source,
+                    )
+                )
+                timeline.add(
+                    CashFlowEntry(
+                        year=0,
+                        amount_in_euro=purchase.amount_in_euro,
+                        category=CostCategory.INVESTMENT,
+                        subject=purchase.subject,
+                        provenance_ids=(provenance,),
+                    )
+                )
+                modernization_cost = modernization_cost + purchase.amount_in_euro
+                levy_cost_by_subject[purchase.subject] = (
+                    levy_cost_by_subject.get(purchase.subject, UncertainValue.exact(0.0)) + purchase.amount_in_euro
+                )
+                levy_credit_by_subject.setdefault(purchase.subject, UncertainValue.exact(0.0))
 
         # --- energy costs per carrier (§3.6 rule 5, §8)
         energy_result = build_energy_flows(
@@ -1062,6 +1098,7 @@ class EconomicEvaluator:
         inputs: EvaluationInputs,
         perspective: Perspective,
         ledger: Optional[ProvenanceLedger] = None,
+        quoted_purchases: Sequence[QuotedPurchase] = (),
     ) -> LifecycleCostResult:
         """Evaluates one perspective: timeline -> allocation -> discounting -> result.
 
@@ -1087,6 +1124,8 @@ class EconomicEvaluator:
             ledger: Provenance ledger to record into; a fresh one is created when omitted. It is
                 stored on the result either way, which is what makes `explain()` work without
                 extra plumbing (§3.10).
+            quoted_purchases: Purchases with no cost facts, priced whole by a stated amount; see
+                `build_timeline`. Empty on every path but a staged plan's.
 
         Returns:
             The `LifecycleCostResult` for this perspective. Every monetary field is a
@@ -1099,7 +1138,7 @@ class EconomicEvaluator:
         # still-empty ledger is falsy and used to be silently replaced by a fresh one — the
         # caller then held an object nothing ever recorded into.
         ledger = ledger if ledger is not None else ProvenanceLedger()
-        build = self.build_timeline(inputs, perspective, ledger)
+        build = self.build_timeline(inputs, perspective, ledger, quoted_purchases)
         timeline = build.timeline
         co2_result = build.co2_result
 

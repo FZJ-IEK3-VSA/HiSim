@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim import log
 from hisim.economics.calculators.aggregation import aggregate_timeline
@@ -61,6 +61,7 @@ from hisim.economics.facts import (
     ExistingAsset,
     ExistingAssetRegister,
     InstallationYearOrigin,
+    QuotedPurchase,
 )
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective, SubsidyMode
@@ -288,6 +289,71 @@ class SubjectLife:
     installation_year_origin: Optional[InstallationYearOrigin]
 
 
+class InvestmentOrigin(str, enum.Enum):
+    """Where a subject's year-0 investment came from, as ``economics_result.json`` states it (schema 6).
+
+    ``READER_QUOTE`` is the reader's quote for the measure the subject is the main subject of
+    (renovisorissues #53); ``INCLUDED_IN_READER_QUOTE`` a further subject of that measure, bought at
+    zero in that stage because the quote covers the whole job; ``REQUEST`` an
+    ``investment_cost_override_in_euro`` the calculation's inputs state (an envelope measure priced
+    from the request's cost block); ``COST_DATABASE`` the cost database's entry for the asset class.
+    """
+
+    READER_QUOTE = "reader_quote"
+    INCLUDED_IN_READER_QUOTE = "included_in_reader_quote"
+    REQUEST = "request"
+    COST_DATABASE = "cost_database"
+
+
+@dataclass(frozen=True)
+class InvestmentOverride:
+    """The reader's quote for one measure of one stage, resolved to the subjects it prices (#53).
+
+    A quote is a total in euro for one measure, installed. It replaces the year-0 investment --
+    investment, planning and removal -- of the measure's **main** subject in that stage; the
+    measure's other subjects in that stage are bought at zero, because the quote covers the whole
+    job, and keep their lifetimes and their later, database-priced replacements (owner decisions
+    of 2026-09-26). Which subject is the main one is the caller's to resolve (for a RenoVisor plan,
+    :class:`hisim.renovisor.economics.MainSubjects`); the evaluator only prices it.
+
+    Args:
+        stage: The index of the stage the quote is for.
+        measure_id: The catalogue measure it is a quote for.
+        amount_in_euro: The quote, a positive exact amount at the plan's price basis.
+        source: Where the quote comes from, as the reader stated it.
+        main_subject: The cost subject the quote prices. A subject the stage holds no cost facts
+            for -- the measure-named subject of a measure HiSim holds no price for -- is bought as
+            a :class:`~hisim.economics.facts.QuotedPurchase`.
+        other_subjects: The measure's further subjects in that stage, bought at zero.
+    """
+
+    stage: int
+    measure_id: str
+    amount_in_euro: float
+    source: str
+    main_subject: str
+    other_subjects: Tuple[str, ...] = ()
+
+    #: How the provenance ledger and a quoted subject's facts cite the main subject's price.
+    MAIN_SOURCE: ClassVar[str] = "reader's quote for {measure_id} (stage {stage}): {source}"
+
+    #: How they cite a further subject's zero.
+    INCLUDED_SOURCE: ClassVar[str] = "included in the reader's quote for {measure_id} (stage {stage}): {source}"
+
+    def cited(self, main: bool) -> str:
+        """The source sentence for the main subject's price or for a further subject's zero."""
+        template = self.MAIN_SOURCE if main else self.INCLUDED_SOURCE
+        return template.format(measure_id=self.measure_id, stage=self.stage, source=self.source)
+
+    def covers(self, subject: str) -> Optional[bool]:
+        """Whether the quote prices a subject: True as its main subject, False as a further one."""
+        if subject == self.main_subject:
+            return True
+        if subject in self.other_subjects:
+            return False
+        return None
+
+
 @dataclass(frozen=True)
 class Stage:
     """One state of the house, the year the plan puts it in, and what got it there.
@@ -374,6 +440,12 @@ class StagedResult:
         lives_by_stage: For each stage, in stage order, the :class:`SubjectLife` of every cost
             subject of its evaluation (renovisorissues #58). Empty for a result assembled by hand,
             whose document then states no lifetime and no installation year.
+        investment_overrides: The reader's quotes the plan was priced with, as resolved
+            (renovisorissues #53), in the order they were given; empty without any.
+        stage_start_scale_by_stage: For each stage, in stage order, the factor the splice applies
+            to a subject's year-0 flows when it books them in the stage's year: the share the stage
+            pays times the price level of that year. A subsidy row's maximum is moved by it exactly
+            as the row's award is (:meth:`stage_start_scale`). Empty for a result assembled by hand.
     """
 
     reference: LifecycleCostResult
@@ -390,6 +462,8 @@ class StagedResult:
     price_basis_year: Optional[int] = None
     price_basis_year_origin: Optional[EchoOrigin] = None
     lives_by_stage: Tuple[Dict[str, SubjectLife], ...] = field(default_factory=tuple)
+    investment_overrides: Tuple[InvestmentOverride, ...] = field(default_factory=tuple)
+    stage_start_scale_by_stage: Tuple[Dict[str, float], ...] = field(default_factory=tuple)
 
     @property
     def ledger(self) -> Optional[ProvenanceLedger]:
@@ -448,6 +522,95 @@ class StagedResult:
             if subject in charged:
                 found = index
         return found
+
+    def stage_start_scale(self, stage: Optional[int], subject: str) -> float:
+        """The factor one stage's year-0 figure of one subject is booked in the plan with.
+
+        Args:
+            stage: The stage, or None on the reference, which books its year 0 as it is.
+            subject: The cost subject.
+
+        Returns:
+            The share the stage pays times the price level of its year; 1.0 on the reference and
+            for a result that does not carry the factors.
+        """
+        if stage is None or stage >= len(self.stage_start_scale_by_stage):
+            return 1.0
+        return self.stage_start_scale_by_stage[stage].get(subject, 1.0)
+
+    def purchase_stage(self, subject: str, staged: bool) -> Optional[int]:
+        """The stage whose purchase of a subject a document row describes.
+
+        The plan's rows describe the last stage that charged the subject
+        (:meth:`stage_of_subject`) and, failing that, the last stage that has it at all; the
+        reference's rows describe stage 0.
+
+        Args:
+            subject: The cost subject.
+            staged: Whether the plan rather than the reference is asked about.
+
+        Returns:
+            The stage index, or None when no stage has cost facts for the subject and none charged it.
+        """
+        if not staged:
+            return 0 if self.stages else None
+        charged = self.stage_of_subject(subject)
+        if charged is not None:
+            return charged
+        for index in range(len(self.stages) - 1, -1, -1):
+            if any(facts.subject == subject for facts in self.stages[index].inputs.cost_facts):
+                return index
+        return None
+
+    def quote_of(self, subject: str, staged: bool) -> Optional[Tuple[InvestmentOverride, bool]]:
+        """The reader's quote that priced a subject's purchase, and whether it is the main subject.
+
+        Args:
+            subject: The cost subject.
+            staged: Whether the plan rather than the reference is asked about.
+
+        Returns:
+            ``(the quote, True for its main subject / False for a further one)``, or None when the
+            purchase the row describes (:meth:`purchase_stage`) was not quoted.
+        """
+        stage = self.purchase_stage(subject, staged)
+        for override in self.investment_overrides:
+            covered = override.covers(subject)
+            if override.stage == stage and covered is not None:
+                return override, covered
+        return None
+
+    def investment_origin(self, subject: str, staged: bool) -> Tuple[Optional[InvestmentOrigin], Optional[str]]:
+        """Where a subject's year-0 investment came from, and the source that states it (#53).
+
+        Args:
+            subject: The cost subject.
+            staged: Whether the plan rather than the reference is asked about.
+
+        Returns:
+            ``(origin, source)``: the reader's quote and its source, a request override and its
+            ``override_source``, or the cost database with no source sentence; ``(None, None)``
+            for a subject no stage holds cost facts for and no quote prices (a carrier, a
+            measure-only row).
+        """
+        quote = self.quote_of(subject, staged)
+        if quote is not None:
+            override, main = quote
+            return (
+                InvestmentOrigin.READER_QUOTE if main else InvestmentOrigin.INCLUDED_IN_READER_QUOTE,
+                override.source,
+            )
+        stage = self.purchase_stage(subject, staged)
+        if stage is None:
+            return None, None
+        facts = next(
+            (entry.facts for entry in self.stages[stage].inputs.cost_facts if entry.subject == subject), None
+        )
+        if facts is None:
+            return None, None
+        if facts.investment_cost_override_in_euro is not None:
+            return InvestmentOrigin.REQUEST, facts.override_source
+        return InvestmentOrigin.COST_DATABASE, None
 
     def life_of(self, subject: str, staged: bool) -> Optional[SubjectLife]:
         """The lifetime and age one subject was priced with, on the reference or on the plan.
@@ -547,6 +710,7 @@ class StagedEvaluator:
         perspective: Perspective,
         catalog: Optional[SubsidyCatalog] = None,
         plan_start_year: Optional[int] = None,
+        investment_overrides: Sequence[InvestmentOverride] = (),
     ) -> StagedResult:
         """Price one plan: evaluate every stage, splice the timelines, compare against stage 0.
 
@@ -572,6 +736,12 @@ class StagedEvaluator:
                 when ``parameters`` states no ``price_basis_year`` — the year the price basis falls
                 back to instead of the stages' simulation year
                 (:func:`~hisim.economics.evaluator.effective_price_basis_year`).
+            investment_overrides: The reader's quotes (renovisorissues #53), each resolved to the
+                subjects it prices (:class:`InvestmentOverride`). A quoted stage is evaluated with
+                its main subject's year-0 purchase at the quote and the measure's other subjects'
+                at zero (``purchase_cost_override_in_euro``), and the stage pays the whole quote
+                (charge share 1). Everything after that purchase -- replacements, maintenance, the
+                later stages' registers -- is priced as without it.
 
         Returns:
             The :class:`StagedResult`, carrying the id of ``catalog`` (:meth:`catalog_id`).
@@ -592,9 +762,11 @@ class StagedEvaluator:
                 f"{PlanYearBounds.MAXIMUM}: a plan's start year is a calendar year."
             )
         ordered = tuple(stages)
+        overrides = tuple(investment_overrides)
         parameters, perspective = self.priced_under(parameters, perspective, catalog)
         self._validate(ordered, parameters)
         basis_year_origin: Optional[EchoOrigin] = None
+        self._validate_overrides(ordered, overrides)
         if parameters.price_basis_year is None and plan_start_year is not None:
             # Resolved once, here, so every stage's evaluation reads the same basis year and the
             # engine's own fallback to the simulation year never runs inside this plan. The one
@@ -626,9 +798,15 @@ class StagedEvaluator:
         charged_by_stage: List[Dict[str, float]] = []
         lives_by_stage: List[Dict[str, SubjectLife]] = []
         for index, stage in enumerate(ordered):
+            quotes = [override for override in overrides if override.stage == index]
             charged = self._charged_subjects(ordered, index)
+            for override in quotes:
+                # The quote is the stage's whole job, so the stage pays all of it -- also where it
+                # only enlarges a subject the stage before already had.
+                charged[override.main_subject] = 1.0
             inputs = self._staged_inputs(ordered, index, charged_by_stage, year_zero)
-            per_stage.append(evaluator.evaluate(inputs, perspective, ledger))
+            inputs, purchases = self._quoted_inputs(inputs, quotes)
+            per_stage.append(evaluator.evaluate(inputs, perspective, ledger, purchases))
             charged_by_stage.append(charged)
             lives_by_stage.append(
                 self._subject_lives(
@@ -658,6 +836,11 @@ class StagedEvaluator:
             price_basis_year=price_basis_year,
             price_basis_year_origin=basis_year_origin,
             lives_by_stage=tuple(lives_by_stage),
+            investment_overrides=overrides,
+            stage_start_scale_by_stage=tuple(
+                self._stage_start_scales(ordered, index, charged_by_stage[index], evaluator, parameters)
+                for index in range(len(ordered))
+            ),
         )
 
     @staticmethod
@@ -1072,6 +1255,134 @@ class StagedEvaluator:
                 f"stages[{index}] resolved the {what} of {carrier.value} as {value!r}, an earlier stage "
                 f"as {earlier!r}; one plan is priced under one set of assumptions."
             )
+
+    #: Code of the refusal of a quote the evaluator cannot place: a stage the plan does not have,
+    #: or two quotes for one measure of one stage. The staged command refuses both earlier, naming
+    #: the key (``hisim.economics.staged_parameters``); this is the engine's own guard.
+    OVERRIDE_PROBLEM_CODE = "parameters.investment_overrides.invalid"
+
+    @classmethod
+    def _validate_overrides(cls, stages: Tuple[Stage, ...], overrides: Tuple[InvestmentOverride, ...]) -> None:
+        """Refuse a quote for a stage the plan does not have, or a second quote for one measure.
+
+        Args:
+            stages: The plan.
+            overrides: The resolved quotes.
+
+        Raises:
+            StagedEvaluationError: Naming the first such quote.
+        """
+        seen: Set[Tuple[int, str]] = set()
+        for position, override in enumerate(overrides):
+            problem = None
+            if not 0 <= override.stage < len(stages):
+                problem = f"stage {override.stage} is not a stage of this plan of {len(stages)}."
+            elif (override.stage, override.measure_id) in seen:
+                problem = f"a second quote for {override.measure_id!r} in stage {override.stage}."
+            elif override.amount_in_euro <= 0:
+                problem = f"the quote {override.amount_in_euro!r} is not a positive amount."
+            if problem is not None:
+                path = f"{ParameterKeys.ROOT_PATH}.{ParameterKeys.INVESTMENT_OVERRIDES}[{position}]"
+                raise StagedEvaluationError(
+                    problem, [{"path": path, "code": cls.OVERRIDE_PROBLEM_CODE, "message": problem}]
+                )
+            seen.add((override.stage, override.measure_id))
+
+    @staticmethod
+    def _quoted_inputs(
+        inputs: EvaluationInputs, quotes: Sequence[InvestmentOverride]
+    ) -> Tuple[EvaluationInputs, List[QuotedPurchase]]:
+        """One stage's inputs with the reader's quotes on its subjects' facts (renovisorissues #53).
+
+        The main subject's facts get the quote as ``purchase_cost_override_in_euro`` and each
+        further subject's a zero; the facts' ``override_source`` names the quote (after whatever
+        it already said, so a request-priced envelope subject still cites its cost block). A main
+        subject the stage has no cost facts for -- a measure HiSim holds no price for -- is bought
+        as a :class:`~hisim.economics.facts.QuotedPurchase` instead.
+
+        Args:
+            inputs: The stage's inputs, with its ageing register already merged in.
+            quotes: The quotes for this stage.
+
+        Returns:
+            A copy of the inputs carrying the quotes, and the stage's quoted purchases. The inputs
+            are returned unchanged when the stage has no quote.
+        """
+        if not quotes:
+            return inputs, []
+        stated: Dict[str, Tuple[UncertainValue, str]] = {}
+        purchases: List[QuotedPurchase] = []
+        priced = {subject_facts.subject for subject_facts in inputs.cost_facts}
+        for quote in quotes:
+            amount = UncertainValue.exact(quote.amount_in_euro)
+            if quote.main_subject in priced:
+                stated[quote.main_subject] = (amount, quote.cited(main=True))
+            else:
+                purchases.append(QuotedPurchase(quote.main_subject, amount, quote.cited(main=True)))
+            for other in quote.other_subjects:
+                if other in priced:
+                    stated[other] = (UncertainValue.exact(0.0), quote.cited(main=False))
+        cost_facts = []
+        for subject_facts in inputs.cost_facts:
+            if subject_facts.subject not in stated:
+                cost_facts.append(subject_facts)
+                continue
+            amount, source = stated[subject_facts.subject]
+            facts = subject_facts.facts
+            cited = f"{facts.override_source}; year-0 purchase: {source}" if facts.override_source else source
+            cost_facts.append(
+                replace(
+                    subject_facts,
+                    facts=replace(facts, purchase_cost_override_in_euro=amount, override_source=cited),
+                )
+            )
+        return replace(inputs, cost_facts=cost_facts), purchases
+
+    def _stage_start_scales(
+        self,
+        stages: Tuple[Stage, ...],
+        index: int,
+        charged: Dict[str, float],
+        evaluator: EconomicEvaluator,
+        parameters: EconomicParameters,
+    ) -> Dict[str, float]:
+        """The factor the splice books each of one stage's year-0 figures with, per subject.
+
+        Args:
+            stages: The plan.
+            index: The stage.
+            charged: What the stage pays for.
+            evaluator: For the escalation rates.
+            parameters: For the general investment escalation rate.
+
+        Returns:
+            Subject -> share paid times the price level of the stage's year, for every subject
+            the stage has cost facts for or charges.
+        """
+        charges = self._stage_charges(stages, index, charged, evaluator, parameters)
+        subjects = {facts.subject for facts in stages[index].inputs.cost_facts} | set(charged)
+        from_year = stages[index].from_year
+        return {
+            subject: charges.share_of(subject) * charges.escalation_factor(subject, from_year)
+            for subject in sorted(subjects)
+        }
+
+    @classmethod
+    def charged_subjects(cls, stages: Sequence[Stage], index: int) -> Dict[str, float]:
+        """Which subjects stage ``index`` pays for, and at what share (:meth:`_charged_subjects`).
+
+        The public face of the rule, for a caller that has to know before pricing whether a stage
+        buys anything for a measure -- the staged command refusing a quote for a measure a stage
+        only carries over.
+
+        Args:
+            stages: The plan.
+            index: The stage.
+
+        Returns:
+            Subject name -> the share of its year-0 flows the stage pays.
+        """
+        return cls._charged_subjects(tuple(stages), index)
 
     # ------------------------------------------------------------------ per-stage inputs
 

@@ -541,6 +541,119 @@ class MeasureSubjects:
             )
 
 
+class MainSubjectError(RuntimeError):
+    """A quoted measure's main subject cannot be determined from the stage it is quoted for.
+
+    The subject a reader's quote prices is decided by :class:`MainSubjects`, never guessed. A
+    measure the table does not know, or a stage whose subjects for the measure match the table
+    zero or several times, is a translator or table defect, not a bad plan: the staged command
+    exits 3 on it.
+    """
+
+
+class MainSubjects:
+    """Which cost subject a reader's quote for a measure prices: its main subject (#53).
+
+    A quote is a total for one measure, installed (renovisorissues #53). It replaces the year-0
+    investment of the measure's **main** subject in the quoted stage, and the measure's other
+    subjects there are bought at zero because the quote covers the whole job (owner decisions of
+    2026-09-26). This table is the one place that says which subject is the main one, in the terms
+    the translator's subject map (:meth:`EconomicContextBuilder._record_device_subjects`,
+    :meth:`EconomicContextBuilder._envelope_subject`, :meth:`MeasureSubjects.record`) already uses:
+
+    * a measure whose subject is **named by the measure id** -- every envelope measure, and a
+      measure HiSim holds no price for (:attr:`MeasureSubjects.UNPRICED`) -- has that subject;
+    * every other priced measure names the **asset classes** its main subject is priced as: the
+      generator for ``heating_system`` (not the buffer it installs with it), the array, the
+      battery, the collector, the emitters for ``heating_installation``, the cylinder for
+      ``hot_water_system``.
+
+    A measure that costs nothing (:attr:`MeasureSubjects.COSTLESS`) has no main subject and takes
+    no quote. Every other catalogue measure the translator acts on is in exactly one of the two
+    sets, which ``tests/renovisor/test_economics_context.py`` pins; a quote for one that is in
+    neither, or whose stage's subjects do not single out one main subject, raises
+    :class:`MainSubjectError` rather than pricing a guess.
+    """
+
+    #: Measures whose main subject is the subject named by the measure id.
+    NAMED_BY_MEASURE: ClassVar[FrozenSet[str]] = frozenset(
+        list(MeasureRegistry.INSULATION) + list(EnvelopeAssets.UNIT_REPLACEMENTS) + list(MeasureSubjects.UNPRICED)
+    )
+
+    #: Measure -> the asset classes its main subject is priced as.
+    BY_ASSET_CLASS: ClassVar[Dict[str, FrozenSet[ComponentType]]] = {
+        "heating_system": frozenset(asset_class for asset_class, _carrier in GeneratorAssets.BY_GENERATOR.values()),
+        "heating_installation": frozenset(
+            {
+                ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING,
+                ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR,
+            }
+        ),
+        "hot_water_system": frozenset({ComponentType.DOMESTIC_HOT_WATER_STORAGE}),
+        **{device.measure_id: frozenset({device.asset_class}) for device in DeviceAssets.ALL},
+    }
+
+    #: What an unresolvable quote is refused with.
+    UNRESOLVED_MESSAGE: ClassVar[str] = (
+        "the quote for {measure_id!r} in stage {stage} cannot be placed: {reason} The main subject a "
+        "quote prices is declared in MainSubjects (hisim/renovisor/economics.py) and never guessed."
+    )
+
+    @classmethod
+    def resolve(
+        cls, measure_id: str, stage: int, subjects: Mapping[str, Optional[ComponentType]]
+    ) -> Tuple[str, Tuple[str, ...]]:
+        """The main subject of one quoted measure in one stage, and the measure's other subjects.
+
+        Args:
+            measure_id: The quoted measure.
+            stage: The stage it is quoted for, for the message.
+            subjects: Every subject the translator stamped with the measure, among those the stage
+                has -> its asset class, or None for a subject the stage holds no cost facts for
+                (a measure-only subject).
+
+        Returns:
+            ``(main subject, the measure's other subjects in the stage, sorted)``.
+
+        Raises:
+            MainSubjectError: If the measure is in neither set of the table, or the stage's
+                subjects do not single out exactly one main subject.
+        """
+        if measure_id in cls.NAMED_BY_MEASURE:
+            if measure_id not in subjects:
+                raise MainSubjectError(
+                    cls.UNRESOLVED_MESSAGE.format(
+                        measure_id=measure_id,
+                        stage=stage,
+                        reason=f"its subject is named by the measure id, and the stage has no subject {measure_id!r}.",
+                    )
+                )
+            main = measure_id
+        elif measure_id in cls.BY_ASSET_CLASS:
+            classes = cls.BY_ASSET_CLASS[measure_id]
+            matching = sorted(subject for subject, asset_class in subjects.items() if asset_class in classes)
+            if len(matching) != 1:
+                raise MainSubjectError(
+                    cls.UNRESOLVED_MESSAGE.format(
+                        measure_id=measure_id,
+                        stage=stage,
+                        reason=(
+                            f"{len(matching)} of the stage's subjects of the measure ({', '.join(matching) or 'none'}) "
+                            f"are priced as {', '.join(sorted(item.value for item in classes))}, and a quote "
+                            "prices exactly one."
+                        ),
+                    )
+                )
+            main = matching[0]
+        else:
+            raise MainSubjectError(
+                cls.UNRESOLVED_MESSAGE.format(
+                    measure_id=measure_id, stage=stage, reason="the measure has no main subject declared."
+                )
+            )
+        return main, tuple(sorted(subject for subject in subjects if subject != main))
+
+
 class UnknownAge:
     """How old an existing device is when the request does not say: half-way through its life.
 

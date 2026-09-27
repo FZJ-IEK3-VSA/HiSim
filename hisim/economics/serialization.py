@@ -129,6 +129,7 @@ def facts_to_json(facts: ComponentCostFacts) -> dict:
             facts.fixed_operation_cost_override_in_euro_per_year
         ),
         "embodied_co2_override_in_kg": facts.embodied_co2_override_in_kg,
+        "purchase_cost_override_in_euro": UncertainValue.optional_to_json(facts.purchase_cost_override_in_euro),
         "override_source": facts.override_source,
         "technical_attributes": facts.technical_attributes,
     }
@@ -162,6 +163,7 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
             raw.get("fixed_operation_cost_override_in_euro_per_year")
         ),
         embodied_co2_override_in_kg=raw.get("embodied_co2_override_in_kg"),
+        purchase_cost_override_in_euro=UncertainValue.optional_from_json(raw.get("purchase_cost_override_in_euro")),
         override_source=raw.get("override_source"),
         technical_attributes=raw.get("technical_attributes", {}),
     )

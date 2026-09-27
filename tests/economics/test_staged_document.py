@@ -139,6 +139,7 @@ class TestTheSchema:
                 "status": "awarded",
                 "amount_in_euro": None,
                 "amount_by_year_in_euro": None,
+                "max_amount_in_euro": None,
                 "binding_cap": None,
                 "open_questions": [],
                 "note": None,
@@ -483,8 +484,8 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_five(self, document):
-        """Version 5: ``weather_year`` and ``plan_start_year`` (#57), and every row's life and age (#58).
+    def test_the_document_states_schema_version_six(self, document):
+        """Version 6: the reader's quotes (#53) and every subsidy row's maximum (#54).
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
         the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
@@ -495,15 +496,17 @@ class TestTheDocumentShape:
         (2026-09-26, renovisorissues #57 and #58) renames ``parameters.simulation_year`` to
         ``weather_year``, requires ``parameters.plan_start_year`` and dates ``annual[]`` from it
         alone, and requires ``service_life_origin``, ``installation_year``,
-        ``installation_year_origin`` and ``note`` on every ``by_subject`` row. A document of that
-        shape stating an older version would tell a consumer it could skip what the later versions
-        require.
+        ``installation_year_origin`` and ``note`` on every ``by_subject`` row; version 6
+        (2026-09-26, renovisorissues #53 and #54) requires ``parameters.investment_overrides``,
+        ``investment_origin`` and ``investment_source`` on every ``by_subject`` row and
+        ``max_amount_in_euro`` on every ``subsidies[]`` row. A document of that shape stating an
+        older version would tell a consumer it could skip what the later versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 5
+        assert document["schema_version"] == 6
         StagedDocument.validate(document)
-        for older in (1, 2, 3, 4):
+        for older in (1, 2, 3, 4, 5):
             with pytest.raises(jsonschema.ValidationError):
                 StagedDocument.validate({**document, "schema_version": older})
 
@@ -1093,11 +1096,12 @@ class TestSupportIsStatedOnce:
 
     def test_a_reduced_vat_award_states_a_zero_and_says_why(self):
         """The same rule for the other benefit that books no cash of its own."""
-        from hisim.economics.subsidies import SubsidyAward, SubsidyDecision
+        from hisim.economics.subsidies import SchemeMaximum, SchemeMaximumNotes, SubsidyAward, SubsidyDecision
 
         decision = SubsidyDecision(
             measure_subject=SyntheticPlan.HEAT_PUMP_SUBJECT,
             applied=[SubsidyAward(scheme_id="VAT", payout_kind=PayoutKind.VAT_REDUCTION, reduced_vat_rate=0.0)],
+            maximum_by_scheme={"VAT": SchemeMaximum(amount_in_euro=None, note=SchemeMaximumNotes.REDUCED_VAT)},
         )
         rows = StagedDocument._decision_rows(  # pylint: disable=protected-access
             decision, 1, "heating_system", {}, set()
@@ -1106,7 +1110,10 @@ class TestSupportIsStatedOnce:
         row = rows[0]
         assert row["status"] == "awarded"
         assert row["amount_in_euro"] == {"min": 0.0, "best": 0.0, "max": 0.0}
-        assert row["note"] == StagedDocument.NON_CASH_NOTES[PayoutKind.VAT_REDUCTION]
+        assert row["max_amount_in_euro"] is None
+        assert row["note"] == (
+            f"{StagedDocument.NON_CASH_NOTES[PayoutKind.VAT_REDUCTION]}; {SchemeMaximumNotes.REDUCED_VAT}"
+        )
 
     def test_a_stack_without_an_awarded_row_is_refused(self, document):
         """The no-catalogue contradiction itself, put back into a document, is refused."""

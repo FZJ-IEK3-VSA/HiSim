@@ -22,6 +22,7 @@ from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.subsidies.assessment import (
     EligibilityStatus,
     MeasureForSubsidy,
+    SchemeMaximum,
     SubsidyAward,
     SubsidyContext,
     SubsidyDecision,
@@ -397,6 +398,70 @@ def _combination_awards(
     return awards
 
 
+class SchemeMaximumNotes:
+    """Why a scheme's maximum is ``None``: the kinds whose catalogue entry states no amount (#54)."""
+
+    #: A reduced VAT rate is a rate on the price, not an amount, and no consumer books it (§7 B7).
+    REDUCED_VAT = "no maximum: the scheme reduces the VAT rate and states no amount it pays"
+
+
+def scheme_maximum(
+    scheme: SubsidyScheme,
+    measure: MeasureForSubsidy,
+    context: SubsidyContext,
+    overall_cap_share: Optional[float],
+) -> SchemeMaximum:
+    """The most one scheme can pay for one measure on its own, whatever its verdict (#54).
+
+    The scheme valued alone by :func:`_combination_awards`, the kernel every award is valued with,
+    so the maximum and an award can only differ by what the combination did to it. Per benefit
+    kind, as the owner decided (renovisorissues #54, 2026-09-26):
+
+    * LUMP_SUM: its amount -- clamped to the eligible cost, as an award is, when the scheme counts
+      cost categories;
+    * PER_UNIT and TIERED_PER_UNIT: the amount (the tier) for the measure's stated size, clamped
+      the same way;
+    * SHARE_OF_ELIGIBLE_COST and BONUS_SHARE: the rate times the eligible cost, the basis capped
+      by the scheme's eligible-basis cap (:meth:`EligibleCostSpec.cap_for_units`). A rate that
+      hinges on an open question takes the larger value: alone, a scheme keeps its full rate,
+      which a cumulation group's combined-rate cap only ever scales down depending on which
+      other schemes (and so which answers) stack with it;
+    * TAX_CREDIT: the whole credit, every instalment;
+    * SOFT_LOAN: the repayment grant on the capped eligible cost (zero where it grants none);
+    * OPERATIONAL: the rate times the measure's annual energy times the duration;
+    * REDUCED_VAT: ``None`` -- the catalogue states a rate on the price, no amount.
+
+    The catalogue's overall state-aid share, where it declares one, bounds the upfront amount as
+    it bounds an award.
+
+    Args:
+        scheme: The scheme, whatever its eligibility verdict.
+        measure: The measure, with its year-0 cost and its size.
+        context: The building context the eligible-cost rules read.
+        overall_cap_share: The catalogue's state-aid ceiling, or None.
+
+    Returns:
+        The maximum, a positive band in nominal year-0 euro, or None with the reason.
+    """
+    benefit = scheme.benefit
+    if isinstance(benefit, ReducedVatBenefit):
+        return SchemeMaximum(amount_in_euro=None, note=SchemeMaximumNotes.REDUCED_VAT)
+    award = _combination_awards([scheme], measure, context, overall_cap_share)[0]
+    if isinstance(benefit, LoanTermsBenefit):
+        basis, _binding = _eligible_cost_basis(scheme, measure, context)
+        return SchemeMaximum(amount_in_euro=basis.scale(benefit.repayment_grant_rate))
+    if isinstance(benefit, TaxCreditBenefit):
+        return SchemeMaximum(amount_in_euro=UncertainValue.sum(award.schedule_amounts))
+    if isinstance(benefit, OperationalBenefit):
+        energy = measure.annual_energy_sold_in_kwh.get(
+            benefit.carrier, 0.0
+        ) or measure.annual_energy_bought_in_kwh.get(benefit.carrier, 0.0)
+        return SchemeMaximum(
+            amount_in_euro=UncertainValue.exact(benefit.rate_per_kwh * energy * benefit.duration_years)
+        )
+    return SchemeMaximum(amount_in_euro=award.upfront_amount)
+
+
 def _support_value(
     awards: List[SubsidyAward],
     measure: MeasureForSubsidy,
@@ -544,6 +609,11 @@ def solve_cumulation(
                 "display_name": assessment.scheme.label,
                 "missing_fields": assessment.missing_fields,
             })
+
+    for assessment in assessments:
+        decision.maximum_by_scheme[assessment.scheme.id] = scheme_maximum(
+            assessment.scheme, measure, context, catalog.overall_cap_share
+        )
 
     def admissible(combination: List[SubsidyScheme]) -> bool:
         """Whether the combination violates no `excludes` relation.

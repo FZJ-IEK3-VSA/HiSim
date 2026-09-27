@@ -190,8 +190,28 @@ Every key is optional: `horizon_years`, `interest_rate`, `country`, `price_basis
 `{"kind": "loan", "financed_share"?, "nominal_interest_rate"?, "term_in_years"?}`), `escalation`
 (`{"general"?, "investment"?, "feed_in"?, "energy"?: {<carrier>: rate}}`; a rate for
 `ELECTRICITY_FEED_IN` is refused, since the feed-in remuneration never escalates at a carrier
-rate), `energy_prices`, and the three that are accepted and ignored because they describe the run
-rather than state an assumption, `weather_year`, `subsidy_catalog` and `origins`.
+rate), `energy_prices`, `investment_overrides`, and the three that are accepted and ignored because
+they describe the run rather than state an assumption, `weather_year`, `subsidy_catalog` and `origins`.
+
+`investment_overrides` carries the reader's quotes, one per measure of a stage, and re-prices the
+plan with no new simulation (renovisorissues #53; the document is schema version 6 with it):
+
+```json
+"investment_overrides": [
+  { "stage": 1, "measure_id": "heating_system", "amount_in_euro": 11800, "source": "installer quote" }
+]
+```
+
+The quote replaces the year-0 investment of the measure's main subject in that stage (the
+generator for `heating_system`); the measure's other subjects there (the buffer) are bought at zero
+and keep their lifetimes and their later replacements at database prices. Grants on eligible cost
+follow the quote, lump sums do not. `hot_water_tank_and_pipe_insulation`, which HiSim cannot price,
+is priced by a quote. A stage the plan does not have, a measure the stage does not carry out,
+`change_room_temperature` (it costs nothing) and a second quote for one measure of one stage are
+refused by name (`parameters.investment_overrides.*`, exit 2). The result echoes the quotes and
+marks each `by_subject` row's `investment_origin` (`reader_quote`, `included_in_reader_quote`,
+`request`, `cost_database`) with its `investment_source`. Every `subsidies[]` row carries
+`max_amount_in_euro`, the most the scheme can pay, whatever its status (renovisorissues #54).
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

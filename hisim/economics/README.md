@@ -211,8 +211,10 @@ records the quote as a `CONFIG_OVERRIDE` citing its source. Every `subsidies[]` 
 (renovisorissues #54, `hisim.economics.subsidies.scheme_maximum`; null for a soft loan without a
 repayment grant, which is no grant at all, #65), and `max_amount_for_measure_in_euro`, the sum of
 that over the rows of the same scheme, measure and stage: what the household can get for the
-measure (#65). The solver sees a measure's cost in the money of plan year 0, so a nominal amount is
-clamped to the year-0 cost, not to the price basis year's (#65).
+measure (#65). The solver sees a measure's cost in the money of the year the plan books it -- plan
+year 0, or a later stage's start year with the investment escalation to it -- so a nominal amount is
+clamped, and an eligible-cost cap binds, on the cost booked beside the award, not on the price basis
+year's (#65) nor on the year-0 cost of a later stage (hisim-xnkp).
 
 The subsidy catalogue is the one input a stage does not carry, so `staged` resolves it the way
 the RenoVisor translator does: `--subsidy-catalog` wins, then a `subsidy_catalog_path` in the

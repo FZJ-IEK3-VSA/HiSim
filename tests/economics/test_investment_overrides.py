@@ -18,7 +18,7 @@ branches on.
 import json
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import pytest
 
@@ -28,7 +28,7 @@ from hisim.economics.parameters import EconomicParameters
 from hisim.economics.staged import InvestmentOrigin, InvestmentOverride, StagedEvaluator, StagedResult
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_parameters import ParameterKeys, StagedParameters, StatedQuote
-from hisim.economics.subsidies import BenefitKind, LumpSumBenefit, PayoutKind
+from hisim.economics.subsidies import BenefitKind, EligibleCostSpec, LumpSumBenefit, PayoutKind
 from hisim.economics.timeline import CostCategory
 from hisim.loadtypes import ComponentType, Units
 from hisim.renovisor.economics import MainSubjectError, MainSubjects, MeasureSubjects
@@ -758,6 +758,175 @@ class TestALaterStagesLoanAndFixedGrants:
         assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
             (self.FROM_YEAR, pytest.approx(-0.3 * SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * factor))
         ]
+
+
+class TestALaterStagesGrantIsBoundedByTheCostItBooks:
+    """A later stage's fixed amount is clamped to the cost as that stage books it (hisim-xnkp).
+
+    The heat pump (EUR 18,000 in year-0 money, no planning or removal) is bought in stage 2, which
+    starts in year 3 under a 2 % investment escalation: the plan books it at
+    18,000 x 1.02**3 = 18,000 x 1.061208 = 19,101.744 in year 3. A lump sum is nominal and never
+    escalated, but it is clamped to that booked cost, not to the year-0 18,000 (which left a lump
+    sum clamped at 18,000 beside a 19,101.744 cost). The stage's evaluation values its subsidies
+    at the stage's price level, and the splice books them as they are.
+    """
+
+    FROM_YEAR = 3
+    RATE = 0.02
+    #: 18,000 x 1.02**3.
+    BOOKED_COST = 19101.744
+
+    def _later(self, database, catalog, rate: float = RATE, perspective=None) -> StagedResult:
+        """The plan with its heat-pump stage in year 3 under the given investment escalation."""
+        stages = _stages()
+        stages[2] = replace(stages[2], from_year=self.FROM_YEAR)
+        parameters = replace(_parameters(), investment_price_escalation_rate=rate)
+        return StagedEvaluator(database).evaluate(
+            stages, parameters, perspective or brownfield_perspective(subsidies=True), catalog
+        )
+
+    @staticmethod
+    def _lump_sum(amount: float):
+        """One lump sum of ``amount`` every synthetic measure qualifies for."""
+        return synthetic_catalog(
+            [
+                always_eligible_scheme(
+                    "LUMP", BenefitKind.LUMP_SUM, LumpSumBenefit(amount=amount), PayoutKind.UPFRONT_GRANT
+                )
+            ]
+        )
+
+    @classmethod
+    def _booked_cost(cls, result: StagedResult) -> float:
+        """The heat pump's purchase as the plan books it in year 3."""
+        return sum(
+            float(amount)
+            for category in (CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REMOVAL)
+            for year, amount in _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, category)
+            if year == cls.FROM_YEAR
+        )
+
+    @classmethod
+    def _heating_row(cls, result: StagedResult) -> Dict[str, Any]:
+        """The awarded grant row of stage 2's heating_system measure."""
+        document = StagedDocument(
+            result, _parameters(), brownfield_perspective(subsidies=True), measure_ids=MEASURE_IDS
+        ).to_json()
+        StagedDocument.validate(document)
+        StagedDocument.assert_subsidies_reconciled(document)
+        rows: List[Dict[str, Any]] = [
+            subsidy
+            for subsidy in document["plan"]["subsidies"]
+            if subsidy["stage"] == 2 and subsidy["measure_id"] == "heating_system" and subsidy["status"] == "awarded"
+        ]
+        (row,) = rows
+        return row
+
+    def test_the_booked_cost_is_the_escalated_database_price(self, database) -> None:
+        """18,000 x 1.061208 = 19,101.744 in year 3: the figure every case below is bounded by."""
+        result = self._later(database, self._lump_sum(1000.0))
+        assert self._booked_cost(result) == pytest.approx(self.BOOKED_COST)
+
+    def test_a_lump_sum_above_the_year_0_cost_but_below_the_booked_cost_is_paid_whole(self, database) -> None:
+        """EUR 18,500 > 18,000 but < 19,101.744: -18,500 in year 3 (was clamped to -18,000)."""
+        result = self._later(database, self._lump_sum(18500.0))
+        assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, pytest.approx(-18500.0))
+        ]
+        row = self._heating_row(result)
+        assert row["amount_in_euro"]["best"] == pytest.approx(-18500.0)
+        assert row["max_amount_in_euro"]["best"] == pytest.approx(-18500.0)
+        assert row["max_amount_for_measure_in_euro"]["best"] == pytest.approx(-18500.0)
+
+    def test_a_lump_sum_above_the_booked_cost_is_clamped_to_it(self, database) -> None:
+        """EUR 20,000 > 19,101.744: -19,101.744 in year 3, and the row's maximum with it (was -18,000)."""
+        result = self._later(database, self._lump_sum(20000.0))
+        assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, pytest.approx(-self.BOOKED_COST))
+        ]
+        row = self._heating_row(result)
+        assert row["amount_in_euro"]["best"] == pytest.approx(-self.BOOKED_COST)
+        assert row["max_amount_in_euro"]["best"] == pytest.approx(-self.BOOKED_COST)
+        assert row["max_amount_for_measure_in_euro"]["best"] == pytest.approx(-self.BOOKED_COST)
+
+    def test_under_a_falling_price_the_award_never_exceeds_the_booked_cost(self, database) -> None:
+        """-5 %: 18,000 x 0.95**3 = 18,000 x 0.857375 = 15,432.75; EUR 17,000 is clamped to it.
+
+        Clamped at the year-0 cost, EUR 17,000 < 18,000 was paid whole beside a 15,432.75 cost.
+        """
+        result = self._later(database, self._lump_sum(17000.0), rate=-0.05)
+        assert self._booked_cost(result) == pytest.approx(15432.75)
+        assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, pytest.approx(-15432.75))
+        ]
+
+    def test_a_share_of_cost_grant_still_follows_its_cost(self, database) -> None:
+        """30 % of 19,101.744 = 5,730.5232, as before."""
+        result = self._later(database, always_eligible_catalog(0.3))
+        assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, pytest.approx(-0.3 * self.BOOKED_COST))
+        ]
+        row = self._heating_row(result)
+        assert row["max_amount_in_euro"]["best"] == pytest.approx(-0.3 * self.BOOKED_COST)
+
+    def test_an_eligible_cost_cap_binds_on_the_booked_cost(self, database) -> None:
+        """30 % of min(19,101.744, 18,500) = 5,550 (was 30 % of 18,000, escalated: 5,730.5232)."""
+        (share,) = always_eligible_catalog(0.3).schemes
+        capped = replace(share, eligible_cost=EligibleCostSpec(cap_per_dwelling_unit_in_euro=[18500.0]))
+        result = self._later(database, synthetic_catalog([capped]))
+        assert _entries(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, pytest.approx(-5550.0))
+        ]
+        row = self._heating_row(result)
+        assert row["max_amount_in_euro"]["best"] == pytest.approx(-5550.0)
+
+    def test_the_loan_finances_the_booked_cost_net_of_the_clamped_grant(self, database) -> None:
+        """80 % of (19,101.744 + 1,000 x 1.061208 - 19,101.744) = 80 % of 1,061.208 = 848.9664."""
+        from hisim.economics.financing import FinancingPlan  # pylint: disable=import-outside-toplevel
+
+        financed = replace(
+            brownfield_perspective(subsidies=True), financing=FinancingPlan(financed_share=0.8, term_in_years=6)
+        )
+        result = self._later(database, self._lump_sum(20000.0), perspective=financed)
+        (principal,) = [
+            amount
+            for year, amount in _entries(result, "financing", CostCategory.LOAN_DISBURSEMENT)
+            if year == self.FROM_YEAR
+        ]
+        assert -principal == pytest.approx(848.9664)
+
+    def test_the_levy_basis_deducts_the_grant_from_the_cost_in_the_same_money(self, database) -> None:
+        """At the level 1.061208: cost 19,101.744, support min(20,000, 19,101.744) = 19,101.744.
+
+        Without the level the basis is 18,000 and 18,000: the engine's seam values the subject's
+        subsidies and its levy basis at the price level the plan books the purchase at, so the
+        grant is never deducted in other money than the cost it is deducted from.
+        """
+        from hisim.economics.evaluator import EconomicEvaluator  # pylint: disable=import-outside-toplevel
+        from hisim.economics.provenance import ProvenanceLedger  # pylint: disable=import-outside-toplevel
+
+        inputs = heat_pump_stage(0).inputs
+        evaluator = EconomicEvaluator(database, _parameters(), self._lump_sum(20000.0))
+        perspective = brownfield_perspective(subsidies=True)
+        levels: Tuple[Dict[str, float], ...] = ({}, {SyntheticPlan.HEAT_PUMP_SUBJECT: 1.02**3})
+        plain, booked = [
+            next(
+                record
+                for record in evaluator.build_timeline(
+                    inputs, perspective, ProvenanceLedger(), booked_price_levels=level
+                ).basis.by_subject
+                if record.subject == SyntheticPlan.HEAT_PUMP_SUBJECT
+            )
+            for level in levels
+        ]
+        assert (plain.modernization_cost_in_euro.best_estimate, plain.subsidies_received_in_euro.best_estimate) == (
+            pytest.approx(18000.0),
+            pytest.approx(18000.0),
+        )
+        assert (booked.modernization_cost_in_euro.best_estimate, booked.subsidies_received_in_euro.best_estimate) == (
+            pytest.approx(self.BOOKED_COST),
+            pytest.approx(self.BOOKED_COST),
+        )
 
 
 class TestTheEngineGuards:

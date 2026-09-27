@@ -205,7 +205,8 @@ plan with no new simulation (renovisorissues #53; the document is schema version
 The quote replaces the year-0 investment of the measure's main subject in that stage (the
 generator for `heating_system`); the measure's other subjects there (the buffer) are bought at zero
 and keep their lifetimes and their later replacements at database prices. Grants on eligible cost
-follow the quote, lump sums do not. `hot_water_tank_and_pipe_insulation`, which HiSim cannot price,
+follow the quote, lump sums do not. A quote is booked exactly as stated in its stage's year, never
+escalated, whatever year the stage starts in. `hot_water_tank_and_pipe_insulation`, which HiSim cannot price,
 is priced by a quote. A stage the plan does not have, a measure the stage does not carry out,
 `change_room_temperature` (it costs nothing) and a second quote for one measure of one stage are
 refused by name (`parameters.investment_overrides.*`, exit 2). The result echoes the quotes and

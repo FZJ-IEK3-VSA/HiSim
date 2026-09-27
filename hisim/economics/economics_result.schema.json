@@ -112,7 +112,7 @@
         },
         "investment_overrides": {
           "type": "array",
-          "description": "The reader's quoted prices the plan was priced with, one per measure of a stage, in the order they were given; empty without any. Each replaces the year-0 investment (investment, planning and removal) of the measure's main subject in that stage; the measure's other subjects in that stage are bought at zero, keep their lifetimes and their later, database-priced replacements. The quote is exact and is escalated to its stage's year like the price it replaces. Also an input of `staged --parameters`, where a stage the plan does not have, a measure the stage does not carry out, a measure that costs nothing (change_room_temperature) and a second quote for one measure of one stage are refused.",
+          "description": "The reader's quoted prices the plan was priced with, one per measure of a stage, in the order they were given; empty without any. Each replaces the year-0 investment (investment, planning and removal) of the measure's main subject in that stage; the measure's other subjects in that stage are bought at zero, keep their lifetimes and their later, database-priced replacements. The quote is exact and is booked as stated, nominal in its stage's year, never escalated, whatever year the stage starts in. Also an input of `staged --parameters`, where a stage the plan does not have, a measure the stage does not carry out, a measure that costs nothing (change_room_temperature) and a second quote for one measure of one stage are refused.",
           "items": {
             "type": "object",
             "required": ["stage", "measure_id", "amount_in_euro", "source"],

@@ -582,21 +582,73 @@ class TestALumpSumDoesNotFollowTheQuote:
 
 
 class TestAQuoteInALaterStage:
-    """A stage that starts later books its quoted purchase in its own year, at that year's prices."""
+    """A quote is taken exactly as stated, whatever year its stage starts in (owner, 2026-09-27).
 
-    def test_the_quote_is_escalated_like_the_price_it_replaces(self, database) -> None:
-        """The ratio of quote to database price is the same on the plan as in the stage's own year 0."""
+    Whoever quotes a price for a given year has already accounted for inflation, so the plan books
+    the quote nominal in its stage's year; the database price it replaces is escalated to that year.
+    """
+
+    FROM_YEAR = 4
+    RATE = 0.02
+
+    @pytest.fixture(name="later", scope="class")
+    def fixture_later(self, database):
+        """The plan with its heat-pump stage in year 4 under a 2 % investment escalation."""
         stages = _stages()
-        stages[2] = replace(stages[2], from_year=4)
-        parameters = replace(_parameters(), investment_price_escalation_rate=0.02)
+        stages[2] = replace(stages[2], from_year=self.FROM_YEAR)
+        parameters = replace(_parameters(), investment_price_escalation_rate=self.RATE)
         evaluator = StagedEvaluator(database)
-        perspective = brownfield_perspective()
-        plain = evaluator.evaluate(stages, parameters, perspective, None)
-        quoted = evaluator.evaluate(stages, parameters, perspective, None, investment_overrides=[HEATING_QUOTE])
-        (plain_year, plain_amount), = _entries(plain, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT)
-        (quoted_year, quoted_amount), = _entries(quoted, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT)
-        assert plain_year == quoted_year == 4
-        assert quoted_amount / plain_amount == pytest.approx(QUOTE / SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO)
+        catalog = always_eligible_catalog(0.3)
+        perspective = brownfield_perspective(subsidies=True)
+        plain = evaluator.evaluate(stages, parameters, perspective, catalog)
+        quoted = evaluator.evaluate(stages, parameters, perspective, catalog, investment_overrides=[HEATING_QUOTE])
+        return plain, quoted
+
+    def test_a_later_stage_quote_books_exactly_its_amount(self, later) -> None:
+        """11,800 nominal in year 4, where the database price is escalated to year 4."""
+        plain, quoted = later
+        factor = (1.0 + self.RATE) ** self.FROM_YEAR
+        assert _entries(plain, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT) == [
+            (self.FROM_YEAR, pytest.approx(SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * factor))
+        ]
+        assert _entries(quoted, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT) == [
+            (self.FROM_YEAR, QUOTE)
+        ]
+        assert _entries(quoted, BUFFER_SUBJECT, CostCategory.INVESTMENT) == [(self.FROM_YEAR, 0.0)]
+
+    def test_its_share_of_cost_grant_is_on_the_quote_as_stated(self, later) -> None:
+        """30 % of 11,800, not of 11,800 escalated."""
+        _plain, quoted = later
+        assert _entries(quoted, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [
+            (self.FROM_YEAR, pytest.approx(-0.3 * QUOTE))
+        ]
+
+    def test_its_replacements_still_escalate(self, later) -> None:
+        """The next purchase is a database price, escalated as without the quote."""
+        plain, quoted = later
+        replacements = _entries(quoted, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.REPLACEMENT)
+        assert replacements == _entries(plain, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.REPLACEMENT)
+
+    def test_the_document_states_the_quote_and_its_cap_unescalated(self, later) -> None:
+        """investment_by_stage is the quote; the grant row's cap equals its amount."""
+        _plain, quoted = later
+        document = StagedDocument(quoted, _parameters(), brownfield_perspective(subsidies=True)).to_json()
+        row = _rows(document)[SyntheticPlan.HEAT_PUMP_SUBJECT]
+        assert row["investment_by_stage"] == [
+            {"stage": 2, "investment_in_euro": {"min": QUOTE, "best": QUOTE, "max": QUOTE}}
+        ]
+        grants = [subsidy for subsidy in document["plan"]["subsidies"] if subsidy["stage"] == 2]
+        assert grants
+        for grant in grants:
+            assert grant["max_amount_in_euro"]["best"] == pytest.approx(grant["amount_in_euro"]["best"])
+
+    def test_a_year_0_quote_is_unchanged(self, database) -> None:
+        """A stage in year 0 books its quote as it did before: nothing to escalate."""
+        parameters = replace(_parameters(), investment_price_escalation_rate=self.RATE)
+        quoted = StagedEvaluator(database).evaluate(
+            _stages(), parameters, brownfield_perspective(), None, investment_overrides=[HEATING_QUOTE]
+        )
+        assert _entries(quoted, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT) == [(0, QUOTE)]
 
 
 class TestTheEngineGuards:

@@ -188,8 +188,10 @@ bought at zero, keep their lifetimes and their later, database-priced replacemen
 carries it as the facts field `purchase_cost_override_in_euro`, which prices that one purchase
 only: replacements, the maintenance base and the residual of a replaced unit stay the database's.
 Subsidies on eligible cost and the coupled-cost anyway credit see the quote; a lump sum and the
-like-for-like anyway credit (the old asset's price) do not. A later stage's quote is escalated to
-its year like the price it replaces. A measure HiSim holds no price for
+like-for-like anyway credit (the old asset's price) do not. A quote is taken exactly as stated,
+never escalated: a stage starting in year 3 books its 11,800 as 11,800 nominal in year 3, since
+whoever quoted for that year has already accounted for inflation (owner decision 2026-09-27); the
+database price it replaces would have been escalated. A measure HiSim holds no price for
 (`hot_water_tank_and_pipe_insulation`) becomes priced: one year-0 purchase, never replaced,
 maintained or written down. A stage the plan does not have
 (`parameters.investment_overrides.stage.unknown`), a measure the stage does not carry out or

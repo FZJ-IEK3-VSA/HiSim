@@ -55,7 +55,8 @@ the same thing in each, the flag taking precedence over the path stored in the p
   `{"kind": "loan", …}`), `escalation`, `energy_prices` (the year-1 price terms per carrier, the
   working price all-in with carbon included; renovisorissues #52), `investment_overrides` (the
   reader's quotes, `[{"stage", "measure_id", "amount_in_euro", "source"}]`, each replacing the
-  year-0 investment of the measure's main subject in that stage; renovisorissues #53), and the three that are accepted
+  year-0 investment of the measure's main subject in that stage, booked as stated and never
+  escalated; renovisorissues #53), and the three that are accepted
   and ignored, `weather_year` (the year of the stages' weather; `simulation_year` up to schema
   version 4), `subsidy_catalog` and `origins`. **The country and the price basis year are
   the stages'**: both are written into every stage's `economic_inputs.json` as facts of the run,
@@ -1695,7 +1696,8 @@ def main(argv=None) -> int:
             + "`energy_prices` states year-1 prices per carrier "
             + "(working price all-in, carbon included). `investment_overrides` states the reader's "
             + 'quotes, [{"stage", "measure_id", "amount_in_euro", "source"}], each replacing the '
-            + "year-0 investment of the measure's main subject in that stage. "
+            + "year-0 investment of the measure's main subject in that stage, booked exactly as "
+            + "stated in the stage's year (never escalated). "
             + "`weather_year`, `subsidy_catalog` and "
             + "`origins` are accepted and ignored."
         ),

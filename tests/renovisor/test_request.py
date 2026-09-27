@@ -78,7 +78,6 @@ class TestTheSchemaIsTheTruth:
             ("house.building", "construction_year"),
             ("house.building", "absolute_conditioned_floor_area_in_m2"),
             ("house.building", "set_heating_temperature_in_celsius"),
-            ("house.building.window", "glazing_panes"),
             ("house.occupancy", "number_of_residents"),
             ("house.heating", "type_of_system"),
             ("house.heat_distribution", "type_of_system"),

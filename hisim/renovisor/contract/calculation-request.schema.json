@@ -148,7 +148,7 @@
         "retrofit_status": {
           "type": "string",
           "enum": ["unrenovated", "usual_refurb", "advanced_refurb"],
-          "description": "How far the envelope has been refurbished, as homeinventory.yaml states it. Selects the TABULA variant (unrenovated -> 001, usual_refurb -> 002, advanced_refurb -> 003); every element whose U-value the request leaves out takes that row's, and the row's air infiltration and thermal-bridge surcharge apply whatever the U-values. A band without the variant falls back to 001. Absent: unrenovated."
+          "description": "How far the envelope has been refurbished, as homeinventory.yaml states it. Selects the TABULA variant (unrenovated -> 001, usual_refurb -> 002, advanced_refurb -> 003); every element whose U-value the request leaves out takes that row's, and the row's air infiltration and thermal-bridge surcharge apply whatever the U-values. A band without the variant falls back to 001. Absent: unrenovated, or, with a tabula_building_code, that code's own variant."
         },
         "roof": {
           "$ref": "#/$defs/roof"
@@ -315,7 +315,6 @@
     "window": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["glazing_panes"],
       "properties": {
         "u_value_in_watt_per_m2_per_kelvin": {
           "$ref": "#/$defs/u_value"

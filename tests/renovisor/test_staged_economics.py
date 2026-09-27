@@ -247,6 +247,27 @@ class TestThePlanStartYear:
         assert dated_document["parameters"]["price_basis_year"] == document["parameters"]["price_basis_year"]
         assert dated_document["plan"]["totals"] == document["plan"]["totals"]
         assert dated_document["comparison"] == document["comparison"]
+        assert "price_level" not in dated_document["parameters"]["origins"]
+
+    def test_a_start_one_year_later_is_in_that_years_money_and_says_so(self, runs, document) -> None:
+        """Start year = basis + 1 (renovisorissues #62): the echo states both years, the money moves.
+
+        Prices are still read at the basis year, so the echoed year-1 prices are the basis year's;
+        every amount is escalated one year, so the plan and the reference cost more.
+        """
+        directory, baseline, package = runs
+        basis = document["parameters"]["price_basis_year"]
+        path = directory / "economics_next_year.json"
+        path.write_text(json.dumps({**STAGED_PARAMETERS, "plan_start_year": basis + 1}), encoding="utf-8")
+        later = _price(
+            [f"{baseline}:0:baseline", f"{package}:0:package"], path, directory / "next" / StagedDocument.FILE_NAME
+        )
+        StagedDocument.validate(later)
+        assert later["parameters"]["price_basis_year"] == basis
+        assert later["parameters"]["origins"]["price_level"] == {"from_year": basis, "to_year": basis + 1}
+        assert later["parameters"]["energy_prices"] == document["parameters"]["energy_prices"]
+        for variant in ("reference", "plan"):
+            assert later[variant]["totals"] != document[variant]["totals"], variant
 
 
 class TestTheEndToEndDocument:

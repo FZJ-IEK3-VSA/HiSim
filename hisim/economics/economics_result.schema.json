@@ -131,12 +131,22 @@
         },
         "origins": {
           "type": "object",
-          "description": "Where each echoed per-carrier rate and price came from, and — only when plan_start_year supplied it — the price basis year. Documentation of the run: accepted and ignored as an input of `staged --parameters`.",
+          "description": "Where each echoed per-carrier rate and price came from; the price basis year, only when plan_start_year supplied it; and the years every amount was escalated between, only when plan_start_year differs from the price basis year. Documentation of the run: accepted and ignored as an input of `staged --parameters`.",
           "required": ["escalation", "energy_prices"],
           "properties": {
             "price_basis_year": {
               "enum": ["plan_start_year"],
               "description": "Present only when neither the stages nor the parameters stated a price basis year and parameters.plan_start_year supplied it (clamped to the earliest year the country's device data covers); absent otherwise."
+            },
+            "price_level": {
+              "type": "object",
+              "required": ["from_year", "to_year"],
+              "properties": {
+                "from_year": {"type": "integer", "description": "The year the prices were read at: parameters.price_basis_year."},
+                "to_year": {"type": "integer", "description": "The year whose money every amount is in: parameters.plan_start_year."}
+              },
+              "additionalProperties": false,
+              "description": "Present only when parameters.plan_start_year is stated and differs from parameters.price_basis_year: every amount of the document was escalated from from_year to to_year (de-escalated when to_year is earlier) with the rate it escalates with in later years — the investment rate of its asset class for a purchase, its replacements, residual value and share-of-cost subsidies, the general rate for maintenance and standing charges, the carrier, spread, grid-fee and feed-in rates for the energy bill, the CO2 path read to_year − from_year years later — except a reader's quote and a fixed-amount grant, booked as stated. The echoed energy_prices remain the year-1 terms read at from_year. Absent when nothing was escalated."
             },
             "escalation": {
               "type": "object",

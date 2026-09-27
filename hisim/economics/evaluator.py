@@ -531,8 +531,8 @@ class YearZeroPriceLevel:
     year-``n`` amount is ``(1 + r)**n`` times a basis-year price, applied here as the factor
     ``(1 + r)**years`` on the finished amounts instead of at the dozen sites that compute them:
 
-    * the year-0 purchase (investment, planning, removal), its replacements, its residual value,
-      a share-of-cost subsidy and a coupled-cost anyway credit: the subject's investment rate;
+    * the year-0 purchase (investment, planning, removal), its replacements, its residual value
+      and a coupled-cost anyway credit: the subject's investment rate;
     * a like-for-like anyway credit: the replaced asset's investment rate, which escalates it;
     * maintenance, fixed operation and the standing charge: the general rate; the capacity charge:
       the grid-fee rate; the working price: the carrier rate on the volume effect and the spread
@@ -543,19 +543,23 @@ class YearZeroPriceLevel:
 
     Exempt, as in the splice: a stated purchase price (a reader's quote, the subjects bought
     within it and a quoted purchase with no cost facts), with the residual value and the
-    coupled-cost credit computed from it, and every award of a fixed-amount scheme
-    (:attr:`FIXED_AMOUNT_BENEFITS`). ``years`` may be negative, a plan starting before the year
+    coupled-cost credit computed from it. Subsidies are not shifted here at all: the solver is
+    given the measure's cost already in year-0 money (:meth:`purchase`), so a share-of-cost grant
+    follows its escalated cost, while a fixed nominal amount (:attr:`FIXED_AMOUNT_BENEFITS`) stays
+    as stated and is clamped to the cost of the year it is paid in, not to the basis year's
+    (renovisorissues #65: EUR 8,000 clamped to a basis-year cost of 7,000 beside a year-0 cost of
+    7,140); an eligible-cost cap in euro is nominal too. The maxima come out of the same valuation.
+    ``years`` may be negative, a plan starting before the year
     its prices are read at: the same law de-escalates. ``years == 0`` -- no plan start year, or
     one equal to the price basis year -- touches nothing, so such a timeline is bit-identical to
     one built without this class. The loan is taken out afterwards on the shifted year-0 net
-    investment, and the levy basis and the subsidy maxima are shifted with the flows they sum.
+    investment, and the levy basis is shifted with the flows it sums.
 
     Attributes:
         years: The shift, ``year 0 - price basis year``; 0 leaves every amount as it is.
         parameters: The general, grid-fee, spread and feed-in rates.
         database: For the carrier rates, resolved by the energy calculator's own chain.
         price_basis_year: Where the CO2 price path is read for year 1.
-        fixed_schemes: The ids of the schemes paying a fixed nominal amount.
         subject_rates: Subject -> its investment escalation rate, filled per costed subject.
         credit_factors: Subject -> the factor its anyway credit (and the credit's basis) is shifted by.
         stated: Subjects whose year-0 purchase is a stated price, never shifted.
@@ -575,7 +579,6 @@ class YearZeroPriceLevel:
     parameters: EconomicParameters
     database: CostDatabase
     price_basis_year: int
-    fixed_schemes: FrozenSet[str] = frozenset()
     subject_rates: Dict[str, float] = field(default_factory=dict)
     credit_factors: Dict[str, float] = field(default_factory=dict)
     stated: Set[str] = field(default_factory=set)
@@ -655,21 +658,6 @@ class YearZeroPriceLevel:
             duration = contract.feed_in.duration_in_years
             self.feed_in[revenue_subject(carrier)] = (params.feed_in_escalation_rate, duration)
 
-    def decision(self, decision: SubsidyDecision) -> SubsidyDecision:
-        """One subsidy decision with its share-of-cost maxima shifted like the awards."""
-        if not self.shifts or not decision.maximum_by_scheme:
-            return decision
-        factor = self.purchase(decision.measure_subject)
-        maxima = {
-            scheme: (
-                maximum
-                if scheme in self.fixed_schemes or maximum.amount_in_euro is None
-                else replace(maximum, amount_in_euro=maximum.amount_in_euro.scale(factor))
-            )
-            for scheme, maximum in decision.maximum_by_scheme.items()
-        }
-        return replace(decision, maximum_by_scheme=maxima)
-
     def timeline(self, timeline: CashFlowTimeline) -> CashFlowTimeline:
         """The timeline with every entry in year-0 money; the same object when nothing shifts."""
         if not self.shifts:
@@ -696,7 +684,8 @@ class YearZeroPriceLevel:
         elif category is CostCategory.ANYWAY_COST_CREDIT:
             factor = self.credit_factors[subject]
         elif category is CostCategory.SUBSIDY:
-            factor = 1.0 if entry.subsidy_scheme_id in self.fixed_schemes else self.purchase(subject)
+            # Valued on the year-0 cost already (``build_subsidy_flows(cost_factor=...)``).
+            factor = 1.0
         elif category in (CostCategory.MAINTENANCE, CostCategory.FIXED_OPERATION, CostCategory.ENERGY_STANDING):
             factor = self.factor(params.general_price_escalation_rate)
         elif category is CostCategory.ENERGY_CAPACITY_CHARGE:
@@ -1107,7 +1096,6 @@ class EconomicEvaluator:
             parameters=params,
             database=self.database,
             price_basis_year=price_basis_year,
-            fixed_schemes=YearZeroPriceLevel.fixed_amount_schemes(self.subsidy_catalog),
         )
 
         for subject_facts in inputs.cost_facts:
@@ -1236,9 +1224,10 @@ class EconomicEvaluator:
                     ledger=ledger,
                     parameters=params,
                     price_basis_year=price_basis_year,
+                    cost_factor=level.purchase(subject) if level.shifts else 1.0,
                 )
                 if subsidy_result.decision is not None:
-                    decisions.append(level.decision(subsidy_result.decision))
+                    decisions.append(subsidy_result.decision)
                 timeline.extend(subsidy_result.entries)
 
         # --- purchases priced whole by a stated amount, with no cost facts behind them (#53)

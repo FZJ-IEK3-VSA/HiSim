@@ -140,6 +140,7 @@ class TestTheSchema:
                 "amount_in_euro": None,
                 "amount_by_year_in_euro": None,
                 "max_amount_in_euro": None,
+                "max_amount_for_measure_in_euro": None,
                 "binding_cap": None,
                 "open_questions": [],
                 "note": None,
@@ -262,6 +263,17 @@ class TestTheDocumentShape:
         rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
         assert rows[SyntheticPlan.ENVELOPE_SUBJECT]["stage"] == 1
         assert rows[SyntheticPlan.HEAT_PUMP_SUBJECT]["stage"] == 2
+
+    def test_a_kept_subject_no_stage_paid_for_has_no_stage(self, document):
+        """The boiler is the house's own and kept: null, as on the reference, never 0 (renovisorissues #65).
+
+        Every plan row with an empty ``investment_by_stage`` and no measure is such a subject.
+        """
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        assert rows[SyntheticPlan.BOILER_SUBJECT]["stage"] is None
+        for row in rows.values():
+            if not row["investment_by_stage"] and row["measure_id"] is None:
+                assert row["stage"] is None, row["subject"]
 
     def test_every_row_splits_its_investment_by_the_stage_that_bought_it(self, document):
         """A stage filter must not count an earlier stage's purchase (renovisorissues #48).

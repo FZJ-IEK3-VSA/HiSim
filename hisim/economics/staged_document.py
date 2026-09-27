@@ -48,7 +48,7 @@ from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
 from hisim.economics.staged import InvestmentOverride, StagedEvaluator, StagedResult
 from hisim.economics.staged_parameters import StagedParameters, StatedQuote
-from hisim.economics.subsidies import PayoutKind, SchemeMaximum, SubsidyDecision
+from hisim.economics.subsidies import PayoutKind, SchemeMaximum, SchemeMaximumNotes, SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
@@ -849,7 +849,7 @@ class StagedDocument:
                     kind=SubjectKindNames.of(breakdown.subject_kind),
                     asset_class=breakdown.asset_class.value if breakdown.asset_class else None,
                     measure_id=measure_id,
-                    stage=self._result.stage_of_subject(subject) if staged else None,
+                    stage=self._row_stage(subject, staged, by_stage),
                     unpriced=unpriced,
                     npv=breakdown.total_npv_in_euro,
                     investment=breakdown.investment_gross_in_euro,
@@ -864,10 +864,35 @@ class StagedDocument:
                 )
             )
         rows.extend(self._measure_only_rows(result, staged))
-        rows.extend(self._no_flow_rows(result, staged))
+        rows.extend(self._no_flow_rows(result, staged, by_stage))
         return sorted(rows, key=lambda row: row["subject"])
 
-    def _no_flow_rows(self, result: LifecycleCostResult, staged: bool) -> List[Dict[str, Any]]:
+    def _row_stage(self, subject: str, staged: bool, by_stage: Mapping[str, Mapping[int, Any]]) -> Optional[int]:
+        """The ``stage`` of one ``by_subject`` row: the last stage that paid for the subject, else null.
+
+        Stage 0 is the reference state, so it "charges" every subject it holds
+        (:meth:`~hisim.economics.staged.StagedResult.stage_of_subject`) though it pays for none it
+        merely keeps -- a cylinder, a meter, a kept envelope element. Such a row is ``null``, as the
+        reference's rows are, unless stage 0 actually booked a purchase for it (renovisorissues #65).
+
+        Args:
+            subject: The row's subject.
+            staged: Whether the row is the plan's.
+            by_stage: :meth:`_investment_by_stage` of the plan.
+
+        Returns:
+            The stage index, or None.
+        """
+        if not staged:
+            return None
+        stage = self._result.stage_of_subject(subject)
+        if stage == 0 and 0 not in by_stage.get(subject, {}):
+            return None
+        return stage
+
+    def _no_flow_rows(
+        self, result: LifecycleCostResult, staged: bool, by_stage: Mapping[str, Mapping[int, Any]]
+    ) -> List[Dict[str, Any]]:
         """One zero row per unpriced subject the evaluation carries that booked no flow at all.
 
         An unpriced subject is priced at zero, so it books money only where the timeline dates an
@@ -881,6 +906,7 @@ class StagedDocument:
         Args:
             result: The evaluation the rows go into.
             staged: Whether it is the plan.
+            by_stage: :meth:`_investment_by_stage` of the plan, for :meth:`_row_stage`.
 
         Returns:
             The rows, unsorted.
@@ -907,7 +933,7 @@ class StagedDocument:
                     kind=SubjectKindNames.COMPONENT,
                     asset_class=facts.asset_class.value,
                     measure_id=measure_id,
-                    stage=self._result.stage_of_subject(subject) if staged else None,
+                    stage=self._row_stage(subject, staged, by_stage),
                     unpriced=True,
                     npv=zero,
                     investment=zero,
@@ -1292,6 +1318,33 @@ class StagedDocument:
                     decision, stage, measure_id, awarded, claimed, self._scale_of(stage, decision.measure_subject)
                 )
             )
+        return self._with_measure_maxima(rows)
+
+    @classmethod
+    def _with_measure_maxima(cls, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Stamp every row with ``max_amount_for_measure_in_euro`` (renovisorissues #65).
+
+        A scheme paying towards a measure pays towards each of its subjects, one decision (and so
+        one row) each: Warmer Homes on ``heating_system`` funds the heat pump and whatever else of
+        the measure its asset classes cover. ``max_amount_in_euro`` is the row's own subject's
+        maximum; the measure's is the slot-wise sum of the rows of the same scheme, measure and
+        stage, stated on each of them, so "up to EUR X" is what the household can get for the
+        measure. Null where the row's maximum is null (a scheme with no amount is none on every
+        subject) and on a row with no measure.
+        """
+        totals: Dict[Tuple[Any, Any, Any], Dict[str, float]] = {}
+        for row in rows:
+            maximum = row["max_amount_in_euro"]
+            if maximum is None or row["measure_id"] is None:
+                continue
+            key = (row["scheme"], row["measure_id"], row["stage"])
+            total = totals.setdefault(key, {"min": 0.0, "best": 0.0, "max": 0.0})
+            for slot in total:
+                total[slot] += maximum[slot]
+        for row in rows:
+            key = (row["scheme"], row["measure_id"], row["stage"])
+            measure_maximum = totals.get(key) if row["max_amount_in_euro"] is not None else None
+            row["max_amount_for_measure_in_euro"] = dict(measure_maximum) if measure_maximum is not None else None
         return rows
 
     def _scale_of(self, stage: Optional[int], subject: str) -> Callable[[Optional[str]], float]:
@@ -1369,6 +1422,7 @@ class StagedDocument:
                 "amount_in_euro": None,
                 "amount_by_year_in_euro": None,
                 "max_amount_in_euro": None,
+                "max_amount_for_measure_in_euro": None,
                 "binding_cap": None,
                 "open_questions": [self.NO_CATALOGUE_QUESTION.format(country=country)],
                 "note": self.NO_CATALOGUE_NOTE.format(country=country),
@@ -1380,7 +1434,7 @@ class StagedDocument:
     #: a zero band: the scheme was awarded, so the row is not a question, and its money is in
     #: another group of the stack.
     NON_CASH_NOTES: ClassVar[Dict[PayoutKind, str]] = {
-        PayoutKind.LOAN_TERMS: "loan terms: the benefit is in the financing costs, not a grant",
+        PayoutKind.LOAN_TERMS: SchemeMaximumNotes.SOFT_LOAN,
         PayoutKind.VAT_REDUCTION: "VAT reduction: the benefit is in the investment price, not a grant",
     }
 
@@ -1467,7 +1521,7 @@ class StagedDocument:
                     "max_amount_in_euro": maximum,
                     "binding_cap": ", ".join(binding) if binding else None,
                     "open_questions": [],
-                    "note": cls._joined("; ".join(notes), maximum_note),
+                    "note": cls._joined("; ".join(notes), maximum_note if maximum_note not in notes else None),
                 }
             )
         for rejected in decision.rejected:

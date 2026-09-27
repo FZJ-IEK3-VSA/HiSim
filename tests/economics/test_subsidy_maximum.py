@@ -166,6 +166,19 @@ class TestOneMaximumPerBenefitKind:
         assert maximum.amount_in_euro is not None
         assert maximum.amount_in_euro.best_estimate == pytest.approx(0.1 * (INVESTMENT + PLANNING + REMOVAL))
 
+    def test_a_soft_loan_without_a_repayment_grant_states_no_amount(self) -> None:
+        """A loan with no grant element: null, not a zero band, and why (renovisorissues #65)."""
+        maximum = _maximum(
+            _scheme(
+                "LOAN",
+                BenefitKind.SOFT_LOAN,
+                LoanTermsBenefit(interest_rate=0.03, term=10, repayment_grant_rate=0.0),
+                PayoutKind.LOAN_TERMS,
+            )
+        )
+        assert maximum.amount_in_euro is None
+        assert maximum.note == SchemeMaximumNotes.SOFT_LOAN
+
     def test_an_operational_payment_is_rate_times_energy_times_duration(self) -> None:
         """A per-kWh payment over its whole duration."""
         maximum = _maximum(
@@ -325,8 +338,81 @@ class TestEveryRowStatesItsCap:
             assert row["max_amount_in_euro"] is None
             assert SchemeMaximumNotes.REDUCED_VAT in (row["note"] or "")
 
+    def test_an_open_soft_loan_without_a_repayment_grant_is_null_and_says_so(self, tmp_path) -> None:
+        """IE_HEULS_LOAN's case: undetermined, no grant element, so no maximum and why (#65)."""
+        catalog = synthetic_catalog(
+            [
+                _scheme(
+                    "LOAN",
+                    BenefitKind.SOFT_LOAN,
+                    LoanTermsBenefit(interest_rate=0.03, term=10, repayment_grant_rate=0.0),
+                    PayoutKind.LOAN_TERMS,
+                    eligibility=TestTheDecisionStatesEveryScheme.OPEN_QUESTION,
+                )
+            ]
+        )
+        rows = _rows(_document(tmp_path, catalog))
+        assert rows
+        for row in rows:
+            assert row["status"] == "undetermined"
+            assert row["max_amount_in_euro"] is None
+            assert row["max_amount_for_measure_in_euro"] is None
+            assert row["note"] == SchemeMaximumNotes.SOFT_LOAN
+
     def test_a_plan_without_a_catalogue_states_null_and_says_why(self, tmp_path) -> None:
         """No scheme, no limit: the undetermined rows carry null and the note names it."""
         for row in _rows(_document(tmp_path, None)):
             assert row["max_amount_in_euro"] is None
             assert "no maximum" in row["note"]
+
+
+class TestTheMeasuresMaximum:
+    """``max_amount_for_measure_in_euro``: the scheme's maximum over all of a measure's subjects (#65).
+
+    The synthetic ``heating_system`` measure buys a heat pump and a buffer in stage 2; a scheme
+    covering both classes pays towards each, one row each, and "up to EUR X" for the measure is
+    the sum of the two.
+    """
+
+    RATE = 0.3
+
+    def test_every_row_of_the_measure_states_the_sum_of_its_subjects(self, tmp_path) -> None:
+        """Two rows, each with its own maximum and the measure's, 30 % of heat pump + buffer."""
+        from tests.economics.test_investment_overrides import (  # pylint: disable=import-outside-toplevel
+            BUFFER_INVESTMENT_IN_EURO,
+            MEASURE_IDS,
+            _parameters as override_parameters,
+            _stages,
+        )
+
+        scheme = _scheme(
+            "SHARE",
+            BenefitKind.SHARE_OF_ELIGIBLE_COST,
+            ShareBenefit(rate=self.RATE),
+            asset_classes=[ComponentType.HEAT_PUMP, ComponentType.SPACE_HEATING_STORAGE],
+        )
+        database = write_database(str(tmp_path / "database"))
+        perspective = brownfield_perspective(subsidies=True)
+        result = StagedEvaluator(database).evaluate(
+            _stages(), override_parameters(), perspective, synthetic_catalog([scheme])
+        )
+        document = StagedDocument(result, override_parameters(), perspective, measure_ids=MEASURE_IDS).to_json()
+        StagedDocument.validate(document)
+        rows = [
+            row
+            for row in document["plan"]["subsidies"]
+            if row["scheme"] == "SHARE" and row["measure_id"] == "heating_system"
+        ]
+        assert len(rows) == 2
+        own = sorted(row["max_amount_in_euro"]["best"] for row in rows)
+        assert own == pytest.approx(
+            sorted([-self.RATE * SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO, -self.RATE * BUFFER_INVESTMENT_IN_EURO])
+        )
+        for row in rows:
+            assert row["max_amount_for_measure_in_euro"] == {
+                slot: pytest.approx(sum(other["max_amount_in_euro"][slot] for other in rows))
+                for slot in ("min", "best", "max")
+            }
+        assert rows[0]["max_amount_for_measure_in_euro"]["best"] == pytest.approx(
+            -self.RATE * (SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO + BUFFER_INVESTMENT_IN_EURO)
+        )

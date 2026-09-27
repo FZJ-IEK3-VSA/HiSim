@@ -99,6 +99,7 @@ def build_subsidy_flows(
     ledger: ProvenanceLedger,
     parameters: EconomicParameters,
     price_basis_year: int,
+    cost_factor: float = 1.0,
 ) -> SubsidyApplicationResult:
     """Subsidy flows for one measure (§5); the support total is derived from the timeline.
 
@@ -132,6 +133,11 @@ def build_subsidy_flows(
         parameters: Economic parameters — supplies the horizon that truncates schedules and the
             discount factor the solver uses to compare payout timings.
         price_basis_year: The economic "today" scheme validity is tested against.
+        cost_factor: The price level of the timeline's year 0 relative to the price basis year
+            for this measure's purchase (:meth:`~hisim.economics.evaluator.YearZeroPriceLevel.purchase`,
+            1.0 for a stated price). The solver sees the cost in year-0 money, so a share of it is
+            a share of the escalated cost and a nominal amount is clamped to the cost of the year
+            it is paid in (renovisorissues #65). 1.0 leaves every figure as it was.
 
     Returns:
         A `SubsidyApplicationResult` whose `entries` are revenue-mirrored (negative) SUBSIDY
@@ -152,6 +158,8 @@ def build_subsidy_flows(
         CostCategory.PLANNING: planning,
         CostCategory.REMOVAL: removal,
     }
+    if cost_factor != 1.0:
+        cost_by_category = {category: cost.scale(cost_factor) for category, cost in cost_by_category.items()}
     measure = MeasureForSubsidy(
         subject=costing.subject,
         facts=costing.facts,

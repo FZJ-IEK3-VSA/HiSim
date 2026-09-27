@@ -221,6 +221,35 @@ class TestTheExemptions:
         ]
         assert row["max_amount_in_euro"]["best"] == pytest.approx(-LUMP_SUM)
 
+    def test_a_lump_sum_above_the_cost_is_clamped_to_the_escalated_cost(self, database) -> None:
+        """EUR 20,000 on an 18,000 heat pump a year later: 18,360, not the basis year's 18,000 (#65).
+
+        The lump sum is nominal and never escalated, but the cost it is clamped to is the cost in
+        the year it is paid in. Clamping it at the price basis year and booking it unescalated left
+        a credit below the year-0 cost it was capped by (IE_SEAI_EXTERNAL_WALL_DETACHED: 7,000
+        beside a year-0 cost of 7,140). The row's maximum is the same figure.
+        """
+        big = 20000.0
+        catalog = synthetic_catalog(
+            [always_eligible_scheme("BIG", BenefitKind.LUMP_SUM, LumpSumBenefit(amount=big), PayoutKind.UPFRONT_GRANT)]
+        )
+        later = _price(database, BASIS + 1, catalog=catalog)
+        cost = sum(
+            amount
+            for category in (CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REMOVAL)
+            for year, amount in _entries(later, SyntheticPlan.HEAT_PUMP_SUBJECT, category)
+            if year == 0
+        )
+        assert cost < big
+        assert cost == pytest.approx(SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO * (1.0 + RATE))
+        assert _entries(later, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.SUBSIDY) == [(0, pytest.approx(-cost))]
+        (row,) = [
+            row
+            for row in _document(later)["plan"]["subsidies"]
+            if row["stage"] == 2 and row["status"] == "awarded"
+        ]
+        assert row["max_amount_in_euro"]["best"] == pytest.approx(-cost)
+
     def test_a_share_of_cost_grant_follows_its_escalated_cost(self, database) -> None:
         """30 % of 18,000 x 1.02, and its row's maximum with it."""
         later = _price(database, BASIS + 1, catalog=always_eligible_catalog(0.3))

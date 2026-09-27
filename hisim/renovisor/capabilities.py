@@ -37,6 +37,7 @@ provenance -- generated from the same two tables the payload is built from. Its 
 """
 
 import copy
+import dataclasses
 import json
 import math
 import re
@@ -113,6 +114,67 @@ class ProbeKind(str, Enum):
     PAIR = "pair"
 
 
+class FrozenDict(dict):  # type: ignore[type-arg]
+    """A dictionary nobody can change, for the probe set every caller of :meth:`ProbeSet.build` shares.
+
+    It stays a ``dict`` -- ``isinstance``, equality, ``json.dumps`` and the order of the keys are
+    those of the dictionary it was made from -- and refuses every way of changing it in place. A
+    copy is what a caller that wants to change something takes: :func:`copy.copy`, :func:`copy.deepcopy`
+    and ``dict(...)`` all return a plain, mutable dictionary (the deep copy a plain one all the way
+    down), which is what :meth:`Probe.document` builds its request from.
+    """
+
+    def _refuse(self, *arguments: Any, **keywords: Any) -> Any:
+        """Refuse a change: the probe set is shared by every caller in the process."""
+        raise TypeError("a probe of the shared probe set cannot be changed; copy it first")
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = __ior__ = _refuse
+
+    def __copy__(self) -> Dict[Any, Any]:
+        """Return a plain, mutable shallow copy."""
+        return dict(self)
+
+    def __deepcopy__(self, memo: Dict[int, Any]) -> Dict[Any, Any]:
+        """Return a plain, mutable deep copy."""
+        return {copy.deepcopy(key, memo): copy.deepcopy(value, memo) for key, value in self.items()}
+
+    def __reduce__(self) -> Any:
+        """Pickle as a plain dictionary."""
+        return (dict, (dict(self),))
+
+
+class FrozenList(list):  # type: ignore[type-arg]
+    """A list nobody can change, the sequence counterpart of :class:`FrozenDict`."""
+
+    def _refuse(self, *arguments: Any, **keywords: Any) -> Any:
+        """Refuse a change: the probe set is shared by every caller in the process."""
+        raise TypeError("a probe of the shared probe set cannot be changed; copy it first")
+
+    __setitem__ = __delitem__ = append = extend = insert = remove = pop = clear = sort = reverse = _refuse
+    __iadd__ = __imul__ = _refuse
+
+    def __copy__(self) -> List[Any]:
+        """Return a plain, mutable shallow copy."""
+        return list(self)
+
+    def __deepcopy__(self, memo: Dict[int, Any]) -> List[Any]:
+        """Return a plain, mutable deep copy."""
+        return [copy.deepcopy(item, memo) for item in self]
+
+    def __reduce__(self) -> Any:
+        """Pickle as a plain list."""
+        return (list, (list(self),))
+
+
+def read_only(value: Any) -> Any:
+    """Return *value* with every dictionary and list in it replaced by its read-only counterpart."""
+    if isinstance(value, Mapping):
+        return FrozenDict((key, read_only(item)) for key, item in value.items())
+    if isinstance(value, list):
+        return FrozenList(read_only(item) for item in value)
+    return value
+
+
 @dataclass(frozen=True)
 class Probe:
     """One request the document is aggregated from, as a patch on the anchor.
@@ -137,6 +199,17 @@ class Probe:
     subject: Optional[str] = None
     value: Any = None
     applicant: Mapping[str, Any] = field(default_factory=dict)
+
+    def read_only(self) -> "Probe":
+        """Return this probe with its patches read-only, as the shared probe set carries it."""
+        return dataclasses.replace(
+            self,
+            house=read_only(self.house),
+            measures=None if self.measures is None else FrozenList(read_only(entry) for entry in self.measures),
+            location=read_only(self.location),
+            value=read_only(self.value),
+            applicant=read_only(self.applicant),
+        )
 
     def document(self, anchor: Mapping[str, Any]) -> Dict[str, Any]:
         """Return the request this probe sends.
@@ -926,14 +999,41 @@ class ProbeSet:
             "from exactly that measure"
         )
 
+    #: The probe set of this process under :attr:`_BUILT_KEY`, built on the first :meth:`build`
+    #: (:meth:`forget` clears it).
+    _BUILT: ClassVar[Dict[str, Tuple[Probe, ...]]] = {}
+
+    #: The one key of :attr:`_BUILT`.
+    _BUILT_KEY: ClassVar[str] = "probes"
+
     @classmethod
     def build(cls) -> Tuple[Probe, ...]:
-        """Return the whole probe set, in a stable order.
+        """Return the whole probe set, in a stable order, built once per process.
+
+        The set is a function of this module's tables, the vendored catalogue and the vendored
+        request schema, none of which changes while a process runs, so it is built on the first
+        call and the same tuple is returned from then on (a build takes seconds, and the capability
+        run, every path-verification run and many tests ask for it). Because every caller shares
+        it, it is immutable all the way down: a tuple of frozen probes whose patches are
+        :class:`FrozenDict` and :class:`FrozenList`. A caller that wants a different probe makes
+        one (``dataclasses.replace``); :meth:`forget` clears the memo.
 
         Returns:
             The anchor, the bare baseline, the block probes, the measure probes, the option
             probes, the inventory probes and the pair probes, in that order.
         """
+        if cls._BUILT_KEY not in cls._BUILT:
+            cls._BUILT[cls._BUILT_KEY] = tuple(probe.read_only() for probe in cls._build())
+        return cls._BUILT[cls._BUILT_KEY]
+
+    @classmethod
+    def forget(cls) -> None:
+        """Clear the remembered probe set, so the next :meth:`build` builds it again."""
+        cls._BUILT.clear()
+
+    @classmethod
+    def _build(cls) -> Tuple[Probe, ...]:
+        """Build the probe set from the tables; :meth:`build` remembers what this returns."""
         probes: List[Probe] = [
             Probe(name="anchor", kind=ProbeKind.ANCHOR),
             Probe(
@@ -2068,7 +2168,22 @@ class CapabilityDocument:
         """
         assert_catalogue_matches(measures_path)
         runner = ProbeRunner(base_files_directory)
-        results = runner.run()
+        return cls.assemble(runner.run(), runner.whitelist)
+
+    @classmethod
+    def assemble(cls, results: Tuple[ProbeResult, ...], whitelist: Whitelist) -> "CapabilityDocument":
+        """Aggregate a finished probe run into the document; :meth:`build` is the probe run plus this.
+
+        The commit fields are read here, when the document is assembled, and nowhere in the probe
+        results, which carry statuses only.
+
+        Args:
+            results: What every probe produced, in probe order.
+            whitelist: The list the probes were run against.
+
+        Returns:
+            The document, with the probe results beside it.
+        """
         measures, fields = Aggregation.entries(results)
         body = {
             "engine": cls.ENGINE,
@@ -2088,7 +2203,7 @@ class CapabilityDocument:
             "fields": fields,
             "results": ResultsSection.build(),
         }
-        return cls(body=body, results=results, whitelist=runner.whitelist)
+        return cls(body=body, results=results, whitelist=whitelist)
 
     @classmethod
     def catalogue_revision(cls) -> str:

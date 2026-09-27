@@ -210,16 +210,21 @@ class TranslationMap:
     TITLE: ClassVar[str] = "RenoVisor translation map"
 
     @classmethod
-    def render(cls, base_files_directory: Optional[Path] = None) -> str:
+    def render(
+        cls, base_files_directory: Optional[Path] = None, document: Optional[CapabilityDocument] = None
+    ) -> str:
         """Return the whole page as one string.
 
         Args:
             base_files_directory: Where the recorded twins live.
+            document: The capability document the page shows, when the caller built it already
+                for the same base files; built here when omitted.
 
         Returns:
             The HTML, deterministic for one state of the translator.
         """
-        document = CapabilityDocument.build(base_files_directory=base_files_directory)
+        if document is None:
+            document = CapabilityDocument.build(base_files_directory=base_files_directory)
         trace = TraceExample.build(base_files_directory)
         parts: List[str] = [
             "<!doctype html>",
@@ -239,18 +244,19 @@ class TranslationMap:
         return "\n".join(parts)
 
     @classmethod
-    def write(cls, path: Optional[Path] = None) -> int:
+    def write(cls, path: Optional[Path] = None, document: Optional[CapabilityDocument] = None) -> int:
         """Render the page and write it.
 
         Args:
             path: Where to write it; the committed location when omitted.
+            document: The capability document to show, as for :meth:`render`.
 
         Returns:
             ``0``, which the command line returns as its exit code.
         """
         target = path or cls.PATH
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(cls.render(), encoding="utf-8")
+        target.write_text(cls.render(document=document), encoding="utf-8")
         return 0
 
     @classmethod

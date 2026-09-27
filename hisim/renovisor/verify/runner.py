@@ -34,7 +34,7 @@ import traceback
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.renovisor import TRANSLATOR_VERSION
@@ -227,12 +227,27 @@ class ArtefactCache:
         """Create an empty cache; nothing is translated until :meth:`get`."""
         self._runner = ProbeRunner(base_files_directory, whitelist)
         self._artefacts: Dict[str, Artefacts] = {}
+        self._requested: Set[str] = set()
         self.lookups = 0
 
     @property
     def translations(self) -> int:
-        """Return how many distinct requests were translated."""
-        return len(self._artefacts)
+        """Return how many distinct requests were asked for since :meth:`start_run`.
+
+        On a cache that serves one run, which is every cache but a test's shared one, that is
+        the number of requests it translated.
+        """
+        return len(self._requested)
+
+    def start_run(self) -> None:
+        """Start counting a new run: its lookups and its distinct requests, not the translations kept.
+
+        A cache shared by several runs (the path-verification tests share one) keeps every
+        translation, and each run's report still counts what that run asked for, so a report does
+        not depend on which run came first.
+        """
+        self._requested = set()
+        self.lookups = 0
 
     def get(self, document: Mapping[str, Any], key: Optional[str] = None) -> Artefacts:
         """Return the artefacts of one request, translating it the first time it is asked for.
@@ -246,6 +261,7 @@ class ArtefactCache:
         self.lookups += 1
         if key is None:
             key = Request.hash_of(document)
+        self._requested.add(key)
         if key not in self._artefacts:
             self._artefacts[key] = self._translate(key, document)
         return self._artefacts[key]
@@ -631,7 +647,7 @@ class VerificationReport:
         missing: The settable things no probe changes; empty when completeness was not checked.
         completeness_checked: Whether the run covered the whole probe set, which completeness
             is only meaningful for.
-        translations: How many distinct requests were translated.
+        translations: How many distinct requests the run translated (on a shared cache: asked for).
         lookups: How many artefact lookups the run made, bases included.
 
     Raises:
@@ -724,6 +740,11 @@ class VerificationRunner:
     Args:
         base_files_directory: Where the recorded twins live.
         whitelist: The list the translations run against.
+        cache: An :class:`ArtefactCache` to keep across runs, which then decides the base files
+            and the list instead of the two arguments above; a fresh cache per run when omitted.
+            A translation is a function of the request as long as nobody patches the translator,
+            so only a caller that never does -- the path-verification tests, not the command --
+            shares one.
 
     Example::
 
@@ -731,10 +752,16 @@ class VerificationRunner:
         ReportWriter.write(report, Path("path-report"))
     """
 
-    def __init__(self, base_files_directory: Optional[Path] = None, whitelist: Optional[Whitelist] = None) -> None:
-        """Store the two inputs; nothing runs until :meth:`run`."""
+    def __init__(
+        self,
+        base_files_directory: Optional[Path] = None,
+        whitelist: Optional[Whitelist] = None,
+        cache: Optional[ArtefactCache] = None,
+    ) -> None:
+        """Store the inputs; nothing runs until :meth:`run`."""
         self._directory = base_files_directory
         self._whitelist = whitelist
+        self._cache = cache
 
     def run(self, probes: Optional[Sequence[Probe]] = None, completeness: Optional[bool] = None) -> VerificationReport:
         """Translate every probe and its base, and compare them.
@@ -748,7 +775,8 @@ class VerificationRunner:
             The report.
         """
         verification_probes = ProbeBases.build(probes)
-        cache = ArtefactCache(self._directory, self._whitelist)
+        cache = self._cache if self._cache is not None else ArtefactCache(self._directory, self._whitelist)
+        cache.start_run()
         results: List[ProbeResult] = []
         for probe in verification_probes:
             artefacts = cache.get(probe.document, probe.request_hash)

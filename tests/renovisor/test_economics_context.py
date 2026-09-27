@@ -15,6 +15,7 @@ import copy
 import dataclasses
 import json
 import os
+import types
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -59,7 +60,8 @@ from hisim.renovisor.economics import (
     TwinEquipment,
     UnknownAge,
 )
-from hisim.renovisor.request import Request
+from hisim.renovisor.layers import ElementAreas, EnvelopeLayers, SimulatedEnvelope
+from hisim.renovisor.request import House, Request
 from hisim.renovisor.simulation import EconomicSetup, SubsidyCatalogue
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
 from hisim.renovisor.translate import Targets, Translator
@@ -258,8 +260,8 @@ class TestTheRegister:
         translated = _translated(document)
 
         register = translated.economic_context.existing_assets
-        fabric = ComponentType.WALL_EXTERNAL_INSULATION
-        devices = [asset for asset in register.assets if asset.asset_class is not fabric]
+        fabric = {EnvelopeAssets.of_element(element) for element in ThermalElement}
+        devices = [asset for asset in register.assets if asset.asset_class not in fabric]
         assert devices and all(asset.installation_year == 2009 for asset in devices)
         paths = ("economic_context.existing_assets.", "house.heating.installation_year")
         dated = [line for line in translated.report.lines() if line.path.startswith(paths)]
@@ -409,6 +411,139 @@ class TestTheEnvelopeCostSubjects:
         assert facts["external_insulation"].size_unit is Units.SQUARE_METER
 
 
+def _without_element_areas(document: Dict[str, Any]) -> Dict[str, Any]:
+    """The request with every envelope element's area removed and a priced floor insulation added.
+
+    calculation-request §3.4 allows the absent area: the Building then keeps the TABULA row's area
+    scaled to the conditioned floor area.
+    """
+    for element in ThermalElement:
+        document["house"]["building"].get(element.value, {}).pop("area_in_m2", None)
+    facade = next(measure for measure in document["measures"] if measure["id"] == "external_insulation")
+    document["measures"].append(
+        {
+            "id": "solid_ground_floor_insulation",
+            "options": copy.deepcopy(facade["options"]),
+            "cost": {"min_in_euro_per_m2": 30, "max_in_euro_per_m2": 50, "source": "a test"},
+        }
+    )
+    return document
+
+
+def _building_areas(translated: Any) -> Any:
+    """The ``BuildingInformation`` of the translated twin's realized ``Building``, as the run builds it."""
+    from hisim.components.building import BuildingInformation  # pylint: disable=import-outside-toplevel
+
+    return BuildingInformation(_realized(translated.model, "Building"))
+
+
+@pytest.mark.base
+class TestTheEnvelopeSubjectsAreSizedAsTheBuildingSimulates:
+    """renovisorissues #61: a priced envelope measure is priced whether or not its area is stated."""
+
+    def test_an_unstated_area_prices_the_subject_with_the_buildings_own_area(self) -> None:
+        """Facade and floor carry a band and no area: both are priced over the Building's areas."""
+        translated = _translated(_without_element_areas(_mockup()))
+        context = translated.economic_context
+        facts = {entry.subject: entry.facts for entry in context.extra_cost_facts}
+        building = _building_areas(translated)
+
+        for measure_id, area, band in (
+            ("external_insulation", building.facade_area_in_m2, (50.0, 70.0)),
+            ("solid_ground_floor_insulation", building.floor_area_in_m2, (30.0, 50.0)),
+        ):
+            assert measure_id not in translated.report.unpriced_subjects()
+            assert area > 0.0
+            assert facts[measure_id].size == pytest.approx(area)
+            investment = facts[measure_id].investment_cost_override_in_euro
+            assert investment.minimum == pytest.approx(band[0] * area)
+            assert investment.maximum == pytest.approx(band[1] * area)
+            assert "TABULA row's area scaled" in facts[measure_id].override_source
+
+    def test_a_stated_area_prices_the_subject_with_that_area(self) -> None:
+        """The mockup states its facade's 140 m²; that area, and not the archetype's, is priced."""
+        translated = _translated(_mockup())
+        facts = {entry.subject: entry.facts for entry in translated.economic_context.extra_cost_facts}
+        facade = facts["external_insulation"]
+
+        assert facade.size == 140.0
+        assert facade.investment_cost_override_in_euro.minimum == pytest.approx(50.0 * 140.0)
+        assert "house.building.facade.area_in_m2" in facade.override_source
+        assert "as the request states it" in facade.override_source
+
+    def test_a_measure_without_a_band_stays_unpriced_with_its_area_unstated(self) -> None:
+        """No price is still no price: the area does not invent one (#60's path, unchanged)."""
+        document = _without_element_areas(_mockup())
+        del next(measure for measure in document["measures"] if measure["id"] == "external_insulation")["cost"]
+        built = _built(document, _building())
+        facts = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}
+
+        assert "external_insulation" in built.unpriced_subjects
+        assert facts["external_insulation"].investment_cost_override_in_euro.best_estimate == 0.0
+        assert facts["external_insulation"].override_source == EconomicContextBuilder.UNPRICED_NOTE
+        assert "solid_ground_floor_insulation" not in built.unpriced_subjects
+
+    def test_the_embodied_carbon_uses_the_buildings_own_area_too(self) -> None:
+        """hisim-2pw8: result.json's layers resolve their areas with the same rule, so the figure exists.
+
+        The realized ``Building`` config is what ``realized.energy_system.yaml`` records: every field,
+        the unstated areas ``None``.
+        """
+        document = _without_element_areas(_mockup())
+        translated = _translated(document)
+        realized = _realized(translated.model, "Building")
+        record = {entry.name: getattr(realized, entry.name) for entry in dataclasses.fields(realized)}
+        assert record["facade_area_in_m2"] is None and record["floor_area_in_m2"] is None
+        request = Request.parse(document)
+        applied = apply(request, request.measures, Whitelist.load())
+
+        areas = ElementAreas.resolve(record, House.from_dict(applied.house))
+        layers = EnvelopeLayers.of(applied.layers, areas)
+        building = _building_areas(translated)
+
+        assert not layers.unresolved()
+        assert areas.area_of(ThermalElement.FACADE) == pytest.approx(building.facade_area_in_m2)
+        assert areas.area_of(ThermalElement.FLOOR) == pytest.approx(building.floor_area_in_m2)
+        assert "TABULA row" in areas.source_of(ThermalElement.FACADE)
+        footprint = document["measures"][2]["options"]["material"]["co2_footprint_a1_a3_c3_c4_kg_m2"]
+        assert layers.total_embodied_co2_in_kg() == pytest.approx(
+            footprint * (building.facade_area_in_m2 + building.floor_area_in_m2)
+        )
+
+    def test_a_zero_area_element_leaves_its_layer_without_an_area(self, monkeypatch) -> None:
+        """A Building area of zero is still no area: the layer is unresolved and the figure missing."""
+        document = _without_element_areas(_mockup())
+        request = Request.parse(document)
+        applied = apply(request, request.measures, Whitelist.load())
+        building = types.SimpleNamespace(
+            **{SimulatedEnvelope.config_field(element): 100.0 for element in ThermalElement}
+        )
+        building.floor_area_in_m2 = 0.0
+        monkeypatch.setattr(SimulatedEnvelope, "information", lambda self: building)
+
+        areas = ElementAreas.resolve(_building(), House.from_dict(applied.house))
+        layers = EnvelopeLayers.of(applied.layers, areas)
+
+        assert areas.area_of(ThermalElement.FACADE) == 100.0
+        assert areas.area_of(ThermalElement.FLOOR) is None
+        assert [layer.measure_id for layer in layers.unresolved()] == ["solid_ground_floor_insulation"]
+        assert layers.total_embodied_co2_in_kg() is None
+
+    def test_a_priced_measure_over_an_element_of_no_area_fails_the_translation(self) -> None:
+        """An area that cannot be determined is a translator error, not a silent unpriced subject."""
+        request = Request.parse(_without_element_areas(_mockup()))
+        builder = EconomicContextBuilder(
+            request,
+            apply(request, request.measures, Whitelist.load()),
+            _building(),
+            heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
+        )
+        builder._envelope.information().floor_area_in_m2 = 0.0  # pylint: disable=protected-access
+
+        with pytest.raises(TranslatorError, match="solid_ground_floor_insulation"):
+            builder.build()
+
+
 @pytest.mark.base
 class TestTheMappingReportHalf:
     """The two maps the staged evaluator reads back out of ``mapping_report.json``."""
@@ -524,14 +659,36 @@ class TestTheEnvelopeInstallationYears:
             EconomicContextBuilder.ENVELOPE_YEAR_KEPT_NOTE,
         )
 
-    def test_a_year_on_an_element_without_an_area_lands_nowhere(self) -> None:
-        """The mockup's window has no area, so no row exists for the year to date, measure or not."""
+    def test_a_year_on_an_element_without_a_stated_area_dates_its_tabula_sized_row(self) -> None:
+        """The mockup's window states no area, so its row carries the Building's own, and the year."""
         document = _mockup()
         document["house"]["building"]["window"]["installation_year"] = 1990
         document["measures"].append(self.WINDOW_REPLACEMENT)
         built = _built(document)
 
-        assert built.context.existing_assets.find(EnvelopeAssets.of_element(ThermalElement.WINDOW)) is None
+        window = built.context.existing_assets.find(EnvelopeAssets.of_element(ThermalElement.WINDOW))
+        assert window is not None and window.size > 0.0
+        assert window.installation_year == 1990
+        assert "house.building.window.installation_year" not in self._unread(built)
+
+    def test_a_year_on_an_element_without_an_area_lands_nowhere(self) -> None:
+        """An element whose Building area is zero has no row, so the year has nothing to date."""
+        document = _mockup()
+        document["house"]["building"]["window"]["installation_year"] = 1990
+        request = Request.parse(document)
+        builder = EconomicContextBuilder(
+            request,
+            apply(request, request.measures, Whitelist.load()),
+            _building(facade_area_in_m2=173.0),
+            heating_reference_temperature_in_celsius=MOCKUP_DESIGN_TEMPERATURE_IN_CELSIUS,
+        )
+        # A TABULA row without windows, as some rows are (hisim-4g9.1).
+        builder._envelope.information().window_area_in_m2 = 0.0  # pylint: disable=protected-access
+        built = builder.build()
+
+        register = built.context.existing_assets
+        assert register is not None
+        assert register.find(EnvelopeAssets.of_element(ThermalElement.WINDOW)) is None
         assert self._unread(built)["house.building.window.installation_year"] == (
             1990,
             EconomicContextBuilder.ENVELOPE_YEAR_UNREGISTERED_NOTE,

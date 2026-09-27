@@ -62,6 +62,7 @@ from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
+from hisim.renovisor.layers import SimulatedEnvelope, positive_number
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import House, Measure, Request
 from hisim.renovisor.simulation import SimulationSetup
@@ -976,15 +977,12 @@ class EconomicContextBuilder:
     #: The request field holding the dwelling's living area (E-spec §7).
     LIVING_AREA_KEY: ClassVar[str] = "living_area_in_m2"
 
-    #: The request field holding one envelope element's area, the fallback when the translated
-    #: ``Building`` config carries none.
+    #: The request field holding one envelope element's area. The translator writes a stated one
+    #: onto the ``Building`` config, which is where :meth:`_element_area` reads it.
     ELEMENT_AREA_KEY: ClassVar[str] = "area_in_m2"
 
     #: The ``Building`` config field holding the conditioned floor area, the fallback for it.
-    FLOOR_AREA_KEY: ClassVar[str] = "absolute_conditioned_floor_area_in_m2"
-
-    #: The suffix of a ``Building`` config envelope area field.
-    AREA_SUFFIX: ClassVar[str] = "_area_in_m2"
+    FLOOR_AREA_KEY: ClassVar[str] = SimulatedEnvelope.FLOOR_AREA_KEY
 
     #: The suffix of a ``Building`` config envelope U-value field, which the achieved U-values
     #: the subsidy conditions read are taken from.
@@ -1042,8 +1040,8 @@ class EconomicContextBuilder:
     #: The note a stated installation year of an envelope element carries when the element has no
     #: area anywhere, so the register has no row for the year to date.
     ENVELOPE_YEAR_UNREGISTERED_NOTE: ClassVar[str] = (
-        "read by nothing: neither the translated building nor the request gives this element an "
-        "area, so the existing-asset register has no row for it; the year only matters for an "
+        "read by nothing: the request states no area for this element and the building's TABULA "
+        "row gives it none, so the existing-asset register has no row for it; the year only matters for an "
         "element with an area that a measure replaces or insulates, for the sunk cost and the "
         "anyway-cost credit"
     )
@@ -1062,7 +1060,23 @@ class EconomicContextBuilder:
     #: The note a cost block on an envelope measure carries.
     COST_USED_NOTE: ClassVar[str] = (
         "the price band of the envelope subject this measure creates, in euro per square metre of "
-        "its element; a subject whose element has no area stays unpriced"
+        "its element, times the area the Building simulates: the request's own area when it states "
+        "one, the TABULA row's area scaled to the conditioned floor area when it does not"
+    )
+
+    #: The two origins of an envelope subject's size, which its ``override_source`` names beside
+    #: the cost block (renovisorissues #61). ``{path}`` is the request's area leaf.
+    AREA_STATED_ORIGIN: ClassVar[str] = "the element's area as the request states it ({path})"
+    AREA_TABULA_ORIGIN: ClassVar[str] = (
+        "the element's area as the Building simulates it: absent from the request ({path}), so the "
+        "TABULA row's area scaled to the conditioned floor area"
+    )
+
+    #: What the build refuses with when a priced envelope subject's element has no area at all.
+    ELEMENT_AREA_MESSAGE: ClassVar[str] = (
+        "the envelope measure '{measure_id}' carries a price per square metre, but its element "
+        "'{element}' has no area: the request states none and the Building's TABULA row gives it "
+        "an area of zero. Pricing it at no area would publish a price for nothing."
     )
 
     #: The note a stated applicant role carries.
@@ -1089,22 +1103,7 @@ class EconomicContextBuilder:
 
     #: The ``Building`` config field naming the TABULA archetype, which the design heat load is
     #: computed from. Written by the translator as a ``for_tabula_code`` constructor argument.
-    BUILDING_CODE_KEY: ClassVar[str] = "building_code"
-
-    #: Its dwelling-unit count, the second constructor argument the load depends on.
-    APARTMENTS_KEY: ClassVar[str] = "number_of_apartments"
-
-    #: The name the rebuilt ``BuildingConfig`` carries. It never reaches a file: the configuration
-    #: exists only to be handed to ``BuildingInformation`` for the heat-load calculation.
-    BUILDING_COMPONENT: ClassVar[str] = "Building"
-
-    #: The three fields the rebuilt configuration gets from its constructor, which must not be
-    #: overwritten afterwards by the same keys read out of the merged mapping.
-    BUILDING_CONSTRUCTOR_KEYS: ClassVar[Tuple[str, ...]] = (
-        BUILDING_CODE_KEY,
-        APARTMENTS_KEY,
-        "absolute_conditioned_floor_area_in_m2",
-    )
+    BUILDING_CODE_KEY: ClassVar[str] = SimulatedEnvelope.BUILDING_CODE_KEY
 
     #: The mapping-report path the existing generator's size is reported under. It is a derived
     #: context field rather than a request leaf, so it gets a path of its own.
@@ -1154,6 +1153,9 @@ class EconomicContextBuilder:
         self._original = House.from_dict(dict(request.document["house"]))
         self._raw_original: Mapping[str, Any] = request.document["house"]
         self._measure_ids = {measure.id for measure in request.measures}
+        # The Building the run builds: its design heat load sizes the existing generator and its
+        # element areas size the envelope subjects -- the one rule the result payload uses too.
+        self._envelope = SimulatedEnvelope(self._building, heating_reference_temperature_in_celsius)
 
     # ------------------------------------------------------------------ the whole context
 
@@ -1379,13 +1381,6 @@ class EconomicContextBuilder:
         Raises:
             TranslatorError: Naming exactly which of the two required inputs is missing.
         """
-        # Function-local: this module is a translation table a test drives with no HiSim component
-        # at all, and the building package pulls the TABULA table and pandas in with it.
-        from hisim.components.building import (  # pylint: disable=import-outside-toplevel
-            BuildingConfig,
-            BuildingInformation,
-        )
-
         missing = []
         code = self._building.get(self.BUILDING_CODE_KEY)
         temperature = self._heating_reference_temperature
@@ -1395,17 +1390,7 @@ class EconomicContextBuilder:
             missing.append("the Weather's heating_reference_temperature_in_celsius")
         if missing or temperature is None:
             raise TranslatorError(self.GENERATOR_SIZE_MESSAGE.format(missing=" and ".join(missing)))
-        config = BuildingConfig.for_tabula_code(
-            name=self.BUILDING_COMPONENT,
-            building_code=str(code),
-            number_of_apartments=self._as_positive_float(self._building.get(self.APARTMENTS_KEY)),
-            absolute_conditioned_floor_area_in_m2=self._floor_area(),
-        )
-        for name, value in self._building.items():
-            if name not in self.BUILDING_CONSTRUCTOR_KEYS and hasattr(config, name):
-                setattr(config, name, value)
-        config.heating_reference_temperature_in_celsius = float(temperature)
-        load = BuildingInformation(config).max_thermal_building_demand_in_watt
+        load = self._envelope.information().max_thermal_building_demand_in_watt
         return float(load) / self.WATT_PER_KILOWATT
 
     def _device_assets(self, result: Optional[EconomicContextResult] = None) -> List[ExistingAsset]:
@@ -1625,11 +1610,12 @@ class EconomicContextBuilder:
 
         The subject's name is the catalogue measure id, which is what makes the mapping report's
         ``subjects`` map trivially right and lets the result document stamp a measure on every
-        row of its investment build-up. Its size is the element's area, from the ``Building``
-        config the translator wrote or, failing that, from the request. An element with no area
-        anywhere is still added — a measure the plan carries out must appear in the economics —
-        with a size of one square metre and the ``unpriced`` flag, because pricing per square
-        metre without a square metre is not a smaller answer, it is a wrong one.
+        row of its investment build-up. Its size is the element's area as the ``Building``
+        simulates it: the request's own when stated, the TABULA row's scaled one when not
+        (:meth:`_element_area`). A measure without a price is still added — a measure the plan
+        carries out must appear in the economics — with the ``unpriced`` flag and an investment of
+        zero; a priced measure over an element of no area fails the translation, because pricing
+        per square metre without a square metre is not a smaller answer, it is a wrong one.
         """
         facts: List[SubjectCostFacts] = []
         for layer in self._applied.layers:
@@ -1660,10 +1646,21 @@ class EconomicContextBuilder:
         asset_class: ComponentType,
         result: EconomicContextResult,
     ) -> SubjectCostFacts:
-        """One envelope measure as a cost subject, with its price or with the absence of one."""
+        """One envelope measure as a cost subject, with its price or with the absence of one.
+
+        A priced subject is sized with the area the Building simulates (:meth:`_element_area`),
+        and its ``override_source`` says whether the request stated that area or the TABULA row
+        supplied it. A measure without a price stays unpriced whatever its area.
+
+        Raises:
+            TranslatorError: If the measure is priced and its element has no area at all -- the
+                request states none and the Building's own area for it is zero.
+        """
         area = self._element_area(element)
         price = self._measure_price(measure_id)
         result.subjects[measure_id] = measure_id
+        if price is not None and area is None:
+            raise TranslatorError(self.ELEMENT_AREA_MESSAGE.format(measure_id=measure_id, element=element.value))
         if price is None or area is None:
             result.unpriced_subjects.append(measure_id)
             result.subject_notes[measure_id] = self.UNPRICED_NOTE
@@ -1686,7 +1683,9 @@ class EconomicContextBuilder:
                 investment_cost_override_in_euro=investment,
                 installation_cost_override_in_euro=UncertainValue.exact(0.0),
                 override_source=(
-                    self.UNPRICED_NOTE if unpriced else f"the request's measures[{measure_id}].cost block"
+                    self.UNPRICED_NOTE
+                    if unpriced
+                    else f"the request's measures[{measure_id}].cost block, over {self._area_origin(element)}"
                 ),
             ),
         )
@@ -2020,17 +2019,26 @@ class EconomicContextBuilder:
         return block if isinstance(block, Mapping) else {}
 
     def _element_area(self, element: ThermalElement) -> Optional[float]:
-        """One element's area in square metres: the realized building first, the request second.
+        """One element's area in square metres, exactly as the ``Building`` simulates it.
 
-        The translated ``Building`` config is what the simulation will run with, so it is the
-        first source; where the translator wrote no area — because the request stated none and
-        the archetype derives it — the request cannot supply one either and the answer is
-        ``None``, which makes the subject unpriced rather than sized by a guess.
+        The translator writes the request's own area onto the ``Building`` config; where the
+        request states none (calculation-request §3.4) it writes nothing and the ``Building``
+        scales the TABULA row's area to the conditioned floor area. That scaled area is read off
+        the Building's own computation (:class:`~hisim.renovisor.layers.SimulatedEnvelope`, the rule
+        the result payload's layers use too), never re-derived here
+        (renovisorissues #61: an absent area used to leave a priced measure unpriced).
+
+        Returns:
+            The area, or ``None`` only when the Building's area for the element is zero -- a
+            TABULA row without windows, say.
         """
-        realized = self._as_positive_float(self._building.get(f"{element.value}{self.AREA_SUFFIX}"))
-        if realized is not None:
-            return realized
-        return self._as_positive_float(self._raw_element(element).get(self.ELEMENT_AREA_KEY))
+        return self._envelope.area_of(element)
+
+    def _area_origin(self, element: ThermalElement) -> str:
+        """Where one element's area came from, in the words an ``override_source`` carries."""
+        path = f"house.building.{element.value}.{self.ELEMENT_AREA_KEY}"
+        stated = self._envelope.stated_area(element) is not None
+        return (self.AREA_STATED_ORIGIN if stated else self.AREA_TABULA_ORIGIN).format(path=path)
 
     def _living_area(self, result: Optional[EconomicContextResult] = None) -> Optional[float]:
         """The dwelling's living area: the request's own, else the conditioned floor area.
@@ -2065,12 +2073,9 @@ class EconomicContextBuilder:
     def _as_positive_float(value: Any) -> Optional[float]:
         """One raw request or config value as a positive number, or ``None``.
 
-        The shape check every numeric leaf of this module needs, in one place: a JSON value is a
-        number, is not a boolean (``True`` is an ``int`` in Python and would otherwise pass as a
-        size of one), and is greater than zero, because none of the quantities read here — an
-        area, a capacity, a peak power — is meaningfully zero or negative. What to do when the
-        answer is ``None`` is the caller's decision and differs per call site, which is why the
-        helper returns the absence rather than a substitute for it.
+        What to do when the answer is ``None`` is the caller's decision and differs per call site,
+        which is why the helper returns the absence rather than a substitute for it; the shape
+        check itself is :func:`~hisim.renovisor.layers.positive_number`.
 
         Args:
             value: Whatever the request or the translated config carried.
@@ -2078,6 +2083,4 @@ class EconomicContextBuilder:
         Returns:
             The value as a float, or ``None`` when it is not a positive number.
         """
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
-            return float(value)
-        return None
+        return positive_number(value)

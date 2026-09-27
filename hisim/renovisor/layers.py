@@ -8,14 +8,16 @@ read here::
     layers = EnvelopeLayers.of(applied.layers, areas)
     layers.total_embodied_co2_in_kg()      # 3 614.5
 
-Where an area comes from: the realized energy-system record's ``Building`` config, which is the
-building the simulation actually ran (``facade_area_in_m2`` and its four siblings). Those config
-values are the ones the translator wrote from the request, so the fallback when the record
-carries ``null`` -- which happens when the request did not state that element's area and the
-``Building`` component derived it from its TABULA row instead -- is the request itself, and when
-neither has a number the layer is *unresolved* rather than assumed. An unresolved layer makes
-the field that needs it absent, with the reason named, because half a building's insulation is
-not a smaller answer to "how much carbon did this cost", it is a wrong one.
+Where an area comes from: the area the ``Building`` of the realized energy-system record
+simulates (:class:`SimulatedEnvelope`, the one rule the economic context sizes its envelope cost
+subjects with too). That is the config's own ``facade_area_in_m2`` and its four siblings where
+the translator wrote the request's area, and where it wrote none -- the request did not state
+that element's area -- the TABULA row's area scaled to the conditioned floor area, read off the
+Building's own computation (renovisorissues #61, hisim-2pw8). Only when the record cannot be
+read do the areas come from the request alone. An element whose area is zero leaves its layer
+*unresolved* rather than assumed. An unresolved layer makes the field that needs it absent, with
+the reason named, because half a building's insulation is not a smaller answer to "how much
+carbon did this cost", it is a wrong one.
 """
 
 from dataclasses import dataclass
@@ -24,6 +26,124 @@ from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple
 from hisim.renovisor.apply import AddedLayer
 from hisim.renovisor.request import House, Material
 from hisim.renovisor.vocabulary import ThermalElement
+
+
+class SimulatedEnvelope:
+    """The envelope areas the ``Building`` simulates, from a mapping of its configuration fields.
+
+    The one rule for an element's area (renovisorissues #61): the ``<element>_area_in_m2`` the
+    config carries, which is the request's stated area the translator wrote, and where the config
+    carries none the TABULA row's area scaled to the conditioned floor area, as the Building's own
+    :class:`~hisim.components.building.BuildingInformation` computes it -- never re-derived. The
+    economic context sizes its envelope cost subjects with it, and the result payload its layers.
+
+    Args:
+        building_config: The ``Building`` configuration fields: the realized record's ``config``
+            block, or the translator's config merged with its ``for_tabula_code`` arguments.
+            Either carries the TABULA archetype under ``building_code``.
+        heating_reference_temperature_in_celsius: The outside design temperature, which decides
+            the design heat load only; ``None`` keeps whatever the mapping carries.
+    """
+
+    #: The suffix of a ``BuildingConfig`` envelope area field.
+    AREA_SUFFIX: ClassVar[str] = "_area_in_m2"
+
+    #: The field naming the TABULA archetype, a ``for_tabula_code`` constructor argument.
+    BUILDING_CODE_KEY: ClassVar[str] = "building_code"
+
+    #: Its dwelling-unit count, the second constructor argument.
+    APARTMENTS_KEY: ClassVar[str] = "number_of_apartments"
+
+    #: The conditioned floor area every TABULA area is scaled to, the third.
+    FLOOR_AREA_KEY: ClassVar[str] = "absolute_conditioned_floor_area_in_m2"
+
+    #: The three constructor arguments, which the mapping must not overwrite afterwards.
+    CONSTRUCTOR_KEYS: ClassVar[Tuple[str, ...]] = (BUILDING_CODE_KEY, APARTMENTS_KEY, FLOOR_AREA_KEY)
+
+    #: The name the rebuilt ``BuildingConfig`` carries. It never reaches a file.
+    BUILDING_COMPONENT: ClassVar[str] = "Building"
+
+    def __init__(
+        self, building_config: Mapping[str, Any], heating_reference_temperature_in_celsius: Optional[float] = None
+    ) -> None:
+        """Store the configuration; the Building is computed on first use."""
+        self._config = dict(building_config)
+        self._temperature = heating_reference_temperature_in_celsius
+        self._information: Any = None
+
+    @classmethod
+    def config_field(cls, element: ThermalElement) -> str:
+        """Return the ``BuildingConfig`` field holding one element's area."""
+        return f"{element.value}{cls.AREA_SUFFIX}"
+
+    def building_code(self) -> Optional[str]:
+        """Return the TABULA archetype the configuration names, or ``None``."""
+        code = self._config.get(self.BUILDING_CODE_KEY)
+        return code if isinstance(code, str) and code else None
+
+    def information(self) -> Any:
+        """Return the ``BuildingInformation`` the run's ``Building`` computes, built once.
+
+        The configuration is rebuilt the way the run builds it: ``for_tabula_code`` with the
+        archetype, the apartment count and the floor area, then every other field of the mapping
+        on top, then the design temperature when one was given.
+
+        Raises:
+            ValueError: If the mapping names no archetype; a caller checks :meth:`building_code`.
+        """
+        if self._information is not None:
+            return self._information
+        code = self.building_code()
+        if code is None:
+            raise ValueError(f"the Building configuration names no {self.BUILDING_CODE_KEY}")
+        # Function-local: the building package pulls the TABULA table and pandas in with it, and
+        # the modules importing this one are translation tables a test drives without them.
+        from hisim.components.building import (  # pylint: disable=import-outside-toplevel
+            BuildingConfig,
+            BuildingInformation,
+        )
+
+        config = BuildingConfig.for_tabula_code(
+            name=self.BUILDING_COMPONENT,
+            building_code=code,
+            number_of_apartments=positive_number(self._config.get(self.APARTMENTS_KEY)),
+            absolute_conditioned_floor_area_in_m2=positive_number(self._config.get(self.FLOOR_AREA_KEY)),
+        )
+        for name, value in self._config.items():
+            if name not in self.CONSTRUCTOR_KEYS and hasattr(config, name):
+                setattr(config, name, value)
+        if self._temperature is not None:
+            config.heating_reference_temperature_in_celsius = float(self._temperature)
+        self._information = BuildingInformation(config)
+        return self._information
+
+    def stated_area(self, element: ThermalElement) -> Optional[float]:
+        """Return the area the configuration itself carries for one element, or ``None``."""
+        return positive_number(self._config.get(self.config_field(element)))
+
+    def area_of(self, element: ThermalElement) -> Optional[float]:
+        """Return one element's area as the Building simulates it.
+
+        Returns:
+            The stated area, else the Building's scaled TABULA area; ``None`` only when that is
+            zero -- a TABULA row without windows, say.
+        """
+        stated = self.stated_area(element)
+        if stated is not None:
+            return stated
+        return positive_number(getattr(self.information(), self.config_field(element)))
+
+
+def positive_number(value: Any) -> Optional[float]:
+    """Return a raw request or config value as a positive float, or ``None``.
+
+    A JSON value is a number, is not a boolean (``True`` is an ``int`` in Python and would
+    otherwise pass as a size of one), and is greater than zero, because none of the quantities
+    read with it -- an area, a capacity, a peak power -- is meaningfully zero or negative.
+    """
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        return float(value)
+    return None
 
 
 class ElementAreas:
@@ -40,7 +160,7 @@ class ElementAreas:
     """
 
     #: The suffix a ``BuildingConfig`` envelope area field carries.
-    AREA_SUFFIX: ClassVar[str] = "_area_in_m2"
+    AREA_SUFFIX: ClassVar[str] = SimulatedEnvelope.AREA_SUFFIX
 
     #: The component of the energy-system file whose config carries the areas.
     BUILDING_COMPONENT: ClassVar[str] = "Building"
@@ -65,7 +185,11 @@ class ElementAreas:
 
     @classmethod
     def resolve(cls, building_config: Mapping[str, Any], house: House) -> "ElementAreas":
-        """Resolve every element's area from the realized record, falling back to the request.
+        """Resolve every element's area as the realized record's Building simulates it.
+
+        The rule is :class:`SimulatedEnvelope`'s: the config's own area, else the Building's
+        scaled TABULA area. Only a record without a ``Building`` archetype -- one that could not
+        be read -- falls back to the areas the request states.
 
         Args:
             building_config: The ``config`` block of the realized record's ``Building``
@@ -73,17 +197,27 @@ class ElementAreas:
             house: The renovated house, read for the areas the request stated.
 
         Returns:
-            The resolved areas. An element neither source carries a number for is absent from
-            the result, which :meth:`area_of` reports as ``None``.
+            The resolved areas. An element without one (a zero TABULA area, or no record and no
+            stated area) is absent from the result, which :meth:`area_of` reports as ``None``.
         """
         areas: Dict[ThermalElement, float] = {}
         sources: Dict[ThermalElement, str] = {}
+        envelope = SimulatedEnvelope(building_config)
+        code = envelope.building_code()
         for element in ThermalElement:
             field_name = cls.config_field(element)
-            from_record = building_config.get(field_name)
-            if isinstance(from_record, (int, float)) and not isinstance(from_record, bool):
-                areas[element] = float(from_record)
-                sources[element] = f"realized.energy_system.yaml: Building.config.{field_name}"
+            stated = envelope.stated_area(element)
+            if stated is not None or code is not None:
+                area = envelope.area_of(element)
+                if area is None:
+                    continue
+                areas[element] = area
+                sources[element] = (
+                    f"realized.energy_system.yaml: Building.config.{field_name}"
+                    if stated is not None
+                    else f"realized.energy_system.yaml: the Building's {field_name}, the TABULA row "
+                    f"{code}'s area scaled to the conditioned floor area (the request states none)"
+                )
                 continue
             from_request = house.element(element.value).area_in_m2
             if from_request is not None:
@@ -108,8 +242,8 @@ class EnvelopeLayer:
         element: The thermal element the layer sits on.
         material: The material's properties as the request carried them.
         thickness_in_mm: How thick the layer is, as the measure resolved it.
-        area_in_m2: The element's area, or ``None`` when neither the realized record nor the
-            request carries one.
+        area_in_m2: The element's area as the Building simulates it (:class:`ElementAreas`), or
+            ``None`` when it has none.
         area_source: Where that area came from, as a phrase for the payload's ``source``.
         measure_id: The catalogue measure that added the layer.
     """

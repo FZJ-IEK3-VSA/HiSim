@@ -1105,7 +1105,8 @@ def _building_config(model: EnergySystemFile) -> Mapping[str, Any]:
     Two things read this. The envelope cost subjects are sized in square metres of the element
     they cover, and the areas live in the component's ``config`` block: the translator writes them
     from the request, and where the request stated none the archetype derives them, in which case
-    the field is absent and the subject ends up unpriced rather than sized by a guess. The design
+    the field is absent and the subject is sized with the Building's own scaled TABULA area
+    (:class:`~hisim.renovisor.layers.SimulatedEnvelope`). The design
     heat load the existing generator is sized from needs the archetype itself — the TABULA code,
     the conditioned floor area and the apartment count — and those are *constructor arguments*
     after the ``for_tabula_code`` swap rather than config keys.

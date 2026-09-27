@@ -29,6 +29,7 @@ from hisim.economics.subsidies.assessment import (
     EligibilityStatus,
     MeasureForSubsidy,
     SchemeAssessment,
+    SchemeMaximum,
     SubsidyAward,
     SubsidyContext,
     SubsidyDecision,
@@ -82,6 +83,8 @@ from hisim.economics.subsidies.solver import _combination_awards, _eligible_cost
 from hisim.economics.subsidies.solver import (
     CapRatios,
     CumulationLimits,
+    SchemeMaximumNotes,
+    scheme_maximum,
     solve_cumulation,
 )
 
@@ -109,6 +112,8 @@ __all__ = [
     "QuestionEntry",
     "ReducedVatBenefit",
     "SchemeAssessment",
+    "SchemeMaximum",
+    "SchemeMaximumNotes",
     "ShareBenefit",
     "SubsidyAward",
     "SubsidyBuildingContext",
@@ -134,5 +139,6 @@ __all__ = [
     "referenced_fields",
     "required_questions",
     "scheme_context_fields",
+    "scheme_maximum",
     "solve_cumulation",
 ]

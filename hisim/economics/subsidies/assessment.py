@@ -433,6 +433,24 @@ class SubsidySchemeLabels:
     UNATTRIBUTED = "subsidy (unattributed)"
 
 
+@dataclass(frozen=True)
+class SchemeMaximum:
+    """The most one scheme can pay for one measure, whatever the verdict (renovisorissues #54).
+
+    What a reader weighs an open question against ("up to EUR X"): the scheme valued alone for the
+    measure as the house and the plan state it, by the same arithmetic an award is valued with
+    (:func:`~hisim.economics.subsidies.solver.scheme_maximum`). ``None`` where the catalogue states
+    no amount the scheme is limited to, and ``note`` then says why.
+
+    Attributes:
+        amount_in_euro: Positive nominal euro in the measure's year 0, per slot, or None.
+        note: Why there is no amount; None when there is one.
+    """
+
+    amount_in_euro: Optional[UncertainValue]
+    note: Optional[str] = None
+
+
 @dataclass
 class SubsidyDecision:
     """Fully reported outcome of the cumulation solver (§5.4) — the audit trail.
@@ -467,6 +485,11 @@ class SubsidyDecision:
     other_slot_optimal_combination: Dict[str, Optional[str]] = field(default_factory=dict)
     # The solver's objective value for `applied`, on the BEST_ESTIMATE slot (see class doc):
     discounted_support_in_euro: float = 0.0
+    #: Scheme id -> the most that scheme can pay for this measure on its own, for every scheme
+    #: assessed -- applied, rejected and undetermined alike (renovisorissues #54). Not part of
+    #: `to_json`: it is read by the staged economics document, and the archived decision format
+    #: stays as it was.
+    maximum_by_scheme: Dict[str, SchemeMaximum] = field(default_factory=dict)
 
     def to_json(self) -> dict:
         """Serializes the audit trail.

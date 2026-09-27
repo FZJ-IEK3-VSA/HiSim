@@ -18,8 +18,8 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 5,
-      "description": "5 since 2026-09-26 (renovisorissues #57), a breaking change: parameters.simulation_year is renamed parameters.weather_year (the year of the weather the stages were simulated with; it dates nothing), parameters carries the required plan_start_year (the calendar year of the plan's year 0, or null), and every annual[].calendar_year is plan_start_year + year, null when plan_start_year is null, no longer simulation_year + year. Also in 5: every by_subject row carries the required service_life_origin, installation_year, installation_year_origin and note, service_life_years states the lifetime the engine used whether the cost database or the request gave it, and every measure a stage carries out has a by_subject row, a zero one of its own for a measure the engine prices no subject for (renovisorissues #58). 4 since 2026-09-26: parameters.escalation.energy states the per-carrier rate actually used for every carrier a stage bills and every carrier the plan named, no longer only the stated ones, and parameters carries the required energy_prices (the year-1 prices used, the working price all-in with carbon) and origins (where each came from) (renovisorissues #52). 3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
+      "const": 6,
+      "description": "6 since 2026-09-26 (renovisorissues #53, #54): parameters carries the required investment_overrides, the reader's quotes the plan was priced with (each replaces the year-0 investment of the measure's main subject in its stage; the measure's other subjects there are bought at zero), every by_subject row carries the required investment_origin and investment_source, and every subsidies[] row carries the required max_amount_in_euro, the most the scheme can pay for the row's subject whatever the row's status. 5 since 2026-09-26 (renovisorissues #57), a breaking change: parameters.simulation_year is renamed parameters.weather_year (the year of the weather the stages were simulated with; it dates nothing), parameters carries the required plan_start_year (the calendar year of the plan's year 0, or null), and every annual[].calendar_year is plan_start_year + year, null when plan_start_year is null, no longer simulation_year + year. Also in 5: every by_subject row carries the required service_life_origin, installation_year, installation_year_origin and note, service_life_years states the lifetime the engine used whether the cost database or the request gave it, and every measure a stage carries out has a by_subject row, a zero one of its own for a measure the engine prices no subject for (renovisorissues #58). 4 since 2026-09-26: parameters.escalation.energy states the per-carrier rate actually used for every carrier a stage bills and every carrier the plan named, no longer only the stated ones, and parameters carries the required energy_prices (the year-1 prices used, the working price all-in with carbon) and origins (where each came from) (renovisorissues #52). 3 since 2026-09-26: every by_subject row carries the required investment_by_stage, the subject's investment split by the stage that bought it (renovisorissues #48, hisim-fig7). 2 since 2026-09-24: a subsidies[] row the plan awarded states amount_by_year_in_euro and an amount (hisim-cyc.5), and totals and comparison carry the headline monthly_equivalent_cost_in_euro / monthly_equivalent_cost_delta_in_euro (hisim-cyc.6)."
     },
     "engine": {
       "type": "object",
@@ -46,6 +46,7 @@
         "financing",
         "escalation",
         "energy_prices",
+        "investment_overrides",
         "subsidy_catalog",
         "origins"
       ],
@@ -107,6 +108,21 @@
               "standing_charge_in_euro_per_year": {"$ref": "#/$defs/band"}
             },
             "additionalProperties": false
+          }
+        },
+        "investment_overrides": {
+          "type": "array",
+          "description": "The reader's quoted prices the plan was priced with, one per measure of a stage, in the order they were given; empty without any. Each replaces the year-0 investment (investment, planning and removal) of the measure's main subject in that stage; the measure's other subjects in that stage are bought at zero, keep their lifetimes and their later, database-priced replacements. The quote is exact and is booked as stated, nominal in its stage's year, never escalated, whatever year the stage starts in. Also an input of `staged --parameters`, where a stage the plan does not have, a measure the stage does not carry out, a measure that costs nothing (change_room_temperature) and a second quote for one measure of one stage are refused.",
+          "items": {
+            "type": "object",
+            "required": ["stage", "measure_id", "amount_in_euro", "source"],
+            "additionalProperties": false,
+            "properties": {
+              "stage": {"type": "integer", "minimum": 0},
+              "measure_id": {"type": "string"},
+              "amount_in_euro": {"type": "number", "exclusiveMinimum": 0},
+              "source": {"type": "string", "minLength": 1}
+            }
           }
         },
         "subsidy_catalog": {
@@ -352,6 +368,8 @@
               "unpriced",
               "npv_in_euro",
               "investment_in_euro",
+              "investment_origin",
+              "investment_source",
               "investment_by_stage",
               "subsidy_in_euro",
               "replacements_in_euro",
@@ -378,6 +396,14 @@
               "investment_in_euro": {
                 "$ref": "#/$defs/band",
                 "description": "Year-0 investment: the investment, planning and removal booked in year 0, by every stage that starts then. Stages starting later are in investment_by_stage."
+              },
+              "investment_origin": {
+                "enum": ["reader_quote", "included_in_reader_quote", "request", "cost_database", null],
+                "description": "Where the purchase the row describes was priced from (on the plan the purchase of the row's stage, on the reference stage 0's): the reader's quote from parameters.investment_overrides, as the measure's main subject (reader_quote); within that quote, as a further subject of the quoted measure, bought at zero (included_in_reader_quote); the request's own price (request); the cost database (cost_database). Null on a carrier row, an unpriced row and a measure-only row."
+              },
+              "investment_source": {
+                "type": ["string", "null"],
+                "description": "The source of a reader_quote or included_in_reader_quote row as the quote states it, or the request's source sentence of a request row; null otherwise."
               },
               "investment_by_stage": {
                 "description": "The subject's investment split by the stage that bought it: one entry per stage whose evaluation booked investment, planning or removal for the subject on the plan's timeline, ascending by stage, each the nominal amount in the year that stage starts. Kept or carried-over subjects have no entry; reference rows carry an empty list.",
@@ -415,7 +441,7 @@
               "replacement_years": {"type": "array", "items": {"type": "integer"}},
               "note": {
                 "type": ["string", "null"],
-                "description": "Why the row has no price (unpriced) or costs nothing (a setting, not a purchase); null otherwise."
+                "description": "Why the row has no price (unpriced) or costs nothing (a setting, not a purchase), or what a reader's quote made of it (priced by it, bought within it); null otherwise."
               }
             },
             "allOf": [
@@ -510,6 +536,7 @@
               "status",
               "amount_in_euro",
               "amount_by_year_in_euro",
+              "max_amount_in_euro",
               "binding_cap",
               "open_questions",
               "note"
@@ -540,6 +567,10 @@
                   },
                   {"type": "null"}
                 ]
+              },
+              "max_amount_in_euro": {
+                "description": "The most the scheme can pay for the row's subject under the house and plan as stated, whatever the row's status, negative like amount_in_euro and moved into the plan the way the stage's award is: LUMP_SUM its amount, PER_UNIT and TIERED_PER_UNIT the amount for the stated size (each clamped to the eligible cost where the scheme counts cost categories), SHARE_OF_ELIGIBLE_COST and BONUS_SHARE the scheme's full rate times the eligible cost capped by the scheme's eligible-basis cap (a rate a cumulation group would scale down, depending on which answers stack, is stated at its larger, unscaled value), TAX_CREDIT the whole credit, SOFT_LOAN its repayment grant, OPERATIONAL the rate times the annual energy times the duration; the catalogue's overall state-aid share bounds it as it bounds an award. Null only where the catalogue defines no limit (a VAT reduction, a plan with no catalogue), and `note` then says so.",
+                "oneOf": [{"$ref": "#/$defs/band"}, {"type": "null"}]
               },
               "binding_cap": {"type": ["string", "null"]},
               "open_questions": {"type": "array", "items": {"type": "string"}},

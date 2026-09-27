@@ -38,16 +38,16 @@ import json
 import os
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.carriers import bill_subjects
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
-from hisim.economics.staged import StagedEvaluator, StagedResult
-from hisim.economics.staged_parameters import StagedParameters
-from hisim.economics.subsidies import PayoutKind, SubsidyDecision
+from hisim.economics.staged import InvestmentOverride, StagedEvaluator, StagedResult
+from hisim.economics.staged_parameters import StagedParameters, StatedQuote
+from hisim.economics.subsidies import PayoutKind, SchemeMaximum, SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
@@ -286,7 +286,7 @@ class StagedDocument:
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 5
+    SCHEMA_VERSION: ClassVar[int] = 6
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -309,7 +309,31 @@ class StagedDocument:
     ECONOMICS_VERSION: ClassVar[str] = "cost-spec-v2"
 
     #: The note an undetermined subsidy row carries when the country has no catalogue at all.
-    NO_CATALOGUE_NOTE: ClassVar[str] = "no subsidy catalogue for {country}"
+    NO_CATALOGUE_NOTE: ClassVar[str] = (
+        "no subsidy catalogue for {country}; no maximum: there is no scheme to state one"
+    )
+
+    #: The note of a subsidy row whose decision carries no maximum for its scheme -- a decision
+    #: made before the maximum existed; the solver states one for every scheme it assesses.
+    NO_MAXIMUM_NOTE: ClassVar[str] = "no maximum: the decision states none for this scheme"
+
+    #: The note of a row the reader's quote prices, where HiSim holds no price of its own for the
+    #: subject (renovisorissues #53): it replaces the note that said the row was unpriced.
+    QUOTED_UNPRICED_NOTE: ClassVar[str] = (
+        "priced by the reader's quote; HiSim holds no price of its own for it"
+    )
+
+    #: The note of a quoted measure HiSim holds neither a price nor an asset class for.
+    QUOTED_PURCHASE_NOTE: ClassVar[str] = (
+        "priced by the reader's quote and bought once: HiSim holds no lifetime for it, so it is "
+        "never replaced, maintained or written down"
+    )
+
+    #: The note of a further subject of a quoted measure, bought within the quote.
+    INCLUDED_NOTE: ClassVar[str] = (
+        "bought within the reader's quote for {measure_id} in stage {stage}: its investment there is "
+        "zero, its lifetime and its later replacements are the cost database's"
+    )
 
     #: The question such a row puts to whoever can answer it.
     NO_CATALOGUE_QUESTION: ClassVar[str] = (
@@ -629,6 +653,15 @@ class StagedDocument:
             energy=self._result.energy_echo,
             plan_start_year=self._result.plan_start_year,
             price_basis_year_origin=self._result.price_basis_year_origin,
+            investment_overrides=[
+                StatedQuote(
+                    stage=override.stage,
+                    measure_id=override.measure_id,
+                    amount_in_euro=override.amount_in_euro,
+                    source=override.source,
+                ).to_json()
+                for override in self._result.investment_overrides
+            ],
         )
 
     def _stages(self) -> List[Dict[str, Any]]:
@@ -767,7 +800,16 @@ class StagedDocument:
         (:class:`~hisim.economics.facts.InstallationYearOrigin`). All four are ``null`` on a
         carrier row, on a synthetic subject's row (financing, replacement reserve, CO2 damage) and
         on a measure-only row, which have no lifetime the engine prices (renovisorissues #58).
-        ``note`` says why a row has no price or costs nothing, and is ``null`` otherwise.
+        ``note`` says why a row has no price or costs nothing, or what a reader's quote made of it,
+        and is ``null`` otherwise.
+
+        ``investment_origin`` says where the purchase the row describes was priced from
+        (:class:`~hisim.economics.staged.InvestmentOrigin`, renovisorissues #53): the reader's quote
+        (``reader_quote``, the measure's main subject), within that quote (``included_in_reader_quote``,
+        the measure's further subjects, bought at zero), the request's own price (``request``) or the
+        cost database (``cost_database``); ``investment_source`` is the quote's or the request's source
+        sentence. Both are ``null`` on a carrier row, an unpriced row and a measure-only row. On the
+        plan the purchase is the one of the row's ``stage``; on the reference, stage 0's.
 
         A measure the engine prices no subject for -- a setting, or one HiSim holds no price for
         -- still gets a row, a zero one of its own (:meth:`_measure_only_rows`), so every measure a
@@ -783,6 +825,11 @@ class StagedDocument:
             measure_id = self._measure_ids.get(subject)
             if not staged and measure_id not in reference_measures:
                 measure_id = None
+            quote = self._result.quote_of(subject, staged)
+            origin, source = self._result.investment_origin(subject, staged)
+            unpriced = subject in self._unpriced and quote is None
+            if unpriced:
+                origin, source = None, None
             rows.append(
                 self._row(
                     subject,
@@ -790,16 +837,47 @@ class StagedDocument:
                     asset_class=breakdown.asset_class.value if breakdown.asset_class else None,
                     measure_id=measure_id,
                     stage=self._result.stage_of_subject(subject) if staged else None,
+                    unpriced=unpriced,
                     npv=breakdown.total_npv_in_euro,
                     investment=breakdown.investment_gross_in_euro,
+                    investment_origin=origin.value if origin is not None else None,
+                    investment_source=source,
                     investment_by_stage=sorted(by_stage.get(subject, {}).items()),
                     categories=categories,
                     life=self._life_fields(subject, staged),
                     replacement_years=replacements.get(subject, []),
+                    note=self._note(subject, quote),
                 )
             )
         rows.extend(self._measure_only_rows(result, staged))
         return sorted(rows, key=lambda row: row["subject"])
+
+    def _note(self, subject: str, quote: Optional[Tuple[InvestmentOverride, bool]]) -> Optional[str]:
+        """One row's ``note``: the mapping report's, or what a reader's quote made of the row.
+
+        A quote replaces an "unpriced" note, since the row now has a price; a measure HiSim holds
+        no asset class for says it is bought once; a further subject of the quoted measure says it
+        was bought within the quote. Every other row keeps the mapping report's sentence.
+
+        Args:
+            subject: The row's subject.
+            quote: The quote that priced its purchase, and whether it is the main subject, or None.
+
+        Returns:
+            The note, or None.
+        """
+        stated = self._notes.get(subject)
+        if quote is None:
+            return stated
+        override, main = quote
+        if not main:
+            return self.INCLUDED_NOTE.format(measure_id=override.measure_id, stage=override.stage)
+        if subject in self._unpriced:
+            has_facts = any(
+                facts.subject == subject for facts in self._result.stages[override.stage].inputs.cost_facts
+            )
+            return self.QUOTED_UNPRICED_NOTE if has_facts else self.QUOTED_PURCHASE_NOTE
+        return stated
 
     #: The four lifetime and age fields of a row whose subject has no lifetime.
     NO_LIFE: ClassVar[Dict[str, None]] = {
@@ -865,12 +943,16 @@ class StagedDocument:
                     asset_class=None,
                     measure_id=measure_id,
                     stage=stage,
+                    unpriced=subject in self._unpriced,
                     npv=zero,
                     investment=zero,
+                    investment_origin=None,
+                    investment_source=None,
                     investment_by_stage=[(stage, zero)] if stage is not None else [],
                     categories={},
                     life=self.NO_LIFE,
                     replacement_years=[],
+                    note=self._notes.get(subject),
                 )
             )
         return rows
@@ -882,12 +964,16 @@ class StagedDocument:
         asset_class: Optional[str],
         measure_id: Optional[str],
         stage: Optional[int],
+        unpriced: bool,
         npv: UncertainValue,
         investment: UncertainValue,
+        investment_origin: Optional[str],
+        investment_source: Optional[str],
         investment_by_stage: Iterable[Tuple[int, UncertainValue]],
         categories: Mapping[CostCategory, UncertainValue],
         life: Mapping[str, Any],
         replacement_years: List[int],
+        note: Optional[str],
     ) -> Dict[str, Any]:
         """One ``by_subject`` row: the one place its key set is written.
 
@@ -897,12 +983,16 @@ class StagedDocument:
             asset_class: Its asset class's value, or ``None``.
             measure_id: The measure that created it, or ``None``.
             stage: The stage it is attributed to, or ``None`` off the plan.
+            unpriced: Whether HiSim holds no price for it (and no quote priced it).
             npv: Its net present value.
             investment: Its gross investment.
+            investment_origin: Where that purchase was priced from (:class:`InvestmentOrigin` value), or ``None``.
+            investment_source: The quote's or the request's source sentence, or ``None``.
             investment_by_stage: ``(stage, amount)`` per stage that paid into it, ascending.
             categories: Its NPV by cost category; a category it lacks is an exact zero.
             life: The four lifetime and age fields (:meth:`_life_fields`, :attr:`NO_LIFE`).
             replacement_years: The years its replacements fall in.
+            note: Why it has no price or costs nothing, or what a reader's quote made of it; ``None`` otherwise.
 
         Returns:
             The row, in the key order of the schema.
@@ -914,9 +1004,11 @@ class StagedDocument:
             "asset_class": asset_class,
             "measure_id": measure_id,
             "stage": stage,
-            "unpriced": subject in self._unpriced,
+            "unpriced": unpriced,
             "npv_in_euro": self._band(npv),
             "investment_in_euro": self._band(investment),
+            "investment_origin": investment_origin,
+            "investment_source": investment_source,
             "investment_by_stage": [
                 {"stage": index, "investment_in_euro": self._band(amount)} for index, amount in investment_by_stage
             ],
@@ -926,7 +1018,7 @@ class StagedDocument:
             "residual_value_in_euro": self._band(categories.get(CostCategory.RESIDUAL_VALUE, zero)),
             **life,
             "replacement_years": replacement_years,
-            "note": self._notes.get(subject),
+            "note": note,
         }
 
     def _investment_by_stage(self, result: LifecycleCostResult) -> Dict[str, Dict[int, UncertainValue]]:
@@ -1120,8 +1212,56 @@ class StagedDocument:
         claimed: Set[AwardKey] = set()
         for stage, decision in self._decisions(result, staged):
             measure_id = self._measure_ids.get(decision.measure_subject)
-            rows.extend(self._decision_rows(decision, stage, measure_id, awarded, claimed))
+            rows.extend(
+                self._decision_rows(
+                    decision, stage, measure_id, awarded, claimed, self._scale_of(stage, decision.measure_subject)
+                )
+            )
         return rows
+
+    def _scale_of(self, stage: Optional[int], subject: str) -> Callable[[Optional[str]], float]:
+        """Scheme id -> the factor a stage's year-0 award of that scheme for one subject is booked with.
+
+        Escalated with the cost for a share of it, the share paid alone for a fixed-amount scheme
+        (:meth:`~hisim.economics.staged.StagedResult.subsidy_scale`).
+        """
+
+        def scale(scheme_id: Optional[str]) -> float:
+            return self._result.subsidy_scale(stage, subject, scheme_id)
+
+        return scale
+
+    @classmethod
+    def _maximum(cls, decision: SubsidyDecision, scheme_id: Optional[str], scale: float) -> Tuple[Any, Optional[str]]:
+        """One row's ``max_amount_in_euro`` and the note it needs, if any (renovisorissues #54).
+
+        The maximum is the subsidy layer's (:func:`~hisim.economics.subsidies.scheme_maximum`),
+        moved into the plan exactly as the stage's own year-0 award is (share paid times the price
+        level of the stage's year; the share alone for a fixed-amount scheme, which is never
+        escalated) and signed as a credit, like ``amount_in_euro``.
+
+        Args:
+            decision: The decision the row belongs to.
+            scheme_id: The row's scheme.
+            scale: The factor the stage's year-0 figures of the subject are booked with.
+
+        Returns:
+            ``(the band or None, the note a None needs or None)``.
+        """
+        maximum: Optional[SchemeMaximum] = decision.maximum_by_scheme.get(str(scheme_id))
+        if maximum is None:
+            return None, cls.NO_MAXIMUM_NOTE
+        if maximum.amount_in_euro is None:
+            return None, maximum.note
+        # `+ 0.0` turns the -0.0 a mirrored zero (a loan with no repayment grant) would carry into 0.0.
+        band = cls._band(maximum.amount_in_euro.scale(scale).as_revenue())
+        return {key: value + 0.0 for key, value in band.items()}, None
+
+    @staticmethod
+    def _joined(*notes: Optional[str]) -> Optional[str]:
+        """Notes joined with ``; ``, or None when there is none."""
+        present = [note for note in notes if note]
+        return "; ".join(present) or None
 
     def _decisions(
         self, result: LifecycleCostResult, staged: bool
@@ -1153,6 +1293,7 @@ class StagedDocument:
                 "status": SubsidyStatus.UNDETERMINED.value,
                 "amount_in_euro": None,
                 "amount_by_year_in_euro": None,
+                "max_amount_in_euro": None,
                 "binding_cap": None,
                 "open_questions": [self.NO_CATALOGUE_QUESTION.format(country=country)],
                 "note": self.NO_CATALOGUE_NOTE.format(country=country),
@@ -1188,14 +1329,15 @@ class StagedDocument:
         measure_id: Optional[str],
         awarded: Mapping[AwardKey, Mapping[int, UncertainValue]],
         claimed: Set[AwardKey],
+        scale: Optional[Callable[[Optional[str]], float]] = None,
     ) -> List[Dict[str, Any]]:
         """The rows of one measure's subsidy decision: awarded, refused and undecided.
 
         The awarded amount is read off the plan's own timeline rather than off the award record,
         so what the document publishes as support is exactly what the NPV was computed with — a
-        staged award is escalated and moved into its stage's year, and re-reading the award would
-        state the unmoved figure. An awarded row always carries an amount: a benefit that books no
-        cash states a zero band and says where its money is instead.
+        staged award is moved into its stage's year (and escalated, unless it is a fixed amount),
+        and re-reading the award would state the unmoved figure. An awarded row always carries an
+        amount: a benefit that books no cash states a zero band and says where its money is instead.
 
         A soft loan's repayment grant is booked under the financing subject rather than under any
         measure, because the loan is taken out against the stage's investment as a whole. The
@@ -1209,10 +1351,14 @@ class StagedDocument:
             measure_id: The catalogue measure behind the decision's subject.
             awarded: What :meth:`_awarded_amounts` read off the timeline.
             claimed: The financing keys whose grant a row already states; updated in place.
+            scale: Scheme id -> the factor the stage books that scheme's year-0 award for the
+                subject with, which the row's ``max_amount_in_euro`` is moved by
+                (:meth:`_maximum`, :meth:`_scale_of`); ``None`` for 1.0 (the reference).
 
         Returns:
-            The rows, awarded first.
+            The rows, awarded first. Every row states ``max_amount_in_euro``, whatever its status.
         """
+        factor = scale or (lambda _scheme: 1.0)
         rows: List[Dict[str, Any]] = []
         for award in decision.applied:
             by_year: Dict[int, UncertainValue] = dict(
@@ -1232,6 +1378,7 @@ class StagedDocument:
             elif award.payout_kind in cls.NON_CASH_NOTES and not by_year:
                 notes.append(cls.NON_CASH_NOTES[award.payout_kind])
             binding = sorted(slot for slot, bound in award.caps_binding_per_slot.items() if bound)
+            maximum, maximum_note = cls._maximum(decision, award.scheme_id, factor(award.scheme_id))
             rows.append(
                 {
                     "scheme": award.scheme_id,
@@ -1242,12 +1389,14 @@ class StagedDocument:
                     "amount_by_year_in_euro": [
                         {"year": year, "amount_in_euro": cls._band(by_year[year])} for year in sorted(by_year)
                     ],
+                    "max_amount_in_euro": maximum,
                     "binding_cap": ", ".join(binding) if binding else None,
                     "open_questions": [],
-                    "note": "; ".join(notes) or None,
+                    "note": cls._joined("; ".join(notes), maximum_note),
                 }
             )
         for rejected in decision.rejected:
+            maximum, maximum_note = cls._maximum(decision, rejected.get("scheme_id"), factor(rejected.get("scheme_id")))
             rows.append(
                 {
                     "scheme": rejected.get("scheme_id"),
@@ -1256,12 +1405,17 @@ class StagedDocument:
                     "status": SubsidyStatus.INELIGIBLE.value,
                     "amount_in_euro": None,
                     "amount_by_year_in_euro": None,
+                    "max_amount_in_euro": maximum,
                     "binding_cap": None,
                     "open_questions": [],
-                    "note": str(rejected.get("reason")) if rejected.get("reason") else None,
+                    "note": cls._joined(
+                        str(rejected.get("reason")) if rejected.get("reason") else None, maximum_note
+                    ),
                 }
             )
         for undetermined in decision.undetermined:
+            scheme_id = undetermined.get("scheme_id")
+            maximum, maximum_note = cls._maximum(decision, scheme_id, factor(scheme_id))
             rows.append(
                 {
                     "scheme": undetermined.get("scheme_id"),
@@ -1270,9 +1424,10 @@ class StagedDocument:
                     "status": SubsidyStatus.UNDETERMINED.value,
                     "amount_in_euro": None,
                     "amount_by_year_in_euro": None,
+                    "max_amount_in_euro": maximum,
                     "binding_cap": None,
                     "open_questions": [str(field) for field in undetermined.get("missing_fields", [])],
-                    "note": None,
+                    "note": maximum_note,
                 }
             )
         return rows

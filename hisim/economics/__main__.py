@@ -53,7 +53,10 @@ the same thing in each, the flag taking precedence over the path stored in the p
   the document is this plus the relative year, and null without it; renovisorissues #57),
   `perspective_id`, `subsidy_mode` (`full`/`none`), `financing` (`{"kind": "cash"}` or
   `{"kind": "loan", …}`), `escalation`, `energy_prices` (the year-1 price terms per carrier, the
-  working price all-in with carbon included; renovisorissues #52), and the three that are accepted
+  working price all-in with carbon included; renovisorissues #52), `investment_overrides` (the
+  reader's quotes, `[{"stage", "measure_id", "amount_in_euro", "source"}]`, each replacing the
+  year-0 investment of the measure's main subject in that stage, booked as stated and never
+  escalated; renovisorissues #53), and the three that are accepted
   and ignored, `weather_year` (the year of the stages' weather; `simulation_year` up to schema
   version 4), `subsidy_catalog` and `origins`. **The country and the price basis year are
   the stages'**: both are written into every stage's `economic_inputs.json` as facts of the run,
@@ -138,7 +141,13 @@ from hisim.economics.serialization import (
     read_stored_parameters,
     read_stored_price_basis_year,
 )
-from hisim.economics.staged import Stage, StagedEngineError, StagedEvaluationError, StagedEvaluator
+from hisim.economics.staged import (
+    InvestmentOverride,
+    Stage,
+    StagedEngineError,
+    StagedEvaluationError,
+    StagedEvaluator,
+)
 from hisim.economics.staged_document import (
     BandOrderError,
     MeasureWithoutRowError,
@@ -151,7 +160,8 @@ from hisim.economics.staged_parameters import (
     ParameterProblemCodes,
     StagedParameters,
 )
-from hisim.renovisor.economics import EconomicContextBuilder, MeasureSubjects
+from hisim.loadtypes import ComponentType
+from hisim.renovisor.economics import EconomicContextBuilder, MainSubjectError, MainSubjects, MeasureSubjects
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import CatalogueTable
 from hisim.economics.subsidies import SubsidyCatalog
@@ -1342,6 +1352,107 @@ class StagedCli:
             )
         return parsed, perspective_id
 
+    #: What the stderr line says when a quote does not fit the plan's stages.
+    QUOTES_REFUSED_MESSAGE: ClassVar[str] = (
+        "the reader's quotes of this plan were refused: {count} problem(s), each named in the "
+        "problems document."
+    )
+
+    @classmethod
+    def carried_out_by_stage(cls, stages: List[Stage]) -> List[Tuple[str, ...]]:
+        """The measures each stage carries out itself: the ones new in it, all of stage 0's.
+
+        A RenoVisor stage's ``measures`` are every measure of its package, so a later stage lists
+        the earlier stages' measures again; only the ones it adds are its own job, and only those
+        can carry a quote for it.
+
+        Args:
+            stages: The plan, in stage order.
+
+        Returns:
+            Per stage, in stage order, the measures it carries out.
+        """
+        carried: List[Tuple[str, ...]] = []
+        for index, stage in enumerate(stages):
+            before = set(stages[index - 1].measures) if index > 0 else set()
+            carried.append(tuple(measure for measure in stage.measures if measure not in before))
+        return carried
+
+    @classmethod
+    def investment_overrides(
+        cls, parsed: StagedParameters, stages: List[Stage], mapping: "StageMapping"
+    ) -> Tuple[InvestmentOverride, ...]:
+        """The reader's quotes, checked against the stages and resolved to the subjects they price.
+
+        Each quote must name a stage the plan has, a catalogue measure, one that costs something,
+        and one the stage carries out (:meth:`carried_out_by_stage`) and buys something for: its
+        main subject must be one the stage pays for, not one it carries over. Every such fault is
+        a problem row (exit 2), all at once. The main subject is then resolved by
+        :class:`~hisim.renovisor.economics.MainSubjects` over the subjects the translator stamped
+        with the measure in that stage (renovisorissues #53); a measure whose main subject cannot
+        be determined is an engine failure (exit 3), never a guess.
+
+        Args:
+            parsed: The parsed parameter block.
+            stages: The plan.
+            mapping: The stages' merged subject map.
+
+        Returns:
+            The resolved quotes, in file order.
+
+        Raises:
+            StagedEvaluationError: Carrying one problem row per quote that does not fit the plan.
+            MainSubjectError: When a quote's main subject cannot be determined.
+        """
+        quotes = parsed.investment_overrides
+        if not quotes:
+            return ()
+        carried = cls.carried_out_by_stage(stages)
+        problems = StagedParameters.check_quotes(
+            quotes, carried, tuple(MeasureSubjects.COSTLESS), CatalogueTable.ids()
+        )
+        resolved: List[InvestmentOverride] = []
+        for quote in quotes:
+            entry_path = f"{StagedParameters.OVERRIDE_ENTRY_PATH}[{quote.position}]"
+            if any(problem.path.startswith(entry_path) for problem in problems):
+                continue
+            subjects: Dict[str, Optional[ComponentType]] = {
+                facts.subject: facts.facts.asset_class
+                for facts in stages[quote.stage].inputs.cost_facts
+                if mapping.measure_ids.get(facts.subject) == quote.measure_id
+            }
+            if mapping.measure_ids.get(quote.measure_id) == quote.measure_id and quote.measure_id not in subjects:
+                subjects[quote.measure_id] = None  # a measure-only subject: no cost facts in any stage
+            main_subject, others = MainSubjects.resolve(quote.measure_id, quote.stage, subjects)
+            charged = StagedEvaluator.charged_subjects(stages, quote.stage)
+            if subjects.get(main_subject) is not None and main_subject not in charged:
+                code_path = f"{StagedParameters.OVERRIDE_ENTRY_PATH}.{ParameterKeys.OVERRIDE_MEASURE_ID}"
+                problems.append(
+                    ParameterProblem(
+                        path=f"{entry_path}.{ParameterKeys.OVERRIDE_MEASURE_ID}",
+                        code=ParameterProblemCodes.NOT_IN_STAGE.format(path=code_path),
+                        message=f"stage {quote.stage} buys nothing for {quote.measure_id!r}: its subject "
+                        f"{main_subject!r} is carried over from the stage before, so there is no purchase a "
+                        "quote could price.",
+                    )
+                )
+                continue
+            resolved.append(
+                InvestmentOverride(
+                    stage=quote.stage,
+                    measure_id=quote.measure_id,
+                    amount_in_euro=quote.amount_in_euro,
+                    source=quote.source,
+                    main_subject=main_subject,
+                    other_subjects=others,
+                )
+            )
+        if problems:
+            raise StagedEvaluationError(
+                cls.QUOTES_REFUSED_MESSAGE.format(count=len(problems)), [problem.to_json() for problem in problems]
+            )
+        return tuple(resolved)
+
     #: The code a refusal about the plan as a whole is published under — a missing input file,
     #: years that run backwards, a stage with no mapping report. A refused *parameter* block
     #: carries its own per-key codes instead (``parameters.<key>.invalid`` and the rest).
@@ -1426,15 +1537,21 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         return StagedCli.ENGINE_FAILED
 
     try:
-        result = StagedEvaluator(database).evaluate(
-            stages, parameters, perspective, catalog, plan_start_year=parsed.plan_start_year
-        )
         mapping = StagedCli.read_mapping(directories, args.stage)
+        overrides = StagedCli.investment_overrides(parsed, stages, mapping)
+        result = StagedEvaluator(database).evaluate(
+            stages,
+            parameters,
+            perspective,
+            catalog,
+            plan_start_year=parsed.plan_start_year,
+            investment_overrides=overrides,
+        )
     except StagedEvaluationError as error:
         path = StagedCli.write_problems(args.out, error)
         print(f"{error} (problems written to {path})", file=sys.stderr)
         return StagedCli.PLAN_REFUSED
-    except (UnresolvableSubjectsError, CostDataError, StagedEngineError, StatedPriceError) as error:
+    except (UnresolvableSubjectsError, CostDataError, StagedEngineError, StatedPriceError, MainSubjectError) as error:
         # A stated price the evaluator's own checks let through and the calculator then refused
         # (`StatedPriceError`) is the engine disagreeing with itself, like a `StagedEngineError`.
         print(str(error), file=sys.stderr)
@@ -1577,7 +1694,11 @@ def main(argv=None) -> int:
             + "The price basis year likewise. `plan_start_year` is the calendar year of the plan's "
             + "year 0: the document's calendar years count from it, and are null without it. "
             + "`energy_prices` states year-1 prices per carrier "
-            + "(working price all-in, carbon included). `weather_year`, `subsidy_catalog` and "
+            + "(working price all-in, carbon included). `investment_overrides` states the reader's "
+            + 'quotes, [{"stage", "measure_id", "amount_in_euro", "source"}], each replacing the '
+            + "year-0 investment of the measure's main subject in that stage, booked exactly as "
+            + "stated in the stage's year (never escalated). "
+            + "`weather_year`, `subsidy_catalog` and "
             + "`origins` are accepted and ignored."
         ),
     )

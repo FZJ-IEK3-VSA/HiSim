@@ -759,3 +759,92 @@ class TestTheBackendsStageLayout:
         }
         assert backend_document["plan"]["totals"]["npv_in_euro"] == document["plan"]["totals"]["npv_in_euro"]
         assert backend_document["reference"]["totals"]["npv_in_euro"] == document["reference"]["totals"]["npv_in_euro"]
+
+
+class TestTheReadersQuote:
+    """The mockup's package re-priced with a heat-pump quote, with no new simulation (#53, #54).
+
+    The package is stage 1; its heating_system installs an air-source heat pump and the buffer
+    beside it, and its hot_water_tank_and_pipe_insulation is a measure HiSim holds no price for.
+    """
+
+    QUOTE = 11800.0
+    LAGGING = "hot_water_tank_and_pipe_insulation"
+    LAGGING_QUOTE = 450.0
+
+    @pytest.fixture(name="quoted_document", scope="class")
+    def fixture_quoted_document(self, runs) -> Dict[str, Any]:
+        """The two-stage plan priced with a quote for the heat pump and one for the lagging."""
+        directory, baseline, package = runs
+        block = {
+            **STAGED_PARAMETERS,
+            "investment_overrides": [
+                {"stage": 1, "measure_id": "heating_system", "amount_in_euro": self.QUOTE, "source": "installer"},
+                {"stage": 1, "measure_id": self.LAGGING, "amount_in_euro": self.LAGGING_QUOTE, "source": "plumber"},
+            ],
+        }
+        path = directory / "economics_quoted.json"
+        path.write_text(json.dumps(block), encoding="utf-8")
+        return _price(
+            [f"{baseline}:0:baseline", f"{package}:0:package"], path, directory / "quoted" / StagedDocument.FILE_NAME
+        )
+
+    def test_the_heat_pump_is_bought_at_the_quote(self, quoted_document) -> None:
+        """The generator's year-0 investment is the quote, and the row says whose it is."""
+        StagedDocument.validate(quoted_document)
+        heat_pumps = [row for row in quoted_document["plan"]["by_subject"] if row["asset_class"] == "HeatPump"]
+        assert len(heat_pumps) == 1, heat_pumps
+        row = heat_pumps[0]
+        assert row["investment_in_euro"]["best"] == pytest.approx(self.QUOTE)
+        assert (row["investment_origin"], row["investment_source"]) == ("reader_quote", "installer")
+
+    def test_the_rest_of_the_heating_job_is_within_the_quote(self, quoted_document, document) -> None:
+        """Every other subject of heating_system is bought at zero and still replaced as before."""
+        quoted = {row["subject"]: row for row in quoted_document["plan"]["by_subject"]}
+        plain = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        others = [
+            subject
+            for subject, row in quoted.items()
+            if row["measure_id"] == "heating_system" and row["asset_class"] != "HeatPump"
+        ]
+        for subject in others:
+            assert quoted[subject]["investment_origin"] == "included_in_reader_quote", quoted[subject]
+            assert quoted[subject]["investment_in_euro"]["best"] == pytest.approx(0.0)
+            assert quoted[subject]["replacement_years"] == plain[subject]["replacement_years"]
+            assert quoted[subject]["service_life_years"] == plain[subject]["service_life_years"]
+
+    def test_the_lagging_is_priced_by_its_quote(self, quoted_document, document) -> None:
+        """Unpriced without a quote, priced with one."""
+        plain = {row["subject"]: row for row in document["plan"]["by_subject"]}[self.LAGGING]
+        quoted = {row["subject"]: row for row in quoted_document["plan"]["by_subject"]}[self.LAGGING]
+        assert plain["unpriced"] is True
+        assert quoted["unpriced"] is False
+        assert quoted["investment_in_euro"]["best"] == pytest.approx(self.LAGGING_QUOTE)
+        assert quoted["investment_origin"] == "reader_quote"
+
+    def test_the_quotes_are_echoed(self, quoted_document) -> None:
+        """The block states the quotes the plan was priced with."""
+        assert [
+            (quote["stage"], quote["measure_id"], quote["amount_in_euro"])
+            for quote in quoted_document["parameters"]["investment_overrides"]
+        ] == [(1, "heating_system", self.QUOTE), (1, self.LAGGING, self.LAGGING_QUOTE)]
+
+    def test_the_lump_sum_grants_do_not_follow_the_quote(self, quoted_document) -> None:
+        """The heat-pump grant of SEAI is a fixed 6,500 EUR, quote or not."""
+        awarded = {
+            row["scheme"]: row for row in quoted_document["plan"]["subsidies"] if row["status"] == "awarded"
+        }
+        assert awarded["IE_SEAI_HEAT_PUMP_UNIT_HOUSE"]["amount_in_euro"]["best"] == pytest.approx(-6500.0)
+
+    def test_every_subsidy_row_states_its_cap(self, quoted_document) -> None:
+        """Undetermined rows included: the most the scheme can pay, as a credit (#54)."""
+        rows = quoted_document["plan"]["subsidies"]
+        assert rows
+        for row in rows:
+            assert row["max_amount_in_euro"] is not None, row
+            assert row["max_amount_in_euro"]["best"] <= 0.0
+        # A soft loan pays no grant of its own (HEULS has no repayment grant), so its cap is zero;
+        # every other open question is worth something.
+        undetermined = [row for row in rows if row["status"] == "undetermined" and row["scheme"] != "IE_HEULS_LOAN"]
+        assert undetermined
+        assert all(row["max_amount_in_euro"]["best"] < 0.0 for row in undetermined), undetermined

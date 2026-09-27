@@ -162,9 +162,16 @@ def build_input_audit(
             entry = database.get_device_entry(facts.asset_class, year, parameters.country)
         except CostDataError:
             flags.append("no database entry")
-        if facts.investment_cost_override_in_euro is not None:
+        # A stated purchase price (a reader's quote) wins over the investment override, as it does
+        # in the engine: it is what the year-0 purchase was priced at.
+        stated = (
+            facts.purchase_cost_override_in_euro
+            if facts.purchase_cost_override_in_euro is not None
+            else facts.investment_cost_override_in_euro
+        )
+        if stated is not None:
             origin_kind = OriginKind.ORIGIN_OVERRIDE
-            unit_price: Optional[UncertainValue] = facts.investment_cost_override_in_euro
+            unit_price: Optional[UncertainValue] = stated
             if not facts.override_source:
                 flags.append("override without source")
         elif entry is not None:

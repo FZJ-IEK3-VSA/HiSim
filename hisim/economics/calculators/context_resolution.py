@@ -117,6 +117,55 @@ class DeviceCosting:
     energy_related_cost_share: UncertainValue
     anyway_threshold_years: float
     replaced_asset: Optional[ExistingAsset] = None
+    #: The whole year-0 purchase as the facts state it (`purchase_cost_override_in_euro`, a
+    #: reader's quote), or None when the purchase is priced from its building blocks. It replaces
+    #: device, installation, planning and removal *of this purchase only*: replacements, the
+    #: residual of a replacement and the maintenance base stay `gross_investment`.
+    purchase_override: Optional[UncertainValue] = None
+
+    def purchase_blocks(self) -> Tuple[UncertainValue, UncertainValue, UncertainValue]:
+        """The year-0 purchase as ``(investment, planning, removal)``, the three year-0 categories.
+
+        Without a stated purchase price these are the building blocks themselves, exactly as the
+        investment schedule and the subsidies read them. A stated price (a reader's quote,
+        renovisorissues #53) covers the whole job, so it is split over the three in the
+        proportions the database's own blocks have in the best-estimate slot: every consumer then
+        sees the quote in total, and a scheme that funds planning alone still sees a planning
+        share. When the database's blocks sum to nothing -- a subject whose request carried no
+        price -- the whole quote is investment.
+
+        Returns:
+            The investment (device plus installation), planning and removal bands of the purchase.
+        """
+        investment = self.device_cost + self.installation_cost
+        if self.purchase_override is None:
+            return investment, self.planning_cost, self.removal_cost_of_replaced
+        total = (
+            investment.best_estimate
+            + self.planning_cost.best_estimate
+            + self.removal_cost_of_replaced.best_estimate
+        )
+        if total <= 0.0:
+            zero = UncertainValue.exact(0.0)
+            return self.purchase_override, zero, zero
+        return (
+            self.purchase_override.scale(investment.best_estimate / total),
+            self.purchase_override.scale(self.planning_cost.best_estimate / total),
+            self.purchase_override.scale(self.removal_cost_of_replaced.best_estimate / total),
+        )
+
+    @property
+    def purchased_gross(self) -> UncertainValue:
+        """The gross investment of the year-0 purchase: investment plus planning, removal excluded.
+
+        ``gross_investment`` without a stated purchase price; with one, the quote less its removal
+        share (:meth:`purchase_blocks`). It is what the year-0 purchase is written down from and
+        what a coupled-cost anyway credit is a share of.
+        """
+        if self.purchase_override is None:
+            return self.gross_investment
+        investment, planning, _removal = self.purchase_blocks()
+        return investment + planning
 
     @property
     def gross_investment(self) -> UncertainValue:
@@ -401,6 +450,9 @@ def resolve_device(
         assert resolved is not None
         service_life = resolved.entry.service_life_in_years
         provenance_ids.append(resolved.provenance_id("service_life_in_years"))
+    purchase_override = facts.purchase_cost_override_in_euro
+    if purchase_override is not None:
+        provenance_ids.append(override_record("purchase_cost_override_in_euro", purchase_override))
     if facts.embodied_co2_override_in_kg is not None:
         embodied_co2 = facts.embodied_co2_override_in_kg
     elif entry is not None:
@@ -468,6 +520,7 @@ def resolve_device(
             else parameters.anyway_threshold_years
         ),
         replaced_asset=replaced_asset,
+        purchase_override=purchase_override,
     )
 
 

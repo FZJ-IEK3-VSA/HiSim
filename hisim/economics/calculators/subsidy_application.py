@@ -144,15 +144,19 @@ def build_subsidy_flows(
     result = SubsidyApplicationResult()
     if subsidy_catalog is None:
         return result
+    # A stated purchase price (a reader's quote, renovisorissues #53) is the whole job, so a
+    # scheme's eligible cost sees it, split over the categories as the purchase itself is.
+    investment, planning, removal = costing.purchase_blocks()
+    cost_by_category = {
+        CostCategory.INVESTMENT: investment,
+        CostCategory.PLANNING: planning,
+        CostCategory.REMOVAL: removal,
+    }
     measure = MeasureForSubsidy(
         subject=costing.subject,
         facts=costing.facts,
         measure_kind="REPLACE" if costing.replaced_asset is not None else "INSTALL",
-        cost_by_category={
-            CostCategory.INVESTMENT: costing.device_cost + costing.installation_cost,
-            CostCategory.PLANNING: costing.planning_cost,
-            CostCategory.REMOVAL: costing.removal_cost_of_replaced,
-        },
+        cost_by_category=cost_by_category,
         vat_rate=costing.vat_rate,
     )
     energy_sold: Dict[EnergyCarrier, float] = measure.annual_energy_sold_in_kwh

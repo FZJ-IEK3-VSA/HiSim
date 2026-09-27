@@ -36,7 +36,7 @@ a reviewed constant of :mod:`hisim.renovisor.constants`.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
 from hisim.economics.adapter import FactsExtractors
 from hisim.economics.bridge import EconomicContext
@@ -44,7 +44,12 @@ from hisim.economics.calculators.context_resolution import ContextResolutionCons
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import SubjectCostFacts, effective_price_basis_year
-from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
+from hisim.economics.facts import (
+    ComponentCostFacts,
+    ExistingAsset,
+    ExistingAssetRegister,
+    InstallationYearOrigin,
+)
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.subsidies import (
     ApplicantActor,
@@ -57,9 +62,10 @@ from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
 from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
+from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import House, Measure, Request
 from hisim.renovisor.simulation import SimulationSetup
-from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
+from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError
 
 
@@ -405,6 +411,136 @@ class RealizedTwin:
         return None
 
 
+class MeasureSubjects:
+    """The measures that carry out something the cost engine prices no subject for.
+
+    Every measure a stage acts on must have a row in ``economics_result.json``'s ``by_subject``,
+    which is where the frontend reads what the work costs (owner decision of 2026-09-26,
+    renovisorissues #58). An envelope measure creates a cost subject named by its id, a device
+    measure the component it installs. Two measures create neither: changing the room set point
+    buys nothing, and lagging the hot-water cylinder changes a coefficient of a vessel the house
+    keeps. Each is declared here, and gets a subject named by its id, as an envelope measure's
+    is: :attr:`COSTLESS` ones are priced at a real zero, :attr:`UNPRICED` ones are flagged
+    unpriced, and each carries the sentence its row's ``note`` says.
+
+    Anything else a stage acts on without a subject fails the translation
+    (:meth:`assert_every_measure_has_subject`): the next measure that needs one fails a test, not
+    a reader.
+    """
+
+    #: The statuses of a measure the translation acts on -- the ones a stage's ``measures`` list
+    #: carries; defined once, on the mapping report.
+    ACTED_ON: ClassVar[Tuple[ReportStatus, ...]] = MappingReport.ACTED_ON_STATUSES
+
+    #: Measures that cost nothing to carry out -> the note their row carries.
+    COSTLESS: ClassVar[Dict[str, str]] = {
+        "change_room_temperature": (
+            "a setting, not a purchase: changing the room set point costs nothing to carry out, and "
+            "its effect is in the energy bill"
+        ),
+    }
+
+    #: Measures HiSim holds no price for and the request cannot price yet -> the note their row
+    #: carries.
+    UNPRICED: ClassVar[Dict[str, str]] = {
+        "hot_water_tank_and_pipe_insulation": (
+            "HiSim holds no price for lagging a hot-water cylinder and its pipes, and the request's "
+            "cost block cannot carry one yet (HiSim hisim-5j3h, renovisorissues #39), so the measure "
+            "is in the plan unpriced: its investment is unknown, not zero"
+        ),
+    }
+
+    #: What the translation refuses with when a measure it acts on has no subject.
+    MISSING_MESSAGE: ClassVar[str] = (
+        "the package acts on {measures}, but no cost subject stands for {them}: economics_result.json "
+        "would have no by_subject row for {them}, so the plan's cost would silently leave {them} out. "
+        "A measure the engine prices no subject for must be declared in MeasureSubjects.COSTLESS or "
+        "MeasureSubjects.UNPRICED (hisim/renovisor/economics.py), with the note its row carries"
+    )
+
+    @classmethod
+    def acted_on(cls, applied: Any) -> List[str]:
+        """The ids of the measures the package acts on, in package order."""
+        return [line.id for line in applied.measures if line.status in cls.ACTED_ON]
+
+    @classmethod
+    def record(cls, applied: Any, result: "EconomicContextResult") -> None:
+        """Give every declared measure the package acts on its own subject, flag and note.
+
+        Args:
+            applied: The applied package.
+            result: The result being assembled; its ``subjects``, ``unpriced_subjects``,
+                ``costless_subjects`` and ``subject_notes`` are extended.
+        """
+        cls.declare(
+            cls.acted_on(applied),
+            result.subjects,
+            unpriced=result.unpriced_subjects,
+            costless=result.costless_subjects,
+            notes=result.subject_notes,
+        )
+
+    @classmethod
+    def declare(
+        cls,
+        measure_ids: Iterable[str],
+        subjects: Dict[str, Optional[str]],
+        unpriced: List[str],
+        costless: List[str],
+        notes: Dict[str, str],
+    ) -> None:
+        """Sort acted-on measures into the costless and the unpriced ones, each with its note.
+
+        The one place the declarations become subjects: the translator calls it through
+        :meth:`record`, and the staged command calls it for a mapping report written before
+        renovisorissues #58, which is what a re-translation of that stage would write. A measure
+        that already stands for a subject, or that is not declared, is left alone.
+
+        Args:
+            measure_ids: The ids of the measures acted on.
+            subjects: Subject -> measure; a declared measure gets a subject named by its id.
+            unpriced: The unpriced subjects; extended in place.
+            costless: The costless subjects; extended in place.
+            notes: Subject -> note; a note already there is kept.
+        """
+        for measure_id in measure_ids:
+            if measure_id in subjects.values():
+                continue
+            if measure_id in cls.COSTLESS:
+                flagged, note = costless, cls.COSTLESS[measure_id]
+            elif measure_id in cls.UNPRICED:
+                flagged, note = unpriced, cls.UNPRICED[measure_id]
+            else:
+                continue
+            subjects[measure_id] = measure_id
+            if measure_id not in flagged:
+                flagged.append(measure_id)
+            notes.setdefault(measure_id, note)
+
+    @classmethod
+    def assert_every_measure_has_subject(cls, applied: Any, result: "EconomicContextResult") -> None:
+        """Refuse a translation in which a measure it acts on stands for no cost subject.
+
+        Called by the translator once the context is built, with every twin in hand; a unit test
+        that builds the context without the twins is not asked.
+
+        Args:
+            applied: The applied package.
+            result: The built context and its maps.
+
+        Raises:
+            TranslatorError: Naming every measure without a subject.
+        """
+        named = set(result.subjects.values())
+        missing = [measure_id for measure_id in cls.acted_on(applied) if measure_id not in named]
+        if missing:
+            raise TranslatorError(
+                cls.MISSING_MESSAGE.format(
+                    measures=", ".join(missing), them="it" if len(missing) == 1 else "them"
+                )
+            )
+
+
 class UnknownAge:
     """How old an existing device is when the request does not say: half-way through its life.
 
@@ -595,6 +731,12 @@ class EconomicContextResult:
             subject that was already there.
         unpriced_subjects: The subjects in the context with no price behind them, in the order
             the package added them.
+        costless_subjects: The subjects of measures that cost nothing to carry out
+            (:attr:`MeasureSubjects.COSTLESS`); like the unpriced subjects of
+            :attr:`MeasureSubjects.UNPRICED` they are in no cost facts of the context, and the
+            result document gives each a zero row of its own.
+        subject_notes: Subject -> the sentence its row of the result document carries as
+            ``note``: why an unpriced subject has no price, why a costless one costs nothing.
         defaults: One ``(request path, value, sentence)`` per request leaf the builder had to
             default, so the mapping report can state it with the value it used. Nothing the
             builder does is silent.
@@ -614,6 +756,8 @@ class EconomicContextResult:
     context: EconomicContext
     subjects: Dict[str, Optional[str]] = field(default_factory=dict)
     unpriced_subjects: List[str] = field(default_factory=list)
+    costless_subjects: List[str] = field(default_factory=list)
+    subject_notes: Dict[str, str] = field(default_factory=dict)
     defaults: List[Tuple[str, Any, str]] = field(default_factory=list)
     approximations: List[Tuple[str, Any, str]] = field(default_factory=list)
     unread: List[Tuple[str, Any, str]] = field(default_factory=list)
@@ -920,6 +1064,7 @@ class EconomicContextBuilder:
             heated_floor_area_in_m2=self._floor_area(),
         )
         self._record_device_subjects(result)
+        MeasureSubjects.record(self._applied, result)
         return result
 
     # ------------------------------------------------------------------ the stated leaves
@@ -1067,6 +1212,9 @@ class EconomicContextBuilder:
             is_functional=True,
             energy_carrier=carrier,
             replaced_by_asset_classes=replaced,
+            installation_year_origin=self._year_origin(
+                self._raw_original.get("heating"), InstallationYearOrigin.MID_LIFE_DEFAULT
+            ),
         )
 
     def _generator_size(self, result: EconomicContextResult) -> float:
@@ -1175,6 +1323,7 @@ class EconomicContextBuilder:
                     replaced_by_asset_classes=(
                         [device.asset_class] if device.measure_id in self._measure_ids else []
                     ),
+                    installation_year_origin=self._year_origin(block, InstallationYearOrigin.MID_LIFE_DEFAULT),
                 )
             )
         return assets
@@ -1243,7 +1392,8 @@ class EconomicContextBuilder:
                     replaced = [successor[1].asset_class]
                 else:
                     removed = self.EQUIPMENT_REMOVED_NOTE.format(measure=equipment.measure_id)
-            stated = self._stated_year(self._raw_original.get(equipment.dated_by)) if equipment.dated_by else None
+            block = self._raw_original.get(equipment.dated_by) if equipment.dated_by else None
+            stated = self._stated_year(block)
             if stated is not None:
                 year = stated
                 dated = f"house.{equipment.dated_by}.{self.INSTALLATION_YEAR_KEY} as the request states it"
@@ -1259,6 +1409,7 @@ class EconomicContextBuilder:
                     installation_year=year,
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
+                    installation_year_origin=self._year_origin(block, InstallationYearOrigin.MID_LIFE_DEFAULT),
                 )
             )
             if result is not None:
@@ -1312,6 +1463,9 @@ class EconomicContextBuilder:
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
                     anyway_share=share,
+                    installation_year_origin=self._year_origin(
+                        self._raw_element(element), InstallationYearOrigin.CONSTRUCTION_YEAR_DEFAULT
+                    ),
                 )
             )
         return assets
@@ -1399,6 +1553,7 @@ class EconomicContextBuilder:
         result.subjects[measure_id] = measure_id
         if price is None or area is None:
             result.unpriced_subjects.append(measure_id)
+            result.subject_notes[measure_id] = self.UNPRICED_NOTE
             unpriced = True
             investment = UncertainValue.exact(0.0)
         else:
@@ -1700,6 +1855,20 @@ class EconomicContextBuilder:
         if result is not None:
             result.defaults.append((path, year, self.INSTALLATION_YEAR_NOTE))
         return year
+
+    @classmethod
+    def _year_origin(cls, block: Any, default: InstallationYearOrigin) -> InstallationYearOrigin:
+        """Where the installation year the register records for one block came from.
+
+        Args:
+            block: The raw block the year is read from, as :meth:`_stated_year` reads it.
+            default: What stands in when the block states none: the mid-life year of a device,
+                the construction year of an envelope element.
+
+        Returns:
+            ``REQUEST`` for a stated year, ``default`` otherwise.
+        """
+        return InstallationYearOrigin.REQUEST if cls._stated_year(block) is not None else default
 
     @classmethod
     def _stated_year(cls, block: Any) -> Optional[int]:

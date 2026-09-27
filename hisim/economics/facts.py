@@ -443,6 +443,30 @@ class BillingDeterminants:
         )
 
 
+class InstallationYearOrigin(str, enum.Enum):
+    """Where an installation year came from, as ``economics_result.json`` states it (schema 5).
+
+    The engine reads an existing asset's age off its installation year -- the replacement it is
+    due, the book value a measure writes off -- and a reader of a replacement in year 2 needs to
+    know whether that year was stated or assumed (renovisorissues #58). The value is the
+    document's spelling, which is why the members are lower-case strings.
+
+    ``REQUEST`` is a year the request states. ``MID_LIFE_DEFAULT`` is the mid-life year the
+    RenoVisor translator assumes for an undated device (price basis year less half its service
+    life, never before the construction year; ``hisim.renovisor.economics.UnknownAge``), and
+    ``CONSTRUCTION_YEAR_DEFAULT`` the construction year an undated envelope element takes.
+    ``STAGE`` is not a value a request's register states: it is what the document says of a
+    subject a stage of the plan bought, installed in the calendar year that stage starts in. The
+    staging machinery writes it into the aged register it hands a later stage
+    (``hisim.economics.staged``), so it is read back off a register there.
+    """
+
+    REQUEST = "request"
+    MID_LIFE_DEFAULT = "mid_life_default"
+    CONSTRUCTION_YEAR_DEFAULT = "construction_year_default"
+    STAGE = "stage"
+
+
 @dataclass
 class ExistingAsset:
     """An asset already installed in the building (brownfield register, §4.1).
@@ -489,15 +513,21 @@ class ExistingAsset:
     #: against it credits money nobody would ever have spent. The default keeps the historical
     #: behaviour, so every register written before this field existed is unchanged.
     anyway_share: float = 1.0
+    #: Where `installation_year` came from, which the arithmetic never reads and the result
+    #: document publishes beside the year (schema 5). `None` for a register whose author did not
+    #: say, which is every register written before the field existed.
+    installation_year_origin: Optional[InstallationYearOrigin] = None
 
     def __post_init__(self) -> None:
         """Validation: normalizes the replacement-cost override and rejects impossible inputs.
 
         Raises:
-            ValueError: If the size is not finite and greater than zero, or if `anyway_share` is
+            ValueError: If the size is not finite and greater than zero, if `anyway_share` is
                 outside `(0, 1]` — a share of zero is spelled by not declaring the asset as
                 replaced at all, and a share above one would credit the renovation with more than
-                the measure costs.
+                the measure costs — or if `installation_year_origin` is neither `None` nor an
+                `InstallationYearOrigin` (a bare string would fail only when the document is
+                written).
         """
         self.replacement_cost_override_in_euro = _coerce_uncertain(self.replacement_cost_override_in_euro)
         if self.size <= 0 or not math.isfinite(self.size):
@@ -507,6 +537,13 @@ class ExistingAsset:
                 f"ExistingAsset.anyway_share must be in (0, 1], got {self.anyway_share!r} for "
                 f"{self.asset_class.value}: it is the share of the new measure's cost the "
                 "counterfactual would truly have spent (§4.1)."
+            )
+        if self.installation_year_origin is not None and not isinstance(
+            self.installation_year_origin, InstallationYearOrigin
+        ):
+            raise ValueError(
+                f"ExistingAsset.installation_year_origin must be None or an InstallationYearOrigin, got "
+                f"{self.installation_year_origin!r} for {self.asset_class.value}."
             )
 
     def age_in_years(self, reference_year: int) -> int:

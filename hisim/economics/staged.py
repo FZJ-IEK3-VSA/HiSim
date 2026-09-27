@@ -38,11 +38,13 @@ decisions), which wins where the two disagree.
 
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim import log
 from hisim.economics.calculators.aggregation import aggregate_timeline
+from hisim.economics.calculators.context_resolution import installation_verdict
 from hisim.economics.calculators.energy import (
     StatedPrices,
     priced_contract,
@@ -54,7 +56,12 @@ from hisim.economics.calculators.reserve import replacement_reserve_amount
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, effective_price_basis_year
-from hisim.economics.facts import ComponentCostFacts, ExistingAsset, ExistingAssetRegister
+from hisim.economics.facts import (
+    ComponentCostFacts,
+    ExistingAsset,
+    ExistingAssetRegister,
+    InstallationYearOrigin,
+)
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective, SubsidyMode
 from hisim.economics.provenance import ProvenanceLedger
@@ -240,6 +247,46 @@ class _StageCharges:
         return (1.0 + self.rates.get(subject, self.default_rate)) ** from_year
 
 
+class LifeOrigin(str, enum.Enum):
+    """Where a subject's service life came from, as ``economics_result.json`` states it (schema 5).
+
+    ``REQUEST`` is a ``lifetime_override_in_years`` on the subject's cost facts -- the lifetime
+    the calculation's own inputs state -- and ``COST_DATABASE`` the ``service_life_in_years`` of
+    the cost database's entry for the asset class at the plan's price basis year. The chain is the
+    engine's own (``calculators/context_resolution.py``): an override wins.
+    """
+
+    REQUEST = "request"
+    COST_DATABASE = "cost_database"
+
+
+@dataclass(frozen=True)
+class SubjectLife:
+    """The lifetime and the age one evaluation priced a cost subject with.
+
+    What a reader needs to follow a replacement year on the document: the service life the
+    engine used and where it came from, and the year the subject counts as installed and where
+    that came from (renovisorissues #58). Nothing here is a second calculation: the life is read
+    by the chain the engine prices with (:meth:`StagedEvaluator._service_life`), and the year is
+    the register entry the engine ages a kept subject from, or the start of the stage that bought
+    it.
+
+    Attributes:
+        service_life_years: The service life, in years.
+        service_life_origin: Where it came from.
+        installation_year: The calendar year the subject counts as installed in: a kept asset's
+            register year, or ``simulation_year + from_year`` of the stage that bought it (the
+            year :meth:`StagedEvaluator._staged_inputs` ages a bought subject from).
+        installation_year_origin: Where that year came from; ``None`` for a register entry whose
+            author did not say (a register written before the field existed).
+    """
+
+    service_life_years: float
+    service_life_origin: LifeOrigin
+    installation_year: int
+    installation_year_origin: Optional[InstallationYearOrigin]
+
+
 @dataclass(frozen=True)
 class Stage:
     """One state of the house, the year the plan puts it in, and what got it there.
@@ -323,6 +370,9 @@ class StagedResult:
             result assembled by hand.
         price_basis_year_origin: :attr:`EchoOrigin.PLAN_START_YEAR` when the plan's start year
             supplied the price basis year because nothing else stated one; ``None`` otherwise.
+        lives_by_stage: For each stage, in stage order, the :class:`SubjectLife` of every cost
+            subject of its evaluation (renovisorissues #58). Empty for a result assembled by hand,
+            whose document then states no lifetime and no installation year.
     """
 
     reference: LifecycleCostResult
@@ -338,6 +388,7 @@ class StagedResult:
     plan_start_year: Optional[int] = None
     price_basis_year: Optional[int] = None
     price_basis_year_origin: Optional[EchoOrigin] = None
+    lives_by_stage: Tuple[Dict[str, SubjectLife], ...] = field(default_factory=tuple)
 
     @property
     def ledger(self) -> Optional[ProvenanceLedger]:
@@ -396,6 +447,33 @@ class StagedResult:
             if subject in charged:
                 found = index
         return found
+
+    def life_of(self, subject: str, staged: bool) -> Optional[SubjectLife]:
+        """The lifetime and age one subject was priced with, on the reference or on the plan.
+
+        The reference is stage 0's evaluation. On the plan a subject is read off the stage that
+        last charged it (:meth:`stage_of_subject`) -- the stage whose purchase the plan keeps --
+        and failing that off the last stage that has it at all.
+
+        Args:
+            subject: The cost subject.
+            staged: Whether the plan rather than the reference is asked about.
+
+        Returns:
+            The :class:`SubjectLife`, or ``None`` for a subject no stage prices as a device (a
+            carrier, a synthetic subject) or a result without lives.
+        """
+        if not self.lives_by_stage:
+            return None
+        if not staged:
+            return self.lives_by_stage[0].get(subject)
+        stage = self.stage_of_subject(subject)
+        if stage is not None and subject in self.lives_by_stage[stage]:
+            return self.lives_by_stage[stage][subject]
+        for lives in reversed(self.lives_by_stage):
+            if subject in lives:
+                return lives[subject]
+        return None
 
 
 class StagedEvaluator:
@@ -543,11 +621,17 @@ class StagedEvaluator:
         ledger = ProvenanceLedger()
         per_stage: List[LifecycleCostResult] = []
         charged_by_stage: List[Dict[str, float]] = []
-        for index in range(len(ordered)):
+        lives_by_stage: List[Dict[str, SubjectLife]] = []
+        for index, stage in enumerate(ordered):
             charged = self._charged_subjects(ordered, index)
             inputs = self._staged_inputs(ordered, index, charged_by_stage)
             per_stage.append(evaluator.evaluate(inputs, perspective, ledger))
             charged_by_stage.append(charged)
+            lives_by_stage.append(
+                self._subject_lives(
+                    inputs, stage.from_year, index, charged, perspective, parameters, price_basis_year
+                )
+            )
 
         spliced = self._splice(
             ordered, tuple(per_stage), tuple(charged_by_stage), evaluator, parameters, active_by_year
@@ -570,6 +654,7 @@ class StagedEvaluator:
             plan_start_year=plan_start_year,
             price_basis_year=price_basis_year,
             price_basis_year_origin=basis_year_origin,
+            lives_by_stage=tuple(lives_by_stage),
         )
 
     #: How a catalogue is named in the document: the country it applies to and the date the
@@ -1145,6 +1230,7 @@ class StagedEvaluator:
                         if subject not in facts_by_subject and facts.asset_class in newly_charged_classes
                         else []
                     ),
+                    installation_year_origin=InstallationYearOrigin.STAGE,
                 )
         assets = [
             asset
@@ -1413,7 +1499,7 @@ class StagedEvaluator:
             if facts is None:
                 continue
             year = last_install[subject]
-            life = self._service_life(facts, price_basis_year, parameters)
+            life, _origin = self._service_life(facts, price_basis_year, parameters)
             fraction = InvestmentDating.residual_fraction(year, life, horizon)
             if fraction <= 0.0:
                 continue
@@ -1440,8 +1526,8 @@ class StagedEvaluator:
 
     def _service_life(
         self, facts: ComponentCostFacts, price_basis_year: int, parameters: EconomicParameters
-    ) -> float:
-        """One subject's service life in years, by the same chain the engine's pricing uses.
+    ) -> Tuple[float, LifeOrigin]:
+        """One subject's service life in years and where it came from, by the engine's chain.
 
         An explicit ``lifetime_override_in_years`` wins, exactly as it does in
         ``calculators/context_resolution.py``; otherwise the cost database's entry for the
@@ -1455,15 +1541,69 @@ class StagedEvaluator:
             parameters: The assumptions, for the country whose device file is read.
 
         Returns:
-            The service life in years.
+            ``(years, origin)``: the service life, and :attr:`LifeOrigin.REQUEST` for the override
+            or :attr:`LifeOrigin.COST_DATABASE` for the database's entry -- decided in the same
+            branch that picks the number, so the two cannot disagree.
 
         Raises:
             hisim.economics.database.CostDataError: If neither source states one.
         """
         if facts.lifetime_override_in_years is not None:
-            return float(facts.lifetime_override_in_years)
+            return float(facts.lifetime_override_in_years), LifeOrigin.REQUEST
         entry = self.database.get_device_entry(facts.asset_class, price_basis_year, parameters.country)
-        return float(entry.service_life_in_years)
+        return float(entry.service_life_in_years), LifeOrigin.COST_DATABASE
+
+    def _subject_lives(
+        self,
+        inputs: EvaluationInputs,
+        from_year: int,
+        index: int,
+        charged: Mapping[str, float],
+        perspective: Perspective,
+        parameters: EconomicParameters,
+        price_basis_year: int,
+    ) -> Dict[str, SubjectLife]:
+        """The lifetime and installation year of every cost subject one stage is evaluated with.
+
+        The life is :meth:`_service_life`'s, the chain the engine prices with. The year is the
+        start of this stage for a subject the stage buys -- one it charges, when it is not the
+        reference -- and otherwise what the engine's own installation verdict
+        (:func:`~hisim.economics.calculators.context_resolution.installation_verdict`) says: a
+        kept asset's register year, which is the year its replacement is scheduled from, or this
+        stage's start for a subject the register does not hold (bought new in year 0).
+
+        Args:
+            inputs: The stage's inputs, with the ageing register already merged in.
+            from_year: The stage's start year, relative to the horizon.
+            index: The stage's index.
+            charged: What the stage pays for (:meth:`_charged_subjects`).
+            perspective: For the installation context the verdict is taken under.
+            parameters: For the country the database is read for.
+            price_basis_year: The plan's price basis year.
+
+        Returns:
+            Subject -> its :class:`SubjectLife`.
+        """
+        start = inputs.simulation_year + from_year
+        lives: Dict[str, SubjectLife] = {}
+        for subject_facts in inputs.cost_facts:
+            facts = subject_facts.facts
+            year: int = start
+            year_origin: Optional[InstallationYearOrigin] = InstallationYearOrigin.STAGE
+            if index == 0 or subject_facts.subject not in charged:
+                kept = installation_verdict(
+                    facts.asset_class, perspective.installation_context, inputs.existing_assets
+                ).kept_asset
+                if kept is not None:
+                    year, year_origin = kept.installation_year, kept.installation_year_origin
+            service_life_years, service_life_origin = self._service_life(facts, price_basis_year, parameters)
+            lives[subject_facts.subject] = SubjectLife(
+                service_life_years=service_life_years,
+                service_life_origin=service_life_origin,
+                installation_year=year,
+                installation_year_origin=year_origin,
+            )
+        return lives
 
     @staticmethod
     def _active_by_year(stages: Tuple[Stage, ...], horizon: int) -> Tuple[int, ...]:

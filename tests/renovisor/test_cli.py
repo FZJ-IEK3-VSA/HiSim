@@ -109,6 +109,10 @@ class TestExitZero:
             # which of those subjects the request carried no price for.
             "subjects",
             "unpriced_subjects",
+            # A measure without a priced subject still gets its row (renovisorissues #58): the
+            # subjects that cost nothing, and why a row is unpriced or costs nothing.
+            "costless_subjects",
+            "subject_notes",
         }
         assert report["fields"] and all("status" in line for line in report["fields"])
 

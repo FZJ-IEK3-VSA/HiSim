@@ -554,6 +554,15 @@ class TestTheDocument:
         dhw_only = next(value for value in supplies["values"] if value["value"] == "dhw_only")
         assert [(item["when"], item["status"]) for item in dhw_only["conditions"]] == [(oil, "not_implemented_yet")]
         assert "conditions" not in supplies
+        # hisim-vdbp: direct electric heating has no water circuit, so the emitter it still sends is not used.
+        electric = [{"path": "house.heating.type_of_system", "in": ["electric_heating"]}]
+        emitters = {item["value"]: item for item in fields["house.heat_distribution.type_of_system"]["values"]}
+        for emitter in ("surface_heating", "conventional_radiator"):
+            assert emitters[emitter]["conditions"] == [{
+                "when": electric, "status": "not_implemented_yet",
+                "note": "The emitter is not used because direct electric heating has no water circuit.",
+            }]
+        assert "conditions" not in emitters["low_temperature_radiator"]
 
     def test_the_worst_case_pair_is_no_condition(self, document: CapabilityDocument) -> None:
         """usual_refurb stays approximated everywhere; its pair gives no condition anywhere (owner decision)."""
@@ -582,7 +591,7 @@ class TestTheDocument:
                     ]
                     assert any(name.startswith("pair:") for name in holding), condition
                     found.append(condition)
-        assert len(found) == 7
+        assert len(found) == 9
 
     def test_a_term_is_matched_as_the_request_states_it(self) -> None:
         """A leaf the request does not state never matches; a value compares as JSON, so 1 is not true."""

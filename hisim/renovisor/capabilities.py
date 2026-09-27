@@ -919,6 +919,19 @@ class ProbeSet:
             {"heating.type_of_system": "air_source_heat_pump"},
             [{"id": "hot_water_system", "options": {"supply": "separate_heat_pump"}}],
         ),
+        # Direct electric heating has no water circuit, so the emitter the schema still requires is
+        # not used; the two emitters that are otherwise used announce it (low_temperature_radiator
+        # is not_implemented_yet anyway).
+        "pair:surface_heating_on_electric_heating": (
+            {"heating.type_of_system": "electric_heating",
+             "heat_distribution.type_of_system": "surface_heating"},
+            None,
+        ),
+        "pair:conventional_radiator_on_electric_heating": (
+            {"heating.type_of_system": "electric_heating",
+             "heat_distribution.type_of_system": "conventional_radiator"},
+            None,
+        ),
         "pair:postcode": ({}, None),  # the location half is added in :meth:`build`
         # retrofit_status in a band without the variant it selects: Irish detached houses of 2011-
         # (IE.N.SFH.10) have no 002, so usual_refurb falls back to 001, approximated (§5.3 step 3).

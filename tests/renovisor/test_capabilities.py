@@ -78,9 +78,9 @@ EXPECTED_NOT_IMPLEMENTED = {
 
 
 @pytest.fixture(scope="module", name="document")
-def fixture_document() -> CapabilityDocument:
-    """Build the capability document once; every test in this module reads the same probe run."""
-    return CapabilityDocument.build()
+def fixture_document(capability_document: CapabilityDocument) -> CapabilityDocument:
+    """The session's capability document (``conftest.py``); every test reads the same probe run."""
+    return capability_document
 
 
 @pytest.mark.base
@@ -608,10 +608,11 @@ class TestTheDocument:
                              "house.heating.flow_temperature_in_celsius", "pair:x")
 
     def test_two_builds_of_one_state_are_byte_identical(
-        self, document: CapabilityDocument, tmp_path: Path
+        self, document: CapabilityDocument, independent_capability_document: CapabilityDocument, tmp_path: Path
     ) -> None:
         """The backend hashes the file for a strong, immutable ETag; a clock in it would break that (H18)."""
-        second = CapabilityDocument.build()
+        second = independent_capability_document
+        assert second is not document
         first_path = tmp_path / "first.json"
         second_path = tmp_path / "second.json"
 

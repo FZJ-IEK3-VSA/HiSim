@@ -23,6 +23,13 @@ class TestHiSimCommit:
     #: A full-length hash, to check that the three sources end up spelled the same way.
     FULL_HASH = "0123456789abcdef0123456789abcdef01234567"
 
+    @pytest.fixture(autouse=True)
+    def forget_the_git_answer(self):
+        """Every case asks git afresh: the lookup is remembered per process, and these cases move it."""
+        HiSimCommit.forget()
+        yield
+        HiSimCommit.forget()
+
     def test_the_baked_file_wins(self, tmp_path, monkeypatch):
         """``hisim/COMMIT`` is what the image was built from, so it answers before anything else."""
         monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
@@ -95,10 +102,17 @@ class TestHiSimCommit:
         monkeypatch.setenv(HiSimCommit.COMMIT_VARIABLE, "0" * 39 + "f")
         assert HiSimCommit.of() == "0" * 7
 
-    def test_the_capability_document_stays_valid_without_a_commit(self, tmp_path, monkeypatch):
-        """A null commit must not make the document the frontend validates against invalid."""
+    def test_the_capability_document_stays_valid_without_a_commit(
+        self, tmp_path, monkeypatch, capability_document: CapabilityDocument
+    ):
+        """A null commit must not make the document the frontend validates against invalid.
+
+        The document is assembled under the patch from the session's probe run: the probe results
+        carry statuses, never a commit, so the commit fields are the only part the patch reaches.
+        """
         monkeypatch.setattr(HiSimCommit, "ROOT", tmp_path)
         monkeypatch.delenv(HiSimCommit.COMMIT_VARIABLE, raising=False)
-        document = CapabilityDocument.build()
+        assert HiSimCommit.of() is None
+        document = CapabilityDocument.assemble(capability_document.results, capability_document.whitelist)
         document.validate()
         assert document.body["engine_version"].endswith("unknown")

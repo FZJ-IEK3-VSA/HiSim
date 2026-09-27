@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from hisim.renovisor.capabilities import CapabilityDocument
 from hisim.renovisor.costs import CostField, CostSchema
 from hisim.renovisor.kpis import KpiField, KpiSchema
 from hisim.renovisor.map import MapPalette, ResultsPane, TranslationMap
@@ -23,9 +24,9 @@ from hisim.renovisor.request import CatalogueTable
 
 
 @pytest.fixture(scope="module", name="page")
-def fixture_page() -> str:
-    """Render the page once; every test in this module reads the same render."""
-    return TranslationMap.render()
+def fixture_page(translation_map_page: str) -> str:
+    """The session's render (``conftest.py``); every test in this module reads the same page."""
+    return translation_map_page
 
 
 @pytest.mark.base
@@ -41,16 +42,24 @@ class TestTheCommittedPageIsCurrent:
             "run `python -m hisim.renovisor map` and commit the result"
         )
 
-    def test_rendering_twice_produces_the_same_page(self, page: str) -> None:
-        """Nothing on it carries a clock, which is what makes the freshness test possible."""
-        assert TranslationMap.render() == page
+    def test_rendering_twice_produces_the_same_page(
+        self, page: str, independent_capability_document: CapabilityDocument
+    ) -> None:
+        """Nothing on it carries a clock, which is what makes the freshness test possible.
 
-    def test_writing_it_somewhere_else_leaves_the_committed_one_alone(self, tmp_path: Path) -> None:
+        The second render is of the session's deliberately independent second build, so the two
+        pages come from two probe runs.
+        """
+        assert TranslationMap.render(document=independent_capability_document) == page
+
+    def test_writing_it_somewhere_else_leaves_the_committed_one_alone(
+        self, tmp_path: Path, capability_document: CapabilityDocument
+    ) -> None:
         """So that a reviewer can render it without dirtying the repository."""
         before = TranslationMap.PATH.read_text(encoding="utf-8")
         target = tmp_path / "map.html"
 
-        assert TranslationMap.write(target) == 0
+        assert TranslationMap.write(target, document=capability_document) == 0
 
         assert target.read_text(encoding="utf-8") == before
 

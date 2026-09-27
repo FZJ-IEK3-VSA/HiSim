@@ -25,6 +25,7 @@ approximated or defaulted silently" (rule 6) a property of the build rather than
 discipline.
 """
 
+import functools
 import os
 import subprocess
 from dataclasses import dataclass
@@ -166,10 +167,29 @@ class HiSimCommit:
 
     @classmethod
     def _git(cls) -> Optional[str]:
-        """Return the short commit hash of the checkout, or ``None`` when there is no git."""
+        """Return the short commit hash of the checkout, or ``None`` when there is no git.
+
+        Asked once per process and per :attr:`ROOT` (:meth:`_git_at`): the lookup is a ``git``
+        subprocess, and a probe run reaches it twice per probe through
+        :meth:`MappingReport.to_json`.
+        """
+        return cls._git_at(cls.ROOT)
+
+    @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def _git_at(root: Path) -> Optional[str]:
+        """Return ``git rev-parse --short HEAD`` in *root*, remembered for the life of the process.
+
+        The memo is safe because the answer is a process-lifetime constant in every case that
+        matters: the code a process runs is the code it imported when it started, so a checkout
+        moved to another commit underneath a running process would make a fresh answer *less*
+        true of that process, not more; and where there is no git (an image, an installed package)
+        the ``None`` does not change either. Keyed on the root, so a caller that points
+        :attr:`ROOT` somewhere else is asked afresh. :meth:`forget` clears it.
+        """
         try:
             completed = subprocess.run(
-                ["git", "-C", str(cls.ROOT), "rev-parse", "--short", "HEAD"],
+                ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -177,6 +197,11 @@ class HiSimCommit:
         except (OSError, subprocess.CalledProcessError):
             return None
         return completed.stdout.strip() or None
+
+    @classmethod
+    def forget(cls) -> None:
+        """Clear the remembered git answer, so the next :meth:`of` asks git again (tests do)."""
+        cls._git_at.cache_clear()
 
     @classmethod
     def _shortened(cls, commit: str) -> str:

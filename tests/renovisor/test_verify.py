@@ -25,6 +25,7 @@ from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases
 from hisim.renovisor.verify.render import ReportWriter
 from hisim.renovisor.verify.runner import (
     Announced,
+    ArtefactCache,
     Announcements,
     Artefacts,
     CellState,
@@ -67,9 +68,20 @@ def _probes(*names: str) -> Sequence[Probe]:
     return [by_name[name] for name in names]
 
 
-def _run(*names: str) -> VerificationReport:
+@pytest.fixture(scope="module", name="runner")
+def fixture_runner() -> VerificationRunner:
+    """One runner over one artefact cache for the module, so the anchor and each probe translate once.
+
+    A translation is a function of the request only while nobody patches the translator, so a test
+    that breaks the translator or a probe runs on a fresh ``VerificationRunner()`` instead, and
+    its refusal or error cannot land in this cache.
+    """
+    return VerificationRunner(cache=ArtefactCache())
+
+
+def _run(runner: VerificationRunner, *names: str) -> VerificationReport:
     """Run tier 1 over the named probes only."""
-    return VerificationRunner().run(_probes(*names))
+    return runner.run(_probes(*names))
 
 
 def _verdict(report: VerificationReport, name: str) -> Any:
@@ -81,9 +93,9 @@ def _verdict(report: VerificationReport, name: str) -> Any:
 class TestTheAnchorAndTheBases:
     """Everything is measured from the anchor, and every base isolates one change."""
 
-    def test_the_anchor_is_the_mockup_with_an_empty_measure_list(self) -> None:
+    def test_the_anchor_is_the_mockup_with_an_empty_measure_list(self, runner: VerificationRunner) -> None:
         """Spec §3: the mostly-uncustomized house of mockup 1, with no package."""
-        report = _run("anchor")
+        report = _run(runner, "anchor")
         verdict = _verdict(report, "anchor")
         mockup = ContractFiles.request_mockup()
 
@@ -155,9 +167,9 @@ class TestTheAnchorAndTheBases:
 class TestTheThreeStages:
     """One probe that works, one that is listed, and two broken on purpose."""
 
-    def test_the_thickness_probe_is_one_used_change_that_moves_the_facade(self) -> None:
+    def test_the_thickness_probe_is_one_used_change_that_moves_the_facade(self, runner: VerificationRunner) -> None:
         """Spec §5's worked example: request -> used -> Building.config.facade_u_value..., lower."""
-        verdict = _verdict(_run(THICKNESS), THICKNESS)
+        verdict = _verdict(_run(runner, THICKNESS), THICKNESS)
         (line,) = verdict.stage_two
         facade = next(
             change for change in verdict.stage_three
@@ -170,9 +182,9 @@ class TestTheThreeStages:
         assert facade.source == "house.building.facade.u_value_in_watt_per_m2_per_kelvin"
         assert set(verdict.cells.values()) == {CellState.AS_EXPECTED}
 
-    def test_a_not_implemented_leaf_is_drawn_half(self) -> None:
+    def test_a_not_implemented_leaf_is_drawn_half(self, runner: VerificationRunner) -> None:
         """Accepted, listed with its note, acted on by nothing: ◐ in both columns."""
-        verdict = _verdict(_run(SHADING), SHADING)
+        verdict = _verdict(_run(runner, SHADING), SHADING)
 
         assert verdict.stage_two[0].status == "not_implemented_yet"
         assert verdict.stage_two[0].note
@@ -195,7 +207,7 @@ class TestTheThreeStages:
         monkeypatch.setattr(
             translate_module._TranslationState, "write", ignoring_the_azimuth  # pylint: disable=protected-access
         )
-        report = _run(AZIMUTH)
+        report = _run(VerificationRunner(), AZIMUTH)
         verdict = _verdict(report, AZIMUTH)
 
         assert verdict.stage_two[0].status == "used"
@@ -214,7 +226,7 @@ class TestTheThreeStages:
             return original(self, request, applied)
 
         monkeypatch.setattr(Translator, "translate", refusing_the_azimuth)
-        report = _run(AZIMUTH)
+        report = _run(VerificationRunner(), AZIMUTH)
         verdict = _verdict(report, AZIMUTH)
 
         assert verdict.cells[Stage.MAPPING] is CellState.FAILED
@@ -245,9 +257,11 @@ class TestTheThreeStages:
         assert (code, probe) == (IssueCode.BASE_NOT_TRANSLATED, AZIMUTH)
         assert "block:pv_system" in message and "the base is broken on purpose" in message
 
-    def test_an_option_added_to_an_empty_options_block_leaves_the_measure_in_place(self) -> None:
+    def test_an_option_added_to_an_empty_options_block_leaves_the_measure_in_place(
+        self, runner: VerificationRunner
+    ) -> None:
         """The disappearing ``options: {}`` is structure: the measure is not reported removed; the option is read."""
-        verdict = _verdict(_run(BATTERY_CAPACITY), BATTERY_CAPACITY)
+        verdict = _verdict(_run(runner, BATTERY_CAPACITY), BATTERY_CAPACITY)
         option = "measures[id=battery_system].options.capacity_in_kwh"
 
         assert [change.path for change in verdict.stage_one] == ["measures[id=battery_system].options", option]
@@ -291,12 +305,12 @@ class TestTheThreeStages:
         assert verdict.cells[Stage.SYSTEM] is CellState.NOT_RUN
         assert [issue.code for issue in report.failures()] == ["request_diff"]
 
-    def test_a_material_probe_changes_the_material_and_the_elements_u_value(self) -> None:
+    def test_a_material_probe_changes_the_material_and_the_elements_u_value(self, runner: VerificationRunner) -> None:
         """hisim-8mjc: a second real row, so stage 1 is the material alone and stage 3 the facade U-value."""
         material = next(
             probe for probe in ProbeSet.build() if probe.name.startswith("option:external_insulation.material=")
         )
-        report = VerificationRunner().run([material])
+        report = runner.run([material])
         verdict = report.verdicts[0]
         option = "measures[id=external_insulation].options.material"
 
@@ -335,9 +349,9 @@ class TestRefusals:
         assert "type.invalid at house.building.construction_year" in message
         assert verdict.to_json()["refused"]["by"] == "schema"
 
-    def test_a_probe_a_semantic_check_refuses_is_drawn_half_with_its_code(self) -> None:
+    def test_a_probe_a_semantic_check_refuses_is_drawn_half_with_its_code(self, runner: VerificationRunner) -> None:
         """ES has no TABULA typology: ◐ in map with location.country.unsupported, not run in sys, no failure."""
-        report = _run(SPAIN)
+        report = _run(runner, SPAIN)
         verdict = _verdict(report, SPAIN)
 
         assert verdict.tested.refusal is not None and not verdict.tested.refusal.structural
@@ -352,9 +366,9 @@ class TestRefusals:
 class TestConditionalStatuses:
     """A pair is held to the status its condition announces; a single change to the unconditional one."""
 
-    def test_a_pair_is_held_to_its_condition(self) -> None:
+    def test_a_pair_is_held_to_its_condition(self, runner: VerificationRunner) -> None:
         """The SCOP is approximated on its own and announced not_implemented_yet beside a heat pump: ◐, no failure."""
-        report = _run(SCOP, SCOP_ON_HEAT_PUMP)
+        report = _run(runner, SCOP, SCOP_ON_HEAT_PUMP)
         verdict = _verdict(report, SCOP_ON_HEAT_PUMP)
         line = next(line for line in verdict.stage_two if line.path == "house.heating.seasonal_efficiency_in_percent")
 
@@ -369,60 +383,68 @@ class TestConditionalStatuses:
         row = next(row for row in verdict.to_json()["stage2"] if row["path"] == line.path)
         assert row["conditions"] == [dict(condition)]
 
-    def test_the_single_change_is_held_to_the_unconditional_status(self) -> None:
+    def test_the_single_change_is_held_to_the_unconditional_status(self, runner: VerificationRunner) -> None:
         """The same leaf in a request without a heat pump: no condition holds, approximated is announced."""
-        verdict = _verdict(_run(SCOP), SCOP)
+        verdict = _verdict(_run(runner, SCOP), SCOP)
         (line,) = verdict.stage_two
 
         assert (line.status, line.announced, line.conditions) == ("approximated", "approximated", ())
 
-    def test_a_condition_better_than_the_unconditional_status_is_as_expected(self) -> None:
+    def test_a_condition_better_than_the_unconditional_status_is_as_expected(self, runner: VerificationRunner) -> None:
         """The flow temperature is not_implemented_yet on a boiler and used on a heat pump: ● for the pair."""
         name = "pair:flow_temperature_on_heat_pump"
-        verdict = _verdict(_run("field:heating.flow_temperature_in_celsius=20", name), name)
+        verdict = _verdict(_run(runner, "field:heating.flow_temperature_in_celsius=20", name), name)
         line = next(line for line in verdict.stage_two if line.path == "house.heating.flow_temperature_in_celsius")
 
         assert (line.status, line.announced) == ("used", "used")
         assert verdict.cells[Stage.MAPPING] is CellState.AS_EXPECTED
 
-    def test_without_its_condition_the_same_pair_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_without_its_condition_the_same_pair_fails(
+        self, runner: VerificationRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A document that announced no conditions holds the pair to the unconditional status, and it fails."""
         monkeypatch.setattr(Conditions, "attach", lambda measures, fields, results: None)
-        report = _run(SCOP, SCOP_ON_HEAT_PUMP)
+        report = _run(runner, SCOP, SCOP_ON_HEAT_PUMP)
 
         assert _verdict(report, SCOP_ON_HEAT_PUMP).cells[Stage.MAPPING] is CellState.FAILED
         assert [(issue.code, issue.probe) for issue in report.failures()] == [
             ("status_below_announced", SCOP_ON_HEAT_PUMP)
         ]
 
-    def test_a_pair_worse_than_its_condition_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_a_pair_worse_than_its_condition_fails(
+        self, runner: VerificationRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A condition that promised more than the combination reports is a failure naming the condition."""
         promise = {"when": [{"path": "house.heating.type_of_system", "in": ["air_source_heat_pump"]}],
                    "status": "approximated", "note": "a promise the pair does not keep"}
         monkeypatch.setattr(
             Announcements, "field", lambda self, path, value, document: Announced("approximated", (promise,))
         )
-        report = _run(SCOP_ON_HEAT_PUMP)
+        report = _run(runner, SCOP_ON_HEAT_PUMP)
         verdict = _verdict(report, SCOP_ON_HEAT_PUMP)
 
         assert verdict.cells[Stage.MAPPING] is CellState.FAILED
         assert "announces approximated (where house.heating.type_of_system" in verdict.remarks[Stage.MAPPING]
         assert [issue.code for issue in report.failures()] == [IssueCode.STATUS_BELOW_ANNOUNCED]
 
-    def test_a_single_change_below_the_announced_status_still_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_a_single_change_below_the_announced_status_still_fails(
+        self, runner: VerificationRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Shading is not_implemented_yet; announced as used, its field probe is ✖ and a failure, not a finding."""
         monkeypatch.setattr(Announcements, "field", lambda self, path, value, document: Announced("used"))
-        report = _run(SHADING)
+        report = _run(runner, SHADING)
         verdict = _verdict(report, SHADING)
 
         assert verdict.cells[Stage.MAPPING] is CellState.FAILED
         assert [(issue.code, issue.probe) for issue in report.failures()] == [("status_below_announced", SHADING)]
         assert not report.findings()
 
-    def test_a_single_change_approximated_where_used_is_announced_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_a_single_change_approximated_where_used_is_announced_fails(
+        self, runner: VerificationRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Owner rule of 2026-09-26: approximated under an announced used is below it, as defaulted would be."""
         monkeypatch.setattr(Announcements, "field", lambda self, path, value, document: Announced("used"))
-        report = _run(SCOP)
+        report = _run(runner, SCOP)
         verdict = _verdict(report, SCOP)
         (line,) = verdict.stage_two
 
@@ -433,9 +455,9 @@ class TestConditionalStatuses:
             (IssueCode.STATUS_BELOW_ANNOUNCED, SCOP)
         ]
 
-    def test_approximated_as_announced_is_listed_not_failed(self) -> None:
+    def test_approximated_as_announced_is_listed_not_failed(self, runner: VerificationRunner) -> None:
         """The same probe against the document's own announcement, approximated: ◐ and no failure."""
-        report = _run(SCOP)
+        report = _run(runner, SCOP)
         verdict = _verdict(report, SCOP)
 
         assert (verdict.stage_two[0].status, verdict.stage_two[0].announced) == ("approximated", "approximated")
@@ -455,9 +477,9 @@ class TestCompleteness:
         assert MissingProbe("house.building.window.outside_shading", "True") not in gaps
         assert MissingProbe("measures[id=external_insulation]", "on") in gaps
 
-    def test_a_subset_does_not_check_completeness_by_default(self) -> None:
+    def test_a_subset_does_not_check_completeness_by_default(self, runner: VerificationRunner) -> None:
         """A handful of probes is incomplete on purpose."""
-        report = _run(SHADING)
+        report = _run(runner, SHADING)
 
         assert not report.completeness_checked
         assert not report.missing
@@ -491,9 +513,9 @@ class TestCompleteness:
 class TestTheReport:
     """report.json, index.html and one page per probe, and the exit code."""
 
-    def test_the_files_are_written_and_say_the_same(self, tmp_path: Path) -> None:
+    def test_the_files_are_written_and_say_the_same(self, runner: VerificationRunner, tmp_path: Path) -> None:
         """The pages are rendered from the JSON, so they cannot disagree."""
-        document = ReportWriter.write(_run("anchor", THICKNESS, SHADING), tmp_path)
+        document = ReportWriter.write(_run(runner, "anchor", THICKNESS, SHADING), tmp_path)
         written: Dict[str, Any] = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
         index = (tmp_path / "index.html").read_text(encoding="utf-8")
 
@@ -509,17 +531,17 @@ class TestTheReport:
         assert "facade_u_value_in_watt_per_m2_per_kelvin" in (tmp_path / thickness["page"]).read_text(encoding="utf-8")
         assert "◐" in index
 
-    def test_two_runs_write_the_same_bytes(self, tmp_path: Path) -> None:
+    def test_two_runs_write_the_same_bytes(self, runner: VerificationRunner, tmp_path: Path) -> None:
         """No clock in any file, so a report is a function of the commit."""
-        ReportWriter.write(_run(SHADING), tmp_path / "one")
-        ReportWriter.write(_run(SHADING), tmp_path / "two")
+        ReportWriter.write(_run(runner, SHADING), tmp_path / "one")
+        ReportWriter.write(_run(runner, SHADING), tmp_path / "two")
 
         assert (tmp_path / "one" / "report.json").read_bytes() == (tmp_path / "two" / "report.json").read_bytes()
         assert (tmp_path / "one" / "index.html").read_bytes() == (tmp_path / "two" / "index.html").read_bytes()
 
-    def test_an_absent_side_is_a_missing_key(self) -> None:
+    def test_an_absent_side_is_a_missing_key(self, runner: VerificationRunner) -> None:
         """So a consumer tells an absent leaf from a null one."""
-        verdict = _verdict(_run(THICKNESS), THICKNESS)
+        verdict = _verdict(_run(runner, THICKNESS), THICKNESS)
 
         assert verdict.stage_one[0].before is ABSENT
         assert "before" not in verdict.stage_one[0].to_json()

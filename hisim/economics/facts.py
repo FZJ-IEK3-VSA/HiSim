@@ -497,8 +497,9 @@ class InstallationYearOrigin(str, enum.Enum):
     ``STAGE`` is not a value a request's register states: it is what the document says of a
     subject a stage of the plan bought, installed in the calendar year that stage starts in -- the
     plan's year 0 plus the stage's ``from_year`` (hisim-dutz). The staging machinery writes it into
-    the aged register it hands a later stage (``hisim.economics.staged``), and it is the one origin
-    the arithmetic reads (:meth:`ExistingAsset.age_for_replacement`).
+    the aged register it hands a later stage (``hisim.economics.staged``). Like every origin it is
+    provenance only: the arithmetic never reads it. The age of a stage purchase is stated by the
+    staging machinery itself (:attr:`ExistingAsset.stated_age_in_years`).
     """
 
     REQUEST = "request"
@@ -553,11 +554,18 @@ class ExistingAsset:
     #: against it credits money nobody would ever have spent. The default keeps the historical
     #: behaviour, so every register written before this field existed is unchanged.
     anyway_share: float = 1.0
-    #: Where `installation_year` came from, which the result document publishes beside the year
-    #: (schema 5). `None` for a register whose author did not say, which is every register written
-    #: before the field existed. The arithmetic reads one value of it, `STAGE`, in
-    #: `age_for_replacement`.
+    #: Where `installation_year` came from, which the arithmetic never reads and the result
+    #: document publishes beside the year (schema 5). `None` for a register whose author did not
+    #: say, which is every register written before the field existed.
     installation_year_origin: Optional[InstallationYearOrigin] = None
+    #: The age the engine takes for this asset instead of measuring `installation_year` against
+    #: year 0 of the timeline (`age_in_years`), and unlike that age not floored. `None` for every
+    #: register of a house. Only the staged evaluator states it, for a subject an earlier stage
+    #: bought, because only it knows when the flows about that asset fall (hisim-4uv9): kept, the
+    #: asset's age at plan year 0, negative for a stage starting after it, so its first replacement
+    #: falls one service life after its purchase; replaced, its age in the year the replacing stage
+    #: starts, which is when it is written off and when the anyway-cost test is taken.
+    stated_age_in_years: Optional[int] = None
 
     def __post_init__(self) -> None:
         """Validation: normalizes the replacement-cost override and rejects impossible inputs.
@@ -596,26 +604,6 @@ class ExistingAsset:
         its replacement beyond the horizon.
         """
         return max(0, reference_year - self.installation_year)
-
-    def age_for_replacement(self, reference_year: int) -> int:
-        """The age the first replacement of this asset, when kept, is scheduled from.
-
-        :meth:`age_in_years` for every asset of the house's own register. An asset a stage of a
-        staged plan bought (``installation_year_origin`` ``STAGE``) is dated in that stage's start
-        year, ``plan year 0 + from_year``, which is after the reference year whenever the stage
-        starts after year 0. Its age is then negative and not floored, so a later stage replaces
-        it one full service life after it was bought -- ``from_year + life`` in plan years --
-        rather than one life after year 0 (hisim-dutz).
-
-        Args:
-            reference_year: The calendar year of year 0 of the timeline being scheduled.
-
-        Returns:
-            The age in whole years, negative only for a stage purchase dated after it.
-        """
-        if self.installation_year_origin is InstallationYearOrigin.STAGE:
-            return reference_year - self.installation_year
-        return self.age_in_years(reference_year)
 
 
 @dataclass

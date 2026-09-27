@@ -110,9 +110,11 @@ class StagedEvaluationError(Exception):
     Every condition this is raised for is a statement about the *plan*, not about the engine: a
     first stage that does not start in year 0, stage years that do not increase, a stage that
     starts past the horizon, stages priced from simulations that do not describe the same year or
-    the same simulated period, an unknown perspective id, or a country the cost database has no
-    price data for. Each of them would otherwise be answered with a plausible number for a
-    different question, which ``economics-hisim-spec.md`` §0 forbids ("fail loudly").
+    the same simulated period, an unknown perspective id, a country the cost database has no
+    price data for, or a plan stating neither a price basis year nor a start year (nothing then
+    says which calendar year its year 0 is). Each of them would otherwise be answered with a
+    plausible number for a different question, which ``economics-hisim-spec.md`` §0 forbids
+    ("fail loudly").
 
     The CLI (``python -m hisim.economics staged``) turns it into exit code 2 with a
     ``problems.json`` beside the requested output; an *engine* error — an unresolvable cost
@@ -805,6 +807,14 @@ class StagedEvaluator:
         "plan for a country that has one."
     )
 
+    #: Message of the refusal raised when nothing states the calendar year of plan year 0.
+    YEAR_ZERO_MESSAGE = (
+        "neither the stages nor the parameters state a price_basis_year and the plan states no "
+        "plan_start_year, so nothing says which calendar year the plan's year 0 is; the stages' "
+        "simulation year is the year of their weather and dates nothing. Name price_basis_year "
+        "or plan_start_year."
+    )
+
     def __init__(self, cost_database: CostDatabase) -> None:
         """Bind the evaluator to one cost database.
 
@@ -861,6 +871,9 @@ class StagedEvaluator:
         Raises:
             ValueError: When ``plan_start_year`` lies outside :class:`PlanYearBounds`, the range
                 ``staged --parameters`` refuses as ``parameters.plan_start_year.invalid``.
+            StagedEvaluationError: ``parameters.price_basis_year.missing`` when neither
+                ``parameters`` states a ``price_basis_year`` nor the plan a ``plan_start_year``
+                (:attr:`YEAR_ZERO_MESSAGE`): plan year 0 is never the weather year.
             StagedEvaluationError: For any condition of the class docstring's list — a plan this
                 module refuses to price.
             hisim.economics.evaluator.UnresolvableSubjectsError: When a stage declares a cost
@@ -894,7 +907,14 @@ class StagedEvaluator:
                 f"No price basis year stated by the stages or the parameters; the plan is priced at "
                 f"{parameters.price_basis_year}, taken from plan_start_year {plan_start_year}."
             )
-        price_basis_year = effective_price_basis_year(parameters, self.database, ordered[0].inputs.simulation_year)
+        if parameters.price_basis_year is None:
+            # Nothing states year 0, and the engine's fallback would take the weather year.
+            path = f"{ParameterKeys.ROOT_PATH}.{ParameterKeys.PRICE_BASIS_YEAR}"
+            problem = ParameterProblem(
+                path=path, code=ParameterProblemCodes.MISSING.format(path=path), message=self.YEAR_ZERO_MESSAGE
+            )
+            raise StagedEvaluationError(self.YEAR_ZERO_MESSAGE, [problem.to_json()])
+        price_basis_year = parameters.price_basis_year
         year_zero = self.plan_year_zero(plan_start_year, price_basis_year)
         evaluator = EconomicEvaluator(self.database, parameters, catalog, plan_year_zero=year_zero)
         self._validate_stated_prices(ordered, parameters, price_basis_year)
@@ -1003,7 +1023,8 @@ class StagedEvaluator:
         every amount is escalated from it to this year with the rate it escalates with later
         (renovisorissues #62, :class:`~hisim.economics.evaluator.YearZeroPriceLevel`), so year 0
         is in its own calendar year's money; the stages' ``simulation_year`` is the year of their
-        weather and dates nothing.
+        weather and dates nothing, which is why :meth:`evaluate` refuses a plan that states neither
+        year. :meth:`evaluate` resolves it once and hands it to the engine and to every stage.
 
         Args:
             plan_start_year: The calendar year the plan starts in, or ``None``.
@@ -1664,7 +1685,14 @@ class StagedEvaluator:
         earlier stage paid for, installed in that stage's calendar year ``plan_year_zero +
         from_year`` and marked with the origin ``STAGE``. The engine's brownfield machinery
         then schedules the replacements, the residual values and the removal costs itself; this
-        module adds no second mechanism.
+        module adds no second mechanism, only the one fact the engine cannot know: the age of
+        such a purchase (``stated_age_in_years``, hisim-4uv9). The engine measures a register
+        asset's age at plan year 0 and floors it, which makes a purchase of stage ``j`` new
+        whatever stage prices it. So this module states it: ``-from_year_j`` when this stage keeps
+        it (its replacements stay on the plan's years, so the first falls in
+        ``from_year_j + L``), ``from_year - from_year_j`` when this stage replaces it (the
+        write-off and the anyway-cost test are taken in the year this stage starts). The house's
+        own register is aged by the engine as ever.
 
         Stage 0 is returned unchanged, and it contributes nothing to later registers either — it is
         the reference, and its register is the inventory as
@@ -1714,18 +1742,21 @@ class StagedEvaluator:
                     # nothing ages into the next stage's register.
                     continue
                 installed_classes.add(facts.asset_class)
+                replaced = subject not in facts_by_subject and facts.asset_class in newly_charged_classes
                 aged[subject] = ExistingAsset(
                     asset_class=facts.asset_class,
                     size=facts.size,
                     size_unit=facts.size_unit,
                     installation_year=plan_year_zero + stages[earlier].from_year,
                     is_functional=True,
-                    replaced_by_asset_classes=(
-                        [facts.asset_class]
-                        if subject not in facts_by_subject and facts.asset_class in newly_charged_classes
-                        else []
-                    ),
+                    replaced_by_asset_classes=[facts.asset_class] if replaced else [],
                     installation_year_origin=InstallationYearOrigin.STAGE,
+                    # Replaced: written off in the year this stage starts. Kept: its replacements
+                    # stay on the plan's own years, so it is aged at plan year 0 -- negative, and
+                    # replaced one service life after it was bought (hisim-4uv9).
+                    stated_age_in_years=(
+                        stage.from_year - stages[earlier].from_year if replaced else -stages[earlier].from_year
+                    ),
                 )
         assets = [
             asset

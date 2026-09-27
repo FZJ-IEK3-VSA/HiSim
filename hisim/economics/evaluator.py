@@ -818,16 +818,17 @@ class EconomicEvaluator:
         database that the scenario asked for (§4.6).
 
         `plan_year_zero` is the calendar year of year 0 of the timeline, the year every kept or
-        replaced register asset is aged at (`ageing_reference_year`). Only the staged evaluator
-        states it: a plan's year 0 is its `plan_start_year`, else its price basis year
-        (hisim-dutz, hisim-nl6j). It is also the year whose money the timeline is in: every amount
-        is escalated from the price basis year to it (`YearZeroPriceLevel`, renovisorissues #62).
-        `None`, every other path, ages and prices at the price basis year exactly as before.
+        replaced register asset is aged at. Only the staged evaluator states it, resolved once
+        (:meth:`hisim.economics.staged.StagedEvaluator.plan_year_zero`: its `plan_start_year`,
+        else its price basis year; hisim-dutz, hisim-nl6j). It is also the year whose money the
+        timeline is in: every amount is escalated from the price basis year to it
+        (`YearZeroPriceLevel`, renovisorissues #62). `None`, every other path, ages and prices at
+        the price basis year exactly as before.
         """
         self.database = cost_database
         self.parameters = parameters
         self.subsidy_catalog = subsidy_catalog
-        self.plan_year_zero = plan_year_zero
+        self._plan_year_zero = plan_year_zero
 
     # ------------------------------------------------------------------ rate resolution
 
@@ -861,24 +862,17 @@ class EconomicEvaluator:
         """
         return effective_price_basis_year(self.parameters, self.database, inputs.simulation_year)
 
-    def ageing_reference_year(self, inputs: EvaluationInputs) -> int:
-        """The calendar year of year 0, at which every register asset's age is measured.
+    def _year_zero(self, price_basis_year: int) -> int:
+        """The calendar year of the timeline's year 0, given the resolved price basis year.
 
-        `plan_year_zero` when the evaluator was given one (a staged plan), else the price basis
-        year. Prices are always read at the price basis year; only ages move with this year.
+        The year every register asset is aged at and whose money the timeline is in: the
+        staged plan's year 0 when the evaluator was given one, else the price basis year. The
+        years every amount is escalated by, ``year 0 - price basis year`` (#62), are therefore 0
+        on every path but a staged plan starting in another year than its prices are read at,
+        and negative for one starting before it, which de-escalates by the same law
+        (:class:`YearZeroPriceLevel`).
         """
-        if self.plan_year_zero is not None:
-            return self.plan_year_zero
-        return self.price_basis_year(inputs)
-
-    def price_level_years(self, inputs: EvaluationInputs) -> int:
-        """How many years every amount is escalated by, from the price basis year to year 0 (#62).
-
-        ``plan_year_zero - price basis year`` when the evaluator was given a year 0 (a staged plan
-        with a ``plan_start_year``), else 0. Negative for a plan starting before the year its prices
-        are read at, which de-escalates by the same law (:class:`YearZeroPriceLevel`).
-        """
-        return self.ageing_reference_year(inputs) - self.price_basis_year(inputs)
+        return price_basis_year if self._plan_year_zero is None else self._plan_year_zero
 
     def effective_parameters(self, inputs: EvaluationInputs) -> EconomicParameters:
         """The parameters as actually used, with the resolved price basis year filled in.
@@ -1070,7 +1064,7 @@ class EconomicEvaluator:
         """
         params = self.parameters
         price_basis_year = self.price_basis_year(inputs)
-        ageing_reference_year = self.ageing_reference_year(inputs)
+        ageing_reference_year = self._year_zero(price_basis_year)
         horizon = params.observation_period_in_years
         timeline = CashFlowTimeline()
         co2_result = LifecycleCo2Result(operational_co2_by_year_in_kg=[0.0] * (horizon + 1))
@@ -1097,7 +1091,7 @@ class EconomicEvaluator:
         # price basis year, and the side figures are shifted as they are summed; the entries are
         # shifted once, after the energy bills. Zero years shifts nothing.
         level = YearZeroPriceLevel(
-            years=self.price_level_years(inputs),
+            years=ageing_reference_year - price_basis_year,
             parameters=params,
             database=self.database,
             price_basis_year=price_basis_year,

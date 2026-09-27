@@ -81,9 +81,12 @@ equals `EconomicEvaluator` on that stage, entry for entry" holds by construction
    is the inventory register merged with one `ExistingAsset` per subject charged in an earlier
    stage `j` (`installation_year = plan_year_zero + from_year_j`, plan year 0 being
    `plan_start_year`, else the price basis year, which the engine ages the register at as well —
-   hisim-dutz; it was `simulation_year + from_year_j`, the weather year; `asset_class` from the
-   subject's cost facts, `replaced_by_asset_classes` from later stages). A purchase dated after
-   year 0 is not floored to age 0, so it is replaced `from_year_j + life` into the plan. This is what makes replacements,
+   hisim-dutz; `asset_class` from the subject's cost facts, `replaced_by_asset_classes` from later
+   stages). A plan stating neither year is refused (`parameters.price_basis_year.missing`): year 0
+   is never the weather year. The staged evaluator states the age of such a purchase
+   (`stated_age_in_years`, hisim-4uv9): kept, `-from_year_j`, so it is replaced
+   `from_year_j + life` into the plan; replaced by stage `k`, `from_year_k - from_year_j`, the age
+   its write-off and the anyway-cost test are taken at. This is what makes replacements,
    residual value and removal fall in the right years through the engine's brownfield machinery;
    the evaluator adds no second mechanism. Consequence: stages are evaluated **in order** and
    stage `k`'s inputs depend on `j < k`; say so in the docstring.

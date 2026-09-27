@@ -134,6 +134,12 @@ report's `subjects` map (§4).
 > **Note (2026-09-26, hisim-fig7).** The document is at `schema_version: 3` since: every
 > `by_subject` row carries the required `investment_by_stage`, the subject's investment split by
 > the stage that bought it (renovisorissues #48); `investment_in_euro` stays the year-0 investment.
+>
+> **Note (2026-09-27, hisim-ryw1).** The document is at `schema_version: 7` since: every
+> `by_subject` row carries the required `replaces_subjects`, and the reference renews the building
+> fabric -- one subject `envelope_<element>` per kept envelope element, renewed at the end of its
+> service life, unpriced (renovisorissues #59) -- and the plan books no anyway-cost credit
+> (full-cost method).
 
 ## 4. Translator integration (`hisim/renovisor/`, E-spec §4)
 

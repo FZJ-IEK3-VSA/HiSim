@@ -535,7 +535,7 @@ class TestTheEquipmentTheHouseAlreadyHas:
         ]
 
     def test_the_buffer_is_a_new_vessel_bought_by_the_heating_system_in_stage_one(self, runs, document) -> None:
-        """The whole heat-pump vessel at its price, in stage 1 only, the old one credited.
+        """The whole heat-pump vessel at its price, in stage 1 only, the old one not credited.
 
         The price is the cost database's own for the package's vessel size, so the row is the new
         vessel and not the increment over the old one that the splice used to charge.
@@ -558,8 +558,9 @@ class TestTheEquipmentTheHouseAlreadyHas:
         assert [stage["stage"] for stage in row["investment_by_stage"]] == [1]
         assert row["investment_by_stage"][0]["investment_in_euro"]["best"] == pytest.approx(price.best_estimate)
         assert row["investment_in_euro"]["best"] == pytest.approx(price.best_estimate)
-        # What the row's NPV holds beyond the columns it lists is the anyway credit for the old
-        # vessel, which the house would have had to replace within the threshold anyway.
+        # Full-cost method (hisim-ryw1): the reference pays the old vessel's renewal, so the plan
+        # books no anyway credit, and the row's NPV is exactly the columns it lists. Until
+        # 2026-09-27 the NPV held that credit beyond them.
         listed = sum(
             row[column]["best"]
             for column in (
@@ -570,7 +571,7 @@ class TestTheEquipmentTheHouseAlreadyHas:
                 "residual_value_in_euro",
             )
         )
-        assert row["npv_in_euro"]["best"] - listed < 0.0
+        assert row["npv_in_euro"]["best"] == pytest.approx(listed)
 
     def test_the_cylinder_the_radiators_and_the_meters_are_kept(self, document) -> None:
         """Kept equipment carries no measure and no purchase in any stage."""

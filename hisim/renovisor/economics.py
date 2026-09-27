@@ -20,7 +20,10 @@ Four things go into it, and each answers a question the run cannot:
   it covers. HiSim prices no envelope measure of its own here: the price comes from the request's
   ``cost`` block, written there by the frontend out of the contract's material table, and a
   measure that arrives without one is added to the plan **unpriced** rather than silently left
-  out, so the result says what it does not know;
+  out, so the result says what it does not know. Beside them, every element the package keeps is
+  a subject of its own, ``envelope_<element>``, which the engine renews like-for-like at the end
+  of its service life: the do-nothing reference renews the fabric too (hisim-ryw1). Its renewals
+  are unpriced -- no cost band reaches a kept element -- but their years are stated;
 * **the technical attributes** — the achieved U-value of each envelope element, the build-up
   position a layer goes to, and the peak power of the array where the request pins it. Subsidy
   conditions read them and nothing else can supply them: Ireland's cavity-fill and dry-lining
@@ -184,10 +187,20 @@ class EnvelopeAssets:
         "door_replacement": ThermalElement.DOOR,
     }
 
+    #: The cost subject an existing element the package keeps is filed under (hisim-ryw1): the
+    #: do-nothing reference, and every stage that leaves the element alone, renews it like-for-like
+    #: at the end of its service life. A measure's own subject is named by the measure id instead.
+    SUBJECT_PREFIX: ClassVar[str] = "envelope_"
+
     @classmethod
     def of_element(cls, element: ThermalElement) -> ComponentType:
         """The class the register entry of one existing element carries."""
         return cls.BY_ELEMENT[element]
+
+    @classmethod
+    def subject_of(cls, element: ThermalElement) -> str:
+        """The cost subject of one existing element, e.g. ``envelope_facade``."""
+        return f"{cls.SUBJECT_PREFIX}{element.value}"
 
     @classmethod
     def of_placement(cls, placement: str) -> ComponentType:
@@ -390,6 +403,21 @@ class RealizedTwin:
             )
         )
 
+    def asset_classes(self) -> Dict[str, ComponentType]:
+        """Every priced component of the twin -> the asset class the cost adapter extracts for it.
+
+        The cost subjects the engine will file this twin's components under, as
+        :meth:`cost_facts` reads each one; a component the adapter prices no variant of, or one
+        configured at zero size, is absent.
+        """
+        classes: Dict[str, ComponentType] = {}
+        for name, class_name, config in self.components:
+            extractor = FactsExtractors.BY_CLASS_NAME.get(class_name)
+            facts = extractor(config) if extractor is not None else None
+            if facts is not None and not facts.is_not_installed():
+                classes[name] = facts.asset_class
+        return classes
+
     def cost_facts(self, component_class: str) -> Optional[Tuple[str, ComponentCostFacts]]:
         """The component of one class and its cost facts, as the cost adapter extracts them.
 
@@ -542,6 +570,53 @@ class MeasureSubjects:
             )
 
 
+class ReplacedSubjects:
+    """Which subjects of the do-nothing reference a measure's subject replaces (hisim-ryw1).
+
+    A plan row names the reference rows its subject takes over, so a reader sees that the external
+    insulation replaces the facade's like-for-like renewal rather than coming on top of it. The
+    answer is the translator's own ``replaced_by_asset_classes``, as the existing-asset register
+    states it: a subject of asset class ``C`` replaces every register entry that names ``C``, and
+    such an entry is, in the reference, the subject of the entry's own asset class -- an envelope
+    element's ``envelope_<element>`` subject, a device's component (which may carry the same name
+    as the plan's new one: a new ``PVSystem`` replaces the reference's ``PVSystem``). Nothing is
+    inferred beyond it: a register entry the reference holds no subject for names none.
+
+    The translator writes the result into the mapping report (``replaces_subjects``); for a report
+    written before that field existed the staged command derives it with the same rule from the
+    register and the subjects each stage's stored inputs carry.
+    """
+
+    @staticmethod
+    def derive(
+        measure_subjects: Mapping[str, ComponentType],
+        register: Optional[ExistingAssetRegister],
+        reference_subjects: Mapping[str, ComponentType],
+    ) -> Dict[str, List[str]]:
+        """Each measure subject -> the reference subjects it replaces, sorted.
+
+        Args:
+            measure_subjects: The subjects a measure created -> their asset class.
+            register: The existing-asset register of the calculation the subjects belong to.
+            reference_subjects: The do-nothing reference's subjects -> their asset class.
+
+        Returns:
+            One entry per measure subject, an empty list for one that replaces nothing.
+        """
+        assets = list(register.assets) if register is not None else []
+        replaced: Dict[str, List[str]] = {}
+        for subject, asset_class in sorted(measure_subjects.items()):
+            names = {
+                name
+                for asset in assets
+                if asset_class in asset.replaced_by_asset_classes
+                for name, reference_class in reference_subjects.items()
+                if reference_class is asset.asset_class
+            }
+            replaced[subject] = sorted(names)
+        return replaced
+
+
 class MainSubjectError(RuntimeError):
     """A quoted measure's main subject cannot be determined from the stage it is quoted for.
 
@@ -667,8 +742,9 @@ class UnknownAge:
     a device of unknown age in a house that is being kept running.
 
     It applies to the heat generator, the devices of :class:`DeviceAssets` and the equipment of
-    :class:`TwinEquipment`. The envelope elements keep the construction year: they are the
-    building's fabric, which is as old as the building unless the request says it was renewed.
+    :class:`TwinEquipment`, and since 2026-09-27 to the five envelope elements too (hisim-ryw1):
+    the reference renews the fabric at the end of its life, and "as old as the building" put every
+    element of an old house in year 1 at once.
 
     Both inputs are the engine's own. The price basis year is the one the run prices at
     (:func:`~hisim.economics.evaluator.effective_price_basis_year` for the calculation's country and
@@ -851,6 +927,8 @@ class EconomicContextResult:
             result document gives each a zero row of its own.
         subject_notes: Subject -> the sentence its row of the result document carries as
             ``note``: why an unpriced subject has no price, why a costless one costs nothing.
+        replaces_subjects: Measure subject -> the subjects of the do-nothing reference it
+            replaces (:class:`ReplacedSubjects`), which its row of the result document states.
         defaults: One ``(request path, value, sentence)`` per request leaf the builder had to
             default, so the mapping report can state it with the value it used. Nothing the
             builder does is silent.
@@ -872,6 +950,7 @@ class EconomicContextResult:
     unpriced_subjects: List[str] = field(default_factory=list)
     costless_subjects: List[str] = field(default_factory=list)
     subject_notes: Dict[str, str] = field(default_factory=dict)
+    replaces_subjects: Dict[str, List[str]] = field(default_factory=dict)
     defaults: List[Tuple[str, Any, str]] = field(default_factory=list)
     approximations: List[Tuple[str, Any, str]] = field(default_factory=list)
     unread: List[Tuple[str, Any, str]] = field(default_factory=list)
@@ -921,7 +1000,7 @@ class EconomicContextBuilder:
 
     #: The request field naming when a device or an element was installed (E-spec §7), on the
     #: dated ``house`` blocks of the vendored schema; read when stated, defaulted to the
-    #: construction year when not.
+    #: mid-life year (:class:`UnknownAge`) when not.
     INSTALLATION_YEAR_KEY: ClassVar[str] = "installation_year"
 
     #: The top-level request block naming who is applying (E-spec §7, the vendored schema's
@@ -1013,11 +1092,18 @@ class EconomicContextBuilder:
         "zero and flagged unpriced; HiSim does not estimate envelope prices (decisions Q8/Q9)"
     )
 
-    #: The note a defaulted installation year of an envelope element carries. A device's
-    #: unstated year is a mid-life year instead, with :attr:`UnknownAge.NOTE`.
-    INSTALLATION_YEAR_NOTE: ClassVar[str] = (
-        "the request states no installation year for this element of the building's fabric, so "
-        "the building's construction year is used as its age"
+    #: The note of every kept envelope element's subject (hisim-ryw1).
+    KEPT_ELEMENT_UNPRICED_NOTE: ClassVar[str] = (
+        "the element is kept and renewed like-for-like at the end of its service life, but the "
+        "renewal is unpriced: HiSim prices no envelope work itself, and the request carries no cost "
+        "band for renewing this element (a band travels only on the cost block of a measure acting "
+        "on the element, and no measure of the package does); its renewals are unknown, not free"
+    )
+
+    #: What that note adds when the cost database has no entry for the element's class either.
+    KEPT_ELEMENT_FALLBACK_LIFE_NOTE: ClassVar[str] = (
+        "; its service life is the engine's fallback of {life:g} years, not a figure of the data: "
+        "the cost database has no entry for {asset_class} in {country}"
     )
 
     #: The note a stated installation year carries.
@@ -1026,24 +1112,13 @@ class EconomicContextBuilder:
         "replacement price and the sunk-cost credit"
     )
 
-    #: The note a stated installation year of an envelope element carries when the element has a
-    #: register row but no measure of the package touches it. The engine reads an element's age
-    #: only for a replaced row (the sunk cost and the anyway-cost credit, cost_spec §4.1); a kept
-    #: envelope row matches no cost subject, because only a measure creates one.
-    ENVELOPE_YEAR_KEPT_NOTE: ClassVar[str] = (
-        "recorded as the installation year of this element's row of the existing-asset register, "
-        "but no measure of the package replaces or insulates the element, so no cost line reads "
-        "its age; it only matters once a measure touches the element, for the sunk cost and the "
-        "anyway-cost credit"
-    )
-
     #: The note a stated installation year of an envelope element carries when the element has no
     #: area anywhere, so the register has no row for the year to date.
     ENVELOPE_YEAR_UNREGISTERED_NOTE: ClassVar[str] = (
         "read by nothing: the request states no area for this element and the building's TABULA "
         "row gives it none, so the existing-asset register has no row for it; the year only matters for an "
-        "element with an area that a measure replaces or insulates, for the sunk cost and the "
-        "anyway-cost credit"
+        "element with an area: for the renewal a stage that keeps it schedules from it, and for "
+        "the sunk cost and the anyway-cost credit of a measure that replaces or insulates it"
     )
 
     #: The note a defaulted living area carries.
@@ -1169,17 +1244,19 @@ class EconomicContextBuilder:
         existing_heating = self._generator_asset(result)
         register = ExistingAssetRegister(assets=self._register_assets(result, existing_heating))
         facts = self._envelope_cost_facts(result)
+        kept_elements = self._kept_element_facts(result)
         living_area = self._living_area(result)
         result.context = EconomicContext(
             existing_assets=register,
             subsidy_context=self._subsidy_context(result, existing_heating),
-            extra_cost_facts=facts,
+            extra_cost_facts=[*facts, *kept_elements],
             technical_attributes_by_subject=self._technical_attributes(facts),
             living_area_in_m2=living_area,
             heated_floor_area_in_m2=self._floor_area(),
         )
         self._record_device_subjects(result)
         MeasureSubjects.record(self._applied, result)
+        result.replaces_subjects = self._replaces_subjects(result, facts, register)
         return result
 
     # ------------------------------------------------------------------ the stated leaves
@@ -1289,8 +1366,8 @@ class EconomicContextBuilder:
         Four groups in one list, in the order a reader of the register would expect them: the
         heat generator, the devices of :class:`DeviceAssets`, the equipment of
         :class:`TwinEquipment` the baseline twin carries, and the five envelope elements. Each
-        carries the year it was installed — the request's own when it states one, the building's
-        construction year otherwise — and the asset classes of the measures that supersede it.
+        carries the year it was installed — the request's own when it states one, its mid-life
+        year (:class:`UnknownAge`) otherwise — and the asset classes of the measures that supersede it.
 
         Args:
             result: The result being assembled, for the defaulted and approximated lines.
@@ -1529,17 +1606,19 @@ class EconomicContextBuilder:
     def _envelope_assets(self, result: Optional[EconomicContextResult] = None) -> List[ExistingAsset]:
         """One register entry per envelope element, with the share it would have cost anyway.
 
-        The element is as old as the building unless the request says otherwise, and it is
+        The element is at mid-life unless the request dates it (:class:`UnknownAge`), and it is
         replaced by whichever measure of the package touches it. ``anyway_share`` is the number
         that decides how much of that measure's price is credited as money the building would
         have spent regardless; it comes from
         :class:`~hisim.renovisor.constants.AnywayShareByPlacement` and is well below one for a
         first-time improvement.
 
-        The row's installation year counts only for a replaced row: the engine reads the age of
-        the asset a measure replaces, and a kept envelope row matches no cost subject. A stated
-        year on an element no measure touches, or on one with no row, is recorded on
-        ``result.unread`` so the mapping report does not call it used (hisim-glv7).
+        The row's installation year is read either way: a replaced row's by the measure that
+        replaces it (the sunk cost and the anyway-cost credit), a kept row's by the element's own
+        cost subject (:meth:`_kept_element_facts`), whose like-for-like renewal is scheduled from
+        it (hisim-ryw1). Only a stated year on an element with no row -- no area anywhere -- is read
+        by nothing, and is recorded on ``result.unread`` so the mapping report does not call it
+        used (hisim-glv7).
         """
         assets = []
         for element in ThermalElement:
@@ -1548,21 +1627,22 @@ class EconomicContextBuilder:
                 self._record_unread_year(element, result, self.ENVELOPE_YEAR_UNREGISTERED_NOTE)
                 continue
             replaced, share = self._replacement_of(element)
-            if not replaced:
-                self._record_unread_year(element, result, self.ENVELOPE_YEAR_KEPT_NOTE)
             assets.append(
                 ExistingAsset(
                     asset_class=EnvelopeAssets.of_element(element),
                     size=area,
                     size_unit=Units.SQUARE_METER,
                     installation_year=self._installation_year(
-                        f"building.{element.value}", result, block=self._raw_element(element)
+                        f"building.{element.value}",
+                        EnvelopeAssets.of_element(element),
+                        result,
+                        block=self._raw_element(element),
                     ),
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
                     anyway_share=share,
                     installation_year_origin=self._year_origin(
-                        self._raw_element(element), InstallationYearOrigin.CONSTRUCTION_YEAR_DEFAULT
+                        self._raw_element(element), InstallationYearOrigin.MID_LIFE_DEFAULT
                     ),
                 )
             )
@@ -1638,6 +1718,113 @@ class EconomicContextBuilder:
                     )
                 )
         return facts
+
+    def _kept_element_facts(self, result: EconomicContextResult) -> List[SubjectCostFacts]:
+        """One cost subject per existing envelope element the package keeps (hisim-ryw1).
+
+        Owner decisions of 2026-09-27: the do-nothing reference renews the building's fabric, and
+        HiSim prices no envelope work itself. An element with a register row that no measure of
+        the package replaces or insulates is a subject of its own, ``envelope_<element>``, of the
+        row's asset class, so the engine treats it as every kept asset: nothing at year 0, a
+        like-for-like renewal at the end of its service life, dated from the row's installation
+        year (``calculators/context_resolution.py``, the kept path of ``resolve_device``). The same
+        holds in every stage of a plan that leaves the element alone, so the plan and the reference
+        renew it alike; a stage whose measure replaces the element has no such subject, and the
+        measure's own subject takes its place from that stage on.
+
+        **The renewal is unpriced.** Its price would be the request's per-m² cost band for the
+        element, and a band reaches the builder only on the ``cost`` block of a measure
+        (:meth:`_measure_price`); a measure acting on the element replaces it, so a kept element
+        never has one. The subject therefore carries an investment of exactly zero, flagged
+        unpriced with :attr:`KEPT_ELEMENT_UNPRICED_NOTE` -- never the cost database's
+        insulation price. Its **service life** is still the cost database's for the class (a
+        life, not a price), and where the database has no entry for the class the engine's
+        fallback, marked as such (``lifetime_is_engine_fallback``), so the row's due years are
+        stated either way.
+
+        The size is the element's area (:meth:`_element_area`) in square metres, except for the
+        door, which the cost database lists per door (``per_unit: null``), so it is one door.
+
+        Args:
+            result: The result being assembled, for the unpriced flags and their notes.
+
+        Returns:
+            The kept elements' cost subjects, in :class:`ThermalElement` order.
+        """
+        country = self._request.country.value
+        database = UnknownAge.database()
+        zero = UncertainValue.exact(0.0)
+        facts: List[SubjectCostFacts] = []
+        for element in ThermalElement:
+            area = self._element_area(element)
+            replaced, _share = self._replacement_of(element)
+            if area is None or replaced:
+                continue
+            asset_class = EnvelopeAssets.of_element(element)
+            subject = EnvelopeAssets.subject_of(element)
+            size, size_unit = (1.0, Units.ANY) if element is ThermalElement.DOOR else (float(area), Units.SQUARE_METER)
+            has_life = database.has_device_entry(asset_class, country)
+            note = self.KEPT_ELEMENT_UNPRICED_NOTE + (
+                "" if has_life else self.KEPT_ELEMENT_FALLBACK_LIFE_NOTE.format(
+                    life=ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS,
+                    asset_class=asset_class.name,
+                    country=country,
+                )
+            )
+            result.unpriced_subjects.append(subject)
+            result.subject_notes[subject] = note
+            facts.append(
+                SubjectCostFacts(
+                    subject=subject,
+                    facts=ComponentCostFacts(
+                        asset_class=asset_class,
+                        size=size,
+                        size_unit=size_unit,
+                        investment_cost_override_in_euro=zero,
+                        installation_cost_override_in_euro=zero,
+                        maintenance_rate_override=zero,
+                        fixed_operation_cost_override_in_euro_per_year=zero,
+                        lifetime_override_in_years=(
+                            None if has_life else ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS
+                        ),
+                        lifetime_is_engine_fallback=not has_life,
+                        override_source=note,
+                    ),
+                )
+            )
+        return facts
+
+    def _replaces_subjects(
+        self, result: EconomicContextResult, envelope: List[SubjectCostFacts], register: ExistingAssetRegister
+    ) -> Dict[str, List[str]]:
+        """Each subject a measure created -> the reference subjects it replaces (:class:`ReplacedSubjects`).
+
+        The measure subjects are the ones :attr:`EconomicContextResult.subjects` stamps with a
+        measure and that have an asset class: the envelope measures' own and the components of the
+        twin this calculation runs. The reference's subjects are the do-nothing twin's components
+        and one ``envelope_<element>`` per envelope row of the register, which the reference keeps
+        and renews (:meth:`_kept_element_facts`: the reference carries out no measure).
+
+        Args:
+            result: The result, whose ``subjects`` map is complete.
+            envelope: The envelope measures' cost subjects.
+            register: The existing-asset register this calculation is evaluated with.
+
+        Returns:
+            The map the mapping report publishes as ``replaces_subjects``.
+        """
+        classes: Dict[str, ComponentType] = self._plan_twin.asset_classes() if self._plan_twin is not None else {}
+        classes.update({facts.subject: facts.facts.asset_class for facts in envelope})
+        measure_subjects = {
+            subject: asset_class for subject, asset_class in classes.items() if result.subjects.get(subject)
+        }
+        reference: Dict[str, ComponentType] = (
+            self._baseline_twin.asset_classes() if self._baseline_twin is not None else {}
+        )
+        for element in ThermalElement:
+            if self._element_area(element) is not None:
+                reference[EnvelopeAssets.subject_of(element)] = EnvelopeAssets.of_element(element)
+        return ReplacedSubjects.derive(measure_subjects, register, reference)
 
     def _envelope_subject(
         self,
@@ -1909,8 +2096,8 @@ class EconomicContextBuilder:
         translator's early recording (:meth:`stated_leaves`). An unstated one is the
         :class:`UnknownAge` mid-life year of the device's asset class, recorded on the result's
         ``approximations`` under the block's ``installation_year`` path with the reason. The
-        envelope elements do not come here: they keep the construction year
-        (:meth:`_installation_year`).
+        envelope elements take the same default through :meth:`_installation_year`, which reads
+        their nested blocks.
 
         Args:
             block_name: The ``house`` key the device lives under, e.g. ``"heating"``.
@@ -1933,25 +2120,28 @@ class EconomicContextBuilder:
     def _installation_year(
         self,
         block_name: str,
+        asset_class: ComponentType,
         result: Optional[EconomicContextResult] = None,
         block: Optional[Mapping[str, Any]] = None,
     ) -> int:
-        """The installation year of one envelope element, defaulting to the construction year.
+        """The installation year of one envelope element: the request's own, else mid-life.
 
-        The envelope is the building's fabric, as old as the building unless the request says it
-        was renewed, so an undated element takes the construction year; every *device* -- the
-        generator, the arrays, the equipment -- takes its mid-life year instead
-        (:meth:`_device_year`, :class:`UnknownAge`).
+        Owner decision of 2026-09-27 (hisim-ryw1): an element whose year the request does not
+        state is at **mid-life**, like an undated device (:class:`UnknownAge`: the price basis
+        year less half the service life of its register class, never before the construction
+        year), and the mapping report calls the year ``approximated``. Until then it took the
+        construction year, which, once the reference renews the fabric, made every element of an
+        old house due in year 1 at once. The same default answers an element of a refurbished
+        TABULA variant the request leaves undated (hisim-75w0): the variant says the element was
+        renewed, not when.
 
-        A year the request states (:meth:`_stated_year`) is read as it stands; one it omits is
-        recorded on the result's ``defaults`` list with the construction year that stood in, so
-        the mapping report says which figure the asset's age is. A stated year's ``used`` line is
-        the translator's own early recording (:meth:`stated_leaves`), which runs before the
-        fail-loud stage.
+        A year the request states (:meth:`_stated_year`) is read as it stands; its ``used`` line is
+        the translator's own early recording (:meth:`stated_leaves`).
 
         Args:
             block_name: The ``house`` key the part lives under, for the mapping-report path.
-            result: The result being assembled, for the ``defaulted`` line.
+            asset_class: The element's register class, whose service life halves.
+            result: The result being assembled, for the ``approximated`` line.
             block: The raw block to read, when it is not ``house[block_name]`` — an envelope
                 element lives one level down, under ``house.building``.
 
@@ -1959,13 +2149,14 @@ class EconomicContextBuilder:
             The year the part was installed.
         """
         raw = self._raw_original.get(block_name) if block is None else block
-        path = f"house.{block_name}.{self.INSTALLATION_YEAR_KEY}"
         stated = self._stated_year(raw)
         if stated is not None:
             return stated
-        year = self._original.building.construction_year
+        year, note = UnknownAge.installation_year(
+            asset_class, self._request.country.value, self._original.building.construction_year
+        )
         if result is not None:
-            result.defaults.append((path, year, self.INSTALLATION_YEAR_NOTE))
+            result.approximations.append((f"house.{block_name}.{self.INSTALLATION_YEAR_KEY}", year, note))
         return year
 
     @classmethod
@@ -1974,8 +2165,7 @@ class EconomicContextBuilder:
 
         Args:
             block: The raw block the year is read from, as :meth:`_stated_year` reads it.
-            default: What stands in when the block states none: the mid-life year of a device,
-                the construction year of an envelope element.
+            default: What stands in when the block states none: the mid-life year.
 
         Returns:
             ``REQUEST`` for a stated year, ``default`` otherwise.

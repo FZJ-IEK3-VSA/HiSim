@@ -214,6 +214,19 @@ marks each `by_subject` row's `investment_origin` (`reader_quote`, `included_in_
 `request`, `cost_database`) with its `investment_source`. Every `subsidies[]` row carries
 `max_amount_in_euro`, the most the scheme can pay, whatever its status (renovisorissues #54).
 
+The do-nothing reference renews the building's fabric (renovisorissues #59, schema version 7):
+every envelope element with an area that no measure replaces is a cost subject `envelope_<element>`
+(roof, facade, floor, window, door), kept and renewed like-for-like at the end of the cost database's
+service life (the engine's fallback, `service_life_origin: engine_fallback`, where it has none), dated
+from its `installation_year` (mid-life when the request states none), on the reference and on every
+stage that keeps it. The renewal is unpriced: HiSim prices no envelope work, and a cost band reaches
+the translator only on a measure, so the row states the due years and no money. The plan is priced by
+the full-cost method: the reference pays every end-of-life renewal, so no stage books an anyway-cost
+credit for what it replaces (the modernisation-levy basis still deducts it). A plan row states `replaces_subjects`, the
+reference subjects its subject takes over (`external_insulation` -> `envelope_facade`, a new heat pump
+-> the reference's boiler), from the mapping report's `replaces_subjects`; a report written before
+the field is completed from the stages' stored registers by the same rule.
+
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when
 the block states none: the document never dates a plan from its weather. `weather_year` is the year

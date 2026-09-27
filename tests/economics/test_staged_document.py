@@ -484,8 +484,8 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_six(self, document):
-        """Version 6: the reader's quotes (#53) and every subsidy row's maximum (#54).
+    def test_the_document_states_schema_version_seven(self, document):
+        """Version 7: every row's ``replaces_subjects`` and the reference's renewed fabric (#59).
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
         the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
@@ -499,14 +499,17 @@ class TestTheDocumentShape:
         ``installation_year_origin`` and ``note`` on every ``by_subject`` row; version 6
         (2026-09-26, renovisorissues #53 and #54) requires ``parameters.investment_overrides``,
         ``investment_origin`` and ``investment_source`` on every ``by_subject`` row and
-        ``max_amount_in_euro`` on every ``subsidies[]`` row. A document of that shape stating an
-        older version would tell a consumer it could skip what the later versions require.
+        ``max_amount_in_euro`` on every ``subsidies[]`` row; version 7 (2026-09-27, renovisorissues
+        #59, hisim-ryw1) requires ``replaces_subjects`` on every ``by_subject`` row, and its
+        reference renews the building fabric, so its reference totals are not a version 6's. A
+        document of that shape stating an older version would tell a consumer it could skip what
+        the later versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 6
+        assert document["schema_version"] == 7
         StagedDocument.validate(document)
-        for older in (1, 2, 3, 4, 5):
+        for older in (1, 2, 3, 4, 5, 6):
             with pytest.raises(jsonschema.ValidationError):
                 StagedDocument.validate({**document, "schema_version": older})
 

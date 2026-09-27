@@ -17,7 +17,7 @@ import json
 import os
 import types
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import pytest
 
@@ -267,27 +267,34 @@ class TestTheRegister:
         dated = [line for line in translated.report.lines() if line.path.startswith(paths)]
         assert dated and all("the cost database has no device data for NL" in (line.note or "") for line in dated)
 
-    def test_an_undated_envelope_element_is_as_old_as_the_building(self) -> None:
-        """The fabric is as old as the building unless the request says it was renewed."""
+    def test_an_undated_envelope_element_is_at_mid_life(self) -> None:
+        """hisim-ryw1: like an undated device, half its service life left, reported approximated.
+
+        Until 2026-09-27 it took the construction year, which put all of an old house's fabric in
+        year 1 of the reference once the reference renews it.
+        """
         document = _mockup()
         built = _built(document)
         facade = built.context.existing_assets.find(ComponentType.WALL_EXTERNAL_INSULATION)
-        assert facade.installation_year == document["house"]["building"]["construction_year"]
-        assert (
-            "house.building.facade.installation_year",
-            document["house"]["building"]["construction_year"],
-        ) in [(path, value) for path, value, _note in built.defaults]
+        year, note = UnknownAge.installation_year(
+            ComponentType.WALL_EXTERNAL_INSULATION, "IE", document["house"]["building"]["construction_year"]
+        )
+        assert facade.installation_year == year > document["house"]["building"]["construction_year"]
+        assert facade.installation_year_origin is InstallationYearOrigin.MID_LIFE_DEFAULT
+        assert ("house.building.facade.installation_year", year, note) in built.approximations
+        assert "house.building.facade.installation_year" not in [path for path, _value, _note in built.defaults]
 
-    def test_a_stated_installation_year_wins_over_the_construction_year(self) -> None:
-        """E-spec §7's additive field: read when present, defaulted to the construction year.
+    def test_a_stated_installation_year_wins_over_the_mid_life_default(self) -> None:
+        """E-spec §7's additive field: read when present, defaulted to the mid-life year.
 
         Asked of the reader directly, so a block the mockup does not date is covered too.
         """
         builder = _builder(_mockup())
+        facade = ComponentType.WALL_EXTERNAL_INSULATION
         # pylint: disable=protected-access
-        assert builder._installation_year("pv_system", block={"installation_year": 2008}) == 2008
-        assert builder._installation_year("pv_system", block={}) == (
-            _mockup()["house"]["building"]["construction_year"]
+        assert builder._installation_year("building.facade", facade, block={"installation_year": 2008}) == 2008
+        assert builder._installation_year("building.facade", facade, block={}) == (
+            UnknownAge.installation_year(facade, "IE", _mockup()["house"]["building"]["construction_year"])[0]
         )
 
     def test_an_integral_float_year_is_the_same_year(self) -> None:
@@ -614,12 +621,13 @@ class TestTheMappingReportHalf:
 
 @pytest.mark.base
 class TestTheEnvelopeInstallationYears:
-    """hisim-glv7: an element's stated year counts only where a measure replaces or insulates it.
+    """hisim-glv7, hisim-ryw1: an element's stated year counts wherever the element has a row.
 
     The engine reads a register row's age for the asset a measure replaces (the sunk cost and the
-    anyway-cost credit) and for a kept asset a cost subject matches; a kept envelope element matches
-    no subject, because only a measure creates one. So the year is read exactly when the element
-    has a row and a measure of the package touches it, and the builder says so otherwise.
+    anyway-cost credit) and for a kept asset a cost subject matches; since hisim-ryw1 a kept
+    envelope element is a subject of its own (``envelope_<element>``), whose renewal is scheduled
+    from that year. So the year is read exactly when the element has a row, and the builder says
+    so otherwise.
     """
 
     #: A valid window replacement, as the catalogue requires its options.
@@ -644,8 +652,12 @@ class TestTheEnvelopeInstallationYears:
         assert facade.installation_year == 1995
         assert "house.building.facade.installation_year" not in self._unread(built)
 
-    def test_a_year_on_a_kept_element_is_recorded_on_its_row_and_read_by_nothing(self) -> None:
-        """Without the facade measure the row keeps the year, and the report must not call it used."""
+    def test_a_year_on_a_kept_element_dates_its_renewal(self) -> None:
+        """Without the facade measure the row keeps the year, and the facade's own subject reads it.
+
+        Before hisim-ryw1 this year was read by nothing (``ENVELOPE_YEAR_KEPT_NOTE``, retired):
+        the kept facade had no subject. Now it is ``envelope_facade``, renewed from that year.
+        """
         document = _mockup()
         document["house"]["building"]["facade"]["installation_year"] = 1995
         document["measures"] = [m for m in document["measures"] if m["id"] != "external_insulation"]
@@ -654,10 +666,8 @@ class TestTheEnvelopeInstallationYears:
         facade = built.context.existing_assets.find(EnvelopeAssets.of_element(ThermalElement.FACADE))
         assert facade is not None and not facade.replaced_by_asset_classes
         assert facade.installation_year == 1995
-        assert self._unread(built)["house.building.facade.installation_year"] == (
-            1995,
-            EconomicContextBuilder.ENVELOPE_YEAR_KEPT_NOTE,
-        )
+        assert "envelope_facade" in {facts.subject for facts in built.context.extra_cost_facts}
+        assert "house.building.facade.installation_year" not in self._unread(built)
 
     def test_a_year_on_an_element_without_a_stated_area_dates_its_tabula_sized_row(self) -> None:
         """The mockup's window states no area, so its row carries the Building's own, and the year."""
@@ -1635,8 +1645,8 @@ class TestAnUnpricedEnvelopeRowSaysWhy:
 class TestTheRegisterSaysWhereEachYearCameFrom:
     """Every register entry says whether its year was stated or assumed (renovisorissues #58)."""
 
-    def test_the_mockups_years_are_stated_assumed_mid_life_or_the_construction_year(self) -> None:
-        """Its boiler's year is stated, its meters are at mid-life, its facade is as old as the house."""
+    def test_the_mockups_years_are_stated_or_assumed_mid_life(self) -> None:
+        """Its boiler's year is stated; its meters and, since hisim-ryw1, its facade are at mid-life."""
         translated = _translated(_mockup())
 
         assert _registered(translated, ComponentType.GAS_HEATER).installation_year_origin is (
@@ -1649,7 +1659,7 @@ class TestTheRegisterSaysWhereEachYearCameFrom:
             InstallationYearOrigin.MID_LIFE_DEFAULT
         )
         assert _registered(translated, ComponentType.WALL_EXTERNAL_INSULATION).installation_year_origin is (
-            InstallationYearOrigin.CONSTRUCTION_YEAR_DEFAULT
+            InstallationYearOrigin.MID_LIFE_DEFAULT
         )
 
     def test_an_undated_generator_is_at_mid_life(self) -> None:
@@ -1668,3 +1678,191 @@ class TestTheRegisterSaysWhereEachYearCameFrom:
         assert asset_from_json(stored).installation_year_origin is InstallationYearOrigin.MID_LIFE_DEFAULT
         del stored["installation_year_origin"]
         assert asset_from_json(stored).installation_year_origin is None
+
+
+@pytest.mark.base
+class TestTheReferenceRenewsTheFabric:
+    """hisim-ryw1 (renovisorissues #59): every kept envelope element is renewed at the end of its life.
+
+    Owner decision of 2026-09-27. The mockup, with an area for each of its five elements, priced as
+    a two-stage plan -- the house as it is, then the facade insulated -- against the shipped Irish
+    cost database: the reference keeps and renews all five elements from their installation years,
+    and the plan's insulation names the facade it takes over.
+    """
+
+    #: One area per element, so each has a register row (the mockup itself states only the facade's).
+    AREAS: Dict[str, float] = {
+        "facade_area_in_m2": 140.0,
+        "roof_area_in_m2": 90.0,
+        "floor_area_in_m2": 80.0,
+        "window_area_in_m2": 29.0,
+        "door_area_in_m2": 2.7,
+    }
+
+    #: Stated installation years for two elements; the other three are at mid-life.
+    YEARS: Dict[str, int] = {"window": 2010, "door": 2000}
+
+    #: The price basis year the plan is priced at; the shipped Irish device data starts there.
+    BASIS_YEAR: int = 2026
+
+    @classmethod
+    def _document(cls, with_insulation: bool) -> Dict[str, Any]:
+        document = _mockup()
+        for element, year in cls.YEARS.items():
+            document["house"]["building"][element]["installation_year"] = year
+        document["measures"] = [
+            measure for measure in document["measures"] if with_insulation and measure["id"] == "external_insulation"
+        ]
+        return document
+
+    @classmethod
+    def _stage(cls, built: Any, index: int, measures: Tuple[str, ...]) -> Any:
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.evaluator import EvaluationInputs
+        from hisim.economics.facts import BillingDeterminants
+        from hisim.economics.staged import Stage
+
+        inputs = EvaluationInputs(
+            simulation_year=cls.BASIS_YEAR,
+            simulated_period_fraction=1.0,
+            cost_facts=list(built.context.extra_cost_facts),
+            billing=[BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=3000.0)],
+            existing_assets=built.context.existing_assets,
+            annual_heat_demand_in_kwh=11000.0,
+        )
+        return Stage(inputs=inputs, from_year=0, label=f"stage {index}", measures=measures)
+
+    @pytest.fixture(name="plan", scope="class")
+    def fixture_plan(self) -> Any:
+        """The two built contexts, the stages made of them and the priced plan's document."""
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.database import CostDatabase
+        from hisim.economics.parameters import EconomicParameters
+        from hisim.economics.staged import StagedEvaluator
+        from hisim.economics.staged_document import StagedDocument
+        from tests.economics.synthetic_stages import brownfield_perspective
+
+        config = _building(**self.AREAS)
+        reference = _built(self._document(with_insulation=False), config)
+        insulated = _built(self._document(with_insulation=True), config)
+        stages = [self._stage(reference, 0, ()), self._stage(insulated, 1, ("external_insulation",))]
+        parameters = EconomicParameters(
+            country="IE", price_basis_year=self.BASIS_YEAR, co2_price_scenario="none", apply_subsidies=False
+        )
+        perspective = brownfield_perspective()
+        database = CostDatabase(None)
+        result = StagedEvaluator(database).evaluate(stages, parameters, perspective)
+        document = StagedDocument(
+            result,
+            parameters,
+            perspective,
+            measure_ids=insulated.subjects,
+            # Merged over both stages' reports, as ``StagedCli.read_mapping`` merges them.
+            unpriced_subjects=[*reference.unpriced_subjects, *insulated.unpriced_subjects],
+            subject_notes={**reference.subject_notes, **insulated.subject_notes},
+            replaces_subjects=insulated.replaces_subjects,
+        ).to_json()
+        StagedDocument.validate(document)
+        return {"stages": stages, "insulated": insulated, "document": document, "database": database}
+
+    def test_every_kept_element_is_a_subject_of_its_register_class(self) -> None:
+        """Five subjects, each of its element's register class, sized in m² -- the door per door."""
+        built = _built(self._document(with_insulation=False), _building(**self.AREAS))
+        facts = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}
+
+        assert set(facts) == {EnvelopeAssets.subject_of(element) for element in ThermalElement}
+        for element in ThermalElement:
+            subject = facts[EnvelopeAssets.subject_of(element)]
+            assert subject.asset_class is EnvelopeAssets.of_element(element)
+            # Unpriced (HiSim prices no envelope work, no band reaches a kept element); the life
+            # is the database's, so no lifetime override.
+            assert subject.investment_cost_override_in_euro == UncertainValue.exact(0.0)
+            assert subject.lifetime_override_in_years is None
+        assert set(built.unpriced_subjects) == set(facts)
+        assert built.subject_notes["envelope_roof"] == EconomicContextBuilder.KEPT_ELEMENT_UNPRICED_NOTE
+        assert facts["envelope_facade"].size == 140.0
+        assert facts["envelope_facade"].size_unit is Units.SQUARE_METER
+        assert (facts["envelope_door"].size, facts["envelope_door"].size_unit) == (1.0, Units.ANY)
+
+    def test_an_element_a_measure_replaces_has_no_subject_of_its_own(self, plan) -> None:
+        """The insulated facade is the measure's subject now, not a renewal of the old one."""
+        subjects = {entry.subject for entry in plan["insulated"].context.extra_cost_facts}
+        assert "envelope_facade" not in subjects
+        assert "external_insulation" in subjects
+
+    def test_the_reference_has_five_envelope_rows_due_at_the_end_of_their_lives(self, plan) -> None:
+        """Due year = installation year + the database's life, as a plan year; unpriced, so no money."""
+        rows = {row["subject"]: row for row in plan["document"]["reference"]["by_subject"]}
+        horizon = plan["document"]["parameters"]["horizon_years"]
+        for element in ThermalElement:
+            row = rows[EnvelopeAssets.subject_of(element)]
+            life = plan["database"].get_device_entry(EnvelopeAssets.of_element(element), self.BASIS_YEAR, "IE")
+            installed = self.YEARS.get(
+                element.value, UnknownAge.installation_year(EnvelopeAssets.of_element(element), "IE", 1975)[0]
+            )
+            first = max(1, installed + int(life.service_life_in_years) - self.BASIS_YEAR)
+            assert row["service_life_years"] == life.service_life_in_years
+            assert (row["installation_year"], row["service_life_origin"]) == (installed, "cost_database")
+            assert row["installation_year_origin"] == ("request" if element.value in self.YEARS else (
+                "mid_life_default"
+            ))
+            # The engine renews strictly inside the horizon; a renewal due in year T or later is
+            # stated by the row's installation year and life alone (facade, roof and floor here).
+            assert row["replacement_years"] == list(range(first, horizon, int(life.service_life_in_years)))
+            assert row["replacements_in_euro"]["best"] == 0.0
+            assert (row["measure_id"], row["replaces_subjects"], row["unpriced"]) == (None, [], True)
+
+    def test_the_insulation_names_the_facade_it_replaces(self, plan) -> None:
+        """The plan row of the measure states the reference subject it takes over."""
+        assert plan["insulated"].replaces_subjects == {"external_insulation": ["envelope_facade"]}
+        rows = {row["subject"]: row for row in plan["document"]["plan"]["by_subject"]}
+        assert rows["external_insulation"]["replaces_subjects"] == ["envelope_facade"]
+        assert rows["envelope_roof"]["replaces_subjects"] == []
+
+    def test_an_old_report_without_the_field_derives_it_from_the_stored_inputs(self, plan, tmp_path) -> None:
+        """A mapping report written before hisim-ryw1: the translator's rule over the stages' inputs."""
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.__main__ import StagedCli
+        from hisim.renovisor.report import MappingReport
+
+        directories = []
+        for index, subjects in enumerate(({}, {"external_insulation": "external_insulation"})):
+            directory = tmp_path / f"stage{index}"
+            directory.mkdir()
+            report = {MappingReport.SUBJECTS_FIELD: subjects, MappingReport.UNPRICED_SUBJECTS_FIELD: []}
+            (directory / StagedCli.MAPPING_REPORT_FILE_NAME).write_text(json.dumps(report), encoding="utf-8")
+            directories.append(str(directory))
+
+        mapping = StagedCli.read_mapping(directories, stages=plan["stages"])
+
+        assert mapping.replaces == {"external_insulation": ["envelope_facade"]}
+        assert StagedCli.read_mapping(directories).replaces == {}
+
+    def test_an_element_the_database_has_no_life_for_takes_the_engines_fallback(self, monkeypatch) -> None:
+        """No entry for the class: the engine's fallback life, marked as such, and the note says so."""
+        # pylint: disable=import-outside-toplevel
+        from hisim.economics.calculators.context_resolution import ContextResolutionConstants
+        from hisim.economics.database import CostDatabase
+
+        original = CostDatabase.has_device_entry
+
+        def without_doors(database: CostDatabase, component_type: ComponentType, country: str) -> bool:
+            return component_type is not ComponentType.EXTERIOR_DOOR and original(database, component_type, country)
+
+        monkeypatch.setattr(CostDatabase, "has_device_entry", without_doors)
+        built = _built(self._document(with_insulation=False), _building(**self.AREAS))
+        door = {entry.subject: entry.facts for entry in built.context.extra_cost_facts}["envelope_door"]
+
+        assert "envelope_door" in built.unpriced_subjects
+        assert door.investment_cost_override_in_euro == UncertainValue.exact(0.0)
+        assert door.lifetime_override_in_years == ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS
+        assert door.lifetime_is_engine_fallback
+        assert "EXTERIOR_DOOR" in built.subject_notes["envelope_door"]
+        # pylint: disable=import-outside-toplevel,protected-access
+        from hisim.economics.parameters import EconomicParameters
+        from hisim.economics.staged import LifeOrigin, StagedEvaluator
+
+        _life, origin = StagedEvaluator(CostDatabase(None))._service_life(
+            door, self.BASIS_YEAR, EconomicParameters(country="IE")
+        )
+        assert origin is LifeOrigin.ENGINE_FALLBACK

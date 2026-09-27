@@ -38,10 +38,11 @@ import json
 import os
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import Any, Callable, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.economics.calculators.financing_application import FinancingConstants
 from hisim.economics.carriers import bill_subjects
+from hisim.economics.facts import ComponentCostFacts
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
@@ -283,10 +284,13 @@ class StagedDocument:
             (renovisorissues #58).
         subject_notes: Subject -> the sentence its row's ``note`` carries: why an unpriced
             subject has no price, why a costless one costs nothing.
+        replaces_subjects: Measure subject -> the reference subjects it replaces, from the
+            translator's mapping report (hisim-ryw1); a row whose subject no measure created, and
+            every reference row of a subject stage 0 does not carry out, states an empty list.
     """
 
     #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 6
+    SCHEMA_VERSION: ClassVar[int] = 7
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -351,6 +355,7 @@ class StagedDocument:
         cost_provenance: str = "cost_provenance.json",
         costless_subjects: Iterable[str] = (),
         subject_notes: Optional[Mapping[str, str]] = None,
+        replaces_subjects: Optional[Mapping[str, Sequence[str]]] = None,
     ) -> None:
         """Store the plan and its context; nothing is built until :meth:`to_json`.
 
@@ -373,6 +378,9 @@ class StagedDocument:
         self._unpriced: Set[str] = set(unpriced_subjects)
         self._costless: Set[str] = set(costless_subjects)
         self._notes: Dict[str, str] = dict(subject_notes or {})
+        self._replaces: Dict[str, List[str]] = {
+            subject: sorted(names) for subject, names in (replaces_subjects or {}).items()
+        }
         self._catalog_id = subsidy_catalog_id
         self._cost_provenance = cost_provenance
 
@@ -814,6 +822,11 @@ class StagedDocument:
         A measure the engine prices no subject for -- a setting, or one HiSim holds no price for
         -- still gets a row, a zero one of its own (:meth:`_measure_only_rows`), so every measure a
         stage carries out is on this list (:meth:`assert_every_measure_has_row`).
+
+        ``replaces_subjects`` names the reference subjects a measure's subject replaces, as the
+        translator's mapping report states them (hisim-ryw1): the external insulation's row names
+        ``envelope_facade``, the element whose like-for-like renewal the reference carries and the
+        insulation takes over from its stage on. It is empty on every row without a ``measure_id``.
         """
         rows: List[Dict[str, Any]] = []
         replacements = self._replacement_years(result)
@@ -847,10 +860,68 @@ class StagedDocument:
                     life=self._life_fields(subject, staged),
                     replacement_years=replacements.get(subject, []),
                     note=self._note(subject, quote),
+                    replaces_subjects=self._replaces.get(subject, []) if measure_id is not None else [],
                 )
             )
         rows.extend(self._measure_only_rows(result, staged))
+        rows.extend(self._no_flow_rows(result, staged))
         return sorted(rows, key=lambda row: row["subject"])
+
+    def _no_flow_rows(self, result: LifecycleCostResult, staged: bool) -> List[Dict[str, Any]]:
+        """One zero row per unpriced subject the evaluation carries that booked no flow at all.
+
+        An unpriced subject is priced at zero, so it books money only where the timeline dates an
+        event for it -- a renewal inside the horizon. A kept envelope element whose renewal falls
+        after the horizon (hisim-ryw1) books none, and the engine's pivot, which is the timeline's,
+        has no row for it. The document gives it one: its lifetime and installation year say when
+        the renewal falls due, and ``unpriced`` says why the row carries no money. Every band is an
+        exact zero, so every sum the document states is unchanged. The subjects are the cost facts
+        of ``stages[0]`` on the reference and of every stage active in some year on the plan.
+
+        Args:
+            result: The evaluation the rows go into.
+            staged: Whether it is the plan.
+
+        Returns:
+            The rows, unsorted.
+        """
+        zero = UncertainValue.exact(0.0)
+        indices = sorted(set(self._result.active_stage_by_year)) if staged else [0]
+        facts_by_subject: Dict[str, ComponentCostFacts] = {}
+        for index in indices:
+            if index < len(self._result.stages):
+                facts_by_subject.update(
+                    {facts.subject: facts.facts for facts in self._result.stages[index].inputs.cost_facts}
+                )
+        reference_measures = set(self._result.stages[0].measures) if self._result.stages else set()
+        rows: List[Dict[str, Any]] = []
+        for subject, facts in sorted(facts_by_subject.items()):
+            if subject in result.component_breakdowns or subject not in self._unpriced:
+                continue
+            measure_id = self._measure_ids.get(subject)
+            if not staged and measure_id not in reference_measures:
+                measure_id = None
+            rows.append(
+                self._row(
+                    subject,
+                    kind=SubjectKindNames.COMPONENT,
+                    asset_class=facts.asset_class.value,
+                    measure_id=measure_id,
+                    stage=self._result.stage_of_subject(subject) if staged else None,
+                    unpriced=True,
+                    npv=zero,
+                    investment=zero,
+                    investment_origin=None,
+                    investment_source=None,
+                    investment_by_stage=[],
+                    categories={},
+                    life=self._life_fields(subject, staged),
+                    replacement_years=[],
+                    note=self._notes.get(subject),
+                    replaces_subjects=self._replaces.get(subject, []) if measure_id is not None else [],
+                )
+            )
+        return rows
 
     def _note(self, subject: str, quote: Optional[Tuple[InvestmentOverride, bool]]) -> Optional[str]:
         """One row's ``note``: the mapping report's, or what a reader's quote made of the row.
@@ -953,6 +1024,7 @@ class StagedDocument:
                     life=self.NO_LIFE,
                     replacement_years=[],
                     note=self._notes.get(subject),
+                    replaces_subjects=self._replaces.get(subject, []),
                 )
             )
         return rows
@@ -974,6 +1046,7 @@ class StagedDocument:
         life: Mapping[str, Any],
         replacement_years: List[int],
         note: Optional[str],
+        replaces_subjects: Sequence[str] = (),
     ) -> Dict[str, Any]:
         """One ``by_subject`` row: the one place its key set is written.
 
@@ -993,6 +1066,7 @@ class StagedDocument:
             life: The four lifetime and age fields (:meth:`_life_fields`, :attr:`NO_LIFE`).
             replacement_years: The years its replacements fall in.
             note: Why it has no price or costs nothing, or what a reader's quote made of it; ``None`` otherwise.
+            replaces_subjects: The reference subjects its subject replaces; empty for one no measure created.
 
         Returns:
             The row, in the key order of the schema.
@@ -1019,6 +1093,7 @@ class StagedDocument:
             **life,
             "replacement_years": replacement_years,
             "note": note,
+            "replaces_subjects": list(replaces_subjects),
         }
 
     def _investment_by_stage(self, result: LifecycleCostResult) -> Dict[str, Dict[int, UncertainValue]]:

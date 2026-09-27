@@ -337,11 +337,14 @@ class LifeOrigin(str, enum.Enum):
     ``REQUEST`` is a ``lifetime_override_in_years`` on the subject's cost facts -- the lifetime
     the calculation's own inputs state -- and ``COST_DATABASE`` the ``service_life_in_years`` of
     the cost database's entry for the asset class at the plan's price basis year. The chain is the
-    engine's own (``calculators/context_resolution.py``): an override wins.
+    engine's own (``calculators/context_resolution.py``): an override wins. ``ENGINE_FALLBACK`` is
+    an override that is the engine's fallback life, standing in where the database has no entry
+    for the class (``ComponentCostFacts.lifetime_is_engine_fallback``, hisim-ryw1; schema 7).
     """
 
     REQUEST = "request"
     COST_DATABASE = "cost_database"
+    ENGINE_FALLBACK = "engine_fallback"
 
 
 @dataclass(frozen=True)
@@ -916,7 +919,11 @@ class StagedEvaluator:
             raise StagedEvaluationError(self.YEAR_ZERO_MESSAGE, [problem.to_json()])
         price_basis_year = parameters.price_basis_year
         year_zero = self.plan_year_zero(plan_start_year, price_basis_year)
-        evaluator = EconomicEvaluator(self.database, parameters, catalog, plan_year_zero=year_zero)
+        # Full-cost method (owner decision 2026-09-27, hisim-ryw1): the reference pays every
+        # end-of-life renewal, so no stage books an anyway credit for what it replaces.
+        evaluator = EconomicEvaluator(
+            self.database, parameters, catalog, plan_year_zero=year_zero, book_anyway_credit=False
+        )
         self._validate_stated_prices(ordered, parameters, price_basis_year)
         active_by_year = self._active_by_year(ordered, parameters.observation_period_in_years)
 
@@ -2095,7 +2102,8 @@ class StagedEvaluator:
             hisim.economics.database.CostDataError: If neither source states one.
         """
         if facts.lifetime_override_in_years is not None:
-            return float(facts.lifetime_override_in_years), LifeOrigin.REQUEST
+            origin = LifeOrigin.ENGINE_FALLBACK if facts.lifetime_is_engine_fallback else LifeOrigin.REQUEST
+            return float(facts.lifetime_override_in_years), origin
         entry = self.database.get_device_entry(facts.asset_class, price_basis_year, parameters.country)
         return float(entry.service_life_in_years), LifeOrigin.COST_DATABASE
 

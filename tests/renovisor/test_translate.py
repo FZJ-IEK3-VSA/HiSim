@@ -829,14 +829,16 @@ class TestTheEconomicsOnlyLeaves:
         "element, measure, status",
         [
             ("facade", True, ReportStatus.USED),
-            ("facade", False, ReportStatus.APPROXIMATED),
+            # hisim-ryw1: the kept facade is a subject of its own, renewed from this year.
+            ("facade", False, ReportStatus.USED),
+            # The mockup states no roof area, so the roof has no register row to date.
             ("roof", False, ReportStatus.APPROXIMATED),
         ],
     )
-    def test_an_envelope_year_is_used_only_where_a_measure_touches_the_element(
+    def test_an_envelope_year_is_used_wherever_the_element_has_a_row(
         self, element: str, measure: bool, status: ReportStatus
     ) -> None:
-        """hisim-glv7: the mockup insulates its facade (which has an area) and leaves its roof alone."""
+        """hisim-glv7/ryw1: a year is used wherever the element has an area; the mockup's roof has none."""
         document = copy.deepcopy(ContractFiles.request_mockup())
         document["house"]["building"][element]["installation_year"] = 1995
         if not measure:

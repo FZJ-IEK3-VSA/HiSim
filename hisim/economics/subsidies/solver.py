@@ -404,6 +404,11 @@ class SchemeMaximumNotes:
     #: A reduced VAT rate is a rate on the price, not an amount, and no consumer books it (§7 B7).
     REDUCED_VAT = "no maximum: the scheme reduces the VAT rate and states no amount it pays"
 
+    #: A soft loan with no repayment grant is a loan, no grant element: nothing it pays is a
+    #: grant, and its benefit is the cheaper interest (renovisorissues #65, cmf 2026-09-27). The
+    #: sentence an awarded loan-terms row already states.
+    SOFT_LOAN = "loan terms: the benefit is in the financing costs, not a grant"
+
 
 def scheme_maximum(
     scheme: SubsidyScheme,
@@ -427,7 +432,8 @@ def scheme_maximum(
       which a cumulation group's combined-rate cap only ever scales down depending on which
       other schemes (and so which answers) stack with it;
     * TAX_CREDIT: the whole credit, every instalment;
-    * SOFT_LOAN: the repayment grant on the capped eligible cost (zero where it grants none);
+    * SOFT_LOAN: the repayment grant on the capped eligible cost; ``None`` where it grants none,
+      since a loan without a grant element states no amount it pays (renovisorissues #65);
     * OPERATIONAL: the rate times the measure's annual energy times the duration;
     * REDUCED_VAT: ``None`` -- the catalogue states a rate on the price, no amount.
 
@@ -448,6 +454,8 @@ def scheme_maximum(
         return SchemeMaximum(amount_in_euro=None, note=SchemeMaximumNotes.REDUCED_VAT)
     award = _combination_awards([scheme], measure, context, overall_cap_share)[0]
     if isinstance(benefit, LoanTermsBenefit):
+        if not benefit.repayment_grant_rate:
+            return SchemeMaximum(amount_in_euro=None, note=SchemeMaximumNotes.SOFT_LOAN)
         basis, _binding = _eligible_cost_basis(scheme, measure, context)
         return SchemeMaximum(amount_in_euro=basis.scale(benefit.repayment_grant_rate))
     if isinstance(benefit, TaxCreditBenefit):

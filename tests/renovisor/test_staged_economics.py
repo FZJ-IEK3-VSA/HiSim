@@ -21,7 +21,7 @@ import pytest
 
 from hisim.economics.__main__ import main as economics_main
 from hisim.economics.staged_document import StagedDocument
-from hisim.economics.subsidies import SubsidyCatalog
+from hisim.economics.subsidies import SchemeMaximumNotes, SubsidyCatalog
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.request import CatalogueTable
 from hisim.renovisor.run import Calculation, ExitCode
@@ -518,6 +518,32 @@ class TestTheEquipmentTheHouseAlreadyHas:
         for row in reference["by_subject"]:
             assert row["investment_in_euro"]["best"] == pytest.approx(0.0), row["subject"]
 
+    def test_the_kept_parts_are_attributed_to_no_stage(self, document) -> None:
+        """The cylinder, the meter and the kept envelope: stage null, as on the reference (#65)."""
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        for subject in ("DHWStorage", "ElectricityMeter", "envelope_roof", "envelope_window"):
+            assert rows[subject]["investment_by_stage"] == [], subject
+            assert rows[subject]["stage"] is None, subject
+        assert rows["MoreAdvancedHeatPumpHPLib"]["stage"] == 1
+
+    def test_a_scheme_states_its_maximum_for_the_whole_measure(self, document) -> None:
+        """Every heating_system row of a scheme states the sum of its subjects' maxima (#65)."""
+        rows = [row for row in document["plan"]["subsidies"] if row["measure_id"] == "heating_system"]
+        warmer = [row for row in rows if row["scheme"] == "IE_SEAI_WARMER_HOMES"]
+        assert warmer
+        for row in rows:
+            same = [
+                other["max_amount_in_euro"]
+                for other in rows
+                if other["scheme"] == row["scheme"] and other["stage"] == row["stage"]
+            ]
+            if row["max_amount_in_euro"] is None:
+                assert row["max_amount_for_measure_in_euro"] is None
+                continue
+            assert row["max_amount_for_measure_in_euro"] == {
+                slot: pytest.approx(sum(band[slot] for band in same)) for slot in ("min", "best", "max")
+            }
+
     def test_the_reference_is_awarded_no_central_heating_grant(self, document) -> None:
         """hisim-fig7: the radiators are kept, so no scheme is even asked about them."""
         schemes = {row["scheme"] for row in document["reference"]["subsidies"]}
@@ -863,10 +889,14 @@ class TestTheReadersQuote:
         rows = quoted_document["plan"]["subsidies"]
         assert rows
         for row in rows:
+            if row["scheme"] == "IE_HEULS_LOAN":
+                # A loan with no grant element states no amount it pays (#65): null, and why.
+                assert row["max_amount_in_euro"] is None, row
+                assert row["note"].count(SchemeMaximumNotes.SOFT_LOAN) == 1, row
+                continue
             assert row["max_amount_in_euro"] is not None, row
             assert row["max_amount_in_euro"]["best"] <= 0.0
-        # A soft loan pays no grant of its own (HEULS has no repayment grant), so its cap is zero;
-        # every other open question is worth something.
+        # Every other open question is worth something.
         undetermined = [row for row in rows if row["status"] == "undetermined" and row["scheme"] != "IE_HEULS_LOAN"]
         assert undetermined
         assert all(row["max_amount_in_euro"]["best"] < 0.0 for row in undetermined), undetermined

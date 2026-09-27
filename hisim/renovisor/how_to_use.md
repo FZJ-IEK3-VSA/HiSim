@@ -212,7 +212,9 @@ is priced by a quote. A stage the plan does not have, a measure the stage does n
 refused by name (`parameters.investment_overrides.*`, exit 2). The result echoes the quotes and
 marks each `by_subject` row's `investment_origin` (`reader_quote`, `included_in_reader_quote`,
 `request`, `cost_database`) with its `investment_source`. Every `subsidies[]` row carries
-`max_amount_in_euro`, the most the scheme can pay, whatever its status (renovisorissues #54).
+`max_amount_in_euro`, the most the scheme can pay, whatever its status (renovisorissues #54; null
+for a soft loan without a repayment grant), and `max_amount_for_measure_in_euro`, that summed over
+all of the measure's subjects in the stage (renovisorissues #65).
 
 The do-nothing reference renews the building's fabric (renovisorissues #59, schema version 7):
 every envelope element with an area that no measure replaces is a cost subject `envelope_<element>`

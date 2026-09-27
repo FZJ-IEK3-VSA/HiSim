@@ -65,7 +65,6 @@ from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import (
     EconomicEvaluator,
     EvaluationInputs,
-    YearZeroPriceLevel,
     effective_price_basis_year,
 )
 from hisim.economics.financing import FinancingPlan
@@ -97,7 +96,7 @@ from hisim.economics.staged_parameters import (
     ParameterProblemCodes,
     PlanYearBounds,
 )
-from hisim.economics.subsidies import BenefitKind, SubsidyCatalog
+from hisim.economics.subsidies import SubsidyCatalog
 from hisim.economics.tariffs import FeedInKind
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -159,13 +158,16 @@ class StagedCategories:
     * :attr:`STAGE_START` — the flows a stage *causes when it starts*. They are read off the
       stage's own year-0 entries, moved to the year that stage begins in, and escalated to that
       year with the investment escalation rate -- except a reader's quote, taken as stated, and a
-      fixed-amount grant (:attr:`FIXED_AMOUNT_BENEFITS`), booked nominal. Only subjects the stage actually pays for are
+      subsidy, which the stage's own evaluation already valued on the cost as the plan books it in
+      the stage's year (``booked_price_levels``, hisim-xnkp): a fixed amount is clamped to that
+      cost and a share of the cost follows it, so the splice books every award as it is, times
+      the share the stage pays. Only subjects the stage actually pays for are
       taken (see :meth:`StagedEvaluator._charge_share`), so a device carried over from the
       previous stage is never bought twice.
     * :attr:`LOAN_SCHEDULE` — the debt service of a stage's loan. It is not a year-0 flow but it
       belongs to the stage that borrowed. The splice does not move the stage's own schedule: it
       takes the loan out again on what the stage actually books in its year (a quote as stated,
-      database prices escalated, fixed-amount grants nominal), dates it from the stage's start
+      database prices escalated, grants as valued in the stage's year), dates it from the stage's start
       year and drops anything falling past the horizon (:meth:`StagedEvaluator._stage_loan`).
     * :attr:`OWN_PURCHASE_AGEING` — the REPLACEMENT entries of a subject the stage *pays for*.
       A unit bought in the stage's own year 0 is bought in plan year ``from_year``, so it wears
@@ -183,6 +185,11 @@ class StagedCategories:
     all of its amounts from the price basis year to ``plan_start_year`` before the splice sees them
     (:class:`~hisim.economics.evaluator.YearZeroPriceLevel`, renovisorissues #62), with the same
     exemptions, so the splice's own escalation is only the one from year 0 to the stage's year.
+    What a later stage's purchase decides is the exception, valued at the price level the plan
+    books that purchase at (:meth:`StagedEvaluator._booked_price_levels`): its subsidies, so a
+    fixed amount is clamped to the cost booked beside it and an eligible-cost cap in euro binds on
+    that cost, and its modernisation-levy basis (cost and anyway credit), so the grant is deducted
+    from the cost in the same money (hisim-xnkp).
 
     ``RESIDUAL_VALUE`` is in none of the three sets, because no stage's residual entry is ever
     taken: a stage writes its own purchase down from *its* year 0, which is the wrong year in a
@@ -207,15 +214,6 @@ class StagedCategories:
     LOAN_SCHEDULE: FrozenSet[CostCategory] = frozenset(
         {CostCategory.LOAN_INTEREST, CostCategory.LOAN_PRINCIPAL}
     )
-
-    #: Benefit kinds that pay a fixed nominal amount (in total, per unit of size, or per kWh), so
-    #: a grant of EUR 6,500 is EUR 6,500 in whichever year its stage starts: the splice books them
-    #: unescalated, and a subsidy row's maximum moves with them (owner decision 2026-09-27). The
-    #: other kinds are computed from a cost and follow it -- a share of the escalated database
-    #: price, or of the quote as stated -- and a soft loan's repayment grant follows the principal
-    #: it is a share of. OPERATIONAL entries are paid after year 0 and are never escalated anyway;
-    #: the kind is listed so its maximum is not escalated either.
-    FIXED_AMOUNT_BENEFITS: FrozenSet[BenefitKind] = YearZeroPriceLevel.FIXED_AMOUNT_BENEFITS
 
     #: Shifted by the stage's start year and escalated to it, but only for the subjects the stage
     #: pays for: the wear-out of its own purchases.
@@ -255,14 +253,11 @@ class _SpliceTerms:
     Attributes:
         quoted_by_stage: Per stage, the subjects whose year-0 purchase is a reader's quote, booked
             unescalated; empty for a plan without quotes.
-        fixed_schemes: The subsidy schemes paying a fixed nominal amount
-            (:meth:`StagedEvaluator.fixed_amount_schemes`), booked unescalated.
         financing: The perspective's financing plan, or ``None`` for a cash purchase. Each stage's
             loan is taken out on what the stage books (:meth:`StagedEvaluator._stage_loan`).
     """
 
     quoted_by_stage: Tuple[FrozenSet[str], ...] = ()
-    fixed_schemes: FrozenSet[str] = frozenset()
     financing: Optional[FinancingPlan] = None
 
 
@@ -285,9 +280,6 @@ class _StageCharges:
             measure's main subject and its further subjects (renovisorissues #53). Their year-0
             flows are booked in the stage's year exactly as stated, never escalated
             (:meth:`stage_start_factor`).
-        fixed_schemes: Subsidy schemes whose benefit is a fixed nominal amount
-            (:attr:`StagedCategories.FIXED_AMOUNT_BENEFITS`); their awards are booked in the
-            stage's year unescalated, quoted or not (:meth:`booked_factor`).
     """
 
     charged: Dict[str, float]
@@ -295,7 +287,6 @@ class _StageCharges:
     rates: Dict[str, float]
     default_rate: float
     quoted: FrozenSet[str] = frozenset()
-    fixed_schemes: FrozenSet[str] = frozenset()
 
     def share_of(self, subject: str) -> float:
         """How much of one subject's year-0 figure this stage pays: 1.0, an increment, or none."""
@@ -320,15 +311,15 @@ class _StageCharges:
     def booked_factor(self, entry: CashFlowEntry, from_year: int) -> float:
         """The factor one of the stage's year-0 entries is booked with in the stage's year.
 
-        The share the stage pays times the price level: :meth:`stage_start_factor`, except for the
-        award of a fixed-amount scheme, which is a nominal amount and is paid as stated in
-        whatever year the stage starts (owner decision 2026-09-27).
+        The share the stage pays times the price level: :meth:`stage_start_factor`, except for a
+        subsidy, which the stage's own evaluation valued on the cost at exactly that price level
+        (:meth:`StagedEvaluator._booked_price_levels`): a fixed amount clamped to the cost booked
+        beside it, a share of the cost following it (owner decision 2026-09-27, hisim-xnkp). Only
+        the share the stage pays applies to it.
         """
-        if entry.category is CostCategory.SUBSIDY and entry.subsidy_scheme_id in self.fixed_schemes:
-            level = 1.0
-        else:
-            level = self.stage_start_factor(entry.subject, from_year)
-        return self.share_of(entry.subject) * level
+        if entry.category is CostCategory.SUBSIDY:
+            return self.share_of(entry.subject)
+        return self.share_of(entry.subject) * self.stage_start_factor(entry.subject, from_year)
 
 
 class LifeOrigin(str, enum.Enum):
@@ -529,16 +520,10 @@ class StagedResult:
             whose document then states no lifetime and no installation year.
         investment_overrides: The reader's quotes the plan was priced with, as resolved
             (renovisorissues #53), in the order they were given; empty without any.
-        stage_start_scale_by_stage: For each stage, in stage order, the factor the splice applies
-            to a subject's year-0 flows when it books them in the stage's year: the share the stage
-            pays times the price level of that year. A subsidy row's maximum is moved by it exactly
-            as the row's award is (:meth:`stage_start_scale`). Empty for a result assembled by hand.
-        stage_start_share_by_stage: The same per stage and subject without the price level: the
-            share the stage pays alone, which a fixed-amount grant is booked with
-            (:meth:`subsidy_scale`). Empty for a result assembled by hand.
-        fixed_subsidy_schemes: The ids of the schemes paying a fixed nominal amount
-            (:meth:`StagedEvaluator.fixed_amount_schemes`), whose awards and maxima are never
-            escalated.
+        stage_start_share_by_stage: For each stage, in stage order, the share of each subject's
+            year-0 figures the stage pays, which every award and a subsidy row's maximum are booked
+            with, both being valued in the stage's year already (:meth:`subsidy_scale`). Empty for
+            a result assembled by hand.
     """
 
     reference: LifecycleCostResult
@@ -556,9 +541,7 @@ class StagedResult:
     price_basis_year_origin: Optional[EchoOrigin] = None
     lives_by_stage: Tuple[Dict[str, SubjectLife], ...] = field(default_factory=tuple)
     investment_overrides: Tuple[InvestmentOverride, ...] = field(default_factory=tuple)
-    stage_start_scale_by_stage: Tuple[Dict[str, float], ...] = field(default_factory=tuple)
     stage_start_share_by_stage: Tuple[Dict[str, float], ...] = field(default_factory=tuple)
-    fixed_subsidy_schemes: FrozenSet[str] = frozenset()
 
     @property
     def ledger(self) -> Optional[ProvenanceLedger]:
@@ -618,38 +601,21 @@ class StagedResult:
                 found = index
         return found
 
-    def stage_start_scale(self, stage: Optional[int], subject: str) -> float:
-        """The factor one stage's year-0 figure of one subject is booked in the plan with.
+    def subsidy_scale(self, stage: Optional[int], subject: str) -> float:
+        """The factor one stage's year-0 awards for one subject, and their maxima, are booked with.
 
-        Args:
-            stage: The stage, or None on the reference, which books its year 0 as it is.
-            subject: The cost subject.
-
-        Returns:
-            The share the stage pays times the price level of its year; 1.0 on the reference and
-            for a result that does not carry the factors.
-        """
-        if stage is None or stage >= len(self.stage_start_scale_by_stage):
-            return 1.0
-        return self.stage_start_scale_by_stage[stage].get(subject, 1.0)
-
-    def subsidy_scale(self, stage: Optional[int], subject: str, scheme_id: Optional[str]) -> float:
-        """The factor one stage's year-0 award of one scheme, and its maximum, is booked with.
-
-        :meth:`stage_start_scale`, except for a scheme paying a fixed nominal amount: its award is
-        paid as stated in whatever year the stage starts, so only the share the stage pays applies
-        (owner decision 2026-09-27).
+        The share the stage pays alone. The stage's own evaluation valued its subsidies on the
+        cost as the plan books it in the stage's year, so a fixed amount is already clamped to
+        that cost and a share of it already follows it; no price level is applied on top, for any
+        kind of scheme (owner decision 2026-09-27, hisim-xnkp).
 
         Args:
             stage: The stage, or None on the reference.
             subject: The measure's cost subject.
-            scheme_id: The scheme.
 
         Returns:
             The factor; 1.0 on the reference and for a result that does not carry the factors.
         """
-        if scheme_id is None or scheme_id not in self.fixed_subsidy_schemes:
-            return self.stage_start_scale(stage, subject)
         if stage is None or stage >= len(self.stage_start_share_by_stage):
             return 1.0
         return self.stage_start_share_by_stage[stage].get(subject, 1.0)
@@ -936,23 +902,6 @@ class StagedEvaluator:
         per_stage: List[LifecycleCostResult] = []
         charged_by_stage: List[Dict[str, float]] = []
         lives_by_stage: List[Dict[str, SubjectLife]] = []
-        for index, stage in enumerate(ordered):
-            quotes = [override for override in overrides if override.stage == index]
-            charged = self._charged_subjects(ordered, index)
-            for override in quotes:
-                # The quote is the stage's whole job, so the stage pays all of it -- also where it
-                # only enlarges a subject the stage before already had.
-                charged[override.main_subject] = 1.0
-            inputs = self._staged_inputs(ordered, index, charged_by_stage, year_zero)
-            inputs, purchases = self._quoted_inputs(inputs, quotes)
-            per_stage.append(evaluator.evaluate(inputs, perspective, ledger, purchases))
-            charged_by_stage.append(charged)
-            lives_by_stage.append(
-                self._subject_lives(
-                    inputs, stage.from_year, index, charged, perspective, parameters, price_basis_year, year_zero
-                )
-            )
-
         quoted_by_stage = tuple(
             frozenset(
                 subject
@@ -962,7 +911,25 @@ class StagedEvaluator:
             )
             for index in range(len(ordered))
         )
-        fixed_schemes = self.fixed_amount_schemes(catalog)
+        for index, stage in enumerate(ordered):
+            quotes = [override for override in overrides if override.stage == index]
+            charged = self._charged_subjects(ordered, index)
+            for override in quotes:
+                # The quote is the stage's whole job, so the stage pays all of it -- also where it
+                # only enlarges a subject the stage before already had.
+                charged[override.main_subject] = 1.0
+            inputs = self._staged_inputs(ordered, index, charged_by_stage, year_zero)
+            inputs, purchases = self._quoted_inputs(inputs, quotes)
+            charges = self._stage_charges(ordered, index, charged, evaluator, parameters, quoted_by_stage[index])
+            booked = self._booked_price_levels(inputs, stage.from_year, charges)
+            per_stage.append(evaluator.evaluate(inputs, perspective, ledger, purchases, booked))
+            charged_by_stage.append(charged)
+            lives_by_stage.append(
+                self._subject_lives(
+                    inputs, stage.from_year, index, charged, perspective, parameters, price_basis_year, year_zero
+                )
+            )
+
         spliced = self._splice(
             ordered,
             tuple(per_stage),
@@ -970,7 +937,7 @@ class StagedEvaluator:
             evaluator,
             parameters,
             active_by_year,
-            _SpliceTerms(quoted_by_stage=quoted_by_stage, fixed_schemes=fixed_schemes, financing=perspective.financing),
+            _SpliceTerms(quoted_by_stage=quoted_by_stage, financing=perspective.financing),
         )
         plan = self._aggregate(
             ordered, tuple(per_stage), spliced.timeline, perspective, parameters, active_by_year, ledger
@@ -992,29 +959,11 @@ class StagedEvaluator:
             price_basis_year_origin=basis_year_origin,
             lives_by_stage=tuple(lives_by_stage),
             investment_overrides=overrides,
-            stage_start_scale_by_stage=tuple(
-                self._stage_start_scales(
-                    ordered, index, charged_by_stage[index], evaluator, parameters, quoted_by_stage[index]
-                )
-                for index in range(len(ordered))
-            ),
             stage_start_share_by_stage=tuple(
-                self._stage_start_scales(
-                    ordered, index, charged_by_stage[index], evaluator, parameters, escalate=False
-                )
+                self._stage_start_shares(ordered, index, charged_by_stage[index], evaluator, parameters)
                 for index in range(len(ordered))
             ),
-            fixed_subsidy_schemes=fixed_schemes,
         )
-
-    @staticmethod
-    def fixed_amount_schemes(catalog: Optional[SubsidyCatalog]) -> FrozenSet[str]:
-        """The ids of the catalogue's schemes that pay a fixed nominal amount.
-
-        Their awards are booked unescalated in whatever year their stage starts
-        (:attr:`StagedCategories.FIXED_AMOUNT_BENEFITS`); empty without a catalogue.
-        """
-        return YearZeroPriceLevel.fixed_amount_schemes(catalog)
 
     @staticmethod
     def plan_year_zero(plan_start_year: Optional[int], price_basis_year: int) -> int:
@@ -1515,39 +1464,57 @@ class StagedEvaluator:
             )
         return replace(inputs, cost_facts=cost_facts), purchases
 
-    def _stage_start_scales(
+    def _stage_start_shares(
         self,
         stages: Tuple[Stage, ...],
         index: int,
         charged: Dict[str, float],
         evaluator: EconomicEvaluator,
         parameters: EconomicParameters,
-        quoted: FrozenSet[str] = frozenset(),
-        escalate: bool = True,
     ) -> Dict[str, float]:
-        """The factor the splice books each of one stage's year-0 figures with, per subject.
+        """The share of each of one stage's year-0 figures the stage pays, per subject.
+
+        The factor the splice books a stage's subsidies with (:meth:`_StageCharges.booked_factor`),
+        and so the factor a subsidy row's maximum is moved into the plan by.
 
         Args:
             stages: The plan.
             index: The stage.
             charged: What the stage pays for.
-            evaluator: For the escalation rates.
+            evaluator: For the escalation rates the charges bundle carries.
             parameters: For the general investment escalation rate.
-            quoted: The stage's quoted subjects, booked at their quote unescalated.
-            escalate: False for the share paid alone, the factor a fixed-amount grant is booked
-                with (:meth:`_StageCharges.booked_factor`).
 
         Returns:
-            Subject -> share paid times the price level of the stage's year (the share alone when
-            ``escalate`` is off), for every subject the stage has cost facts for or charges.
+            Subject -> the share paid, for every subject the stage has cost facts for or charges.
         """
-        charges = self._stage_charges(stages, index, charged, evaluator, parameters, quoted)
+        charges = self._stage_charges(stages, index, charged, evaluator, parameters)
         subjects = {facts.subject for facts in stages[index].inputs.cost_facts} | set(charged)
-        from_year = stages[index].from_year
-        return {
-            subject: charges.share_of(subject) * (charges.stage_start_factor(subject, from_year) if escalate else 1.0)
-            for subject in sorted(subjects)
-        }
+        return {subject: charges.share_of(subject) for subject in sorted(subjects)}
+
+    @staticmethod
+    def _booked_price_levels(
+        inputs: EvaluationInputs, from_year: int, charges: "_StageCharges"
+    ) -> Dict[str, float]:
+        """The price level the plan books each of a stage's year-0 purchases at, per subject.
+
+        :meth:`_StageCharges.stage_start_factor` in the stage's year: the subject's investment
+        escalation from year 0 to ``from_year``, 1.0 for a reader's quote. The stage's evaluation
+        values its subsidies on the cost at this level (``booked_price_levels``), so a fixed
+        amount is clamped, and an eligible-cost cap in euro binds, on the cost the splice books
+        beside it rather than on the year-0 cost (owner decision 2026-09-27, hisim-xnkp). Only the
+        levels other than 1.0 are listed, so a stage starting in year 0 and a plan without
+        investment escalation are evaluated exactly as before.
+
+        Args:
+            inputs: The stage's evaluation inputs, for its cost subjects.
+            from_year: The stage's start year.
+            charges: The stage's charges bundle, for the rates and the quoted subjects.
+
+        Returns:
+            Subject -> price level, for the subjects whose level is not 1.0.
+        """
+        levels = {facts.subject: charges.stage_start_factor(facts.subject, from_year) for facts in inputs.cost_facts}
+        return {subject: level for subject, level in levels.items() if level != 1.0}
 
     @classmethod
     def charged_subjects(cls, stages: Sequence[Stage], index: int) -> Dict[str, float]:
@@ -1821,8 +1788,8 @@ class StagedEvaluator:
             parameters: The assumptions, for the horizon and the general escalation rate.
             active_by_year: Which stage is active in each horizon year, from
                 :meth:`_active_by_year`.
-            terms: The quotes, the fixed-amount schemes and the financing plan
-                (:class:`_SpliceTerms`); the defaults for a cash plan without quotes or grants.
+            terms: The quotes and the financing plan
+                (:class:`_SpliceTerms`); the defaults for a cash plan without quotes.
 
         Returns:
             The spliced timeline, sign-validated like any engine timeline, together with the stage
@@ -1836,10 +1803,7 @@ class StagedEvaluator:
         reserve_flows: List[Tuple[int, UncertainValue]] = []
         for index, stage in enumerate(stages):
             quoted = terms.quoted_by_stage[index] if index < len(terms.quoted_by_stage) else frozenset()
-            charges = replace(
-                self._stage_charges(stages, index, charged_by_stage[index], evaluator, parameters, quoted),
-                fixed_schemes=terms.fixed_schemes,
-            )
+            charges = self._stage_charges(stages, index, charged_by_stage[index], evaluator, parameters, quoted)
             reserve_flows.extend(
                 self._staged_reserve_flows(per_stage[index], index, stage.from_year, charges, active_by_year)
             )
@@ -2269,8 +2233,8 @@ class StagedEvaluator:
 
         Returns:
             The entry in the stage's year, scaled by the share the stage pays and by the price
-            level of that year (none for a quoted purchase or a fixed-amount grant:
-            :meth:`_StageCharges.booked_factor`);
+            level of that year (none for a quoted purchase or a subsidy, which is valued in the
+            stage's year already: :meth:`_StageCharges.booked_factor`);
             ``None`` for a subject the stage inherits or a stage that never
             starts inside the horizon.
         """
@@ -2305,7 +2269,7 @@ class StagedEvaluator:
 
         The principal is the financed share of the stage's year-0 net investment *as the plan
         books it* (:meth:`_stage_start_entry`): a reader's quote as stated, database prices
-        escalated to the stage's year, fixed-amount grants nominal, and only the share of each
+        escalated to the stage's year, grants as valued in the stage's year, and only the share of each
         subject the stage pays. Scaling the stage's own loan by one escalation factor would
         finance a quote at more than it states (owner decision 2026-09-27). The loan terms are
         the stage's own (:func:`resolve_loan_plan` on its subsidy decisions), and the schedule is

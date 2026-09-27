@@ -28,6 +28,7 @@ without HiSim.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 from typing import ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim import log
@@ -570,7 +571,9 @@ class YearZeroPriceLevel:
 
     #: Benefit kinds that pay a fixed nominal amount (in total, per unit of size, or per kWh): a
     #: grant of EUR 6,500 is EUR 6,500 in whichever year it is paid (owner decision 2026-09-27).
-    #: The other kinds are a share of a cost and follow it.
+    #: The other kinds are a share of a cost and follow it. Nothing branches on the list: the
+    #: rule follows from valuing every subsidy on the cost in the money of the year it is booked
+    #: (:meth:`purchase`, and a staged plan's ``booked_price_levels``).
     FIXED_AMOUNT_BENEFITS: ClassVar[FrozenSet[BenefitKind]] = frozenset(
         {BenefitKind.LUMP_SUM, BenefitKind.PER_UNIT, BenefitKind.TIERED_PER_UNIT, BenefitKind.OPERATIONAL}
     )
@@ -585,13 +588,6 @@ class YearZeroPriceLevel:
     stated_residuals: Set[str] = field(default_factory=set)
     carriers: Dict[str, Tuple[float, float, float]] = field(default_factory=dict)
     feed_in: Dict[str, Tuple[float, int]] = field(default_factory=dict)
-
-    @classmethod
-    def fixed_amount_schemes(cls, catalog: Optional[SubsidyCatalog]) -> FrozenSet[str]:
-        """The ids of the catalogue's schemes that pay a fixed nominal amount; empty without one."""
-        if catalog is None:
-            return frozenset()
-        return frozenset(scheme.id for scheme in catalog.schemes if scheme.benefit_kind in cls.FIXED_AMOUNT_BENEFITS)
 
     @property
     def shifts(self) -> bool:
@@ -988,6 +984,7 @@ class EconomicEvaluator:
         perspective: Perspective,
         ledger: ProvenanceLedger,
         quoted_purchases: Sequence[QuotedPurchase] = (),
+        booked_price_levels: Mapping[str, float] = MappingProxyType({}),
     ) -> TimelineBuildResult:
         """Builds the canonical timeline for one perspective, plus its non-cash outputs.
 
@@ -1056,6 +1053,14 @@ class EconomicEvaluator:
                 (:class:`~hisim.economics.facts.QuotedPurchase`): one year-0 INVESTMENT entry each,
                 in the levy basis, before financing; empty on every path but a staged plan with a
                 reader's quote for a measure HiSim holds no price for (renovisorissues #53).
+            booked_price_levels: Subject -> the price level, relative to year 0, at which the caller
+                books that subject's year-0 purchase: a staged plan books a later stage's purchase
+                in the stage's year, escalated to it (:meth:`hisim.economics.staged._StageCharges.stage_start_factor`).
+                The subject's subsidies are valued on the cost at that level, so a fixed amount is
+                clamped to the cost the plan books beside it and a share of the cost follows it,
+                and the levy basis states the subject's cost and anyway credit at the same level
+                (hisim-xnkp). The caller then books the subsidies as they are. A subject absent, or
+                at 1.0, is valued in year-0 money as before; empty on every path but a staged plan.
 
         Returns:
             A `TimelineBuildResult`: the timeline in nominal, undiscounted euro bands (discounting
@@ -1120,10 +1125,14 @@ class EconomicEvaluator:
             # --- year-0 investment, replacements and residual value (§3.6 rules 1-3)
             schedule = build_investment_schedule(costing, gross, asset_rate, horizon, include_investment)
             level.add_subject(costing, asset_rate, replaced=bool(schedule.reserve_flows))
+            # The price level the caller books this purchase at (a later stage's year, hisim-xnkp).
+            booked = booked_price_levels.get(subject, 1.0)
             timeline.extend(schedule.year_zero_entries)
             for addend in schedule.modernization_cost_addends:
                 if level.shifts:
                     addend = addend.scale(level.purchase(subject))
+                if booked != 1.0:
+                    addend = addend.scale(booked)
                 modernization_cost = modernization_cost + addend
                 levy_cost_by_subject[subject] = levy_cost_by_subject[subject] + addend
             accumulate_embodied_co2(co2_result, subject, schedule.embodied_co2_addends)
@@ -1191,10 +1200,11 @@ class EconomicEvaluator:
                         anyway_basis_kind_by_subject[subject] = replaced_outcome.credit_basis_kind
                     # The levy basis keeps the credit whether or not the evaluation books it: the
                     # avoided maintenance share is a deduction of the law (§6.4), not a plan flow.
-                    anyway_credit_total = anyway_credit_total + replaced_outcome.credit_amount
-                    levy_credit_by_subject[subject] = (
-                        levy_credit_by_subject[subject] + replaced_outcome.credit_amount
-                    )
+                    levy_credit = replaced_outcome.credit_amount
+                    if booked != 1.0:
+                        levy_credit = levy_credit.scale(booked)
+                    anyway_credit_total = anyway_credit_total + levy_credit
+                    levy_credit_by_subject[subject] = levy_credit_by_subject[subject] + levy_credit
             # Replacements and the residual value are appended only now, so the §4.1 credit sits
             # between them and the year-0 entries; timeline insertion order is observable.
             schedule.add_to(timeline)
@@ -1224,7 +1234,7 @@ class EconomicEvaluator:
                     ledger=ledger,
                     parameters=params,
                     price_basis_year=price_basis_year,
-                    cost_factor=level.purchase(subject) if level.shifts else 1.0,
+                    cost_factor=(level.purchase(subject) if level.shifts else 1.0) * booked,
                 )
                 if subsidy_result.decision is not None:
                     decisions.append(subsidy_result.decision)
@@ -1367,6 +1377,7 @@ class EconomicEvaluator:
         perspective: Perspective,
         ledger: Optional[ProvenanceLedger] = None,
         quoted_purchases: Sequence[QuotedPurchase] = (),
+        booked_price_levels: Mapping[str, float] = MappingProxyType({}),
     ) -> LifecycleCostResult:
         """Evaluates one perspective: timeline -> allocation -> discounting -> result.
 
@@ -1394,6 +1405,8 @@ class EconomicEvaluator:
                 extra plumbing (§3.10).
             quoted_purchases: Purchases with no cost facts, priced whole by a stated amount; see
                 `build_timeline`. Empty on every path but a staged plan's.
+            booked_price_levels: Subject -> the price level its year-0 purchase is booked at,
+                relative to year 0; see `build_timeline`. Empty on every path but a staged plan's.
 
         Returns:
             The `LifecycleCostResult` for this perspective. Every monetary field is a
@@ -1406,7 +1419,7 @@ class EconomicEvaluator:
         # still-empty ledger is falsy and used to be silently replaced by a fresh one — the
         # caller then held an object nothing ever recorded into.
         ledger = ledger if ledger is not None else ProvenanceLedger()
-        build = self.build_timeline(inputs, perspective, ledger, quoted_purchases)
+        build = self.build_timeline(inputs, perspective, ledger, quoted_purchases, booked_price_levels)
         timeline = build.timeline
         co2_result = build.co2_result
 

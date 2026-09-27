@@ -41,6 +41,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
+from hisim import log
 from hisim.economics.calculators.aggregation import aggregate_timeline
 from hisim.economics.calculators.energy import (
     StatedPrices,
@@ -73,6 +74,7 @@ from hisim.economics.staged_parameters import (
     ParameterKeys,
     ParameterProblem,
     ParameterProblemCodes,
+    PlanYearBounds,
 )
 from hisim.economics.subsidies import SubsidyCatalog
 from hisim.economics.tariffs import FeedInKind
@@ -315,6 +317,12 @@ class StagedResult:
             ``None`` when it stated none (renovisorissues #57). The document dates its years from
             this alone — never from the stages' ``simulation_year``, which is the year of their
             weather — and dates none of them without it.
+        price_basis_year: The price basis year the plan was actually priced at, as
+            :meth:`StagedEvaluator.evaluate` resolved it — the one the document publishes, rather
+            than the caller's possibly unset ``parameters.price_basis_year``. ``None`` only for a
+            result assembled by hand.
+        price_basis_year_origin: :attr:`EchoOrigin.PLAN_START_YEAR` when the plan's start year
+            supplied the price basis year because nothing else stated one; ``None`` otherwise.
     """
 
     reference: LifecycleCostResult
@@ -328,6 +336,8 @@ class StagedResult:
     subsidy_catalog_id: Optional[str] = None
     energy_echo: Optional[EnergyEcho] = None
     plan_start_year: Optional[int] = None
+    price_basis_year: Optional[int] = None
+    price_basis_year_origin: Optional[EchoOrigin] = None
 
     @property
     def ledger(self) -> Optional[ProvenanceLedger]:
@@ -487,22 +497,38 @@ class StagedEvaluator:
             The :class:`StagedResult`, carrying the id of ``catalog`` (:meth:`catalog_id`).
 
         Raises:
+            ValueError: When ``plan_start_year`` lies outside :class:`PlanYearBounds`, the range
+                ``staged --parameters`` refuses as ``parameters.plan_start_year.invalid``.
             StagedEvaluationError: For any condition of the class docstring's list — a plan this
                 module refuses to price.
             hisim.economics.evaluator.UnresolvableSubjectsError: When a stage declares a cost
                 subject nothing can price (D7). An engine error, deliberately not wrapped.
         """
+        if plan_start_year is not None and not (
+            PlanYearBounds.MINIMUM <= plan_start_year <= PlanYearBounds.MAXIMUM
+        ):
+            raise ValueError(
+                f"plan_start_year {plan_start_year!r} lies outside {PlanYearBounds.MINIMUM}.."
+                f"{PlanYearBounds.MAXIMUM}: a plan's start year is a calendar year."
+            )
         ordered = tuple(stages)
         parameters, perspective = self.priced_under(parameters, perspective, catalog)
         self._validate(ordered, parameters)
+        basis_year_origin: Optional[EchoOrigin] = None
         if parameters.price_basis_year is None and plan_start_year is not None:
             # Resolved once, here, so every stage's evaluation reads the same basis year and the
-            # engine's own fallback to the simulation year never runs inside this plan.
+            # engine's own fallback to the simulation year never runs inside this plan. The one
+            # place both entry points resolve it: `staged --parameters` leaves it unset for this.
             parameters = replace(
                 parameters,
                 price_basis_year=effective_price_basis_year(
                     parameters, self.database, ordered[0].inputs.simulation_year, plan_start_year
                 ),
+            )
+            basis_year_origin = EchoOrigin.PLAN_START_YEAR
+            log.warning(
+                f"No price basis year stated by the stages or the parameters; the plan is priced at "
+                f"{parameters.price_basis_year}, taken from plan_start_year {plan_start_year}."
             )
         evaluator = EconomicEvaluator(self.database, parameters, catalog)
         price_basis_year = evaluator.price_basis_year(ordered[0].inputs)
@@ -542,6 +568,8 @@ class StagedEvaluator:
             subsidy_catalog_id=self.catalog_id(catalog, parameters.country),
             energy_echo=self._energy_echo(ordered, tuple(per_stage), parameters, price_basis_year),
             plan_start_year=plan_start_year,
+            price_basis_year=price_basis_year,
+            price_basis_year_origin=basis_year_origin,
         )
 
     #: How a catalogue is named in the document: the country it applies to and the date the

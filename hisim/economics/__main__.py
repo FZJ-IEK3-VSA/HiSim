@@ -60,7 +60,8 @@ the same thing in each, the flag taking precedence over the path stored in the p
   a value in the file is only
   checked against them, and stages that state neither over a file that states neither is a refusal
   rather than a silent `"DE"` or a basis year re-derived from the weather year — unless the file
-  states `plan_start_year`, which is then the price basis year. Everything the
+  states `plan_start_year`, which then anchors the price basis year (clamped to the earliest year
+  the country's device data covers; `origins.price_basis_year` says so). Everything the
   block does not name stays what the stages were priced under. The subsidy catalogue is resolved
   the way the RenoVisor translator resolves it (step 11 §3): `--subsidy-catalog`, else a path the
   stages' stored record names, else the shipped `hisim/subsidy_catalog` directory when it holds

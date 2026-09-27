@@ -276,14 +276,19 @@ class TestThePlanStartYear:
             parsed = StagedParameters.from_mapping({ParameterKeys.PLAN_START_YEAR: year}, _stored())
             assert parsed.plan_start_year == year
 
-    def test_it_is_the_basis_year_when_neither_stages_nor_file_state_one(self):
-        """The plan's "today" is the year it starts in, never the weather year of its stages."""
+    def test_neither_stages_nor_file_stating_a_basis_year_leaves_it_to_the_evaluator(self):
+        """Not a refusal, and not written verbatim: the staged evaluator resolves and clamps it.
+
+        Writing the start year into ``price_basis_year`` here bypassed the clamp to the device
+        data that the Python API applies, so the CLI and the API priced one plan at two years.
+        """
         parsed = StagedParameters.from_mapping(
             {ParameterKeys.PLAN_START_YEAR: 2026}, None, stored_country="IE"
         )
         assert not parsed.problems
         assert parsed.parameters is not None
-        assert parsed.parameters.price_basis_year == 2026
+        assert parsed.parameters.price_basis_year is None
+        assert parsed.plan_start_year == 2026
 
     def test_a_stated_basis_year_wins_over_it(self):
         """An explicit ``price_basis_year`` is the basis year; the start year only dates the rows."""
@@ -306,6 +311,9 @@ class TestThePlanStartYear:
         """Schema version 5 renamed it ``weather_year``; the old spelling is an unknown key now."""
         parsed = StagedParameters.from_mapping({"simulation_year": 2019}, _stored())
         assert _codes(parsed) == ["parameters.unknown_key"]
+        message = parsed.problems[0].message
+        assert "renamed `weather_year` in schema version 5" in message
+        assert "`plan_start_year`" in message
 
     def test_the_document_block_echoes_it_and_the_weather_year(self):
         """Both are published, each under its own name, and the block reads back to the same year."""

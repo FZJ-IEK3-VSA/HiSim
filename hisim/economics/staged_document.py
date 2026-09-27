@@ -36,6 +36,7 @@ from __future__ import annotations
 import enum
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -548,14 +549,22 @@ class StagedDocument:
         which is also the table of keys ``--parameters`` reads. One table for both directions is
         what makes this block a legal input file: a reader can copy it out of a document, hand it
         back over the same stages and get the same run.
+
+        ``price_basis_year`` is the year the plan was *priced at*, as the evaluator resolved it
+        (:attr:`~hisim.economics.staged.StagedResult.price_basis_year`), not the caller's record,
+        which may leave it unset for the evaluator to derive from ``plan_start_year``.
         """
+        parameters = self._parameters
+        if self._result.price_basis_year is not None:
+            parameters = replace(parameters, price_basis_year=self._result.price_basis_year)
         return StagedParameters.to_document_block(
-            parameters=self._parameters,
+            parameters=parameters,
             perspective=self._perspective,
             weather_year=self._result.plan.simulation_year,
             subsidy_catalog=self._catalog_id,
             energy=self._result.energy_echo,
             plan_start_year=self._result.plan_start_year,
+            price_basis_year_origin=self._result.price_basis_year_origin,
         )
 
     def _stages(self) -> List[Dict[str, Any]]:

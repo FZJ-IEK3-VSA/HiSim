@@ -22,7 +22,7 @@ from hisim.economics.carriers import EnergyCarrier, revenue_subject
 from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.staged import StagedEvaluator
 from hisim.economics.staged_document import CostGroup, CostGroups, StagedDocument
-from hisim.economics.staged_parameters import StagedParameters
+from hisim.economics.staged_parameters import PlanYearBounds, StagedParameters
 from hisim.economics.subsidies import PayoutKind
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -493,14 +493,55 @@ class TestTheParametersBlock:
 
         assert set(document["parameters"]) == set(ParameterKeys.ACCEPTED)
 
-    def test_the_schema_no_longer_knows_simulation_year(self, document):
-        """Version 5 renamed it: a block still carrying ``simulation_year`` is an older format."""
+    @pytest.mark.parametrize("required", ["weather_year", "plan_start_year"])
+    def test_version_five_requires_the_weather_year_and_the_plan_start_year(self, document, required):
+        """A block missing either key is not a version 5 block — whatever else it carries.
+
+        This pins the two required keys and nothing more: the schema leaves the block open to
+        further keys, so a stray ``simulation_year`` is refused by ``staged --parameters``
+        (``parameters.unknown_key``), not by the schema.
+        """
         import jsonschema
 
-        renamed = json.loads(json.dumps(document))
-        renamed["parameters"]["simulation_year"] = renamed["parameters"].pop("weather_year")
+        missing = json.loads(json.dumps(document))
+        missing["parameters"].pop(required)
         with pytest.raises(jsonschema.ValidationError):
-            StagedDocument.validate(renamed)
+            StagedDocument.validate(missing)
+
+    def test_the_schema_bounds_of_the_plan_start_year_are_the_parsers(self):
+        """``economics_result.schema.json`` and :class:`PlanYearBounds` state one range, not two."""
+        schema = json.loads(StagedDocument.schema_path().read_text(encoding="utf-8"))
+        declared = schema["properties"]["parameters"]["properties"]["plan_start_year"]
+        assert declared["minimum"] == PlanYearBounds.MINIMUM
+        assert declared["maximum"] == PlanYearBounds.MAXIMUM
+
+    def test_it_publishes_the_basis_year_the_plan_was_priced_at(self, tmp_path, parameters, database, monkeypatch):
+        """Priced from the start year, the block states the resolved year and says where it came from.
+
+        The caller's record leaves ``price_basis_year`` unset; publishing that ``null`` would hide
+        the year every figure of the document was priced at.
+        """
+        from hisim import log
+
+        # The evaluator warns that the start year supplied the basis year; kept out of ../logs.
+        monkeypatch.setattr(log, "warning", lambda *_args, **_kwargs: None)
+        unstated = replace(parameters, price_basis_year=None)
+        perspective = brownfield_perspective()
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), heat_pump_stage(4)], unstated, perspective, plan_start_year=SyntheticPlan.YEAR
+        )
+        document = StagedDocument(result, unstated, perspective).write(tmp_path / "resolved.json")
+        assert document["parameters"]["price_basis_year"] == SyntheticPlan.YEAR
+        assert document["parameters"]["origins"]["price_basis_year"] == "plan_start_year"
+        read_back = StagedParameters.from_mapping(document["parameters"], None, stored_country=SyntheticPlan.COUNTRY)
+        assert not read_back.problems
+        assert read_back.parameters is not None
+        assert read_back.parameters.price_basis_year == SyntheticPlan.YEAR
+
+    def test_a_stated_basis_year_leaves_no_origin(self, document):
+        """``origins.price_basis_year`` exists only when the start year supplied the year."""
+        assert document["parameters"]["price_basis_year"] == SyntheticPlan.YEAR
+        assert "price_basis_year" not in document["parameters"]["origins"]
 
 
 class TestFinancing:

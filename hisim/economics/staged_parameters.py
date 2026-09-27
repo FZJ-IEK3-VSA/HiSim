@@ -71,8 +71,10 @@ class ParameterKeys:
     #: ISO-2 country code deciding the price data and the subsidy catalogue.
     COUNTRY: ClassVar[str] = "country"
 
-    #: Price basis year of the database lookups, or null for "the stages' year" (see
-    #: :meth:`StagedParameters._read_price_basis_year`).
+    #: Price basis year of the database lookups. A null says nothing: the stages' year when they
+    #: state one, else the plan's start year (:attr:`PLAN_START_YEAR`) clamped to the earliest year
+    #: the country's device data covers (see :meth:`StagedParameters._read_price_basis_year` and
+    #: :func:`~hisim.economics.evaluator.effective_price_basis_year`).
     PRICE_BASIS_YEAR: ClassVar[str] = "price_basis_year"
 
     #: The calendar year the plan starts in: year 0 of the horizon (renovisorissues #57). Every
@@ -162,6 +164,17 @@ class ParameterKeys:
         ORIGINS,
     )
 
+    #: Keys the top-level block no longer accepts under their old name, with the sentence that
+    #: says what became of them. Still refused as ``parameters.unknown_key``; only the message
+    #: differs, so a reader holding an older document learns where the key went.
+    RENAMED: ClassVar[Mapping[str, str]] = {
+        "simulation_year": (
+            "'simulation_year' was renamed `weather_year` in schema version 5 (renovisorissues #57): "
+            "it is the year of the stages' weather, accepted and ignored on input. The calendar "
+            "years of the rows are dated by `plan_start_year`."
+        ),
+    }
+
     #: Every key the :attr:`ESCALATION` block accepts.
     ACCEPTED_ESCALATION: ClassVar[Tuple[str, ...]] = (
         ESCALATION_GENERAL,
@@ -243,7 +256,10 @@ class EchoOrigin(enum.Enum):
     Two vocabularies share the enum because they share the first word. A per-carrier escalation
     rate is ``stated`` (the plan's assumptions name it), ``country_default`` (the country's
     ``escalation_defaults_<COUNTRY>.json``) or ``general`` (the general escalation rate); a price
-    field is ``stated`` or ``database`` (the price entry at the price basis year).
+    field is ``stated`` or ``database`` (the price entry at the price basis year). One more value
+    stands alone: ``plan_start_year`` under ``origins.price_basis_year``, written only when the
+    stages and the parameters stated no price basis year and the plan's start year supplied it
+    (clamped to the device data; renovisorissues #57). Otherwise that key is absent.
 
     Example::
 
@@ -254,6 +270,7 @@ class EchoOrigin(enum.Enum):
     COUNTRY_DEFAULT = "country_default"
     GENERAL = "general"
     DATABASE = "database"
+    PLAN_START_YEAR = "plan_start_year"
 
     @classmethod
     def of_rate(cls, origin: RateOrigin) -> "EchoOrigin":
@@ -476,6 +493,8 @@ class ParameterReader:
         problems: The list every fault is appended to; shared with the other blocks of one file.
         noun: What one key of this block is, for the unknown-key message ("energy carrier" for the
             per-carrier escalation rates, whose keys are carrier names rather than parameters).
+        renamed: Former keys of this block and the message that says what became of each; they
+            are refused like any unknown key, with that message instead of the generic one.
     """
 
     def __init__(
@@ -485,6 +504,7 @@ class ParameterReader:
         accepted: Sequence[str],
         problems: List[ParameterProblem],
         noun: str = "parameter of a staged plan",
+        renamed: Optional[Mapping[str, str]] = None,
     ) -> None:
         """Store the block, its path, its accepted keys, the shared problem list and the noun."""
         self.raw = raw
@@ -492,6 +512,7 @@ class ParameterReader:
         self.accepted = tuple(accepted)
         self.problems = problems
         self.noun = noun
+        self.renamed: Mapping[str, str] = renamed if renamed is not None else {}
 
     def path_of(self, key: str) -> str:
         """The dotted path one key of this block is reported under.
@@ -544,7 +565,7 @@ class ParameterReader:
             self.refuse(
                 key,
                 ParameterProblemCodes.UNKNOWN_KEY,
-                f"{key!r} is no {self.noun}.",
+                self.renamed.get(key, f"{key!r} is no {self.noun}."),
                 accepted=self.accepted,
                 code_path=self.path,
             )
@@ -784,8 +805,9 @@ class StagedParameters:
         in the file must equal it or the run is refused naming both; a file without ``country``
         over stages without a stored one is refused too. ``price_basis_year`` follows the same
         rule, because the stored inputs were priced at the stages' basis year, with one fallback:
-        stages and file stating none, a stated ``plan_start_year`` is the basis year. Nothing here
-        ever substitutes ``"DE"``.
+        stages and file stating none, a stated ``plan_start_year`` anchors the basis year, which
+        the record then leaves unset for :meth:`~hisim.economics.staged.StagedEvaluator.evaluate`
+        to resolve and clamp. Nothing here ever substitutes ``"DE"``.
 
         Example::
 
@@ -819,7 +841,9 @@ class StagedParameters:
             )
             return cls(parameters=None, problems=tuple(problems))
 
-        reader = ParameterReader(raw, ParameterKeys.ROOT_PATH, ParameterKeys.ACCEPTED, problems)
+        reader = ParameterReader(
+            raw, ParameterKeys.ROOT_PATH, ParameterKeys.ACCEPTED, problems, renamed=ParameterKeys.RENAMED
+        )
         reader.refuse_unknown_keys()
         overrides: Dict[str, Any] = {}
         cls._read_horizon_and_interest(reader, overrides)
@@ -999,8 +1023,13 @@ class StagedParameters:
         document whose block is fed back in round trips.
 
         When no stage states a year and the file states none either, a stated
-        ``plan_start_year`` is the basis year (renovisorissues #57): the plan's own "today" is the
-        calendar year it starts in, which the caller has just named. Without one the run is
+        ``plan_start_year`` anchors the basis year (renovisorissues #57): the plan's own "today" is
+        the calendar year it starts in, which the caller has just named. The record's
+        ``price_basis_year`` is then left unset, and
+        :meth:`~hisim.economics.staged.StagedEvaluator.evaluate` resolves it through
+        :func:`~hisim.economics.evaluator.effective_price_basis_year` — clamped to the earliest
+        year the country's device data covers, exactly as a Python caller's plan is, so the CLI
+        and the API price one plan at one year. Without a start year the run is
         **refused** rather than re-derived from the simulation year — the year of the stages'
         weather, which says nothing about price levels. Re-deriving is the same class of silent
         difference as a defaulted country: it produces a complete-looking plan priced at a year
@@ -1021,7 +1050,8 @@ class StagedParameters:
         )
         if not states_a_year:
             if stored_year is None and plan_start_year is not None:
-                overrides["price_basis_year"] = plan_start_year
+                # Left unset on purpose: the staged evaluator resolves it from the start year with
+                # the one clamp every entry point shares.
                 return
             if stored_year is None:
                 reader.refuse(
@@ -1451,6 +1481,7 @@ class StagedParameters:
         subsidy_catalog: Optional[str],
         energy: Optional[EnergyEcho] = None,
         plan_start_year: Optional[int] = None,
+        price_basis_year_origin: Optional[EchoOrigin] = None,
     ) -> Dict[str, Any]:
         """The ``parameters`` block ``economics_result.json`` publishes.
 
@@ -1479,6 +1510,9 @@ class StagedParameters:
             energy: The rates and prices the plan was priced with, as the staged evaluator resolved
                 them; None echoes only what ``parameters`` states (:meth:`EnergyEcho.stated_only`).
             plan_start_year: The calendar year the plan starts in, or None when it named none.
+            price_basis_year_origin: :attr:`EchoOrigin.PLAN_START_YEAR` when the plan's start year
+                supplied ``parameters.price_basis_year``, written as ``origins.price_basis_year``;
+                None (the key absent) whenever the stages or the parameters stated the year.
 
         Returns:
             The block, with the keys in the order the document writes them.
@@ -1486,6 +1520,17 @@ class StagedParameters:
         echo = energy if energy is not None else EnergyEcho.stated_only(parameters)
         rates = sorted(echo.rates.items(), key=lambda item: item[0].value)
         prices = sorted(echo.prices.items(), key=lambda item: item[0].value)
+        origins: Dict[str, Any] = {
+            ParameterKeys.ESCALATION: {
+                ParameterKeys.ESCALATION_ENERGY: {carrier.value: origin.value for carrier, (_rate, origin) in rates}
+            },
+            ParameterKeys.ENERGY_PRICES: {
+                carrier.value: {key: origin.value for key, _value, origin in price.fields()}
+                for carrier, price in prices
+            },
+        }
+        if price_basis_year_origin is not None:
+            origins[ParameterKeys.PRICE_BASIS_YEAR] = price_basis_year_origin.value
         return {
             ParameterKeys.HORIZON_YEARS: parameters.observation_period_in_years,
             ParameterKeys.INTEREST_RATE: parameters.interest_rate,
@@ -1507,17 +1552,7 @@ class StagedParameters:
                 for carrier, price in prices
             },
             ParameterKeys.SUBSIDY_CATALOG: subsidy_catalog,
-            ParameterKeys.ORIGINS: {
-                ParameterKeys.ESCALATION: {
-                    ParameterKeys.ESCALATION_ENERGY: {
-                        carrier.value: origin.value for carrier, (_rate, origin) in rates
-                    }
-                },
-                ParameterKeys.ENERGY_PRICES: {
-                    carrier.value: {key: origin.value for key, _value, origin in price.fields()}
-                    for carrier, price in prices
-                },
-            },
+            ParameterKeys.ORIGINS: origins,
         }
 
     @staticmethod

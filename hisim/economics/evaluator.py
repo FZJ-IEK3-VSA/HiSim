@@ -195,10 +195,12 @@ def effective_price_basis_year(
     earliest = database.earliest_device_year(parameters.country)
     if earliest is None or earliest <= anchor:
         return anchor
-    key = (parameters.country, anchor, earliest)
+    which = "plan start year" if plan_start_year is not None else "simulation year"
+    # The anchor's kind is part of the key: a plan start year and a simulation year that happen to
+    # be equal are two different statements, and silencing one with the other would hide which.
+    key = (parameters.country, which, anchor, earliest)
     if key not in _PriceBasisYearWarnings.WARNED:
         _PriceBasisYearWarnings.WARNED.add(key)
-        which = "plan start year" if plan_start_year is not None else "simulation year"
         log.warning(
             f"No device cost data valid at {which} {anchor} for {parameters.country}; "
             f"using price basis year {earliest} (earliest available). Set "

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/FZJ-IEK3-VSA/HiSim/hisim/economics/economics_result.schema.json",
   "title": "economics_result.json",
-  "description": "One staged renovation plan priced by hisim.economics.staged, in the shape the RenoVisor frontend draws from (economics-hisim-spec.md section 3). Every amount is a band {min, best, max}; costs are positive and money arriving is negative; years are relative to the start of the horizon and every row carries its calendar year (null when the plan states no plan_start_year); every subject, asset class, measure and scheme is an id the frontend labels itself.",
+  "description": "One staged renovation plan priced by hisim.economics.staged, in the shape the RenoVisor frontend draws from (economics-hisim-spec.md section 3). Every amount is a band {min, best, max}; costs are positive and money arriving is negative; years are relative to the start of the horizon, and only the rows of the annual series carry a calendar year (annual[].calendar_year, null when the plan states no plan_start_year); every subject, asset class, measure and scheme is an id the frontend labels itself.",
   "type": "object",
   "required": [
     "schema_version",
@@ -58,7 +58,7 @@
           "type": ["integer", "null"],
           "minimum": 1900,
           "maximum": 2100,
-          "description": "The calendar year of the plan's year 0, as the plan stated it; null when it stated none. Also an input of `staged --parameters`, and the price basis year when neither the stages nor the parameters state one."
+          "description": "The calendar year of the plan's year 0, as the plan stated it; null when it stated none. Also an input of `staged --parameters`, and the anchor of the price basis year when neither the stages nor the parameters state one, clamped to the earliest year the country's device data covers (origins.price_basis_year then says plan_start_year)."
         },
         "weather_year": {
           "type": ["integer", "null"],
@@ -115,9 +115,13 @@
         },
         "origins": {
           "type": "object",
-          "description": "Where each echoed per-carrier rate and price came from. Documentation of the run: accepted and ignored as an input of `staged --parameters`.",
+          "description": "Where each echoed per-carrier rate and price came from, and — only when plan_start_year supplied it — the price basis year. Documentation of the run: accepted and ignored as an input of `staged --parameters`.",
           "required": ["escalation", "energy_prices"],
           "properties": {
+            "price_basis_year": {
+              "enum": ["plan_start_year"],
+              "description": "Present only when neither the stages nor the parameters stated a price basis year and parameters.plan_start_year supplied it (clamped to the earliest year the country's device data covers); absent otherwise."
+            },
             "escalation": {
               "type": "object",
               "required": ["energy"],

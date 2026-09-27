@@ -366,7 +366,7 @@ def setup_function(
             "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden"
         )
     # Add to simulator
-    my_sim.add_component(my_heatpump, connect_automatically=True)
+    my_sim.add_component(my_heatpump)
 
     # Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
@@ -468,6 +468,23 @@ def setup_function(
     )
     my_sim.add_component(my_dhw_storage)
 
+    # The heat pump is the tank's secondary generator, so it reads its return temperature and the heat the
+    # tank accepted from it on the secondary slot (hisim-4g9.16). Its automatic wiring would take the primary
+    # slot, the solar collectors', so it is wired by hand.
+    my_heatpump.connect_only_predefined_connections(
+        my_heatpump_controller_sh, my_weather, my_simple_water_storage, my_heatpump_controller_dhw
+    )
+    my_heatpump.connect_input(
+        my_heatpump.TemperatureInputSecondaryDHW,
+        my_dhw_storage.component_name,
+        my_dhw_storage.WaterTemperatureToSecondaryHeatGenerator,
+    )
+    my_heatpump.connect_input(
+        my_heatpump.ThermalPowerAcceptedByStorageDHW,
+        my_dhw_storage.component_name,
+        my_dhw_storage.ThermalPowerFromSecondaryHeatGenerator,
+    )
+
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -543,7 +560,10 @@ def setup_function(
     my_heatpump_controller_sh.connect_only_predefined_connections(
         my_heat_distribution_controller, my_weather, my_simple_water_storage
     )
-    my_heatpump_controller_dhw.connect_only_predefined_connections(my_dhw_storage)
+    # the buffer and the set flow temperature let a hot-water charge yield a step to space heating (hisim-6ehm)
+    my_heatpump_controller_dhw.connect_only_predefined_connections(
+        my_dhw_storage, my_simple_water_storage, my_heat_distribution_controller
+    )
     my_sim.add_component(my_heatpump_controller_sh)
     my_sim.add_component(my_heatpump_controller_dhw)
 

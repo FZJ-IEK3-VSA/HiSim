@@ -46,6 +46,7 @@ from hisim.config import (
     sized_field,
 )
 from hisim.components import weather, simple_water_storage, heat_distribution_system
+from hisim.components.accepted_heat import AcceptedHeat, StorageForecast
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
 from hisim.components.configuration import (
@@ -663,6 +664,10 @@ class MoreAdvancedHeatPumpHPLib(Component):
     TemperatureInputSecondaryDHW = "TemperatureInputSecondaryDHW"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
+    #: The heat the space-heating buffer accepted from this heat pump (hisim-4g9.16): booked instead of its own.
+    ThermalPowerAcceptedByStorageSH = "ThermalPowerAcceptedByStorageSH"  # W
+    #: The heat the hot-water tank accepted from this heat pump (hisim-4g9.16): booked instead of its own.
+    ThermalPowerAcceptedByStorageDHW = "ThermalPowerAcceptedByStorageDHW"  # W
 
     # Outputs
     ThermalOutputPowerSH = "ThermalOutputPowerSH"  # W
@@ -883,6 +888,15 @@ class MoreAdvancedHeatPumpHPLib(Component):
             mandatory=True,
         )
 
+        # What the buffer accepted of this heat pump's space heating. Unconnected, it books its own heat.
+        self.thermal_power_accepted_sh_channel: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.ThermalPowerAcceptedByStorageSH,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            mandatory=False,
+        )
+
         if self.with_domestic_hot_water_preparation:
             self.on_off_switch_dhw: ComponentInput = self.add_input(
                 object_name=self.component_name,
@@ -914,6 +928,15 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 mandatory=True,
+            )
+
+            # What the hot-water tank accepted of this heat pump's heat. Unconnected, it books its own heat.
+            self.thermal_power_accepted_dhw_channel: ComponentInput = self.add_input(
+                object_name=self.component_name,
+                field_name=self.ThermalPowerAcceptedByStorageDHW,
+                load_type=LoadTypes.HEATING,
+                unit=Units.WATT,
+                mandatory=False,
             )
 
         if (
@@ -1345,6 +1368,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.ThermalPowerAcceptedByStorageSH,
+                hws_classname,
+                simple_water_storage.SimpleHotWaterStorage.ThermalPowerFromHeatGenerator,
+            )
+        )
         return connections
 
     def get_default_connections_from_simple_dhw_storage(
@@ -1362,6 +1392,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW,
                 dhw_classname,
                 component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.ThermalPowerAcceptedByStorageDHW,
+                dhw_classname,
+                component_class.ThermalPowerFromHeatGenerator,
             )
         )
         return connections
@@ -1749,6 +1786,16 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         else:
             raise ValueError("Unknown mode for Advanced HPLib On_Off.")
+
+        # A storage that took less than the flow offered (hisim-4g9.16) is what the heat pump books and draws
+        # electricity for, at the same COP; the flow itself -- mass and temperature -- is its own either way. A
+        # storage accepts no heat below its own temperature, so cooling into a buffer is booked as nothing.
+        p_th_sh, share_sh = AcceptedHeat.booked(p_th_sh, self.thermal_power_accepted_sh_channel, stsv)
+        p_el_sh = p_el_sh * share_sh
+        p_el_cooling = p_el_cooling * share_sh
+        if self.with_domestic_hot_water_preparation:
+            p_th_dhw, share_dhw = AcceptedHeat.booked(p_th_dhw, self.thermal_power_accepted_dhw_channel, stsv)
+            p_el_dhw = p_el_dhw * share_dhw
 
         p_th_tot_in_watt = p_th_dhw + p_th_sh
         p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling + p_el_brine_pump
@@ -2577,6 +2624,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
     SimpleHotWaterStorageTemperatureModifier = "SimpleHotWaterStorageTemperatureModifier"
+    ThermalPowerDrawForecast = "ThermalPowerDrawForecast"
+    WaterMassInStorage = "WaterMassInStorage"
 
     # Outputs
     State_SH = "State_SH"
@@ -2639,6 +2688,14 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
             Units.CELSIUS,
             mandatory=False,
         )
+        # The buffer's draw forecast and mass: the controller switches on the buffer temperature forecast after
+        # this step's draw (hisim-6ehm). Unconnected, it switches on the buffer's start temperature.
+        self.draw_forecast_channel: ComponentInput = self.add_input(
+            self.component_name, self.ThermalPowerDrawForecast, LoadTypes.HEATING, Units.WATT, mandatory=False
+        )
+        self.water_mass_channel: ComponentInput = self.add_input(
+            self.component_name, self.WaterMassInStorage, LoadTypes.WARM_WATER, Units.KG, mandatory=False
+        )
 
         self.state_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -2697,6 +2754,20 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ThermalPowerDrawForecast,
+                hws_classname,
+                simple_water_storage.SimpleHotWaterStorage.ThermalPowerDrawForecast,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterMassInStorage,
+                hws_classname,
+                simple_water_storage.SimpleHotWaterStorage.WaterMassInStorage,
             )
         )
         return connections
@@ -2772,6 +2843,15 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
             # Retrieves inputs
 
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+            forecast_in_celsius = StorageForecast.temperature_after_draw_in_celsius(
+                water_temperature_input_in_celsius,
+                self.draw_forecast_channel,
+                self.water_mass_channel,
+                stsv,
+                self.my_simulation_parameters.seconds_per_timestep,
+            )
+            if forecast_in_celsius is not None:
+                water_temperature_input_in_celsius = forecast_in_celsius
 
             heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
                 self.heating_flow_temperature_from_heat_distribution_system_channel
@@ -3119,6 +3199,19 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
     DHWStorageTemperatureModifier = "DHWStorageTemperatureModifier"
+    ThermalPowerDrawForecast = "ThermalPowerDrawForecast"
+    WaterMassInStorage = "WaterMassInStorage"
+    # the space-heating buffer and its set flow temperature, for yielding a step of a charge (hisim-6ehm)
+    SpaceHeatingBufferTemperature = "SpaceHeatingBufferTemperature"
+    SpaceHeatingBufferDrawForecast = "SpaceHeatingBufferDrawForecast"
+    SpaceHeatingBufferWaterMass = "SpaceHeatingBufferWaterMass"
+    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
+
+    #: The tank temperature below which a charge is never interrupted for space heating: five kelvin above the
+    #: 40 degC the tap draws at.
+    DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS: ClassVar[float] = 45.0
+    #: How far below the set flow temperature the buffer may be forecast before a charge yields it a step.
+    SPACE_HEATING_MARGIN_IN_KELVIN: ClassVar[float] = 5.0
 
     # Outputs
     State_dhw = "StateDHW"
@@ -3168,6 +3261,34 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             Units.CELSIUS,
             mandatory=False,
         )
+        # The tank's draw forecast and mass: the controller switches on the tank temperature forecast after this
+        # step's draw (hisim-6ehm). Unconnected, it switches on the tank's start temperature.
+        self.draw_forecast_channel: ComponentInput = self.add_input(
+            self.component_name, self.ThermalPowerDrawForecast, LoadTypes.HEATING, Units.WATT, mandatory=False
+        )
+        self.water_mass_channel: ComponentInput = self.add_input(
+            self.component_name, self.WaterMassInStorage, LoadTypes.WARM_WATER, Units.KG, mandatory=False
+        )
+        self.space_heating_buffer_temperature_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.SpaceHeatingBufferTemperature,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            mandatory=False,
+        )
+        self.space_heating_buffer_draw_forecast_channel: ComponentInput = self.add_input(
+            self.component_name, self.SpaceHeatingBufferDrawForecast, LoadTypes.HEATING, Units.WATT, mandatory=False
+        )
+        self.space_heating_buffer_water_mass_channel: ComponentInput = self.add_input(
+            self.component_name, self.SpaceHeatingBufferWaterMass, LoadTypes.WARM_WATER, Units.KG, mandatory=False
+        )
+        self.heating_flow_temperature_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingFlowTemperatureFromHeatDistributionSystem,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            mandatory=False,
+        )
 
         self.state_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -3195,6 +3316,70 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
         self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+        self.add_default_connections(self.get_default_connections_from_space_heating_buffer())
+        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+
+    def get_default_connections_from_space_heating_buffer(self) -> List[ComponentConnection]:
+        """Get the space-heating buffer's temperature, draw forecast and mass (hisim-6ehm)."""
+        buffer_class = simple_water_storage.SimpleHotWaterStorage
+        buffer_classname = buffer_class.get_classname()
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.SpaceHeatingBufferTemperature,
+                buffer_classname,
+                buffer_class.WaterTemperatureToHeatGenerator,
+            ),
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.SpaceHeatingBufferDrawForecast,
+                buffer_classname,
+                buffer_class.ThermalPowerDrawForecast,
+            ),
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.SpaceHeatingBufferWaterMass,
+                buffer_classname,
+                buffer_class.WaterMassInStorage,
+            ),
+        ]
+
+    def get_default_connections_from_heat_distribution_controller(self) -> List[ComponentConnection]:
+        """Get the set flow temperature of the space-heating circuit (hisim-6ehm)."""
+        controller_class = heat_distribution_system.HeatDistributionController
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.HeatingFlowTemperatureFromHeatDistributionSystem,
+                controller_class.get_classname(),
+                controller_class.HeatingFlowTemperature,
+            )
+        ]
+
+    def space_heating_buffer_needs_the_step(self, stsv: SingleTimeStepValues) -> bool:
+        """Whether this step of a hot-water charge goes to space heating instead (hisim-6ehm).
+
+        Hot water has priority and a charge lasts several steps, while a buffer sized at 50 l/kW holds less
+        than one 900 s step of a winter heating draw: once the vessels conserve energy (hisim-4g9.16), every
+        charge drained the buffer below the room temperature. The step is yielded when the buffer's
+        temperature after this step's draw is forecast more than :attr:`SPACE_HEATING_MARGIN_IN_KELVIN` below
+        the set flow temperature and the tank is at least at
+        :attr:`DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS`. The charge itself is not ended; it resumes on
+        the next step the buffer allows.
+        """
+        if self.heating_flow_temperature_channel.source_output is None:
+            return False
+        if self.water_temperature_input_from_dhw_storage_in_celsius < self.DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS:
+            return False
+        buffer_forecast_in_celsius = StorageForecast.temperature_after_draw_in_celsius(
+            stsv.get_input_value(self.space_heating_buffer_temperature_channel),
+            self.space_heating_buffer_draw_forecast_channel,
+            self.space_heating_buffer_water_mass_channel,
+            stsv,
+            self.my_simulation_parameters.seconds_per_timestep,
+        )
+        if buffer_forecast_in_celsius is None:
+            return False
+        return (
+            buffer_forecast_in_celsius
+            < stsv.get_input_value(self.heating_flow_temperature_channel) - self.SPACE_HEATING_MARGIN_IN_KELVIN
+        )
 
     def get_default_connections_from_simple_dhw_storage(
         self,
@@ -3211,6 +3396,20 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
                 dhw_classname,
                 component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.ThermalPowerDrawForecast,
+                dhw_classname,
+                component_class.ThermalPowerDrawForecast,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.WaterMassInStorage,
+                dhw_classname,
+                component_class.WaterMassInStorage,
             )
         )
         return connections
@@ -3296,22 +3495,35 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 )
 
             temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)
+            forecast_in_celsius = StorageForecast.temperature_after_draw_in_celsius(
+                self.water_temperature_input_from_dhw_storage_in_celsius,
+                self.draw_forecast_channel,
+                self.water_mass_channel,
+                stsv,
+                self.my_simulation_parameters.seconds_per_timestep,
+            )
+            # switch on the forecast; what is remembered as the tank temperature stays the measured one
+            temperature_for_switching_in_celsius = (
+                forecast_in_celsius
+                if forecast_in_celsius is not None
+                else self.water_temperature_input_from_dhw_storage_in_celsius
+            )
 
             t_min_dhw_storage_in_celsius = self.config.t_min_dhw_storage_in_celsius
             t_max_dhw_storage_in_celsius = self.config.t_max_dhw_storage_in_celsius
 
-            if self.water_temperature_input_from_dhw_storage_in_celsius < t_min_dhw_storage_in_celsius:  # on
+            if temperature_for_switching_in_celsius < t_min_dhw_storage_in_celsius:  # on
                 self.state_dhw = 2
 
             if (
-                self.water_temperature_input_from_dhw_storage_in_celsius
+                temperature_for_switching_in_celsius
                 > t_max_dhw_storage_in_celsius + temperature_modifier
             ):  # off
                 self.state_dhw = 0
 
             if (
                 temperature_modifier > 0
-                and self.water_temperature_input_from_dhw_storage_in_celsius < t_max_dhw_storage_in_celsius
+                and temperature_for_switching_in_celsius < t_max_dhw_storage_in_celsius
             ):  # aktiviren wenn strom überschuss
                 self.state_dhw = 2
 
@@ -3320,7 +3532,10 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             self.water_temperature_input_from_dhw_storage_in_celsius
         )
 
-        stsv.set_output_value(self.state_dhw_channel, self.state_dhw)
+        state_dhw_this_step = self.state_dhw
+        if state_dhw_this_step == 2 and not force_convergence and self.space_heating_buffer_needs_the_step(stsv):
+            state_dhw_this_step = 0
+        stsv.set_output_value(self.state_dhw_channel, state_dhw_this_step)
         stsv.set_output_value(
             self.thermalpower_dhw_is_constant_channel,
             self.thermalpower_dhw_is_constant,

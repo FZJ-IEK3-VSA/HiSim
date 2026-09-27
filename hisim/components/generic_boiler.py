@@ -46,6 +46,7 @@ from hisim.config import (
     preset,
     sized_field,
 )
+from hisim.components.accepted_heat import AcceptedHeat
 from hisim.components.dual_circuit_system import (
     DiverterValve,
     HeatingMode,
@@ -354,6 +355,12 @@ class GenericBoiler(Component):
     TemperatureDelta = "TemperatureDelta"
     WaterInputTemperatureSh = "WaterInputTemperatureSh"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
+    #: The heat the space-heating buffer accepted from this boiler (hisim-4g9.16): booked instead of its own.
+    ThermalPowerAcceptedByStorageSh = "ThermalPowerAcceptedByStorageSh"
+    #: The heat the hot-water tank accepted from this boiler (hisim-4g9.16): booked instead of its own.
+    ThermalPowerAcceptedByStorageDhw = "ThermalPowerAcceptedByStorageDhw"
+    #: The thermal power the controller's feed-forward asks for (hisim-6ehm); -1 means follow the control signal.
+    ThermalPowerSetpoint = "ThermalPowerSetpoint"
 
     # Output
     WaterOutputMassFlowSh = "WaterOutputMassFlowSh"
@@ -412,6 +419,29 @@ class GenericBoiler(Component):
             self.config.energy_carrier,
             lt.Units.WATT,
             output_description=f"here a description for {self.TotalFuelConsumption} will follow.",
+        )
+
+        self.thermal_power_setpoint_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.ThermalPowerSetpoint,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            False,
+        )
+        # What the storages accepted of this boiler's heat. Unconnected, the boiler books its own heat.
+        self.thermal_power_accepted_sh_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.ThermalPowerAcceptedByStorageSh,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            False,
+        )
+        self.thermal_power_accepted_dhw_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.ThermalPowerAcceptedByStorageDhw,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            False,
         )
 
         # Space heating
@@ -544,6 +574,13 @@ class GenericBoiler(Component):
                 component_class.TemperatureDelta,
             )
         )
+        connections.append(
+            ComponentConnection(
+                GenericBoiler.ThermalPowerSetpoint,
+                l1_controller_classname,
+                component_class.ThermalPowerSetpoint,
+            )
+        )
         return connections
 
     def get_default_connections_from_simple_hot_water_storage(
@@ -563,6 +600,13 @@ class GenericBoiler(Component):
                 component_class.WaterTemperatureToHeatGenerator,
             )
         )
+        connections.append(
+            ComponentConnection(
+                GenericBoiler.ThermalPowerAcceptedByStorageSh,
+                hws_classname,
+                component_class.ThermalPowerFromHeatGenerator,
+            )
+        )
         return connections
 
     def get_default_connections_from_simple_dhw_storage(
@@ -580,6 +624,13 @@ class GenericBoiler(Component):
                 GenericBoiler.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                GenericBoiler.ThermalPowerAcceptedByStorageDhw,
+                hws_classname,
+                component_class.ThermalPowerFromHeatGenerator,
             )
         )
         return connections
@@ -660,7 +711,12 @@ class GenericBoiler(Component):
         # Calculate combustion efficiency
         delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
 
-        if control_signal * self.maximal_thermal_power_in_watt < self.minimal_thermal_power_in_watt:
+        thermal_power_setpoint_in_watt = stsv.get_input_value(self.thermal_power_setpoint_channel)
+        if self.thermal_power_setpoint_channel.source_output is not None and thermal_power_setpoint_in_watt >= 0:
+            maximum_power_used_in_watt, real_combustion_efficiency = self.fuel_power_for_thermal_power(
+                thermal_power_setpoint_in_watt
+            )
+        elif control_signal * self.maximal_thermal_power_in_watt < self.minimal_thermal_power_in_watt:
             maximum_power_used_in_watt = self.minimal_thermal_power_in_watt
             real_combustion_efficiency = self.min_combustion_efficiency
         else:
@@ -689,6 +745,24 @@ class GenericBoiler(Component):
             if temperature_delta > 0
             else 0
         )
+
+        # A storage that took less than the flow offered (hisim-4g9.16) is what the boiler books and burns fuel
+        # for; the flow itself -- mass and temperature -- is the boiler's own either way.
+        if operating_mode == HeatingMode.SPACE_HEATING.value:
+            accepted_channel = self.thermal_power_accepted_sh_channel
+        elif operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
+            accepted_channel = self.thermal_power_accepted_dhw_channel
+        else:
+            accepted_channel = None
+        if accepted_channel is not None:
+            thermal_power_delivered_in_watt, fuel_share = AcceptedHeat.booked(
+                thermal_power_delivered_in_watt, accepted_channel, stsv
+            )
+            maximum_power_used_in_watt = maximum_power_used_in_watt * fuel_share
+            fuel_energy_consumption_in_watt_hour = fuel_energy_consumption_in_watt_hour * fuel_share
+            thermal_energy_delivered_in_watt_hour = (
+                thermal_power_delivered_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+            )
 
         stsv.set_output_value(
             self.total_fuel_input_power_channel,
@@ -794,6 +868,29 @@ class GenericBoiler(Component):
             )
         else:
             raise ValueError(f"Unknown operating mode {operating_mode}")
+
+    def fuel_power_for_thermal_power(self, thermal_power_in_watt: float) -> Tuple[float, float]:
+        """The burner power that yields a thermal power, and its efficiency, within the power band (hisim-6ehm).
+
+        The inverse of the modulation law used for the control signal: the efficiency rises linearly from
+        ``eff_th_min`` at the minimal to ``eff_th_max`` at the maximal burner power, so
+        ``P_th = F (eta_min + (F - F_min) slope)`` is solved for ``F``. A request below what the minimal power
+        yields runs the burner at its minimum; one above the maximum runs it at its maximum.
+
+        Returns:
+            Tuple[float, float]: The burner power in W and the combustion efficiency.
+        """
+        minimal, maximal = self.minimal_thermal_power_in_watt, self.maximal_thermal_power_in_watt
+        if thermal_power_in_watt <= minimal * self.min_combustion_efficiency or maximal <= minimal:
+            return minimal, self.min_combustion_efficiency
+        slope = (self.max_combustion_efficiency - self.min_combustion_efficiency) / (maximal - minimal)
+        linear = self.min_combustion_efficiency - minimal * slope
+        if slope > 0:
+            fuel_power_in_watt = (-linear + (linear**2 + 4 * slope * thermal_power_in_watt) ** 0.5) / (2 * slope)
+        else:
+            fuel_power_in_watt = thermal_power_in_watt / linear
+        fuel_power_in_watt = min(max(fuel_power_in_watt, minimal), maximal)
+        return fuel_power_in_watt, self.min_combustion_efficiency + (fuel_power_in_watt - minimal) * slope
 
     @staticmethod
     def get_cost_capex(
@@ -1220,10 +1317,28 @@ class GenericBoilerController(Component):
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
+    # What the vessels forecast for the step, for the feed-forward (hisim-6ehm)
+    ThermalPowerDrawForecastSh = "ThermalPowerDrawForecastSh"
+    WaterMassInStorageSh = "WaterMassInStorageSh"
+    ThermalPowerDrawForecastDhw = "ThermalPowerDrawForecastDhw"
+    WaterMassInStorageDhw = "WaterMassInStorageDhw"
+
     # Outputs
     ControlSignalToGenericBoiler = "ControlSignalToGenericBoiler"
     OperatingMode = "OperatingMode"
     TemperatureDelta = "TemperatureDelta"
+    ThermalPowerSetpoint = "ThermalPowerSetpoint"
+
+    #: The smallest lift the feed-forward asks the boiler for. At the set temperature the correction term is
+    #: zero, and a boiler told to lift its return by nothing pushes no water, so it could not cover the draw.
+    #: Five kelvin is the spread of a heating circuit; the supply may then sit that far above the set
+    #: temperature, but the heat asked for still leaves the vessel at the set temperature.
+    MINIMUM_TEMPERATURE_LIFT_IN_KELVIN: ClassVar[float] = 5.0
+    #: The setpoint that says "no feed-forward this step": the boiler then follows the control signal.
+    NO_SETPOINT: ClassVar[float] = -1.0
+    #: The hot-water tank temperature below which a hot-water charge is never interrupted for space heating:
+    #: five kelvin above the 40 degC the tap draws at.
+    DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS: ClassVar[float] = 45.0
 
     def __init__(
         self,
@@ -1290,6 +1405,21 @@ class GenericBoilerController(Component):
             True,
         )
 
+        # The feed-forward (hisim-6ehm): with a vessel's draw forecast and mass the modulating controller asks the
+        # boiler for the heat that covers the draw and brings the vessel to its set temperature in one step.
+        self.draw_forecast_sh_channel: ComponentInput = self.add_input(
+            self.component_name, self.ThermalPowerDrawForecastSh, lt.LoadTypes.HEATING, lt.Units.WATT, False
+        )
+        self.water_mass_sh_channel: ComponentInput = self.add_input(
+            self.component_name, self.WaterMassInStorageSh, lt.LoadTypes.WARM_WATER, lt.Units.KG, False
+        )
+        self.draw_forecast_dhw_channel: ComponentInput = self.add_input(
+            self.component_name, self.ThermalPowerDrawForecastDhw, lt.LoadTypes.HEATING, lt.Units.WATT, False
+        )
+        self.water_mass_dhw_channel: ComponentInput = self.add_input(
+            self.component_name, self.WaterMassInStorageDhw, lt.LoadTypes.WARM_WATER, lt.Units.KG, False
+        )
+
         self.control_signal_to_generic_boiler_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ControlSignalToGenericBoiler,
@@ -1311,9 +1441,22 @@ class GenericBoilerController(Component):
             lt.Units.KELVIN,
             output_description="Temperature difference between actual and set water temperature.",
         )
+        self.thermal_power_setpoint_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerSetpoint,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                "Thermal power the feed-forward asks the boiler for, or -1 when there is none and the boiler "
+                "follows the control signal."
+            ),
+        )
 
         self.controller_mode: HeatingMode
         self.previous_controller_mode: HeatingMode
+        #: A hot-water charge that was interrupted for space heating and resumes when the buffer allows.
+        self.dhw_charge_pending: bool = False
+        self.previous_dhw_charge_pending: bool = False
 
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
@@ -1334,6 +1477,20 @@ class GenericBoilerController(Component):
                 SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
+        connections.append(
+            ComponentConnection(
+                GenericBoilerController.ThermalPowerDrawForecastSh,
+                storage_classname,
+                SimpleHotWaterStorage.ThermalPowerDrawForecast,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                GenericBoilerController.WaterMassInStorageSh,
+                storage_classname,
+                SimpleHotWaterStorage.WaterMassInStorage,
+            )
+        )
         return connections
 
     def get_default_connections_from_dhw_storage(
@@ -1347,6 +1504,20 @@ class GenericBoilerController(Component):
                 GenericBoilerController.WaterTemperatureInputFromDHWStorage,
                 storage_classname,
                 SimpleDHWStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                GenericBoilerController.ThermalPowerDrawForecastDhw,
+                storage_classname,
+                SimpleDHWStorage.ThermalPowerDrawForecast,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                GenericBoilerController.WaterMassInStorageDhw,
+                storage_classname,
+                SimpleDHWStorage.WaterMassInStorage,
             )
         )
         return connections
@@ -1401,10 +1572,12 @@ class GenericBoilerController(Component):
     def i_save_state(self) -> None:
         """Save the current state."""
         self.previous_controller_mode = self.controller_mode
+        self.previous_dhw_charge_pending = self.dhw_charge_pending
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
         self.controller_mode = self.previous_controller_mode
+        self.dhw_charge_pending = self.previous_dhw_charge_pending
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -1446,17 +1619,103 @@ class GenericBoilerController(Component):
                 self.daily_avg_outside_temperature_input_channel
             )
 
+            space_heating_temperature_after_draw_in_celsius: Optional[float] = None
+            if (
+                self.draw_forecast_sh_channel.source_output is not None
+                and self.water_mass_sh_channel.source_output is not None
+                and stsv.get_input_value(self.water_mass_sh_channel) > 0
+            ):
+                space_heating_temperature_after_draw_in_celsius = (
+                    water_temperature_input_from_space_heating_water_storage_in_celsius
+                    - stsv.get_input_value(self.draw_forecast_sh_channel)
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / (
+                        stsv.get_input_value(self.water_mass_sh_channel)
+                        * PhysicsConfig.get_properties_for_energy_carrier(
+                            energy_carrier=lt.LoadTypes.WATER
+                        ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+                    )
+                )
             control_signal, temperature_delta = self.determine_operating_mode(
                 daily_avg_outside_temperature_in_celsius,
                 water_temperature_input_from_space_heating_water_storage_in_celsius,
                 water_temperature_input_from_dhw_water_storage_in_celsius,
                 heating_flow_temperature_from_heat_distribution_system,
                 timestep,
+                space_heating_temperature_after_draw_in_celsius,
             )
+            thermal_power_setpoint_in_watt = self.NO_SETPOINT
+            forecast_channel: Optional[ComponentInput]
+            mass_channel: Optional[ComponentInput]
+            if self.config.is_modulating and self.controller_mode == HeatingMode.SPACE_HEATING:
+                target_in_celsius = heating_flow_temperature_from_heat_distribution_system
+                start_in_celsius = water_temperature_input_from_space_heating_water_storage_in_celsius
+                forecast_channel, mass_channel = self.draw_forecast_sh_channel, self.water_mass_sh_channel
+            elif self.config.is_modulating and self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
+                assert water_temperature_input_from_dhw_water_storage_in_celsius is not None
+                target_in_celsius = (
+                    self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset
+                )
+                start_in_celsius = water_temperature_input_from_dhw_water_storage_in_celsius
+                forecast_channel, mass_channel = self.draw_forecast_dhw_channel, self.water_mass_dhw_channel
+            else:
+                forecast_channel = mass_channel = None
+            if (
+                forecast_channel is not None
+                and mass_channel is not None
+                and forecast_channel.source_output is not None
+                and mass_channel.source_output is not None
+            ):
+                thermal_power_setpoint_in_watt = self.feed_forward_thermal_power_in_watt(
+                    draw_forecast_in_watt=stsv.get_input_value(forecast_channel),
+                    water_mass_in_kg=stsv.get_input_value(mass_channel),
+                    start_temperature_in_celsius=start_in_celsius,
+                    target_temperature_in_celsius=target_in_celsius,
+                    seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+                )
+                temperature_delta = max(target_in_celsius - start_in_celsius, self.MINIMUM_TEMPERATURE_LIFT_IN_KELVIN)
+                control_signal = min(
+                    max(
+                        thermal_power_setpoint_in_watt / concrete(self.config.maximal_thermal_power_in_watt),
+                        concrete(self.config.minimal_thermal_power_in_watt)
+                        / concrete(self.config.maximal_thermal_power_in_watt),
+                    ),
+                    1.0,
+                )
 
             stsv.set_output_value(self.control_signal_to_generic_boiler_channel, control_signal)
             stsv.set_output_value(self.operating_mode_channel, self.controller_mode.value)
             stsv.set_output_value(self.temperature_delta_channel, temperature_delta)
+            stsv.set_output_value(self.thermal_power_setpoint_channel, thermal_power_setpoint_in_watt)
+
+    @staticmethod
+    def feed_forward_thermal_power_in_watt(
+        draw_forecast_in_watt: float,
+        water_mass_in_kg: float,
+        start_temperature_in_celsius: float,
+        target_temperature_in_celsius: float,
+        seconds_per_timestep: float,
+    ) -> float:
+        """The heat that covers the vessel's draw and brings it to the target temperature in one step, in W.
+
+        ``P = Q_draw / dt + M c (T_target - T0) / dt``, never below zero. The vessel's energy balance then ends
+        the step at the target temperature, as long as the generator can deliver ``P``; the boiler clips it
+        to its power band and the vessel still accepts no more than keeps it below the supply temperature.
+        The old proportional law acted on the vessel temperature alone: once the vessel conserved energy
+        (hisim-4g9.16), it overshot and swung around the set temperature, at 3600 s in a limit cycle
+        (hisim-6ehm).
+        """
+        specific_heat_in_joule_per_kg_per_kelvin = PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=lt.LoadTypes.WATER
+        ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+        return max(
+            draw_forecast_in_watt
+            + water_mass_in_kg
+            * specific_heat_in_joule_per_kg_per_kelvin
+            * (target_temperature_in_celsius - start_temperature_in_celsius)
+            / seconds_per_timestep,
+            0.0,
+        )
 
     def determine_operating_mode(
         self,
@@ -1465,6 +1724,7 @@ class GenericBoilerController(Component):
         water_temperature_input_from_dhw_water_storage_in_celsius: Optional[float],
         heating_flow_temperature_from_heat_distribution_system: float,
         timestep,
+        space_heating_temperature_after_draw_in_celsius: Optional[float] = None,
     ) -> Tuple[float, float]:
         """Determine which operating mode to use in dual-circuit system."""
 
@@ -1486,6 +1746,14 @@ class GenericBoilerController(Component):
 
         # Enforce minimum run and idle times (if necessary overwrites previously set mode)
         self.enforce_minimum_run_and_idle_times(previous_controller_mode, timestep)
+
+        if space_heating_temperature_after_draw_in_celsius is not None:
+            self.interleave_space_heating_into_dhw_charge(
+                space_heating_temperature_after_draw_in_celsius,
+                water_temperature_input_from_dhw_water_storage_in_celsius,
+                heating_flow_temperature_from_heat_distribution_system,
+                daily_avg_outside_temperature_in_celsius,
+            )
 
         if self.controller_mode == HeatingMode.SPACE_HEATING:
             # get a modulated control signal between 0 and 1
@@ -1523,6 +1791,48 @@ class GenericBoilerController(Component):
             raise ValueError("Controller mode unknown.")
 
         return control_signal, temperature_delta
+
+    def interleave_space_heating_into_dhw_charge(
+        self,
+        space_heating_temperature_after_draw_in_celsius: float,
+        dhw_temperature_in_celsius: Optional[float],
+        set_heating_flow_temperature_in_celsius: float,
+        daily_avg_outside_temperature_in_celsius: float,
+    ) -> None:
+        """Let the space-heating buffer have a step of a hot-water charge when it would otherwise run dry (hisim-6ehm).
+
+        Hot water has priority, and a charge lasts several steps. A buffer sized at 20 l/kW holds a few
+        kelvin times 0.2 kWh/K, less than one 900 s step of a winter heating draw, so once the vessel
+        conserves energy (hisim-4g9.16) every charge drained it below the room temperature and the rooms
+        cooled. The buffer's temperature after this step's draw is forecast; when it would fall more than
+        :attr:`MINIMUM_TEMPERATURE_LIFT_IN_KELVIN` below the set flow temperature in the heating season,
+        and the hot-water tank is still above :attr:`DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS`, the
+        step goes to space heating and the charge resumes on the next step the buffer allows, up to the
+        charge's own end at the aim temperature.
+        """
+        if not self.config.with_domestic_hot_water_preparation or dhw_temperature_in_celsius is None:
+            return
+        if dhw_temperature_in_celsius >= self.warm_water_temperature_aim_in_celsius:
+            self.dhw_charge_pending = False
+        buffer_needs_the_step = (
+            space_heating_temperature_after_draw_in_celsius
+            < set_heating_flow_temperature_in_celsius - self.MINIMUM_TEMPERATURE_LIFT_IN_KELVIN
+            and DiverterValve.determine_summer_heating_mode(
+                daily_avg_outside_temperature_in_celsius,
+                self.config.set_heating_threshold_outside_temperature_in_celsius,
+            )
+            == "on"
+            and dhw_temperature_in_celsius >= self.DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS
+        )
+        if self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER and buffer_needs_the_step:
+            self.controller_mode = HeatingMode.SPACE_HEATING
+            self.dhw_charge_pending = True
+        elif (
+            self.controller_mode != HeatingMode.DOMESTIC_HOT_WATER
+            and self.dhw_charge_pending
+            and not buffer_needs_the_step
+        ):
+            self.controller_mode = HeatingMode.DOMESTIC_HOT_WATER
 
     def enforce_minimum_run_and_idle_times(self, previous_controller_mode: HeatingMode, timestep: int) -> None:
         """Enforces minimum run and idle times."""

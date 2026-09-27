@@ -6,6 +6,7 @@ from hisim import component as cp
 from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.configuration import PhysicsConfig
 from hisim.config import ComponentID, ConfigSizingError, SizingContext, auto_fields
 from tests import functions_for_testing as fft
 
@@ -174,31 +175,60 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[5]
     water_temperature_output_in_celsius_to_heat_generator = stsv.values[6]
 
-    # test mean water temperature calculation in storage
+    # test mean water temperature calculation in storage: the vessel steps on booked energy (hisim-4g9.16)
     mass_water_hds_in_kg = stsv.values[water_mass_flow_rate_hds.global_index] * sec_per_timesteps
     mass_water_hp_in_kg = stsv.values[water_mass_flow_rate_from_heat_generator.global_index] * sec_per_timesteps
-
+    temperature_from_hds = stsv.values[water_temperature_input_from_heat_distribution_system.global_index]
+    temperature_from_generator = stsv.values[water_temperature_input_from_heat_generator.global_index]
+    specific_heat_in_watt_hour_per_kg_per_kelvin = (
+        PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=lt.LoadTypes.WATER
+        ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+        / 3600
+    )
+    heat_capacity_in_watt_hour_per_kelvin = (
+        my_simple_heat_water_storage.water_mass_in_storage_in_kg * specific_heat_in_watt_hour_per_kg_per_kelvin
+    )
+    # without an exchanger the flows leaving the vessel are mixed by the mixing factor
+    temperature_to_hds = (
+        factor_for_water_storage_portion * previous_mean_temperature_in_celsius
+        + (1 - factor_for_water_storage_portion) * temperature_from_generator
+    )
+    temperature_to_generator = (
+        factor_for_water_storage_portion * previous_mean_temperature_in_celsius
+        + (1 - factor_for_water_storage_portion) * temperature_from_hds
+    )
+    # unconnected, the distribution system asks for the stream the vessel sends it
+    heat_requested = mass_water_hds_in_kg * specific_heat_in_watt_hour_per_kg_per_kelvin * (
+        temperature_to_hds - temperature_from_hds
+    )
+    heat_offered = mass_water_hp_in_kg * specific_heat_in_watt_hour_per_kg_per_kelvin * (
+        temperature_from_generator - temperature_to_generator
+    )
+    heat_accepted = min(
+        heat_offered,
+        heat_capacity_in_watt_hour_per_kelvin * (temperature_from_generator - previous_mean_temperature_in_celsius)
+        + heat_requested,
+    )
+    heat_drawn = min(
+        heat_requested,
+        heat_accepted
+        + heat_capacity_in_watt_hour_per_kelvin * (previous_mean_temperature_in_celsius - temperature_from_hds),
+    )
     calculated_mean_water_temperature_in_celsius = (
-        my_simple_heat_water_storage.water_mass_in_storage_in_kg * previous_mean_temperature_in_celsius
-        + mass_water_hp_in_kg * stsv.values[water_temperature_input_from_heat_generator.global_index]
-        + mass_water_hds_in_kg * stsv.values[water_temperature_input_from_heat_distribution_system.global_index]
-    ) / (my_simple_heat_water_storage.water_mass_in_storage_in_kg + mass_water_hp_in_kg + mass_water_hds_in_kg)
+        previous_mean_temperature_in_celsius + (heat_accepted - heat_drawn) / heat_capacity_in_watt_hour_per_kelvin
+    )
 
-    # test if calculated mean water temperature is equal to simulated water temperature.
-    # A weighted average recomputed here from the same inputs may differ from the
-    # component's i_simulate result by float-reassociation noise, so compare with a
-    # tight tolerance instead of exact equality.
     np.testing.assert_allclose(
         calculated_mean_water_temperature_in_celsius,
         my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius,
-        rtol=1e-6,
+        rtol=1e-9,
     )
 
     # test water output temperature for hp
 
     calculated_output_to_heat_generator_in_celsius = (
-        factor_for_water_storage_portion
-        * my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
+        factor_for_water_storage_portion * previous_mean_temperature_in_celsius
         + (1 - factor_for_water_storage_portion)
         * stsv.values[water_temperature_input_from_heat_distribution_system.global_index]
     )
@@ -206,19 +236,18 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     np.testing.assert_allclose(
         calculated_output_to_heat_generator_in_celsius,
         water_temperature_output_in_celsius_to_heat_generator,
-        rtol=0.01,
+        rtol=1e-12,
     )
 
     # test water output temperature for hds
     calculated_output_to_heat_distribution_system_in_celsius = (
-        factor_for_water_storage_portion
-        * my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
+        factor_for_water_storage_portion * previous_mean_temperature_in_celsius
         + (1 - factor_for_water_storage_portion) * stsv.values[water_temperature_input_from_heat_generator.global_index]
     )
     np.testing.assert_allclose(
         calculated_output_to_heat_distribution_system_in_celsius,
         water_temperature_output_in_celsius_to_heat_distribution_system,
-        rtol=0.01,
+        rtol=1e-12,
     )
 
 

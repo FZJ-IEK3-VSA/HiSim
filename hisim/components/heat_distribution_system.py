@@ -123,6 +123,8 @@ class HeatDistributionSystemState:
     water_output_temperature_in_celsius: float = 25.0
     water_input_temperature_in_celsius: float = 25.0
     thermal_power_delivered_in_watt: float = 0.0
+    #: The indoor air temperature the delivered power above was computed against (hisim-4g9.16).
+    residence_temperature_in_celsius: float = 20.0
 
     def self_copy(self) -> "HeatDistributionSystemState":
         """Copy the Heat Distribution State."""
@@ -130,6 +132,7 @@ class HeatDistributionSystemState:
             self.water_output_temperature_in_celsius,
             self.water_input_temperature_in_celsius,
             self.thermal_power_delivered_in_watt,
+            self.residence_temperature_in_celsius,
         )
 
 
@@ -148,12 +151,20 @@ class HeatDistribution(cp.Component):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
     WaterMassFlowInput = "WaterMassFlowInput"
+    #: The heat the buffer vessel gave of what this system asked for (hisim-4g9.16). Connected, it is what the
+    #: system delivers to the building; unconnected, the system delivers what it computed itself.
+    ThermalPowerGrantedByStorage = "ThermalPowerGrantedByStorage"
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
     WaterTemperatureOutput = "WaterTemperatureOutput"
     WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
+    #: The heat this system asks the buffer vessel for: what it computed it delivers, before the vessel's floor.
+    ThermalPowerRequestedFromStorage = "ThermalPowerRequestedFromStorage"
+    #: The supply temperature at and below which this system delivers no heat: the indoor air temperature. A
+    #: buffer vessel cannot be drawn below it by this system (hisim-4g9.16).
+    SupplyTemperatureFloor = "SupplyTemperatureFloor"
     WaterMassFlowHDS = "WaterMassFlowHDS"
 
     # Similar components to connect to:
@@ -231,6 +242,14 @@ class HeatDistribution(cp.Component):
             True,
         )
 
+        self.thermal_power_granted_by_storage_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ThermalPowerGrantedByStorage,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            False,
+        )
+
         self.water_mass_flow_rate_hp_in_kg_per_second_channel: Optional[cp.ComponentInput] = None
         if self.position_hot_water_storage_in_system in (
             PositionHotWaterStorageInSystemSetup.SERIES,
@@ -273,6 +292,26 @@ class HeatDistribution(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
+        )
+        self.thermal_power_requested_from_storage_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerRequestedFromStorage,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=(
+                "Heat the distribution system asks the buffer vessel for; the vessel grants it up to what it holds "
+                "above the return temperature."
+            ),
+        )
+        self.supply_temperature_floor_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.SupplyTemperatureFloor,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                "Supply temperature at and below which the distribution system delivers no heat, the indoor air "
+                "temperature; the buffer vessel is not drawn below it."
+            ),
         )
         self.water_mass_flow_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -343,6 +382,13 @@ class HeatDistribution(cp.Component):
                 HeatDistribution.WaterTemperatureInput,
                 hws_classname,
                 component_class.WaterTemperatureToHeatDistribution,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.ThermalPowerGrantedByStorage,
+                hws_classname,
+                component_class.ThermalPowerConsumptionHeatDistribution,
             )
         )
         return connections
@@ -485,10 +531,24 @@ class HeatDistribution(cp.Component):
             self.state.water_input_temperature_in_celsius - self.state.water_output_temperature_in_celsius,
         )
 
+        # What the system computed it delivers is its request to the buffer vessel; what it delivers to the building
+        # is what the vessel granted, when the vessel says so (hisim-4g9.16), so the two book one number.
+        stsv.set_output_value(
+            self.thermal_power_requested_from_storage_channel,
+            self.state.thermal_power_delivered_in_watt,
+        )
+        # the floor belongs to the request: both are the previous step's, so neither depends on this step's
+        # delivery, which the building's temperature does
+        stsv.set_output_value(self.supply_temperature_floor_channel, self.state.residence_temperature_in_celsius)
+        if self.thermal_power_granted_by_storage_channel.source_output is not None:
+            thermal_power_delivered_to_building_in_watt = stsv.get_input_value(
+                self.thermal_power_granted_by_storage_channel
+            )
+        else:
+            thermal_power_delivered_to_building_in_watt = self.state.thermal_power_delivered_in_watt
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
-            self.state.thermal_power_delivered_in_watt,
-            # thermal_power_delivered_in_watt,
+            thermal_power_delivered_to_building_in_watt,
         )
         stsv.set_output_value(
             self.water_mass_flow_channel,
@@ -499,6 +559,7 @@ class HeatDistribution(cp.Component):
         self.state.water_output_temperature_in_celsius = water_temperature_output_in_celsius
         self.state.water_input_temperature_in_celsius = water_temperature_input_in_celsius
         self.state.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
+        self.state.residence_temperature_in_celsius = residence_temperature_input_in_celsius
 
     def determine_water_temperature_input_output_effective_thermal_power_without_mass_flow(
         self,

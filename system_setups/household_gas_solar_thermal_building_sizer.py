@@ -317,7 +317,7 @@ def setup_function(
         config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_sim.add_component(my_gas_heater, connect_automatically=True)
+    my_sim.add_component(my_gas_heater)
 
     # Build Gas Heater Controller For Space Heating and DHW
     my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.preset_modulating(
@@ -437,6 +437,21 @@ def setup_function(
         my_gas_heater.WaterOutputMassFlowDhw,
     )
     my_sim.add_component(my_dhw_storage)
+
+    # The gas heater is the tank's secondary generator, so it reads its return temperature and the heat the
+    # tank accepted from it on the secondary slot (hisim-4g9.16). Its automatic wiring would take the primary
+    # slot, the solar collectors', so it is wired by hand.
+    my_gas_heater.connect_only_predefined_connections(my_gas_heater_controller, my_simple_water_storage)
+    my_gas_heater.connect_input(
+        my_gas_heater.WaterInputTemperatureDhw,
+        my_dhw_storage.component_name,
+        my_dhw_storage.WaterTemperatureToSecondaryHeatGenerator,
+    )
+    my_gas_heater.connect_input(
+        my_gas_heater.ThermalPowerAcceptedByStorageDhw,
+        my_dhw_storage.component_name,
+        my_dhw_storage.ThermalPowerFromSecondaryHeatGenerator,
+    )
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(

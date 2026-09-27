@@ -61,8 +61,8 @@ components:
       with_domestic_hot_water_preparation: true
     inputs:
       - DistrictHeatingController
-      - HeatDistributionSystem
       - DHWStorage
+      - HeatDistributionSystem
   DHWStorage:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard

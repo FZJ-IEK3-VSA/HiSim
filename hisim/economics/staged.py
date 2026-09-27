@@ -2310,8 +2310,9 @@ class StagedEvaluator:
         finance a quote at more than it states (owner decision 2026-09-27). The loan terms are
         the stage's own (:func:`resolve_loan_plan` on its subsidy decisions), and the schedule is
         laid out by the engine's own :func:`build_financing_flows`, so a soft loan's repayment
-        grant is a share of this principal too. A payment in year T is kept: it is paid inside the
-        period rather than at its edge.
+        grant is a share of this principal too, and a slot in which the stage's grants exceed
+        what it books finances nothing rather than a negative loan (renovisorissues #66). A
+        payment in year T is kept: it is paid inside the period rather than at its edge.
 
         Args:
             result: The stage's own evaluation.

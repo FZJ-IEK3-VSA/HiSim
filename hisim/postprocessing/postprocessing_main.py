@@ -134,6 +134,23 @@ def _propagating_cost_errors() -> Tuple[type, ...]:
         return ()
 
 
+class LifecycleCostEngineError(RuntimeError):
+    """The lifecycle cost engine failed in a run that cannot finish without its answer.
+
+    Raised only when the run asked for it (`SimulationParameters.require_lifecycle_costs`); a
+    plain simulation logs the engine's failure and keeps its legacy outputs. The message names the
+    engine's own error by type and text, because the caller shows it as the job's error message.
+    """
+
+    def __init__(self, cause: BaseException) -> None:
+        """Wrap one engine error.
+
+        Args:
+            cause: What the engine raised.
+        """
+        super().__init__(f"the lifecycle cost engine failed: {type(cause).__name__}: {cause}")
+
+
 class PostProcessor:
     """Entry point that orchestrates HiSim's post-processing stage.
 
@@ -166,6 +183,55 @@ class PostProcessor:
         if dirname is None:
             raise ValueError("No results directory name was defined.")
         self.dirname = dirname
+
+    def compute_lifecycle_costs(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Runs the parallel lifecycle cost engine and decides what its failure means (cost_spec.md §10).
+
+        A `CostDataError` always fails postprocessing. Any other failure is logged and the legacy
+        outputs are written as always, unless the run declared that it cannot finish without the
+        engine's answer (`SimulationParameters.require_lifecycle_costs`, which a RenoVisor
+        calculation does): then the failure is re-raised as a `LifecycleCostEngineError` naming it.
+
+        Args:
+            ppdt: The postprocessing data of the run.
+
+        Raises:
+            LifecycleCostEngineError: When the engine failed and the run requires its answer.
+        """
+        log.information("Computing lifecycle costs (parallel cost engine).")
+        start = timer()
+        try:
+            compute_lifecycle_costs = _load_attribute("hisim.economics.bridge", "compute_lifecycle_costs")
+            compute_lifecycle_costs(
+                wrapped_components=ppdt.wrapped_components,
+                all_outputs=ppdt.all_outputs,
+                postprocessing_results=ppdt.results,
+                simulation_parameters=ppdt.simulation_parameters,
+                generate_report=(
+                    PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+                ),
+            )
+        except Exception as err:  # pylint: disable=broad-except
+            # Asking for lifecycle costs is opt-in, so an answer that cannot be produced is a
+            # failed run rather than a log line: a CostDataError — and hence the D7
+            # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
+            # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
+            # Everything else is an accident in the parallel engine and must still not cost a
+            # user their simulation results, so it stays a logged error. What that leniency
+            # must not do is leave a *partial* cost export set behind for a later reader to
+            # take as complete, and it does not: `compute_lifecycle_costs` removes the files it
+            # had already written before letting anything propagate, so this branch is reached
+            # with the cost files either all there or none of them.
+            if isinstance(err, _propagating_cost_errors()):
+                raise
+            if getattr(ppdt.simulation_parameters, "lifecycle_costs_required", False):
+                # The caller's answer is the money (SimulationParameters.require_lifecycle_costs):
+                # a run without it is a failed run, and its error names the engine's own.
+                raise LifecycleCostEngineError(err) from err
+            log.error(f"Lifecycle cost engine failed (legacy outputs are unaffected): {err}")
+        end = timer()
+        duration = end - start
+        log.information("Computing lifecycle costs took " + f"{duration:1.2f}s.")
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
@@ -338,36 +404,7 @@ class PostProcessor:
             PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
             or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
         ):
-            log.information("Computing lifecycle costs (parallel cost engine).")
-            start = timer()
-            try:
-                compute_lifecycle_costs = _load_attribute("hisim.economics.bridge", "compute_lifecycle_costs")
-                compute_lifecycle_costs(
-                    wrapped_components=ppdt.wrapped_components,
-                    all_outputs=ppdt.all_outputs,
-                    postprocessing_results=ppdt.results,
-                    simulation_parameters=ppdt.simulation_parameters,
-                    generate_report=(
-                        PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
-                    ),
-                )
-            except Exception as err:  # pylint: disable=broad-except
-                # Asking for lifecycle costs is opt-in, so an answer that cannot be produced is a
-                # failed run rather than a log line: a CostDataError — and hence the D7
-                # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
-                # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
-                # Everything else is an accident in the parallel engine and must still not cost a
-                # user their simulation results, so it stays a logged error. What that leniency
-                # must not do is leave a *partial* cost export set behind for a later reader to
-                # take as complete, and it does not: `compute_lifecycle_costs` removes the files it
-                # had already written before letting anything propagate, so this branch is reached
-                # with the cost files either all there or none of them.
-                if isinstance(err, _propagating_cost_errors()):
-                    raise
-                log.error(f"Lifecycle cost engine failed (legacy outputs are unaffected): {err}")
-            end = timer()
-            duration = end - start
-            log.information("Computing lifecycle costs took " + f"{duration:1.2f}s.")
+            self.compute_lifecycle_costs(ppdt)
 
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(

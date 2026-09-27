@@ -88,6 +88,34 @@ class Year0NetInvestment:
         """
         return self.amount.maximum > 0
 
+    @property
+    def financed_basis(self) -> UncertainValue:
+        """The amount a loan can be taken out on: the net investment, never below zero per slot.
+
+        A loan finances what is left to pay, and in a world where upfront grants cover the whole
+        investment nothing is left, so that slot's basis is zero rather than a negative loan. That
+        world is not rare: a grant capped at the eligible cost is mirrored as a revenue (§3.9), so
+        the LOW slot pairs the *largest* grant with the *cheapest* investment and the net figure
+        dips below zero whenever a cap binds in one world and not in the other (renovisorissues
+        #66: EUR 8,000 wall grant and EUR 3,500 floor grant against EUR 6,000 and EUR 1,600 of
+        LOW-world investment, a net of EUR -3,900). Clamping each slot on its own keeps the band
+        ordered, because ``max(0, x)`` is monotone, and it leaves every slot that was already
+        non-negative bit for bit as it was -- a signed zero included.
+
+        Returns:
+            A cost-positive band whose three slots are each ``max(0, net)``.
+        """
+        return UncertainValue(
+            best_estimate=self._non_negative(self.amount.best_estimate),
+            minimum=self._non_negative(self.amount.minimum),
+            maximum=self._non_negative(self.amount.maximum),
+        )
+
+    @staticmethod
+    def _non_negative(value: float) -> float:
+        """Return ``value`` itself when it is not negative, and zero when it is."""
+        return value if value >= 0.0 else 0.0
+
 
 def compute_year0_net_investment(timeline: CashFlowTimeline) -> Year0NetInvestment:
     """Sums the year-0 investment categories, net of upfront subsidies (§4.4).
@@ -177,9 +205,11 @@ def build_financing_flows(
 ) -> List[CashFlowEntry]:
     """Loan flows replacing (a share of) the year-0 outflow (§4.4).
 
-    Nothing is emitted when there is no net investment left to finance. The schedule stops at
-    the observation horizon, so a term longer than the horizon leaves the remaining debt
-    implicitly outstanding (unchanged behavior).
+    Nothing is emitted when there is no net investment left to finance. A slot in which upfront
+    grants exceed the investment finances nothing (:attr:`Year0NetInvestment.financed_basis`), so
+    the disbursement is never a payment to the bank and the debt service never a refund. The
+    schedule stops at the observation horizon, so a term longer than the horizon leaves the
+    remaining debt implicitly outstanding (unchanged behavior).
 
     The layout half of financing: the closed-form annuity or interest-only schedule comes from
     `financing.loan_flows`, and this function decides what it is applied to (a share of the year-0
@@ -204,7 +234,7 @@ def build_financing_flows(
     if not year0_net.is_financeable:
         return []
     entries: List[CashFlowEntry] = []
-    principal = year0_net.amount.scale(loan_plan.financed_share)
+    principal = year0_net.financed_basis.scale(loan_plan.financed_share)
     disbursement, schedule = loan_flows(loan_plan, principal)
     entries.append(
         CashFlowEntry(

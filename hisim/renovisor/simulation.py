@@ -122,8 +122,8 @@ class SimulationSetup:
                 sentinel; see the module docstring.
 
         Returns:
-            The parameters, with the result directory created and the post-processing options
-            set.
+            The parameters, with the result directory created, the post-processing options set
+            and the lifecycle costs required.
         """
         start = datetime.datetime(cls.YEAR, 1, 1)
         days = period.days
@@ -139,6 +139,10 @@ class SimulationSetup:
             post_processing_options=list(cls.POST_PROCESSING),
             logging_level=cls.LOGGING_LEVEL,
         )
+        # The payload's money and lifecycle CO2 come from the cost engine, so a calculation whose
+        # engine fails is a failed calculation (exit 5, the engine's error named), not a finished
+        # one without them (owner decision 2026-09-27, renovisorissues #66).
+        parameters.require_lifecycle_costs()
         if cache_directory is not None:
             # The explicit argument outranks the environment: a caller that names a directory
             # gets exactly that one, and the variable is not consulted.

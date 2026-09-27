@@ -325,6 +325,30 @@ class SimpleWaterStorage(cp.Component):
         self.my_simulation_parameters = my_simulation_parameters
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
 
+    #: Plausible range of a storage's converged mean water temperature. Outside it the run fails.
+    PLAUSIBLE_MEAN_WATER_TEMPERATURE_RANGE_IN_CELSIUS: ClassVar[Tuple[float, float]] = (0.0, 90.0)
+
+    def check_converged_mean_water_temperature(
+        self, mean_water_temperature_in_celsius: float, storage_label: str
+    ) -> None:
+        """Fail the run when the converged mean water temperature leaves the plausible range.
+
+        Called from ``i_doublecheck``, that is once per timestep on the value the timestep converged
+        to. The check used to run at the top of ``i_simulate`` on whatever the previous call had
+        computed, which inside a timestep is an intermediate iterate of the convergence loop: at
+        timestep 0 of a 3600 s run the boiler controller first answers the zero-initialised storage
+        input with a 70 K lift, the boiler adds it to the storage's real 60 degC, and one hour of
+        that 130 degC flow mixes the vessel to above 90 degC in an iterate the next iteration
+        discards (hisim-4g9.11). A converged value outside the range still fails, one timestep
+        earlier than before and with the same message.
+        """
+        lowest, highest = self.PLAUSIBLE_MEAN_WATER_TEMPERATURE_RANGE_IN_CELSIUS
+        if mean_water_temperature_in_celsius > highest or mean_water_temperature_in_celsius < lowest:
+            raise ValueError(
+                f"The water temperature in the {storage_label} is with {mean_water_temperature_in_celsius}°C"
+                " way too high or too low."
+            )
+
     def calculate_masses_of_water_flows(
         self,
         water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
@@ -869,8 +893,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.state = self.previous_state.self_copy()
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublecheck."""
-        pass
+        """Check the converged mean water temperature of the timestep."""
+        self.check_converged_mean_water_temperature(
+            self.mean_water_temperature_in_water_storage_in_celsius, "water storage"
+        )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the heating water storage."""
@@ -906,16 +932,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             water_mass_flow_rate_from_heat_generator_in_kg_per_second = 0
             water_temperature_from_secondary_heat_generator_in_celsius = 0
             water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = 0
-
-        # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
-
-        if (
-            self.mean_water_temperature_in_water_storage_in_celsius > 90
-            or self.mean_water_temperature_in_water_storage_in_celsius < 0
-        ):
-            raise ValueError(
-                f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
-            )
 
         # Calculations ------------------------------------------------------------------------------------------------------
 
@@ -1723,8 +1739,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.state = self.previous_state.self_copy()
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublecheck."""
-        pass
+        """Check the converged mean water temperature of the timestep."""
+        self.check_converged_mean_water_temperature(
+            self.mean_water_temperature_in_water_storage_in_celsius, "DHW water storage"
+        )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the heating water storage."""
@@ -1753,16 +1771,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
         water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
             self.water_mass_flow_rate_secondary_heat_generator_input_channel
         )
-
-        # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
-
-        if (
-            self.mean_water_temperature_in_water_storage_in_celsius > 90
-            or self.mean_water_temperature_in_water_storage_in_celsius < 0
-        ):
-            raise ValueError(
-                f"The water temperature in the DHW water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
-            )
 
         # if (water_mass_flow_rate_of_dhw_in_kg_per_second > 0) and (self.mean_water_temperature_in_water_storage_in_celsius < self.warm_water_temperature):
         #     # if there is water consumption, the temperature must be high enough

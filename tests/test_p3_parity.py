@@ -19,6 +19,7 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
+import importlib
 import json
 import math
 from pathlib import Path
@@ -481,7 +482,7 @@ def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_
     fleet-wide.
 
     What this setup cannot vouch for are the participant targets, the dispatch outputs nothing
-    reads; it grows none, and the test below builds two sizers that do.
+    reads; it grows none, and :func:`check_participant_targets` builds two sizers that do.
     """
     build = Rig.canary_wiring(tmp_path)
     declared = DeclaredPortRenamings.pairs()
@@ -498,14 +499,22 @@ def test_the_table_still_spells_the_ports_the_dynamic_components_setup_actually_
     assert diff.is_identical(), diff.describe()
 
 
-# Builds two building sizers for real, load profile and all, so it belongs to a full-simulation
-# shard; neither is simulated, only built far enough to name its ports.
-@pytest.mark.extendedbase
-@pytest.mark.parametrize("stem", sorted(Rig.PARTICIPANT_CANARIES))
-def test_the_table_still_spells_the_participant_targets_the_ems_sizers_actually_grow(
-    stem: str, tmp_path: Path
-) -> None:
+#: The modules that run :func:`check_participant_targets`, one per participant canary, named
+#: ``test_p3_parity_participants_<short name>.py`` and each stating the setup it builds as ``STEM``.
+PARTICIPANT_MODULE_PATTERN = "test_p3_parity_participants_*.py"
+
+
+def check_participant_targets(stem: str, tmp_path: Path) -> None:
     """Catches a table missing, or misspelling, a row for a dispatch output nothing reads.
+
+    Not a test itself: each participant canary runs it from its own module,
+    ``test_p3_parity_participants_<short name>.py``, because each builds a building sizer for real
+    (load profile and all, about 220 s in CI) and ``--dist loadfile`` keeps one module on one
+    worker. Two cases in one module bounded the extendedbase shard at twice that; one module each
+    lets the workers take them side by side (hisim-60sv.10). The modules are deleted with this one
+    when P6 retires the rig (hisim-b3b.22), and
+    :func:`test_every_participant_canary_has_its_own_module` keeps their set equal to
+    :attr:`Rig.PARTICIPANT_CANARIES`.
 
     An energy manager grows two kinds of dispatch output. One steers a participant that reads it —
     the battery's loading power, the car's charge target — and the other is published for the
@@ -521,10 +530,14 @@ def test_the_table_still_spells_the_participant_targets_the_ems_sizers_actually_
     constructor — nothing in the table said what the two paths now call them instead, and all
     eleven EMS sizers failed the result comparison on names alone while every test stayed green.
 
-    The two sizers parametrised here grow all six participant rows between them, and the assertion
-    covers both halves of each against a live build: the legacy name is a port the Python build's
-    manager really has, the declarative name is a port the twin's build really has, and translating
-    one wiring through the table yields the other.
+    The two sizers of :attr:`Rig.PARTICIPANT_CANARIES` grow all six participant rows between them,
+    and the assertion covers both halves of each against a live build: the legacy name is a port the
+    Python build's manager really has, the declarative name is a port the twin's build really has,
+    and translating one wiring through the table yields the other.
+
+    Args:
+        stem: The participant canary to build, a key of :attr:`Rig.PARTICIPANT_CANARIES`.
+        tmp_path: Where the two builds may write; the calling test's own temporary directory.
     """
     build = Rig.canary_wiring(tmp_path, stem)
     declared = DeclaredPortRenamings.pairs()
@@ -543,6 +556,23 @@ def test_the_table_still_spells_the_participant_targets_the_ems_sizers_actually_
         DeclaredPortRenamings.port_renaming().apply_to(build.legacy), build.declarative
     )
     assert diff.is_identical(), diff.describe()
+
+
+@pytest.mark.base
+def test_every_participant_canary_has_its_own_module() -> None:
+    """Catches a participant canary that no module runs, or a module running a setup no longer listed.
+
+    The canaries run from one module each (see :func:`check_participant_targets`), so a setup added
+    to :attr:`Rig.PARTICIPANT_CANARIES` without a module would silently go unbuilt.
+    """
+    stems = []
+    for path in sorted(Path(__file__).parent.glob(PARTICIPANT_MODULE_PATTERN)):
+        module = importlib.import_module(f"{__package__}.{path.stem}")
+        stems.append(module.STEM)
+    assert len(stems) == len(set(stems)), f"two modules run the same canary: {sorted(stems)}"
+    assert set(stems) == set(Rig.PARTICIPANT_CANARIES), (
+        f"the canary modules run {sorted(stems)}, but the rig lists {sorted(Rig.PARTICIPANT_CANARIES)}"
+    )
 
 
 @pytest.mark.base

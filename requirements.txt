@@ -7,6 +7,12 @@ pvlib # ==0.10.2
 oemof.thermal
 openpyxl
 pytest
+# The tests workflow runs every shard over pytest-xdist workers (-n, --dist loadfile) and measures
+# coverage through pytest-cov, which follows those workers where a bare 'coverage run' would not.
+# pytest-cov 7 dropped the .pth hook that also measured subprocesses; the '>=7' keeps the measured
+# set what 'coverage run' measured before (the pytest processes only).
+pytest-xdist
+pytest-cov>=7
 sphinx
 sphinx-rtd-theme
 # Documentation build (docs/conf.py extensions): renders the ```mermaid blocks

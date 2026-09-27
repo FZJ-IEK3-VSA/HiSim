@@ -641,7 +641,7 @@ class TestTheEquipmentTheHouseAlreadyHas:
         rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
         heat_pump = rows["MoreAdvancedHeatPumpHPLib"]
         assert document["parameters"]["weather_year"] != document["parameters"]["price_basis_year"]
-        assert heat_pump["installation_year"] == document["parameters"]["price_basis_year"]
+        assert heat_pump["installation_year"] == 2026
         assert heat_pump["installation_year_origin"] == "stage"
         assert heat_pump["service_life_origin"] == "cost_database"
 

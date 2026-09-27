@@ -29,9 +29,12 @@ Units and conventions used throughout: euro amounts are banded (`UncertainValue`
 cost-positive; the anyway-cost credit is the one entry emitted here and it is revenue-mirrored
 (negative). Years are relative to the investment date, so `first_replacement_year` is "years
 from now", not a calendar year; scheme validity is anchored on the *price basis year* — the
-economic "today" — which may differ from the simulated weather year, and so are ages, unless the
-caller states an ``ageing_reference_year``: a staged plan's year 0 (``plan_start_year``, else the
-price basis year; hisim-dutz, hisim-nl6j), which the plan's calendar years count from as well.
+economic "today" — which may differ from the simulated weather year. Ages are measured at the
+``ageing_reference_year``, the timeline's year 0: the price basis year when nothing is stated, a
+staged plan's own year 0 when the caller passes one (``plan_start_year``, else the price basis
+year; hisim-dutz, hisim-nl6j); never the weather year. The plan's calendar years count from that
+year only when the plan states a start year (they are null without one). A register asset whose
+age the caller states (``ExistingAsset.stated_age_in_years``, a stage purchase) takes that age.
 
 Realizes: cost_spec.md §3.5 (device entries, removal cost), §3.10 (provenance), §4.1 (existing
 assets, sunk cost, anyway cost), spec Q7 (coupled cost).
@@ -316,6 +319,18 @@ def installation_verdict(
     )
 
 
+def _age(asset: ExistingAsset, ageing_reference_year: int) -> int:
+    """The age a kept or replaced register asset is priced at (§4.1).
+
+    The age its caller states, when it states one -- the staged evaluator does for a subject an
+    earlier stage bought (:attr:`ExistingAsset.stated_age_in_years`, hisim-4uv9) -- and otherwise
+    its floored age at the timeline's year 0 (:meth:`ExistingAsset.age_in_years`).
+    """
+    if asset.stated_age_in_years is not None:
+        return asset.stated_age_in_years
+    return asset.age_in_years(ageing_reference_year)
+
+
 def resolve_device(
     subject: str,
     facts: ComponentCostFacts,
@@ -325,7 +340,7 @@ def resolve_device(
     database: CostDatabase,
     parameters: EconomicParameters,
     price_basis_year: int,
-    ageing_reference_year: Optional[int] = None,
+    ageing_reference_year: int,
 ) -> DeviceCosting:
     """Resolves one subject's cost building blocks and its installation context (§3.5, §4.1).
 
@@ -358,13 +373,12 @@ def resolve_device(
         database: Loaded cost database for the country's device entries (§3.5).
         parameters: Economic parameters — supplies the country and the default
             `anyway_threshold_years`.
-        price_basis_year: The economic "today"; device entries are looked up for it and asset
-            ages are measured against it, deliberately not against the simulated weather year —
-            unless ``ageing_reference_year`` is stated.
-        ageing_reference_year: The calendar year a kept asset's age is measured at, i.e. the
-            calendar year of year 0 of the timeline; ``None`` (every path but a staged plan) means
-            ``price_basis_year``. A staged plan states its plan year 0 here
-            (:attr:`hisim.economics.evaluator.EconomicEvaluator.plan_year_zero`).
+        price_basis_year: The economic "today"; device entries are looked up for it, deliberately
+            not for the simulated weather year.
+        ageing_reference_year: The calendar year of the timeline's year 0, at which a kept
+            asset's age is measured: the price basis year on every path but a staged plan, which
+            passes its own year 0 (:meth:`hisim.economics.staged.StagedEvaluator.plan_year_zero`).
+            A kept asset with a ``stated_age_in_years`` takes that age instead.
 
     Returns:
         A `DeviceCosting` with every building block banded and sized, the installation-context
@@ -469,11 +483,10 @@ def resolve_device(
     first_replacement_year = int(round(service_life))
     if verdict.kept_asset is not None:
         # Kept asset: no investment; first replacement at service_life - current_age.
-        # Ages anchor on year 0 of the timeline: the price basis year (the economic "today",
-        # like scheme validity and the CO2 path), not the possibly historical weather year,
-        # or a staged plan's own year 0 when the caller states one.
-        reference = price_basis_year if ageing_reference_year is None else ageing_reference_year
-        age = verdict.kept_asset.age_for_replacement(reference)
+        # Ages anchor on the timeline's year 0: the price basis year (the economic "today", like
+        # scheme validity and the CO2 path) when nothing is stated, a staged plan's own year 0
+        # when the caller passes one; never the possibly historical weather year.
+        age = _age(verdict.kept_asset, ageing_reference_year)
         first_replacement_year = max(1, int(round(service_life - age)))
     if context == InstallationContext.STATUS_QUO and register is None:
         log.warning(
@@ -530,8 +543,8 @@ def resolve_replaced_asset(
     database: CostDatabase,
     parameters: EconomicParameters,
     price_basis_year: int,
+    ageing_reference_year: int,
     ledger: Optional[ProvenanceLedger] = None,
-    ageing_reference_year: Optional[int] = None,
 ) -> ReplacedAssetOutcome:
     """Sunk cost and anyway-cost credit for the asset this measure replaces (§4.1, Q7).
 
@@ -570,13 +583,13 @@ def resolve_replaced_asset(
             branch.
         database: Loaded cost database, for the replaced asset's price and service life.
         parameters: Economic parameters — country and the escalation-rate fallback chains.
-        price_basis_year: The economic "today" the replaced asset's price is looked up for and,
-            unless ``ageing_reference_year`` is stated, its age is measured against.
+        price_basis_year: The economic "today" the replaced asset's price is looked up for.
+        ageing_reference_year: The calendar year of the timeline's year 0, at which the replaced
+            asset's age is measured (see :func:`resolve_device`); a replaced asset with a
+            ``stated_age_in_years`` takes that age instead.
         ledger: Provenance ledger; the applied anyway share is recorded into it so the credit's
             basis is traceable with `explain`. Optional only because the tests that exercise the
             arithmetic alone do not carry one.
-        ageing_reference_year: The calendar year of year 0 the replaced asset's age is measured
-            at; ``None`` means ``price_basis_year`` (see :func:`resolve_device`).
 
     Returns:
         A `ReplacedAssetOutcome`. `sunk_cost` is always present (possibly zero); `credit_entry` is
@@ -612,7 +625,7 @@ def resolve_replaced_asset(
             ) from err
         like_for_like = replaced.replacement_cost_override_in_euro
         old_life = ContextResolutionConstants.FALLBACK_SERVICE_LIFE_IN_YEARS
-    age = replaced.age_in_years(price_basis_year if ageing_reference_year is None else ageing_reference_year)
+    age = _age(replaced, ageing_reference_year)
     remaining = max(0.0, old_life - age)
     sunk_cost = like_for_like.scale(remaining / old_life if old_life else 0.0)
     if remaining > costing.anyway_threshold_years:

@@ -28,6 +28,7 @@ from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.provenance import ParameterOrigin
 from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
+from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_parameters import EchoOrigin, ParameterKeys, PlanYearBounds, StagedParameters
 from hisim.economics.tariffs import SupplyKind, TariffContract, TariffSupply
 from hisim.economics.timeline import Actor, CostCategory
@@ -1466,8 +1467,9 @@ class TestOnePlanYearZero:
         f = 3, L = 10, T = 20.
 
             installation_year = plan year 0 + f = 2026 + 3 = 2029   (it was 2019 + 3 = 2022)
-            age in the third stage, at 2026   = 2026 - 2029  = -3  (not floored: a stage purchase)
+            age the third stage keeps it at   = -f           = -3  (stated by the staged module)
             first replacement                 = L - age      = 10 + 3 = 13 = f + L
+            its calendar year                 = 2026 + 13    = 2039
 
         Before, the third stage aged the 2022 unit at 2026, age 4, and replaced it in year
         L - 4 = 6 = f + L - 7: seven years early, the weather-to-basis gap.
@@ -1480,11 +1482,10 @@ class TestOnePlanYearZero:
             assert life.installation_year_origin is not None
             assert (life.installation_year, life.installation_year_origin.value) == (2029, "stage"), stage
         assert self._years(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.INVESTMENT) == [3]
-        assert self._years(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.REPLACEMENT) == [
-            3 + int(SyntheticPlan.LIFETIME_IN_YEARS)
-        ]
-        assert result.plan_start_year == self.BASIS_YEAR
-        assert self.BASIS_YEAR + 13 == 2029 + SyntheticPlan.LIFETIME_IN_YEARS  # the calendar year it is due
+        (due,) = self._years(result, SyntheticPlan.HEAT_PUMP_SUBJECT, CostCategory.REPLACEMENT)
+        assert due == 13
+        document = StagedDocument(result, gap_parameters, brownfield_perspective()).to_json()
+        assert document["plan"]["annual"][due]["calendar_year"] == 2039
 
     def test_without_a_start_year_a_stage_purchase_is_dated_from_the_basis_year(self, database, gap_parameters):
         """No start year: plan year 0 is the price basis year 2026, never the weather year 2019.
@@ -1506,15 +1507,16 @@ class TestOnePlanYearZero:
             start 2026 (= basis): due = L - (2026 - 2020) = 10 - 6 = 4, calendar 2026 + 4 = 2030
             start 2029 (basis + 3): due = L - (2029 - 2020) = 10 - 9 = 1, calendar 2029 + 1 = 2030
 
-        Three years earlier in plan years, the same calendar year: the price basis year (2026 in
-        both) no longer ages it.
+        Three years earlier in plan years, the same calendar year, which the document publishes
+        as the row's ``calendar_year``: the price basis year (2026 in both) no longer ages it.
         """
         baseline = self._weathered(baseline_stage(), self._kept_boiler_register())
         result = StagedEvaluator(database).evaluate(
             [baseline], gap_parameters, brownfield_perspective(), plan_start_year=start
         )
         assert self._years(result, SyntheticPlan.BOILER_SUBJECT, CostCategory.REPLACEMENT)[0] == due
-        assert start + due == self.KEPT_BOILER_YEAR + SyntheticPlan.LIFETIME_IN_YEARS
+        document = StagedDocument(result, gap_parameters, brownfield_perspective()).to_json()
+        assert document["plan"]["annual"][due]["calendar_year"] == 2030
         assert result.plan.parameters.price_basis_year == self.BASIS_YEAR
 
     def test_without_a_start_year_a_kept_asset_ages_as_an_unstaged_evaluation_does(self, database, gap_parameters):
@@ -1529,6 +1531,53 @@ class TestOnePlanYearZero:
         plain = EconomicEvaluator(database, gap_parameters).evaluate(baseline.inputs, brownfield_perspective())
         assert self._years(staged, SyntheticPlan.BOILER_SUBJECT, CostCategory.REPLACEMENT)[0] == 4
         assert entry_signature(staged.plan.timeline.entries) == entry_signature(plain.timeline.entries)
+
+    def test_a_stage_purchase_a_later_stage_replaces_is_written_off_at_its_own_age(self, tmp_path, gap_parameters):
+        """Stage 1 (f = 3) buys the heat pump, stage 3 (f = 8) replaces it with another: age 5.
+
+        The replacing unit is a subject of the same class under another name, so the register
+        stage 3 is evaluated with declares the stage-1 unit replaced. Its like-for-like price is
+        the heat-pump device entry's ``1 EUR/kW x 9 kW = 9 EUR``, its life ``L = 10``; the
+        anyway-cost threshold is raised to 5 years so the credit's test is visible:
+
+            age when stage 3 replaces it = 8 - 3            = 5   (not 2026 - 2029 floored = 0)
+            remaining life               = L - age          = 5   <= 5: the anyway credit is due
+            written-off book value       = 9 x 5 / 10       = 4.50 EUR   (not 9 x 10 / 10 = 9)
+            anyway credit, stage year    = remaining        = 5          (none at all with age 0)
+        """
+        database = write_database(str(tmp_path / "with_a_heat_pump_entry"), heat_pump_legacy_flat_subsidy_share=0.1)
+        replacing = state_inputs(
+            [
+                (
+                    SyntheticPlan.ENVELOPE_SUBJECT,
+                    ComponentType.WALL_EXTERNAL_INSULATION,
+                    120.0,
+                    SyntheticPlan.ENVELOPE_INVESTMENT_IN_EURO,
+                ),
+                ("HeatPumpAgain", ComponentType.HEAT_PUMP, 9.0, SyntheticPlan.HEAT_PUMP_INVESTMENT_IN_EURO),
+            ],
+            SyntheticPlan.RENOVATED_ELECTRICITY_IN_KWH,
+        )
+        third = Stage(inputs=replacing, from_year=8, label="stage 3", job_id="job-again")
+        stages = [self._weathered(stage) for stage in (baseline_stage(), heat_pump_stage(3), third)]
+        parameters = replace(gap_parameters, anyway_threshold_years=5.0)
+        result = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective())
+        replacing_stage = result.per_stage[2]
+        assert replacing_stage.sunk_cost_written_off_in_euro.best_estimate == pytest.approx(4.5)
+        credit_years = [
+            entry.year
+            for entry in replacing_stage.timeline.entries
+            if entry.subject == "HeatPumpAgain" and entry.category is CostCategory.ANYWAY_COST_CREDIT
+        ]
+        assert credit_years == [5]
+
+    def test_a_plan_stating_no_year_zero_is_refused(self, database, gap_parameters):
+        """Neither a price basis year nor a start year: year 0 would be the weather year, refused."""
+        with pytest.raises(StagedEvaluationError) as refusal:
+            StagedEvaluator(database).evaluate(
+                self._three_stages(), replace(gap_parameters, price_basis_year=None), brownfield_perspective()
+            )
+        assert _problem_codes(refusal.value) == ["parameters.price_basis_year.missing"]
 
     def test_the_anchor_itself(self):
         """``plan_start_year`` when stated, else the price basis year; never a weather year."""

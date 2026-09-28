@@ -111,10 +111,8 @@ class GeneratorAssets:
         HeatGenerator.CONDENSING_GAS_HEATING: (ComponentType.GAS_HEATER, EnergyCarrier.NATURAL_GAS),
         HeatGenerator.CONDENSING_OIL_HEATING: (ComponentType.OIL_HEATER, EnergyCarrier.HEATING_OIL),
         HeatGenerator.CONDENSING_LPG_HEATING: (ComponentType.GAS_HEATER, EnergyCarrier.NATURAL_GAS),
-        # Solid fuel is only ever an *existing* generator; the closest priced class is the
-        # woodchip heater, and the register entry exists so a heating_system measure can replace
-        # something rather than install into an empty cellar.
-        HeatGenerator.SOLID_FUEL_HEATING: (ComponentType.WOOD_CHIP_HEATER, EnergyCarrier.WOOD_CHIPS),
+        # solid_fuel_heating has no row: HiSim has no coal or peat carrier, so the request
+        # validation refuses it by name (SemanticChecks.UNSUPPORTED_GENERATORS).
     }
 
     @classmethod

@@ -84,6 +84,7 @@ class ProblemCode(str, Enum):
     HEATING_SCOP_NOT_A_HEAT_PUMP = "heating.scop.not_a_heat_pump"
     HEATING_SCOP_W55_ABOVE_W35 = "heating.scop.w55_above_w35"
     HEATING_SCOP_NOT_FINITE = "heating.scop.not_finite"
+    HEATING_TYPE_UNSUPPORTED = "heating.type_of_system.unsupported"
 
 
 @dataclass(frozen=True)
@@ -95,8 +96,8 @@ class Problem:
             ``house.heating.type_of_system`` or ``measures[2].options.type_of_system``.
         code: Which kind of problem it is.
         message: One sentence a person can read, naming the value and what is wrong with it.
-        accepted: For an unknown enum value, the values that would have been accepted; ``None``
-            for every other code.
+        accepted: For an unknown enum value, an unsupported country and an unsupported heat
+            generator, the values that would have been accepted; ``None`` for every other code.
     """
 
     path: str
@@ -1254,6 +1255,28 @@ class SemanticChecks:
     #: range the schema enforces on ``building.set_heating_temperature_in_celsius``.
     ROOM_TEMPERATURE_RANGE: ClassVar[Tuple[int, int]] = (12, 28)
 
+    #: The floor areas HiSim simulates, in m², both ends inclusive and for every building type
+    #: (renovisorissues #75, owner decision of 2026-09-28). Outside it the sized generator and the
+    #: hot-water storage leave the range their models hold for -- a 9,999 m² house overheated its
+    #: DHW storage to 106 °C -- so a request is refused with the range rather than crash in a
+    #: component. The capability document publishes it as the two fields' bounds.
+    FLOOR_AREA_RANGE: ClassVar[Tuple[int, int]] = (20, 1000)
+
+    #: The ``house.building`` fields :attr:`FLOOR_AREA_RANGE` bounds.
+    FLOOR_AREA_KEYS: ClassVar[Tuple[str, str]] = ("absolute_conditioned_floor_area_in_m2", "living_area_in_m2")
+
+    #: The generators a request may name as the house's existing one but HiSim cannot simulate
+    #: yet, each with the reason its refusal gives. ``solid_fuel_heating`` (peat, coal) ran on the
+    #: pellet twin and was priced as wood chips, so its fuel, cost and CO2 were a wood boiler's
+    #: (renovisorissues #76); until a coal/peat carrier exists it is refused by name
+    #: (``heating.type_of_system.unsupported``) instead of answered wrongly.
+    UNSUPPORTED_GENERATORS: ClassVar[Dict[HeatGenerator, str]] = {
+        HeatGenerator.SOLID_FUEL_HEATING: (
+            "HiSim has no coal or peat fuel, so neither the boiler's fuel use nor its cost and CO2 "
+            "could be this house's"
+        ),
+    }
+
     #: The measure whose option writes the room set point, and the option's name.
     #: ``tests/renovisor/test_request.py`` asserts that :class:`CatalogueTable` declares the pair.
     ROOM_TEMPERATURE_MEASURE: ClassVar[Tuple[str, str]] = (
@@ -1289,6 +1312,8 @@ class SemanticChecks:
         problems.extend(cls._added_insulation(house))
         problems.extend(cls._hot_water_volumes(house))
         problems.extend(cls._heat_pump_scop(house))
+        problems.extend(cls._floor_areas(house))
+        problems.extend(cls._unsupported_generator(house))
         problems.extend(cls._measures(document["measures"], house))
         problems.extend(cls._cost_bands(document["measures"]))
         problems.extend(cls._tabula(document))
@@ -1417,6 +1442,49 @@ class SemanticChecks:
                     f"the house has one hot-water storage and the request gives it two volumes: "
                     f"{first} l under house.hot_water and {second} l under "
                     "house.solar_thermal_system"
+                ),
+            )
+        ]
+
+    @classmethod
+    def _floor_areas(cls, house: Mapping[str, Any]) -> List[Problem]:
+        """Refuse a conditioned floor area or a living area outside :attr:`FLOOR_AREA_RANGE`."""
+        building = house.get("building") or {}
+        low, high = cls.FLOOR_AREA_RANGE
+        problems: List[Problem] = []
+        for key in cls.FLOOR_AREA_KEYS:
+            area = building.get(key)
+            if area is None or isinstance(area, bool) or not isinstance(area, (int, float)):
+                continue
+            if low <= area <= high:
+                continue
+            problems.append(
+                Problem(
+                    path=f"house.building.{key}",
+                    code=ProblemCode.RANGE_EXCEEDED,
+                    message=(
+                        f"HiSim simulates a dwelling of {low} to {high} m²; house.building.{key} is {area:g} m²"
+                    ),
+                )
+            )
+        return problems
+
+    @classmethod
+    def _unsupported_generator(cls, house: Mapping[str, Any]) -> List[Problem]:
+        """Refuse an existing generator the request may name but HiSim cannot simulate yet."""
+        stated = (house.get("heating") or {}).get("type_of_system")
+        reason = next(
+            (why for generator, why in cls.UNSUPPORTED_GENERATORS.items() if generator.value == stated), None
+        )
+        if reason is None:
+            return []
+        return [
+            Problem(
+                path="house.heating.type_of_system",
+                code=ProblemCode.HEATING_TYPE_UNSUPPORTED,
+                message=f"'{stated}' cannot be simulated yet: {reason}",
+                accepted=tuple(
+                    member.value for member in HeatGenerator if member not in cls.UNSUPPORTED_GENERATORS
                 ),
             )
         ]

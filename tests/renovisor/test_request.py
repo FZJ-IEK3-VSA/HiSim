@@ -32,6 +32,7 @@ from hisim.renovisor.request import (
     SemanticChecks,
     ValueType,
 )
+from hisim.renovisor.vocabulary import HeatGenerator
 
 
 def mockup() -> Dict[str, Any]:
@@ -472,6 +473,66 @@ class TestTheSemanticChecks:
             first = body["problems"][0]
             assert set(first) >= {"path", "code", "message"}
             assert json.dumps(body)
+
+    @pytest.mark.parametrize("key", SemanticChecks.FLOOR_AREA_KEYS)
+    @pytest.mark.parametrize("area, refused", [(19, True), (20, False), (1000, False), (1001, True), (9999, True)])
+    def test_a_floor_area_outside_what_hisim_simulates_is_refused_with_the_range(
+        self, key: str, area: float, refused: bool
+    ) -> None:
+        """From 20 to 1000 m², both ends inclusive, named rather than crashed on (renovisorissues #75)."""
+        document = mockup()
+        document["house"]["building"][key] = area
+
+        problems = codes_of(document)
+
+        assert ((f"house.building.{key}", ProblemCode.RANGE_EXCEEDED.value) in problems) is refused
+        if not refused:
+            assert not problems
+            return
+        with pytest.raises(RequestError) as caught:
+            Request.parse(document)
+        problem = next(item for item in caught.value.problems if item.path == f"house.building.{key}")
+        assert "20 to 1000 m²" in problem.message and f"{area} m²" in problem.message
+        assert problem.accepted is None
+
+    @pytest.mark.parametrize("building_type", ["detached_sfh", "terraced_sfh", "apartment", "bungalow"])
+    def test_the_floor_area_range_holds_for_every_building_type(self, building_type: str) -> None:
+        """The range is the dwelling's, not an archetype's."""
+        document = mockup()
+        document["house"]["building"].update(
+            {"building_type": building_type, "absolute_conditioned_floor_area_in_m2": 1001}
+        )
+
+        assert (
+            "house.building.absolute_conditioned_floor_area_in_m2", ProblemCode.RANGE_EXCEEDED.value
+        ) in codes_of(document)
+
+    def test_solid_fuel_heating_is_refused_by_name(self) -> None:
+        """No coal or peat carrier, so the request is refused, not run as pellets (renovisorissues #76)."""
+        document = mockup()
+        document["house"]["heating"]["type_of_system"] = "solid_fuel_heating"
+
+        with pytest.raises(RequestError) as caught:
+            Request.parse(document)
+
+        assert not caught.value.structural
+        [problem] = caught.value.problems
+        assert (problem.path, problem.code) == (
+            "house.heating.type_of_system", ProblemCode.HEATING_TYPE_UNSUPPORTED
+        )
+        assert "coal or peat" in problem.message
+        assert problem.accepted is not None and "solid_fuel_heating" not in problem.accepted
+        assert "biomass_heating" in problem.accepted
+
+    def test_every_other_generator_passes_the_check(self) -> None:
+        """Only the listed generators are refused; logs, pellets and the rest go through."""
+        for generator in HeatGenerator:
+            document = mockup()
+            document["house"]["heating"]["type_of_system"] = generator.value
+            refused = (
+                "house.heating.type_of_system", ProblemCode.HEATING_TYPE_UNSUPPORTED.value
+            ) in codes_of(document)
+            assert refused is (generator in SemanticChecks.UNSUPPORTED_GENERATORS), generator
 
 
 @pytest.mark.base

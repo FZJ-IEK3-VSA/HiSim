@@ -61,7 +61,7 @@ from hisim.renovisor.economics import (
     UnknownAge,
 )
 from hisim.renovisor.layers import ElementAreas, EnvelopeLayers, SimulatedEnvelope
-from hisim.renovisor.request import House, Request
+from hisim.renovisor.request import House, Request, SemanticChecks
 from hisim.renovisor.simulation import EconomicSetup, SubsidyCatalogue
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
 from hisim.renovisor.translate import Targets, Translator
@@ -1113,8 +1113,15 @@ class TestTheTables:
     """The two naming tables, which are the translation and not a calculation."""
 
     def test_every_generator_of_the_vocabulary_has_an_asset_class(self) -> None:
-        """A generator with no row would fail a request rather than a test, so it is a test."""
+        """A generator with no row would fail a request rather than a test, so it is a test.
+
+        A generator the request validation refuses (solid fuel, renovisorissues #76) has no row, so
+        that nothing prices it as something it is not.
+        """
         for generator in HeatGenerator:
+            if generator in SemanticChecks.UNSUPPORTED_GENERATORS:
+                assert generator not in GeneratorAssets.BY_GENERATOR
+                continue
             asset_class, carrier = GeneratorAssets.of(generator)
             assert isinstance(asset_class, ComponentType)
             assert carrier is not None

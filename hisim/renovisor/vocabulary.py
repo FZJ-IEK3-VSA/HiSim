@@ -35,7 +35,9 @@ class HeatGenerator(str, Enum):
     These are the sixteen values of the catalogue's ``heating_system.type_of_system`` option plus
     ``SOLID_FUEL_HEATING``, which the request schema adds because a building's *existing*
     generator has to be expressible even when nobody would newly install it (F-spec §3.6). The
-    list is therefore wider than the set of outcomes a package can produce.
+    list is therefore wider than the set of outcomes a package can produce. It is wider than what
+    HiSim simulates, too: the request validation refuses ``SOLID_FUEL_HEATING`` by name until a coal
+    or peat carrier exists (``SemanticChecks.UNSUPPORTED_GENERATORS``).
 
     Not every member has its own model. Which ones are approximated by another and which are
     accepted without acting on them is not decided here but in ``not_implemented_yet.yaml``; this

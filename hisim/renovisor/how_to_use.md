@@ -22,8 +22,11 @@ energy-system file and the mapping report. `validate` prints the problems JSON a
 nothing. `capabilities` writes the document the backend serves as `GET /measures` for this
 image; where a pair probe (two changes at once) reports a leaf differently from its unconditional
 status, the leaf carries a `conditions` entry (measure-capabilities 0.5.0) whose terms are the pair's
-other change — the seasonal efficiency is `approximated`, and `not_implemented_yet` when the request
-also states `house.heating.type_of_system: air_source_heat_pump`. `map` regenerates `roadmap/renovisor/translation_map.html`. `verify` runs tier 1 of the
+other change — the seasonal efficiency is `approximated` (a boiler's efficiency), and `not_implemented_yet`
+when the request also states a `house.heating.type_of_system` with no efficiency parameter: any heat pump,
+`district_heating` or `electric_heating`. A numeric field publishes the request schema's bounds, except the
+two floor areas, which publish the 20–1,000 m² the request validation enforces (below); a value the
+validation refuses is left out of its field's `values` (`ES`, `solid_fuel_heating`). `map` regenerates `roadmap/renovisor/translation_map.html`. `verify` runs tier 1 of the
 path verification (below).
 
 ## The files
@@ -156,7 +159,11 @@ directory as the artifact **`path-verification-report`**.
 ## The one rule worth knowing
 
 **Fail loudly, except for what is written down.** An unknown key, an unknown value, a value out
-of range, a measure named twice, a country with no TABULA typology, a `tabula_building_code` whose
+of range — including an `absolute_conditioned_floor_area_in_m2` or `living_area_in_m2` outside the
+20–1,000 m² HiSim simulates, for every building type (`range.exceeded`) —, a heat generator HiSim
+cannot simulate yet (`heating.type_of_system.unsupported`: `solid_fuel_heating`, since there is no coal
+or peat fuel; `biomass_heating` runs on the pellet twin and is priced and emitted as pellets), a measure
+named twice, a country with no TABULA typology, a `tabula_building_code` whose
 variant contradicts the stated `retrofit_status`, a `measures[i].cost` price
 band whose cheap end is above its expensive end or whose prices are negative: each is a refusal
 (exit 2) naming every problem at once. A feature the translator has not implemented is a **note**

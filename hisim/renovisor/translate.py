@@ -504,7 +504,9 @@ class BaseFiles:
     #: The suffix every recorded base file carries.
     SUFFIX: ClassVar[str] = ".energy_system.yaml"
 
-    #: generator -> the twin it runs (§5.2 of the calculation-request specification).
+    #: generator -> the twin it runs (§5.2 of the calculation-request specification). A generator
+    #: the request validation refuses (``SemanticChecks.UNSUPPORTED_GENERATORS``, today
+    #: ``solid_fuel_heating``) has no twin, since no translation ever meets it.
     BY_GENERATOR: ClassVar[Dict[HeatGenerator, str]] = {
         HeatGenerator.CONDENSING_GAS_HEATING: "household_gas_building_sizer.grouped",
         HeatGenerator.CONVENTIONAL_GAS_HEATING: "household_gas_building_sizer.grouped",
@@ -515,7 +517,6 @@ class BaseFiles:
         HeatGenerator.HVO_HEATING: "household_oil_building_sizer.grouped",
         HeatGenerator.PELLET_HEATING: "household_pellets_building_sizer.grouped",
         HeatGenerator.BIOMASS_HEATING: "household_pellets_building_sizer.grouped",
-        HeatGenerator.SOLID_FUEL_HEATING: "household_pellets_building_sizer.grouped",
         HeatGenerator.WOODCHIP_HEATING: "household_wood_chips_building_sizer.grouped",
         HeatGenerator.HYDROGEN_HEATING: "household_hydrogen_boiler_building_sizer.grouped",
         HeatGenerator.AIR_SOURCE_HEAT_PUMP: "household_heatpump_building_sizer.grouped",
@@ -567,7 +568,6 @@ class BaseFiles:
         HeatGenerator.HVO_HEATING,
         HeatGenerator.PELLET_HEATING,
         HeatGenerator.BIOMASS_HEATING,
-        HeatGenerator.SOLID_FUEL_HEATING,
         HeatGenerator.WOODCHIP_HEATING,
         HeatGenerator.HYDROGEN_HEATING,
     )
@@ -1640,8 +1640,11 @@ def _generator_note(state: _TranslationState, generator: HeatGenerator) -> Optio
     as it says for LPG running the gas twin (hisim-epc.19).
     """
     del state
-    if generator in (HeatGenerator.BIOMASS_HEATING, HeatGenerator.SOLID_FUEL_HEATING):
-        return "simulated on the pellet twin, which is the nearest recorded solid-fuel boiler"
+    if generator is HeatGenerator.BIOMASS_HEATING:
+        return (
+            "simulated on the pellet twin, which is the nearest recorded solid-fuel boiler; the logs are "
+            "priced and their CO2 counted as wood pellets"
+        )
     return None
 
 

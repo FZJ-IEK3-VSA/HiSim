@@ -96,7 +96,7 @@ from hisim.economics.staged_parameters import (
     ParameterProblemCodes,
     PlanYearBounds,
 )
-from hisim.economics.subsidies import SubsidyCatalog
+from hisim.economics.subsidies import PayoutKind, SubsidyCatalog
 from hisim.economics.tariffs import FeedInKind
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -176,6 +176,20 @@ class StagedCategories:
       §2.1). The REPLACEMENT entries of a subject the stage merely *inherits* are not re-dated:
       the stage's own register already installed them in the right year, and shifting them would
       book them twice.
+    * a ``SUBSIDY`` entry after the stage's own year 0 -- a tax credit's instalments and an
+      operational payment (hisim-staged-tax-credit-placement-nvz7, owner principle 2026-09-27).
+      Both are dated from the stage's start: own year ``y`` is plan year ``from_year + y``, and one
+      falling past the horizon is dropped. A **tax credit** is a share of the cost the stage books,
+      which its evaluation already valued at the stage's price level (``booked_price_levels``), so
+      it is scaled by nothing but the share the stage pays -- never escalated again -- and every
+      instalment is kept, whichever stage is active when it is paid: the credit is owed for money
+      spent, not for the state the house is in. An **operational** payment is a fixed nominal rate
+      per kWh, never escalated, and is earned by the installation the stage bought: it is kept
+      while that installation is in the house and dropped from the year a later stage buys the
+      subject whole again or no longer has it (:attr:`_StageCharges.leaves_house_in`). A later
+      stage that merely keeps the installation books no award of its own, so without this rule
+      the payment would vanish the day an unrelated measure starts. Its amount stays the one the
+      earning stage valued on its own simulated kWh.
     * everything else — the operating flows of E-spec §1.2 (energy, maintenance, fixed operation,
       feed-in, CO2 price, levy, replacement reserve). All of them are taken from the stage that is
       active in the entry's own year, which is what makes "year y of the plan is year y of
@@ -280,6 +294,12 @@ class _StageCharges:
             measure's main subject and its further subjects (renovisorissues #53). Their year-0
             flows are booked in the stage's year exactly as stated, never escalated
             (:meth:`stage_start_factor`).
+        operational: ``(subject, scheme id)`` of every OPERATIONAL award of the stage's own
+            evaluation: the SUBSIDY entries after year 0 that are per-kWh payments rather than a
+            tax credit's instalments.
+        leaves_house_in: Subject -> the plan year a later stage buys it whole again or no longer
+            has it, which ends the operational payments the stage's purchase earns; absent for a
+            subject that stays to the horizon.
     """
 
     charged: Dict[str, float]
@@ -287,6 +307,8 @@ class _StageCharges:
     rates: Dict[str, float]
     default_rate: float
     quoted: FrozenSet[str] = frozenset()
+    operational: FrozenSet[Tuple[str, str]] = frozenset()
+    leaves_house_in: Mapping[str, int] = field(default_factory=dict)
 
     def share_of(self, subject: str) -> float:
         """How much of one subject's year-0 figure this stage pays: 1.0, an increment, or none."""
@@ -1803,7 +1825,11 @@ class StagedEvaluator:
         reserve_flows: List[Tuple[int, UncertainValue]] = []
         for index, stage in enumerate(stages):
             quoted = terms.quoted_by_stage[index] if index < len(terms.quoted_by_stage) else frozenset()
-            charges = self._stage_charges(stages, index, charged_by_stage[index], evaluator, parameters, quoted)
+            charges = replace(
+                self._stage_charges(stages, index, charged_by_stage[index], evaluator, parameters, quoted),
+                operational=self._operational_awards(per_stage[index]),
+                leaves_house_in=self._leaving_years(stages, index, charged_by_stage),
+            )
             reserve_flows.extend(
                 self._staged_reserve_flows(per_stage[index], index, stage.from_year, charges, active_by_year)
             )
@@ -2197,8 +2223,10 @@ class StagedEvaluator:
         splice takes the loan out anew (:meth:`_stage_loan`); a replacement of a subject the stage *buys* is
         shifted and escalated with the purchase it follows and then kept only while the stage is
         still the state of the house, so the stage that supersedes it schedules the rest from its
-        own register instead of the two booking the same re-purchase twice; everything else is
-        kept only when the entry's own year belongs to this stage.
+        own register instead of the two booking the same re-purchase twice; a later subsidy
+        payment -- a tax credit's instalment, an operational payment -- is dated from the stage's
+        start (:meth:`_later_subsidy_entry`); everything else is kept only when the entry's own
+        year belongs to this stage.
 
         A shifted replacement that lands exactly on the horizon is dropped, which is the engine's
         own rule for the unshifted ones (``calculators/investment.py``: the observation period ends
@@ -2217,6 +2245,8 @@ class StagedEvaluator:
         """
         if entry.category in StagedCategories.STAGE_START and entry.year == 0:
             return self._stage_start_entry(entry, from_year, charges, horizon)
+        if entry.category is CostCategory.SUBSIDY:
+            return self._later_subsidy_entry(entry, from_year, charges, horizon)
         if entry.category in StagedCategories.OWN_PURCHASE_AGEING and charges.share_of(entry.subject) > 0.0:
             return self._replacement_entry(entry, index, from_year, charges, active_by_year, horizon)
         if 0 <= entry.year <= horizon and active_by_year[entry.year] == index:
@@ -2246,6 +2276,77 @@ class StagedEvaluator:
             return None
         factor = charges.booked_factor(entry, from_year)
         return replace(entry, year=from_year, amount_in_euro=entry.amount_in_euro.scale(factor))
+
+    @staticmethod
+    def _later_subsidy_entry(
+        entry: CashFlowEntry, from_year: int, charges: "_StageCharges", horizon: int
+    ) -> Optional[CashFlowEntry]:
+        """A subsidy the stage's award pays after its own year 0, in its plan year (:class:`StagedCategories`).
+
+        Own year ``y`` is plan year ``from_year + y``; a payment past the horizon is dropped, as
+        the engine drops one past its own. A tax credit's instalment is a share of the cost the
+        stage books and was valued on that cost at the stage's price level already, so only the
+        share the stage pays applies, and it is kept whichever stage is active. An operational
+        payment is a nominal rate per kWh, never escalated, kept while the installation that earns
+        it is in the house (:attr:`_StageCharges.leaves_house_in`).
+
+        Args:
+            entry: The stage's own SUBSIDY entry of a year after 0.
+            from_year: The stage's start year.
+            charges: What the stage pays for, and which of its awards are operational.
+            horizon: The last year index of the horizon.
+
+        Returns:
+            The entry in its plan year, or ``None``.
+        """
+        year = entry.year + from_year
+        if year > horizon:
+            return None
+        if (entry.subject, entry.subsidy_scheme_id) in charges.operational:
+            if year >= charges.leaves_house_in.get(entry.subject, horizon + 1):
+                return None
+            return replace(entry, year=year)
+        share = charges.share_of(entry.subject)
+        if share <= 0.0:
+            return None
+        return replace(entry, year=year, amount_in_euro=entry.amount_in_euro.scale(share))
+
+    @staticmethod
+    def _operational_awards(result: LifecycleCostResult) -> FrozenSet[Tuple[str, str]]:
+        """``(subject, scheme id)`` of every OPERATIONAL award one stage's evaluation booked."""
+        return frozenset(
+            (decision.measure_subject, award.scheme_id)
+            for decision in result.subsidy_decisions
+            for award in decision.applied
+            if award.payout_kind is PayoutKind.OPERATIONAL
+        )
+
+    @staticmethod
+    def _leaving_years(
+        stages: Tuple[Stage, ...], index: int, charged_by_stage: Tuple[Dict[str, float], ...]
+    ) -> Dict[str, int]:
+        """For each of a stage's subjects, the plan year its installation leaves the house, if it does.
+
+        The start year of the first later stage that no longer has the subject or buys it whole
+        again (charges it at 1.0): from then on the stage's purchase is not what runs. A later
+        stage that keeps the subject, or only enlarges it, leaves the installation in place.
+
+        Args:
+            stages: The plan.
+            index: The stage whose purchases are asked about.
+            charged_by_stage: What every stage charges.
+
+        Returns:
+            Subject -> that plan year, for the subjects that leave inside the plan.
+        """
+        leaving: Dict[str, int] = {}
+        for facts in stages[index].inputs.cost_facts:
+            for later in range(index + 1, len(stages)):
+                present = any(other.subject == facts.subject for other in stages[later].inputs.cost_facts)
+                if not present or charged_by_stage[later].get(facts.subject, 0.0) >= 1.0:
+                    leaving[facts.subject] = stages[later].from_year
+                    break
+        return leaving
 
     @staticmethod
     def _is_loan_flow(entry: CashFlowEntry) -> bool:

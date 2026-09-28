@@ -196,7 +196,13 @@ stage books: its principal is the financed share of the stage's booked year-0 ne
 quote as stated, database prices escalated, grants as booked), never the stage's own loan escalated.
 Fixed-amount grants (`LUMP_SUM`, `PER_UNIT`, `TIERED_PER_UNIT`) are booked nominal in their stage's
 year, quoted or not, and so is their `max_amount_in_euro`; share-of-cost grants follow the cost they
-are a share of, and a soft loan's repayment grant follows the principal. A measure HiSim holds no price for
+are a share of, and a soft loan's repayment grant follows the principal. A later stage's award paid
+after its own year 0 is dated from the stage's start: instalment `y` of a tax credit falls in plan
+year `from_year + y`, valued on the cost the stage books (so escalated once, with that cost), and
+every instalment is kept whichever stage is active by then; an `OPERATIONAL` payment is a nominal
+rate per kWh, never escalated, dated the same way and kept while the installation that earns it is
+in the house (until a later stage no longer has the subject or buys it whole again). Payments past
+the horizon are dropped (hisim-staged-tax-credit-placement-nvz7). A measure HiSim holds no price for
 (`hot_water_tank_and_pipe_insulation`) becomes priced: one year-0 purchase, never replaced,
 maintained or written down. A stage the plan does not have
 (`parameters.investment_overrides.stage.unknown`), a measure the stage does not carry out or

@@ -544,6 +544,28 @@ class TestTheEquipmentTheHouseAlreadyHas:
                 slot: pytest.approx(sum(band[slot] for band in same)) for slot in ("min", "best", "max")
             }
 
+    def test_warmer_homes_states_its_maximum_over_the_buffer_too(self, document) -> None:
+        """The 100 % scheme covers the heat pump and the buffer bought with it (#69 point 3).
+
+        One Warmer Homes row per heating_system subject it covers, so the heat pump's row alone no
+        longer states the whole measure: the measure's maximum exceeds the heat pump's by the
+        buffer's cost.
+        """
+        warmer = [
+            row
+            for row in document["plan"]["subsidies"]
+            if row["scheme"] == "IE_SEAI_WARMER_HOMES" and row["measure_id"] == "heating_system"
+        ]
+        assert len(warmer) >= 2, warmer
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        buffer = rows["SimpleHotWaterStorage"]
+        assert buffer["measure_id"] == "heating_system"
+        own = sorted(row["max_amount_in_euro"]["best"] for row in warmer)
+        measure = warmer[0]["max_amount_for_measure_in_euro"]["best"]
+        assert measure == pytest.approx(sum(own))
+        assert measure < min(own)  # credits are negative: the measure's maximum is the larger grant
+        assert -buffer["investment_in_euro"]["best"] in [pytest.approx(value) for value in own]
+
     def test_the_reference_is_awarded_no_central_heating_grant(self, document) -> None:
         """hisim-fig7: the radiators are kept, so no scheme is even asked about them."""
         schemes = {row["scheme"] for row in document["reference"]["subsidies"]}
@@ -896,7 +918,9 @@ class TestTheReadersQuote:
                 continue
             assert row["max_amount_in_euro"] is not None, row
             assert row["max_amount_in_euro"]["best"] <= 0.0
-        # Every other open question is worth something.
+        # Every other open question is worth something for its measure. A row's own subject may
+        # be worth nothing: the buffer bought within the heat pump's quote costs zero, and the
+        # 100 % scheme covers it since #69 (point 3).
         undetermined = [row for row in rows if row["status"] == "undetermined" and row["scheme"] != "IE_HEULS_LOAN"]
         assert undetermined
-        assert all(row["max_amount_in_euro"]["best"] < 0.0 for row in undetermined), undetermined
+        assert all(row["max_amount_for_measure_in_euro"]["best"] < 0.0 for row in undetermined), undetermined

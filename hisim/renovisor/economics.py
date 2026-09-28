@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
 from hisim.economics.adapter import FactsExtractors
-from hisim.economics.bridge import EconomicContext
+from hisim.economics.bridge import CostlessPart, EconomicContext
 from hisim.economics.calculators.context_resolution import ContextResolutionConstants
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
@@ -303,6 +303,18 @@ class DeviceAssets:
         ),
     )
 
+    @classmethod
+    def of_measure(cls, measure_id: str) -> "DeviceAssets.Device":
+        """The device one catalogue measure installs.
+
+        Raises:
+            KeyError: If no device of the table is installed by the measure.
+        """
+        for device in cls.ALL:
+            if device.measure_id == measure_id:
+                return device
+        raise KeyError(f"no device of DeviceAssets is installed by the measure {measure_id!r}")
+
 
 class TwinEquipment:
     """The equipment every twin carries that the request never describes, and what replaces it.
@@ -327,6 +339,14 @@ class TwinEquipment:
     ``house.battery.installation_year`` (it goes with the battery it runs) when the request states
     it. The meters have no block that dates them. Every row without a stated year is at mid-life
     (:class:`UnknownAge`, for its own asset class), never before the construction year.
+
+    Owner decision of 2026-09-28 (renovisorissues #77): the energy-management controller is part
+    of the battery system (``part_of``). It stays a cost subject of its own, but a costless one --
+    no investment, maintenance or renewal cost of its own
+    (:attr:`~hisim.economics.bridge.EconomicContext.costless_subjects`), for a kept battery as for
+    a new one -- and it carries the battery's measure where the package installs the battery. It
+    follows the battery's life: dated with the battery's installation year, renewed on the
+    battery's service life and replaced when the battery is, so it has no due years of its own.
     """
 
     @dataclass(frozen=True)
@@ -340,11 +360,25 @@ class TwinEquipment:
             dated_by: The ``house`` block whose ``installation_year`` it shares when the request
                 states one, or ``None`` when no block dates it; either way an unstated year is the
                 :class:`UnknownAge` mid-life year.
+            part_of: The device measure whose system the equipment is part of, or ``None``: such
+                equipment costs nothing of its own and carries that measure's id where the
+                package carries the measure out.
         """
 
         component_class: str
         measure_id: Optional[str]
         dated_by: Optional[str]
+        part_of: Optional[str] = None
+
+    #: The note a piece of equipment that is part of a device's system carries, by that device's
+    #: measure (renovisorissues #77).
+    PART_OF_NOTES: ClassVar[Dict[str, str]] = {
+        "battery_system": (
+            "part of the battery system: the energy-management controller comes with the battery, "
+            "is renewed with it and costs nothing of its own (no investment, maintenance or renewal "
+            "cost); its row states its dates and no money"
+        ),
+    }
 
     #: Every row, in the order the register lists them.
     ALL: ClassVar[Tuple["TwinEquipment.Equipment", ...]] = (
@@ -353,7 +387,12 @@ class TwinEquipment:
         Equipment(component_class="HeatDistribution", measure_id="heating_installation", dated_by="heating"),
         Equipment(component_class="ElectricityMeter", measure_id=None, dated_by=None),
         Equipment(component_class="GasMeter", measure_id=None, dated_by=None),
-        Equipment(component_class="L2GenericEnergyManagementSystem", measure_id=None, dated_by="battery"),
+        Equipment(
+            component_class="L2GenericEnergyManagementSystem",
+            measure_id=None,
+            dated_by="battery",
+            part_of="battery_system",
+        ),
     )
 
 
@@ -926,7 +965,9 @@ class EconomicContextResult:
         costless_subjects: The subjects of measures that cost nothing to carry out
             (:attr:`MeasureSubjects.COSTLESS`); like the unpriced subjects of
             :attr:`MeasureSubjects.UNPRICED` they are in no cost facts of the context, and the
-            result document gives each a zero row of its own.
+            result document gives each a zero row of its own. Also the equipment that is part of
+            a device's system (:attr:`TwinEquipment.PART_OF_NOTES`, the battery's controller):
+            it has cost facts, zeroed by the context's ``costless_subjects``.
         subject_notes: Subject -> the sentence its row of the result document carries as
             ``note``: why an unpriced subject has no price, why a costless one costs nothing.
         replaces_subjects: Measure subject -> the subjects of the do-nothing reference it
@@ -1254,6 +1295,7 @@ class EconomicContextBuilder:
             subsidy_context=self._subsidy_context(result, existing_heating),
             extra_cost_facts=[*facts, *kept_elements],
             technical_attributes_by_subject=self._technical_attributes(facts),
+            costless_subjects=self._costless_equipment(result),
             living_area_in_m2=living_area,
             heated_floor_area_in_m2=self._floor_area(),
         )
@@ -1563,16 +1605,26 @@ class EconomicContextBuilder:
             component, facts = found
             replaced: List[ComponentType] = []
             removed = ""
-            if equipment.measure_id in self._measure_ids:
+            # Part of a device's system (the battery's controller, #77): replaced when the device
+            # is, dated as the device is, and costing nothing when it is written off.
+            replacing_measure = equipment.measure_id or equipment.part_of
+            if replacing_measure in self._measure_ids:
                 plan_twin = self._plan_twin if self._plan_twin is not None else self._baseline_twin
                 successor = plan_twin.cost_facts(equipment.component_class)
                 if successor is not None:
                     replaced = [successor[1].asset_class]
                 else:
-                    removed = self.EQUIPMENT_REMOVED_NOTE.format(measure=equipment.measure_id)
+                    removed = self.EQUIPMENT_REMOVED_NOTE.format(measure=replacing_measure)
             block = self._raw_original.get(equipment.dated_by) if equipment.dated_by else None
             stated = self._stated_year(block)
-            if stated is not None:
+            if equipment.part_of is not None:
+                device = DeviceAssets.of_measure(equipment.part_of)
+                year = self._device_year(device.house_block, device.asset_class)
+                dated = (
+                    f"the {device.house_block}'s installation year, as the part of its system it is "
+                    "(renovisorissues #77)"
+                )
+            elif stated is not None:
                 year = stated
                 dated = f"house.{equipment.dated_by}.{self.INSTALLATION_YEAR_KEY} as the request states it"
             else:
@@ -1588,6 +1640,10 @@ class EconomicContextBuilder:
                     is_functional=True,
                     replaced_by_asset_classes=replaced,
                     installation_year_origin=self._year_origin(block, InstallationYearOrigin.MID_LIFE_DEFAULT),
+                    # Costless: nothing of it is written off or credited when it goes (#77).
+                    replacement_cost_override_in_euro=(
+                        UncertainValue.exact(0.0) if equipment.part_of is not None else None
+                    ),
                 )
             )
             if result is not None:
@@ -1802,6 +1858,7 @@ class EconomicContextBuilder:
                         ),
                         lifetime_is_engine_fallback=not has_life,
                         override_source=note,
+                        price_is_unknown=True,
                     ),
                 )
             )
@@ -1887,6 +1944,8 @@ class EconomicContextBuilder:
                     if unpriced
                     else f"the request's measures[{measure_id}].cost block, over {self._area_origin(element)}"
                 ),
+                # The zero is a placeholder: a fixed-amount grant is not capped at it (#77).
+                price_is_unknown=unpriced,
             ),
         )
 
@@ -2092,11 +2151,50 @@ class EconomicContextBuilder:
         if self._plan_twin is None:
             return
         for equipment in TwinEquipment.ALL:
-            if equipment.measure_id is None or equipment.measure_id not in self._measure_ids:
+            measure_id = equipment.measure_id or equipment.part_of
+            if measure_id is None or measure_id not in self._measure_ids:
                 continue
             installed = self._plan_twin.cost_facts(equipment.component_class)
             if installed is not None:
-                result.subjects[installed[0]] = equipment.measure_id
+                result.subjects[installed[0]] = measure_id
+
+    def _costless_equipment(self, result: EconomicContextResult) -> Dict[str, CostlessPart]:
+        """The equipment of this run that is part of a device's system, each with why it costs nothing.
+
+        Every :class:`TwinEquipment` row with a ``part_of`` whose component the run has -- the
+        energy-management controller of a battery, whether the house keeps the battery or the
+        package installs it (owner decision of 2026-09-28, renovisorissues #77). Each is a
+        costless subject of the mapping report with its :attr:`TwinEquipment.PART_OF_NOTES` sentence, so its row
+        of the result document says why it carries no money, and goes into the context, where the
+        engine zeroes its facts and renews it on the life of the device it is part of
+        (:meth:`DeviceAssets.of_measure`), so it has no due years of its own.
+
+        Args:
+            result: The result being assembled; its ``costless_subjects`` and ``subject_notes`` are
+                extended.
+
+        Returns:
+            Subject -> its :class:`~hisim.economics.bridge.CostlessPart`, for
+            :attr:`~hisim.economics.bridge.EconomicContext.costless_subjects`.
+        """
+        costless: Dict[str, CostlessPart] = {}
+        if self._plan_twin is None:
+            return costless
+        for equipment in TwinEquipment.ALL:
+            if equipment.part_of is None:
+                continue
+            installed = self._plan_twin.cost_facts(equipment.component_class)
+            if installed is None:
+                continue
+            subject = installed[0]
+            note = TwinEquipment.PART_OF_NOTES[equipment.part_of]
+            costless[subject] = CostlessPart(
+                reason=note, lifetime_of_asset_class=DeviceAssets.of_measure(equipment.part_of).asset_class
+            )
+            if subject not in result.costless_subjects:
+                result.costless_subjects.append(subject)
+            result.subject_notes[subject] = note
+        return costless
 
     # ------------------------------------------------------------------ small readers
 

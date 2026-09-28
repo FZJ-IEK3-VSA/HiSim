@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import enum
 import json
+import math
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -281,7 +282,9 @@ class StagedDocument:
         costless_subjects: Subjects of a measure that costs nothing to carry out -- a setting,
             not a purchase. With the measure-only subjects of ``unpriced_subjects`` they are the
             subjects the engine prices no cost facts for, and each gets a zero row of its own
-            (renovisorissues #58).
+            (renovisorissues #58). Also a subject that is part of another's purchase and whose
+            facts the translator's context zeroed -- the battery's energy-management controller
+            (renovisorissues #77); it keeps its own row, with a zero one where it booked no flow.
         subject_notes: Subject -> the sentence its row's ``note`` carries: why an unpriced
             subject has no price, why a costless one costs nothing.
         replaces_subjects: Measure subject -> the reference subjects it replaces, from the
@@ -482,6 +485,13 @@ class StagedDocument:
     #: The three keys that make a mapping in the document a band, and their order.
     BAND_KEYS: ClassVar[Tuple[str, str, str]] = ("min", "best", "max")
 
+    #: The bands whose ends may be ``null`` with a stated meaning, by the key they sit under, and
+    #: the value a ``null`` end is ordered as. A payback year is ``null`` when that end never pays
+    #: back within the horizon, which is later than any year (renovisorissues #73). Every other
+    #: band of the schema has numeric ends (or is ``null`` whole), so a ``null`` end anywhere else
+    #: is left to the schema, which refuses it.
+    NULL_END_MEANS: ClassVar[Dict[str, float]] = {"discounted_payback_year": math.inf}
+
     @classmethod
     def assert_bands_ordered(cls, document: Any, path: str = "") -> None:
         """Raise unless every band in the document reads ``min <= best <= max``.
@@ -492,6 +502,10 @@ class StagedDocument:
         the finished document is cheap and catches every such mistake at the place the document is
         written rather than in a chart.
 
+        A band whose ends may be ``null`` with a meaning (:attr:`NULL_END_MEANS`) is checked with
+        ``null`` read as that meaning -- a payback year that never comes is later than every year --
+        rather than skipped, which is how a reversed payback band with an open end used to pass.
+
         Args:
             document: The document, or any part of it while recursing.
             path: The dotted path of ``document`` inside the whole, for the message.
@@ -500,14 +514,18 @@ class StagedDocument:
             BandOrderError: Naming the first band that is out of order and where it is.
         """
         if isinstance(document, Mapping):
+            null_end = cls.NULL_END_MEANS.get(path.rsplit(".", 1)[-1])
             if set(document) == set(cls.BAND_KEYS) and all(
-                isinstance(document[key], (int, float)) and not isinstance(document[key], bool)
+                (isinstance(document[key], (int, float)) and not isinstance(document[key], bool))
+                or (document[key] is None and null_end is not None)
                 for key in cls.BAND_KEYS
             ):
-                low, best, high = (document[key] for key in cls.BAND_KEYS)
+                ends = [document[key] for key in cls.BAND_KEYS]
+                low, best, high = (float(end) if end is not None else float(null_end or 0.0) for end in ends)
                 if not low <= best <= high:
+                    stated = "/".join("null" if document[key] is None else str(document[key]) for key in cls.BAND_KEYS)
                     raise BandOrderError(
-                        f"the band at {path or '<document>'} is {low}/{best}/{high}, which is not "
+                        f"the band at {path or '<document>'} is {stated}, which is not "
                         "min <= best <= max. Every amount in economics_result.json is an ordered "
                         "band; a sign flip applied slot by slot is the usual cause."
                     )
@@ -893,7 +911,7 @@ class StagedDocument:
     def _no_flow_rows(
         self, result: LifecycleCostResult, staged: bool, by_stage: Mapping[str, Mapping[int, Any]]
     ) -> List[Dict[str, Any]]:
-        """One zero row per unpriced subject the evaluation carries that booked no flow at all.
+        """One zero row per unpriced or costless subject the evaluation carries that booked no flow at all.
 
         An unpriced subject is priced at zero, so it books money only where the timeline dates an
         event for it -- a renewal inside the horizon. A kept envelope element whose renewal falls
@@ -902,6 +920,11 @@ class StagedDocument:
         the renewal falls due, and ``unpriced`` says why the row carries no money. Every band is an
         exact zero, so every sum the document states is unchanged. The subjects are the cost facts
         of ``stages[0]`` on the reference and of every stage active in some year on the plan.
+
+        A costless subject with cost facts -- the battery's energy-management controller, part of
+        the battery system (renovisorissues #77) -- is a subject too, and its facts cost nothing,
+        so a kept controller whose renewal falls after the horizon would otherwise have no row. It
+        gets one the same way, ``unpriced: false``, its note saying why it carries no money.
 
         Args:
             result: The evaluation the rows go into.
@@ -922,7 +945,7 @@ class StagedDocument:
         reference_measures = set(self._result.stages[0].measures) if self._result.stages else set()
         rows: List[Dict[str, Any]] = []
         for subject, facts in sorted(facts_by_subject.items()):
-            if subject in result.component_breakdowns or subject not in self._unpriced:
+            if subject in result.component_breakdowns or subject not in self._unpriced | self._costless:
                 continue
             measure_id = self._measure_ids.get(subject)
             if not staged and measure_id not in reference_measures:
@@ -934,7 +957,7 @@ class StagedDocument:
                     asset_class=facts.asset_class.value,
                     measure_id=measure_id,
                     stage=self._row_stage(subject, staged, by_stage),
-                    unpriced=True,
+                    unpriced=subject in self._unpriced,
                     npv=zero,
                     investment=zero,
                     investment_origin=None,
@@ -1334,21 +1357,29 @@ class StagedDocument:
         the measure its asset classes cover. ``max_amount_in_euro`` is the row's own subject's
         maximum; the measure's is the slot-wise sum of the rows of the same scheme, measure and
         stage, stated on each of them, so "up to EUR X" is what the household can get for the
-        measure. Null where the row's maximum is null (a scheme with no amount is none on every
-        subject) and on a row with no measure.
+        measure. Null on a row with no measure, and on every row of the scheme, measure and stage
+        as soon as one of them is null: a scheme with no amount is none on every subject, and a
+        sum with an unknown term -- a fixed amount on an unpriced subject (renovisorissues #77) --
+        is unknown.
         """
-        totals: Dict[Tuple[Any, Any, Any], Dict[str, float]] = {}
+        totals: Dict[Tuple[Any, Any, Any], Optional[Dict[str, float]]] = {}
         for row in rows:
-            maximum = row["max_amount_in_euro"]
-            if maximum is None or row["measure_id"] is None:
+            if row["measure_id"] is None:
                 continue
             key = (row["scheme"], row["measure_id"], row["stage"])
+            maximum = row["max_amount_in_euro"]
+            if maximum is None:
+                totals[key] = None
+                continue
             total = totals.setdefault(key, {"min": 0.0, "best": 0.0, "max": 0.0})
+            if total is None:
+                continue
             for slot in total:
                 total[slot] += maximum[slot]
         for row in rows:
-            key = (row["scheme"], row["measure_id"], row["stage"])
-            measure_maximum = totals.get(key) if row["max_amount_in_euro"] is not None else None
+            measure_maximum = (
+                totals.get((row["scheme"], row["measure_id"], row["stage"])) if row["measure_id"] is not None else None
+            )
             row["max_amount_for_measure_in_euro"] = dict(measure_maximum) if measure_maximum is not None else None
         return rows
 
@@ -1715,11 +1746,9 @@ class StagedDocument:
                 comparison.monthly_equivalent_cost_delta_in_euro
             ),
             "monthly_cost_year1_delta_in_euro": monthly_delta,
-            "discounted_payback_year": {
-                "min": comparison.discounted_payback_years.get("low"),
-                "best": comparison.discounted_payback_years.get("best_estimate"),
-                "max": comparison.discounted_payback_years.get("high"),
-            },
+            # The range by value, not by slot: which world pays back first depends on which
+            # uncertainty dominates the savings (renovisorissues #73).
+            "discounted_payback_year": comparison.discounted_payback_envelope.to_band(),
             "cumulative_delta": cumulative,
             "lifecycle_co2_delta_in_kg": self._scalar_band(
                 plan.lifecycle_co2_result.total_co2_in_kg

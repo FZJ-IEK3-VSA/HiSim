@@ -56,7 +56,7 @@ independent of cost-database state (cost-spec-v2 W1.1).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -84,6 +84,7 @@ from hisim.economics.exports import (
 )
 from hisim.economics.facts import (
     BillingDeterminants,
+    ComponentCostFacts,
     CostRelevance,
     ExistingAssetRegister,
     describe_undeclared_class,
@@ -94,7 +95,8 @@ from hisim.economics.perspectives import load_default_bundle, select_applicable
 from hisim.economics.scenarios import ScenarioSet
 from hisim.economics.serialization import write_inputs
 from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext
-from hisim.loadtypes import LoadTypes, Units
+from hisim.economics.uncertainty import UncertainValue
+from hisim.loadtypes import ComponentType, LoadTypes, Units
 
 if TYPE_CHECKING:  # The renderer is imported lazily; only its record type is needed for typing.
     from hisim.economics.report_plots import SkippedPlot
@@ -106,6 +108,53 @@ if TYPE_CHECKING:  # The renderer is imported lazily; only its record type is ne
 #: quantities, so a leap day's worth of difference is far below the uncertainty band of any price
 #: it is multiplied with.
 SECONDS_PER_YEAR = 365 * 24 * 3600
+
+
+@dataclass(frozen=True)
+class CostlessPart:
+    """A simulation component that is part of another's system (`EconomicContext.costless_subjects`).
+
+    The battery's energy-management controller (renovisorissues #77, owner decisions of
+    2026-09-28): a cost subject of its own, but a costless one, renewed exactly when the device it
+    belongs to is.
+
+    Attributes:
+        reason: Why the subject costs nothing, recorded as its overrides' source (§3.10).
+        lifetime_of_asset_class: The class whose service life the subject is renewed on, or None
+            to keep its own.
+    """
+
+    reason: str
+    lifetime_of_asset_class: Optional[ComponentType] = None
+
+    def applied_to(self, facts: ComponentCostFacts) -> ComponentCostFacts:
+        """The adapter's facts overridden to cost nothing of their own and to live the system's life.
+
+        Every monetary field the engine prices a device with is overridden to an exact zero -- the
+        investment and the installation (so a replacement costs nothing either), the maintenance
+        rate and the fixed operation cost -- and so is the embodied CO2. Planning and removal costs
+        are not overridable; they are the cost database's for the class, zero for the
+        energy-management controller this exists for. The asset class and the size stay what the
+        adapter extracted, so the subject is still registered; its service life is the one of
+        :attr:`lifetime_of_asset_class` (``ComponentCostFacts.lifetime_of_asset_class``).
+
+        Args:
+            facts: The adapter's facts.
+
+        Returns:
+            A copy of the facts with the zero overrides.
+        """
+        zero = UncertainValue.exact(0.0)
+        return replace(
+            facts,
+            investment_cost_override_in_euro=zero,
+            installation_cost_override_in_euro=zero,
+            maintenance_rate_override=zero,
+            fixed_operation_cost_override_in_euro_per_year=zero,
+            embodied_co2_override_in_kg=0.0,
+            override_source=f"{facts.override_source}; {self.reason}" if facts.override_source else self.reason,
+            lifetime_of_asset_class=self.lifetime_of_asset_class or facts.lifetime_of_asset_class,
+        )
 
 
 @dataclass
@@ -143,6 +192,11 @@ class EconomicContext:
     - `technical_attributes_by_subject` — per-subject key/value pairs merged into the facts the
       adapter derived, for subsidy conditions the adapter cannot know (SCOP, refrigerant, achieved
       U-value).
+    - `costless_subjects` — simulation components that are part of another component's purchase
+      (the energy-management controller of a battery): each stays a cost subject, but its facts
+      are overridden to cost nothing -- no investment, installation, maintenance, fixed operation
+      or embodied CO2 of its own -- with the stated reason as the overrides' source, and it is
+      renewed on the life of the class it is part of (`CostlessPart`).
     - the actor-model context (`living_area_in_m2`, `heated_floor_area_in_m2`,
       `current_cold_rent_in_euro_per_m2_month`, `building_specific_emissions_in_kg_per_m2_a`), which
       the §6.3/§6.4 CO2 split and modernization levy need to allocate costs between landlord and
@@ -174,6 +228,10 @@ class EconomicContext:
     # Technical attributes merged into component-derived facts by subject name (subsidy
     # conditions like SCOP/refrigerant that the adapter cannot know):
     technical_attributes_by_subject: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    # Subjects that are part of another subject's system, by subject name: they stay cost
+    # subjects of their own, but every amount the engine would price for them is zero, and they
+    # live that system's life (renovisorissues #77: the controller that comes with a battery).
+    costless_subjects: Dict[str, CostlessPart] = field(default_factory=dict)
     # Actor-model context (§6.3, §6.4):
     living_area_in_m2: Optional[float] = None
     heated_floor_area_in_m2: Optional[float] = None
@@ -1079,6 +1137,10 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
         if extra_attributes is not None:
             matched_subjects.add(subject_facts.subject)
             subject_facts.facts.technical_attributes.update(extra_attributes)
+    for subject_facts in inputs.cost_facts:
+        part = context.costless_subjects.get(subject_facts.subject)
+        if part is not None:
+            subject_facts.facts = part.applied_to(subject_facts.facts)
     unmatched = sorted(set(context.technical_attributes_by_subject) - matched_subjects)
     if unmatched:
         # A subject name that matches nothing is a typo or a renamed component, and its attributes

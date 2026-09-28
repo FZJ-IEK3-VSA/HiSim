@@ -276,6 +276,16 @@ class ComponentCostFacts:
     # fallback, standing in because the cost database has no entry for the class (hisim-ryw1): the
     # result document then says `engine_fallback` rather than calling it the request's.
     lifetime_is_engine_fallback: bool = False
+    # True when the subject's price is unknown rather than zero: the investment override is a
+    # placeholder zero because nobody stated a price (an envelope measure without a cost block,
+    # renovisorissues #77). The engine books it at zero, but a fixed-amount grant, which is capped
+    # at the eligible cost, cannot be valued against it (`is_unpriced`).
+    price_is_unknown: bool = False
+    # The asset class whose service life the subject is renewed on, when it is part of another
+    # subject's system rather than a device with a life of its own: the battery's
+    # energy-management controller lives and is renewed with the battery (renovisorissues #77).
+    # The engine reads that class's `service_life_in_years`; `lifetime_override_in_years` still wins.
+    lifetime_of_asset_class: Optional[ComponentType] = None
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).
     technical_attributes: Dict[str, Any] = field(default_factory=dict)
 
@@ -339,6 +349,8 @@ class ComponentCostFacts:
                 raise ValueError(f"{band_name} must be non-negative in every slot.")
         if self.lifetime_override_in_years is not None and self.lifetime_override_in_years <= 0:
             raise ValueError("lifetime_override_in_years must be > 0.")
+        if self.lifetime_of_asset_class is not None and not isinstance(self.lifetime_of_asset_class, ComponentType):
+            raise ValueError(f"lifetime_of_asset_class must be a ComponentType, got {self.lifetime_of_asset_class!r}.")
         if self.lifetime_is_engine_fallback and self.lifetime_override_in_years is None:
             raise ValueError("lifetime_is_engine_fallback needs the fallback in lifetime_override_in_years.")
         try:
@@ -359,6 +371,20 @@ class ComponentCostFacts:
             True when `size` is exactly zero.
         """
         return self.size == 0.0
+
+    def is_unpriced(self) -> bool:
+        """True when nobody stated what the subject costs: its price is unknown, not zero.
+
+        `price_is_unknown` marks the placeholder zero, and a stated purchase price (a reader's
+        quote, `purchase_cost_override_in_euro`) prices the purchase after all, so a quoted subject
+        is not unpriced whatever the flag says. The subsidy engine reads this to leave a fixed
+        amount capped at the eligible cost undecided rather than capped at a zero it does not know
+        (renovisorissues #77).
+
+        Returns:
+            True for a flagged subject without a stated purchase price.
+        """
+        return self.price_is_unknown and self.purchase_cost_override_in_euro is None
 
     def has_overrides(self) -> bool:
         """True if any per-field override is set (then `override_source` is required in strict mode).

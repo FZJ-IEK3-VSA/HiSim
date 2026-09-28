@@ -44,7 +44,12 @@ from hisim.economics.presentation_style import PresentationStyle, SequentialRamp
 # cash curve's lower panel and the treemap's disclosure. They are printed by both renderers,
 # so they are authored once, in the module that holds the report's wording.
 from hisim.economics.report_prose import payback_interval_sentence, treemap_disclosure
-from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, VariantComparison
+from hisim.economics.results import (
+    EvaluationMatrix,
+    LifecycleCostResult,
+    VariantComparison,
+    discounted_payback_envelope,
+)
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import Slot
 
@@ -351,9 +356,8 @@ def _liquidity_section_html(
             {"low": low, "best_estimate": best_estimate, "high": high}
         )
         lower_label = "cumulative discounted savings [EUR] (reference - variant)"
-        payback_note = payback_interval_sentence(
-            crossings["low"], crossings["best_estimate"], crossings["high"]
-        )
+        envelope = discounted_payback_envelope(crossings)
+        payback_note = payback_interval_sentence(envelope.earliest, envelope.central, envelope.latest)
     else:
         discounted = views.cumulative_discounted_cost_series(result)
         low, best_estimate, high = (

@@ -95,9 +95,13 @@ Two further points a reader should know about how the numbers land:
 * **The technical assessment's 200 €** is declared against the `PLANNING` cost category only, and
   a lump sum is clamped to its own eligible-cost basis, so the award is whatever planning cost the
   run books for the heat pump, up to 200 €. Where a run books no planning cost, the award is zero.
-* **Warmer Homes is a 100 % share** over every envelope and heating class. In reality SEAI's
-  surveyor decides which measures are installed, so the catalogue offers the scheme on a wider
-  measure list than the programme actually funds.
+* **Warmer Homes is a 100 % share** over every envelope and heating class, the heat pump's
+  space-heating buffer and hot-water cylinder included (`SPACE_HEATING_STORAGE`,
+  `DOMESTIC_HOT_WATER_STORAGE`, renovisorissues #69), so the scheme covers the whole heat-pump
+  measure; the Home Energy Upgrade Loan lists the same two classes. The fixed-amount heat-pump
+  grants do not: their amount is per installation, already stated on the heat pump. In reality
+  SEAI's surveyor decides which measures are installed, so the catalogue offers the scheme on a
+  wider measure list than the programme actually funds.
 
 ## What the transcription leaves out
 

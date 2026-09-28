@@ -70,7 +70,7 @@ Simulation year 2026, country DE, horizon 20 a, interest 3.0%, price basis 2026.
 
 - NPV delta (variant - reference): -45,064 [-50,684 | -39,632] EUR
 - Equivalent annual cost delta: -3,029 [-3,407 | -2,664] EUR/a
-- Discounted payback [a]: best 1, expected 2, worst 4 (None = never within horizon)
+- Discounted payback [a]: earliest 1, expected 2, latest 4 across the three worlds (None = never within horizon)
 
 | Subject | NPV delta |
 |---|---|

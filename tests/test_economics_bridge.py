@@ -55,6 +55,7 @@ from hisim.economics.perspectives import load_default_bundle, select_applicable
 from hisim.economics.plausibility import CheckIds, CheckStatus, run_plausibility_checks
 from hisim.economics.reporting import render_plausibility_findings
 from hisim.economics.scenarios import ScenarioSet
+from hisim.economics.uncertainty import UncertainValue
 from hisim.components import (
     building,
     electricity_meter,
@@ -611,6 +612,39 @@ class TestContextMerge:
 
         assert inputs.cost_facts[0].facts.technical_attributes == {"module": "mono"}
         assert inputs.cost_facts[0].facts.size == 5.0
+
+    def test_a_costless_subject_keeps_its_facts_but_costs_nothing(self):
+        """Part of another purchase (renovisorissues #77), so every amount of its own is zero.
+
+        The subject stays -- its class, size and lifetime are what the adapter extracted, so it is
+        registered, dated and renewed -- but its investment, installation, maintenance, fixed
+        operation and embodied CO2 are overridden to zero, citing the reason.
+        """
+        inputs = self._inputs()
+        context = EconomicContext(
+            costless_subjects={
+                "PVSystem": bridge.CostlessPart(
+                    reason="part of the battery system", lifetime_of_asset_class=loadtypes.ComponentType.BATTERY
+                )
+            }
+        )
+
+        bridge._merge_context(inputs, context)  # pylint: disable=protected-access
+
+        facts = inputs.cost_facts[0].facts
+        zero = UncertainValue.exact(0.0)
+        assert (facts.asset_class, facts.size, facts.lifetime_override_in_years) == (
+            loadtypes.ComponentType.PV,
+            5.0,
+            None,
+        )
+        assert facts.investment_cost_override_in_euro == zero
+        assert facts.installation_cost_override_in_euro == zero
+        assert facts.maintenance_rate_override == zero
+        assert facts.fixed_operation_cost_override_in_euro_per_year == zero
+        assert facts.embodied_co2_override_in_kg == 0.0
+        assert facts.override_source == "part of the battery system"
+        assert facts.lifetime_of_asset_class is loadtypes.ComponentType.BATTERY
 
 
 class TestSharedHelpers:

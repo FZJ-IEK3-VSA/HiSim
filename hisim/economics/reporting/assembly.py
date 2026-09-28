@@ -761,10 +761,10 @@ def _comparison_section_html(comparison: VariantComparison, context: _ChapterCon
             continue
         color = "var(--g5)" if delta.best_estimate > 0 else "var(--g1)"
         steps.append((subject, delta.best_estimate, color))
-    payback = comparison.discounted_payback_years
+    payback = comparison.discounted_payback_envelope
     payback_text = (
-        f"best case {payback.get('low')} a, expected {payback.get('best_estimate')} a, "
-        f"worst case {payback.get('high')} a (None = never within the horizon)"
+        f"earliest {payback.earliest} a, expected {payback.central} a, "
+        f"latest {payback.latest} a across the three worlds (None = never within the horizon)"
     )
     warm_rent = ""
     if comparison.warm_rent_change_per_month_in_euro is not None:

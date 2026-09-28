@@ -630,7 +630,9 @@ def _payback_svg(comparison: VariantComparison) -> str:
     parts.append(_hline(left, width - 10, to_y(0.0), "var(--baseline)"))
     styles = {"best_estimate": ("var(--g0)", 2.5, ""), "min": ("var(--g0)", 1.2, ' stroke-dasharray="5 4"'),
               "max": ("var(--g0)", 1.2, ' stroke-dasharray="2 4"')}
-    labels = {"best_estimate": "expected", "min": "optimistic (LOW world)", "max": "pessimistic (HIGH world)"}
+    # By world, not optimistic/pessimistic: which world saves most depends on which uncertainty
+    # dominates the savings (renovisorissues #73).
+    labels = {"best_estimate": "expected", "min": "LOW world", "max": "HIGH world"}
     for slot_name, values in series.items():
         color, stroke_width, dash = styles[slot_name]
         points = " ".join(f"{left + year * step:.1f},{to_y(value):.1f}" for year, value in enumerate(values))

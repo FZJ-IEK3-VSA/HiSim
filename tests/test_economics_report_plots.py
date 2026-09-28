@@ -1066,10 +1066,8 @@ class TestSharedCaptions:
         matrix, reference = evaluated
         variant = matrix.results["brownfield_net"]
         comparison = compare(reference, variant)
-        crossings = views.band_zero_crossings(comparison.cumulative_discounted_savings_in_euro)
-        expected = payback_interval_sentence(
-            crossings.get("low"), crossings.get("best_estimate"), crossings.get("high")
-        )
+        envelope = comparison.discounted_payback_envelope
+        expected = payback_interval_sentence(envelope.earliest, envelope.central, envelope.latest)
 
         report_plots.plot_liquidity_fan(
             variant, os.path.join(str(tmp_path), "fan.png"), comparison

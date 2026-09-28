@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import pytest
 
+from hisim.economics.bridge import CostlessPart
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.adapter import FactsExtractors
 from hisim.economics.facts import ComponentCostFacts, ExistingAssetRegister, InstallationYearOrigin
@@ -1504,6 +1505,82 @@ class TestTheEquipmentTheHouseAlreadyHas:
             assert equipment.component_class in FactsExtractors.BY_CLASS_NAME, equipment
             if equipment.measure_id is not None:
                 assert MeasureRegistry.function_for(equipment.measure_id) is not None, equipment
+            if equipment.part_of is not None:
+                assert MeasureRegistry.function_for(equipment.part_of) is not None, equipment
+                assert equipment.part_of in TwinEquipment.PART_OF_NOTES, equipment
+
+
+def _battery_house(existing: bool, measure: bool) -> Dict[str, Any]:
+    """The mockup without its package: a battery the house keeps, one the package installs, or both."""
+    document = _mockup()
+    document["measures"] = []
+    if existing:
+        document["house"]["battery"] = {"custom_battery_capacity_generic_in_kilowatt_hour": 8}
+    if measure:
+        document["measures"] = [{"id": "battery_system", "options": {"capacity_in_kwh": 8}}]
+    return document
+
+
+def _controller(translated: Any) -> str:
+    """The name of the twin's energy-management controller."""
+    for name, class_name, _config in RealizedTwin.of(translated.model).components:
+        if class_name == "L2GenericEnergyManagementSystem":
+            return name
+    raise KeyError("the twin has no energy-management controller")
+
+
+@pytest.mark.base
+class TestTheControllerIsPartOfTheBattery:
+    """Owner decision 2026-09-28 (renovisorissues #77): the battery's controller costs nothing of its own."""
+
+    @pytest.mark.parametrize("existing, measure", [(True, False), (False, True)])
+    def test_the_controller_is_a_costless_subject_with_its_note(self, existing, measure) -> None:
+        """Kept or installed, it is declared costless to the engine and to the mapping report."""
+        translated = _translated(_battery_house(existing, measure))
+        controller = _controller(translated)
+        note = TwinEquipment.PART_OF_NOTES["battery_system"]
+        assert translated.economic_context.costless_subjects == {
+            controller: CostlessPart(reason=note, lifetime_of_asset_class=ComponentType.BATTERY)
+        }
+        report = translated.report.to_json()
+        assert controller in report["costless_subjects"]
+        assert report["subject_notes"][controller] == note
+
+    def test_it_carries_the_battery_measure_where_the_package_installs_the_battery(self) -> None:
+        """The controller the battery_system measure brings is stamped with that measure."""
+        translated = _translated(_battery_house(existing=False, measure=True))
+        assert translated.report.to_json()["subjects"][_controller(translated)] == "battery_system"
+
+    def test_a_kept_batterys_controller_carries_no_measure(self) -> None:
+        """Equipment of the house as it was: no measure put it there."""
+        translated = _translated(_battery_house(existing=True, measure=False))
+        assert translated.report.to_json()["subjects"].get(_controller(translated)) is None
+
+    @pytest.mark.parametrize("stated", [None, 2019])
+    def test_a_kept_controller_is_dated_as_the_battery_and_written_off_at_zero(self, stated) -> None:
+        """Owner follow-up of 2026-09-28: it follows the battery's life, not a mid-life of its own."""
+        document = _battery_house(existing=True, measure=False)
+        if stated is not None:
+            document["house"]["battery"]["installation_year"] = stated
+        translated = _translated(document)
+        battery = _registered(translated, ComponentType.BATTERY)
+        controller = _registered(translated, ComponentType.ENERGY_MANAGEMENT_SYSTEM)
+        assert controller.installation_year == battery.installation_year
+        if stated is not None:
+            assert controller.installation_year == stated
+        assert controller.replacement_cost_override_in_euro == UncertainValue.exact(0.0)
+        assert controller.replaced_by_asset_classes == []
+
+    def test_a_replaced_battery_takes_its_controller_with_it(self) -> None:
+        """A battery_system measure over a kept battery replaces the controller too."""
+        translated = _translated(_battery_house(existing=True, measure=True))
+        controller = _registered(translated, ComponentType.ENERGY_MANAGEMENT_SYSTEM)
+        assert controller.replaced_by_asset_classes == [ComponentType.ENERGY_MANAGEMENT_SYSTEM]
+
+    def test_a_house_without_a_battery_declares_nothing(self) -> None:
+        """No controller, nothing costless."""
+        translated = _translated(_battery_house(existing=False, measure=False))
+        assert translated.economic_context.costless_subjects == {}
 
 
 class TestEveryMeasureHasASubject:

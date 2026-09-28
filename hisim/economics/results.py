@@ -25,7 +25,7 @@ from __future__ import annotations
 import enum
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar, Dict, List, Optional, Tuple
+from typing import ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.provenance import (
@@ -1120,8 +1120,10 @@ class VariantComparison:
     Sign and slot conventions, which every field below follows: deltas are **variant − reference**
     and slot-wise, so a *negative* NPV delta means the variant is cheaper; payback and
     warm-rent-neutrality are reported per slot (`"low"`, `"best_estimate"`, `"high"`) because a
-    retrofit can pay back in the optimistic world and never in the pessimistic one, and saying so
-    is the honest statement.
+    retrofit can pay back in one world and never in another, and saying so is the honest
+    statement. Which slot pays back first depends on which uncertainty dominates the savings, so
+    a *range* of payback years is read by value from :attr:`discounted_payback_envelope`, never
+    positionally from the slots (renovisorissues #73).
     """
 
     reference_id: str
@@ -1158,6 +1160,11 @@ class VariantComparison:
             "warm_rent_neutral_per_slot": self.warm_rent_neutral_per_slot,
             "cumulative_discounted_savings_in_euro": self.cumulative_discounted_savings_in_euro,
         }
+
+    @property
+    def discounted_payback_envelope(self) -> "PaybackEnvelope":
+        """The payback years of the three worlds as one range ordered by value (#73)."""
+        return discounted_payback_envelope(self.discounted_payback_years)
 
 
 def _subject_alignment_key(result: LifecycleCostResult, subject: str) -> str:
@@ -1233,13 +1240,71 @@ def discounted_payback_year(cumulative_savings: List[float]) -> Optional[int]:
 
     Returns:
         The year, or None when the curve never reaches zero within the horizon — a legitimate
-        result that the band reports per slot, so "pays back in the optimistic world only" is
-        expressible.
+        result that the band reports per slot, so "pays back in one world only" is expressible.
     """
     for year, value in enumerate(cumulative_savings):
         if year > 0 and value >= 0:
             return year
     return None
+
+
+@dataclass(frozen=True)
+class PaybackEnvelope:
+    """The payback years of the three worlds as one ordered range (renovisorissues #73).
+
+    Which world pays back first is not a property of its slot. Savings are reference minus variant
+    per slot, and the LOW slot prices *both* variants cheap: where the energy bill dominates the
+    uncertainty, the LOW world saves least and pays back last; where the plan's investment
+    dominates, the LOW world is the cheap-investment world and pays back first. A band written
+    positionally (LOW -> min) is therefore reversed in the first case, which is what production
+    refused as ``11/9/9``. The range is taken by value instead:
+
+    * ``earliest`` -- the first year any world has paid back; None when no world does;
+    * ``central`` -- the best-estimate world's year, None when it never pays back;
+    * ``latest`` -- the year every world has paid back; None as soon as one world never does,
+      because "never within the horizon" is the latest answer there is (None reads as +infinity).
+
+    With None as +infinity, ``earliest <= central <= latest`` holds by construction. Per-slot
+    years stay on :attr:`VariantComparison.discounted_payback_years`, where each slot's curve is
+    drawn; every place that *states* a payback range reads this.
+    """
+
+    earliest: Optional[int]
+    central: Optional[int]
+    latest: Optional[int]
+
+    @classmethod
+    def of(cls, payback_by_slot: Mapping[str, Optional[int]]) -> "PaybackEnvelope":
+        """The envelope of per-slot payback years keyed ``low``/``best_estimate``/``high``.
+
+        Args:
+            payback_by_slot: One payback year per world, None meaning never within the horizon,
+                as :func:`discounted_payback_year` gives it slot by slot.
+
+        Returns:
+            The range by value; a world missing from the mapping counts as never paying back.
+        """
+        years = [payback_by_slot.get(slot) for slot, _getter in _SlotAccessors.BY_SLOT]
+        reached = [year for year in years if year is not None]
+        return cls(
+            earliest=min(reached) if reached else None,
+            central=payback_by_slot.get("best_estimate"),
+            latest=max(reached) if len(reached) == len(years) else None,
+        )
+
+    def to_band(self) -> Dict[str, Optional[int]]:
+        """The document's band: ``min`` earliest, ``best`` central, ``max`` latest; None = never."""
+        return {"min": self.earliest, "best": self.central, "max": self.latest}
+
+
+def discounted_payback_envelope(payback_by_slot: Mapping[str, Optional[int]]) -> PaybackEnvelope:
+    """The payback range of the three worlds, ordered by value (:class:`PaybackEnvelope`).
+
+    Next to :func:`discounted_payback_year` because it is the only way the per-slot years become a
+    stated range: a range read off the slots by position is reversed whenever the savings
+    uncertainty is dominated by the reference's energy bill rather than by the plan's investment.
+    """
+    return PaybackEnvelope.of(payback_by_slot)
 
 
 def compare(
@@ -1266,7 +1331,8 @@ def compare(
     kind belong to the scenario axes and the break-even search (§4.6).
 
     The same reasoning drives the two derived figures: the discounted payback is the zero-crossing
-    of each slot's own savings curve (so payback is a band, each slot independently "never"), and
+    of each slot's own savings curve (each slot independently "never"; the range across them is
+    taken by value, :func:`discounted_payback_envelope`), and
     warm-rent neutrality is evaluated per slot, where neutrality in the HIGH slot — "neutral even
     if everything comes in expensive" — is the robust policy statement (§6.5).
 

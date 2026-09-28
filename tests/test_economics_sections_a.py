@@ -897,24 +897,23 @@ class TestTheCashCurveTellsOnePerspectivesStory:
 
 
 class TestThePaybackSentence:
-    """Savings are reference minus variant, so the larger savings pay back earlier.
+    """The sentence states the payback range by value and names no world optimistic.
 
-    The slot that carries the *smaller* savings — `"low"` — is therefore the pessimistic world
-    and `"high"` the optimistic one. The sentence used to name them the other way round, which
-    inverted the conclusion a reader drew from it, and it consulted two of the three slots, so
-    the central world it is actually about was never stated.
+    Which world saves most depends on which uncertainty dominates the savings -- the reference's
+    energy bill or the plan's investment -- so a sentence naming the slots by position was wrong
+    in one of the two cases (renovisorissues #73). It takes the
+    :class:`~hisim.economics.results.PaybackEnvelope` (earliest, central, latest) instead.
 
-    The sentence now lives in `report_prose` because the PNG companion prints it too, and its
-    own copy of it had a fourth wording again. It is asserted from this side, where the section
-    that shows it is tested, and the two renderings are held together in
-    `tests/test_economics_report_plots.py`.
+    The sentence lives in `report_prose` because the PNG companion prints it too. It is asserted
+    from this side, where the section that shows it is tested, and the two renderings are held
+    together in `tests/test_economics_report_plots.py`.
     """
 
     def test_all_three_worlds_pay_back(self):
-        """The central world leads; the other two are the interval around it."""
-        assert payback_interval_sentence(9, 7, 5) == (
-            "Payback lands in year 7 in the central world, between year 5 (optimistic) and "
-            "year 9 (pessimistic)."
+        """The central world leads; the earliest and the latest world are the range around it."""
+        assert payback_interval_sentence(5, 7, 9) == (
+            "Payback lands in year 7 in the central world; across the three worlds between year 5 "
+            "and year 9."
         )
 
     def test_no_world_pays_back(self):
@@ -923,18 +922,18 @@ class TestThePaybackSentence:
             "The investment does not pay back within the horizon in any of the three worlds."
         )
 
-    def test_only_the_optimistic_world_pays_back(self):
+    def test_only_a_world_other_than_the_central_one_pays_back(self):
         """The weakest case a reader can still act on, and it has to be marked as weak."""
-        assert payback_interval_sentence(None, None, 6) == (
-            "Payback lands in year 6 in the optimistic world only; in the central and the "
-            "pessimistic world the curve never reaches zero within the horizon."
+        assert payback_interval_sentence(6, None, None) == (
+            "Payback lands in year 6 at the earliest, but not in the central world: there the "
+            "curve never reaches zero within the horizon."
         )
 
-    def test_an_open_pessimistic_end_is_spelled_out(self):
-        """Two worlds cross and one does not: the interval says so instead of printing a None."""
-        assert payback_interval_sentence(None, 8, 6) == (
-            "Payback lands in year 8 in the central world, between year 6 (optimistic) and "
-            "never within the horizon (pessimistic)."
+    def test_an_open_latest_end_is_spelled_out(self):
+        """Two worlds cross and one does not: the range says so instead of printing a None."""
+        assert payback_interval_sentence(6, 8, None) == (
+            "Payback lands in year 8 in the central world; across the three worlds between year 6 "
+            "and never within the horizon."
         )
 
 

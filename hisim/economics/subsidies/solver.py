@@ -9,9 +9,12 @@ the package `__init__` re-exports everything.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import (
     Callable,
+    ClassVar,
     Dict,
+    FrozenSet,
     List,
     Optional,
     Tuple,
@@ -22,6 +25,7 @@ from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.subsidies.assessment import (
     EligibilityStatus,
     MeasureForSubsidy,
+    SchemeAssessment,
     SchemeMaximum,
     SubsidyAward,
     SubsidyContext,
@@ -409,6 +413,86 @@ class SchemeMaximumNotes:
     #: sentence an awarded loan-terms row already states.
     SOFT_LOAN = "loan terms: the benefit is in the financing costs, not a grant"
 
+    #: A fixed amount is capped at the eligible cost and a share is a share of it, and an unpriced
+    #: measure's cost is unknown, not zero, so neither can be stated (renovisorissues #77, cmf
+    #: 2026-09-28).
+    UNPRICED = (
+        "no maximum: the measure is unpriced, and what the scheme pays is capped at or a share of the "
+        "measure's cost, which is unknown, not zero"
+    )
+
+
+class UnpricedMeasures:
+    """What a scheme bounded by the cost does on a measure whose price is unknown (renovisorissues #77).
+
+    An unpriced measure (``ComponentCostFacts.is_unpriced``) books its unknown price as a
+    placeholder zero. A LUMP_SUM, PER_UNIT or TIERED_PER_UNIT amount is clamped to the eligible
+    cost, and a SHARE_OF_ELIGIBLE_COST, BONUS_SHARE or TAX_CREDIT is a share of it, so against
+    that zero each would read "up to EUR 0" -- nothing -- where the truth is that the amount is
+    unknown. Owner decisions of 2026-09-28: such a scheme's maximum is ``None``
+    (:attr:`SchemeMaximumNotes.UNPRICED`), and a scheme the answers would award is not awarded but
+    left undetermined on the measure's price (:attr:`PRICE_QUESTION`), so nothing is booked for
+    it. A scheme that counts no cost category is not bounded by the cost -- an unconditional
+    fixed amount -- and is decided as for any measure. A soft loan's repayment grant and an
+    operational (per-kWh) payment keep their own rules.
+    """
+
+    #: The benefit kinds whose amount is capped at the eligible cost or is a share of it.
+    COST_BOUND_KINDS: ClassVar[FrozenSet[BenefitKind]] = frozenset(
+        {
+            BenefitKind.LUMP_SUM,
+            BenefitKind.PER_UNIT,
+            BenefitKind.TIERED_PER_UNIT,
+            BenefitKind.SHARE_OF_ELIGIBLE_COST,
+            BenefitKind.BONUS_SHARE,
+            BenefitKind.TAX_CREDIT,
+        }
+    )
+
+    #: The open question an otherwise decided scheme is left undetermined on.
+    PRICE_QUESTION: ClassVar[str] = (
+        "the measure's price: the scheme pays an amount capped at or a share of the measure's "
+        "eligible cost, and the plan states no price for the measure"
+    )
+
+    @classmethod
+    def applies(cls, scheme: SubsidyScheme, measure: MeasureForSubsidy) -> bool:
+        """Whether the scheme's amount is bounded by the eligible cost, and the measure's price is unknown."""
+        return (
+            scheme.benefit_kind in cls.COST_BOUND_KINDS
+            and bool(scheme.eligible_cost.categories)
+            and measure.facts.is_unpriced()
+        )
+
+    @classmethod
+    def assessed(cls, assessment: SchemeAssessment, measure: MeasureForSubsidy) -> SchemeAssessment:
+        """One assessment with the price question added where the scheme cannot be valued.
+
+        An eligible fixed-amount scheme on an unpriced measure becomes undetermined on the price;
+        an undetermined one also asks for the price; an ineligible one stays ineligible, since no
+        price could change that verdict.
+        """
+        if assessment.status == EligibilityStatus.INELIGIBLE or not cls.applies(assessment.scheme, measure):
+            return assessment
+        return replace(
+            assessment,
+            status=EligibilityStatus.UNDETERMINED,
+            missing_fields=[*assessment.missing_fields, cls.PRICE_QUESTION],
+        )
+
+
+def _unstated_maximum_note(scheme: SubsidyScheme, measure: MeasureForSubsidy) -> Optional[str]:
+    """Why a scheme states no maximum for a measure before anything is valued, or None.
+
+    A VAT reduction states a rate on the price, no amount; an amount capped at or a share of the
+    cost of an unpriced measure is bounded by a cost nobody stated (:class:`UnpricedMeasures`).
+    """
+    if isinstance(scheme.benefit, ReducedVatBenefit):
+        return SchemeMaximumNotes.REDUCED_VAT
+    if UnpricedMeasures.applies(scheme, measure):
+        return SchemeMaximumNotes.UNPRICED
+    return None
+
 
 def scheme_maximum(
     scheme: SubsidyScheme,
@@ -437,6 +521,9 @@ def scheme_maximum(
     * OPERATIONAL: the rate times the measure's annual energy times the duration;
     * REDUCED_VAT: ``None`` -- the catalogue states a rate on the price, no amount.
 
+    A fixed amount, a share or a tax credit on a measure whose price is unknown is ``None`` too
+    (:class:`UnpricedMeasures`): it is bounded by the cost nobody stated.
+
     The catalogue's overall state-aid share, where it declares one, bounds the upfront amount as
     it bounds an award.
 
@@ -450,8 +537,9 @@ def scheme_maximum(
         The maximum, a positive band in nominal year-0 euro, or None with the reason.
     """
     benefit = scheme.benefit
-    if isinstance(benefit, ReducedVatBenefit):
-        return SchemeMaximum(amount_in_euro=None, note=SchemeMaximumNotes.REDUCED_VAT)
+    unstated = _unstated_maximum_note(scheme, measure)
+    if unstated is not None:
+        return SchemeMaximum(amount_in_euro=None, note=unstated)
     award = _combination_awards([scheme], measure, context, overall_cap_share)[0]
     if isinstance(benefit, LoanTermsBenefit):
         if not benefit.repayment_grant_rate:
@@ -601,7 +689,11 @@ def solve_cumulation(
     Raises:
         SubsidyDataError: If either scheme set exceeds MAX_CUMULATION_SCHEMES.
     """
-    assessments = assess_schemes(catalog, measure, context, year, admits)
+    # An amount bounded by an unknown price is not decided (renovisorissues #77).
+    assessments = [
+        UnpricedMeasures.assessed(assessment, measure)
+        for assessment in assess_schemes(catalog, measure, context, year, admits)
+    ]
     eligible = [assessment.scheme for assessment in assessments if assessment.status == EligibilityStatus.ELIGIBLE]
     decision = SubsidyDecision(measure_subject=measure.subject)
     for assessment in assessments:

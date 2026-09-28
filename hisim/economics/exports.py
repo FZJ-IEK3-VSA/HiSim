@@ -308,7 +308,8 @@ def build_lifecycle_kpi_entries(
     not the other. A KPI whose band is None is omitted entirely rather than published as zero.
 
     Two entries are deliberately *not* bands and are constructed by hand instead of via `add`: the
-    discounted payback (whose low/high crossings are a bracket, carried in the description) and the
+    discounted payback (whose earliest and latest crossing across the three worlds are a range,
+    carried in the description, `VariantComparison.discounted_payback_envelope`) and the
     warm-rent-neutral flag (a boolean rendered as a string, with the per-slot verdicts in the
     description).
 
@@ -399,15 +400,15 @@ def build_lifecycle_kpi_entries(
             "EUR",
             comparison.npv_delta_in_euro,
         )
-        payback = comparison.discounted_payback_years.get("best_estimate")
+        payback = comparison.discounted_payback_envelope
         entries.append(
             KpiEntry(
                 name=f"Discounted payback vs reference [a] ({comparison.perspective_id})",
                 unit="a",
-                value=payback,
+                value=payback.central,
                 tag=KpiTagEnumClass.COSTS,
-                description=f"band: low={comparison.discounted_payback_years.get('low')}, "
-                f"high={comparison.discounted_payback_years.get('high')}",
+                description=f"range across the three worlds: earliest={payback.earliest}, "
+                f"latest={payback.latest} (None = never within the horizon)",
             )
         )
         if comparison.warm_rent_change_per_month_in_euro is not None:

@@ -478,6 +478,28 @@ class TestTheEnvelopeSubjectsAreSizedAsTheBuildingSimulates:
         assert "house.building.facade.area_in_m2" in facade.override_source
         assert "as the request states it" in facade.override_source
 
+    def test_a_storey_corrected_area_prices_the_subject_with_the_corrected_area(self) -> None:
+        """hisim-9b0m: two storeys on the mockup's one-storey row; the subjects follow the Building's areas.
+
+        The translator writes the corrected facade and floor areas onto the config, so the realized
+        Building simulates them and the subjects are priced over them, with an origin that says so.
+        """
+        document = _without_element_areas(_mockup())
+        unstoreyed = _building_areas(_translated(copy.deepcopy(document)))
+        document["house"]["building"]["number_of_storeys"] = 2
+        translated = _translated(document)
+        facts = {entry.subject: entry.facts for entry in translated.economic_context.extra_cost_facts}
+        building = _building_areas(translated)
+
+        assert building.facade_area_in_m2 == pytest.approx(unstoreyed.facade_area_in_m2 * 2 ** 0.5)
+        assert building.floor_area_in_m2 == pytest.approx(unstoreyed.floor_area_in_m2 / 2)
+        for measure_id, area in (
+            ("external_insulation", building.facade_area_in_m2),
+            ("solid_ground_floor_insulation", building.floor_area_in_m2),
+        ):
+            assert facts[measure_id].size == pytest.approx(area)
+            assert "corrected to the stated number of storeys" in facts[measure_id].override_source
+
     def test_a_measure_without_a_band_stays_unpriced_with_its_area_unstated(self) -> None:
         """No price is still no price: the area does not invent one (#60's path, unchanged)."""
         document = _without_element_areas(_mockup())

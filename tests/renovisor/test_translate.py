@@ -13,6 +13,7 @@ management system, whose battery would size itself from an array producing nothi
 """
 
 import copy
+import math
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
@@ -593,6 +594,129 @@ def issue_72_request(generator: str, **building: Any) -> Dict[str, Any]:
         "applicant": {"receives_means_tested_benefit": False, "managed_full_retrofit": True, "main_residence": False},
         "measures": [],
     }
+
+
+def issue_76_request(building_type: str, storeys: Optional[int], **building: Any) -> Dict[str, Any]:
+    """Return the renovisorissues #76 pair's house: IE, 1960, 170 m2, unrenovated, a pellet boiler."""
+    document = issue_72_request(
+        "pellet_heating",
+        building_type=building_type,
+        construction_year=1960,
+        absolute_conditioned_floor_area_in_m2=170,
+        living_area_in_m2=170,
+        retrofit_status="unrenovated",
+        **building,
+    )
+    if storeys is None:
+        del document["house"]["building"]["number_of_storeys"]
+    else:
+        document["house"]["building"]["number_of_storeys"] = storeys
+    return document
+
+
+def simulated_areas(system: TranslatedSystem) -> Dict[ThermalElement, float]:
+    """Return every element's area as the translated Building simulates it."""
+    merged = {**config_of(system, Targets.BUILDING), **(constructor_of(system, Targets.BUILDING) or {})}
+    # The design temperature sizes the heat load only, never an area.
+    envelope = SimulatedEnvelope(merged, heating_reference_temperature_in_celsius=0.0)
+    areas = {}
+    for element in ThermalElement:
+        area = envelope.area_of(element)
+        assert area is not None
+        areas[element] = area
+    return areas
+
+
+@pytest.mark.base
+class TestTheStatedNumberOfStoreys:
+    """hisim-9b0m, renovisorissues #76 point 4: a bungalow and a two-storey house are different houses.
+
+    Both land on ``IE.N.SFH.04`` (1950-66), a one-storey row (n_Storey 1, A_C_Ref 141.1 m2), whose
+    areas scaled to 170 m2 are roof 187.241, floor 186.036, facade 128.169, windows 31.036 and door
+    3.928 m2. Two storeys over the same 170 m2 halve the footprint and grow the facade by sqrt(2).
+    """
+
+    SCALE = 170 / 141.1
+    ROW_AREAS = {
+        ThermalElement.ROOF: (137.68 + 17.73) * SCALE,
+        ThermalElement.FLOOR: (136.68 + 17.73) * SCALE,
+        ThermalElement.FACADE: (94.08 + 12.3) * SCALE,
+        ThermalElement.WINDOW: (19.16 + 6.6) * SCALE,
+        ThermalElement.DOOR: 3.26 * SCALE,
+    }
+
+    def test_the_bungalow_and_the_two_storey_house_no_longer_translate_alike(self) -> None:
+        """Bigger roof and floor, smaller facade for the bungalow; the same windows and door."""
+        bungalow = translate(issue_76_request("bungalow", 1))
+        two_storeys = translate(issue_76_request("detached_sfh", 2))
+
+        assert bungalow.yaml_text != two_storeys.yaml_text
+        low, high = simulated_areas(bungalow), simulated_areas(two_storeys)
+        for element, area in self.ROW_AREAS.items():
+            assert low[element] == pytest.approx(area), element
+        assert high[ThermalElement.ROOF] == pytest.approx(self.ROW_AREAS[ThermalElement.ROOF] / 2)
+        assert high[ThermalElement.ROOF] == pytest.approx(93.6204819277)
+        assert high[ThermalElement.FLOOR] == pytest.approx(93.0180722892)
+        assert high[ThermalElement.FACADE] == pytest.approx(self.ROW_AREAS[ThermalElement.FACADE] * math.sqrt(2))
+        assert high[ThermalElement.FACADE] == pytest.approx(181.2578780304)
+        assert high[ThermalElement.WINDOW] == pytest.approx(low[ThermalElement.WINDOW])
+        assert high[ThermalElement.DOOR] == pytest.approx(low[ThermalElement.DOOR])
+        assert low[ThermalElement.ROOF] > high[ThermalElement.ROOF]
+        assert low[ThermalElement.FLOOR] > high[ThermalElement.FLOOR]
+        assert low[ThermalElement.FACADE] < high[ThermalElement.FACADE]
+
+    def test_the_report_states_the_storeys_as_used_with_the_factors(self) -> None:
+        """The storey line names the factors; each corrected area is a defaulted line with its value."""
+        system = translate(issue_76_request("detached_sfh", 2))
+
+        system.report.assert_complete(issue_76_request("detached_sfh", 2))
+        line = system.report.line("house.building.number_of_storeys")
+        assert line is not None and (line.status, line.value) == (ReportStatus.USED, 2)
+        assert line.note is not None
+        assert "roof and floor area x0.5" in line.note and "facade x1.414" in line.note
+        roof = system.report.line("house.building.roof.area_in_m2")
+        assert roof is not None and roof.status is ReportStatus.DEFAULTED
+        assert roof.value == pytest.approx(93.6204819277)
+        window = system.report.line("house.building.window.area_in_m2")
+        assert window is not None and window.value == "TABULA"
+
+    def test_a_stated_area_wins_over_the_corrected_one(self) -> None:
+        """The stated roof is written as stated; floor and facade are still corrected."""
+        system = translate(issue_76_request("detached_sfh", 2, roof={"area_in_m2": 120}))
+
+        areas = simulated_areas(system)
+        assert areas[ThermalElement.ROOF] == 120
+        assert areas[ThermalElement.FLOOR] == pytest.approx(93.0180722892)
+        assert areas[ThermalElement.FACADE] == pytest.approx(181.2578780304)
+        line = system.report.line("house.building.number_of_storeys")
+        assert line is not None and line.note is not None and "states the roof area" in line.note
+        roof = system.report.line("house.building.roof.area_in_m2")
+        assert roof is not None and (roof.status, roof.value) == (ReportStatus.USED, 120)
+
+    @pytest.mark.parametrize("building_type", ["bungalow", "detached_sfh"])
+    def test_the_rows_own_storey_count_translates_byte_identically(self, building_type: str) -> None:
+        """One storey on a one-storey row writes nothing: the text is the one without the leaf.
+
+        Only the file's name differs, because it hashes the request; before hisim-9b0m the leaf
+        reached nothing, so the request without it translates as every request did then.
+        """
+        stated = translate(issue_76_request(building_type, 1))
+        absent = translate(issue_76_request(building_type, None))
+
+        assert stated.yaml_text.replace(stated.model.name, "NAME") == absent.yaml_text.replace(
+            absent.model.name, "NAME"
+        )
+        assert [edit.location for edit in stated.edits] == [edit.location for edit in absent.edits]
+        assert not any(
+            key.endswith("_area_in_m2") for key in config_of(stated, Targets.BUILDING)
+        )
+
+    def test_an_absent_storey_count_is_reported_as_the_rows(self) -> None:
+        """The line says which n_Storey stands."""
+        line = translate(issue_76_request("detached_sfh", None)).report.line("house.building.number_of_storeys")
+
+        assert line is not None and (line.status, line.value) == (ReportStatus.DEFAULTED, 1.0)
+        assert line.note is not None and "IE.N.SFH.04.Gen.ReEx.001.001's n_Storey 1 stands" in line.note
 
 
 @pytest.mark.base

@@ -760,7 +760,8 @@ class Building:
         set_heating_temperature_in_celsius: The room set point, which propagates to the heat
             distribution controller.
         roof, facade, floor, window, door: The five envelope elements.
-        number_of_storeys: Recorded; the archetype's own storey count is used.
+        number_of_storeys: The storey count the conditioned floor area is spread over; it corrects
+            the archetype's roof, floor and facade areas (:class:`~hisim.renovisor.tabula.StoreyCorrection`).
         tabula_building_code: The expert override that skips the derivation entirely.
         retrofit_status: Which TABULA variant the archetype is; ``None`` when the request leaves
             it out (``unrenovated``, or a stated code's own variant).

@@ -47,6 +47,7 @@ element the request leaves out is, bit for bit, the one the simulation uses.
 """
 
 import csv
+import math
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -434,16 +435,25 @@ class ArchetypeEnvelope:
         air_infiltration_rate_per_hour: The row's ``n_air_infiltration``.
         thermal_bridging_surcharge_in_watt_per_m2_per_kelvin: The surcharge the ``Building`` uses,
             the row's ``delta_U_ThermalBridging`` (0.1 where the row says 0).
+        number_of_storeys: The row's ``n_Storey``, the storey count its areas were drawn for.
+        areas: Each element's area as the ``Building`` computes it for the floor area and door area
+            the envelope was built with: the row's reference area scaled to the conditioned floor
+            area (the door's estimated where the row states none).
     """
 
     code: str
     elements: Mapping[ThermalElement, ElementDefault]
     air_infiltration_rate_per_hour: float
     thermal_bridging_surcharge_in_watt_per_m2_per_kelvin: float
+    number_of_storeys: float
+    areas: Mapping[ThermalElement, float]
 
     #: The outside design temperature the throw-away ``BuildingInformation`` is built with. It only
     #: sizes the maximum heating load, which nothing here reads; the envelope does not depend on it.
     DESIGN_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 0.0
+
+    #: The TABULA column holding the storey count a row's areas were drawn for.
+    STOREYS_COLUMN: ClassVar[str] = "n_Storey"
 
     #: The ``Building``'s own name of each request element, as
     #: :py:meth:`BuildingInformation.element_values` keys it; only the facade is named differently.
@@ -458,6 +468,10 @@ class ArchetypeEnvelope:
     def u_value(self, element: ThermalElement) -> float:
         """Return the U-value the ``Building`` uses for an element the request leaves out."""
         return self.elements[element].u_value_in_watt_per_m2_per_kelvin
+
+    def area(self, element: ThermalElement) -> float:
+        """Return the area the ``Building`` gives an element the request states no area for."""
+        return self.areas[element]
 
     @classmethod
     def for_code(
@@ -535,4 +549,102 @@ class ArchetypeEnvelope:
             thermal_bridging_surcharge_in_watt_per_m2_per_kelvin=(
                 information.thermal_bridging_surcharge_in_watt_per_m2_per_kelvin
             ),
+            number_of_storeys=float(information.buildingdata_ref[cls.STOREYS_COLUMN].values[0]),
+            areas={
+                element: float(getattr(information, StoreyCorrection.config_field(element)))
+                for element in ThermalElement
+            },
+        )
+
+
+@dataclass(frozen=True)
+class StoreyCorrection:
+    """How a stated number of storeys reshapes a TABULA row's envelope (hisim-9b0m, renovisorissues #76).
+
+    A TABULA row's areas belong to a house of the row's own ``n_Storey``. The request's
+    conditioned floor area is kept -- every row area is already scaled to it -- and spread over
+    the stated number of storeys instead, which gives the house another footprint. The geometry
+    rule, with ``n0`` the row's storeys and ``n`` the stated ones:
+
+    * **Roof and floor** are the footprint: the same floor area over ``n`` storeys instead of
+      ``n0`` makes it ``n0 / n`` times as large, and the roof and the ground floor (or the ceiling
+      to a cold attic, or the floor over a cellar -- whatever TABULA's ``A_Roof`` and ``A_Floor``
+      hold) with it.
+    * **Facade** is perimeter x storey height x storeys. The row's storey height is kept, and so is
+      its footprint's shape -- its aspect ratio, so the perimeter grows with the square root of the
+      footprint. The perimeter is therefore ``sqrt(n0 / n)`` times the row's, the height ``n / n0``
+      times, and the facade ``sqrt(n / n0)`` times: 1.414 for a one-storey row stated as two,
+      0.707 for a two-storey row stated as one. Neither the perimeter nor ``h_room`` is needed;
+      they cancel. The factor is applied to the opaque wall area ``A_Wall`` TABULA lists, not to a
+      gross facade from which the openings would then be subtracted: the openings stay (below), and
+      treating them as a constant share of the facade keeps the wall area positive for every factor
+      at the cost of a second-order error.
+    * **Windows and door** keep the row's area. TABULA sizes the windows of a typology in proportion
+      to its reference floor area (``A_Estim_Window`` is about 0.16 x ``A_C_Ref`` across the Irish
+      rows), because glazing follows the rooms it lights, and the floor area does not change; a
+      dwelling keeps its one entrance door however many storeys it has.
+
+    An area the request states always wins over the corrected one; the translator only writes a
+    corrected area for an element whose area the request leaves out. A stated storey count equal
+    to the row's is no correction at all, so such a request translates exactly as before.
+
+    Args:
+        archetype_storeys: The row's ``n_Storey``.
+        stated_storeys: ``house.building.number_of_storeys``.
+    """
+
+    archetype_storeys: float
+    stated_storeys: int
+
+    #: The elements whose area follows the footprint.
+    FOOTPRINT_ELEMENTS: ClassVar[Tuple[ThermalElement, ...]] = (ThermalElement.ROOF, ThermalElement.FLOOR)
+
+    #: The one element whose area follows the facade.
+    FACADE_ELEMENTS: ClassVar[Tuple[ThermalElement, ...]] = (ThermalElement.FACADE,)
+
+    #: The ``BuildingConfig`` suffix of an element area field, which is also the attribute
+    #: ``BuildingInformation`` exposes the area under.
+    AREA_SUFFIX: ClassVar[str] = "_area_in_m2"
+
+    @classmethod
+    def config_field(cls, element: ThermalElement) -> str:
+        """Return the ``BuildingConfig`` field holding one element's area."""
+        return f"{element.value}{cls.AREA_SUFFIX}"
+
+    def is_identity(self) -> bool:
+        """Return whether the stated storeys are the row's own, which corrects nothing."""
+        return float(self.stated_storeys) == self.archetype_storeys
+
+    def footprint_factor(self) -> float:
+        """Return the factor the roof and the floor area are multiplied by, ``n0 / n``."""
+        return self.archetype_storeys / self.stated_storeys
+
+    def facade_factor(self) -> float:
+        """Return the factor the facade area is multiplied by, ``sqrt(n / n0)``."""
+        return math.sqrt(self.stated_storeys / self.archetype_storeys)
+
+    def factor(self, element: ThermalElement) -> float:
+        """Return the factor one element's area is multiplied by; 1 for the window and the door."""
+        if element in self.FOOTPRINT_ELEMENTS:
+            return self.footprint_factor()
+        if element in self.FACADE_ELEMENTS:
+            return self.facade_factor()
+        return 1.0
+
+    def corrects(self, element: ThermalElement) -> bool:
+        """Return whether the correction changes one element's area."""
+        return not self.is_identity() and element in (*self.FOOTPRINT_ELEMENTS, *self.FACADE_ELEMENTS)
+
+    def corrected_area(self, element: ThermalElement, area_in_m2: float) -> float:
+        """Return one element's row area, as the ``Building`` scales it, for the stated storeys."""
+        return area_in_m2 * self.factor(element)
+
+    def describe(self) -> str:
+        """Return the correction in one phrase for the mapping report."""
+        return (
+            f"the row's n_Storey {self.archetype_storeys:g} becomes {self.stated_storeys}, the same floor "
+            f"area on a footprint {self.footprint_factor():.4g} times as large: roof and floor area "
+            f"x{self.footprint_factor():.4g} (n_Storey / storeys), facade x{self.facade_factor():.4g} "
+            "(sqrt(storeys / n_Storey), the row's footprint shape and storey height kept); window and door "
+            "keep the row's area, which follows the floor area; an area the request states wins"
         )

@@ -12,6 +12,7 @@ a row without door or window geometry was skipped for the nearest band that had 
 the example the specification names on both sides.
 """
 
+import math
 from typing import Optional
 
 import pytest
@@ -22,6 +23,7 @@ from hisim.renovisor.tabula import (
     ArchetypeEnvelope,
     BuildingCode,
     BuildingCodeSelector,
+    StoreyCorrection,
     TabulaIndex,
     TabulaTypology,
     TabulaUnresolvable,
@@ -321,6 +323,72 @@ class TestTheArchetypeEnvelope:
         assert elements[ThermalElement.FLOOR].fixed_adjustment_factor == pytest.approx(0.5)
         for element in (ThermalElement.ROOF, ThermalElement.FACADE, ThermalElement.WINDOW, ThermalElement.DOOR):
             assert elements[element].fixed_adjustment_factor == pytest.approx(1.0)
+
+
+@pytest.mark.base
+class TestTheStoreyCorrection:
+    """hisim-9b0m: the same floor area over another number of storeys, by hand for two Irish rows.
+
+    ``IE.N.SFH.04`` (1950-66) is a one-storey row: A_C_Ref 141.1 m2, roof 137.68 + 17.73, floor
+    136.68 + 17.73, wall 94.08 + 12.3, windows 19.16 + 6.6, door 3.26 m2. ``IE.N.TH.05`` is a
+    two-storey one: A_C_Ref 114.6, roof 47.6 + 31.95, floor 76.62, wall 99.22 m2.
+    """
+
+    def test_the_envelope_carries_the_rows_storeys_and_scaled_areas(self) -> None:
+        """The areas are the Building's own: the row's reference areas times 170 / 141.1."""
+        envelope = ArchetypeEnvelope.of("IE.N.SFH.04.Gen.ReEx.001.001", 170)
+        scale = 170 / 141.1
+
+        assert envelope.number_of_storeys == 1.0
+        assert envelope.area(ThermalElement.ROOF) == pytest.approx((137.68 + 17.73) * scale)
+        assert envelope.area(ThermalElement.FLOOR) == pytest.approx((136.68 + 17.73) * scale)
+        assert envelope.area(ThermalElement.FACADE) == pytest.approx((94.08 + 12.3) * scale)
+        assert envelope.area(ThermalElement.WINDOW) == pytest.approx((19.16 + 6.6) * scale)
+        assert envelope.area(ThermalElement.DOOR) == pytest.approx(3.26 * scale)
+        assert ArchetypeEnvelope.of("IE.N.TH.05.Gen.ReEx.001.001", 170).number_of_storeys == 2.0
+
+    def test_a_bungalow_row_stated_as_two_storeys_halves_its_footprint(self) -> None:
+        """Roof and floor x 1/2, facade x sqrt(2), window and door unchanged."""
+        envelope = ArchetypeEnvelope.of("IE.N.SFH.04.Gen.ReEx.001.001", 170)
+        correction = StoreyCorrection(archetype_storeys=envelope.number_of_storeys, stated_storeys=2)
+        scale = 170 / 141.1
+
+        def corrected(element: ThermalElement) -> float:
+            return correction.corrected_area(element, envelope.area(element))
+
+        assert not correction.is_identity()
+        assert corrected(ThermalElement.ROOF) == pytest.approx(187.24096385542168 / 2)
+        assert corrected(ThermalElement.ROOF) == pytest.approx(93.6204819277)
+        assert corrected(ThermalElement.FLOOR) == pytest.approx((136.68 + 17.73) * scale / 2)
+        assert corrected(ThermalElement.FACADE) == pytest.approx(106.38 * scale * math.sqrt(2))
+        assert corrected(ThermalElement.FACADE) == pytest.approx(181.2578780304)
+        for element in (ThermalElement.WINDOW, ThermalElement.DOOR):
+            assert corrected(element) == envelope.area(element)
+            assert not correction.corrects(element)
+
+    def test_a_two_storey_row_stated_as_one_doubles_its_footprint(self) -> None:
+        """Roof and floor x 2, facade x sqrt(1/2)."""
+        envelope = ArchetypeEnvelope.of("IE.N.TH.05.Gen.ReEx.001.001", 114.6)
+        correction = StoreyCorrection(archetype_storeys=envelope.number_of_storeys, stated_storeys=1)
+
+        assert correction.footprint_factor() == 2.0
+        assert correction.corrected_area(ThermalElement.ROOF, envelope.area(ThermalElement.ROOF)) == pytest.approx(
+            2 * (47.6 + 31.95)
+        )
+        assert correction.corrected_area(ThermalElement.FLOOR, envelope.area(ThermalElement.FLOOR)) == pytest.approx(
+            2 * 76.62
+        )
+        assert correction.corrected_area(
+            ThermalElement.FACADE, envelope.area(ThermalElement.FACADE)
+        ) == pytest.approx(99.22 / math.sqrt(2))
+
+    def test_the_rows_own_storey_count_corrects_nothing(self) -> None:
+        """Every factor is 1 and nothing is corrected."""
+        correction = StoreyCorrection(archetype_storeys=2.0, stated_storeys=2)
+
+        assert correction.is_identity()
+        assert all(correction.factor(element) == 1.0 for element in ThermalElement)
+        assert not any(correction.corrects(element) for element in ThermalElement)
 
 
 @pytest.mark.base

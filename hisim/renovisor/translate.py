@@ -56,7 +56,7 @@ from hisim.renovisor.constants import (
 )
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import House, Request, SemanticChecks
-from hisim.renovisor.tabula import ArchetypeEnvelope, BuildingCode
+from hisim.renovisor.tabula import ArchetypeEnvelope, BuildingCode, StoreyCorrection
 from hisim.renovisor.vocabulary import (
     HeatDistributionType,
     HeatGenerator,
@@ -1326,8 +1326,9 @@ def _envelope(state: _TranslationState) -> None:
     )
     _report_archetype(state, code)
     _report_variant(state, code, archetype)
+    storeys = _storeys(state, archetype)
     for element in ThermalElement:
-        _element(state, element, archetype)
+        _element(state, element, archetype, storeys)
     state.write(
         Targets.BUILDING,
         Targets.SET_HEATING_TEMPERATURE,
@@ -1412,13 +1413,69 @@ def _report_variant(state: _TranslationState, code: BuildingCode, archetype: Arc
     state.report.defaulted(path, status.value if status is not None else code.variant, note=note, target=target)
 
 
-def _element(state: _TranslationState, element: ThermalElement, archetype: ArchetypeEnvelope) -> None:
+def _storeys(state: _TranslationState, archetype: ArchetypeEnvelope) -> Optional[StoreyCorrection]:
+    """Report ``number_of_storeys`` and return the correction it makes of the row's areas (hisim-9b0m).
+
+    The stated count reshapes the row's envelope by :class:`StoreyCorrection`; :func:`_element`
+    writes the corrected roof, floor and facade areas for every element whose area the request
+    leaves out. A count equal to the row's ``n_Storey`` corrects nothing, and an absent one keeps
+    the row's.
+
+    Returns:
+        The correction, or ``None`` when the request states no storey count.
+    """
+    path = "house.building.number_of_storeys"
+    stated = state.house.building.number_of_storeys
+    targets = ", ".join(
+        Targets.describe(Targets.BUILDING, Targets.element_area(element))
+        for element in (*StoreyCorrection.FOOTPRINT_ELEMENTS, *StoreyCorrection.FACADE_ELEMENTS)
+    )
+    if stated is None:
+        state.report.defaulted(
+            path,
+            archetype.number_of_storeys,
+            note=(
+                f"absent from the request; the TABULA row {archetype.code}'s n_Storey "
+                f"{archetype.number_of_storeys:g} stands, and with it the row's roof, floor and facade areas"
+            ),
+            target=Targets.describe_constructor(Targets.BUILDING, "for_tabula_code", "building_code"),
+        )
+        return None
+    correction = StoreyCorrection(archetype_storeys=archetype.number_of_storeys, stated_storeys=stated)
+    if correction.is_identity():
+        note = (
+            f"the TABULA row {archetype.code}'s own n_Storey, so its roof, floor and facade areas stand"
+        )
+    else:
+        stated_elements = [
+            element.value
+            for element in (*StoreyCorrection.FOOTPRINT_ELEMENTS, *StoreyCorrection.FACADE_ELEMENTS)
+            if state.house.element(element.value).area_in_m2 is not None
+        ]
+        kept = f"; the request states the {', '.join(stated_elements)} area, which is not corrected" if (
+            stated_elements
+        ) else ""
+        note = f"{correction.describe()}{kept}"
+    state.report.used(path, targets, value=stated, note=note)
+    return correction
+
+
+def _element(
+    state: _TranslationState,
+    element: ThermalElement,
+    archetype: ArchetypeEnvelope,
+    storeys: Optional[StoreyCorrection] = None,
+) -> None:
     """Write one envelope element's U-value and area, and report both plus its extra fields.
 
     A U-value the renovated house carries -- the request's, or one a measure wrote -- is written
     and fixes the element's transmission adjustment factor. One it does not carry leaves the config
     field unset, so the ``Building`` keeps the TABULA row's U-value and adjustment factor; the
     line names the value it will use, as the ``Building`` computes it (:class:`ArchetypeEnvelope`).
+
+    An area the request states is written as stated. One it leaves out is the row's area scaled
+    to the conditioned floor area, which the ``Building`` computes itself -- unless the stated
+    number of storeys corrects it (``storeys``), in which case the corrected area is written.
     """
     block = state.house.element(element.value)
     u_path = f"house.building.{element.value}.u_value_in_watt_per_m2_per_kelvin"
@@ -1481,6 +1538,30 @@ def _element(state: _TranslationState, element: ThermalElement, archetype: Arche
             area_path,
             Targets.describe(Targets.BUILDING, Targets.element_area(element)),
             value=block.area_in_m2,
+        )
+    elif storeys is not None and storeys.corrects(element):
+        area = storeys.corrected_area(element, archetype.area(element))
+        state.write(
+            Targets.BUILDING,
+            Targets.element_area(element),
+            area,
+            source="house.building.number_of_storeys",
+            note=(
+                f"the TABULA row's scaled area {archetype.area(element):g} m2 times "
+                f"{storeys.factor(element):.4g} for {storeys.stated_storeys} storeys instead of "
+                f"the row's {storeys.archetype_storeys:g}"
+            ),
+        )
+        state.report.defaulted(
+            area_path,
+            area,
+            note=(
+                f"absent from the request; the archetype's own area, scaled to the conditioned floor "
+                f"area ({archetype.area(element):g} m2), times {storeys.factor(element):.4g} for "
+                f"house.building.number_of_storeys {storeys.stated_storeys} instead of the row's "
+                f"n_Storey {storeys.archetype_storeys:g}"
+            ),
+            target=Targets.describe(Targets.BUILDING, Targets.element_area(element)),
         )
     else:
         state.report.defaulted(

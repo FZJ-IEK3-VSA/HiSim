@@ -23,10 +23,6 @@
 
 # --- The building ---------------------------------------------------------------------------
 
-- path: house.building.number_of_storeys
-  note: The archetype's n_Storey is used.
-  tracked: hisim-9b0m
-
 - path: house.building.window.outside_shading
   note: No shading parameter on Building.
   tracked: hisim-l77d

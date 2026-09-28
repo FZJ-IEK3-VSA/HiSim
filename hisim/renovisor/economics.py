@@ -1142,12 +1142,17 @@ class EconomicContextBuilder:
         "one, the TABULA row's area scaled to the conditioned floor area when it does not"
     )
 
-    #: The two origins of an envelope subject's size, which its ``override_source`` names beside
+    #: The three origins of an envelope subject's size, which its ``override_source`` names beside
     #: the cost block (renovisorissues #61). ``{path}`` is the request's area leaf.
     AREA_STATED_ORIGIN: ClassVar[str] = "the element's area as the request states it ({path})"
     AREA_TABULA_ORIGIN: ClassVar[str] = (
         "the element's area as the Building simulates it: absent from the request ({path}), so the "
         "TABULA row's area scaled to the conditioned floor area"
+    )
+    AREA_STOREYS_ORIGIN: ClassVar[str] = (
+        "the element's area as the Building simulates it: absent from the request ({path}), so the "
+        "TABULA row's area scaled to the conditioned floor area and corrected to the stated number of "
+        "storeys (house.building.number_of_storeys)"
     )
 
     #: What the build refuses with when a priced envelope subject's element has no area at all.
@@ -2240,8 +2245,13 @@ class EconomicContextBuilder:
     def _area_origin(self, element: ThermalElement) -> str:
         """Where one element's area came from, in the words an ``override_source`` carries."""
         path = f"house.building.{element.value}.{self.ELEMENT_AREA_KEY}"
-        stated = self._envelope.stated_area(element) is not None
-        return (self.AREA_STATED_ORIGIN if stated else self.AREA_TABULA_ORIGIN).format(path=path)
+        if self._envelope.stated_area(element) is None:
+            return self.AREA_TABULA_ORIGIN.format(path=path)
+        # The config carries an area the request did not state only when the translator corrected
+        # the row's area for the stated number of storeys (hisim-9b0m).
+        if self._raw_element(element).get(self.ELEMENT_AREA_KEY) is None:
+            return self.AREA_STOREYS_ORIGIN.format(path=path)
+        return self.AREA_STATED_ORIGIN.format(path=path)
 
     def _living_area(self, result: Optional[EconomicContextResult] = None) -> Optional[float]:
         """The dwelling's living area: the request's own, else the conditioned floor area.

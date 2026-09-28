@@ -286,6 +286,12 @@ class ComponentCostFacts:
     # energy-management controller lives and is renewed with the battery (renovisorissues #77).
     # The engine reads that class's `service_life_in_years`; `lifetime_override_in_years` still wins.
     lifetime_of_asset_class: Optional[ComponentType] = None
+    # True for a subject matched only against the register entry bound to its own name
+    # (`ExistingAsset.subject`), and bought new when the register binds none to it, whatever else
+    # the register holds of its class. Only the staged evaluator sets it, for the increment a later
+    # stage adds to a subject the house keeps (hisim-1y0m): a same-class lookup would find the
+    # enlarged asset and call the increment kept. Every other subject ignores bound entries.
+    own_register_entry: bool = False
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).
     technical_attributes: Dict[str, Any] = field(default_factory=dict)
 
@@ -600,6 +606,11 @@ class ExistingAsset:
     #: falls one service life after its purchase; replaced, its age in the year the replacing stage
     #: starts, which is when it is written off and when the anyway-cost test is taken.
     stated_age_in_years: Optional[int] = None
+    #: The cost subject this entry is bound to, or `None` for an entry any subject of its class
+    #: matches (every register of a house). Only the staged evaluator binds one: the increment a
+    #: later stage bought for a kept subject, which is matched by that increment's subject alone
+    #: (`ComponentCostFacts.own_register_entry`, hisim-1y0m), so it ages beside the unit it enlarges.
+    subject: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validation: normalizes the replacement-cost override and rejects impossible inputs.

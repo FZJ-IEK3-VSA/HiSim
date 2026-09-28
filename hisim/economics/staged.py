@@ -65,6 +65,7 @@ from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import (
     EconomicEvaluator,
     EvaluationInputs,
+    SubjectCostFacts,
     effective_price_basis_year,
 )
 from hisim.economics.financing import FinancingPlan
@@ -311,7 +312,7 @@ class _StageCharges:
     leaves_house_in: Mapping[str, int] = field(default_factory=dict)
 
     def share_of(self, subject: str) -> float:
-        """How much of one subject's year-0 figure this stage pays: 1.0, an increment, or none."""
+        """How much of one subject's year-0 figure this stage pays: all of it or none."""
         if subject in self.charged:
             return self.charged[subject]
         return 0.0 if subject in self.carried_over else 1.0
@@ -454,6 +455,35 @@ class InvestmentOverride:
         return None
 
 
+class IncrementSubjects:
+    """The subject a later stage's enlargement of a kept subject is bought as (hisim-1y0m).
+
+    A stage that enlarges something the house keeps -- a 5 kWp array grown to 8 kWp -- buys the
+    increment, 3 kWp, as a purchase of its own: priced as a new unit of that size, escalated to the
+    stage's year, with its own life and replacements, while the unit it enlarges keeps ageing on
+    its own schedule (owner decision 2026-09-28). The engine prices one subject per name, so the
+    increment gets a name of its own, formed here and nowhere else, and the document shows it as a
+    row of its own beside the subject it enlarges, with that subject's measure.
+    """
+
+    #: The increment's subject: the enlarged subject and the stage that bought the increment.
+    NAME: ClassVar[str] = "{subject}#increment_stage{stage}"
+
+    #: What separates the two in :attr:`NAME`.
+    SEPARATOR: ClassVar[str] = "#increment_stage"
+
+    @classmethod
+    def name(cls, subject: str, stage: int) -> str:
+        """The subject of the increment stage ``stage`` adds to ``subject``."""
+        return cls.NAME.format(subject=subject, stage=stage)
+
+    @classmethod
+    def base_of(cls, subject: str) -> Optional[str]:
+        """The subject an increment enlarges, or ``None`` for a subject that is no increment."""
+        base, separator, stage = subject.rpartition(cls.SEPARATOR)
+        return base if separator and base and stage.isdigit() else None
+
+
 @dataclass(frozen=True)
 class Stage:
     """One state of the house, the year the plan puts it in, and what got it there.
@@ -501,14 +531,17 @@ class StagedResult:
             ordinary evaluation is.
         comparison: ``results.compare(reference, plan, "reference", "plan")``; deltas are
             plan minus reference, slot-wise, so a negative NPV delta means the plan is cheaper.
-        stages: The stages as they were given, in order.
+        stages: The stages as they were priced, in order: as given, except that a subject a stage
+            enlarges is carried as the unit it had plus one :class:`IncrementSubjects` subject per
+            enlargement (:meth:`StagedEvaluator.split_increments`, hisim-1y0m).
         per_stage: Each stage evaluated alone over the full horizon, in stage order. Stage ``k``'s
             evaluation already carries the merged ageing register of every stage before it. All of
             them, and therefore ``reference`` and ``plan`` too, carry the *same* provenance ledger
             (:attr:`ledger`), so an id means one record wherever in the result it appears.
         charged_subjects_by_stage: Which cost subjects each stage pays for, and at which share of
-            the stage's own year-0 figure — 1.0 for a subject new in the stage, the size increment
-            for one that grew, and absent for a subject carried over unchanged.
+            the stage's own year-0 figure — 1.0 for a subject new in the stage, including the
+            increment of one that grew, which is a subject of its own (:class:`IncrementSubjects`),
+            and absent for a subject carried over unchanged.
         active_stage_by_year: The index of the stage the house is in, one entry per horizon year
             0..T. Computed once while the plan is priced and read back by
             :meth:`stage_of_year`, so the supersession rule (the last stage whose ``from_year``
@@ -883,6 +916,10 @@ class StagedEvaluator:
         self._validate(ordered, parameters)
         basis_year_origin: Optional[EchoOrigin] = None
         self._validate_overrides(ordered, overrides)
+        # An enlargement of a kept subject is bought as its own subject (hisim-1y0m); from here on
+        # every stage carries it so, and a quote for the enlarged subject prices the increment.
+        ordered = self.split_increments(ordered)
+        overrides = self._quotes_on_increments(ordered, overrides)
         if parameters.price_basis_year is None and plan_start_year is not None:
             # Resolved once, here, so every stage's evaluation reads the same basis year and the
             # engine's own fallback to the simulation year never runs inside this plan. The one
@@ -937,8 +974,8 @@ class StagedEvaluator:
             quotes = [override for override in overrides if override.stage == index]
             charged = self._charged_subjects(ordered, index)
             for override in quotes:
-                # The quote is the stage's whole job, so the stage pays all of it -- also where it
-                # only enlarges a subject the stage before already had.
+                # The quote is the stage's whole job, so the stage pays all of it; where the stage
+                # enlarges a subject, the quote already names the increment (`_quotes_on_increments`).
                 charged[override.main_subject] = 1.0
             inputs = self._staged_inputs(ordered, index, charged_by_stage, year_zero)
             inputs, purchases = self._quoted_inputs(inputs, quotes)
@@ -1544,16 +1581,154 @@ class StagedEvaluator:
 
         The public face of the rule, for a caller that has to know before pricing whether a stage
         buys anything for a measure -- the staged command refusing a quote for a measure a stage
-        only carries over.
+        only carries over. Asked of the stages as given: a subject the stage enlarges is listed
+        under its own name, since the stage buys its increment (:class:`IncrementSubjects`).
 
         Args:
-            stages: The plan.
+            stages: The plan, as given.
             index: The stage.
 
         Returns:
             Subject name -> the share of its year-0 flows the stage pays.
         """
-        return cls._charged_subjects(tuple(stages), index)
+        charged = cls._charged_subjects(cls.split_increments(tuple(stages)), index)
+        return {IncrementSubjects.base_of(subject) or subject: share for subject, share in charged.items()}
+
+    @classmethod
+    def split_increments(cls, stages: Sequence[Stage]) -> Tuple[Stage, ...]:
+        """The plan with every enlargement of a kept subject carried as a subject of its own (hisim-1y0m).
+
+        A stage whose subject is larger than the stage before's, under the same asset class, not
+        newly replaced and not grown out of a size of zero (:meth:`_charged_subjects` buys those
+        whole), keeps the unit it had and buys the difference: its cost facts carry the subject at
+        the size it had and one :class:`IncrementSubjects` subject per enlargement, each at its
+        own size. Every later stage that holds the subject at that size carries the same pieces,
+        so each ages on its own schedule; a stage that no longer has the subject, replaces it or
+        shrinks it carries it whole again, as stated, and the increments leave the plan with it.
+
+        A piece's facts are the stage's facts for the subject at the piece's size, so a
+        database-priced subject is priced by the database's law for that size -- device cost
+        ``specific x size`` (or ``specific x size^exponent``) plus the entry's fixed installation
+        and planning cost, which a separate purchase incurs again -- and an
+        ``investment_cost_override_in_euro`` or embodied-CO2 override, which states the whole
+        subject's figure and no law, is split in proportion to size. An increment's facts say
+        ``own_register_entry``: it is bought new in the stage that adds it, and kept on its own
+        register entry after that.
+
+        Args:
+            stages: The plan, as given.
+
+        Returns:
+            The plan with the split cost facts; a stage with nothing split is returned as it was,
+            so a plan without enlargements is the plan as given.
+        """
+        split: List[Stage] = []
+        held: Dict[str, List[Tuple[str, float]]] = {}
+        for index, stage in enumerate(stages):
+            previous = {facts.subject: facts.facts for facts in stages[index - 1].inputs.cost_facts} if index else {}
+            replaced = cls._newly_replaced_classes(tuple(stages), index) if index else frozenset()
+            pieces: Dict[str, List[Tuple[str, float]]] = {}
+            cost_facts: List[SubjectCostFacts] = []
+            for subject_facts in stage.inputs.cost_facts:
+                subject, facts = subject_facts.subject, subject_facts.facts
+                before = previous.get(subject)
+                if before is None or subject not in held or cls._held_whole(before, facts, replaced):
+                    pieces[subject] = [(subject, facts.size)]
+                elif facts.size > before.size:
+                    pieces[subject] = held[subject] + [
+                        (IncrementSubjects.name(subject, index), facts.size - before.size)
+                    ]
+                else:
+                    pieces[subject] = held[subject]
+                cost_facts.extend(cls._piece_facts(subject_facts, pieces[subject]))
+            held = pieces
+            if len(cost_facts) == len(stage.inputs.cost_facts):
+                split.append(stage)
+            else:
+                split.append(replace(stage, inputs=replace(stage.inputs, cost_facts=cost_facts)))
+        return tuple(split)
+
+    @staticmethod
+    def _held_whole(before: ComponentCostFacts, facts: ComponentCostFacts, replaced: FrozenSet[ComponentType]) -> bool:
+        """Whether a subject the stage before also had is one unit again rather than grown pieces.
+
+        Bought whole -- another class, a newly replaced class, grown out of a size of zero
+        (:meth:`_charged_subjects`) -- or shrunk, which leaves nothing an increment could describe.
+        """
+        return (
+            before.asset_class != facts.asset_class
+            or facts.asset_class in replaced
+            or before.size <= 0.0
+            or facts.size < before.size
+        )
+
+    @staticmethod
+    def _piece_facts(subject_facts: SubjectCostFacts, pieces: List[Tuple[str, float]]) -> List[SubjectCostFacts]:
+        """One subject's cost facts split into its pieces, each at its own size (:meth:`split_increments`).
+
+        Args:
+            subject_facts: The stage's facts for the whole subject.
+            pieces: ``(subject, size)`` per piece, the unit it enlarges first; the sizes sum to
+                the subject's.
+
+        Returns:
+            The facts as given for a subject of one piece, else one facts record per piece.
+        """
+        if len(pieces) == 1:
+            return [subject_facts]
+        facts = subject_facts.facts
+        split: List[SubjectCostFacts] = []
+        for name, size in pieces:
+            share = size / facts.size
+            investment = facts.investment_cost_override_in_euro
+            embodied = facts.embodied_co2_override_in_kg
+            split.append(
+                SubjectCostFacts(
+                    name,
+                    replace(
+                        facts,
+                        size=size,
+                        investment_cost_override_in_euro=investment.scale(share) if investment is not None else None,
+                        embodied_co2_override_in_kg=embodied * share if embodied is not None else None,
+                        own_register_entry=name != subject_facts.subject,
+                    ),
+                )
+            )
+        return split
+
+    @staticmethod
+    def _quotes_on_increments(
+        stages: Tuple[Stage, ...], overrides: Tuple[InvestmentOverride, ...]
+    ) -> Tuple[InvestmentOverride, ...]:
+        """The quotes with every subject a stage enlarges replaced by that stage's increment (hisim-1y0m).
+
+        A quote is the stage's whole job for the measure, and what the stage buys of an enlarged
+        subject is its increment: the quote replaces the increment's price exactly, and the unit
+        it enlarges, bought earlier, is not re-priced.
+
+        Args:
+            stages: The plan, split (:meth:`split_increments`).
+            overrides: The quotes, validated.
+
+        Returns:
+            The quotes, re-pointed where a subject is enlarged in the quote's stage.
+        """
+        resolved: List[InvestmentOverride] = []
+        for override in overrides:
+            subjects = {facts.subject for facts in stages[override.stage].inputs.cost_facts}
+
+            def bought(subject: str, stage: int = override.stage, held: Set[str] = subjects) -> str:
+                increment = IncrementSubjects.name(subject, stage)
+                return increment if increment in held else subject
+
+            resolved.append(
+                replace(
+                    override,
+                    main_subject=bought(override.main_subject),
+                    other_subjects=tuple(bought(subject) for subject in override.other_subjects),
+                )
+            )
+        return tuple(resolved)
 
     # ------------------------------------------------------------------ per-stage inputs
 
@@ -1562,10 +1737,12 @@ class StagedEvaluator:
         """Which subjects stage ``index`` pays for, and at what share of its own year-0 figure.
 
         E-spec §1.2 item 2: a subject is charged when it is present in ``S_k`` and absent from
-        ``S_{k-1}`` under the same asset class, or present in both but larger, in which case only
-        the increment is charged. A subject carried over unchanged is not charged again, and is
-        absent from the returned mapping rather than present with a zero, so "did this stage buy
-        this" is one membership test.
+        ``S_{k-1}`` under the same asset class. A subject carried over unchanged is not charged
+        again, and is absent from the returned mapping rather than present with a zero, so "did
+        this stage buy this" is one membership test. Asked of the split plan
+        (:meth:`split_increments`), where a subject the stage enlarges keeps its size and the
+        increment is a subject of its own, new in the stage and charged whole (hisim-1y0m); a
+        subject that grows without being split -- one shrunk and regrown -- is carried over.
 
         The increment is only for something the house *keeps* and enlarges. Anything the stage's
         inventory declares *replaced*, where the stage before declared no such replacement
@@ -1588,7 +1765,7 @@ class StagedEvaluator:
 
         Returns:
             Subject name -> the share of that subject's year-0 investment-class flows the stage
-            pays, in ``(0, 1]``.
+            pays: 1.0 for every subject it buys.
         """
         current = {facts.subject: facts.facts for facts in stages[index].inputs.cost_facts}
         if index == 0:
@@ -1607,8 +1784,6 @@ class StagedEvaluator:
                 # out of it is not an enlargement of something that was there — it is the whole
                 # device, bought now, and the stage pays for all of it.
                 charged[subject] = 1.0
-            elif facts.size > before.size:
-                charged[subject] = (facts.size - before.size) / facts.size
         return charged
 
     @classmethod
@@ -1715,7 +1890,7 @@ class StagedEvaluator:
         newly_charged_classes = {
             facts_by_subject[subject].asset_class
             for subject in self._charged_subjects(stages, index)
-            if subject in facts_by_subject
+            if subject in facts_by_subject and not facts_by_subject[subject].own_register_entry
         }
         installed_classes: Set[ComponentType] = set()
         aged: Dict[str, ExistingAsset] = {}
@@ -1736,6 +1911,22 @@ class StagedEvaluator:
                     # (`ComponentCostFacts` allows the zero and means exactly that), and
                     # `ExistingAsset` refuses a size of zero. Nothing was put in the building, so
                     # nothing ages into the next stage's register.
+                    continue
+                if facts.own_register_entry:
+                    # An increment (hisim-1y0m) ages on an entry bound to it, beside the unit it
+                    # enlarged, which it neither hides nor replaces. It leaves with that unit: a
+                    # stage that no longer carries it has replaced, shrunk or removed the subject.
+                    if subject in facts_by_subject:
+                        aged[subject] = ExistingAsset(
+                            asset_class=facts.asset_class,
+                            size=facts.size,
+                            size_unit=facts.size_unit,
+                            installation_year=plan_year_zero + stages[earlier].from_year,
+                            is_functional=True,
+                            installation_year_origin=InstallationYearOrigin.STAGE,
+                            stated_age_in_years=-stages[earlier].from_year,
+                            subject=subject,
+                        )
                     continue
                 installed_classes.add(facts.asset_class)
                 replaced = subject not in facts_by_subject and facts.asset_class in newly_charged_classes
@@ -2143,7 +2334,11 @@ class StagedEvaluator:
             year_origin: Optional[InstallationYearOrigin] = InstallationYearOrigin.STAGE
             if index == 0 or subject_facts.subject not in charged:
                 kept = installation_verdict(
-                    facts.asset_class, perspective.installation_context, inputs.existing_assets
+                    facts.asset_class,
+                    perspective.installation_context,
+                    inputs.existing_assets,
+                    subject_facts.subject,
+                    facts.own_register_entry,
                 ).kept_asset
                 if kept is not None:
                     year, year_origin = kept.installation_year, kept.installation_year_origin

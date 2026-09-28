@@ -47,7 +47,7 @@ from hisim.economics.facts import ComponentCostFacts
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
-from hisim.economics.staged import InvestmentOverride, StagedEvaluator, StagedResult
+from hisim.economics.staged import IncrementSubjects, InvestmentOverride, StagedEvaluator, StagedResult
 from hisim.economics.staged_parameters import StagedParameters, StatedQuote
 from hisim.economics.subsidies import PayoutKind, SchemeMaximum, SchemeMaximumNotes, SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
@@ -377,6 +377,13 @@ class StagedDocument:
         self._parameters = parameters
         self._perspective = perspective
         self._measure_ids: Dict[str, Optional[str]] = dict(measure_ids or {})
+        # An increment a later stage bought for a kept subject is that subject's measure too
+        # (hisim-1y0m): its row sits beside the subject it enlarges, under the same measure.
+        for stage in result.stages:
+            for subject_facts in stage.inputs.cost_facts:
+                base = IncrementSubjects.base_of(subject_facts.subject)
+                if base is not None and base in self._measure_ids:
+                    self._measure_ids.setdefault(subject_facts.subject, self._measure_ids[base])
         self._has_measure_map = measure_ids is not None
         self._unpriced: Set[str] = set(unpriced_subjects)
         self._costless: Set[str] = set(costless_subjects)

@@ -5,7 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Hard rules
 
 - **Todos live in beads (`br`)**, never in markdown lists: `br ready` to find work, `br create` for a
-  new finding, `br close` when done, `br sync --flush-only` before committing. See AGENTS.md.
+  new finding, `br close` when done, `br sync --flush-only` before committing. Every bead follows the
+  schema in AGENTS.md, "Beads schema": one kind, one area label, a priority with a fixed meaning
+  (P0 production broken … P4 idea), a parent epic, and queue labels (`owner-decision`, `external`,
+  `needs-triage`). See AGENTS.md.
 
 - **NEVER publish Claude artifacts** (Artifact tool, claude.ai-hosted pages) unless the user
   EXPLICITLY orders it in the current request. Deliverables are files in this repository —

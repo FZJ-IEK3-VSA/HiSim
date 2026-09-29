@@ -489,6 +489,11 @@ class PostProcessor:
             log.information("Write all KPIs to json file.")
             self.write_kpis_to_json_file(ppdt)
 
+        # Last, so every other output is written when strict mode fails the run on a balance that does not close
+        if PostProcessingOptions.EXPORT_ENERGY_BALANCE in ppdt.post_processing_options:
+            log.information("Checking the energy balances and writing the Sankeys.")
+            self.export_sankeys(ppdt)
+
         log.information("Finished main post processing function.")
 
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> List[SystemChartEntry]:
@@ -985,12 +990,21 @@ class PostProcessor:
         else:
             log.information("Not on Windows. Can't open explorer.")
 
-    def export_sankeys(self):
-        """Exports Sankeys plots.
+    def export_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Check every component's energy balance and write the report and the Sankeys per carrier.
 
-        ToDo: implement
+        Writes ``balance_report.json`` and ``energy_sankeys/`` into the result directory
+        (:mod:`hisim.postprocessing.energy_balance`); with ``HISIM_ENERGY_BALANCE=strict`` a balance that does
+        not close fails the run.
         """
-        pass  # noqa: unnecessary-pass
+        from hisim.postprocessing.energy_balance import EnergyBalanceReport  # pylint: disable=import-outside-toplevel
+
+        EnergyBalanceReport(
+            results=ppdt.results,
+            all_outputs=ppdt.all_outputs,
+            wrapped_components=ppdt.wrapped_components,
+            seconds_per_timestep=ppdt.simulation_parameters.seconds_per_timestep,
+        ).write(ppdt.simulation_parameters.result_directory)
 
     @utils.measure_execution_time
     def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:

@@ -74,7 +74,8 @@ The `post_processing_options` array accepts any combination of the following str
 | ------------------------------------------------- | ------------------------------------------------------------------- |
 | `PLOT_LINE`                                     | Line plots for all outputs                                          |
 | `PLOT_CARPET`                                   | Carpet plots (heat maps over time)                                  |
-| `PLOT_SANKEY`                                   | Sankey energy flow diagram                                          |
+| `PLOT_SANKEY`                                   | Reserved; draws nothing (see `EXPORT_ENERGY_BALANCE`)               |
+| `EXPORT_ENERGY_BALANCE`                         | Per-component energy balance (`balance_report.json`) and a Sankey per energy carrier (`energy_sankeys/`); `HISIM_ENERGY_BALANCE=strict` fails the run on a balance that does not close |
 | `PLOT_SINGLE_DAYS`                              | Detailed plots for representative single days                       |
 | `PLOT_MONTHLY_BAR_CHARTS`                       | Monthly bar charts for key outputs                                  |
 | `PLOT_SPECIAL_TESTING_SINGLE_DAY`               | Single-day plots used in automated testing                          |

@@ -736,7 +736,6 @@ class HydrogenStorage(Component):
             field_name=HydrogenStorage.DischargingHydrogenAmountReal,
             load_type=lt.LoadTypes.GREEN_HYDROGEN,
             unit=lt.Units.KG_PER_SEC,
-            sankey_flow_direction=False,
             output_description="Discharging Hydrogen Amount Real",
         )
 

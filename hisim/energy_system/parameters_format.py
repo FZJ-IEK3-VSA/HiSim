@@ -162,6 +162,7 @@ class ParameterFileName:
         ),
         ("costs", ("COMPUTE_OPEX", "COMPUTE_CAPEX")),
         ("lifecycle", ("COMPUTE_LIFECYCLE_COSTS", "LIFECYCLE_COST_REPORT")),
+        ("balance", ("EXPORT_ENERGY_BALANCE",)),
         (
             "plots",
             (

@@ -67,7 +67,7 @@ from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.layers import SimulatedEnvelope, positive_number
 from hisim.renovisor.report import MappingReport
-from hisim.renovisor.request import House, Measure, Request
+from hisim.renovisor.request import House, Measure, Request, SemanticChecks
 from hisim.renovisor.simulation import SimulationSetup
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError
@@ -111,10 +111,8 @@ class GeneratorAssets:
         HeatGenerator.CONDENSING_GAS_HEATING: (ComponentType.GAS_HEATER, EnergyCarrier.NATURAL_GAS),
         HeatGenerator.CONDENSING_OIL_HEATING: (ComponentType.OIL_HEATER, EnergyCarrier.HEATING_OIL),
         HeatGenerator.CONDENSING_LPG_HEATING: (ComponentType.GAS_HEATER, EnergyCarrier.NATURAL_GAS),
-        # Solid fuel is only ever an *existing* generator; the closest priced class is the
-        # woodchip heater, and the register entry exists so a heating_system measure can replace
-        # something rather than install into an empty cellar.
-        HeatGenerator.SOLID_FUEL_HEATING: (ComponentType.WOOD_CHIP_HEATER, EnergyCarrier.WOOD_CHIPS),
+        # solid_fuel_heating has no row: HiSim has no coal or peat carrier, so the request
+        # validation refuses it by name (SemanticChecks.UNSUPPORTED_GENERATORS).
     }
 
     @classmethod
@@ -128,9 +126,13 @@ class GeneratorAssets:
             ``(asset class, energy carrier)``.
 
         Raises:
-            KeyError: If the vocabulary has grown a generator this table does not know, which is
-                a translator bug and not a bad request.
+            TranslatorError: If the generator has no row, naming it. Either the request validation
+                refuses it (``SemanticChecks.UNSUPPORTED_GENERATORS``) and the request reached the
+                translator without :meth:`Request.parse`, or the vocabulary has grown a generator
+                this table does not know; both are translator bugs and not a bad request.
         """
+        if generator not in cls.BY_GENERATOR:
+            raise TranslatorError(SemanticChecks.missing_row_message(generator, "no asset class and carrier"))
         return cls.BY_GENERATOR[generator]
 
 

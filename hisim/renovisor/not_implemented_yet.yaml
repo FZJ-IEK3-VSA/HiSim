@@ -87,6 +87,9 @@
 
 # --- Heating --------------------------------------------------------------------------------
 
+# solid_fuel_heating (peat, coal) is on neither side of this entry: HiSim has no coal or peat
+# carrier yet, so the request validation refuses it by name (`heating.type_of_system.unsupported`,
+# request.py SemanticChecks.UNSUPPORTED_GENERATORS) and no translation ever meets it.
 - path: house.heating.type_of_system
   except:
     - air_source_heat_pump
@@ -100,7 +103,6 @@
     - conventional_oil_heating
     - condensing_gas_heating
     - condensing_oil_heating
-    - solid_fuel_heating
   note: No brine/water heat-pump preset, no hybrid twin and no LPG or HVO fuel in HiSim; modelled as the nearest implemented generator.
   tracked: [hisim-ztt7, hisim-epc.20, hisim-kdvg, hisim-epc.19]
 
@@ -117,10 +119,27 @@
   note: Boilers have no flow-temperature field.
   tracked: hisim-4g9.4
 
+# A seasonal efficiency is written onto a boiler's efficiency bounds (approximated, translate.py
+# `_efficiency`). The generators below have no efficiency parameter to write it to (renovisorissues
+# #72); a frontend that keeps its 90 % default for them must not lose the whole calculation.
 - path: house.heating.seasonal_efficiency_in_percent
-  when: heating.type_of_system == air_source_heat_pump
+  when: heating.type_of_system in [air_source_heat_pump, ground_source_heat_pump, hybrid_heat_pump]
   note: The heat pump follows its hplib model curve.
   tracked: hisim-f79l
+
+- path: house.heating.seasonal_efficiency_in_percent
+  when: heating.type_of_system == district_heating
+  note: The district-heating substation has no efficiency parameter; the house is billed for the heat
+    it draws from the network.
+  deliberate: District heat is metered and priced as heat delivered at the substation, so a
+    generation efficiency is the network's business and not the house's.
+
+- path: house.heating.seasonal_efficiency_in_percent
+  when: heating.type_of_system == electric_heating
+  note: Direct electric heating turns every kilowatt-hour into heat at the point of use (100 %), so it
+    has no efficiency parameter.
+  deliberate: A resistance heater's efficiency at the point of use is 1 by physics; there is nothing
+    to calibrate.
 
 - path: house.heat_distribution.type_of_system
   when: heating.type_of_system == electric_heating

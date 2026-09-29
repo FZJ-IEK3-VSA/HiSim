@@ -309,6 +309,29 @@ class RequestSchemaBounds:
                 declared[keyword] = candidate[keyword]
         return {keyword: declared[keyword] for keyword in cls.KEYWORDS if keyword in declared}
 
+    #: The numeric fields whose accepted range a semantic check narrows below the schema's, by
+    #: request path: the conditioned floor area HiSim simulates (renovisorissues #75). The living
+    #: area is only checked against the conditioned area, which no fixed range can express, so it
+    #: publishes the schema's bounds.
+    SEMANTIC_RANGES: ClassVar[Dict[str, Tuple[float, float]]] = {
+        f"house.building.{SemanticChecks.FLOOR_AREA_KEY}": SemanticChecks.FLOOR_AREA_RANGE,
+    }
+
+    @classmethod
+    def published(cls, path: str, schema: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        """Return the bounds one request path publishes: the schema's, or the range a semantic check enforces.
+
+        A field of :attr:`SEMANTIC_RANGES` publishes the range the request validation enforces as an
+        inclusive ``minimum``/``maximum``, which replaces the schema's own ends altogether, because a
+        value the schema admits and the check refuses (``range.exceeded``) is not one the frontend
+        may offer. ``tests/renovisor/test_capabilities.py`` keeps every such range inside the
+        schema's. Every other field publishes :meth:`of` unchanged.
+        """
+        if path not in cls.SEMANTIC_RANGES:
+            return cls.of(path, schema)
+        low, high = cls.SEMANTIC_RANGES[path]
+        return {"minimum": low, "maximum": high}
+
 
 class SchemaLeaves:
     """The one walker over the vendored request JSON Schema: local ``$ref``, alternatives, properties.
@@ -718,7 +741,8 @@ class ProbeSet:
     #: schema). ``tests/renovisor/test_capabilities.py`` keeps every point inside the schema.
     FIELD_PROBE_POINTS: ClassVar[Dict[str, Tuple[float, float]]] = {
         "building.construction_year": (1700, 2100),
-        "building.absolute_conditioned_floor_area_in_m2": (1, 400),
+        # The two ends of SemanticChecks.FLOOR_AREA_RANGE, which the field publishes.
+        "building.absolute_conditioned_floor_area_in_m2": SemanticChecks.FLOOR_AREA_RANGE,
         "building.number_of_storeys": (1, 6),
         "building.set_heating_temperature_in_celsius": (12, 28),
         "building.roof.u_value_in_watt_per_m2_per_kelvin": (0.01, 10),
@@ -742,7 +766,8 @@ class ProbeSet:
         "pv_system.tilt": (0, 90),
         "pv_system.shading_losses_in_percent": (0, 100),
         "pv_system.installation_year": (1900, 2100),
-        "building.living_area_in_m2": (30, 400),
+        # At or below the anchor's conditioned floor area (140 m²): a larger living area is refused.
+        "building.living_area_in_m2": (30, 140),
         "building.roof.installation_year": (1900, 2100),
         "building.facade.installation_year": (1900, 2100),
         "building.floor.installation_year": (1900, 2100),
@@ -903,6 +928,28 @@ class ProbeSet:
         "pair:seasonal_efficiency_on_heat_pump": (
             {"heating.type_of_system": "air_source_heat_pump",
              "heating.seasonal_efficiency_in_percent": 300},
+            None,
+        ),
+        # A seasonal efficiency is a boiler's; every generator with no efficiency parameter lists
+        # it (renovisorissues #72), and each announces so as a condition of its own.
+        "pair:seasonal_efficiency_on_ground_source_heat_pump": (
+            {"heating.type_of_system": "ground_source_heat_pump",
+             "heating.seasonal_efficiency_in_percent": 300},
+            None,
+        ),
+        "pair:seasonal_efficiency_on_hybrid_heat_pump": (
+            {"heating.type_of_system": "hybrid_heat_pump",
+             "heating.seasonal_efficiency_in_percent": 300},
+            None,
+        ),
+        "pair:seasonal_efficiency_on_district_heating": (
+            {"heating.type_of_system": "district_heating",
+             "heating.seasonal_efficiency_in_percent": 90},
+            None,
+        ),
+        "pair:seasonal_efficiency_on_electric_heating": (
+            {"heating.type_of_system": "electric_heating",
+             "heating.seasonal_efficiency_in_percent": 90},
             None,
         ),
         "pair:flow_temperature_on_heat_pump": (
@@ -1989,7 +2036,8 @@ class Aggregation:
         value announces the worst case the pair reaches. A numeric
         field (:attr:`FieldShape.NUMERIC`) carries no ``values``: it
         publishes the request schema's ``minimum``/``maximum`` and ``exclusiveMinimum``/
-        ``exclusiveMaximum`` where the schema declares them (:class:`RequestSchemaBounds`) -- never
+        ``exclusiveMaximum`` where the schema declares them, or the narrower range a semantic check
+        enforces (:meth:`RequestSchemaBounds.published`: the conditioned floor area) -- never
         its probe points -- and the probes at both ends count towards its own status, as the
         probes of a free-text field (:attr:`FieldShape.FREE`) count towards its. The report's line
         for a package entry's cost block, ``measures[<position>].cost``, is left out: it is spelled
@@ -2005,7 +2053,7 @@ class Aggregation:
         schema = ContractFiles.request_schema()
         shapes = ProbeSet.field_shapes()
         bounds = {
-            path: RequestSchemaBounds.of(path, schema)
+            path: RequestSchemaBounds.published(path, schema)
             for path, shape in shapes.items()
             if shape is FieldShape.NUMERIC and not path.startswith(cls.PACKAGE_PREFIX)
         }

@@ -24,12 +24,17 @@ from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, Roof
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.layers import SimulatedEnvelope
 from hisim.renovisor.report import MappingReport
-from hisim.renovisor.request import Request
+from hisim.renovisor.request import Request, RequestError, SemanticChecks
 from hisim.renovisor.translate import BaseFiles, Targets, TranslatedSystem, Translator
 from hisim.renovisor.vocabulary import HeatGenerator, ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import Whitelist
 
 BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
+
+#: The generators a request may name and HiSim simulates: all but the refused ones (solid fuel).
+SIMULATED_GENERATORS = [
+    generator for generator in HeatGenerator if generator not in SemanticChecks.UNSUPPORTED_GENERATORS
+]
 
 
 def translate(document: Mapping[str, Any]) -> TranslatedSystem:
@@ -86,9 +91,9 @@ def _entry(system: TranslatedSystem, component: str) -> Any:
 
 @pytest.mark.base
 class TestEveryGenerator:
-    """Seventeen generators, nine twins, and a file that loads for every one of them."""
+    """Sixteen simulated generators, eight base twins, and a file that loads for every one of them."""
 
-    @pytest.mark.parametrize("generator", list(HeatGenerator))
+    @pytest.mark.parametrize("generator", SIMULATED_GENERATORS)
     def test_the_file_loads_back_and_names_the_twins_generator(self, generator: HeatGenerator) -> None:
         """The self-check of §5.1 step 3, and the generator entry of §5.2."""
         system = translate(baseline(heating__type_of_system=generator.value))
@@ -97,7 +102,7 @@ class TestEveryGenerator:
         assert system.base_file_name == BaseFiles.select(generator, with_solar_thermal=False)
         assert _entry(system, BaseFiles.generator_component(system.base_file_name)) is not None
 
-    @pytest.mark.parametrize("generator", list(HeatGenerator))
+    @pytest.mark.parametrize("generator", SIMULATED_GENERATORS)
     def test_the_file_carries_no_placeholder_and_changes_nothing_forbidden(
         self, generator: HeatGenerator
     ) -> None:
@@ -552,6 +557,118 @@ class TestTheEmitterOnDirectElectricHeating:
 
         line = system.report.line("house.heat_distribution.type_of_system")
         assert line is not None and (line.status, line.value) == (ReportStatus.USED, member)
+
+
+def issue_72_request(generator: str, **building: Any) -> Dict[str, Any]:
+    """Return a baseline the production frontend sent (renovisorissues #72), with its 90 % default."""
+    return {
+        "schema_version": 1,
+        "location": {"country": "IE"},
+        "house": {
+            "building": {
+                "building_type": "detached_sfh",
+                "construction_year": 1985,
+                "absolute_conditioned_floor_area_in_m2": 300,
+                "living_area_in_m2": 300,
+                "number_of_storeys": 2,
+                "set_heating_temperature_in_celsius": 21,
+                "retrofit_status": "usual_refurb",
+                "roof": {},
+                "facade": {},
+                "floor": {},
+                "window": {},
+                "door": {},
+                **building,
+            },
+            "occupancy": {"number_of_residents": 5, "home_office_days_per_week": 0},
+            "heating": {
+                "type_of_system": generator,
+                "cooking_range": False,
+                "flow_temperature_in_celsius": 55,
+                "seasonal_efficiency_in_percent": 90,
+            },
+            "heat_distribution": {"type_of_system": "conventional_radiator"},
+            "temperature_control": {"type_of_system": "traditional_thermostats"},
+        },
+        "applicant": {"receives_means_tested_benefit": False, "managed_full_retrofit": True, "main_residence": False},
+        "measures": [],
+    }
+
+
+@pytest.mark.base
+class TestASeasonalEfficiencyWithoutABoiler:
+    """renovisorissues #72: a generator with no efficiency parameter lists the stated figure instead of failing."""
+
+    PATH = "house.heating.seasonal_efficiency_in_percent"
+
+    @pytest.mark.parametrize(
+        "document",
+        [
+            issue_72_request("district_heating"),
+            issue_72_request(
+                "electric_heating",
+                building_type="terraced_sfh",
+                construction_year=1900,
+                absolute_conditioned_floor_area_in_m2=50,
+                living_area_in_m2=50,
+                retrofit_status="unrenovated",
+                set_heating_temperature_in_celsius=18,
+            ),
+        ],
+        ids=["district_heating", "electric_heating"],
+    )
+    def test_the_production_requests_translate_and_name_the_field(self, document: Dict[str, Any]) -> None:
+        """Both bodies of the issue, verbatim in what matters: exit 0 and a note, not exit 3."""
+        system = translate(document)
+
+        system.report.assert_complete(document)
+        line = system.report.line(self.PATH)
+        assert line is not None
+        assert (line.status, line.value) == (ReportStatus.NOT_IMPLEMENTED_YET, 90.0)
+        assert line.note and "no efficiency parameter" in line.note
+
+    @pytest.mark.parametrize("generator", [generator.value for generator in HeatGenerator.heat_pumps()])
+    def test_every_heat_pump_lists_it(self, generator: str) -> None:
+        """Ground-source and hybrid units follow the same hplib curve as the air-source one."""
+        system = translate(issue_72_request(generator))
+
+        line = system.report.line(self.PATH)
+        assert line is not None
+        assert (line.status, line.note) == (
+            ReportStatus.NOT_IMPLEMENTED_YET, "The heat pump follows its hplib model curve."
+        )
+
+    def test_a_boiler_still_takes_it_as_its_efficiency(self) -> None:
+        """Unchanged for boilers: the figure becomes the full-load efficiency, approximated."""
+        system = translate(issue_72_request("conventional_oil_heating"))
+
+        line = system.report.line(self.PATH)
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+        config = config_of(system, BaseFiles.generator_component(system.base_file_name))
+        assert config[Targets.EFFICIENCY_MAXIMUM] == pytest.approx(0.9)
+
+
+@pytest.mark.base
+class TestSolidFuel:
+    """renovisorissues #76 point 1: peat and coal are refused until HiSim has their carrier; logs are pellets."""
+
+    def test_solid_fuel_is_refused_before_anything_is_translated(self) -> None:
+        """No twin, no register row: the request validation names it."""
+        with pytest.raises(RequestError) as caught:
+            translate(baseline(heating__type_of_system="solid_fuel_heating"))
+
+        assert [problem.code.value for problem in caught.value.problems] == ["heating.type_of_system.unsupported"]
+        assert HeatGenerator.SOLID_FUEL_HEATING not in BaseFiles.BY_GENERATOR
+        assert HeatGenerator.SOLID_FUEL_HEATING not in BaseFiles.BOILERS
+
+    def test_logs_say_they_are_priced_and_emitted_as_pellets(self) -> None:
+        """biomass_heating keeps the pellet twin, and its note says what that means for cost and CO2."""
+        system = translate(baseline(heating__type_of_system="biomass_heating"))
+
+        assert system.base_file_name == BaseFiles.select(HeatGenerator.PELLET_HEATING, with_solar_thermal=False)
+        line = system.report.line("house.heating.type_of_system")
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert line.note is not None and "priced and their CO2 counted as wood pellets" in line.note
 
 
 #: The five elements, by their request names.

@@ -45,7 +45,7 @@ from hisim.renovisor.capabilities import (
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.costs import CostField, CostSchema
 from hisim.renovisor.kpis import KpiField, KpiSchema
-from hisim.renovisor.request import CatalogueTable, ValueType
+from hisim.renovisor.request import CatalogueTable, SemanticChecks, ValueType
 from hisim.renovisor.vocabulary import Provenance, ReportStatus
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
@@ -540,9 +540,19 @@ class TestTheDocument:
 
         efficiency = fields["house.heating.seasonal_efficiency_in_percent"]
         assert efficiency["status"] == ReportStatus.APPROXIMATED.value
-        assert efficiency["conditions"] == [{
-            "when": heat_pump, "status": "not_implemented_yet", "note": "The heat pump follows its hplib model curve.",
-        }]
+        hplib = "The heat pump follows its hplib model curve."
+        # renovisorissues #72: every generator without an efficiency parameter lists it, and says so.
+        assert [(item["when"], item["status"]) for item in efficiency["conditions"]] == [
+            ([{"path": "house.heating.type_of_system", "in": [generator]}], "not_implemented_yet")
+            for generator in (
+                "air_source_heat_pump", "ground_source_heat_pump", "hybrid_heat_pump", "district_heating",
+                "electric_heating",
+            )
+        ]
+        assert efficiency["conditions"][0] == {"when": heat_pump, "status": "not_implemented_yet", "note": hplib}
+        assert [item["note"] for item in efficiency["conditions"][:3]] == [hplib] * 3
+        assert "no efficiency parameter" in efficiency["conditions"][3]["note"]
+        assert "100 %" in efficiency["conditions"][4]["note"]
         # Better than the unconditional status, too: the flow temperature is a heat pump's input.
         flow = fields["house.heating.flow_temperature_in_celsius"]
         assert (flow["status"], [(item["when"], item["status"]) for item in flow["conditions"]]) == (
@@ -591,7 +601,9 @@ class TestTheDocument:
                     ]
                     assert any(name.startswith("pair:") for name in holding), condition
                     found.append(condition)
-        assert len(found) == 9
+        # Nine, plus the four generators besides the air-source heat pump whose seasonal efficiency
+        # is listed (renovisorissues #72).
+        assert len(found) == 13
 
     def test_a_term_is_matched_as_the_request_states_it(self) -> None:
         """A leaf the request does not state never matches; a value compares as JSON, so 1 is not true."""
@@ -658,6 +670,16 @@ class TestTheRunner:
         results = ProbeRunner().run([probe])
 
         assert results[0].refused == ("location.country.unsupported",)
+
+    def test_the_solid_fuel_probe_is_refused_by_name(self, document: CapabilityDocument) -> None:
+        """The value is probed, refused, and so left out of the field's values (renovisorissues #76)."""
+        [result] = [
+            result
+            for result in document.results
+            if result.probe.name == "field:heating.type_of_system=solid_fuel_heating"
+        ]
+
+        assert result.refused == ("heating.type_of_system.unsupported",)
 
 
 @pytest.mark.base
@@ -998,6 +1020,8 @@ class TestNumericFields:
             assert declared is not None, path
             assert "values" not in entry, path
             assert "enum" not in declared, path
+            if path in RequestSchemaBounds.SEMANTIC_RANGES:
+                continue
             for key in ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"):
                 if key in declared:
                     assert entry[key] == declared[key], (path, key)
@@ -1005,10 +1029,9 @@ class TestNumericFields:
                     assert key not in entry, (path, key)
 
     def test_the_exclusive_bounds_of_the_request_schema_are_published(self, document: CapabilityDocument) -> None:
-        """hisim-9h7t: floor area, roof U-value, SCOP, collector area and the two device powers are > 0 or > 1."""
+        """hisim-9h7t: roof U-value, SCOP, collector area and the two device powers are > 0 or > 1."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
 
-        assert fields["house.building.absolute_conditioned_floor_area_in_m2"]["exclusiveMinimum"] == 0
         assert fields["house.building.roof.u_value_in_watt_per_m2_per_kelvin"]["exclusiveMinimum"] == 0
         assert fields["house.heating.heatpump_scop_en14825_w35"]["exclusiveMinimum"] == 1
         assert fields["house.solar_thermal_system.area_m2"]["exclusiveMinimum"] == 0
@@ -1033,7 +1056,9 @@ class TestNumericFields:
             assert declared is not None, path
             if "enum" not in declared:
                 continue  # a boolean, which lists (True, False) without the schema enumerating them
-            assert [value["value"] for value in fields[full]["values"]] == declared["enum"], path
+            refused = {generator.value for generator in SemanticChecks.UNSUPPORTED_GENERATORS}
+            expected = [value for value in declared["enum"] if path != "heating.type_of_system" or value not in refused]
+            assert [value["value"] for value in fields[full]["values"]] == expected, path
             assert "minimum" not in fields[full] and "maximum" not in fields[full], path
 
     def test_every_enum_declared_inventory_field_is_probed_per_value(self, document: CapabilityDocument) -> None:
@@ -1110,10 +1135,56 @@ class TestNumericFields:
         for path in ProbeSet.FIELD_PROBE_POINTS:
             assert shapes[f"{ProbeSet.HOUSE_PREFIX}{path}"] is FieldShape.NUMERIC, path
 
-    def test_an_enumerated_field_keeps_one_entry_per_value(self, document: CapabilityDocument) -> None:
-        """Enumerations, booleans and the glazing-pane counts still list their values."""
+    def test_the_conditioned_floor_area_publishes_the_range_hisim_simulates(
+        self, document: CapabilityDocument
+    ) -> None:
+        """The semantic check's 20-1000 m² replaces the schema's open ``> 0`` (renovisorissues #75).
+
+        The living area is only checked against the conditioned area, so it publishes the schema's
+        own ``exclusiveMinimum: 0`` and nothing else.
+        """
         fields = {entry["path"]: entry for entry in document.body["fields"]}
+        low, high = SemanticChecks.FLOOR_AREA_RANGE
+
+        assert (low, high) == (20, 1000)
+        conditioned = fields[f"house.building.{SemanticChecks.FLOOR_AREA_KEY}"]
+        assert (conditioned["minimum"], conditioned["maximum"]) == (low, high)
+        assert "exclusiveMinimum" not in conditioned and "exclusiveMaximum" not in conditioned
+        living = fields[f"house.building.{SemanticChecks.LIVING_AREA_KEY}"]
+        assert living["exclusiveMinimum"] == 0
+        assert "minimum" not in living and "maximum" not in living and "exclusiveMaximum" not in living
+
+    @pytest.mark.parametrize("path", sorted(RequestSchemaBounds.SEMANTIC_RANGES))
+    def test_every_semantic_range_lies_within_the_schemas_bounds(self, path: str) -> None:
+        """A published range replaces the schema's, so it must not reach past it.
+
+        Were the schema to tighten a bound below a semantic range, the document would publish a
+        value the schema refuses; this fails the build instead. An exclusive end must lie strictly
+        inside, an inclusive one may meet it.
+        """
+        low, high = RequestSchemaBounds.SEMANTIC_RANGES[path]
+        declared = RequestSchemaBounds.of(path)
+
+        assert low <= high, path
+        if "minimum" in declared:
+            assert low >= declared["minimum"], path
+        if "exclusiveMinimum" in declared:
+            assert low > declared["exclusiveMinimum"], path
+        if "maximum" in declared:
+            assert high <= declared["maximum"], path
+        if "exclusiveMaximum" in declared:
+            assert high < declared["exclusiveMaximum"], path
+
+    def test_an_enumerated_field_keeps_one_entry_per_value(self, document: CapabilityDocument) -> None:
+        """Enumerations, booleans and the glazing-pane counts still list their values.
+
+        A value the request validation refuses is left out, as a refused country is: the frontend
+        reads its absence as "not offered". Today that is solid fuel (renovisorissues #76).
+        """
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        refused = {("heating.type_of_system", generator.value) for generator in SemanticChecks.UNSUPPORTED_GENERATORS}
         for path, values in ProbeSet.FIELD_VALUES.items():
             entry = fields[f"{ProbeSet.HOUSE_PREFIX}{path}"]
-            assert [value["value"] for value in entry["values"]] == list(values), path
+            expected = [value for value in values if (path, value) not in refused]
+            assert [value["value"] for value in entry["values"]] == expected, path
             assert "minimum" not in entry, path

@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
 from hisim.economics.adapter import FactsExtractors
-from hisim.economics.bridge import EconomicContext
+from hisim.economics.bridge import AddedPiece, EconomicContext
 from hisim.economics.calculators.context_resolution import ContextResolutionConstants
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
@@ -67,7 +67,7 @@ from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.layers import SimulatedEnvelope, positive_number
 from hisim.renovisor.report import MappingReport
-from hisim.renovisor.request import House, Measure, Request, SemanticChecks
+from hisim.renovisor.request import House, Measure, PvSystem, Request, SemanticChecks
 from hisim.renovisor.simulation import SimulationSetup
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError
@@ -260,6 +260,10 @@ class DeviceAssets:
                 ``size_unit``. One where the request already states the register's unit, and
                 ``1/1000`` for the array, whose request field is in watts while the database
                 prices photovoltaics per kilowatt.
+            adds: Whether the measure, on a house that has the device, adds a unit beside it
+                rather than replacing it (owner decision of 2026-09-29, hisim-epc.28): the house's
+                unit is then kept, and the added one is a purchase of its own
+                (:class:`AddedUnits`).
         """
 
         house_block: str
@@ -269,6 +273,7 @@ class DeviceAssets:
         size_key: Optional[str]
         size_unit: Units
         to_register_size: float = 1.0
+        adds: bool = False
 
     #: Watts per kilowatt: the array's request field is ``power_in_watt`` and the register's unit
     #: is the kilowatt the cost database prices photovoltaics per.
@@ -284,6 +289,7 @@ class DeviceAssets:
             size_key="power_in_watt",
             size_unit=Units.KILOWATT,
             to_register_size=1.0 / WATT_PER_KILOWATT,
+            adds=True,
         ),
         Device(
             house_block="battery",
@@ -292,6 +298,7 @@ class DeviceAssets:
             measure_id="battery_system",
             size_key="custom_battery_capacity_generic_in_kilowatt_hour",
             size_unit=Units.KWH,
+            adds=True,
         ),
         Device(
             house_block="solar_thermal_system",
@@ -302,6 +309,59 @@ class DeviceAssets:
             size_unit=Units.SQUARE_METER,
         ),
     )
+
+
+class AddedUnits:
+    """The unit a device measure adds beside the one the house keeps, as a cost subject of its own.
+
+    Owner decision of 2026-09-29 (hisim-epc.28): a ``photovoltaic_system`` measure on a house that
+    has an array adds a second array, and a ``battery_system`` measure on a house with a battery a
+    second battery. The house's unit stays a kept subject -- it keeps producing
+    and ageing on its own installation year and life -- and the new one is its own purchase, priced
+    alone at its own size, with its own life. The twin simulates both as one component of the summed
+    size (:class:`~hisim.renovisor.translate.RoofArrays`), so the added unit is the difference
+    between the component in the twin this calculation runs and the one in the twin of the house
+    before the package, split off the component's subject by the engine
+    (:class:`~hisim.economics.bridge.AddedPiece`). It is the same idea as the staged plan's
+    ``<subject>#increment_stage<k>``, but within one translation, where no stage number exists.
+    """
+
+    #: The subject the added unit is priced as.
+    SUBJECT: ClassVar[str] = "{component}#added"
+
+    #: The note of the added unit's row.
+    ADDED_NOTE: ClassVar[str] = (
+        "the {what} the {measure} measure adds beside the house's existing one, bought new at its own "
+        "size ({size:g} {unit}) with its own service life; the existing one is the kept subject "
+        "{component}, and the twin simulates both as one {component} of the summed size"
+    )
+
+    #: The note of the kept unit's row, where the package adds one beside it.
+    KEPT_NOTE: ClassVar[str] = (
+        "the house's existing {what}, kept: it keeps working and ageing on its own installation "
+        "year and service life; the {measure} measure adds {added} beside it rather than replacing it"
+    )
+
+    #: The note of the measure's row when there was nothing to add: an array on a roof the
+    #: existing one already covers. ``{path}`` is the mapping report's line of the added size.
+    NOTHING_ADDED_NOTE: ClassVar[str] = (
+        "the {measure} measure adds no {what}: the house's existing one leaves no room for it ({path} "
+        "of the mapping report), so nothing is bought and the existing one is kept"
+    )
+
+    #: How the notes name each device.
+    WHAT: ClassVar[Dict[str, str]] = {"photovoltaic_system": "array", "battery_system": "battery"}
+
+    #: The mapping report's line of each device's added size.
+    SIZE_PATH: ClassVar[Dict[str, str]] = {
+        "photovoltaic_system": "house.pv_system.added_array.power_in_watt",
+        "battery_system": "house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour",
+    }
+
+    @classmethod
+    def subject_of(cls, device: "DeviceAssets.Device") -> str:
+        """The subject of the unit a device's measure adds."""
+        return cls.SUBJECT.format(component=device.component)
 
 
 class TwinEquipment:
@@ -1249,18 +1309,77 @@ class EconomicContextBuilder:
         facts = self._envelope_cost_facts(result)
         kept_elements = self._kept_element_facts(result)
         living_area = self._living_area(result)
+        added = self._added_pieces(result)
         result.context = EconomicContext(
             existing_assets=register,
             subsidy_context=self._subsidy_context(result, existing_heating),
             extra_cost_facts=[*facts, *kept_elements],
             technical_attributes_by_subject=self._technical_attributes(facts),
+            added_pieces=added,
             living_area_in_m2=living_area,
             heated_floor_area_in_m2=self._floor_area(),
         )
         self._record_device_subjects(result)
         MeasureSubjects.record(self._applied, result)
-        result.replaces_subjects = self._replaces_subjects(result, facts, register)
+        result.replaces_subjects = self._replaces_subjects(result, facts, register, added)
         return result
+
+    def _adding_devices(self) -> List["DeviceAssets.Device"]:
+        """The devices whose measure the package carries out on a house that already has one."""
+        return [
+            device
+            for device in DeviceAssets.ALL
+            if device.adds
+            and device.measure_id in self._measure_ids
+            and isinstance(self._raw_original.get(device.house_block), Mapping)
+        ]
+
+    def _added_pieces(self, result: EconomicContextResult) -> Dict[str, AddedPiece]:
+        """The unit each adding device measure puts beside the house's own, as the engine splits it off.
+
+        The added size is the device's component in the twin this calculation runs less the same
+        component in the twin of the house before the package: the translator simulates both units
+        as one component of their sum (:class:`AddedUnits`). The kept component is stamped with no
+        measure and the added unit with the device's. A measure that adds nothing -- an array on a
+        roof the existing one already covers -- is a costless subject named by its id, so the result
+        document still has its row and says why it costs nothing.
+
+        Args:
+            result: The result being assembled; its ``subjects``, ``costless_subjects`` and
+                ``subject_notes`` are extended.
+
+        Returns:
+            Component subject -> its added piece, for
+            :attr:`~hisim.economics.bridge.EconomicContext.added_pieces`; empty without the twins.
+        """
+        pieces: Dict[str, AddedPiece] = {}
+        if self._baseline_twin is None or self._plan_twin is None:
+            return pieces
+        for device in self._adding_devices():
+            plan = self._plan_twin.cost_facts(device.component)
+            before = self._baseline_twin.cost_facts(device.component)
+            size = (plan[1].size if plan is not None else 0.0) - (before[1].size if before is not None else 0.0)
+            what = AddedUnits.WHAT[device.measure_id]
+            if plan is None or before is None or size <= 0.0:
+                result.subjects[device.measure_id] = device.measure_id
+                if device.measure_id not in result.costless_subjects:
+                    result.costless_subjects.append(device.measure_id)
+                result.subject_notes[device.measure_id] = AddedUnits.NOTHING_ADDED_NOTE.format(
+                    measure=device.measure_id, what=what, path=AddedUnits.SIZE_PATH[device.measure_id]
+                )
+                continue
+            subject = AddedUnits.subject_of(device)
+            pieces[plan[0]] = AddedPiece(subject=subject, size=size)
+            result.subjects[plan[0]] = None
+            result.subjects[subject] = device.measure_id
+            unit = device.size_unit.value
+            result.subject_notes[subject] = AddedUnits.ADDED_NOTE.format(
+                what=what, measure=device.measure_id, size=size, unit=unit, component=plan[0]
+            )
+            result.subject_notes[plan[0]] = AddedUnits.KEPT_NOTE.format(
+                what=what, measure=device.measure_id, added=subject
+            )
+        return pieces
 
     # ------------------------------------------------------------------ the stated leaves
 
@@ -1498,8 +1617,9 @@ class EconomicContextBuilder:
                     size_unit=device.size_unit,
                     installation_year=self._device_year(device.house_block, device.asset_class, result),
                     is_functional=True,
+                    # A measure that adds a unit beside this one keeps it (hisim-epc.28).
                     replaced_by_asset_classes=(
-                        [device.asset_class] if device.measure_id in self._measure_ids else []
+                        [device.asset_class] if device.measure_id in self._measure_ids and not device.adds else []
                     ),
                     installation_year_origin=self._year_origin(block, InstallationYearOrigin.MID_LIFE_DEFAULT),
                 )
@@ -1808,7 +1928,11 @@ class EconomicContextBuilder:
         return facts
 
     def _replaces_subjects(
-        self, result: EconomicContextResult, envelope: List[SubjectCostFacts], register: ExistingAssetRegister
+        self,
+        result: EconomicContextResult,
+        envelope: List[SubjectCostFacts],
+        register: ExistingAssetRegister,
+        added: Optional[Mapping[str, AddedPiece]] = None,
     ) -> Dict[str, List[str]]:
         """Each subject a measure created -> the reference subjects it replaces (:class:`ReplacedSubjects`).
 
@@ -1822,12 +1946,17 @@ class EconomicContextBuilder:
             result: The result, whose ``subjects`` map is complete.
             envelope: The envelope measures' cost subjects.
             register: The existing-asset register this calculation is evaluated with.
+            added: Component subject -> the unit a measure adds beside it (:meth:`_added_pieces`),
+                which is priced as the component's class and replaces nothing.
 
         Returns:
             The map the mapping report publishes as ``replaces_subjects``.
         """
         classes: Dict[str, ComponentType] = self._plan_twin.asset_classes() if self._plan_twin is not None else {}
         classes.update({facts.subject: facts.facts.asset_class for facts in envelope})
+        classes.update(
+            {piece.subject: classes[component] for component, piece in (added or {}).items() if component in classes}
+        )
         measure_subjects = {
             subject: asset_class for subject, asset_class in classes.items() if result.subjects.get(subject)
         }
@@ -1971,25 +2100,34 @@ class EconomicContextBuilder:
                     entry[self.U_VALUE_ATTRIBUTE] = float(value)
             if entry:
                 attributes[subject] = entry
-        peak_power = self._peak_power_in_kwp()
+        array = self._house.pv_system
+        peak_power = self._peak_power_in_kwp(array)
         if peak_power is not None:
             attributes[self.PHOTOVOLTAIC_COMPONENT] = {self.PEAK_POWER_ATTRIBUTE: peak_power}
+        added = self._peak_power_in_kwp(array.added_array if array is not None else None)
+        if added is not None:
+            # The array a measure adds beside an existing one is a subject of its own (hisim-epc.28).
+            subject = AddedUnits.SUBJECT.format(component=self.PHOTOVOLTAIC_COMPONENT)
+            attributes[subject] = {self.PEAK_POWER_ATTRIBUTE: added}
         return attributes
 
-    def _peak_power_in_kwp(self) -> Optional[float]:
-        """The renovated array's peak power in kilowatt-peak, or ``None`` when it has none.
+    def _peak_power_in_kwp(self, array: Optional[PvSystem]) -> Optional[float]:
+        """One array's peak power in kilowatt-peak, or ``None`` when it has none.
 
         Reads the house the package produced rather than the request, so an array a measure
-        installed or enlarged is the one reported. The value is information for condition authors
+        installed is the one reported, and an array a measure added beside the house's own is
+        reported for the added subject. The value is information for condition authors
         (:attr:`PEAK_POWER_ATTRIBUTE`); no shipped scheme reads it. A request that sizes the array
         as a share of the roof states no power at all, and a house with no array states zero; both
         give ``None``, because a condition on array size must then stay undetermined rather than
         be denied on a zero nobody wrote.
 
+        Args:
+            array: The renovated house's array, its ``added_array``, or ``None``.
+
         Returns:
             The peak power in kWp, or ``None``.
         """
-        array = self._house.pv_system
         if array is None or array.power_in_watt is None or array.power_in_watt <= 0:
             return None
         return float(array.power_in_watt) / self.WATT_PER_KILOWATT
@@ -2084,8 +2222,11 @@ class EconomicContextBuilder:
         ``heating_system`` -- where the run has the component at all. Kept equipment is stamped
         with nothing, which the result document reads as a subject of the house as it was.
         """
+        adding = self._adding_devices()
         for device in DeviceAssets.ALL:
-            if device.measure_id in self._measure_ids:
+            # A device the measure adds a unit beside is stamped by `_added_pieces`: the house's unit
+            # is kept, and the measure's subject is the added one.
+            if device.measure_id in self._measure_ids and device not in adding:
                 result.subjects[device.component] = device.measure_id
         if self._generator_component and self.HEATING_MEASURE_ID in self._measure_ids:
             result.subjects[self._generator_component] = self.HEATING_MEASURE_ID

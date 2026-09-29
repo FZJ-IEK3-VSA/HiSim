@@ -434,8 +434,8 @@ class TestReplacementsAndRemovals:
         assert applied.house["heating"] == {"type_of_system": "air_source_heat_pump"}
         assert "removed" in (applied.measures[0].note or "")
 
-    def test_a_new_array_replaces_the_old_one_and_keeps_its_orientation(self) -> None:
-        """The measure describes the new total, not an addition to what was there."""
+    def test_an_array_on_a_house_with_one_is_added_beside_it(self) -> None:
+        """Owner decision of 2026-09-29 (hisim-epc.28): the house's array is kept, the measure's is added."""
         house = anchor_house()
         house["pv_system"] = {"power_in_watt": 3000, "azimuth": 200, "tilt": 25}
 
@@ -446,18 +446,19 @@ class TestReplacementsAndRemovals:
         )
 
         assert applied.house["pv_system"] == {
-            "size_in_percent_of_roof_area": 80,
+            "power_in_watt": 3000,
             "azimuth": 200,
             "tilt": 25,
+            "added_array": {"size_in_percent_of_roof_area": 80},
         }
+        assert applied.measures[0].status is ReportStatus.USED
+        assert "adds an array beside the house's existing one, which is kept" in (applied.measures[0].note or "")
+        assert applied.measures[0].targets == ["PVSystem.config.power_in_watt"]
 
-    def test_the_array_s_own_figures_replace_the_old_ones_and_the_power_wins(self) -> None:
+    def test_an_array_on_a_house_without_one_is_installed_with_its_own_figures(self) -> None:
         """Contract 882a8c1: power, azimuth and tilt are written; the share is kept and recorded."""
-        house = anchor_house()
-        house["pv_system"] = {"power_in_watt": 3000, "azimuth": 200, "tilt": 25}
-
         applied = apply(
-            request_of(house),
+            anchor(),
             measures_of({"id": "photovoltaic_system", "options": {
                 "size_in_percent_of_roof_area": 60, "power_in_watt": 5500,
                 "azimuth_in_degree": 170, "tilt_in_degree": 35}}),
@@ -477,6 +478,33 @@ class TestReplacementsAndRemovals:
         assert share.status is ReportStatus.USED
         assert "power_in_watt sizes the array" in (share.note or "")
         assert applied.measures[0].status is ReportStatus.USED
+        assert applied.measures[0].note is None
+
+    def test_an_added_array_in_another_orientation_is_approximated(self) -> None:
+        """The twins carry one PVSystem: an orientation equal to the existing array's is used, another is not."""
+        house = anchor_house()
+        house["pv_system"] = {"power_in_watt": 3000, "azimuth": 200}
+
+        applied = apply(
+            request_of(house),
+            measures_of({"id": "photovoltaic_system", "options": {
+                "size_in_percent_of_roof_area": 60, "power_in_watt": 5500,
+                "azimuth_in_degree": 170, "tilt_in_degree": 30}}),
+            whitelist(),
+        )
+
+        assert applied.house["pv_system"]["added_array"] == {
+            "size_in_percent_of_roof_area": 60,
+            "power_in_watt": 5500.0,
+            "azimuth": 170.0,
+            "tilt": 30.0,
+        }
+        options = {option.name: option for option in applied.measures[0].options}
+        assert options["azimuth_in_degree"].status is ReportStatus.APPROXIMATED
+        assert "facing 200 degrees" in (options["azimuth_in_degree"].note or "")
+        # 30 degrees is the tilt of the anchor's pitched roof, which the existing array is simulated at.
+        assert options["tilt_in_degree"].status is ReportStatus.USED
+        assert applied.measures[0].status is ReportStatus.USED
 
     def test_the_shading_loss_is_copied_into_the_array_and_not_implemented(self) -> None:
         """§4.2: the measure writes the loss into pv_system; the array is simulated unshaded all the same."""
@@ -493,8 +521,8 @@ class TestReplacementsAndRemovals:
         assert applied.house["pv_system"]["shading_losses_in_percent"] == 8.0
         assert [option.name for option in applied.measures[0].options].count("shading_losses_in_percent") == 1
 
-    def test_a_new_battery_replaces_the_old_one_entirely(self) -> None:
-        """The measure states the new battery; nothing of the old one survives."""
+    def test_a_battery_on_a_house_with_one_is_added_beside_it(self) -> None:
+        """hisim-epc.28, as for the array: the house's battery is kept, the measure's is added."""
         house = anchor_house()
         house["battery"] = {"custom_battery_capacity_generic_in_kilowatt_hour": 5, "installation_year": 2015}
 
@@ -505,12 +533,14 @@ class TestReplacementsAndRemovals:
         )
 
         assert applied.house["battery"] == {
-            "custom_battery_capacity_generic_in_kilowatt_hour": 10.0,
-            "power_in_watt": 4000.0,
+            "custom_battery_capacity_generic_in_kilowatt_hour": 5,
+            "installation_year": 2015,
+            "added_battery": {"custom_battery_capacity_generic_in_kilowatt_hour": 10.0, "power_in_watt": 4000.0},
         }
         options = {option.name: option.status for option in applied.measures[0].options}
         assert options == {"capacity_in_kwh": ReportStatus.USED, "power_in_watt": ReportStatus.USED}
         assert applied.measures[0].status is ReportStatus.USED
+        assert "adds a battery beside the house's existing one" in (applied.measures[0].note or "")
 
     def test_an_absent_battery_power_is_the_catalogue_s_half_c_rule(self) -> None:
         """The catalogue: power from the capacity at 0.5 C when unset; reported defaulted with the rule."""

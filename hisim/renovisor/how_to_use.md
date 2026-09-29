@@ -111,6 +111,32 @@ arithmetic note says so; the written U-value then switches the adjustment factor
 infiltration and thermal-bridge surcharge, so `retrofit_status` changes the house even when every
 U-value is stated, and the `house.building.retrofit_status` line names both numbers.
 
+## A photovoltaic or battery measure on a house that has one
+
+`photovoltaic_system` and `battery_system` **add** a unit beside the house's own; they never replace
+it (owner decision 2026-09-29, hisim-epc.28), so production and storage can only grow. On a house
+without the device the measure installs it, exactly as before. The twins carry one `PVSystem` and
+one `Battery`, and the translator may not author a component, so both units are simulated as one of
+their sum — exact for two arrays of one orientation; an added array whose stated azimuth or tilt
+differs from the existing one's is simulated in the existing one's, and its option line is
+`approximated`. Two batteries become one of the summed capacity and the summed power.
+
+The measure's `size_in_percent_of_roof_area` is a share of the whole roof, as on a house without an
+array, capped at what the existing array leaves free. The roof is HiSim's rooftop law: 60 % of the
+roof area the `Building` simulates, filled with the rooftop module; an existing array stated in
+watts covers watts / that maximum of it. A stated `power_in_watt` is added as stated and never
+capped. The added size is the derived line `house.pv_system.added_array.power_in_watt` of the
+mapping report (`house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour` for
+the battery): `used` when the measure got what it asked for, `approximated` with the numbers when
+the roof capped it — down to zero, when the existing array already fills the usable roof, in which
+case the measure adds nothing.
+
+In the economics the house's unit is a kept subject (`PVSystem`, `Battery`), ageing on its own
+installation year and life, and the added unit is a purchase of its own, `PVSystem#added` /
+`Battery#added`, stamped with the measure, priced alone at its size and renewed on its own life. The
+engine splits it off the simulated component (`EconomicContext.added_pieces`); a measure that adds
+nothing is a costless `photovoltaic_system` row whose note says why.
+
 ## Path verification, tier 1
 
 `verify` answers, for every probe of the capability probe set, whether a setting reaches the right

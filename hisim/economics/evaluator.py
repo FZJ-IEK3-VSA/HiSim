@@ -1363,7 +1363,11 @@ class EconomicEvaluator:
                 for subject_facts in inputs.cost_facts
                 if not subject_facts.facts.is_not_installed()
                 and installation_verdict(
-                    subject_facts.facts.asset_class, context, inputs.existing_assets
+                    subject_facts.facts.asset_class,
+                    context,
+                    inputs.existing_assets,
+                    subject_facts.subject,
+                    subject_facts.facts.own_register_entry,
                 ).is_new_investment
             }
         )

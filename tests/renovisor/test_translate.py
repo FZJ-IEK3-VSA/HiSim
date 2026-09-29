@@ -374,6 +374,118 @@ class TestTheSwitchesOfDecisionDD:
             assert line is not None and line.status is ReportStatus.USED
 
 
+def _roof_maximum(document: Mapping[str, Any]) -> float:
+    """The array HiSim's rooftop law puts on the whole usable roof of a request's house."""
+    from hisim.renovisor.economics import RealizedTwin  # pylint: disable=import-outside-toplevel
+
+    full = copy.deepcopy(dict(document))
+    full["house"].pop("pv_system", None)
+    full["measures"] = [{"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 100}}]
+    twin = RealizedTwin.of(translate(full).model)
+    found = twin.cost_facts("PVSystem")
+    assert found is not None
+    return found[1].size * 1000.0
+
+
+@pytest.mark.base
+class TestAMeasureAddsBesideTheHousesDevice:
+    """hisim-epc.28: on a house with an array or a battery, the measure adds one beside it.
+
+    The twins carry one PVSystem and one Battery, so both units are simulated as one of their sum;
+    the added size is reported on a derived line, ``approximated`` when the roof capped it.
+    """
+
+    HALF_THE_ROOF: Dict[str, Any] = {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50}}
+    ADDED_ARRAY: str = "house.pv_system.added_array.power_in_watt"
+
+    def _with(self, pv_system: Dict[str, Any], *measures: Dict[str, Any]) -> Dict[str, Any]:
+        document = baseline(pv_system=pv_system)
+        document["measures"] = list(measures)
+        return document
+
+    def test_an_array_that_fits_is_added_to_the_existing_one(self) -> None:
+        """Half the roof, beside a 3 kW array: the file's power is the sum, the added line is used."""
+        document = self._with({"power_in_watt": 3000}, self.HALF_THE_ROOF)
+        maximum = _roof_maximum(document)
+        system = translate(document)
+
+        line = system.report.line(self.ADDED_ARRAY)
+        assert line is not None and line.status is ReportStatus.USED
+        assert line.value == pytest.approx(maximum / 2, abs=0.01)
+        assert config_of(system, Targets.PV)[Targets.POWER_IN_WATT] == pytest.approx(3000 + maximum / 2, abs=0.01)
+        assert Targets.SHARE_OF_ROOF not in config_of(system, Targets.PV)
+        existing = system.report.line("house.pv_system.power_in_watt")
+        assert existing is not None and existing.status is ReportStatus.USED
+        system.report.assert_complete(document)
+
+    def test_the_share_is_of_the_whole_roof_and_capped_at_what_is_left(self) -> None:
+        """An existing array leaving 1 kW of the roof free gets 1 kW added, not half the roof."""
+        document = self._with({"power_in_watt": 3000}, self.HALF_THE_ROOF)
+        maximum = _roof_maximum(document)
+        document["house"]["pv_system"]["power_in_watt"] = round(maximum - 1000.0)
+        system = translate(document)
+
+        line = system.report.line(self.ADDED_ARRAY)
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert line.value == pytest.approx(maximum - round(maximum - 1000.0), abs=0.01)
+        assert "capped" in (line.note or "")
+        assert config_of(system, Targets.PV)[Targets.POWER_IN_WATT] == pytest.approx(maximum, abs=0.01)
+
+    def test_a_roof_the_existing_array_fills_gets_nothing_added_and_loses_nothing(self) -> None:
+        """The remote case: the existing array is simulated as stated, and the measure adds no array."""
+        system = translate(self._with({"power_in_watt": 100000}, self.HALF_THE_ROOF))
+
+        line = system.report.line(self.ADDED_ARRAY)
+        assert line is not None and line.status is ReportStatus.APPROXIMATED and line.value == 0
+        assert "adds no array" in (line.note or "")
+        assert config_of(system, Targets.PV)[Targets.POWER_IN_WATT] == 100000
+
+    def test_a_stated_power_is_added_as_stated(self) -> None:
+        """An installer's figure is a fact: it is not capped by the estimated roof."""
+        measure = {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50, "power_in_watt": 4000}}
+        system = translate(self._with({"power_in_watt": 100000}, measure))
+
+        line = system.report.line(self.ADDED_ARRAY)
+        assert line is not None and line.status is ReportStatus.USED and line.value == 4000
+        assert "simulated as stated" in (line.note or "")
+        assert config_of(system, Targets.PV)[Targets.POWER_IN_WATT] == 104000
+
+    def test_two_shares_add_up(self) -> None:
+        """An existing array sized by its share of the roof is that share of the same maximum."""
+        document = self._with({"size_in_percent_of_roof_area": 30}, self.HALF_THE_ROOF)
+        maximum = _roof_maximum(document)
+        system = translate(document)
+
+        assert config_of(system, Targets.PV)[Targets.POWER_IN_WATT] == pytest.approx(0.8 * maximum, abs=0.02)
+        share = system.report.line("house.pv_system.size_in_percent_of_roof_area")
+        assert share is not None and "sizes the existing array" in (share.note or "")
+        system.report.assert_complete(document)
+
+    def test_a_house_without_an_array_gets_the_measure_s_array_as_before(self) -> None:
+        """No existing array, nothing to add to: the share sizes the array and no added line exists."""
+        document = baseline(pv_system=None)
+        document["measures"] = [self.HALF_THE_ROOF]
+        system = translate(document)
+
+        config = config_of(system, Targets.PV)
+        assert config[Targets.SHARE_OF_ROOF] == pytest.approx(0.5)
+        assert Targets.POWER_IN_WATT not in config
+        assert system.report.line(self.ADDED_ARRAY) is None
+
+    def test_a_battery_is_added_to_the_existing_one(self) -> None:
+        """Capacities and powers add up: two batteries in parallel behind one controller."""
+        document = baseline(battery={"custom_battery_capacity_generic_in_kilowatt_hour": 5})
+        document["measures"] = [{"id": "battery_system", "options": {"capacity_in_kwh": 10, "power_in_watt": 4000}}]
+        system = translate(document)
+
+        config = config_of(system, Targets.BATTERY)
+        assert config[Targets.BATTERY_CAPACITY] == 15
+        assert config[Targets.BATTERY_INVERTER] == pytest.approx(5 * 500.0 + 4000)
+        line = system.report.line("house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour")
+        assert line is not None and line.status is ReportStatus.USED and line.value == 10
+        system.report.assert_complete(document)
+
+
 @pytest.mark.base
 class TestTheHouseFieldsOfTheSharedSchemaAt882a8c1:
     """hisim-wevr: the battery's power, the array's power beside its share, its loss, the air conditioner's year."""
@@ -450,7 +562,7 @@ class TestTheHouseFieldsOfTheSharedSchemaAt882a8c1:
             assert line is not None and line.status is ReportStatus.NOT_IMPLEMENTED_YET, name
 
     @pytest.mark.parametrize(
-        "block, measure, superseded",
+        "block, measure, existing",
         [
             ("pv_system", {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50}},
              {"power_in_watt": 3000}),
@@ -458,19 +570,19 @@ class TestTheHouseFieldsOfTheSharedSchemaAt882a8c1:
              {"days_to_cover": 2, "power_in_watt": 2000}),
         ],
     )
-    def test_a_value_of_the_device_a_measure_replaces_is_reported_rather_than_a_translator_error(
-        self, block: str, measure: Dict[str, Any], superseded: Dict[str, Any]
+    def test_the_existing_device_a_measure_adds_beside_keeps_its_own_lines(
+        self, block: str, measure: Dict[str, Any], existing: Dict[str, Any]
     ) -> None:
-        """The measure describes the new device (§4.2); the old one's sizing has nothing left to size."""
-        document = baseline(**{block: dict(superseded)})
+        """hisim-epc.28: the house's device is kept, so its values still size it; none is superseded."""
+        document = baseline(**{block: dict(existing)})
         document["measures"] = [measure]
         system = translate(document)
 
         system.report.assert_complete(document)
-        for name in superseded:
+        for name in existing:
             line = system.report.line(f"house.{block}.{name}")
-            assert line is not None and line.status is ReportStatus.APPROXIMATED, name
-            assert f"the {measure['id']} measure replaced" in (line.note or ""), name
+            assert line is not None and line.status is not ReportStatus.NOT_IMPLEMENTED_YET, name
+            assert "replaced" not in (line.note or ""), name
 
 
 @pytest.mark.base

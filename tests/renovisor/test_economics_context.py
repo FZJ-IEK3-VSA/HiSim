@@ -343,15 +343,16 @@ class TestTheRegister:
         register = _built(_mockup()).context.existing_assets
         assert register.find(ComponentType.PV) is None
 
-    def test_an_existing_photovoltaic_array_is_in_the_register_and_is_replaced(self) -> None:
-        """A device that is there must not be bought again, and the measure that renews it says so."""
+    def test_an_existing_photovoltaic_array_is_in_the_register_and_is_kept(self) -> None:
+        """hisim-epc.28: the measure adds an array beside the house's, which keeps producing and ageing."""
         document = _mockup()
         document["house"]["pv_system"] = {"power_in_watt": 4000}
         document["measures"] = [{"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50}}]
         register = _built(document).context.existing_assets
         array = register.find(ComponentType.PV)
         assert array is not None
-        assert array.replaced_by_asset_classes == [ComponentType.PV]
+        assert array.size == 4.0
+        assert array.replaced_by_asset_classes == []
 
 
 @pytest.mark.base
@@ -1917,3 +1918,64 @@ class TestTheReferenceRenewsTheFabric:
             door, self.BASIS_YEAR, EconomicParameters(country="IE")
         )
         assert origin is LifeOrigin.ENGINE_FALLBACK
+
+
+@pytest.mark.base
+class TestAMeasureAddedBesideAKeptDevice:
+    """hisim-epc.28: the house's array or battery is a kept subject, the added one its own purchase."""
+
+    HALF_THE_ROOF: Dict[str, Any] = {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50}}
+
+    @staticmethod
+    def _house_with(pv_watt: float, *measures: Dict[str, Any]) -> Dict[str, Any]:
+        document = _mockup()
+        document["house"]["pv_system"] = {"power_in_watt": pv_watt}
+        document["measures"] = list(measures)
+        return document
+
+    def test_the_added_array_is_a_subject_of_its_own_and_the_house_s_is_kept(self) -> None:
+        """The engine splits the simulated sum: PVSystem at 3 kW kept, PVSystem#added bought."""
+        translated = _translated(self._house_with(3000, self.HALF_THE_ROOF))
+        added = translated.report.line("house.pv_system.added_array.power_in_watt")
+        assert added is not None and added.value > 0
+
+        pieces = translated.economic_context.added_pieces
+        assert set(pieces) == {"PVSystem"}
+        assert pieces["PVSystem"].subject == "PVSystem#added"
+        assert pieces["PVSystem"].size == pytest.approx(added.value / 1000.0)
+        report = translated.report.to_json()
+        assert report["subjects"]["PVSystem#added"] == "photovoltaic_system"
+        assert report["subjects"]["PVSystem"] is None
+        assert report["replaces_subjects"]["PVSystem#added"] == []
+        assert "adds beside the house's existing one" in report["subject_notes"]["PVSystem#added"]
+        assert "kept" in report["subject_notes"]["PVSystem"]
+
+    def test_a_measure_that_adds_nothing_is_a_costless_row_that_says_why(self) -> None:
+        """A roof the existing array fills: the measure still has its row, with no money and a reason."""
+        translated = _translated(self._house_with(100000, self.HALF_THE_ROOF))
+        assert translated.economic_context.added_pieces == {}
+        report = translated.report.to_json()
+        assert report["subjects"]["photovoltaic_system"] == "photovoltaic_system"
+        assert "photovoltaic_system" in report["costless_subjects"]
+        assert "adds no array" in report["subject_notes"]["photovoltaic_system"]
+        assert "PVSystem" not in report["replaces_subjects"]
+
+    def test_a_stated_power_is_published_for_the_added_array(self) -> None:
+        """A grant that steps with array size reads the added array's own peak power."""
+        measure = {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50, "power_in_watt": 4000}}
+        context = _translated(self._house_with(3000, measure)).economic_context
+        attributes = context.technical_attributes_by_subject
+        assert attributes["PVSystem#added"] == {"peak_power_in_kwp": 4.0}
+        assert attributes["PVSystem"] == {"peak_power_in_kwp": 3.0}
+        assert context.added_pieces["PVSystem"].size == pytest.approx(4.0)
+
+    def test_an_added_battery_is_a_subject_of_its_own(self) -> None:
+        """The battery follows the array: kept Battery, bought Battery#added of the measure's capacity."""
+        document = _mockup()
+        document["house"]["battery"] = {"custom_battery_capacity_generic_in_kilowatt_hour": 5}
+        document["measures"] = [{"id": "battery_system", "options": {"capacity_in_kwh": 10}}]
+        translated = _translated(document)
+        assert translated.economic_context.added_pieces["Battery"].size == pytest.approx(10.0)
+        battery = translated.economic_context.existing_assets.find(ComponentType.BATTERY)
+        assert battery is not None and battery.replaced_by_asset_classes == []
+        assert translated.report.to_json()["subjects"]["Battery#added"] == "battery_system"

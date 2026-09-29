@@ -132,6 +132,7 @@ def facts_to_json(facts: ComponentCostFacts) -> dict:
         "purchase_cost_override_in_euro": UncertainValue.optional_to_json(facts.purchase_cost_override_in_euro),
         "override_source": facts.override_source,
         "lifetime_is_engine_fallback": facts.lifetime_is_engine_fallback,
+        "own_register_entry": facts.own_register_entry,
         "technical_attributes": facts.technical_attributes,
     }
 
@@ -167,6 +168,7 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
         purchase_cost_override_in_euro=UncertainValue.optional_from_json(raw.get("purchase_cost_override_in_euro")),
         override_source=raw.get("override_source"),
         lifetime_is_engine_fallback=bool(raw.get("lifetime_is_engine_fallback", False)),
+        own_register_entry=bool(raw.get("own_register_entry", False)),
         technical_attributes=raw.get("technical_attributes", {}),
     )
 

@@ -260,6 +260,8 @@ def installation_verdict(
     asset_class: ComponentType,
     context: InstallationContext,
     register: Optional[ExistingAssetRegister],
+    subject: Optional[str] = None,
+    own_register_entry: bool = False,
 ) -> InstallationVerdict:
     """Decide the §4.1 installation context of one asset class, touching no price and no ledger.
 
@@ -278,10 +280,18 @@ def installation_verdict(
     replacement, whose first replacement then fell at a full service life instead of at its
     remaining life.
 
+    A register entry bound to a subject (``ExistingAsset.subject``) is seen by that subject
+    alone, and a subject with ``own_register_entry`` sees nothing else: a piece added beside a kept
+    unit -- the array a measure adds to an existing one (hisim-epc.28), the increment a staged plan
+    adds to a kept subject (hisim-1y0m) -- is kept or bought on its own entry, never on the unit it
+    enlarges. A register binding nothing reads exactly as before.
+
     Args:
         asset_class: The subject's asset class.
         context: The perspective's installation context.
         register: The existing-asset register, or ``None`` for a greenfield run.
+        subject: The subject asked about; only read against bound entries.
+        own_register_entry: The subject's ``ComponentCostFacts.own_register_entry``.
 
     Returns:
         The verdict.
@@ -294,6 +304,13 @@ def installation_verdict(
     replaced_asset: Optional[ExistingAsset] = None
     kept_asset: Optional[ExistingAsset] = None
     is_new_investment = True
+    if register is not None:
+        visible = [
+            asset
+            for asset in register.assets
+            if (asset.subject == subject if own_register_entry else asset.subject is None)
+        ]
+        register = ExistingAssetRegister(assets=visible)
     if context == InstallationContext.BROWNFIELD and register is not None:
         replaced = [asset for asset in register.assets if asset_class in asset.replaced_by_asset_classes]
         if len(replaced) > 1:
@@ -477,7 +494,7 @@ def resolve_device(
     # Installation context: matched-kept vs new measure vs replacement (§4.1), decided by
     # `installation_verdict`; only the replacement schedule of a kept asset is computed here.
     register = existing_assets
-    verdict = installation_verdict(facts.asset_class, context, register)
+    verdict = installation_verdict(facts.asset_class, context, register, subject, facts.own_register_entry)
     is_new_investment = verdict.is_new_investment
     replaced_asset = verdict.replaced_asset
     first_replacement_year = int(round(service_life))
@@ -493,7 +510,7 @@ def resolve_device(
             f"STATUS_QUO without an existing-asset register: treating {subject} "
             "as an existing asset of age 0."
         )
-    if context == InstallationContext.STATUS_QUO and register is not None and register.find(facts.asset_class) is None:
+    if context == InstallationContext.STATUS_QUO and register is not None and verdict.kept_asset is None:
         first_replacement_year = int(round(service_life))
 
     removal_cost = UncertainValue.exact(0.0)

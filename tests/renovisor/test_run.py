@@ -144,6 +144,84 @@ class TestTheWholeChain:
         assert after == before
 
 
+def kpi(directory: Path, name: str) -> float:
+    """Return one KPI of one run's ``all_kpis.json`` by its name."""
+    document = json.loads((directory / "results" / "all_kpis.json").read_text(encoding="utf-8"))
+    for block in document.values():
+        for group in block.values():
+            for entry in group.values():
+                if isinstance(entry, dict) and entry.get("name") == name:
+                    return float(entry["value"])
+    raise AssertionError(f"all_kpis.json carries no {name!r}")
+
+
+def terraced_house(pv_watt: float, *measures: Dict[str, Any]) -> Dict[str, Any]:
+    """The Irish terraced house of the remote backend's job D2811327 (2026-09-29), with an array.
+
+    Its package, 728B0B70, installed an air-source heat pump and a photovoltaic array of half the
+    roof; before hisim-epc.28 the measure replaced the house's 8 kW array and production fell from
+    6178 to 2804 kWh a year.
+    """
+    return {
+        "applicant": {"main_residence": True, "receives_means_tested_benefit": False},
+        "house": {
+            "building": {
+                "absolute_conditioned_floor_area_in_m2": 95, "building_type": "terraced_sfh",
+                "construction_year": 1955, "door": {}, "facade": {}, "floor": {}, "living_area_in_m2": 95,
+                "number_of_storeys": 2, "retrofit_status": "unrenovated", "roof": {},
+                "set_heating_temperature_in_celsius": 21, "window": {},
+            },
+            "heat_distribution": {"type_of_system": "conventional_radiator"},
+            "heating": {"cooking_range": False, "flow_temperature_in_celsius": 55,
+                        "type_of_system": "ground_source_heat_pump"},
+            "occupancy": {"home_office_days_per_week": 0, "number_of_residents": 3},
+            "pv_system": {"azimuth": 180, "power_in_watt": pv_watt},
+            "temperature_control": {"type_of_system": "traditional_thermostats"},
+        },
+        "location": {"country": "IE"},
+        "measures": list(measures),
+        "schema_version": 1,
+    }
+
+
+def run_week(document: Dict[str, Any], directory: Path, name: str) -> ExitCode:
+    """Run one request over a January week, long enough for the array's output to be read to 1 %."""
+    return Calculation(
+        request_path=request_file(directory / f"{name}.json", document),
+        output_directory=directory / name,
+        period=Period.ONE_WEEK_15MIN,
+        base_files_directory=BASE_FILES,
+    ).run()
+
+
+@pytest.mark.system_setups
+class TestAPhotovoltaicMeasureAddsToTheHousesArray:
+    """hisim-epc.28: the measure adds an array beside the house's, so production can only rise."""
+
+    HALF_THE_ROOF: Dict[str, Any] = {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50}}
+
+    def test_the_remote_pair_no_longer_loses_production(self, tmp_path: Path) -> None:
+        """The 8 kW array already fills the usable roof, so the measure adds nothing and nothing falls."""
+        heat_pump = {"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"}}
+        assert run_week(terraced_house(8000), tmp_path, "base") == ExitCode.FINISHED
+        assert run_week(terraced_house(8000, heat_pump, self.HALF_THE_ROOF), tmp_path, "package") == ExitCode.FINISHED
+
+        assert kpi(tmp_path / "package", "PV production") == pytest.approx(kpi(tmp_path / "base", "PV production"))
+
+    def test_production_rises_by_the_added_arrays_yield(self, tmp_path: Path) -> None:
+        """A 3 kW array leaves room: the one simulated array is the sum, and its output scales with it."""
+        assert run_week(terraced_house(3000), tmp_path, "base") == ExitCode.FINISHED
+        assert run_week(terraced_house(3000, self.HALF_THE_ROOF), tmp_path, "package") == ExitCode.FINISHED
+
+        report = json.loads((tmp_path / "package" / Outputs.MAPPING_REPORT).read_text(encoding="utf-8"))
+        added = next(
+            line["value"] for line in report["fields"] if line["path"] == "house.pv_system.added_array.power_in_watt"
+        )
+        assert added > 0
+        before, after = kpi(tmp_path / "base", "PV production"), kpi(tmp_path / "package", "PV production")
+        assert after == pytest.approx(before * (3000 + added) / 3000, rel=0.01)
+
+
 @pytest.mark.system_setups
 class TestTheResultPayload:
     """T-RESULT: the step-6 payload assertions, adjusted for what rule 5 took away."""

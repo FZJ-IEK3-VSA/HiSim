@@ -276,6 +276,14 @@ class ComponentCostFacts:
     # fallback, standing in because the cost database has no entry for the class (hisim-ryw1): the
     # result document then says `engine_fallback` rather than calling it the request's.
     lifetime_is_engine_fallback: bool = False
+    # True for a subject matched only against the register entry bound to its own name
+    # (`ExistingAsset.subject`), and bought new when the register binds none to it, whatever else
+    # the register holds of its class. Set for a piece a measure adds beside a unit the house keeps:
+    # the array a photovoltaic_system measure adds to an existing one (`bridge.AddedPiece`,
+    # hisim-epc.28), and the increment a later stage adds to a kept subject (hisim-1y0m). A
+    # same-class lookup would find the unit it enlarges and call the piece kept. Every other
+    # subject ignores bound entries.
+    own_register_entry: bool = False
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).
     technical_attributes: Dict[str, Any] = field(default_factory=dict)
 
@@ -574,6 +582,11 @@ class ExistingAsset:
     #: falls one service life after its purchase; replaced, its age in the year the replacing stage
     #: starts, which is when it is written off and when the anyway-cost test is taken.
     stated_age_in_years: Optional[int] = None
+    #: The cost subject this entry is bound to, or `None` for an entry any subject of its class
+    #: matches (every register of a house). Only the staged evaluator binds one: a piece a subject
+    #: of its own was bought as beside a kept unit, which is matched by that piece's subject alone
+    #: (`ComponentCostFacts.own_register_entry`, hisim-1y0m), so it ages beside the unit it enlarges.
+    subject: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validation: normalizes the replacement-cost override and rejects impossible inputs.

@@ -914,22 +914,27 @@ class PvSystem:
         size_in_percent_of_roof_area: The share of the usable roof the array covers.
         azimuth: Degrees, 180 being south.
         tilt: Degrees from horizontal.
+        added_array: The array a ``photovoltaic_system`` measure adds beside this one, in the
+            renovated house only (``added_array``, hisim-epc.28); ``None`` in every request.
     """
 
     power_in_watt: Optional[float] = None
     size_in_percent_of_roof_area: Optional[int] = None
     azimuth: Optional[float] = None
     tilt: Optional[float] = None
+    added_array: Optional["PvSystem"] = None
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "PvSystem":
         """Build the photovoltaic block from the renovated house."""
         share = raw.get("size_in_percent_of_roof_area")
+        added = raw.get("added_array")
         return cls(
             power_in_watt=None if raw.get("power_in_watt") is None else float(raw["power_in_watt"]),
             size_in_percent_of_roof_area=None if share is None else int(share),
             azimuth=None if raw.get("azimuth") is None else float(raw["azimuth"]),
             tilt=None if raw.get("tilt") is None else float(raw["tilt"]),
+            added_array=None if added is None else cls.from_dict(added),
         )
 
 
@@ -946,11 +951,14 @@ class Battery:
         days_to_cover: How many days of household electricity a battery sized by days should hold.
         power_in_watt: The battery's charging and discharging power, when the house or a measure
             states it; 0.5 C of the capacity otherwise.
+        added_battery: The battery a ``battery_system`` measure adds beside this one, in the
+            renovated house only (``added_battery``, hisim-epc.28); ``None`` in every request.
     """
 
     custom_battery_capacity_generic_in_kilowatt_hour: Optional[float] = None
     days_to_cover: Optional[int] = None
     power_in_watt: Optional[float] = None
+    added_battery: Optional["Battery"] = None
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "Battery":
@@ -958,10 +966,12 @@ class Battery:
         capacity = raw.get("custom_battery_capacity_generic_in_kilowatt_hour")
         days = raw.get("days_to_cover")
         power = raw.get("power_in_watt")
+        added = raw.get("added_battery")
         return cls(
             custom_battery_capacity_generic_in_kilowatt_hour=None if capacity is None else float(capacity),
             days_to_cover=None if days is None else int(days),
             power_in_watt=None if power is None else float(power),
+            added_battery=None if added is None else cls.from_dict(added),
         )
 
 

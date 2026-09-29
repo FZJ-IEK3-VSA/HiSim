@@ -1693,7 +1693,7 @@ class StagedEvaluator:
         newly_charged_classes = {
             facts_by_subject[subject].asset_class
             for subject in self._charged_subjects(stages, index)
-            if subject in facts_by_subject
+            if subject in facts_by_subject and not facts_by_subject[subject].own_register_entry
         }
         installed_classes: Set[ComponentType] = set()
         aged: Dict[str, ExistingAsset] = {}
@@ -1714,6 +1714,23 @@ class StagedEvaluator:
                     # (`ComponentCostFacts` allows the zero and means exactly that), and
                     # `ExistingAsset` refuses a size of zero. Nothing was put in the building, so
                     # nothing ages into the next stage's register.
+                    continue
+                if facts.own_register_entry:
+                    # A piece bought beside a kept unit (hisim-epc.28, hisim-1y0m) ages on an entry
+                    # bound to it, beside the unit it enlarged, which it neither hides nor replaces. It
+                    # leaves with that unit: a stage that no longer carries it has replaced, shrunk or
+                    # removed the subject.
+                    if subject in facts_by_subject:
+                        aged[subject] = ExistingAsset(
+                            asset_class=facts.asset_class,
+                            size=facts.size,
+                            size_unit=facts.size_unit,
+                            installation_year=plan_year_zero + stages[earlier].from_year,
+                            is_functional=True,
+                            installation_year_origin=InstallationYearOrigin.STAGE,
+                            stated_age_in_years=-stages[earlier].from_year,
+                            subject=subject,
+                        )
                     continue
                 installed_classes.add(facts.asset_class)
                 replaced = subject not in facts_by_subject and facts.asset_class in newly_charged_classes
@@ -2113,7 +2130,11 @@ class StagedEvaluator:
             year_origin: Optional[InstallationYearOrigin] = InstallationYearOrigin.STAGE
             if index == 0 or subject_facts.subject not in charged:
                 kept = installation_verdict(
-                    facts.asset_class, perspective.installation_context, inputs.existing_assets
+                    facts.asset_class,
+                    perspective.installation_context,
+                    inputs.existing_assets,
+                    subject_facts.subject,
+                    facts.own_register_entry,
                 ).kept_asset
                 if kept is not None:
                     year, year_origin = kept.installation_year, kept.installation_year_origin

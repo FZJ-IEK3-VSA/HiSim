@@ -979,6 +979,13 @@ class ProbeSet:
              "heat_distribution.type_of_system": "conventional_radiator"},
             None,
         ),
+        # A photovoltaic measure on a house that has an array adds one beside it (hisim-epc.28). The
+        # twins carry one PVSystem, so an added array stating another orientation than the house's
+        # is simulated in the house's, approximated.
+        "pair:photovoltaic_measure_on_an_existing_array": (
+            {"pv_system": {"power_in_watt": 3000}},
+            [{"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 30, "azimuth_in_degree": 90}}],
+        ),
         "pair:postcode": ({}, None),  # the location half is added in :meth:`build`
         # retrofit_status in a band without the variant it selects: Irish detached houses of 2011-
         # (IE.N.SFH.10) have no 002, so usual_refurb falls back to 001, approximated (§5.3 step 3).

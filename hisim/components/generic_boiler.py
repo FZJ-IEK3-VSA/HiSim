@@ -46,6 +46,7 @@ from hisim.config import (
     preset,
     sized_field,
 )
+from hisim.energy_port import EnergyPort
 from hisim.components.dual_circuit_system import (
     DiverterValve,
     HeatingMode,
@@ -367,6 +368,8 @@ class GenericBoiler(Component):
     ThermalOutputPowerDhw = "ThermalOutputPowerDhw"
     ThermalOutputEnergyDhw = "ThermalOutputEnergyDhw"
     TotalFuelConsumption = "TotalFuelConsumption"
+    #: The fuel energy of this step that did not become booked heat: flue and burner loss (hisim-9uoo.4).
+    CombustionHeatLoss = "CombustionHeatLoss"
 
     def __init__(
         self,
@@ -414,6 +417,7 @@ class GenericBoiler(Component):
             output_description=f"here a description for {self.TotalFuelConsumption} will follow.",
         )
 
+        fuel_carrier = EnergyPort.carrier_of_fuel(self.config.energy_carrier)
         # Space heating
         self.water_input_temperature_sh_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -443,6 +447,7 @@ class GenericBoiler(Component):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.EnergyDemandSh} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier, peer_output=self.EnergyDemandSh),
         )
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -459,6 +464,9 @@ class GenericBoiler(Component):
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalOutputEnergySh} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            energy_port=EnergyPort(
+                lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputMassFlowSh
+            ),
         )
 
         # DHW
@@ -490,6 +498,7 @@ class GenericBoiler(Component):
             lt.Units.WATT_HOUR,
             output_description="Energy demand",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            energy_port=EnergyPort(lt.EnergyRole.IN, fuel_carrier, peer_output=self.EnergyDemandDhw),
         )
         self.thermal_output_power_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -506,6 +515,22 @@ class GenericBoiler(Component):
             unit=lt.Units.WATT_HOUR,
             output_description="Thermal energy output",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            energy_port=EnergyPort(
+                lt.EnergyRole.OUT,
+                lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+                peer_output=self.WaterOutputMassFlowDhw,
+            ),
+        )
+        self.combustion_heat_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CombustionHeatLoss,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description=(
+                "Fuel power of this step that did not become heat, the flue and burner loss: the fuel power times "
+                "one minus the combustion efficiency while the boiler heats, zero while it is off."
+            ),
+            energy_port=EnergyPort(lt.EnergyRole.LOSS, fuel_carrier),
         )
         # Set important parameters
         self.build()
@@ -693,6 +718,15 @@ class GenericBoiler(Component):
         stsv.set_output_value(
             self.total_fuel_input_power_channel,
             maximum_power_used_in_watt,
+        )
+        # The loss of the fuel billed in this step (EnergyDemandSh/Dhw), which is nothing when the boiler is off.
+        stsv.set_output_value(
+            self.combustion_heat_loss_channel,
+            (
+                0.0
+                if operating_mode == HeatingMode.OFF.value
+                else maximum_power_used_in_watt * (1 - real_combustion_efficiency)
+            ),
         )
 
         if operating_mode == HeatingMode.SPACE_HEATING.value:

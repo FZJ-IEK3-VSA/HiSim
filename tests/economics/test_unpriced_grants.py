@@ -1,11 +1,13 @@
-"""A fixed-amount grant on an unpriced subject: no cap, no award, a question (renovisorissues #77).
+"""A cost-bound grant on an unpriced subject: no cap, no award, a question (renovisorissues #77).
 
 An envelope measure without a ``cost`` block is booked at a placeholder zero investment and
 flagged unpriced: its price is unknown, not zero. A fixed-amount grant (LUMP_SUM, PER_UNIT,
 TIERED_PER_UNIT) is clamped to the eligible cost, so against that zero it used to read "up to
 EUR 0" -- production's "rafter insulation grant, up to EUR 0". Owner decision of 2026-09-28: the
 scheme's maximum is ``null`` with a note saying why, and a scheme the answers would award is not
-awarded (nothing is booked) but left ``undetermined`` on the measure's price. A reader's quote
+awarded (nothing is booked) but left ``undetermined`` on the measure's price. The same holds for
+a share of the cost (SHARE_OF_ELIGIBLE_COST, BONUS_SHARE, TAX_CREDIT) and, since 2026-09-29, for a
+soft loan's non-zero repayment grant; a loan without one keeps its #65 rule. A reader's quote
 prices the purchase, and the scheme is then decided as for any priced measure.
 """
 
@@ -102,6 +104,19 @@ def _scheme(scheme_id: str, kind: BenefitKind, benefit, **changes):
     return replace(scheme, eligible_cost=EligibleCostSpec(categories=list(CATEGORIES)), **changes)
 
 
+def _loan(repayment_grant_rate: float):
+    """A soft loan counting the cost categories, with the given repayment grant (0.0: none)."""
+    return replace(
+        always_eligible_scheme(
+            "LOAN",
+            BenefitKind.SOFT_LOAN,
+            LoanTermsBenefit(interest_rate=0.01, term=10, repayment_grant_rate=repayment_grant_rate),
+            PayoutKind.LOAN_TERMS,
+        ),
+        eligible_cost=EligibleCostSpec(categories=list(CATEGORIES)),
+    )
+
+
 FIXED_AMOUNTS = [
     ("LUMP", BenefitKind.LUMP_SUM, LumpSumBenefit(amount=AMOUNT)),
     ("PER_M2", BenefitKind.PER_UNIT, PerUnitBenefit(amount=25.0, size_unit=Units.SQUARE_METER)),
@@ -175,6 +190,21 @@ class TestTheMaximum:
         )
         assert scheme_maximum(feed_in, _measure(), SubsidyContext(), None).amount_in_euro == UncertainValue.exact(0.0)
 
+    def test_a_repayment_grant_on_an_unpriced_measure_states_no_cap(self) -> None:
+        """A repayment grant is a share of the cost, so it is as unknown as the cost (cmf 2026-09-29).
+
+        Before, a soft loan was left to its own rule whatever its grant, and the grant on the
+        placeholder zero read "up to EUR 0".
+        """
+        maximum = scheme_maximum(_loan(0.15), _measure(), SubsidyContext(), None)
+        assert maximum.amount_in_euro is None
+        assert maximum.note == SchemeMaximumNotes.UNPRICED
+
+    def test_a_repayment_grant_on_a_priced_measure_is_its_share(self) -> None:
+        """With a price the grant is the share of the eligible cost, as before."""
+        maximum = scheme_maximum(_loan(0.15), _measure(unpriced=False, cost=20000.0), SubsidyContext(), None)
+        assert maximum.amount_in_euro == UncertainValue.exact(3000.0)
+
 
 class TestTheDecision:
     """The solver leaves such a scheme undetermined on the price instead of awarding a zero."""
@@ -219,6 +249,26 @@ class TestTheDecision:
         assert [(award.scheme_id, award.upfront_amount) for award in decision.applied] == [
             ("LUMP", UncertainValue.exact(AMOUNT))
         ]
+
+    def test_a_loan_with_a_repayment_grant_asks_for_the_price(self) -> None:
+        """Undetermined on the price, nothing applied: its grant is a share of an unknown cost."""
+        decision = self._decide([_loan(0.15)], _measure())
+        assert decision.applied == []
+        assert [row["scheme_id"] for row in decision.undetermined] == ["LOAN"]
+        assert decision.undetermined[0]["missing_fields"] == [UnpricedMeasures.PRICE_QUESTION]
+        assert decision.maximum_by_scheme["LOAN"].note == SchemeMaximumNotes.UNPRICED
+
+    def test_a_loan_without_a_repayment_grant_is_decided_as_usual(self) -> None:
+        """No grant element, nothing bounded by the cost: the #65 rule, and no question about the price.
+
+        The decision is the one a priced measure gets, so the price cannot be what it hinges on.
+        """
+        decision = self._decide([_loan(0.0)], _measure())
+        priced = self._decide([_loan(0.0)], _measure(unpriced=False, cost=20000.0))
+        assert not decision.undetermined and not decision.rejected
+        assert decision.applied == priced.applied
+        assert decision.maximum_by_scheme["LOAN"].amount_in_euro is None
+        assert decision.maximum_by_scheme["LOAN"].note == SchemeMaximumNotes.SOFT_LOAN
 
 
 class TestTheFlagTravels:

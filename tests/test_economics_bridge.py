@@ -613,6 +613,28 @@ class TestContextMerge:
         assert inputs.cost_facts[0].facts.technical_attributes == {"module": "mono"}
         assert inputs.cost_facts[0].facts.size == 5.0
 
+    def test_a_costless_subject_matching_no_subject_warns(self, capsys):
+        """Catches a part that should cost nothing being priced because its name has a typo.
+
+        A `costless_subjects` key that matches no extracted subject zeroes nothing; if the part
+        exists under another name, its price is booked beside the purchase it belongs to. The
+        warning names the unmatched key and the subjects that do exist, as the attribute map's does.
+        """
+        inputs = self._inputs()
+        context = EconomicContext(
+            costless_subjects={
+                "BatteryControllr": bridge.CostlessPart(
+                    reason="part of the battery system", lifetime_of_asset_class=loadtypes.ComponentType.BATTERY
+                )
+            }
+        )
+
+        bridge._merge_context(inputs, context)  # pylint: disable=protected-access
+
+        logged = capsys.readouterr().out
+        assert "BatteryControllr" in logged and "PVSystem" in logged and "not zeroed" in logged
+        assert inputs.cost_facts[0].facts.investment_cost_override_in_euro is None
+
     def test_a_costless_subject_keeps_its_facts_but_costs_nothing(self):
         """Part of another purchase (renovisorissues #77), so every amount of its own is zero.
 

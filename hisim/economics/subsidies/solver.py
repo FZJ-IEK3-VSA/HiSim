@@ -413,9 +413,9 @@ class SchemeMaximumNotes:
     #: sentence an awarded loan-terms row already states.
     SOFT_LOAN = "loan terms: the benefit is in the financing costs, not a grant"
 
-    #: A fixed amount is capped at the eligible cost and a share is a share of it, and an unpriced
-    #: measure's cost is unknown, not zero, so neither can be stated (renovisorissues #77, cmf
-    #: 2026-09-28).
+    #: A fixed amount is capped at the eligible cost, and a share -- a soft loan's repayment grant
+    #: among them -- is a share of it, and an unpriced measure's cost is unknown, not zero, so
+    #: neither can be stated (renovisorissues #77, cmf 2026-09-28 and 2026-09-29).
     UNPRICED = (
         "no maximum: the measure is unpriced, and what the scheme pays is capped at or a share of the "
         "measure's cost, which is unknown, not zero"
@@ -427,17 +427,20 @@ class UnpricedMeasures:
 
     An unpriced measure (``ComponentCostFacts.is_unpriced``) books its unknown price as a
     placeholder zero. A LUMP_SUM, PER_UNIT or TIERED_PER_UNIT amount is clamped to the eligible
-    cost, and a SHARE_OF_ELIGIBLE_COST, BONUS_SHARE or TAX_CREDIT is a share of it, so against
-    that zero each would read "up to EUR 0" -- nothing -- where the truth is that the amount is
-    unknown. Owner decisions of 2026-09-28: such a scheme's maximum is ``None``
+    cost, and a SHARE_OF_ELIGIBLE_COST, BONUS_SHARE or TAX_CREDIT is a share of it, as is a
+    SOFT_LOAN's non-zero repayment grant, so against that zero each would read "up to EUR 0" --
+    nothing -- where the truth is that the amount is unknown. Owner decisions of 2026-09-28 (and
+    2026-09-29 for the repayment grant): such a scheme's maximum is ``None``
     (:attr:`SchemeMaximumNotes.UNPRICED`), and a scheme the answers would award is not awarded but
     left undetermined on the measure's price (:attr:`PRICE_QUESTION`), so nothing is booked for
     it. A scheme that counts no cost category is not bounded by the cost -- an unconditional
-    fixed amount -- and is decided as for any measure. A soft loan's repayment grant and an
-    operational (per-kWh) payment keep their own rules.
+    fixed amount -- and is decided as for any measure. A soft loan without a repayment grant
+    grants no amount and keeps its own rule (renovisorissues #65: no maximum, decided as usual),
+    and so does an operational (per-kWh) payment.
     """
 
-    #: The benefit kinds whose amount is capped at the eligible cost or is a share of it.
+    #: The benefit kinds whose amount is always capped at the eligible cost or a share of it. A
+    #: SOFT_LOAN is bounded by the cost only through a non-zero repayment grant (:meth:`applies`).
     COST_BOUND_KINDS: ClassVar[FrozenSet[BenefitKind]] = frozenset(
         {
             BenefitKind.LUMP_SUM,
@@ -457,19 +460,24 @@ class UnpricedMeasures:
 
     @classmethod
     def applies(cls, scheme: SubsidyScheme, measure: MeasureForSubsidy) -> bool:
-        """Whether the scheme's amount is bounded by the eligible cost, and the measure's price is unknown."""
-        return (
-            scheme.benefit_kind in cls.COST_BOUND_KINDS
-            and bool(scheme.eligible_cost.categories)
-            and measure.facts.is_unpriced()
+        """Whether the scheme's amount is bounded by the eligible cost, and the measure's price is unknown.
+
+        Bounded by the cost means a kind of :attr:`COST_BOUND_KINDS`, or a soft loan whose
+        repayment grant is a non-zero share of the cost, in a scheme that counts cost categories.
+        """
+        benefit = scheme.benefit
+        grants_a_share = scheme.benefit_kind in cls.COST_BOUND_KINDS or (
+            isinstance(benefit, LoanTermsBenefit) and bool(benefit.repayment_grant_rate)
         )
+        return grants_a_share and bool(scheme.eligible_cost.categories) and measure.facts.is_unpriced()
 
     @classmethod
     def assessed(cls, assessment: SchemeAssessment, measure: MeasureForSubsidy) -> SchemeAssessment:
         """One assessment with the price question added where the scheme cannot be valued.
 
-        An eligible fixed-amount scheme on an unpriced measure becomes undetermined on the price;
-        an undetermined one also asks for the price; an ineligible one stays ineligible, since no
+        An eligible scheme whose amount the cost bounds (:meth:`applies`: capped at or a share of
+        the eligible cost) on an unpriced measure becomes undetermined on the price; an
+        undetermined one also asks for the price; an ineligible one stays ineligible, since no
         price could change that verdict.
         """
         if assessment.status == EligibilityStatus.INELIGIBLE or not cls.applies(assessment.scheme, measure):
@@ -517,12 +525,13 @@ def scheme_maximum(
       other schemes (and so which answers) stack with it;
     * TAX_CREDIT: the whole credit, every instalment;
     * SOFT_LOAN: the repayment grant on the capped eligible cost; ``None`` where it grants none,
-      since a loan without a grant element states no amount it pays (renovisorissues #65);
+      since a loan without a grant element states no amount it pays (renovisorissues #65), and
+      ``None`` for an unpriced measure, whose cost the grant is a share of;
     * OPERATIONAL: the rate times the measure's annual energy times the duration;
     * REDUCED_VAT: ``None`` -- the catalogue states a rate on the price, no amount.
 
-    A fixed amount, a share or a tax credit on a measure whose price is unknown is ``None`` too
-    (:class:`UnpricedMeasures`): it is bounded by the cost nobody stated.
+    A fixed amount, a share, a tax credit or a repayment grant on a measure whose price is unknown
+    is ``None`` too (:class:`UnpricedMeasures`): it is bounded by the cost nobody stated.
 
     The catalogue's overall state-aid share, where it declares one, bounds the upfront amount as
     it bounds an award.

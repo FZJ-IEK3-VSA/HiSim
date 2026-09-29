@@ -74,7 +74,7 @@ from hisim.economics.results import (
     RateOrigin,
     ResolvedRate,
     VariantComparison,
-    discounted_payback_envelope,
+    PaybackEnvelope,
     discounted_payback_year,
 )
 from hisim.economics.subsidies import PayoutKind, SubsidyAward, SubsidySchemeLabels
@@ -3247,7 +3247,7 @@ def lifecycle_lanes(
     if comparison is not None:
         # The range by value (renovisorissues #73): which world pays back first is not a
         # property of its slot.
-        envelope = discounted_payback_envelope(
+        envelope = PaybackEnvelope.of(
             band_zero_crossings(comparison.cumulative_discounted_savings_in_euro)
         )
         if envelope.earliest is not None:

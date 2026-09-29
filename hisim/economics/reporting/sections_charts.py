@@ -48,7 +48,7 @@ from hisim.economics.results import (
     EvaluationMatrix,
     LifecycleCostResult,
     VariantComparison,
-    discounted_payback_envelope,
+    PaybackEnvelope,
 )
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import Slot
@@ -356,7 +356,7 @@ def _liquidity_section_html(
             {"low": low, "best_estimate": best_estimate, "high": high}
         )
         lower_label = "cumulative discounted savings [EUR] (reference - variant)"
-        envelope = discounted_payback_envelope(crossings)
+        envelope = PaybackEnvelope.of(crossings)
         payback_note = payback_interval_sentence(envelope.earliest, envelope.central, envelope.latest)
     else:
         discounted = views.cumulative_discounted_cost_series(result)

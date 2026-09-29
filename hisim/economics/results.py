@@ -1164,7 +1164,7 @@ class VariantComparison:
     @property
     def discounted_payback_envelope(self) -> "PaybackEnvelope":
         """The payback years of the three worlds as one range ordered by value (#73)."""
-        return discounted_payback_envelope(self.discounted_payback_years)
+        return PaybackEnvelope.of(self.discounted_payback_years)
 
 
 def _subject_alignment_key(result: LifecycleCostResult, subject: str) -> str:
@@ -1266,7 +1266,8 @@ class PaybackEnvelope:
 
     With None as +infinity, ``earliest <= central <= latest`` holds by construction. Per-slot
     years stay on :attr:`VariantComparison.discounted_payback_years`, where each slot's curve is
-    drawn; every place that *states* a payback range reads this.
+    drawn; every place that *states* a payback range reads this, and :meth:`of` is the only way the
+    per-slot years of :func:`discounted_payback_year` become a stated range.
     """
 
     earliest: Optional[int]
@@ -1279,32 +1280,34 @@ class PaybackEnvelope:
 
         Args:
             payback_by_slot: One payback year per world, None meaning never within the horizon,
-                as :func:`discounted_payback_year` gives it slot by slot.
+                as :func:`discounted_payback_year` gives it slot by slot. All three worlds must
+                be present.
 
         Returns:
-            The range by value; a world missing from the mapping counts as never paying back.
+            The range by value.
+
+        Raises:
+            ValueError: A world is missing from the mapping. None is an answer ("never within
+                the horizon"), so a missing world is not read as one: it would state an open
+                range the per-slot years do not support.
         """
-        years = [payback_by_slot.get(slot) for slot, _getter in _SlotAccessors.BY_SLOT]
+        missing = [slot for slot, _getter in _SlotAccessors.BY_SLOT if slot not in payback_by_slot]
+        if missing:
+            raise ValueError(
+                f"The payback range needs the payback year of every world, but {', '.join(missing)} "
+                f"is missing from the per-slot years {dict(payback_by_slot)!r}."
+            )
+        years = [payback_by_slot[slot] for slot, _getter in _SlotAccessors.BY_SLOT]
         reached = [year for year in years if year is not None]
         return cls(
             earliest=min(reached) if reached else None,
-            central=payback_by_slot.get("best_estimate"),
+            central=payback_by_slot["best_estimate"],
             latest=max(reached) if len(reached) == len(years) else None,
         )
 
     def to_band(self) -> Dict[str, Optional[int]]:
         """The document's band: ``min`` earliest, ``best`` central, ``max`` latest; None = never."""
         return {"min": self.earliest, "best": self.central, "max": self.latest}
-
-
-def discounted_payback_envelope(payback_by_slot: Mapping[str, Optional[int]]) -> PaybackEnvelope:
-    """The payback range of the three worlds, ordered by value (:class:`PaybackEnvelope`).
-
-    Next to :func:`discounted_payback_year` because it is the only way the per-slot years become a
-    stated range: a range read off the slots by position is reversed whenever the savings
-    uncertainty is dominated by the reference's energy bill rather than by the plan's investment.
-    """
-    return PaybackEnvelope.of(payback_by_slot)
 
 
 def compare(
@@ -1332,7 +1335,7 @@ def compare(
 
     The same reasoning drives the two derived figures: the discounted payback is the zero-crossing
     of each slot's own savings curve (each slot independently "never"; the range across them is
-    taken by value, :func:`discounted_payback_envelope`), and
+    taken by value, :meth:`PaybackEnvelope.of`), and
     warm-rent neutrality is evaluated per slot, where neutrality in the HIGH slot — "neutral even
     if everything comes in expensive" — is the robust policy statement (§6.5).
 

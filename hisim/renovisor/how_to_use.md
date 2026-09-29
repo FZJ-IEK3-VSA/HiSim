@@ -226,10 +226,11 @@ marks each `by_subject` row's `investment_origin` (`reader_quote`, `included_in_
 for a soft loan without a repayment grant), and `max_amount_for_measure_in_euro`, that summed over
 all of the measure's subjects in the stage (renovisorissues #65; null when one of them is null). A
 grant capped at or a share of the measure's cost (lump sum, per unit, tiered, share, bonus share,
-tax credit) cannot be stated on an unpriced measure (an envelope measure without a `cost` block and
-without a quote): its maximum is null with a note saying why, and a grant the answers would award
-stays `undetermined`, books nothing, and asks for the measure's price in `open_questions`
-(renovisorissues #77); a soft loan and a per-kWh payment keep their rules. The energy-management
+tax credit, a soft loan's repayment grant) cannot be stated on an unpriced measure (an envelope
+measure without a `cost` block and without a quote): its maximum is null with a note saying why, and
+a grant the answers would award stays `undetermined`, books nothing, and asks for the measure's
+price in `open_questions` (renovisorissues #77); a soft loan without a repayment grant and a per-kWh
+payment keep their rules. The energy-management
 controller that comes with a battery is part of the battery system: a subject of its own, costless
 (no investment, maintenance or renewal cost), dated and renewed with the battery (no due years of
 its own), carrying `battery_system` where the package installs the battery (renovisorissues #77).

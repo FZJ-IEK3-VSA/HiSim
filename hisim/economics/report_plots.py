@@ -106,7 +106,7 @@ from hisim.economics.results import (  # noqa: E402
     VariantComparison,
     compare,
     cumulative_discounted_savings,
-    discounted_payback_envelope,
+    PaybackEnvelope,
 )
 from hisim.economics.timeline import CostCategory  # noqa: E402
 from hisim.economics.uncertainty import Slot  # noqa: E402
@@ -1085,7 +1085,7 @@ def plot_liquidity_fan(
                     "evaluations of the same observation period."
                 )
             lower_label = "cumulative discounted savings [EUR]"
-            envelope = discounted_payback_envelope(views.band_zero_crossings(curves))
+            envelope = PaybackEnvelope.of(views.band_zero_crossings(curves))
             note = payback_interval_sentence(envelope.earliest, envelope.central, envelope.latest)
         else:
             discounted = views.cumulative_discounted_cost_series(result)

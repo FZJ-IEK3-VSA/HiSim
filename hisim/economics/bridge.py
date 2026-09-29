@@ -1137,10 +1137,13 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
         if extra_attributes is not None:
             matched_subjects.add(subject_facts.subject)
             subject_facts.facts.technical_attributes.update(extra_attributes)
+    zeroed_subjects = set()
     for subject_facts in inputs.cost_facts:
         part = context.costless_subjects.get(subject_facts.subject)
         if part is not None:
+            zeroed_subjects.add(subject_facts.subject)
             subject_facts.facts = part.applied_to(subject_facts.facts)
+    known_subjects = ", ".join(sorted(item.subject for item in inputs.cost_facts)) or "(none)"
     unmatched = sorted(set(context.technical_attributes_by_subject) - matched_subjects)
     if unmatched:
         # A subject name that matches nothing is a typo or a renamed component, and its attributes
@@ -1149,8 +1152,17 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
         log.warning(
             "Lifecycle cost engine: EconomicContext.technical_attributes_by_subject names "
             f"subject(s) that no extracted cost subject matches, so their attributes were not "
-            f"applied: {', '.join(unmatched)}. Known subjects: "
-            f"{', '.join(sorted(item.subject for item in inputs.cost_facts)) or '(none)'}."
+            f"applied: {', '.join(unmatched)}. Known subjects: {known_subjects}."
+        )
+    unmatched_costless = sorted(set(context.costless_subjects) - zeroed_subjects)
+    if unmatched_costless:
+        # The same typo on the other map costs money instead of a grant: a part declared to be
+        # part of another purchase that matches no subject is not zeroed, and if it exists under
+        # another name its price is booked a second time without anything saying so.
+        log.warning(
+            "Lifecycle cost engine: EconomicContext.costless_subjects names subject(s) that no "
+            f"extracted cost subject matches, so those parts were not zeroed: "
+            f"{', '.join(unmatched_costless)}. Known subjects: {known_subjects}."
         )
     for name in EconomicContext.NON_NEGATIVE_FIELDS:
         # `is not None`, not truthiness: a declared 0.0 is a statement, not an absent value.

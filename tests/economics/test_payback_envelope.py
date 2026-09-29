@@ -21,7 +21,6 @@ from hisim.economics.parameters import EconomicParameters
 from hisim.economics.results import (
     PaybackEnvelope,
     cumulative_discounted_savings,
-    discounted_payback_envelope,
     discounted_payback_year,
 )
 from hisim.economics.staged import StagedEvaluator
@@ -59,7 +58,7 @@ def _payback_by_slot(reference: SimpleNamespace, plan: SimpleNamespace) -> dict:
 
 def _band(payback_by_slot: dict) -> dict:
     """The document's band for those years."""
-    return discounted_payback_envelope(payback_by_slot).to_band()
+    return PaybackEnvelope.of(payback_by_slot).to_band()
 
 
 class TestTheEnvelope:
@@ -105,6 +104,15 @@ class TestTheEnvelope:
             "best": None,
             "max": None,
         }
+
+    def test_a_missing_world_is_refused_rather_than_read_as_never(self):
+        """None means "never within the horizon", so a world nobody computed must not become one.
+
+        Reading a missing slot as None would state an open range (``latest`` None) that no curve
+        supports; the envelope names the missing world instead.
+        """
+        with pytest.raises(ValueError, match="high"):
+            PaybackEnvelope.of({"low": 7, "best_estimate": 9})
 
     def test_the_envelope_is_ordered_for_every_combination(self):
         """With null as +infinity, earliest <= central <= latest for every triple of years."""

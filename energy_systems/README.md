@@ -198,6 +198,14 @@ a row's meaning itself — it only writes down what it observed and carries a pr
 decision forward — and a `≠` row left empty is refused by name, twice: once by the importer
 against the cells, and once by the second pass against the recordings.
 
+A group can add a participant to an aggregator that survives it: the ten building-sizer setups the
+RenoVisor translator runs carry a second array (`added_pv`) and a second battery (`added_battery`),
+which the meter and the energy manager measure or dispatch (hisim-epc.28). The builder therefore
+writes a component as the column that recorded it with the most references into components the
+first column's world lacks, provided it says everything else exactly as that column does, and the
+expansion drops the references into a switched-off group; the comparison, likewise, ignores a
+reference into a component either side lacks, so such a component needs no decision of its own.
+
 Every probe column is then an assertion the second pass checks: put the grouped file's switches
 where that column stands, resolve it, and the result equals that column's flat recording byte for
 byte. The baseline column is what makes the grouped file provably the committed twin with structure

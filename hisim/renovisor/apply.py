@@ -35,7 +35,6 @@ from hisim.renovisor.constants import (
     LayerDefaults,
     OpeningUValues,
     Placement,
-    RoofDefaults,
 )
 from hisim.renovisor.envelope import LayerNote, UValueComposer
 from hisim.renovisor.request import CatalogueTable, Material, Measure, Request, SemanticChecks
@@ -801,27 +800,19 @@ class MeasureRegistry:
         "calculation reads"
     )
 
-    #: The measure's note on a house that already has an array (owner decision of 2026-09-29,
+    #: The measure's note on a house that already has an array (owner decisions of 2026-09-29,
     #: hisim-epc.28).
     PV_ADDS_NOTE: ClassVar[str] = (
-        "adds an array beside the house's existing one, which is kept: the existing array keeps "
-        "producing and ageing, and the new one is its own purchase with its own life. The twins "
-        "carry one PVSystem, so both are simulated as one array of the summed power; the size of "
-        "the added array is on the house.pv_system.added_array.power_in_watt line"
+        "adds a second array beside the house's existing one, which is kept: the existing array keeps "
+        "producing and ageing, and the new one is its own component (PVSystemAdded), its own purchase "
+        "and its own life, with the measure's orientation or else the existing array's. Its size is on "
+        "the house.pv_system.added_array.power_in_watt line. Whether a second array is eligible for the "
+        "SEAI solar PV grant is unverified (hisim-cyc.2)"
     )
-
-    #: The note on a stated orientation that differs from the existing array's.
-    PV_ORIENTATION_DIFFERS_NOTE: ClassVar[str] = (
-        "the house already has an array {orientation} {existing:g} degrees; the twins carry one "
-        "PVSystem, so the added array is simulated in the existing array's orientation"
-    )
-
-    #: How that note names each of the two orientation keys.
-    PV_ORIENTATION_WORDS: ClassVar[Dict[str, str]] = {"azimuth": "facing", "tilt": "tilted at"}
 
     @classmethod
     def photovoltaic_system(cls, context: MeasureContext) -> None:
-        """Install a photovoltaic array, or add one beside the house's own; a stated power sizes it.
+        """Install a photovoltaic array, or add a second one beside the house's; a stated power sizes it.
 
         On a house without an array the measure installs one. The roof share is the ``everyone``
         option and is always written. ``power_in_watt``, when the request states it, is written
@@ -832,14 +823,15 @@ class MeasureRegistry:
         line is ``not_implemented_yet`` and no house line repeats it (the renovated block's value
         is the package's, not a request leaf).
 
-        On a house that has an array the measure adds a second one beside it (owner decision of
+        On a house that has an array the measure adds a second one beside it (owner decisions of
         2026-09-29, hisim-epc.28): the existing block stays as the request states it, and the new
-        array's figures go into its ``added_array`` key, from which the translator sizes the added
-        array against the roof the existing one leaves free (:func:`_photovoltaics` in
-        ``translate.py``). A stated orientation equal to the existing array's is ``used``; a
-        different one is ``approximated``, because both arrays are simulated as one.
+        array's figures go into its ``added_array`` key. The translator writes it into the twins'
+        second array, with its own orientation -- the stated one, else the existing array's -- and
+        its own size (:class:`~hisim.renovisor.translate.RoofArrays`).
         """
         existing = context.effects.read(HousePaths.PV_SYSTEM)
+        adds = isinstance(existing, Mapping)
+        component = "PVSystemAdded" if adds else "PVSystem"
         array: Dict[str, Any] = {
             "size_in_percent_of_roof_area": context.option("size_in_percent_of_roof_area")
         }
@@ -850,31 +842,19 @@ class MeasureRegistry:
             context.record("power_in_watt", ReportStatus.USED)
         else:
             context.record("size_in_percent_of_roof_area", ReportStatus.USED)
-        adds = isinstance(existing, Mapping)
         if adds:
-            context.target("PVSystem.config.power_in_watt")
+            context.target(f"{component}.config.power_in_watt")
             context.line.note = cls.PV_ADDS_NOTE
         else:
-            context.target("PVSystem.config.share_of_maximum_pv_potential")
+            context.target(f"{component}.config.share_of_maximum_pv_potential")
             if _is_number(power):
-                context.target("PVSystem.config.power_in_watt")
+                context.target(f"{component}.config.power_in_watt")
         for option, key in cls.PV_ORIENTATION:
             stated = context.option(option)
-            if not _is_number(stated):
-                continue
-            array[key] = float(stated)
-            if not adds:
+            if _is_number(stated):
+                array[key] = float(stated)
                 context.record(option, ReportStatus.USED)
-                context.target(f"PVSystem.config.{key}")
-                continue
-            simulated = cls._existing_orientation(context.effects, key)
-            if float(stated) == simulated:
-                context.record(option, ReportStatus.USED)
-            else:
-                note = cls.PV_ORIENTATION_DIFFERS_NOTE.format(
-                    orientation=cls.PV_ORIENTATION_WORDS[key], existing=simulated
-                )
-                context.record(option, ReportStatus.APPROXIMATED, note)
+                context.target(f"{component}.config.{key}")
         shading = context.option(cls.PV_SHADING_LOSSES)
         if _is_number(shading):
             array[cls.PV_SHADING_LOSSES] = float(shading)
@@ -883,17 +863,6 @@ class MeasureRegistry:
             context.effects.set(HousePaths.PV_ADDED_ARRAY, array)
         else:
             context.effects.replace_block(HousePaths.PV_SYSTEM, array)
-
-    @classmethod
-    def _existing_orientation(cls, effects: "Effects", key: str) -> float:
-        """The azimuth or tilt the house's existing array is simulated at: its own, else the roof's default."""
-        stated = effects.read(f"{HousePaths.PV_SYSTEM}.{key}")
-        if _is_number(stated):
-            return float(stated)
-        if key == "azimuth":
-            return RoofDefaults.AZIMUTH
-        shape = effects.read("building.roof.shape")
-        return RoofDefaults.TILT_BY_ROOF_SHAPE[shape if isinstance(shape, str) else RoofDefaults.SHAPE]
 
     #: The ``battery`` keys the measure writes: the request schema's own capacity field (HiSim's
     #: config field verbatim), a power the schema's house block does not offer yet, and the
@@ -904,11 +873,11 @@ class MeasureRegistry:
 
     #: The measure's note on a house that already has a battery (hisim-epc.28).
     BATTERY_ADDS_NOTE: ClassVar[str] = (
-        "adds a battery beside the house's existing one, which is kept: the existing battery keeps "
-        "working and ageing, and the new one is its own purchase with its own life. The twins carry "
-        "one Battery, so both are simulated as one battery of the summed capacity and power; the "
-        "added capacity is on the house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour "
-        "line"
+        "adds a second battery beside the house's existing one, which is kept: the existing battery "
+        "keeps working and ageing, and the new one is its own component (BatteryAdded), its own "
+        "purchase and its own life, behind the same energy manager, which serves the house's battery "
+        "first; its capacity is on the "
+        "house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour line"
     )
 
     @classmethod
@@ -966,16 +935,18 @@ class MeasureRegistry:
                 f"absent from the request; the catalogue's rule, 0.5 C of the capacity ({rate:g} W per "
                 "kWh), which is also HiSim's battery's own",
             )
-        if isinstance(context.effects.read(HousePaths.BATTERY), Mapping):
+        adds = isinstance(context.effects.read(HousePaths.BATTERY), Mapping)
+        if adds:
             context.effects.set(HousePaths.ADDED_BATTERY, block)
             context.line.note = cls.BATTERY_ADDS_NOTE if context.line.note is None else (
                 f"{cls.BATTERY_ADDS_NOTE}; {context.line.note}"
             )
         else:
             context.effects.replace_block(HousePaths.BATTERY, block)
+        component = "BatteryAdded" if adds else "Battery"
         context.target(
-            "Battery.config.custom_battery_capacity_generic_in_kilowatt_hour",
-            "Battery.config.custom_pv_inverter_power_generic_in_watt",
+            f"{component}.config.custom_battery_capacity_generic_in_kilowatt_hour",
+            f"{component}.config.custom_pv_inverter_power_generic_in_watt",
         )
 
     @classmethod

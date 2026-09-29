@@ -196,20 +196,28 @@ def run_week(document: Dict[str, Any], directory: Path, name: str) -> ExitCode:
 
 @pytest.mark.system_setups
 class TestAPhotovoltaicMeasureAddsToTheHousesArray:
-    """hisim-epc.28: the measure adds an array beside the house's, so production can only rise."""
+    """hisim-epc.28: the measure adds a second array beside the house's, so production can only rise."""
 
     HALF_THE_ROOF: Dict[str, Any] = {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50}}
 
     def test_the_remote_pair_no_longer_loses_production(self, tmp_path: Path) -> None:
-        """The 8 kW array already fills the usable roof, so the measure adds nothing and nothing falls."""
+        """The 8 kW array already fills its roof face, so the same orientation adds nothing and nothing falls."""
         heat_pump = {"id": "heating_system", "options": {"type_of_system": "air_source_heat_pump"}}
         assert run_week(terraced_house(8000), tmp_path, "base") == ExitCode.FINISHED
         assert run_week(terraced_house(8000, heat_pump, self.HALF_THE_ROOF), tmp_path, "package") == ExitCode.FINISHED
 
         assert kpi(tmp_path / "package", "PV production") == pytest.approx(kpi(tmp_path / "base", "PV production"))
 
+    def test_an_added_array_facing_another_way_adds_its_whole_share(self, tmp_path: Path) -> None:
+        """The remote pair with the measure facing east: another roof face, so production rises."""
+        east = {"id": "photovoltaic_system", "options": {"size_in_percent_of_roof_area": 50, "azimuth_in_degree": 90}}
+        assert run_week(terraced_house(8000), tmp_path, "base") == ExitCode.FINISHED
+        assert run_week(terraced_house(8000, east), tmp_path, "package") == ExitCode.FINISHED
+
+        assert kpi(tmp_path / "package", "PV production") > kpi(tmp_path / "base", "PV production")
+
     def test_production_rises_by_the_added_arrays_yield(self, tmp_path: Path) -> None:
-        """A 3 kW array leaves room: the one simulated array is the sum, and its output scales with it."""
+        """A 3 kW array leaves room on its face: a second array of the same orientation, output linear in power."""
         assert run_week(terraced_house(3000), tmp_path, "base") == ExitCode.FINISHED
         assert run_week(terraced_house(3000, self.HALF_THE_ROOF), tmp_path, "package") == ExitCode.FINISHED
 

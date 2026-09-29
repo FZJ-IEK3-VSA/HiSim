@@ -1716,7 +1716,7 @@ class StagedEvaluator:
                     # nothing ages into the next stage's register.
                     continue
                 if facts.own_register_entry:
-                    # A piece bought beside a kept unit (hisim-epc.28, hisim-1y0m) ages on an entry
+                    # A unit bought beside a kept one (hisim-epc.28, hisim-1y0m) ages on an entry
                     # bound to it, beside the unit it enlarged, which it neither hides nor replaces. It
                     # leaves with that unit: a stage that no longer carries it has replaced, shrunk or
                     # removed the subject.

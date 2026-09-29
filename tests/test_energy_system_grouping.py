@@ -1064,3 +1064,159 @@ def test_a_knob_adding_a_field_writes_it_in_the_configuration_class_field_order(
 
     assert list(document["components"]["pv"]["config"]) == ["location", "power_in_watt"]
     assert realizer.text("relocated", "") == matrix.recordings["relocated"].text
+
+
+class AddedArray:
+    """A household whose second array is a group, measured by a meter that survives it (hisim-epc.28).
+
+    The meter is in both worlds; in the second it also measures the added array. A group can only
+    add that feed if the file's meter entry carries it and the expansion drops it where the group
+    is off, so the builder has to state the meter as the fuller world recorded it -- the difference
+    is membership, not a value a consumer sets.
+    """
+
+    #: The house's own world: one array, measured by the meter.
+    BASELINE: ClassVar[str] = """
+schema_version: 3
+name: added_array
+components:
+  weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+  pv:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      power_in_watt: 9000.0
+    inputs:
+      - weather
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config: {}
+    inputs:
+      - input: ElectricityInput
+        from: pv.ElectricityOutput
+"""
+
+    #: The world with the second array, which the meter measures too.
+    ADDED: ClassVar[str] = """
+schema_version: 3
+name: added_array
+components:
+  weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+  pv:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      power_in_watt: 9000.0
+    inputs:
+      - weather
+  pv_added:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      power_in_watt: 3000.0
+    inputs:
+      - weather
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config: {}
+    inputs:
+      - input: ElectricityInput
+        from: pv_added.ElectricityOutput
+      - input: ElectricityInput
+        from: pv.ElectricityOutput
+"""
+
+    #: The probe list the two worlds stand for.
+    PROBES: ClassVar[str] = """
+setup: system_setups/added_array.py
+defaults: tests.test_energy_system_grouping.Defaults.build
+probes:
+  - column: baseline
+    description: the class defaults
+  - column: added
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+"""
+
+    @classmethod
+    def matrix(cls) -> ProbeMatrix:
+        """The two worlds as a matrix, baseline first."""
+        recordings = {
+            "baseline": Fork.recording("baseline", cls.BASELINE),
+            "added": Fork.recording("added", cls.ADDED),
+        }
+        return ProbeMatrix.of(
+            dataclasses.replace(ProbeList.read(cls.PROBES), origin="energy_systems/added_array.probes.yaml"),
+            recordings,
+        )
+
+    @classmethod
+    def decision(cls) -> Grouping:
+        """The second array is a group; the meter is an ordinary component of both worlds."""
+        return Grouping(
+            setup="system_setups/added_array.py",
+            probes="energy_systems/added_array.probes.yaml",
+            assignments=(Assignment("pv_added", AssignmentKind.GROUP, "added_pv"),),
+            configurations=(
+                ConfigurationSelection("baseline", groups={"added_pv": False}),
+                ConfigurationSelection("added", groups={"added_pv": True}),
+            ),
+            origin="added_array.grouping.yaml",
+        )
+
+
+@pytest.mark.base
+def test_a_group_can_add_a_participant_to_an_aggregator_that_survives_it() -> None:
+    """Catches a meter written as the baseline recorded it, so the added array is never measured.
+
+    The file states the meter with both feeds; the expansion drops the one into the switched-off
+    group, so both columns reproduce with no knob -- the feed is not a value a consumer would have to
+    know to set.
+    """
+    matrix = AddedArray.matrix()
+    decision = AddedArray.decision()
+    check_grouping(decision, matrix)
+    builder = GroupedSystemBuilder(decision, matrix)
+    grouped = builder.build()
+    realizer = ColumnRealizer(grouped, builder)
+
+    assert [item.source for item in grouped.components["meter"].inputs] == ["pv_added", "pv"]
+    assert not builder.knobs()
+    for column in matrix.columns:
+        assert realizer.text(column, "") == matrix.recordings[column].text, column
+
+
+@pytest.mark.base
+def test_a_knob_giving_an_entry_its_first_config_block_writes_it_before_the_inputs() -> None:
+    """Catches the realizer appending a knob's ``config`` block after ``inputs``.
+
+    An entry whose preset answers everything carries no ``config`` block in the baseline; a column
+    that sets one field produces a block the emitter writes before ``inputs``, and the realized
+    entry has to put it there too or the column fails over key order alone.
+    """
+    baseline = AddedArray.BASELINE.replace("    config:\n      power_in_watt: 9000.0\n", "", 1)
+    configured = AddedArray.BASELINE
+    recordings = {
+        "baseline": Fork.recording("baseline", baseline),
+        "added": Fork.recording("added", configured),
+    }
+    matrix = ProbeMatrix.of(
+        dataclasses.replace(ProbeList.read(AddedArray.PROBES), origin="energy_systems/added_array.probes.yaml"),
+        recordings,
+    )
+    decision = Grouping(
+        setup="system_setups/added_array.py",
+        probes="energy_systems/added_array.probes.yaml",
+        assignments=(Assignment("pv", AssignmentKind.OVERRIDE, note="the array's power is a value"),),
+        configurations=(ConfigurationSelection("baseline"), ConfigurationSelection("added")),
+        origin="added_array.grouping.yaml",
+    )
+    check_grouping(decision, matrix)
+    builder = GroupedSystemBuilder(decision, matrix)
+    realizer = ColumnRealizer(builder.build(), builder)
+
+    assert list(realizer.document("added")["components"]["pv"]) == ["class", "config", "inputs"]
+    assert realizer.text("added", "") == matrix.recordings["added"].text

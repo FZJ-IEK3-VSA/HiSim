@@ -123,7 +123,8 @@ class GroupedSystemBuilder:
         kept = {}
         for name, entry in self.baseline.entries().items():
             if self.grouping.assignment(name).kind in (AssignmentKind.ORDINARY, AssignmentKind.OVERRIDE):
-                kept[name] = entry
+                column = self.entry_column(name, self.matrix.columns)
+                kept[name] = self.matrix.recordings[column].entries()[name] if column is not None else entry
         return kept
 
     def _groups(self) -> Dict[str, Group]:
@@ -210,11 +211,43 @@ class GroupedSystemBuilder:
         Returns:
             The entry, or ``None`` when none of the columns has the component at all.
         """
-        for column in columns:
-            entry = self.matrix.recordings[column].entries().get(component)
-            if entry is not None:
-                return entry
-        return None
+        column = self.entry_column(component, columns)
+        return self.matrix.recordings[column].entries()[component] if column is not None else None
+
+    def entry_column(self, component: str, columns: Tuple[str, ...]) -> Optional[str]:
+        """The column whose recording the file states one component's entry from.
+
+        The first of these columns that has the component, unless a later one recorded the same
+        entry *plus* references to components that first world does not have: a meter or an energy
+        manager that also measures the array or the battery a group adds (hisim-epc.28). The
+        expansion drops a reference into a switched-off group, so the fuller entry realizes to the
+        first column's in that column's world and to its own where the group is on -- a group can
+        then add a participant to an aggregator that survives it, which a knob could only restate.
+        A candidate that differs in anything else -- a value, a reference to a component the first
+        world has -- is not taken, so no value moves from one world into another.
+
+        Args:
+            component: The component wanted.
+            columns: The columns to look in, in preference order.
+
+        Returns:
+            The column, or ``None`` when none of them recorded the component at all.
+        """
+        having = [column for column in columns if component in self.matrix.recordings[column].entries()]
+        if not having:
+            return None
+        first = having[0]
+        present = self.matrix.recordings[first].entries()
+        stated = EntryComparison.document(present[component])
+        chosen, reach = first, len(stated.get(EntryComparison.INPUTS_KEY) or ())
+        for column in having[1:]:
+            fuller = EntryComparison.document(self.matrix.recordings[column].entries()[component])
+            if EntryComparison.restricted(fuller, present) != EntryComparison.restricted(stated, present):
+                continue
+            size = len(fuller.get(EntryComparison.INPUTS_KEY) or ())
+            if size > reach:
+                chosen, reach = column, size
+        return chosen
 
     def source_column(self, component: str, column: str) -> str:
         """Which column's recording the grouped file holds this component's entry from.
@@ -236,10 +269,8 @@ class GroupedSystemBuilder:
             candidates = self._columns_selecting(assignment.name, option or "")
         else:
             candidates = self.matrix.columns
-        for candidate in candidates:
-            if component in self.matrix.recordings[candidate].entries():
-                return candidate
-        return column
+        source = self.entry_column(component, candidates)
+        return source if source is not None else column
 
     def knobs(self) -> Tuple[Knob, ...]:
         """Every value the file does not determine, in table order.
@@ -317,6 +348,12 @@ class ColumnRealizer:
     #: The entry key holding the configuration block, which is the one block a knob can add a key
     #: to and therefore the one that has to be put back into field order after a knob is applied.
     CONFIG_KEY: ClassVar[str] = "config"
+
+    #: The order :meth:`hisim.energy_system.emitter.EnergySystemEmitter.entry` writes an entry's
+    #: keys in, which a patched entry is put back into.
+    ENTRY_KEY_ORDER: ClassVar[Tuple[str, ...]] = (
+        "class", "preset", "constructor", "config", "inputs", "sizing_sources"
+    )
 
     def __init__(self, grouped: EnergySystemFile, builder: GroupedSystemBuilder) -> None:
         """Prepares the realizer for one grouped file.
@@ -426,7 +463,13 @@ class ColumnRealizer:
         declared = tuple(field.name for field in dataclasses.fields(ClassBinder.config_class_of(name, entry)))
         ordered = {key: block[key] for key in declared if key in block}
         ordered.update({key: value for key, value in block.items() if key not in ordered})
-        return {key: (ordered if key == cls.CONFIG_KEY else value) for key, value in document.items()}
+        patched = {key: (ordered if key == cls.CONFIG_KEY else value) for key, value in document.items()}
+        # A knob that gives a block-less entry its first ``config`` key appends the block after
+        # ``inputs``; the emitter writes every entry's keys in one canonical order, so the block
+        # goes back to its place there too.
+        canonical = [key for key in cls.ENTRY_KEY_ORDER if key in patched]
+        canonical.extend(key for key in patched if key not in canonical)
+        return {key: patched[key] for key in canonical}
 
     def text(self, column: str, header: str) -> str:
         """The realized file of one column, ready to be compared with its flat recording.

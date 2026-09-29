@@ -108,29 +108,6 @@ if TYPE_CHECKING:  # The renderer is imported lazily; only its record type is ne
 SECONDS_PER_YEAR = 365 * 24 * 3600
 
 
-@dataclass(frozen=True)
-class AddedPiece:
-    """The part of a simulated cost subject a measure added beside the unit the house keeps.
-
-    A simulation component can stand for two purchases: a photovoltaic measure on a house that
-    already has an array adds a second array, and the twin simulates both as one ``PVSystem`` of
-    the summed power, because every recorded twin wires exactly one (hisim-epc.28). The engine
-    would extract one subject of the summed size and call it kept -- the new array free -- or, were
-    the old one declared replaced, charge the whole sum and write the old one off. The piece says
-    which part is new: :func:`_merge_context` splits the component's facts into the kept unit at the
-    size it had and one subject of its own at the added size, which is bought new
-    (``ComponentCostFacts.own_register_entry``) and lives on its own schedule.
-
-    Args:
-        subject: The cost subject the added part is priced as, e.g. ``PVSystem#added``.
-        size: Its size, in the size unit of the component's facts; more than zero and less than
-            the component's whole size.
-    """
-
-    subject: str
-    size: float
-
-
 @dataclass
 class EconomicContext:
     """Everything a system setup can declare beyond what the simulation knows itself.
@@ -166,9 +143,9 @@ class EconomicContext:
     - `technical_attributes_by_subject` — per-subject key/value pairs merged into the facts the
       adapter derived, for subsidy conditions the adapter cannot know (SCOP, refrigerant, achieved
       U-value).
-    - `added_pieces` — for a component that simulates a kept unit and one a measure added beside it
-      as one (an array added to the house's array), the added part, split off into a subject of its
-      own that is bought new (`AddedPiece`).
+    - `own_register_subjects` — subjects bought new although the register keeps an asset of their
+      class: a second array or battery a measure adds beside the house's own (hisim-epc.28), which a
+      same-class lookup would call the house's and charge nothing for.
     - the actor-model context (`living_area_in_m2`, `heated_floor_area_in_m2`,
       `current_cold_rent_in_euro_per_m2_month`, `building_specific_emissions_in_kg_per_m2_a`), which
       the §6.3/§6.4 CO2 split and modernization levy need to allocate costs between landlord and
@@ -200,9 +177,9 @@ class EconomicContext:
     # Technical attributes merged into component-derived facts by subject name (subsidy
     # conditions like SCOP/refrigerant that the adapter cannot know):
     technical_attributes_by_subject: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    # Simulated subject -> the part of it a measure added beside a unit the house keeps, split off
-    # into a subject of its own (`AddedPiece`, hisim-epc.28):
-    added_pieces: Dict[str, AddedPiece] = field(default_factory=dict)
+    # Subjects matched only against a register entry bound to their own name, and so bought new
+    # beside a kept asset of their class (`ComponentCostFacts.own_register_entry`, hisim-epc.28):
+    own_register_subjects: List[str] = field(default_factory=list)
     # Actor-model context (§6.3, §6.4):
     living_area_in_m2: Optional[float] = None
     heated_floor_area_in_m2: Optional[float] = None
@@ -1102,8 +1079,8 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
         inputs.subsidy_context = context.subsidy_context
     for subject_facts in context.extra_cost_facts:
         inputs.cost_facts.append(subject_facts)
-    if context.added_pieces:
-        inputs.cost_facts = _split_added_pieces(inputs.cost_facts, context.added_pieces)
+    if context.own_register_subjects:
+        inputs.cost_facts = _own_register_entries(inputs.cost_facts, context.own_register_subjects)
     matched_subjects = set()
     for subject_facts in inputs.cost_facts:
         extra_attributes = context.technical_attributes_by_subject.get(subject_facts.subject)
@@ -1128,71 +1105,32 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
             setattr(inputs, name, declared)
 
 
-def _split_added_pieces(
-    cost_facts: List[SubjectCostFacts], pieces: Dict[str, AddedPiece]
-) -> List[SubjectCostFacts]:
-    """Every subject a measure enlarged, split into the unit it had and the piece it added.
-
-    The kept unit keeps its subject and its facts at the size it had; the piece is a subject of its
-    own at the added size, bought new on a register entry of its own
-    (``ComponentCostFacts.own_register_entry``). An override that states the whole subject's
-    figure and no law -- an investment or embodied-CO2 override -- is split in proportion to size;
-    a database-priced subject is priced by the database's law at each size.
+def _own_register_entries(cost_facts: List[SubjectCostFacts], subjects: List[str]) -> List[SubjectCostFacts]:
+    """The subjects with the named ones marked as bought on a register entry of their own.
 
     Args:
         cost_facts: The subjects as extracted and merged so far.
-        pieces: Simulated subject -> its added piece.
+        subjects: The subjects a measure adds beside a kept asset of their class.
 
     Returns:
-        The subjects, each enlarged one followed by its piece.
+        The subjects, the named ones with ``own_register_entry`` set.
 
     Raises:
-        ValueError: If a piece names a subject the run did not extract, or a size that is not
-            more than zero and less than the subject's own. Either would price a purchase that
-            the simulation did not describe, or leave out one it did.
+        ValueError: If a named subject is not one the run extracted: the purchase it stands for
+            would silently be left kept, or be missing.
     """
-    unknown = sorted(set(pieces) - {subject_facts.subject for subject_facts in cost_facts})
+    unknown = sorted(set(subjects) - {subject_facts.subject for subject_facts in cost_facts})
     if unknown:
         raise ValueError(
-            f"EconomicContext.added_pieces names subject(s) the run did not extract: {', '.join(unknown)}. "
-            "The added part of a subject is split off the subject the simulation describes, and a "
-            "piece of nothing would price a purchase no component makes."
+            f"EconomicContext.own_register_subjects names subject(s) the run did not extract: {', '.join(unknown)}. "
+            "A subject bought beside a kept asset of its class is a component of the run."
         )
-    split: List[SubjectCostFacts] = []
-    for subject_facts in cost_facts:
-        piece = pieces.get(subject_facts.subject)
-        if piece is None:
-            split.append(subject_facts)
-            continue
-        facts = subject_facts.facts
-        if not 0.0 < piece.size < facts.size:
-            raise ValueError(
-                f"EconomicContext.added_pieces[{subject_facts.subject!r}]: the added piece "
-                f"{piece.subject!r} is {piece.size:g} {facts.size_unit.value} of a subject of "
-                f"{facts.size:g}; a piece is more than nothing and less than the whole, or there is "
-                "no unit left for the house to keep."
-            )
-        for name, size, own in (
-            (subject_facts.subject, facts.size - piece.size, False),
-            (piece.subject, piece.size, True),
-        ):
-            share = size / facts.size
-            investment = facts.investment_cost_override_in_euro
-            embodied = facts.embodied_co2_override_in_kg
-            split.append(
-                SubjectCostFacts(
-                    name,
-                    replace(
-                        facts,
-                        size=size,
-                        investment_cost_override_in_euro=investment.scale(share) if investment is not None else None,
-                        embodied_co2_override_in_kg=embodied * share if embodied is not None else None,
-                        own_register_entry=own,
-                        technical_attributes=dict(facts.technical_attributes),
-                    ),
-                )
-            )
-    return split
+    return [
+        SubjectCostFacts(subject_facts.subject, replace(subject_facts.facts, own_register_entry=True))
+        if subject_facts.subject in subjects
+        else subject_facts
+        for subject_facts in cost_facts
+    ]
 
 
 #: Modules the cost path needs before it writes anything, because it draws the audit heatmap on

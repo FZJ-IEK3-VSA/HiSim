@@ -55,19 +55,71 @@ assignments:
     assign: variant:electricity_management/ems_with_battery
     note: The other half of that world, and the component the meter's two wirings
       are about.
+  PVSystemAdded:
+    assign: group:added_pv
+    note: 'The array a photovoltaic renovation measure adds beside the house''s own
+      (hisim-epc.28): there or not, so a group. The meter and the energy manager measure
+      it as a second producer; their entries carry that feed, and the expansion drops
+      it wherever the group is off.'
+  BatteryAdded:
+    assign: group:added_battery
+    note: The battery a battery renovation measure adds beside the house's own (hisim-epc.28),
+      dispatched by the same energy manager on its own source weight after the house's
+      battery; the manager's entry carries its feed, dropped wherever the group is
+      off. It exists only in the worlds with an energy manager, which no probe column
+      contradicts.
 configurations:
   baseline:
+    groups:
+      added_pv: false
+      added_battery: false
     variants:
       electricity_management: ems_with_battery
   no_battery_ems:
+    groups:
+      added_pv: false
+      added_battery: false
     variants:
       electricity_management: metered_directly
   half_pv:
+    groups:
+      added_pv: false
+      added_battery: false
     variants:
       electricity_management: ems_with_battery
   radiator:
+    groups:
+      added_pv: false
+      added_battery: false
     variants:
       electricity_management: ems_with_battery
   nineties_building:
+    groups:
+      added_pv: false
+      added_battery: false
+    variants:
+      electricity_management: ems_with_battery
+  added_pv:
+    groups:
+      added_pv: true
+      added_battery: false
+    variants:
+      electricity_management: ems_with_battery
+  added_pv_metered_directly:
+    groups:
+      added_pv: true
+      added_battery: false
+    variants:
+      electricity_management: metered_directly
+  added_battery:
+    groups:
+      added_pv: false
+      added_battery: true
+    variants:
+      electricity_management: ems_with_battery
+  added_pv_and_battery:
+    groups:
+      added_pv: true
+      added_battery: true
     variants:
       electricity_management: ems_with_battery

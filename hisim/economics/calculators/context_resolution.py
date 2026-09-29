@@ -281,10 +281,10 @@ def installation_verdict(
     remaining life.
 
     A register entry bound to a subject (``ExistingAsset.subject``) is seen by that subject
-    alone, and a subject with ``own_register_entry`` sees nothing else: a piece added beside a kept
-    unit -- the array a measure adds to an existing one (hisim-epc.28), the increment a staged plan
-    adds to a kept subject (hisim-1y0m) -- is kept or bought on its own entry, never on the unit it
-    enlarges. A register binding nothing reads exactly as before.
+    alone, and a subject with ``own_register_entry`` sees nothing else: a unit added beside a kept
+    one -- the second array a measure adds to an existing one (hisim-epc.28), the increment a staged
+    plan adds to a kept subject (hisim-1y0m) -- is kept or bought on its own entry, never on the unit
+    it stands beside. A register binding nothing reads exactly as before.
 
     Args:
         asset_class: The subject's asset class.

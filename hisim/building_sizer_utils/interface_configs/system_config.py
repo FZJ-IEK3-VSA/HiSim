@@ -15,7 +15,7 @@ The two halves are bundled by
 Configurable components
 -----------------------
 
-The four fields of :class:`EnergySystemConfig` select the supply-side hardware:
+The fields of :class:`EnergySystemConfig` select the supply-side hardware:
 
 - ``heating_system`` (:class:`~hisim.loadtypes.HeatingSystems`): the heat
   source for space heating and domestic hot water. Members range from
@@ -36,6 +36,9 @@ The four fields of :class:`EnergySystemConfig` select the supply-side hardware:
   electrical battery storage and the L2 energy-management-system (EMS)
   controller that dispatches it. There is no separate battery-without-EMS or
   EMS-without-battery mode.
+- ``use_added_pv`` / ``use_added_battery`` (``bool``, off by default): a second
+  array or a second battery beside the house's own, as a renovation measure adds
+  one (hisim-epc.28); see :mod:`hisim.building_sizer_utils.secondary_devices`.
 
 Data flow and dependencies
 --------------------------
@@ -95,7 +98,7 @@ be combined with every supported ``heating_system``.
 Efficiency models and control strategies
 ----------------------------------------
 
-The four fields only *select* hardware; the concrete physical models live in
+The fields only *select* hardware; the concrete physical models live in
 the consuming components and system setups, never in this config. For
 traceability the downstream behaviour is:
 
@@ -181,6 +184,24 @@ class EnergySystemConfig:
     heat_distribution_system: ComponentType = ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
     share_of_maximum_pv_potential: float = 1.0
     use_battery_and_ems: bool = True
+    #: A second array beside the house's own, as a renovation measure adds one (hisim-epc.28):
+    #: ``PVSystemAdded``, built by :class:`~hisim.building_sizer_utils.secondary_devices.SecondaryDevices`.
+    use_added_pv: bool = False
+    #: A second battery beside the house's own, behind the same energy manager (hisim-epc.28):
+    #: ``BatteryAdded``. Only with ``use_battery_and_ems``, since there is no battery without it.
+    use_added_battery: bool = False
+
+    def __post_init__(self) -> None:
+        """Refuses an added battery in a household without the battery and energy manager it is added to.
+
+        Raises:
+            ValueError: If ``use_added_battery`` is set while ``use_battery_and_ems`` is not.
+        """
+        if self.use_added_battery and not self.use_battery_and_ems:
+            raise ValueError(
+                "use_added_battery is true while use_battery_and_ems is false: a second battery is added "
+                "beside the house's own, behind its energy manager, and this household has neither."
+            )
 
     @classmethod
     def get_default_config(cls, heating_system: HeatingSystems) -> "EnergySystemConfig":

@@ -602,9 +602,8 @@ class TestTheDocument:
                     assert any(name.startswith("pair:") for name in holding), condition
                     found.append(condition)
         # Nine, plus the four generators besides the air-source heat pump whose seasonal efficiency
-        # is listed (renovisorissues #72), plus the added array's orientation on a house that has an
-        # array (hisim-epc.28).
-        assert len(found) == 14
+        # is listed (renovisorissues #72).
+        assert len(found) == 13
 
     def test_a_term_is_matched_as_the_request_states_it(self) -> None:
         """A leaf the request does not state never matches; a value compares as JSON, so 1 is not true."""

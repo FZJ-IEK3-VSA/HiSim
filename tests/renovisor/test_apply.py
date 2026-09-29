@@ -452,8 +452,9 @@ class TestReplacementsAndRemovals:
             "added_array": {"size_in_percent_of_roof_area": 80},
         }
         assert applied.measures[0].status is ReportStatus.USED
-        assert "adds an array beside the house's existing one, which is kept" in (applied.measures[0].note or "")
-        assert applied.measures[0].targets == ["PVSystem.config.power_in_watt"]
+        assert "adds a second array beside the house's existing one, which is kept" in (applied.measures[0].note or "")
+        assert "SEAI solar PV grant is unverified (hisim-cyc.2)" in (applied.measures[0].note or "")
+        assert applied.measures[0].targets == ["PVSystemAdded.config.power_in_watt"]
 
     def test_an_array_on_a_house_without_one_is_installed_with_its_own_figures(self) -> None:
         """Contract 882a8c1: power, azimuth and tilt are written; the share is kept and recorded."""
@@ -480,8 +481,8 @@ class TestReplacementsAndRemovals:
         assert applied.measures[0].status is ReportStatus.USED
         assert applied.measures[0].note is None
 
-    def test_an_added_array_in_another_orientation_is_approximated(self) -> None:
-        """The twins carry one PVSystem: an orientation equal to the existing array's is used, another is not."""
+    def test_an_added_array_keeps_its_own_orientation(self) -> None:
+        """The second array is a component of its own, so the orientation the measure states is used."""
         house = anchor_house()
         house["pv_system"] = {"power_in_watt": 3000, "azimuth": 200}
 
@@ -500,10 +501,9 @@ class TestReplacementsAndRemovals:
             "tilt": 30.0,
         }
         options = {option.name: option for option in applied.measures[0].options}
-        assert options["azimuth_in_degree"].status is ReportStatus.APPROXIMATED
-        assert "facing 200 degrees" in (options["azimuth_in_degree"].note or "")
-        # 30 degrees is the tilt of the anchor's pitched roof, which the existing array is simulated at.
+        assert options["azimuth_in_degree"].status is ReportStatus.USED
         assert options["tilt_in_degree"].status is ReportStatus.USED
+        assert "PVSystemAdded.config.azimuth" in applied.measures[0].targets
         assert applied.measures[0].status is ReportStatus.USED
 
     def test_the_shading_loss_is_copied_into_the_array_and_not_implemented(self) -> None:
@@ -540,7 +540,11 @@ class TestReplacementsAndRemovals:
         options = {option.name: option.status for option in applied.measures[0].options}
         assert options == {"capacity_in_kwh": ReportStatus.USED, "power_in_watt": ReportStatus.USED}
         assert applied.measures[0].status is ReportStatus.USED
-        assert "adds a battery beside the house's existing one" in (applied.measures[0].note or "")
+        assert "adds a second battery beside the house's existing one" in (applied.measures[0].note or "")
+        assert applied.measures[0].targets == [
+            "BatteryAdded.config.custom_battery_capacity_generic_in_kilowatt_hour",
+            "BatteryAdded.config.custom_pv_inverter_power_generic_in_watt",
+        ]
 
     def test_an_absent_battery_power_is_the_catalogue_s_half_c_rule(self) -> None:
         """The catalogue: power from the capacity at 0.5 C when unset; reported defaulted with the rule."""

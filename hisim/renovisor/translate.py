@@ -822,6 +822,13 @@ class Targets:
     SOLAR_THERMAL: ClassVar[str] = "SolarThermalSystem"
     BATTERY: ClassVar[str] = "Battery"
 
+    #: The second array and the second battery a measure adds beside the house's (hisim-epc.28),
+    #: and the groups of the twins that carry them.
+    PV_ADDED: ClassVar[str] = "PVSystemAdded"
+    BATTERY_ADDED: ClassVar[str] = "BatteryAdded"
+    ADDED_PV_GROUP: ClassVar[str] = "added_pv"
+    ADDED_BATTERY_GROUP: ClassVar[str] = "added_battery"
+
     #: The variant every twin carries, and the two options the MVP selects between.
     ELECTRICITY_MANAGEMENT: ClassVar[str] = "electricity_management"
     WITH_BATTERY: ClassVar[str] = "ems_with_battery"
@@ -1261,6 +1268,30 @@ class _TranslationState:
             )
         )
         return True
+
+    def enable(self, group: str, source: str, note: str) -> None:
+        """Switch on one group of the twin and log the edit.
+
+        Raises:
+            TranslateError: When the twin has no such group, which a base file every translation
+                can select must have.
+        """
+        if group not in self.editor.group_names():
+            raise TranslateError(
+                f"the base file {self.base_file_name} has no group '{group}'",
+                "every recorded twin the translator selects carries the added_pv and added_battery "
+                "groups (hisim-epc.28); re-record it with its probe list",
+            )
+        self.editor.enable_group(group, True)
+        self.edits.append(
+            Edit(
+                kind=EditKind.GROUP_FLAG,
+                location=DocumentPaths.group_flag(group),
+                value=True,
+                source=source,
+                note=note,
+            )
+        )
 
     def select(self, variant: str, option: str, source: str, note: str) -> None:
         """Select one variant option and log the edit."""
@@ -2003,9 +2034,11 @@ def _devices(state: _TranslationState) -> None:
 def _photovoltaics(state: _TranslationState) -> None:
     """Size, orient and, when the house has no array, silence the array every twin carries.
 
-    Decision D-D: no twin has a ``pv`` group, so "no photovoltaics" is a zero-power pin on the
-    array rather than a group that is switched off. A recorded value on a sized field pins it,
-    so the array stays in the file and produces nothing, which is verified to run.
+    Decision D-D: no twin has a group for the house's own array, so "no photovoltaics" is a
+    zero-power pin on the array rather than a group that is switched off. A recorded value on a
+    sized field pins it, so the array stays in the file and produces nothing, which is verified to
+    run. A second array a measure adds beside an existing one is the twins' ``added_pv`` group
+    (:func:`_added_array`).
     """
     array = state.house.pv_system
     roof = state.house.building.roof
@@ -2033,10 +2066,6 @@ def _photovoltaics(state: _TranslationState) -> None:
             ),
             target=Targets.describe(Targets.PV, Targets.POWER_IN_WATT),
         )
-        return
-    if array.added_array is not None:
-        _added_array(state, array)
-        _orientation_lines(state, array, azimuth, tilt, shape)
         return
     if array.size_in_percent_of_roof_area is not None:
         share = array.size_in_percent_of_roof_area / Targets.PERCENT
@@ -2068,6 +2097,8 @@ def _photovoltaics(state: _TranslationState) -> None:
             value=array.power_in_watt,
         )
     _orientation_lines(state, array, azimuth, tilt, shape)
+    if array.added_array is not None:
+        _added_array(state, array, azimuth, tilt)
 
 
 def _orientation_lines(state: _TranslationState, array: PvSystem, azimuth: float, tilt: float, shape: str) -> None:
@@ -2088,35 +2119,38 @@ def _orientation_lines(state: _TranslationState, array: PvSystem, azimuth: float
 
 @dataclass(frozen=True)
 class RoofArrays:
-    """How much of the roof an existing array takes, and what a measure's array adds beside it.
+    """The array a photovoltaic measure adds beside the house's own, and the roof it goes on.
 
-    Owner decision of 2026-09-29 (hisim-epc.28): a ``photovoltaic_system`` measure on a house that
-    already has an array adds a second array; it never replaces the first, so production can only
-    rise. The twins carry one ``PVSystem``, wired into the meter and the energy management by
-    name, and the diff rule forbids authoring a component or an input, so both arrays are
-    simulated as one ``PVSystem`` of the summed power. That is exact for two arrays of one
-    orientation (a PV model's output is linear in the peak power), and the added array takes the
-    existing one's orientation; a measure stating another is ``approximated`` on its option line.
+    Owner decisions of 2026-09-29 (hisim-epc.28): a ``photovoltaic_system`` measure on a house
+    that already has an array adds a second array; it never replaces the first, so production can
+    only rise. The second array is a component of its own, ``PVSystemAdded`` of the twins' group
+    ``added_pv``, with its own orientation -- the measure's azimuth and tilt options, else the
+    existing array's -- and its own size, measured by the meter or the energy manager as a second
+    producer.
 
     The roof is HiSim's rooftop law, the one the array's ``power_in_watt`` is sized with when it
     is left to the roof: :attr:`~hisim.components.generic_pv_system.PVSystemConfig.
     USABLE_ROOF_FRACTION` of the roof area the ``Building`` simulates, filled with the rooftop
-    preset's module, is the roof's maximum. An array stated by its share covers that share of the
-    maximum, and an array stated by its power covers power / maximum of it -- the same law read
-    backwards. The measure's ``size_in_percent_of_roof_area`` is a share of the whole roof, as it
-    is on a house without an array, capped at what the existing array leaves free: the option
-    keeps one meaning whichever house it is sent for. A stated ``power_in_watt`` is simulated as
-    stated, like the existing array's, because an installer's figure is a fact and the usable
-    roof an estimate.
+    preset's module, is the roof's maximum. The measure's ``size_in_percent_of_roof_area`` is a
+    share of that whole roof, as on a house without an array. An added array facing another way
+    stands on another face of the roof, so nothing of the existing array is subtracted; one of the
+    existing array's own orientation shares its face and is capped at what the existing array
+    leaves free there -- an array stated by its share covers that share of the maximum, one stated
+    by its power covers power / maximum of it, the same law read backwards. A stated
+    ``power_in_watt`` is simulated as stated and never capped, because an installer's figure is a
+    fact and the usable roof an estimate.
 
     Args:
         roof_area_in_m2: The roof area the ``Building`` simulates.
         maximum_in_watt: The array the whole usable roof holds.
         existing_in_watt: The existing array's power.
-        wanted_in_watt: The array the measure asks for, before the cap.
-        added_in_watt: The array it adds: what it asks for, or what is left of the roof.
+        wanted_in_watt: The array the measure asks for, before any cap.
+        added_in_watt: The array it adds.
         stated: Whether the measure stated its power, which is never capped.
         usable_percent: The share of the roof the rooftop law counts as usable, in percent.
+        azimuth: The added array's azimuth, the measure's or the existing array's.
+        tilt: The added array's tilt, likewise.
+        same_orientation: Whether it faces exactly as the existing array does.
     """
 
     roof_area_in_m2: float
@@ -2126,21 +2160,26 @@ class RoofArrays:
     added_in_watt: float
     stated: bool
     usable_percent: float
+    azimuth: float
+    tilt: float
+    same_orientation: bool
 
     #: The report path of the added array's size. It is derived rather than a request leaf, like
     #: the existing generator's ``house.heating.nominal_power_in_kw``.
     PATH: ClassVar[str] = "house.pv_system.added_array.power_in_watt"
 
     @classmethod
-    def of(cls, array: PvSystem, model: EnergySystemFile) -> "RoofArrays":
-        """Size the existing array and the added one on the roof the ``Building`` simulates.
+    def of(cls, array: PvSystem, model: EnergySystemFile, azimuth: float, tilt: float) -> "RoofArrays":
+        """Size the added array on the roof the ``Building`` simulates.
 
         Args:
             array: The renovated house's array, carrying the measure's in ``added_array``.
             model: The translated document so far, whose ``Building`` and ``Weather`` it reads.
+            azimuth: The existing array's azimuth as the file simulates it.
+            tilt: The existing array's tilt, likewise.
 
         Returns:
-            The two arrays and the roof they share.
+            The added array and the roof it shares.
         """
         # Function-local, like the building package in layers.py: the component pulls pvlib in.
         # pylint: disable=import-outside-toplevel
@@ -2155,114 +2194,99 @@ class RoofArrays:
                 roof_area, percent / Targets.PERCENT, preset.module_name, preset.module_database
             )
 
+        added = array.added_array
+        assert added is not None
+        own_azimuth = added.azimuth if added.azimuth is not None else azimuth
+        own_tilt = added.tilt if added.tilt is not None else tilt
+        same = own_azimuth == azimuth and own_tilt == tilt
         maximum = of_share(Targets.PERCENT)
         existing = (
             array.power_in_watt if array.power_in_watt is not None
             else of_share(float(array.size_in_percent_of_roof_area or 0))
         )
-        usable = PVSystemConfig.USABLE_ROOF_FRACTION * Targets.PERCENT
-        added = array.added_array
-        assert added is not None
+        common: Dict[str, Any] = {
+            "roof_area_in_m2": roof_area,
+            "maximum_in_watt": maximum,
+            "existing_in_watt": existing,
+            "usable_percent": PVSystemConfig.USABLE_ROOF_FRACTION * Targets.PERCENT,
+            "azimuth": own_azimuth,
+            "tilt": own_tilt,
+            "same_orientation": same,
+        }
         if added.power_in_watt is not None:
             wanted = added.power_in_watt
-            return cls(roof_area, maximum, existing, wanted, wanted, stated=True, usable_percent=usable)
+            return cls(wanted_in_watt=wanted, added_in_watt=wanted, stated=True, **common)
         wanted = of_share(float(added.size_in_percent_of_roof_area or 0))
-        free = max(maximum - existing, 0.0)
-        return cls(
-            roof_area, maximum, existing, wanted, round(min(wanted, free), 2), stated=False, usable_percent=usable
-        )
-
-    @property
-    def total_in_watt(self) -> float:
-        """The one simulated array: the existing one and the added one."""
-        return round(self.existing_in_watt + self.added_in_watt, 2)
+        allowed = min(wanted, max(maximum - existing, 0.0)) if same else wanted
+        return cls(wanted_in_watt=wanted, added_in_watt=round(allowed, 2), stated=False, **common)
 
     @property
     def capped(self) -> bool:
-        """Whether the roof the existing array leaves free is smaller than the measure's array."""
+        """Whether the roof face the existing array shares left less than the measure's array."""
         return self.added_in_watt < self.wanted_in_watt
 
     def note(self, share: Optional[int]) -> str:
-        """The added array's line: its size, where it came from, and the sum the file carries."""
+        """The added array's line: its size, its orientation, and where both came from."""
         roof = (
             f"HiSim's usable roof holds {self.maximum_in_watt:g} W ({self.usable_percent:g} % of the "
             f"{self.roof_area_in_m2:.1f} m2 roof the Building simulates)"
         )
-        total = (
-            f"the file's PVSystem power_in_watt is the sum with the existing array's {self.existing_in_watt:g} W, "
-            f"{self.total_in_watt:g} W, simulated in the existing array's orientation"
+        own = (
+            f"the added array is PVSystemAdded, beside the existing {self.existing_in_watt:g} W array, facing "
+            f"{self.azimuth:g} degrees at {self.tilt:g} degrees tilt"
         )
         if self.stated:
-            beyond = (
-                f"; together they exceed the usable roof HiSim estimates ({self.maximum_in_watt:g} W), and a "
-                "stated power is simulated as stated"
-                if self.total_in_watt > self.maximum_in_watt else ""
-            )
-            return f"the power the measure states, added beside the existing array; {total}{beyond}"
+            return f"the power the measure states, simulated as stated; {own}"
         asked = f"{share} % of the roof is {self.wanted_in_watt:g} W: {roof}"
+        if not self.same_orientation:
+            return (
+                f"{asked}; it faces another way than the existing array, so it stands on another face of the "
+                f"roof and nothing of the existing array is subtracted; {own}"
+            )
         if self.added_in_watt <= 0.0:
             return (
-                f"{asked}, and the existing array's {self.existing_in_watt:g} W leaves none of it free, "
-                "so the measure adds no array: nothing is simulated or priced for it, and the "
+                f"{asked}, and the existing array's {self.existing_in_watt:g} W in the same orientation leaves "
+                "none of it free, so the measure adds no array: nothing is simulated or priced for it, and the "
                 "existing array is simulated as the request states it"
             )
         if self.capped:
             return (
-                f"{asked}, of which the existing array's {self.existing_in_watt:g} W leaves "
-                f"{self.added_in_watt:g} W free, so the added array is capped there; {total}"
+                f"{asked}, of which the existing array's {self.existing_in_watt:g} W in the same orientation "
+                f"leaves {self.added_in_watt:g} W free, so the added array is capped there; {own}"
             )
-        return f"{asked}, and it fits beside the existing array; {total}"
+        return f"{asked}, and it fits beside the existing array in the same orientation; {own}"
 
 
-def _added_array(state: _TranslationState, array: PvSystem) -> None:
-    """Write an existing array and the array a measure adds beside it as one array of their sum.
+def _added_array(state: _TranslationState, array: PvSystem, azimuth: float, tilt: float) -> None:
+    """Switch on the twin's second array and write the one a measure adds beside the house's.
 
-    The existing array's own leaves are reported as sizing it; the file's power is pinned to the
-    sum (:class:`RoofArrays`), and the added array's size is reported on :attr:`RoofArrays.PATH`,
-    ``used`` when it is what the measure asked for and ``approximated`` when the roof capped it.
+    The existing array has been written exactly as without the measure; the added one is sized by
+    :class:`RoofArrays`, reported on :attr:`RoofArrays.PATH` -- ``used`` when it is what the measure
+    asked for, ``approximated`` when the roof capped it -- and left switched off when nothing is
+    added.
     """
-    arrays = RoofArrays.of(array, state.editor.build())
-    power_target = Targets.describe(Targets.PV, Targets.POWER_IN_WATT)
-    state.write(
-        Targets.PV,
-        Targets.POWER_IN_WATT,
-        arrays.total_in_watt,
-        source="house.pv_system and the photovoltaic_system measure",
-        note="the existing array and the array the measure adds beside it, simulated as one",
-    )
-    if array.size_in_percent_of_roof_area is not None:
-        share = array.size_in_percent_of_roof_area / Targets.PERCENT
-        state.report.used(
-            "house.pv_system.size_in_percent_of_roof_area",
-            power_target,
-            value=share,
-            note=(
-                f"sizes the existing array: {array.size_in_percent_of_roof_area} % of the usable roof, "
-                f"{arrays.existing_in_watt:g} W, to which the measure's array is added"
-                if array.power_in_watt is None
-                else "recorded as the share of the roof the existing array covers; its stated power_in_watt "
-                "sizes it"
-            ),
-        )
-    if array.power_in_watt is not None:
-        state.report.used(
-            "house.pv_system.power_in_watt",
-            power_target,
-            value=array.power_in_watt,
-            note="the existing array's power, to which the measure's array is added",
-        )
+    arrays = RoofArrays.of(array, state.editor.build(), azimuth, tilt)
     added = array.added_array
     assert added is not None
+    target = Targets.describe(Targets.PV_ADDED, Targets.POWER_IN_WATT)
+    note = arrays.note(added.size_in_percent_of_roof_area)
+    if arrays.added_in_watt <= 0.0:
+        state.report.approximated(RoofArrays.PATH, note, target=target, value=0.0)
+        return
+    state.enable(Targets.ADDED_PV_GROUP, source="the photovoltaic_system measure",
+                 note="the house has an array, so the measure's array is a second one beside it")
+    state.write(Targets.PV_ADDED, Targets.LOCATION, state.request.country.value, source="location.country",
+                note="the array's own label, as the house's array carries it")
+    state.write(Targets.PV_ADDED, Targets.AZIMUTH, arrays.azimuth, source="the photovoltaic_system measure",
+                note="the measure's azimuth, else the existing array's")
+    state.write(Targets.PV_ADDED, Targets.TILT, arrays.tilt, source="the photovoltaic_system measure",
+                note="the measure's tilt, else the existing array's")
+    state.write(Targets.PV_ADDED, Targets.POWER_IN_WATT, arrays.added_in_watt,
+                source="the photovoltaic_system measure", note="the added array's own power")
     if arrays.capped:
-        state.report.approximated(
-            RoofArrays.PATH, arrays.note(added.size_in_percent_of_roof_area), target=power_target,
-            value=arrays.added_in_watt,
-        )
+        state.report.approximated(RoofArrays.PATH, note, target=target, value=arrays.added_in_watt)
     else:
-        state.report.used(
-            RoofArrays.PATH, power_target, value=arrays.added_in_watt,
-            note=arrays.note(added.size_in_percent_of_roof_area),
-        )
+        state.report.used(RoofArrays.PATH, target, value=arrays.added_in_watt, note=note)
 
 
 def _battery(state: _TranslationState) -> None:
@@ -2311,8 +2335,7 @@ def _battery(state: _TranslationState) -> None:
             value=capacity,
         )
     if battery.added_battery is not None:
-        _added_battery(state, battery, capacity)
-        return
+        _added_battery(state, battery.added_battery)
     state.write(Targets.BATTERY, Targets.BATTERY_CAPACITY, capacity, source="house.battery",
                 note="the usable capacity")
     # The power is the house's own battery.power_in_watt (shared schema of 2026-09-25) or the
@@ -2339,63 +2362,46 @@ def _battery(state: _TranslationState) -> None:
         state.report.defaulted(path, power, note=rule, target=target)
 
 
-#: The report path of the capacity a battery_system measure adds beside the house's battery. It is
-#: derived rather than a request leaf, like :attr:`RoofArrays.PATH`.
+#: The report path of the battery a battery_system measure adds beside the house's. It is derived
+#: rather than a request leaf, like :attr:`RoofArrays.PATH`.
 ADDED_BATTERY_PATH = "house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour"
 
 
-def _added_battery(state: _TranslationState, battery: Battery, capacity: float) -> None:
-    """Write an existing battery and the one a measure adds beside it as one battery of their sum.
+def _added_battery(state: _TranslationState, added: Battery) -> None:
+    """Switch on the twin's second battery and write the one a measure adds beside the house's.
 
     Owner decision of 2026-09-29 (hisim-epc.28, as for the array): a ``battery_system`` measure on a
-    house that has a battery adds a second one; the house's battery is kept. The twins carry one
-    ``Battery`` under one energy management system, so both are simulated as one battery of the
-    summed capacity and the summed charging power -- two batteries in parallel behind one
-    controller. Each power is the stated one, else the catalogue's 0.5 C of its own capacity.
+    house that has a battery adds a second one, ``BatteryAdded`` of the twins' group
+    ``added_battery``; the house's battery is kept and written exactly as without the measure. Both
+    stand behind the one energy manager, which dispatches the house's battery first (source weight
+    6) and hands the added one (weight 7) what is left. The added battery's capacity is the
+    measure's, read back from its power at 0.5 C, or sized by days as the measure function said;
+    its power the measure's, else 0.5 C of its capacity.
 
     Args:
         state: The translation.
-        battery: The renovated house's battery, carrying the measure's in ``added_battery``.
-        capacity: The existing battery's capacity, as :func:`_battery` reported it.
+        added: The measure's battery, the renovated house's ``battery.added_battery``.
     """
-    added = battery.added_battery
-    assert added is not None
     rate = BatteryLaw.INVERTER_WATT_PER_KILOWATT_HOUR
     if added.custom_battery_capacity_generic_in_kilowatt_hour is not None:
-        added_capacity = added.custom_battery_capacity_generic_in_kilowatt_hour
+        capacity = added.custom_battery_capacity_generic_in_kilowatt_hour
     else:
-        added_capacity, _note = BatteryCapacityLaw.capacity_of(int(added.days_to_cover or 0))
-    existing_power = battery.power_in_watt if battery.power_in_watt is not None else capacity * rate
-    added_power = added.power_in_watt if added.power_in_watt is not None else added_capacity * rate
-    total_capacity = capacity + added_capacity
-    total_power = existing_power + added_power
-    state.write(Targets.BATTERY, Targets.BATTERY_CAPACITY, total_capacity,
-                source="house.battery and the battery_system measure",
-                note="the existing battery and the one the measure adds beside it, simulated as one")
-    state.write(Targets.BATTERY, Targets.BATTERY_INVERTER, total_power,
-                source="house.battery and the battery_system measure",
-                note="the sum of both batteries' charging and discharging powers")
-    path = "house.battery.power_in_watt"
-    target = Targets.describe(Targets.BATTERY, Targets.BATTERY_INVERTER)
-    if battery.power_in_watt is not None:
-        state.report.used(path, target, value=battery.power_in_watt,
-                          note="the existing battery's power, to which the measure's battery's is added")
-    else:
-        state.report.defaulted(
-            path, existing_power, target=target,
-            note=(
-                f"the existing battery's power: {rate:g} W per kWh, the class's own C-rate of 0.5 and the "
-                "catalogue's rule for an unstated power; the measure's battery's is added to it"
-            ),
-        )
+        capacity, _note = BatteryCapacityLaw.capacity_of(int(added.days_to_cover or 0))
+    power = added.power_in_watt if added.power_in_watt is not None else capacity * rate
+    state.enable(Targets.ADDED_BATTERY_GROUP, source="the battery_system measure",
+                 note="the house has a battery, so the measure's battery is a second one beside it")
+    state.write(Targets.BATTERY_ADDED, Targets.BATTERY_CAPACITY, capacity, source="the battery_system measure",
+                note="the added battery's usable capacity")
+    state.write(Targets.BATTERY_ADDED, Targets.BATTERY_INVERTER, power, source="the battery_system measure",
+                note="the added battery's charging and discharging power")
     state.report.used(
         ADDED_BATTERY_PATH,
-        Targets.describe(Targets.BATTERY, Targets.BATTERY_CAPACITY),
-        value=added_capacity,
+        Targets.describe(Targets.BATTERY_ADDED, Targets.BATTERY_CAPACITY),
+        value=capacity,
         note=(
-            f"the battery the battery_system measure adds beside the existing {capacity:g} kWh one; the file's "
-            f"Battery capacity is their sum, {total_capacity:g} kWh, and its power the sum of both powers, "
-            f"{total_power:g} W ({existing_power:g} W and {added_power:g} W)"
+            f"the battery the battery_system measure adds beside the house's: BatteryAdded, {capacity:g} kWh and "
+            f"{power:g} W, behind the same energy manager, which charges and discharges the house's battery "
+            "first and the added one with what is left"
         ),
     )
 

@@ -278,10 +278,10 @@ class ComponentCostFacts:
     lifetime_is_engine_fallback: bool = False
     # True for a subject matched only against the register entry bound to its own name
     # (`ExistingAsset.subject`), and bought new when the register binds none to it, whatever else
-    # the register holds of its class. Set for a piece a measure adds beside a unit the house keeps:
-    # the array a photovoltaic_system measure adds to an existing one (`bridge.AddedPiece`,
+    # the register holds of its class. Set for a unit a measure adds beside one the house keeps:
+    # the second array or battery a RenoVisor measure adds (`bridge.EconomicContext.own_register_subjects`,
     # hisim-epc.28), and the increment a later stage adds to a kept subject (hisim-1y0m). A
-    # same-class lookup would find the unit it enlarges and call the piece kept. Every other
+    # same-class lookup would find the kept unit and call the added one kept too. Every other
     # subject ignores bound entries.
     own_register_entry: bool = False
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).

@@ -113,29 +113,37 @@ U-value is stated, and the `house.building.retrofit_status` line names both numb
 
 ## A photovoltaic or battery measure on a house that has one
 
-`photovoltaic_system` and `battery_system` **add** a unit beside the house's own; they never replace
-it (owner decision 2026-09-29, hisim-epc.28), so production and storage can only grow. On a house
-without the device the measure installs it, exactly as before. The twins carry one `PVSystem` and
-one `Battery`, and the translator may not author a component, so both units are simulated as one of
-their sum — exact for two arrays of one orientation; an added array whose stated azimuth or tilt
-differs from the existing one's is simulated in the existing one's, and its option line is
-`approximated`. Two batteries become one of the summed capacity and the summed power.
+`photovoltaic_system` and `battery_system` **add** a second unit beside the house's own; they never
+replace it (owner decisions 2026-09-29, hisim-epc.28), so production and storage can only grow. On a
+house without the device the measure installs it, exactly as before. Every building-sizer twin
+carries the second units as two groups that are off unless a translation switches them on:
+`added_pv` holds `PVSystemAdded`, which the meter or the energy manager measures as a second
+producer, and `added_battery` holds `BatteryAdded`, which the one energy manager dispatches after
+the house's battery (source weights 6 and 7: the house's battery charges and discharges first, the
+added one takes what is left). The house's own array and battery are written exactly as without the
+measure. A house without the measure runs the same system as before; its file carries the two
+groups switched off.
 
-The measure's `size_in_percent_of_roof_area` is a share of the whole roof, as on a house without an
-array, capped at what the existing array leaves free. The roof is HiSim's rooftop law: 60 % of the
-roof area the `Building` simulates, filled with the rooftop module; an existing array stated in
-watts covers watts / that maximum of it. A stated `power_in_watt` is added as stated and never
-capped. The added size is the derived line `house.pv_system.added_array.power_in_watt` of the
-mapping report (`house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour` for
-the battery): `used` when the measure got what it asked for, `approximated` with the numbers when
-the roof capped it — down to zero, when the existing array already fills the usable roof, in which
-case the measure adds nothing.
+The added array faces the way the measure states (`azimuth_in_degree`, `tilt_in_degree`), else the
+way the existing array faces. The measure's `size_in_percent_of_roof_area` is a share of the whole
+roof, as on a house without an array: HiSim's rooftop law, 60 % of the roof area the `Building`
+simulates filled with the rooftop module. An added array facing another way stands on another face of
+the roof and gets the whole share; one facing the existing array's way shares its face and is capped
+at what the existing array leaves free there (an existing array stated in watts covers watts / that
+maximum). A stated `power_in_watt` is simulated as stated and never capped. The added size is the
+derived line `house.pv_system.added_array.power_in_watt` of the mapping report
+(`house.battery.added_battery.custom_battery_capacity_generic_in_kilowatt_hour` for the battery):
+`used` when the measure got what it asked for, `approximated` with the numbers when the roof capped
+it -- down to zero, when the existing array already fills its face, in which case the group stays off
+and the measure adds nothing.
 
 In the economics the house's unit is a kept subject (`PVSystem`, `Battery`), ageing on its own
-installation year and life, and the added unit is a purchase of its own, `PVSystem#added` /
-`Battery#added`, stamped with the measure, priced alone at its size and renewed on its own life. The
-engine splits it off the simulated component (`EconomicContext.added_pieces`); a measure that adds
-nothing is a costless `photovoltaic_system` row whose note says why.
+installation year and life, and the added one is a purchase of its own (`PVSystemAdded`,
+`BatteryAdded`), stamped with the measure, priced alone at its size and renewed on its own life
+(`EconomicContext.own_register_subjects`: bought although the register keeps an asset of its class).
+The added array is priced for the SEAI solar PV grant as any array is; whether a second array on a
+house that has one is eligible is unverified (hisim-cyc.2). A measure that adds nothing is a
+costless `photovoltaic_system` row whose note says why.
 
 ## Path verification, tier 1
 

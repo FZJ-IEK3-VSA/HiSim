@@ -53,3 +53,35 @@ probes:
       whole chain moves numbers only and adds, removes and rewires nothing.
     module_config:
       archetype_config_.building_code: DE.N.SFH.09.Gen.ReEx.001.002
+
+  - column: added_pv
+    description: >-
+      A second array beside the house's own, as a photovoltaic renovation measure adds one
+      (hisim-epc.28): a component of its own, PVSystemAdded, which the energy manager measures as a
+      second producer. With two arrays the battery could be sized from either, so the setup states
+      the numbers it sized from the house's array, and they are a knob of this column.
+    module_config:
+      energy_system_config_.use_added_pv: true
+
+  - column: added_pv_metered_directly
+    description: >-
+      The same second array in the household without battery and energy manager, where the meter
+      measures it directly: the one place the added array meets the other electricity world.
+    module_config:
+      energy_system_config_.use_added_pv: true
+      energy_system_config_.use_battery_and_ems: false
+
+  - column: added_battery
+    description: >-
+      A second battery beside the house's own, behind the same energy manager (hisim-epc.28):
+      BatteryAdded, dispatched on its own source weight 7, after the house's battery on 6.
+    module_config:
+      energy_system_config_.use_added_battery: true
+
+  - column: added_pv_and_battery
+    description: >-
+      Both at once, the second array and the second battery: the column whose energy manager
+      measures and dispatches every participant the two groups can add.
+    module_config:
+      energy_system_config_.use_added_pv: true
+      energy_system_config_.use_added_battery: true

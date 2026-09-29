@@ -24,6 +24,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.loadtypes import HeatingSystems, ComponentType
+from hisim.building_sizer_utils.secondary_devices import SecondaryDevices
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
     ModularHouseholdConfig,
@@ -301,6 +302,15 @@ def setup_function(
     )
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
+    # A second array beside the house's own, when a renovation measure adds one (hisim-epc.28).
+    SecondaryDevices.add_array(
+        my_sim,
+        energy_system_config_,
+        my_photovoltaic_system_config,
+        my_building_information.roof_area_in_m2,
+        my_weather_config.identity(),
+        my_simulation_parameters,
+    )
 
     # Build Heat Distribution Controller
     my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
@@ -460,8 +470,8 @@ def setup_function(
         )
 
         # Build Battery
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-            SizingContext(pv_peak_power_in_watt=concrete(my_photovoltaic_system_config.power_in_watt))
+        my_advanced_battery_config = SecondaryDevices.battery_config(
+            "Battery", energy_system_config_, my_photovoltaic_system_config
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
             my_simulation_parameters=my_simulation_parameters,
@@ -502,7 +512,12 @@ def setup_function(
 
         my_sim.add_component(my_electricity_meter)
         my_sim.add_component(my_advanced_battery)
-        my_sim.add_component(my_electricity_controller, connect_automatically=True)
+        # A second battery behind the same energy manager, when a measure adds one (hisim-epc.28).
+        SecondaryDevices.add_battery(
+            my_sim, energy_system_config_, my_electricity_controller, my_photovoltaic_system_config,
+            my_simulation_parameters
+        )
+        SecondaryDevices.add_energy_manager(my_sim, energy_system_config_, my_electricity_controller)
 
     # without an energy manager, connect the electricity meter automatically to every participant
     else:

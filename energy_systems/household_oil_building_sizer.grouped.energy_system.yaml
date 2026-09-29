@@ -93,6 +93,23 @@ components:
         tags:
           - HEAT_CONSUMPTION
         weight: 999
+groups:
+  added_pv:
+    enabled: false
+    components:
+      PVSystemAdded:
+        class: hisim.components.generic_pv_system.PVSystem
+        preset: rooftop
+        config:
+          location: AACHEN
+        inputs:
+          - Weather
+  added_battery:
+    enabled: false
+    components:
+      BatteryAdded:
+        class: hisim.components.advanced_battery_bslib.Battery
+        preset: sized_to_pv
 variants:
   electricity_management:
     selected: ems_with_battery
@@ -114,6 +131,13 @@ variants:
             class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
             preset: optimize_own_consumption
             inputs:
+              - from: BatteryAdded.AcBatteryPowerUsed
+                component_type: BATTERY
+                tags:
+                  - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+                weight: 7
+                dispatch:
+                  target_input: LoadingPowerInput
               - from: Battery.AcBatteryPowerUsed
                 component_type: BATTERY
                 tags:
@@ -121,6 +145,11 @@ variants:
                 weight: 6
                 dispatch:
                   target_input: LoadingPowerInput
+              - from: PVSystemAdded.ElectricityOutput
+                component_type: PV
+                tags:
+                  - ELECTRICITY_PRODUCTION
+                weight: 999
               - from: PVSystem.ElectricityOutput
                 component_type: PV
                 tags:
@@ -138,6 +167,11 @@ variants:
             class: hisim.components.electricity_meter.ElectricityMeter
             preset: standard
             inputs:
+              - from: PVSystemAdded.ElectricityOutput
+                component_type: PV
+                tags:
+                  - ELECTRICITY_PRODUCTION
+                weight: 999
               - from: PVSystem.ElectricityOutput
                 component_type: PV
                 tags:

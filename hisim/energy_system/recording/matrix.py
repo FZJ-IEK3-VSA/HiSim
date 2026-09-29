@@ -454,17 +454,24 @@ class ProbeMatrix:
 
         Returns:
             ``ABSENT`` when the column has no such component, ``IDENTICAL`` when its entry agrees
-            with the baseline's once references into components the column does not have are
+            with the baseline's once references into components either side does not have are
             removed, and ``DIFFERENT`` otherwise — including when the baseline is the side that
             does not have the component, since there is then nothing for it to agree with.
+
+            The removal runs both ways. A reference the baseline makes into a component the column
+            lacks is what turning a group off does; a reference the column makes into a component
+            the baseline lacks is what turning it on does -- a meter that also measures the second
+            array a group adds (hisim-epc.28). That component's own row is where the decision is
+            made; the meter has none to ask about.
         """
-        present = recording.entries()
-        entry = present.get(component)
+        entries = recording.entries()
+        entry = entries.get(component)
         if entry is None:
             return CellState.ABSENT
         reference = baseline.get(component)
         if reference is None:
             return CellState.DIFFERENT
+        present = {name: value for name, value in entries.items() if name in baseline}
         before = EntryComparison.restricted(EntryComparison.document(reference), present)
         after = EntryComparison.restricted(EntryComparison.document(entry), present)
         return CellState.IDENTICAL if before == after else CellState.DIFFERENT

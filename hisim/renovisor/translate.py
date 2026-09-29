@@ -55,7 +55,7 @@ from hisim.renovisor.constants import (
     StorageDefaults,
 )
 from hisim.renovisor.report import MappingReport
-from hisim.renovisor.request import House, Request
+from hisim.renovisor.request import House, Request, SemanticChecks
 from hisim.renovisor.tabula import ArchetypeEnvelope, BuildingCode
 from hisim.renovisor.vocabulary import (
     HeatDistributionType,
@@ -583,9 +583,17 @@ class BaseFiles:
 
         Returns:
             The file name, without a directory.
+
+        Raises:
+            TranslatorError: If the generator has no twin, naming it. Either the request validation
+                refuses it (``SemanticChecks.UNSUPPORTED_GENERATORS``) and the request reached the
+                translator without :meth:`Request.parse`, or the vocabulary has grown a generator
+                this table does not know.
         """
         if with_solar_thermal and generator in cls.WITH_SOLAR_THERMAL:
             return cls.WITH_SOLAR_THERMAL[generator] + cls.SUFFIX
+        if generator not in cls.BY_GENERATOR:
+            raise TranslatorError(SemanticChecks.missing_row_message(generator, "no base twin"))
         return cls.BY_GENERATOR[generator] + cls.SUFFIX
 
     @classmethod

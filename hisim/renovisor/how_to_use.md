@@ -159,12 +159,12 @@ directory as the artifact **`path-verification-report`**.
 ## The one rule worth knowing
 
 **Fail loudly, except for what is written down.** An unknown key, an unknown value, a value out
-of range — including an `absolute_conditioned_floor_area_in_m2` or `living_area_in_m2` outside the
-20–1,000 m² HiSim simulates, for every building type (`range.exceeded`) —, a heat generator HiSim
-cannot simulate yet (`heating.type_of_system.unsupported`: `solid_fuel_heating`, since there is no coal
-or peat fuel; `biomass_heating` runs on the pellet twin and is priced and emitted as pellets), a measure
-named twice, a country with no TABULA typology, a `tabula_building_code` whose
-variant contradicts the stated `retrofit_status`, a `measures[i].cost` price
+of range — including an `absolute_conditioned_floor_area_in_m2` outside the 20–1,000 m² HiSim
+simulates, for every building type, and a `living_area_in_m2` larger than the conditioned floor area
+(`range.exceeded`) —, a heat generator HiSim cannot simulate yet (`heating.type_of_system.unsupported`:
+`solid_fuel_heating`, since there is no coal or peat fuel), a measure named twice, a country with no
+TABULA typology, a `tabula_building_code` whose variant contradicts the stated `retrofit_status`, a
+`measures[i].cost` price
 band whose cheap end is above its expensive end or whose prices are negative: each is a refusal
 (exit 2) naming every problem at once. A feature the translator has not implemented is a **note**
 in the mapping report and the calculation runs — but only if it is an entry of
@@ -172,6 +172,9 @@ in the mapping report and the calculation runs — but only if it is an entry of
 that file fails the translator's own build (exit 3), never the user's request — an insulation
 build-up position with no cost-database asset class and a building whose archetype or design
 temperature the existing generator cannot be sized from are both of that kind.
+
+`biomass_heating` is not refused: it runs on the pellet twin, and its logs are priced and their CO2
+counted as wood pellets, which the mapping report notes.
 
 The same two codes hold for `python -m hisim.economics staged`, which prices a plan out of
 finished jobs: exit 2 with a `problems.json` for a plan the caller can fix — stage years that run

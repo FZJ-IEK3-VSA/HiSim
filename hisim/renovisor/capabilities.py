@@ -310,27 +310,27 @@ class RequestSchemaBounds:
         return {keyword: declared[keyword] for keyword in cls.KEYWORDS if keyword in declared}
 
     #: The numeric fields whose accepted range a semantic check narrows below the schema's, by
-    #: request path: the two floor areas HiSim simulates (renovisorissues #75).
+    #: request path: the conditioned floor area HiSim simulates (renovisorissues #75). The living
+    #: area is only checked against the conditioned area, which no fixed range can express, so it
+    #: publishes the schema's bounds.
     SEMANTIC_RANGES: ClassVar[Dict[str, Tuple[float, float]]] = {
-        f"house.building.{key}": SemanticChecks.FLOOR_AREA_RANGE for key in SemanticChecks.FLOOR_AREA_KEYS
+        f"house.building.{SemanticChecks.FLOOR_AREA_KEY}": SemanticChecks.FLOOR_AREA_RANGE,
     }
 
     @classmethod
     def published(cls, path: str, schema: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-        """Return the bounds one request path publishes: the schema's, narrowed by a semantic check.
+        """Return the bounds one request path publishes: the schema's, or the range a semantic check enforces.
 
         A field of :attr:`SEMANTIC_RANGES` publishes the range the request validation enforces as an
-        inclusive ``minimum``/``maximum`` in place of the schema's own ends, because a value the
-        schema admits and the check refuses (``range.exceeded``) is not one the frontend may offer.
-        Every other field publishes :meth:`of` unchanged.
+        inclusive ``minimum``/``maximum``, which replaces the schema's own ends altogether, because a
+        value the schema admits and the check refuses (``range.exceeded``) is not one the frontend
+        may offer. ``tests/renovisor/test_capabilities.py`` keeps every such range inside the
+        schema's. Every other field publishes :meth:`of` unchanged.
         """
-        bounds = cls.of(path, schema)
         if path not in cls.SEMANTIC_RANGES:
-            return bounds
+            return cls.of(path, schema)
         low, high = cls.SEMANTIC_RANGES[path]
-        narrowed = {key: value for key, value in bounds.items() if key not in cls.KEYWORDS}
-        narrowed["minimum"], narrowed["maximum"] = low, high
-        return narrowed
+        return {"minimum": low, "maximum": high}
 
 
 class SchemaLeaves:
@@ -741,7 +741,7 @@ class ProbeSet:
     #: schema). ``tests/renovisor/test_capabilities.py`` keeps every point inside the schema.
     FIELD_PROBE_POINTS: ClassVar[Dict[str, Tuple[float, float]]] = {
         "building.construction_year": (1700, 2100),
-        # Both floor areas at the two ends of SemanticChecks.FLOOR_AREA_RANGE, which they publish.
+        # The two ends of SemanticChecks.FLOOR_AREA_RANGE, which the field publishes.
         "building.absolute_conditioned_floor_area_in_m2": SemanticChecks.FLOOR_AREA_RANGE,
         "building.number_of_storeys": (1, 6),
         "building.set_heating_temperature_in_celsius": (12, 28),
@@ -766,7 +766,8 @@ class ProbeSet:
         "pv_system.tilt": (0, 90),
         "pv_system.shading_losses_in_percent": (0, 100),
         "pv_system.installation_year": (1900, 2100),
-        "building.living_area_in_m2": SemanticChecks.FLOOR_AREA_RANGE,
+        # At or below the anchor's conditioned floor area (140 m²): a larger living area is refused.
+        "building.living_area_in_m2": (30, 140),
         "building.roof.installation_year": (1900, 2100),
         "building.facade.installation_year": (1900, 2100),
         "building.floor.installation_year": (1900, 2100),
@@ -2036,7 +2037,7 @@ class Aggregation:
         field (:attr:`FieldShape.NUMERIC`) carries no ``values``: it
         publishes the request schema's ``minimum``/``maximum`` and ``exclusiveMinimum``/
         ``exclusiveMaximum`` where the schema declares them, or the narrower range a semantic check
-        enforces (:meth:`RequestSchemaBounds.published`: the two floor areas) -- never
+        enforces (:meth:`RequestSchemaBounds.published`: the conditioned floor area) -- never
         its probe points -- and the probes at both ends count towards its own status, as the
         probes of a free-text field (:attr:`FieldShape.FREE`) count towards its. The report's line
         for a package entry's cost block, ``measures[<position>].cost``, is left out: it is spelled

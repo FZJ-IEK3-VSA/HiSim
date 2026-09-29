@@ -1135,16 +1135,45 @@ class TestNumericFields:
         for path in ProbeSet.FIELD_PROBE_POINTS:
             assert shapes[f"{ProbeSet.HOUSE_PREFIX}{path}"] is FieldShape.NUMERIC, path
 
-    def test_the_floor_areas_publish_the_range_hisim_simulates(self, document: CapabilityDocument) -> None:
-        """The semantic check's 20-1000 m² replaces the schema's open ``> 0`` (renovisorissues #75)."""
+    def test_the_conditioned_floor_area_publishes_the_range_hisim_simulates(
+        self, document: CapabilityDocument
+    ) -> None:
+        """The semantic check's 20-1000 m² replaces the schema's open ``> 0`` (renovisorissues #75).
+
+        The living area is only checked against the conditioned area, so it publishes the schema's
+        own ``exclusiveMinimum: 0`` and nothing else.
+        """
         fields = {entry["path"]: entry for entry in document.body["fields"]}
         low, high = SemanticChecks.FLOOR_AREA_RANGE
 
         assert (low, high) == (20, 1000)
-        for key in SemanticChecks.FLOOR_AREA_KEYS:
-            entry = fields[f"house.building.{key}"]
-            assert (entry["minimum"], entry["maximum"]) == (low, high), key
-            assert "exclusiveMinimum" not in entry and "exclusiveMaximum" not in entry, key
+        conditioned = fields[f"house.building.{SemanticChecks.FLOOR_AREA_KEY}"]
+        assert (conditioned["minimum"], conditioned["maximum"]) == (low, high)
+        assert "exclusiveMinimum" not in conditioned and "exclusiveMaximum" not in conditioned
+        living = fields[f"house.building.{SemanticChecks.LIVING_AREA_KEY}"]
+        assert living["exclusiveMinimum"] == 0
+        assert "minimum" not in living and "maximum" not in living and "exclusiveMaximum" not in living
+
+    @pytest.mark.parametrize("path", sorted(RequestSchemaBounds.SEMANTIC_RANGES))
+    def test_every_semantic_range_lies_within_the_schemas_bounds(self, path: str) -> None:
+        """A published range replaces the schema's, so it must not reach past it.
+
+        Were the schema to tighten a bound below a semantic range, the document would publish a
+        value the schema refuses; this fails the build instead. An exclusive end must lie strictly
+        inside, an inclusive one may meet it.
+        """
+        low, high = RequestSchemaBounds.SEMANTIC_RANGES[path]
+        declared = RequestSchemaBounds.of(path)
+
+        assert low <= high, path
+        if "minimum" in declared:
+            assert low >= declared["minimum"], path
+        if "exclusiveMinimum" in declared:
+            assert low > declared["exclusiveMinimum"], path
+        if "maximum" in declared:
+            assert high <= declared["maximum"], path
+        if "exclusiveMaximum" in declared:
+            assert high < declared["exclusiveMaximum"], path
 
     def test_an_enumerated_field_keeps_one_entry_per_value(self, document: CapabilityDocument) -> None:
         """Enumerations, booleans and the glazing-pane counts still list their values.

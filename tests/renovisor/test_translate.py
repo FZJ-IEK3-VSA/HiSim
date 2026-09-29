@@ -91,7 +91,7 @@ def _entry(system: TranslatedSystem, component: str) -> Any:
 
 @pytest.mark.base
 class TestEveryGenerator:
-    """Sixteen simulated generators, nine twins, and a file that loads for every one of them."""
+    """Sixteen simulated generators, eight base twins, and a file that loads for every one of them."""
 
     @pytest.mark.parametrize("generator", SIMULATED_GENERATORS)
     def test_the_file_loads_back_and_names_the_twins_generator(self, generator: HeatGenerator) -> None:

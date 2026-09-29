@@ -64,7 +64,7 @@ from hisim.renovisor.layers import ElementAreas, EnvelopeLayers, SimulatedEnvelo
 from hisim.renovisor.request import House, Request, SemanticChecks
 from hisim.renovisor.simulation import EconomicSetup, SubsidyCatalogue
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ThermalElement
-from hisim.renovisor.translate import Targets, Translator
+from hisim.renovisor.translate import BaseFiles, Targets, Translator
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 
 # No module-level mark: every class carries ``base`` itself, except the one test that translates
@@ -1125,6 +1125,30 @@ class TestTheTables:
             asset_class, carrier = GeneratorAssets.of(generator)
             assert isinstance(asset_class, ComponentType)
             assert carrier is not None
+
+    def test_every_generator_is_refused_or_has_a_twin_and_an_asset_class(self) -> None:
+        """One of two, never both: refused by the request validation, or in both per-generator tables.
+
+        The twin table and the asset table name the same generators, so a generator added to one
+        and forgotten in the other fails here and not in a production request.
+        """
+        twins, assets = set(BaseFiles.BY_GENERATOR), set(GeneratorAssets.BY_GENERATOR)
+
+        assert twins == assets
+        for generator in HeatGenerator:
+            refused = generator in SemanticChecks.UNSUPPORTED_GENERATORS
+            assert refused is not (generator in twins), generator
+
+    @pytest.mark.parametrize("generator", list(SemanticChecks.UNSUPPORTED_GENERATORS))
+    def test_a_refused_generator_that_reaches_a_table_is_a_named_translator_error(
+        self, generator: HeatGenerator
+    ) -> None:
+        """Not a bare ``KeyError``: the message names the generator and says the validation was skipped."""
+        for lookup in (GeneratorAssets.of, lambda member: BaseFiles.select(member, with_solar_thermal=False)):
+            with pytest.raises(TranslatorError) as caught:
+                lookup(generator)
+            assert f"'{generator.value}'" in caught.value.message
+            assert "without Request.parse" in caught.value.message
 
     def test_every_thermal_element_has_an_asset_class(self) -> None:
         """The register has an entry per element, so each needs a class the database knows."""

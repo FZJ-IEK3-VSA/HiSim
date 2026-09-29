@@ -474,25 +474,60 @@ class TestTheSemanticChecks:
             assert set(first) >= {"path", "code", "message"}
             assert json.dumps(body)
 
-    @pytest.mark.parametrize("key", SemanticChecks.FLOOR_AREA_KEYS)
     @pytest.mark.parametrize("area, refused", [(19, True), (20, False), (1000, False), (1001, True), (9999, True)])
-    def test_a_floor_area_outside_what_hisim_simulates_is_refused_with_the_range(
-        self, key: str, area: float, refused: bool
+    def test_a_conditioned_floor_area_outside_what_hisim_simulates_is_refused_with_the_range(
+        self, area: float, refused: bool
     ) -> None:
         """From 20 to 1000 m², both ends inclusive, named rather than crashed on (renovisorissues #75)."""
+        path = f"house.building.{SemanticChecks.FLOOR_AREA_KEY}"
         document = mockup()
-        document["house"]["building"][key] = area
+        document["house"]["building"][SemanticChecks.FLOOR_AREA_KEY] = area
 
         problems = codes_of(document)
 
-        assert ((f"house.building.{key}", ProblemCode.RANGE_EXCEEDED.value) in problems) is refused
+        assert ((path, ProblemCode.RANGE_EXCEEDED.value) in problems) is refused
         if not refused:
             assert not problems
             return
         with pytest.raises(RequestError) as caught:
             Request.parse(document)
-        problem = next(item for item in caught.value.problems if item.path == f"house.building.{key}")
+        problem = next(item for item in caught.value.problems if item.path == path)
         assert "20 to 1000 m²" in problem.message and f"{area} m²" in problem.message
+        assert problem.accepted is None
+
+    @pytest.mark.parametrize("living", [15, 300])
+    def test_a_living_area_up_to_the_conditioned_floor_area_is_accepted(self, living: float) -> None:
+        """The living area keeps the schema's ``> 0``: 15 m² passes, below the conditioned area's own range."""
+        document = mockup()
+        document["house"]["building"].update(
+            {SemanticChecks.FLOOR_AREA_KEY: 300, SemanticChecks.LIVING_AREA_KEY: living}
+        )
+
+        assert not codes_of(document)
+
+    def test_an_absent_living_area_is_accepted(self) -> None:
+        """The conditioned floor area stands in for it; there is nothing to compare."""
+        document = mockup()
+        document["house"]["building"].pop(SemanticChecks.LIVING_AREA_KEY, None)
+
+        assert not codes_of(document)
+
+    def test_a_living_area_above_the_conditioned_floor_area_is_refused_on_its_own_path(self) -> None:
+        """It scales the cost lines, so it cannot exceed the heated floor area the simulation runs."""
+        document = mockup()
+        document["house"]["building"].update(
+            {SemanticChecks.FLOOR_AREA_KEY: 300, SemanticChecks.LIVING_AREA_KEY: 301}
+        )
+
+        with pytest.raises(RequestError) as caught:
+            Request.parse(document)
+
+        [problem] = caught.value.problems
+        assert (problem.path, problem.code) == (
+            f"house.building.{SemanticChecks.LIVING_AREA_KEY}", ProblemCode.RANGE_EXCEEDED
+        )
+        assert "301 m²" in problem.message and "300 m²" in problem.message
+        assert "modernisation-levy cap" in problem.message
         assert problem.accepted is None
 
     @pytest.mark.parametrize("building_type", ["detached_sfh", "terraced_sfh", "apartment", "bungalow"])

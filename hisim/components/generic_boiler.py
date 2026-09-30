@@ -46,7 +46,7 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim.components.accepted_heat import AcceptedHeat
+from hisim.components.accepted_heat import AcceptedHeat, DhwChargeYield, StorageForecast
 from hisim.components.dual_circuit_system import (
     DiverterValve,
     HeatingMode,
@@ -648,6 +648,12 @@ class GenericBoiler(Component):
         self.maximal_thermal_power_in_watt = self.config.maximal_thermal_power_in_watt
         self.min_combustion_efficiency = self.config.eff_th_min
         self.max_combustion_efficiency = self.config.eff_th_max
+        if self.maximal_thermal_power_in_watt < self.minimal_thermal_power_in_watt:
+            raise ValueError(
+                f"{self.component_name}: the maximal thermal power ({self.maximal_thermal_power_in_watt} W) is below "
+                f"the minimal thermal power ({self.minimal_thermal_power_in_watt} W); a boiler's power band must "
+                "run from its minimal up to its maximal power."
+            )
         # self.temperature_delta_in_celsius = (
         #     self.config.temperature_delta_in_celsius
         # )
@@ -708,9 +714,6 @@ class GenericBoiler(Component):
         if not 0 <= control_signal <= 1:
             raise ValueError(f"Expected a control signal between 0 and 1, not {control_signal}")
 
-        # Calculate combustion efficiency
-        delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
-
         thermal_power_setpoint_in_watt = stsv.get_input_value(self.thermal_power_setpoint_channel)
         if self.thermal_power_setpoint_channel.source_output is not None and thermal_power_setpoint_in_watt >= 0:
             maximum_power_used_in_watt, real_combustion_efficiency = self.fuel_power_for_thermal_power(
@@ -721,13 +724,7 @@ class GenericBoiler(Component):
             real_combustion_efficiency = self.min_combustion_efficiency
         else:
             maximum_power_used_in_watt = control_signal * self.maximal_thermal_power_in_watt
-            # values for the efficiency
-            delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
-            delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
-            slope = delta_efficiency / delta_power
-            # real efficiency formula
-            real_combustion_efficiency = (self.min_combustion_efficiency
-                + (maximum_power_used_in_watt - self.minimal_thermal_power_in_watt) * slope)
+            real_combustion_efficiency = self.combustion_efficiency_at_burner_power(maximum_power_used_in_watt)
 
         # energy consumption
         fuel_energy_consumption_in_watt_hour = (
@@ -869,13 +866,32 @@ class GenericBoiler(Component):
         else:
             raise ValueError(f"Unknown operating mode {operating_mode}")
 
+    def combustion_efficiency_at_burner_power(self, fuel_power_in_watt: float) -> float:
+        """The modulation law: the combustion efficiency at a burner power.
+
+        The efficiency runs linearly from ``eff_th_min`` at the minimal to ``eff_th_max`` at the maximal burner
+        power, ``eta(F) = eta_min + (F - F_min) slope`` with ``slope = (eta_max - eta_min) / (F_max - F_min)``;
+        it rises with the power when ``eff_th_max > eff_th_min`` and falls when it is smaller. A boiler whose
+        band is a single power runs at ``eff_th_min``.
+        """
+        delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
+        if delta_power <= 0:
+            return float(self.min_combustion_efficiency)
+        slope = (self.max_combustion_efficiency - self.min_combustion_efficiency) / delta_power
+        return float(
+            self.min_combustion_efficiency + (fuel_power_in_watt - self.minimal_thermal_power_in_watt) * slope
+        )
+
     def fuel_power_for_thermal_power(self, thermal_power_in_watt: float) -> Tuple[float, float]:
         """The burner power that yields a thermal power, and its efficiency, within the power band (hisim-6ehm).
 
-        The inverse of the modulation law used for the control signal: the efficiency rises linearly from
-        ``eff_th_min`` at the minimal to ``eff_th_max`` at the maximal burner power, so
-        ``P_th = F (eta_min + (F - F_min) slope)`` is solved for ``F``. A request below what the minimal power
-        yields runs the burner at its minimum; one above the maximum runs it at its maximum.
+        The inverse of :meth:`combustion_efficiency_at_burner_power`: with ``eta(F) = linear + slope F``,
+        ``P_th = F (linear + slope F)`` is solved for ``F``. For a rising efficiency (``slope > 0``) the positive
+        root is taken; for a constant one ``F = P_th / linear``; for a falling one (``slope < 0``) the parabola
+        has two positive roots and the smaller is taken, the one on the rising side of the thermal power,
+        written ``2 P_th / (linear + sqrt(linear^2 + 4 slope P_th))`` so it does not lose digits to cancellation.
+        A request below what the minimal power yields runs the burner at its minimum; one at or above what the
+        maximal power yields runs it at its maximum.
 
         Returns:
             Tuple[float, float]: The burner power in W and the combustion efficiency.
@@ -887,10 +903,18 @@ class GenericBoiler(Component):
         linear = self.min_combustion_efficiency - minimal * slope
         if slope > 0:
             fuel_power_in_watt = (-linear + (linear**2 + 4 * slope * thermal_power_in_watt) ** 0.5) / (2 * slope)
-        else:
+        elif slope == 0:
             fuel_power_in_watt = thermal_power_in_watt / linear
+        else:
+            # below what the maximal power yields the discriminant is positive: the parabola's peak, where
+            # linear^2 + 4 slope P_th is zero, lies at or above every thermal power the band reaches
+            if thermal_power_in_watt >= maximal * self.max_combustion_efficiency:
+                return maximal, self.max_combustion_efficiency
+            fuel_power_in_watt = (
+                2 * thermal_power_in_watt / (linear + (linear**2 + 4 * slope * thermal_power_in_watt) ** 0.5)
+            )
         fuel_power_in_watt = min(max(fuel_power_in_watt, minimal), maximal)
-        return fuel_power_in_watt, self.min_combustion_efficiency + (fuel_power_in_watt - minimal) * slope
+        return fuel_power_in_watt, self.combustion_efficiency_at_burner_power(fuel_power_in_watt)
 
     @staticmethod
     def get_cost_capex(
@@ -1336,9 +1360,6 @@ class GenericBoilerController(Component):
     MINIMUM_TEMPERATURE_LIFT_IN_KELVIN: ClassVar[float] = 5.0
     #: The setpoint that says "no feed-forward this step": the boiler then follows the control signal.
     NO_SETPOINT: ClassVar[float] = -1.0
-    #: The hot-water tank temperature below which a hot-water charge is never interrupted for space heating:
-    #: five kelvin above the 40 degC the tap draws at.
-    DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS: ClassVar[float] = 45.0
 
     def __init__(
         self,
@@ -1619,23 +1640,13 @@ class GenericBoilerController(Component):
                 self.daily_avg_outside_temperature_input_channel
             )
 
-            space_heating_temperature_after_draw_in_celsius: Optional[float] = None
-            if (
-                self.draw_forecast_sh_channel.source_output is not None
-                and self.water_mass_sh_channel.source_output is not None
-                and stsv.get_input_value(self.water_mass_sh_channel) > 0
-            ):
-                space_heating_temperature_after_draw_in_celsius = (
-                    water_temperature_input_from_space_heating_water_storage_in_celsius
-                    - stsv.get_input_value(self.draw_forecast_sh_channel)
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / (
-                        stsv.get_input_value(self.water_mass_sh_channel)
-                        * PhysicsConfig.get_properties_for_energy_carrier(
-                            energy_carrier=lt.LoadTypes.WATER
-                        ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                    )
-                )
+            space_heating_temperature_after_draw_in_celsius = StorageForecast.temperature_after_draw_in_celsius(
+                water_temperature_input_from_space_heating_water_storage_in_celsius,
+                self.draw_forecast_sh_channel,
+                self.water_mass_sh_channel,
+                stsv,
+                self.my_simulation_parameters.seconds_per_timestep,
+            )
             control_signal, temperature_delta = self.determine_operating_mode(
                 daily_avg_outside_temperature_in_celsius,
                 water_temperature_input_from_space_heating_water_storage_in_celsius,
@@ -1804,25 +1815,26 @@ class GenericBoilerController(Component):
         Hot water has priority, and a charge lasts several steps. A buffer sized at 20 l/kW holds a few
         kelvin times 0.2 kWh/K, less than one 900 s step of a winter heating draw, so once the vessel
         conserves energy (hisim-4g9.16) every charge drained it below the room temperature and the rooms
-        cooled. The buffer's temperature after this step's draw is forecast; when it would fall more than
-        :attr:`MINIMUM_TEMPERATURE_LIFT_IN_KELVIN` below the set flow temperature in the heating season,
-        and the hot-water tank is still above :attr:`DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS`, the
-        step goes to space heating and the charge resumes on the next step the buffer allows, up to the
-        charge's own end at the aim temperature.
+        cooled. The buffer's temperature after this step's draw is forecast; when the shared rule
+        :meth:`~hisim.components.accepted_heat.DhwChargeYield.space_heating_buffer_needs_the_step` says the
+        buffer needs the step and it is the heating season, the step goes to space heating and the charge
+        resumes on the next step the buffer allows, up to the charge's own end at the aim temperature.
         """
         if not self.config.with_domestic_hot_water_preparation or dhw_temperature_in_celsius is None:
             return
         if dhw_temperature_in_celsius >= self.warm_water_temperature_aim_in_celsius:
             self.dhw_charge_pending = False
         buffer_needs_the_step = (
-            space_heating_temperature_after_draw_in_celsius
-            < set_heating_flow_temperature_in_celsius - self.MINIMUM_TEMPERATURE_LIFT_IN_KELVIN
+            DhwChargeYield.space_heating_buffer_needs_the_step(
+                space_heating_temperature_after_draw_in_celsius,
+                set_heating_flow_temperature_in_celsius,
+                dhw_temperature_in_celsius,
+            )
             and DiverterValve.determine_summer_heating_mode(
                 daily_avg_outside_temperature_in_celsius,
                 self.config.set_heating_threshold_outside_temperature_in_celsius,
             )
             == "on"
-            and dhw_temperature_in_celsius >= self.DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS
         )
         if self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER and buffer_needs_the_step:
             self.controller_mode = HeatingMode.SPACE_HEATING

@@ -154,7 +154,7 @@ def test_a_generator_books_what_the_storage_accepted_and_scales_its_carrier() ->
     channel.source_output = accepted
     stsv.values[0] = 3000.0
     assert AcceptedHeat.booked(5000.0, channel, stsv) == (3000.0, pytest.approx(0.6))
-    assert AcceptedHeat.booked(0.0, channel, stsv) == (3000.0, 0.0)
+    assert AcceptedHeat.booked(0.0, channel, stsv) == (0.0, 0.0)
 
 
 @pytest.mark.base
@@ -365,3 +365,257 @@ def test_the_storage_forecast_is_the_temperature_after_the_draw() -> None:
     assert StorageForecast.temperature_after_draw_in_celsius(40.0, forecast, mass, stsv, 900) == pytest.approx(
         40.0 - 1000.0 * 900 / (100.0 * C_WATER)
     )
+
+
+# --- the review round of #864: clamps, guards and the rules shared by both controllers -------------------------
+
+
+def connected_channel(value: float, stsv: cp.SingleTimeStepValues, index: int, name: str = "Accepted") -> Any:
+    """An accepted-heat input wired to a fake output holding ``value`` at ``index``."""
+    channel = cp.ComponentInput("Generator", name, lt.LoadTypes.HEATING, lt.Units.WATT, False)
+    source = fake_output(f"{name}Source{index}", lt.LoadTypes.HEATING, lt.Units.WATT)
+    source.global_index = index
+    channel.source_output = source
+    stsv.values[index] = value
+    return channel
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "own, accepted, expected",
+    [
+        (5000.0, -100.0, (0.0, 0.0)),  # never negative
+        (0.0, 3000.0, (0.0, 0.0)),  # no heat without fuel, at any iteration
+        (-500.0, 0.0, (0.0, 0.0)),  # a cooling or idle machine books nothing through a storage
+        (5000.0, 5020.0, (5020.0, 1.004)),  # what the vessel holds, when the flow carried a little more
+    ],
+)
+def test_the_booked_power_is_never_negative_and_needs_fuel(
+    own: float, accepted: float, expected: Tuple[float, float]
+) -> None:
+    """Connected, the booked power is at least 0 and the share too; own <= 0 books (0, 0).
+
+    It is not capped at ``own``: the storage keeps what the flow carried, and the generator books exactly
+    that, so the vessel's balance closes (see :meth:`AcceptedHeat.booked`).
+    """
+    stsv = cp.SingleTimeStepValues(1)
+
+    booked = AcceptedHeat.booked(own, connected_channel(accepted, stsv, 0), stsv)
+
+    assert booked[0] == pytest.approx(expected[0])
+    assert booked[1] == pytest.approx(expected[1])
+    assert booked[1] >= 0.0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("tank_temperature", [10.0, 8.0])
+def test_a_tank_not_warmer_than_the_mains_gives_no_hot_water(tank_temperature: float) -> None:
+    """A tank at or below the 10 degC mains: no hot water leaves it, and the whole 60 l * 30 K demand is unmet."""
+    hot_water, requested, demand = simple_water_storage.SimpleDHWStorage.hot_water_draw(
+        60.0, tank_temperature, 40.0, 10.0
+    )
+
+    assert (hot_water, requested) == (0.0, 0.0)
+    assert demand == pytest.approx(wh(60, 30))
+
+
+@pytest.mark.base
+def test_the_mixing_valve_does_not_divide_by_zero_when_the_tap_asks_for_mains_water() -> None:
+    """A warm-water temperature at the mains temperature asks for no heat and takes no hot water."""
+    assert simple_water_storage.SimpleDHWStorage.hot_water_draw(60.0, 50.0, 10.0, 10.0) == (0.0, 0.0, 0.0)
+
+
+def dhw_storage(volume_in_liter: float, seconds_per_timestep: int = 900) -> Any:
+    """A hot-water tank of the given volume."""
+    config = simple_water_storage.SimpleDHWStorageConfig(
+        component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=volume_in_liter
+    )
+    return simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, seconds_per_timestep), config=config
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("volume_in_liter", [0.0, -50.0])
+def test_a_storage_without_water_is_refused_at_construction(volume_in_liter: float) -> None:
+    """Both vessels divide by M c every step; a volume of zero or less is refused when they are built."""
+    with pytest.raises(ValueError, match="positive volume_heating_water_storage_in_liter"):
+        dhw_storage(volume_in_liter)
+    config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("Buffer")
+    config.volume_heating_water_storage_in_liter = volume_in_liter
+    with pytest.raises(ValueError, match="positive volume_heating_water_storage_in_liter"):
+        simple_water_storage.SimpleHotWaterStorage(
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 900), config=config
+        )
+
+
+@pytest.mark.base
+def test_a_tank_too_cold_for_the_tap_reports_the_unmet_hot_water() -> None:
+    """60 l from a 30 degC tank with no heating: 60 l * 0.992 kg/l * 20 K drawn, the 10 K to 40 degC unmet."""
+    storage = dhw_storage(250.0)
+    consumption = fake_output("Consumption", lt.LoadTypes.WARM_WATER, lt.Units.LITER)
+    storage.water_consumption_channel.source_output = consumption
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([consumption, storage]))
+    fft.add_global_index_of_components([consumption, storage])
+    stsv.values[consumption.global_index] = 60.0
+    storage.state.mean_water_temperature_in_celsius = 30.0
+
+    storage.i_simulate(0, stsv, False)
+
+    assert stsv.values[storage.thermal_energy_dhw_channel.global_index] == pytest.approx(-wh(60 * 0.992, 20))
+    assert stsv.values[storage.thermal_energy_unmet_dhw_channel.global_index] == pytest.approx(wh(60 * 0.992, 10))
+
+
+# --- the boiler's modulation law for any slope -----------------------------------------------------------------
+
+
+def boiler_with_efficiencies(eff_th_min: float, eff_th_max: float) -> Any:
+    """The 1 to 10 kW boiler of :func:`small_boiler` with its own efficiency end points."""
+    from hisim.components import generic_boiler
+
+    config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler")
+    config.minimal_thermal_power_in_watt = 1000.0
+    config.maximal_thermal_power_in_watt = 10000.0
+    config.eff_th_min, config.eff_th_max = eff_th_min, eff_th_max
+    return generic_boiler.GenericBoiler(SimulationParameters.one_day_only(2021, 900), config)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("fuel_power", [1500.0, 5000.0, 9500.0])
+def test_a_boiler_whose_efficiency_falls_with_its_power_burns_what_yields_the_setpoint(fuel_power: float) -> None:
+    """eff_th_min 0.95 > eff_th_max 0.85: the burner power found reproduces the thermal power asked for."""
+    boiler = boiler_with_efficiencies(0.95, 0.85)
+    thermal_power = fuel_power * boiler.combustion_efficiency_at_burner_power(fuel_power)
+
+    fuel, efficiency = boiler.fuel_power_for_thermal_power(thermal_power)
+
+    assert fuel == pytest.approx(fuel_power, rel=1e-12)
+    assert fuel * efficiency == pytest.approx(thermal_power, rel=1e-12)
+    assert boiler.fuel_power_for_thermal_power(8500.0) == (10000.0, 0.85)
+    assert boiler.fuel_power_for_thermal_power(900.0) == (1000.0, 0.95)
+
+
+@pytest.mark.base
+def test_a_boiler_with_a_constant_efficiency_divides_by_it() -> None:
+    """eff_th_min = eff_th_max = 0.9: 4.5 kW of heat takes 5 kW of fuel."""
+    assert boiler_with_efficiencies(0.9, 0.9).fuel_power_for_thermal_power(4500.0) == (
+        pytest.approx(5000.0),
+        pytest.approx(0.9),
+    )
+
+
+@pytest.mark.base
+def test_a_boiler_whose_maximal_power_is_below_its_minimal_is_refused() -> None:
+    """A power band from 10 kW down to 1 kW is refused when the boiler is built."""
+    from hisim.components import generic_boiler
+
+    config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler")
+    config.minimal_thermal_power_in_watt = 10000.0
+    config.maximal_thermal_power_in_watt = 1000.0
+    with pytest.raises(ValueError, match="maximal thermal power"):
+        generic_boiler.GenericBoiler(SimulationParameters.one_day_only(2021, 900), config)
+
+
+# --- the heat pump's hot-water controller yields a step to the buffer ------------------------------------------
+
+
+@pytest.mark.base
+def test_the_heat_pump_yields_a_hot_water_step_to_a_buffer_about_to_run_dry_and_resumes() -> None:
+    """A charge at a 50 degC tank: a buffer forecast 10.8 K under 25 degC, below a 35 degC flow, gets the step.
+
+    5 kW drawn from 100 kg for 900 s lowers the buffer by 5000 * 900 / (100 c) = 10.8 K, far below the 35 degC
+    set flow temperature less the 5 K margin; the controller outputs off for the step and keeps its charge, so
+    with a buffer at 40 degC the next step charges again. A tank at 44 degC keeps its priority, and a forced step
+    never yields.
+    """
+    from hisim.components import more_advanced_heat_pump_hplib as hplib
+
+    controller = hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+        config=hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW"),
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
+    )
+    wired = [
+        (controller.water_temperature_input_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        (controller.space_heating_buffer_temperature_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        (controller.space_heating_buffer_draw_forecast_channel, lt.LoadTypes.HEATING, lt.Units.WATT),
+        (controller.space_heating_buffer_water_mass_channel, lt.LoadTypes.WARM_WATER, lt.Units.KG),
+        (controller.heating_flow_temperature_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+    ]
+    fakes = []
+    for number, (channel, load_type, unit) in enumerate(wired):
+        fake = fake_output(f"Fake{number}", load_type, unit)
+        channel.source_output = fake
+        fakes.append(fake)
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, controller]))
+    fft.add_global_index_of_components([*fakes, controller])
+
+    def step(tank: float, buffer: float, draw: float, force_convergence: bool = False) -> float:
+        for fake, value in zip(fakes, (tank, buffer, draw, 100.0, 35.0)):
+            stsv.values[fake.global_index] = value
+        controller.i_simulate(0, stsv, force_convergence)
+        return stsv.values[controller.state_dhw_channel.global_index]
+
+    controller.state_dhw = 2  # a charge in progress
+
+    assert step(tank=50.0, buffer=25.0, draw=5000.0) == 0
+    assert controller.state_dhw == 2
+    assert step(tank=50.0, buffer=25.0, draw=5000.0, force_convergence=True) == 2
+    assert step(tank=50.0, buffer=40.0, draw=0.0) == 2
+    assert step(tank=44.0, buffer=25.0, draw=5000.0) == 2
+
+
+# --- cooling through a water storage is refused (bead hisim-9uoo.17) -------------------------------------------
+
+
+@pytest.mark.base
+def test_a_heat_pump_asked_to_cool_through_a_water_storage_is_refused() -> None:
+    """Controller state -1 with the space-heating accepted heat wired to a buffer raises, naming the bead."""
+    from hisim.components import more_advanced_heat_pump_hplib as hplib
+
+    config = hplib.MoreAdvancedHeatPumpHPLibConfig(
+        component_id=ComponentID(name="HeatPump"),
+        model="Generic",
+        fluid_primary_side="air",
+        group_id=1,
+        heating_reference_temperature_in_celsius=-7,
+        flow_temperature_in_celsius=52,
+        set_thermal_output_power_in_watt=10000,
+        cycling_mode=True,
+        minimum_idle_time_in_seconds=600,
+        minimum_running_time_in_seconds=600,
+        minimum_thermal_output_power_in_watt=1500,
+        position_hot_water_storage_in_system=hplib.PositionHotWaterStorageInSystemSetup.PARALLEL,
+        with_domestic_hot_water_preparation=False,
+        passive_cooling_with_brine=False,
+        electrical_input_power_brine_pump_in_watt=None,
+        massflow_nominal_secondary_side_in_kg_per_s=0.333,
+        specific_heat_capacity_of_primary_fluid=0,
+        device_co2_footprint_in_kg=1658.4,
+        investment_costs_in_euro=15137.4,
+        lifetime_in_years=10,
+        maintenance_costs_in_euro_per_year=378.4,
+        subsidy_as_percentage_of_investment_costs=0.3,
+    )
+    heatpump = hplib.MoreAdvancedHeatPumpHPLib(
+        config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+    )
+    wired = [
+        heatpump.on_off_switch_sh,
+        heatpump.t_in_primary,
+        heatpump.t_in_secondary_sh,
+        heatpump.t_amb,
+        heatpump.thermal_power_accepted_sh_channel,
+    ]
+    fakes = []
+    for number, channel in enumerate(wired):
+        fake = fake_output(f"Fake{number}", channel.loadtype, channel.unit)
+        channel.source_output = fake
+        fakes.append(fake)
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, heatpump]))
+    fft.add_global_index_of_components([*fakes, heatpump])
+    for fake, value in zip(fakes, (-1.0, 30.0, 22.0, 30.0, 0.0)):
+        stsv.values[fake.global_index] = value
+    heatpump.state.time_off = 3600  # idle long enough that the minimum idle time does not hold it off
+
+    with pytest.raises(hplib.CoolingThroughWaterStorageNotSupportedError, match="hisim-9uoo.17"):
+        heatpump.i_simulate(1, stsv, False)

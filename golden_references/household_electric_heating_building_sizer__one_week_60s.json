@@ -14,7 +14,7 @@
   "BUI1.Building.Specific heating load": 64.19762541254126,
   "BUI1.Building.Tabula reference energy need for heating": 128.1,
   "BUI1.Building.Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius": 0.0,
-  "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius": 1.2188406728341762e-09,
+  "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius": 1.2188373569680759e-09,
   "BUI1.Building.Theoretical cooling demand": 0.0,
   "BUI1.Building.Theoretical heating demand": 534.7113939495059,
   "BUI1.Costs.Costs of grid electricity for simulated period": 182.561252,

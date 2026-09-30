@@ -46,7 +46,7 @@ from hisim.config import (
     sized_field,
 )
 from hisim.components import weather, simple_water_storage, heat_distribution_system
-from hisim.components.accepted_heat import AcceptedHeat, StorageForecast
+from hisim.components.accepted_heat import AcceptedHeat, DhwChargeYield, StorageForecast
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
 from hisim.components.configuration import (
@@ -82,6 +82,15 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     PARALLEL = "PARALLEL"
     SERIES = "SERIES"
     NO_STORAGE = "NO_STORAGE"
+
+
+class CoolingThroughWaterStorageNotSupportedError(NotImplementedError):
+    """A heat pump asked to cool while its space heating is booked through a water storage (bead hisim-9uoo.17).
+
+    Since hisim-4g9.16 a water storage accepts no heat from a flow colder than itself, so a heat pump cooling into
+    a buffer would book zero cooling and zero electricity. Until cooling through a storage is modelled, that
+    configuration is refused instead of silently reporting a machine that cools for free.
+    """
 
 
 @unique
@@ -1701,6 +1710,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 time_off = 0
 
         elif on_off == -1:
+            if self.thermal_power_accepted_sh_channel.source_output is not None:
+                raise CoolingThroughWaterStorageNotSupportedError(
+                    f"{self.component_name} was asked to cool (controller mode 2) while its space heating is booked "
+                    "through a water storage: cooling through a water storage is not supported yet, tracked as bead "
+                    "hisim-9uoo.17. A storage accepts no heat from a flow colder than itself (hisim-4g9.16), so the "
+                    "machine would book zero cooling and zero electricity. Run the space-heating controller in mode 1, "
+                    "or leave the heat pump's ThermalPowerAcceptedByStorageSH input unconnected."
+                )
             if self.passive_cooling_with_brine:
                 # passiv cooling with brine
                 cop = 0
@@ -1788,14 +1805,20 @@ class MoreAdvancedHeatPumpHPLib(Component):
             raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
         # A storage that took less than the flow offered (hisim-4g9.16) is what the heat pump books and draws
-        # electricity for, at the same COP; the flow itself -- mass and temperature -- is its own either way. A
-        # storage accepts no heat below its own temperature, so cooling into a buffer is booked as nothing.
+        # electricity for, at the same COP; the flow itself -- mass and temperature -- is its own either way.
+        # Cooling never reaches this point with the space-heating channel connected (refused above), so the
+        # cooling electricity is the machine's own.
         p_th_sh, share_sh = AcceptedHeat.booked(p_th_sh, self.thermal_power_accepted_sh_channel, stsv)
         p_el_sh = p_el_sh * share_sh
-        p_el_cooling = p_el_cooling * share_sh
+        share_dhw = 1.0
         if self.with_domestic_hot_water_preparation:
             p_th_dhw, share_dhw = AcceptedHeat.booked(p_th_dhw, self.thermal_power_accepted_dhw_channel, stsv)
             p_el_dhw = p_el_dhw * share_dhw
+        # The brine pump runs whenever the compressor does, and in one step the compressor serves one circuit:
+        # hot water when on_off is 2, the space-heating side otherwise. A storage that took only part of that
+        # circuit's heat had the machine run, in effect, for that part of the step, and its brine pump with it,
+        # so the pump's electricity is scaled by the share of the circuit that ran, like the compressor's.
+        p_el_brine_pump = (p_el_brine_pump or 0.0) * (share_dhw if on_off == 2 else share_sh)
 
         p_th_tot_in_watt = p_th_dhw + p_th_sh
         p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling + p_el_brine_pump
@@ -3207,12 +3230,6 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     SpaceHeatingBufferWaterMass = "SpaceHeatingBufferWaterMass"
     HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
 
-    #: The tank temperature below which a charge is never interrupted for space heating: five kelvin above the
-    #: 40 degC the tap draws at.
-    DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS: ClassVar[float] = 45.0
-    #: How far below the set flow temperature the buffer may be forecast before a charge yields it a step.
-    SPACE_HEATING_MARGIN_IN_KELVIN: ClassVar[float] = 5.0
-
     # Outputs
     State_dhw = "StateDHW"
     ThermalPower_dhw_is_constant = "ThermalPowerDHWConst"  # if heatpump has fix power for dhw
@@ -3355,17 +3372,12 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     def space_heating_buffer_needs_the_step(self, stsv: SingleTimeStepValues) -> bool:
         """Whether this step of a hot-water charge goes to space heating instead (hisim-6ehm).
 
-        Hot water has priority and a charge lasts several steps, while a buffer sized at 50 l/kW holds less
-        than one 900 s step of a winter heating draw: once the vessels conserve energy (hisim-4g9.16), every
-        charge drained the buffer below the room temperature. The step is yielded when the buffer's
-        temperature after this step's draw is forecast more than :attr:`SPACE_HEATING_MARGIN_IN_KELVIN` below
-        the set flow temperature and the tank is at least at
-        :attr:`DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS`. The charge itself is not ended; it resumes on
-        the next step the buffer allows.
+        The buffer's temperature after this step's draw is forecast and handed, with the set flow temperature and
+        the tank temperature, to the rule the boiler controller uses too,
+        :meth:`~hisim.components.accepted_heat.DhwChargeYield.space_heating_buffer_needs_the_step`. Without the
+        set flow temperature or the buffer's forecast there is nothing to yield to.
         """
         if self.heating_flow_temperature_channel.source_output is None:
-            return False
-        if self.water_temperature_input_from_dhw_storage_in_celsius < self.DHW_TEMPERATURE_KEEPING_PRIORITY_IN_CELSIUS:
             return False
         buffer_forecast_in_celsius = StorageForecast.temperature_after_draw_in_celsius(
             stsv.get_input_value(self.space_heating_buffer_temperature_channel),
@@ -3376,9 +3388,10 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
         if buffer_forecast_in_celsius is None:
             return False
-        return (
-            buffer_forecast_in_celsius
-            < stsv.get_input_value(self.heating_flow_temperature_channel) - self.SPACE_HEATING_MARGIN_IN_KELVIN
+        return DhwChargeYield.space_heating_buffer_needs_the_step(
+            buffer_forecast_in_celsius,
+            stsv.get_input_value(self.heating_flow_temperature_channel),
+            self.water_temperature_input_from_dhw_storage_in_celsius,
         )
 
     def get_default_connections_from_simple_dhw_storage(
@@ -3532,6 +3545,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             self.water_temperature_input_from_dhw_storage_in_celsius
         )
 
+        # The yield is a feed-forward refinement and is skipped deliberately in a forced step: a forced step
+        # takes the controller's own state so the convergence loop cannot oscillate between yielding and not.
+        # self.state_dhw keeps the charge either way, so a yielded charge resumes on the next step.
         state_dhw_this_step = self.state_dhw
         if state_dhw_this_step == 2 and not force_convergence and self.space_heating_buffer_needs_the_step(stsv):
             state_dhw_this_step = 0

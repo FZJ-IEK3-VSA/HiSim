@@ -333,6 +333,18 @@ class SimpleWaterStorage(cp.Component):
         self.my_simulation_parameters = my_simulation_parameters
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
 
+    def check_water_mass(self, storage_label: str) -> None:
+        """Refuse a vessel that holds no water.
+
+        Every step divides by the vessel's heat capacity ``M c``; a volume of zero or less would divide by zero
+        or run the energy balance backwards, so it is refused when the storage is built.
+        """
+        if self.water_mass_in_storage_in_kg <= 0:
+            raise ValueError(
+                f"The {storage_label} {self.component_name} holds {self.water_mass_in_storage_in_kg} kg of water; "
+                "a water storage needs a positive volume_heating_water_storage_in_liter."
+            )
+
     #: Plausible range of a storage's converged mean water temperature. Outside it the run fails.
     PLAUSIBLE_MEAN_WATER_TEMPERATURE_RANGE_IN_CELSIUS: ClassVar[Tuple[float, float]] = (0.0, 90.0)
 
@@ -387,8 +399,8 @@ class SimpleWaterStorage(cp.Component):
     def add_feed_forward_outputs(self) -> Tuple[ComponentOutput, ComponentOutput]:
         """Declare the two outputs a generator controller's feed-forward reads (hisim-6ehm).
 
-        ``ThermalPowerDrawForecast`` is the heat the vessel will give this step -- the consumer's request and the
-        standby loss at the start temperature -- known before any generator acts. ``WaterMassInStorage`` is the
+        ``ThermalPowerDrawForecast`` is the power the vessel will give this step -- the consumer's request and the
+        standby loss at the start temperature, in W -- known before any generator acts. ``WaterMassInStorage`` is the
         vessel's water mass. With both, a controller asks its generator for ``draw + M c (T_set - T0) / dt``: the
         heat that leaves the vessel at the set temperature after the step.
         """
@@ -398,8 +410,8 @@ class SimpleWaterStorage(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=(
-                "Heat the vessel gives this timestep before any generator acts: the consumer's request plus the "
-                "standby loss at the start temperature."
+                "Thermal power the vessel gives this timestep before any generator acts: the consumer's request "
+                "plus the standby loss at the start temperature."
             ),
         )
         water_mass_channel = self.add_output(
@@ -448,10 +460,9 @@ class SimpleWaterStorage(cp.Component):
         return (
             PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=lt.LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
             * water_mass_in_kg
             * (supply_temperature_in_celsius - return_temperature_in_celsius)
-            / 3600
         )
 
     @staticmethod
@@ -460,9 +471,8 @@ class SimpleWaterStorage(cp.Component):
         return (
             PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=lt.LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
             * water_mass_in_kg
-            / 3600
         )
 
     @staticmethod
@@ -503,6 +513,55 @@ class SimpleWaterStorage(cp.Component):
         )
         return min(heat_offered_in_watt_hour, max(room_in_watt_hour, 0.0))
 
+    def heat_accepted_from_both_generator_slots_in_watt_hour(
+        self,
+        start_temperature_in_celsius: float,
+        heat_capacity_in_watt_hour_per_kelvin: float,
+        heat_drawn_in_watt_hour: float,
+        return_temperature_to_heat_generator_in_celsius: float,
+        return_temperature_to_secondary_heat_generator_in_celsius: float,
+        primary_flow: Tuple[float, float],
+        secondary_flow: Tuple[float, float],
+    ) -> Tuple[float, float]:
+        """The heat the vessel accepts from its primary, then its secondary generator slot in one step, in Wh.
+
+        Each slot offers what its flow carries relative to the return temperature the vessel told it
+        (:meth:`heat_offered_by_water_flow_in_watt_hour`) and is accepted within the room left after this step's
+        draw and after the slots handled before it (:meth:`heat_accepted_from_generator_in_watt_hour`).
+
+        Args:
+            start_temperature_in_celsius: The vessel's mean temperature at the start of the timestep.
+            heat_capacity_in_watt_hour_per_kelvin: The vessel's ``M c``.
+            heat_drawn_in_watt_hour: Heat the consumer side asks of the vessel in the same timestep.
+            return_temperature_to_heat_generator_in_celsius: What the vessel told its primary generator.
+            return_temperature_to_secondary_heat_generator_in_celsius: What it told its secondary generator.
+            primary_flow: The primary generator's mass flow in kg/s and supply temperature in degC.
+            secondary_flow: The secondary generator's mass flow in kg/s and supply temperature in degC.
+
+        Returns:
+            Tuple[float, float]: The heat accepted from the primary and from the secondary slot, in Wh.
+        """
+        accepted_in_watt_hour: List[float] = []
+        for (mass_flow_in_kg_per_second, supply_temperature_in_celsius), return_temperature_in_celsius in (
+            (primary_flow, return_temperature_to_heat_generator_in_celsius),
+            (secondary_flow, return_temperature_to_secondary_heat_generator_in_celsius),
+        ):
+            accepted_in_watt_hour.append(
+                self.heat_accepted_from_generator_in_watt_hour(
+                    heat_offered_in_watt_hour=self.heat_offered_by_water_flow_in_watt_hour(
+                        water_mass_in_kg=mass_flow_in_kg_per_second * self.seconds_per_timestep,
+                        supply_temperature_in_celsius=supply_temperature_in_celsius,
+                        return_temperature_in_celsius=return_temperature_in_celsius,
+                    ),
+                    supply_temperature_in_celsius=supply_temperature_in_celsius,
+                    start_temperature_in_celsius=start_temperature_in_celsius,
+                    heat_capacity_in_watt_hour_per_kelvin=heat_capacity_in_watt_hour_per_kelvin,
+                    heat_drawn_in_watt_hour=heat_drawn_in_watt_hour,
+                    heat_already_accepted_in_watt_hour=sum(accepted_in_watt_hour),
+                )
+            )
+        return accepted_in_watt_hour[0], accepted_in_watt_hour[1]
+
     @staticmethod
     def heat_granted_to_draw_in_watt_hour(
         heat_requested_in_watt_hour: float,
@@ -514,11 +573,13 @@ class SimpleWaterStorage(cp.Component):
         """The part of a consumer's request the vessel gives in one timestep, in Wh.
 
         The mirror of the delivery cap: a vessel cannot be drawn below the temperature at which its
-        consumer stops taking heat -- the mains water that refills a hot-water tank, the indoor air a
-        heating circuit cannot deliver below. It gives at most what it holds above that temperature plus
-        what its generators delivered in the same step, ``M c (T0 - T_floor) + Q_accepted``. Without this
-        floor a space-heating buffer at 3600 s, asked by the distribution system for the heat it computed
-        one step earlier from a warmer supply, would be drawn below 0 degC by an explicit update. A
+        consumer stops taking heat -- the mains water (about 10 degC) that refills a hot-water tank, the
+        indoor air (about 20 degC) a heating circuit cannot deliver below. It gives at most what it holds
+        above that temperature plus what its generators delivered in the same step,
+        ``max(M c (T0 - T_floor), 0) + Q_accepted``: a vessel already at or below its floor gives only what
+        was delivered to it. Without this floor a space-heating buffer at 3600 s, asked by the distribution
+        system for the heat it computed one step earlier from a warmer supply, would be drawn by an explicit
+        update below the indoor air it is meant to heat, to a temperature no heating circuit delivers from. A
         request of nothing or less (a cooling distribution system) is passed through unchanged.
 
         Args:
@@ -1180,31 +1241,25 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
         self.set_feed_forward_outputs(stsv, heat_requested_in_watt_hour, start_temperature_in_celsius)
 
-        thermal_energy_input_from_heat_generator_in_watt_hour = self.heat_accepted_from_generator_in_watt_hour(
-            heat_offered_in_watt_hour=self.heat_offered_by_water_flow_in_watt_hour(
-                water_mass_in_kg=water_mass_flow_rate_from_heat_generator_in_kg_per_second * self.seconds_per_timestep,
-                supply_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
-                return_temperature_in_celsius=water_temperature_to_heat_generator_in_celsius,
-            ),
-            supply_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
+        (
+            thermal_energy_input_from_heat_generator_in_watt_hour,
+            thermal_energy_input_from_secondary_heat_generator_in_watt_hour,
+        ) = self.heat_accepted_from_both_generator_slots_in_watt_hour(
             start_temperature_in_celsius=start_temperature_in_celsius,
             heat_capacity_in_watt_hour_per_kelvin=heat_capacity_in_watt_hour_per_kelvin,
             heat_drawn_in_watt_hour=heat_requested_in_watt_hour,
-        )
-        thermal_energy_input_from_secondary_heat_generator_in_watt_hour = (
-            self.heat_accepted_from_generator_in_watt_hour(
-                heat_offered_in_watt_hour=self.heat_offered_by_water_flow_in_watt_hour(
-                    water_mass_in_kg=water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second
-                    * self.seconds_per_timestep,
-                    supply_temperature_in_celsius=water_temperature_from_secondary_heat_generator_in_celsius,
-                    return_temperature_in_celsius=water_temperature_to_secondary_heat_generator_in_celsius,
-                ),
-                supply_temperature_in_celsius=water_temperature_from_secondary_heat_generator_in_celsius,
-                start_temperature_in_celsius=start_temperature_in_celsius,
-                heat_capacity_in_watt_hour_per_kelvin=heat_capacity_in_watt_hour_per_kelvin,
-                heat_drawn_in_watt_hour=heat_requested_in_watt_hour,
-                heat_already_accepted_in_watt_hour=thermal_energy_input_from_heat_generator_in_watt_hour,
-            )
+            return_temperature_to_heat_generator_in_celsius=water_temperature_to_heat_generator_in_celsius,
+            return_temperature_to_secondary_heat_generator_in_celsius=(
+                water_temperature_to_secondary_heat_generator_in_celsius
+            ),
+            primary_flow=(
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+                water_temperature_from_heat_generator_in_celsius,
+            ),
+            secondary_flow=(
+                water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second,
+                water_temperature_from_secondary_heat_generator_in_celsius,
+            ),
         )
 
         # the distribution system gets what it asked for, down to the temperature at which it delivers nothing
@@ -1366,6 +1421,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.density_water_at_40_degree_celsius_in_kg_per_liter
             * concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter)
         )
+        self.check_water_mass("heating water storage")
         self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = (
             self.config.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
         )
@@ -1891,6 +1947,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         cold water, so only ``m_hot = m_d (T_warm - T_cold) / (T_tank - T_cold)`` leaves the tank and the heat
         drawn is exactly the demand ``m_d c (T_warm - T_cold)``. A tank at or below ``T_warm`` passes all of
         ``m_d`` unmixed: it gives ``m_d c (T_tank - T_cold)`` (nothing below ``T_cold``) and the rest of the
+        demand is unmet. A tank at or below ``T_cold`` gives nothing: no hot water leaves it and the whole
         demand is unmet. The tank temperature is the one at the start of the timestep, so the draw does not
         depend on the step's own result. The tank then gives what the valve asks for down to its floor at the
         cold-water temperature (:meth:`SimpleWaterStorage.heat_granted_to_draw_in_watt_hour`).
@@ -1910,6 +1967,8 @@ class SimpleDHWStorage(SimpleWaterStorage):
             supply_temperature_in_celsius=warm_water_temperature_in_celsius,
             return_temperature_in_celsius=cold_water_temperature_in_celsius,
         )
+        if tank_temperature_in_celsius <= cold_water_temperature_in_celsius:
+            return 0.0, 0.0, heat_demand_in_watt_hour
         if tank_temperature_in_celsius > warm_water_temperature_in_celsius:
             hot_water_mass_in_kg = (
                 tap_water_mass_in_kg
@@ -1922,7 +1981,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             hot_water_mass_in_kg = tap_water_mass_in_kg
             heat_drawn_in_watt_hour = SimpleWaterStorage.heat_offered_by_water_flow_in_watt_hour(
                 water_mass_in_kg=hot_water_mass_in_kg,
-                supply_temperature_in_celsius=max(tank_temperature_in_celsius, cold_water_temperature_in_celsius),
+                supply_temperature_in_celsius=tank_temperature_in_celsius,
                 return_temperature_in_celsius=cold_water_temperature_in_celsius,
             )
         return hot_water_mass_in_kg, heat_drawn_in_watt_hour, heat_demand_in_watt_hour
@@ -1959,6 +2018,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             self.density_water_at_40_degree_celsius_in_kg_per_liter
             * concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter)
         )
+        self.check_water_mass("DHW water storage")
         self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = (
             self.waterstorageconfig.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
         )
@@ -2047,31 +2107,25 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # ------------------------------
         water_temperature_to_heat_generator_in_celsius = start_temperature_in_celsius
         water_temperature_to_secondary_heat_generator_in_celsius = start_temperature_in_celsius
-        thermal_energy_input_from_heat_generator_in_watt_hour = self.heat_accepted_from_generator_in_watt_hour(
-            heat_offered_in_watt_hour=self.heat_offered_by_water_flow_in_watt_hour(
-                water_mass_in_kg=water_mass_flow_rate_from_heat_generator_in_kg_per_second * self.seconds_per_timestep,
-                supply_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
-                return_temperature_in_celsius=water_temperature_to_heat_generator_in_celsius,
-            ),
-            supply_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
+        (
+            thermal_energy_input_from_heat_generator_in_watt_hour,
+            thermal_energy_input_from_secondary_heat_generator_in_watt_hour,
+        ) = self.heat_accepted_from_both_generator_slots_in_watt_hour(
             start_temperature_in_celsius=start_temperature_in_celsius,
             heat_capacity_in_watt_hour_per_kelvin=heat_capacity_in_watt_hour_per_kelvin,
             heat_drawn_in_watt_hour=heat_requested_in_watt_hour,
-        )
-        thermal_energy_input_from_secondary_heat_generator_in_watt_hour = (
-            self.heat_accepted_from_generator_in_watt_hour(
-                heat_offered_in_watt_hour=self.heat_offered_by_water_flow_in_watt_hour(
-                    water_mass_in_kg=water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second
-                    * self.seconds_per_timestep,
-                    supply_temperature_in_celsius=water_temperature_from_secondary_heat_generator_in_celsius,
-                    return_temperature_in_celsius=water_temperature_to_secondary_heat_generator_in_celsius,
-                ),
-                supply_temperature_in_celsius=water_temperature_from_secondary_heat_generator_in_celsius,
-                start_temperature_in_celsius=start_temperature_in_celsius,
-                heat_capacity_in_watt_hour_per_kelvin=heat_capacity_in_watt_hour_per_kelvin,
-                heat_drawn_in_watt_hour=heat_requested_in_watt_hour,
-                heat_already_accepted_in_watt_hour=thermal_energy_input_from_heat_generator_in_watt_hour,
-            )
+            return_temperature_to_heat_generator_in_celsius=water_temperature_to_heat_generator_in_celsius,
+            return_temperature_to_secondary_heat_generator_in_celsius=(
+                water_temperature_to_secondary_heat_generator_in_celsius
+            ),
+            primary_flow=(
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+                water_temperature_from_heat_generator_in_celsius,
+            ),
+            secondary_flow=(
+                water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second,
+                water_temperature_from_secondary_heat_generator_in_celsius,
+            ),
         )
 
         # the tap gets what the valve asked for, down to the tank's floor at the cold-water temperature

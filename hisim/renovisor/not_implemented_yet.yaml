@@ -24,7 +24,7 @@
 # --- The building ---------------------------------------------------------------------------
 
 - path: house.building.number_of_storeys
-  note: The archetype's n_Storey is used.
+  note: "Not used yet: the building keeps the shape of its TABULA archetype -- that row's own number of storeys and its roof, floor and facade areas, scaled to the floor area -- so two houses that differ only in their storeys are simulated alike."
   tracked: hisim-9b0m
 
 - path: house.building.window.outside_shading

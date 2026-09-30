@@ -4,7 +4,9 @@ It iterates over all components in each timestep until convergence and loops ove
 """
 import os
 import datetime
-from typing import List, Tuple, Optional, Dict, Any, Type, Union
+import enum
+from dataclasses import dataclass
+from typing import Callable, List, Tuple, Optional, Dict, Any, Type, Union
 import time
 import pandas as pd
 
@@ -89,6 +91,60 @@ def cost_declaration_refusal(component_class: type) -> Optional[Type[ValueError]
     return None
 
 
+class ProgressEvent(enum.Enum):
+    """When in the time loop a progress callback is called.
+
+    ``LOOP_START`` once, after every component is prepared and connected and before the first
+    timestep. ``PERIODIC`` whenever :meth:`Simulator.show_progress` logs its progress message, which
+    is at most once every five seconds. ``LOOP_END`` once, after the last timestep and before the
+    postprocessing that :meth:`Simulator.run_all_timesteps` runs next.
+    """
+
+    LOOP_START = "loop_start"
+    PERIODIC = "periodic"
+    LOOP_END = "loop_end"
+
+
+@dataclass(frozen=True)
+class SimulationProgress:
+    """How far the time loop has come, as plain values handed to every progress callback.
+
+    Args:
+        event: Which of the three moments this is.
+        timesteps_done: How many timesteps have finished; 0 at the start, ``timesteps`` at the end.
+        timesteps: How many timesteps the loop runs.
+        seconds_per_timestep: The length of one timestep.
+        eta_seconds: The loop's own estimate of its remaining wall-clock time, the one its progress
+            message logs; ``None`` at the start, when there is nothing to estimate from, and 0 at
+            the end.
+    """
+
+    event: ProgressEvent
+    timesteps_done: int
+    timesteps: int
+    seconds_per_timestep: int
+    eta_seconds: Optional[float]
+
+    @property
+    def fraction(self) -> float:
+        """Return the finished share of the timesteps, between 0 and 1."""
+        return self.timesteps_done / self.timesteps if self.timesteps else 1.0
+
+    @property
+    def simulated_days(self) -> float:
+        """Return the simulated time the finished timesteps cover, in days."""
+        return self.timesteps_done * self.seconds_per_timestep / 86400
+
+    @property
+    def total_days(self) -> float:
+        """Return the simulated time the whole loop covers, in days."""
+        return self.timesteps * self.seconds_per_timestep / 86400
+
+
+#: What :meth:`Simulator.add_progress_callback` accepts: anything that takes one progress report.
+ProgressCallback = Callable[[SimulationProgress], None]
+
+
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
 __copyright__ = "Copyright 2020-2022, FZJ-IEK-3"
 __license__ = "MIT"
@@ -164,6 +220,43 @@ class Simulator:
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
         self.config_dictionary: Dict[str, Any] = {}
+        #: Called at the start of the time loop, with every progress message and at its end
+        #: (:meth:`add_progress_callback`). Empty unless a caller registers one, and then the loop
+        #: behaves and logs exactly as it always did.
+        self._progress_callbacks: List[ProgressCallback] = []
+
+    def add_progress_callback(self, callback: ProgressCallback) -> None:
+        """Register a callable that is told how far the time loop has come.
+
+        It is called with a :class:`SimulationProgress` once when the loop starts, whenever
+        :meth:`show_progress` logs its message (at most once every five seconds) and once when the
+        loop ends, before the postprocessing. Nothing is computed for it in between, so a
+        registered callback costs the loop nothing beyond the progress message it already logs.
+        A callback that raises is logged once and dropped: progress is informational and can
+        never fail a simulation.
+
+        Args:
+            callback: Takes one :class:`SimulationProgress`; its return value is ignored.
+        """
+        self._progress_callbacks.append(callback)
+
+    def _notify_progress(self, event: ProgressEvent, timesteps_done: int, eta_seconds: Optional[float]) -> None:
+        """Hand one progress report to every registered callback, dropping any that raises."""
+        if not self._progress_callbacks:
+            return
+        progress = SimulationProgress(
+            event=event,
+            timesteps_done=timesteps_done,
+            timesteps=self._simulation_parameters.timesteps,
+            seconds_per_timestep=self._simulation_parameters.seconds_per_timestep,
+            eta_seconds=eta_seconds,
+        )
+        for callback in list(self._progress_callbacks):
+            try:
+                callback(progress)
+            except Exception as error:  # pylint: disable=broad-except  # progress never fails a run
+                log.warning(f"A progress callback raised and is no longer called: {type(error).__name__}: {error}")
+                self._progress_callbacks.remove(callback)
 
     def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """Sets the simulation parameters and the logging level at the same time.
@@ -534,6 +627,7 @@ class Simulator:
         number_of_outputs = len(self.all_outputs)
         stsv = cp.SingleTimeStepValues(number_of_outputs)
 
+        self._notify_progress(ProgressEvent.LOOP_START, 0, None)
         for step in range(self._simulation_parameters.timesteps):
             (
                 resulting_stsv,
@@ -563,6 +657,8 @@ class Simulator:
                 )
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
+        # The loop is done; what follows, up to the finished flag, is postprocessing.
+        self._notify_progress(ProgressEvent.LOOP_END, self._simulation_parameters.timesteps, 0.0)
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
         log.information("Starting postprocessing")
         if postprocessing_datatransfer is None:
@@ -672,6 +768,9 @@ class Simulator:
     ) -> datetime.datetime:
         """Logs a progress message with elapsed time, speed, and time estimate.
 
+        The same estimate goes to every progress callback (:meth:`add_progress_callback`), with
+        ``step + 1`` timesteps done, because ``step`` is the index of the timestep just finished.
+
         Args:
             starttime: When the simulation started.
             step: Current timestep index.
@@ -693,7 +792,8 @@ class Simulator:
             average_iteration_tries: float = 1
         else:
             average_iteration_tries = total_iteration_tries / elapsed_steps
-        time_elapsed = datetime.timedelta(seconds=(self._simulation_parameters.timesteps - step) / steps_per_second)
+        eta_seconds = (self._simulation_parameters.timesteps - step) / steps_per_second
+        time_elapsed = datetime.timedelta(seconds=eta_seconds)
         time_left_minutes, time_left_seconds = divmod(time_elapsed.seconds, 60)
         time_left_seconds = str(time_left_seconds).zfill(2)  # type: ignore
         simulation_status = f"Simulating... {(step / self._simulation_parameters.timesteps) * 100:.1f}% "
@@ -704,6 +804,7 @@ class Simulator:
         if force_covergence:
             simulation_status += " (forced)"
         log.information(simulation_status)
+        self._notify_progress(ProgressEvent.PERIODIC, step + 1, eta_seconds)
         return datetime.datetime.now()
 
     @utils.measure_execution_time

@@ -28,6 +28,7 @@ from hisim.economics.provenance import ProvenanceLedger
 from hisim.economics.staged import StagedEvaluationError, StagedEvaluator, StagedResult
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_parameters import ParameterKeys
+from hisim.renovisor.progress import ProgressLine
 
 from tests.economics.synthetic_stages import (
     SyntheticPlan,
@@ -288,6 +289,15 @@ class TestTheHappyPath:
         assert [stage["label"] for stage in document["stages"]] == ["baseline", "stage 1", "stage 2"]
         assert document["stages"][2]["job_id"] == "job-heat-pump"
         assert "economics_result.json" in capsys.readouterr().out
+
+    def test_it_reports_three_phases_and_no_days(self, workspace, capsys):
+        """``staged`` has no time loop: reading, evaluating, writing, and no days (progress-spec §1)."""
+        out = workspace / "economics_result.json"
+        assert main(_arguments(workspace, out)) == 0
+        lines = [ProgressLine.parse(line) for line in capsys.readouterr().out.splitlines()]
+        progress = [line for line in lines if line is not None]
+        assert [line["phase"] for line in progress] == ["reading", "evaluating", "writing"]
+        assert all(set(line) == {"phase"} for line in progress)
 
     def test_it_writes_the_plans_ledger_beside_the_document(self, workspace):
         """``cost_provenance.json`` lands in ``--out``'s directory, in an ordinary run's format.

@@ -44,7 +44,7 @@ path verification (below).
 | `realized.energy_system.yaml`, `realized.audit.yaml`, `realized.simulation.yaml`, `component_connections.json` | what HiSim made of it, written before the first timestep |
 | `results/` | the simulation's own outputs, including `all_kpis.json` |
 | `result.json` | the KPIs and the costs, every value with its provenance |
-| `calculation.json` | the success manifest: the translator version, the image digest, the options used |
+| `calculation.json` | the success manifest: the translator version, the image digest, the options used, and `simulated_days`, the days the time loop covered (`null` when none ran) |
 | `problems.json` | only on exit 2: every fault of the request, by path and code |
 | `translator_error.json` | only on exit 3: what the translator could not map |
 
@@ -85,6 +85,38 @@ cache volume saves that download, and nothing is ever written into the installed
 
 The last line on standard error for 3 and 5 is one line, which the backend shows as the job's
 error message.
+
+## Progress on standard output
+
+`run` and `python -m hisim.economics staged` report their progress on standard output, always --
+there is no option and no environment variable. **A line that starts with `RENOVISOR_PROGRESS` is
+progress, not log output:** the prefix, one space, and one compact JSON object, then a flush, and
+nothing else on that line (`hisim/renovisor/progress.py`, progress-spec §1):
+
+```
+RENOVISOR_PROGRESS {"phase":"simulating","fraction":0.42,"eta_seconds":35,"simulated_days":153.3,"total_days":365}
+```
+
+| `phase` | Covers |
+| --- | --- |
+| `reading` | parsing and validating the request |
+| `preparing` | applying and translating, building the system, weather data, occupancy/LPG profiles |
+| `simulating` | the time loop |
+| `evaluating` | HiSim's postprocessing, the KPIs, the economic inputs, the result document |
+| `writing` | writing `result.json` and `calculation.json` |
+
+`phase` is on every line; the other fields are optional, and a reader ignores fields it does not
+know. `fraction` (timesteps done ÷ timesteps) and `eta_seconds` (the time loop's own estimate) come
+with `simulating`; `simulated_days` and `total_days` with every line from `simulating` on, and
+`simulated_days` never decreases. `run` writes one line on entering each phase, in the order of the
+table; during `simulating` at most one more every five seconds, from the time loop's own progress
+message; and one with `fraction` 1 when the loop ends, right before `evaluating`. `staged` writes
+only `reading`, `evaluating` and `writing`, without days. A line that cannot be written -- standard
+output closed or broken -- is dropped, and the calculation ends exactly as it would without it.
+
+The time loop's side is generic: `Simulator.add_progress_callback` (`hisim/simulator.py`) calls a
+callable with a `SimulationProgress` at the loop's start, with every progress message and at its
+end; the translator registers the one that writes these lines.
 
 ## The envelope
 

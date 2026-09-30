@@ -11,18 +11,21 @@ collection, and one that raises proves exit 5, neither of which needs a day of w
 """
 
 import copy
+import io
 import json
 import re
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import pytest
 
 from hisim.renovisor.__main__ import RenovisorCommandLine
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.progress import ProgressLine, ProgressWriter
 from hisim.renovisor.run import Calculation, ExitCode, LifecycleCosts, Outputs
 from hisim.renovisor.simulation import SimulationParameters
+from hisim.simulator import ProgressEvent, SimulationProgress
 
 BASE_FILES = Path(__file__).resolve().parents[2] / "energy_systems"
 
@@ -156,6 +159,91 @@ class TestExitZero:
             "replaces_subjects",
         }
         assert report["fields"] and all("status" in line for line in report["fields"])
+
+
+class LoopReportingRunner(SilentRunner):
+    """A simulation that reports a one-day, hourly time loop to the calculation's progress writer."""
+
+    def __init__(self, progress: ProgressWriter) -> None:
+        """Keep the writer the calculation was given, as the real runner keeps its callback."""
+        self._progress = progress
+
+    def run(self, energy_system_path: Path, parameters: SimulationParameters, record_directory: Path) -> None:
+        """Report the loop's start, one periodic message and its end, then write what HiSim writes."""
+        for event, done in ((ProgressEvent.LOOP_START, 0), (ProgressEvent.PERIODIC, 12), (ProgressEvent.LOOP_END, 24)):
+            self._progress.on_simulation_progress(
+                SimulationProgress(
+                    event=event, timesteps_done=done, timesteps=24, seconds_per_timestep=3600, eta_seconds=None
+                )
+            )
+        super().run(energy_system_path, parameters, record_directory)
+
+
+def progress_lines(text: str) -> List[Dict[str, Any]]:
+    """Return the progress lines among standard output's lines, parsed."""
+    return [fields for fields in map(ProgressLine.parse, text.splitlines()) if fields is not None]
+
+
+@pytest.mark.base
+class TestProgress:
+    """``run`` reports its five phases in order on standard output (progress-spec §1)."""
+
+    def test_run_writes_the_five_phases_in_order(self, tmp_path: Path, capsys) -> None:
+        """reading, preparing, simulating, evaluating, writing; days from simulating on."""
+        request = write_request(tmp_path / "request.json", measures=[])
+        out = tmp_path / "out"
+        progress = ProgressWriter()
+        run = Calculation(
+            request_path=request,
+            output_directory=out,
+            base_files_directory=BASE_FILES,
+            simulation_runner=LoopReportingRunner(progress),
+            progress=progress,
+        )
+
+        assert run.run() == ExitCode.FINISHED
+
+        lines = progress_lines(capsys.readouterr().out)
+        phases = [line["phase"] for line in lines]
+        assert list(dict.fromkeys(phases)) == ["reading", "preparing", "simulating", "evaluating", "writing"]
+        assert "simulated_days" not in lines[0] and "simulated_days" not in lines[1]
+        days = [line["simulated_days"] for line in lines[2:]]
+        assert days == sorted(days) and days[-1] == 1.0
+        manifest = json.loads((out / Outputs.CALCULATION).read_text(encoding="utf-8"))
+        assert manifest["simulated_days"] == 1.0
+
+    def test_a_runner_that_reports_no_loop_still_gets_the_phases_in_order(self, tmp_path: Path, capsys) -> None:
+        """No days are invented: the manifest says none were simulated."""
+        request = write_request(tmp_path / "request.json", measures=[])
+        out = tmp_path / "out"
+
+        assert calculation(request, out).run() == ExitCode.FINISHED
+
+        phases = [line["phase"] for line in progress_lines(capsys.readouterr().out)]
+        assert phases == ["reading", "preparing", "evaluating", "writing"]
+        manifest = json.loads((out / Outputs.CALCULATION).read_text(encoding="utf-8"))
+        assert manifest["simulated_days"] is None
+
+    def test_a_run_with_standard_output_closed_still_finishes(self, tmp_path: Path) -> None:
+        """Progress is informational: a line that cannot be written is dropped (spec §6)."""
+        request = write_request(tmp_path / "request.json", measures=[])
+        closed = io.StringIO()
+        closed.close()
+        progress = ProgressWriter(stream=closed)
+        run = Calculation(
+            request_path=request,
+            output_directory=tmp_path / "out",
+            base_files_directory=BASE_FILES,
+            simulation_runner=LoopReportingRunner(progress),
+            progress=progress,
+        )
+        assert run.run() == ExitCode.FINISHED
+
+    def test_translate_writes_no_progress(self, tmp_path: Path, capsys) -> None:
+        """Only ``run`` and ``staged`` report progress."""
+        request = write_request(tmp_path / "request.json", measures=[])
+        assert calculation(request, tmp_path / "out").translate_only() == ExitCode.FINISHED
+        assert not progress_lines(capsys.readouterr().out)
 
 
 @pytest.mark.base

@@ -168,6 +168,7 @@ from hisim.renovisor.economics import (
     MeasureSubjects,
     ReplacedSubjects,
 )
+from hisim.renovisor.progress import Phase, ProgressWriter
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import CatalogueTable
 from hisim.economics.subsidies import SubsidyCatalog
@@ -1562,7 +1563,12 @@ def _cmd_staged(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 2 for a refused plan (with a ``problems.json`` beside ``--out``), 3 for an
         engine failure.
+
+    It writes the progress lines of ``reading``, ``evaluating`` and ``writing`` on standard output
+    (:mod:`hisim.renovisor.progress`); there is no time loop, so they carry no days.
     """
+    progress = ProgressWriter()
+    progress.enter(Phase.READING)
     try:
         stages_and_directories = [
             StagedCli.read_stage(argument, index) for index, argument in enumerate(args.stage)
@@ -1597,6 +1603,7 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
 
+    progress.enter(Phase.EVALUATING)
     try:
         mapping = StagedCli.read_mapping(directories, args.stage, stages)
         overrides = StagedCli.investment_overrides(parsed, stages, mapping)
@@ -1628,6 +1635,7 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         subject_notes=mapping.notes,
         replaces_subjects=mapping.replaces,
     )
+    progress.enter(Phase.WRITING)
     try:
         document.write(Path(args.out))
     except (SubsidyReconciliationError, BandOrderError, MeasureWithoutRowError) as error:

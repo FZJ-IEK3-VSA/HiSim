@@ -33,7 +33,7 @@ import traceback
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Protocol, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Protocol, Sequence, Tuple
 
 import yaml
 
@@ -42,6 +42,7 @@ from hisim.energy_system.executor import build_energy_system, write_records
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import apply
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.progress import Phase, ProgressWriter
 from hisim.renovisor.report import ReportError
 from hisim.renovisor.request import Request, RequestError
 from hisim.renovisor.result import ResultBuilder
@@ -49,6 +50,7 @@ from hisim.renovisor.simulation import EconomicSetup, Period, SimulationSetup
 from hisim.renovisor.translate import TranslatedSystem, Translator
 from hisim.renovisor.whitelist import TranslatorError, Whitelist
 from hisim.simulationparameters import SimulationParameters
+from hisim.simulator import ProgressCallback
 
 
 class ExitCode(IntEnum):
@@ -156,7 +158,16 @@ class EnergySystemSimulationRunner:
     The order is requirement R16's: the realized record and its audit are written *before* the
     first timestep, so that a run which dies halfway still leaves a complete description of the
     system it was running behind -- which is when such a description is worth the most.
+
+    Args:
+        progress_callbacks: Registered on the simulator before its time loop starts
+            (:meth:`hisim.simulator.Simulator.add_progress_callback`); the calculation passes the
+            one that writes its progress lines.
     """
+
+    def __init__(self, progress_callbacks: Sequence[ProgressCallback] = ()) -> None:
+        """Store the progress callbacks; nothing is built until :meth:`run`."""
+        self._progress_callbacks = tuple(progress_callbacks)
 
     def run(
         self,
@@ -177,6 +188,8 @@ class EnergySystemSimulationRunner:
         """
         built = build_energy_system(energy_system_path, parameters)
         write_records(built, str(record_directory))
+        for callback in self._progress_callbacks:
+            built.simulator.add_progress_callback(callback)
         built.simulator.run_all_timesteps()
 
 
@@ -252,6 +265,10 @@ class Calculation:
             another.
         subsidy_catalogue_directory: Where the country subsidy catalogues live; the shipped
             directory when omitted.
+        progress: Writes the progress lines of :meth:`run` (:mod:`hisim.renovisor.progress`); one
+            on standard output when omitted. The real runner is given its simulator callback; an
+            injected runner that wants to report the time loop calls
+            :meth:`ProgressWriter.on_simulation_progress` itself.
     """
 
     #: The environment variable the image digest is read from when the caller passes none.
@@ -273,6 +290,7 @@ class Calculation:
         image_digest: Optional[str] = None,
         simulation_runner: Optional[SimulationRunner] = None,
         subsidy_catalogue_directory: Optional[Path] = None,
+        progress: Optional[ProgressWriter] = None,
     ) -> None:
         """Store the locations; nothing is read and nothing is created until :meth:`run`."""
         self._request_path = Path(request_path)
@@ -287,7 +305,13 @@ class Calculation:
         self._image_digest = (
             image_digest if image_digest is not None else os.environ.get(self.IMAGE_DIGEST_VARIABLE)
         )
-        self._runner: SimulationRunner = simulation_runner or EnergySystemSimulationRunner()
+        # Only `run` reports progress: `translate` and `validate` are what a person or a probe calls,
+        # and their standard output is theirs. The writer `run` uses is kept until it starts.
+        self._run_progress = progress if progress is not None else ProgressWriter()
+        self._progress = ProgressWriter.silent()
+        self._runner: SimulationRunner = simulation_runner or EnergySystemSimulationRunner(
+            progress_callbacks=(self._run_progress.on_simulation_progress,)
+        )
         self._catalogue_directory = (
             Path(subsidy_catalogue_directory) if subsidy_catalogue_directory is not None else None
         )
@@ -299,6 +323,7 @@ class Calculation:
 
     def run(self) -> ExitCode:
         """Do everything: validate, apply, translate, simulate and assemble the payload."""
+        self._progress = self._run_progress
         return self._guarded(self._calculate)
 
     def validate(self) -> ExitCode:
@@ -357,8 +382,10 @@ class Calculation:
 
     def _translate(self) -> Tuple[Request, Any, TranslatedSystem]:
         """Validate, apply and translate, without writing anything."""
+        self._progress.enter(Phase.READING)
         document = RequestFile.read(self._request_path)
         request = Request.parse(document)
+        self._progress.enter(Phase.PREPARING)
         whitelist = Whitelist.load()
         applied = apply(request, request.measures, whitelist)
         translated = Translator(self._base_files, whitelist).translate(request, applied)
@@ -388,6 +415,9 @@ class Calculation:
             parameters.set_economic_context(translated.economic_context)
         energy_system_path = self._output / translated.file_name
         self._runner.run(energy_system_path, parameters, self._output)
+        # The time loop's end has entered `evaluating` already; a run that reported no loop enters
+        # it here, so that the phases arrive in order whatever the runner reported.
+        self._progress.enter(Phase.EVALUATING)
         LifecycleCosts.require(self._output / Outputs.RESULTS_DIRECTORY)
         self._written.extend(Outputs.RECORDS)
         self._written.append(f"{Outputs.RESULTS_DIRECTORY}/")
@@ -400,6 +430,7 @@ class Calculation:
             image_digest=self._image_digest,
             subsidy_catalogue_path=catalogue,
         ).build(self._contract())
+        self._progress.enter(Phase.WRITING)
         self._write_json(Outputs.RESULT, document)
         self._write_json(
             Outputs.CALCULATION,
@@ -414,6 +445,9 @@ class Calculation:
                 # not the machine -- so this manifest is the one place a result directory says
                 # where its cache entries came from.
                 "cache_directories": list(parameters.cache_locations().directories),
+                # What the run cost, in simulated days: the last figure of its progress lines, and
+                # null when no time loop reported one.
+                "simulated_days": self._progress.simulated_days,
                 "output_files": sorted(set(self._written) | {Outputs.CALCULATION}),
             },
         )

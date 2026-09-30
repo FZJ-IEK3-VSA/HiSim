@@ -191,12 +191,14 @@ _LEGACY_CONFIG_FIELD_ALIASES: Dict[str, str] = {
     "temperature_out_in_celsius": "temperature_output_in_celsius",
 }
 
-# The @dataclass_json-provided decoder, captured before it is replaced below. The type
-# checker only sees ConfigBase's from_dict stub (a plain classmethod signature without
-# __func__), so the runtime unwrapping needs an ignore.
-_dataclass_json_from_dict: "Callable[..., SimpleHeatSourceConfig]" = (
-    SimpleHeatSourceConfig.from_dict.__func__  # type: ignore[attr-defined]
-)
+# The @dataclass_json-provided decoder, captured before it is replaced below: the plain
+# function inside the classmethod object that @dataclass_json put into the class dict,
+# so the replacement can call it with its own ``cls``. Read from the class dict rather
+# than as ``SimpleHeatSourceConfig.from_dict.__func__``, because attribute access goes
+# through the descriptor, and pylint >= 4.1 (astroid 4.3) then treats the unwrapped
+# function as the bound classmethod and reports the explicit ``cls`` argument as one
+# positional argument too many (E1121).
+_dataclass_json_from_dict: "Callable[..., SimpleHeatSourceConfig]" = vars(SimpleHeatSourceConfig)["from_dict"].__func__
 
 
 @classmethod

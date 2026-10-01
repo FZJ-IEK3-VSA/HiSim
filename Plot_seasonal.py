@@ -1,33 +1,12 @@
 # %% Initial config
-"""
-plot_seasonal_reconstruct.py
-----------------------------
-Lädt ein cleaned TRY-AT CSV, rekonstruiert DHI und DNI aus GHI
-mit wählbarer Methode, und plottet seasonale Profile gegen NSRDB Wien
-und DWD TRY Aachen.
 
-Ordnerstruktur (relativ zum Script):
-    HiSim/
-    ├── TRY_au_data/
-    │   └── 2011-2030/
-    │       └── cleaned/
-    ├── hisim/
-    │   ├── components/weather.py
-    │   └── inputs/weather/NSRDB_15min/Viena/
-    └── plot_seasonal_reconstruct.py
 
-──────────────────────────────────────────────────────
-NUR HIER ANPASSEN:
-"""
+AT_FILE = "TRY__R1__Z1__LL11__A1__S1.csv"  # use cleaned filename
+METHOD = "erbs"  # Options: "erbs" | "boland" | "reindl" | "dirint"
+ELEVATION_THRESHOLD = 5  # ° Degree 
+AACHEN_YEAR = 2011
 
-AT_FILE = "TRY__R1__Z1__LL11__A1__S1.csv"  # Dateiname des cleaned CSV
-METHOD = "dirint"  # Optionen: "erbs" | "boland" | "reindl" | "dirint"
-ELEVATION_THRESHOLD = 5  # Grad — unter diesem Wert werden DNI/DHI/GHI auf 0 gesetzt
-AACHEN_YEAR = 2011  # Jahr für den Aachen-Datensatz (für den Zeitindex)
 
-"""
-──────────────────────────────────────────────────────
-"""
 
 # %% Imports
 import sys
@@ -105,14 +84,14 @@ elif METHOD == "dirint":
     auex["DHI"] = (auex["GHI"] - auex["DNI"] * cos_z).clip(lower=0)
 
 else:
-    raise ValueError(f"Unbekannte Methode: {METHOD}. Wähle: erbs | boland | reindl | dirint")
+    raise ValueError(f"Unbekannte Methode: {METHOD}. Choose: erbs | boland | reindl | dirint")
 
-# Elevationsfilter
+# Elevation filter
 valid_sun = solar_pos["apparent_elevation"] > ELEVATION_THRESHOLD
 auex.loc[~valid_sun.values, ["DNI", "DHI"]] = 0.0
 print(f"AT Rekonstruktion mit '{METHOD}' abgeschlossen.")
 
-# UTC → Lokalzeit (Europe/Vienna), tz-naive for consistent plot
+# UTC → local time (Europe/Vienna), tz-naive for consistent plot
 auex.index = auex.index.tz_localize("UTC").tz_convert("Europe/Vienna").tz_localize(None)
 
 
@@ -124,7 +103,7 @@ for col in ["GHI", "DHI", "DNI"]:
 
 wien_data["T"] = pd.to_numeric(wien_data["Temperature"], errors="coerce")
 
-# 15-Min → Stundenmittel (damit Summen vergleichbar mit AT und Aachen)
+# 15-min to 1h average for comparison
 wien_data = wien_data.resample("H").mean()
 
 

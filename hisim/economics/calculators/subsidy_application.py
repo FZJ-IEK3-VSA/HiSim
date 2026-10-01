@@ -127,7 +127,8 @@ def build_subsidy_flows(
             predicate is handed to the solver, so filtering happens *before* the optimization
             (B5), not after.
         billing: All carriers' billing determinants, read only for `energy_sold_in_kwh`, which
-            OPERATIONAL payouts (per-kWh feed-in-style premiums) are paid on.
+            OPERATIONAL payouts (per-kWh feed-in-style premiums) are paid on -- the subject's
+            ``share_of_energy_sold`` of it.
         simulated_period_fraction: Simulated share of a year, used to annualize that sold energy.
         ledger: Provenance ledger; each applied scheme's own record is interned into it (W2.4).
         parameters: Economic parameters — supplies the horizon that truncates schedules and the
@@ -171,9 +172,12 @@ def build_subsidy_flows(
     for determinants in billing:
         if determinants.energy_sold_in_kwh:
             # W3.5: this site guards the divisor, the energy calculator does not — see
-            # calculators/annualization.py for the (preserved) discrepancy.
-            energy_sold[determinants.carrier] = annualize(
-                determinants.energy_sold_in_kwh, simulated_period_fraction, guard_zero=True
+            # calculators/annualization.py for the (preserved) discrepancy. A piece of a subject a
+            # staged plan split is paid on its size share of what the installation sells
+            # (`ComponentCostFacts.share_of_energy_sold`, hisim-1y0m); 1.0 for every other subject.
+            energy_sold[determinants.carrier] = (
+                annualize(determinants.energy_sold_in_kwh, simulated_period_fraction, guard_zero=True)
+                * costing.facts.share_of_energy_sold
             )
     # Scheme validity follows the price basis year — the economic "today" — not the
     # (possibly historical) weather year of the simulation.

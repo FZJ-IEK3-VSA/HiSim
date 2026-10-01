@@ -149,11 +149,13 @@ value a measure writes off), and a subject a stage buys counts as installed in y
 enlarges a subject the house keeps (5 kWp from stage 1, 8 kWp in stage 2) buys the increment as a
 purchase of its own, the subject `<subject>#increment_stage<k>` (`IncrementSubjects`, hisim-1y0m):
 priced as a new unit of that size by the database's law (device cost for 3 kWp plus the entry's
-fixed installation and planning cost; an investment override states no law and is split in
-proportion to size), escalated to the stage's year, replaced on its own life, and replaced exactly
-by a reader's quote for the stage's measure; the unit it enlarges keeps ageing on its own schedule.
-The document gives the increment a `by_subject` row of its own under the enlarged subject's
-measure. `escalation.energy` names a
+fixed installation and planning cost; an investment override states no law, so the increment takes
+the stage's per-unit figure times its size), escalated to the stage's year, replaced on its own life,
+and replaced exactly by a reader's quote for the stage's measure; the unit it enlarges keeps ageing
+on its own schedule at the price its own stage paid. Per-kWh subsidies pay each piece on its size
+share of the energy sold (5/8 and 3/8), each at its own scheme's terms; an increment a later stage
+removes again earns no residual value. The document gives the increment a `by_subject` row of its
+own under the enlarged subject's measure. `escalation.energy` names a
 per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
 then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
 (renovisorissues #52), per carrier —

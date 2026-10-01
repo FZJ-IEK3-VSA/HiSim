@@ -134,6 +134,8 @@ def facts_to_json(facts: ComponentCostFacts) -> dict:
         "lifetime_is_engine_fallback": facts.lifetime_is_engine_fallback,
         "price_is_unknown": facts.price_is_unknown,
         "lifetime_of_asset_class": facts.lifetime_of_asset_class.name if facts.lifetime_of_asset_class else None,
+        "own_register_entry": facts.own_register_entry,
+        "share_of_energy_sold": facts.share_of_energy_sold,
         "technical_attributes": facts.technical_attributes,
     }
 
@@ -173,6 +175,9 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
         lifetime_of_asset_class=(
             ComponentType[raw["lifetime_of_asset_class"]] if raw.get("lifetime_of_asset_class") else None
         ),
+        # Both absent in facts written before a staged plan split an enlarged subject (hisim-1y0m).
+        own_register_entry=bool(raw.get("own_register_entry", False)),
+        share_of_energy_sold=float(raw.get("share_of_energy_sold", 1.0)),
         technical_attributes=raw.get("technical_attributes", {}),
     )
 
@@ -244,6 +249,7 @@ def asset_to_json(asset: ExistingAsset) -> dict:
         "installation_year_origin": (
             asset.installation_year_origin.value if asset.installation_year_origin is not None else None
         ),
+        "subject": asset.subject,
     }
 
 
@@ -273,6 +279,8 @@ def asset_from_json(item: dict) -> ExistingAsset:
             if item.get("installation_year_origin")
             else None
         ),
+        # Absent in a register written before an entry could be bound to a subject (hisim-1y0m).
+        subject=item.get("subject"),
     )
 
 

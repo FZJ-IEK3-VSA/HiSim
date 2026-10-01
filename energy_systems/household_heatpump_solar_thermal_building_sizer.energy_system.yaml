@@ -51,12 +51,15 @@ components:
     inputs:
       - HeatPumpControllerDHW
       - MoreAdvancedHeatPumpHPLibControllerSH
-      - DHWStorage
       - SimpleHotWaterStorage
       - input: TemperatureAmbient
         from: Weather.DailyAverageOutsideTemperatures
       - input: TemperatureInputPrimary
         from: Weather.DailyAverageOutsideTemperatures
+      - input: TemperatureInputSecondaryDHW
+        from: DHWStorage.WaterTemperatureToSecondaryHeatGenerator
+      - input: ThermalPowerAcceptedByStorageDHW
+        from: DHWStorage.ThermalPowerFromSecondaryHeatGenerator
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
     preset: buffer
@@ -157,4 +160,6 @@ components:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
+      - HeatDistributionController
+      - SimpleHotWaterStorage
       - DHWStorage

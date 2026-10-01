@@ -15,6 +15,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim.components.accepted_heat import AcceptedHeat
 from hisim.loadtypes import LoadTypes, Units, ComponentType
 from hisim.component import (
     Component,
@@ -197,6 +198,8 @@ class DistrictHeating(Component):
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
+    #: The heat the hot-water tank accepted from this connection (hisim-4g9.16): booked instead of its own.
+    ThermalPowerAcceptedByStorageDhw = "ThermalPowerAcceptedByStorageDhw"
 
     # Output
     WaterOutputShTemperature = "WaterOutputShTemperature"
@@ -277,6 +280,14 @@ class DistrictHeating(Component):
                 LoadTypes.WARM_WATER,
                 Units.KG_PER_SEC,
                 True,
+            )
+            # What the tank accepted of this connection's heat. Unconnected, the connection books its own heat.
+            self.thermal_power_accepted_dhw_channel: ComponentInput = self.add_input(
+                self.component_name,
+                DistrictHeating.ThermalPowerAcceptedByStorageDhw,
+                LoadTypes.HEATING,
+                Units.WATT,
+                False,
             )
 
         # Outputs Space Heating
@@ -420,6 +431,13 @@ class DistrictHeating(Component):
                 component_class.WaterMassFlowRateOfDHW,
             )
         )
+        connections.append(
+            ComponentConnection(
+                DistrictHeating.ThermalPowerAcceptedByStorageDhw,
+                hws_classname,
+                component_class.ThermalPowerFromHeatGenerator,
+            )
+        )
         return connections
 
     def i_prepare_simulation(self) -> None:
@@ -509,22 +527,25 @@ class DistrictHeating(Component):
             # Calculate
             (
                 thermal_power_delivered_in_w,
-                thermal_energy_delivered_in_watt_hour,
+                _,
                 water_output_temperature_deg_c,
                 water_mass_flow_rate_in_kg_per_s,
             ) = self._calculate_dhw_outputs(
                 water_input_temperature_for_dhw_deg_c,
                 delta_temperature_needed_for_dhw_in_celsius,
             )
+            booked_power_dhw_in_w, booked_energy_dhw_in_watt_hour = self._book_accepted_dhw_heat(
+                stsv, thermal_power_delivered_in_w
+            )
 
             # Set outputs
             stsv.set_output_value(
                 self.thermal_output_power_dhw_channel,
-                thermal_power_delivered_in_w,
+                booked_power_dhw_in_w,
             )
             stsv.set_output_value(
                 self.thermal_output_energy_dhw_channel,
-                thermal_energy_delivered_in_watt_hour,
+                booked_energy_dhw_in_watt_hour,
             )
             stsv.set_output_value(
                 self.water_output_temperature_dhw_channel,
@@ -560,7 +581,7 @@ class DistrictHeating(Component):
             # Calculate first for dhw
             (
                 thermal_power_delivered_for_dhw_w,
-                thermal_energy_delivered_for_dhw_in_watt_hour,
+                _,
                 water_output_temperature_for_dhw_deg_c,
                 water_mass_flow_rate_for_dhw_in_kg_per_s,
             ) = self._calculate_dhw_outputs(
@@ -568,14 +589,18 @@ class DistrictHeating(Component):
                 delta_temperature_needed_for_dhw_in_celsius,
             )
 
+            booked_power_dhw_in_w, booked_energy_dhw_in_watt_hour = self._book_accepted_dhw_heat(
+                stsv, thermal_power_delivered_for_dhw_w
+            )
+
             # Set outputs
             stsv.set_output_value(
                 self.thermal_output_power_dhw_channel,
-                thermal_power_delivered_for_dhw_w,
+                booked_power_dhw_in_w,
             )
             stsv.set_output_value(
                 self.thermal_output_energy_dhw_channel,
-                thermal_energy_delivered_for_dhw_in_watt_hour,
+                booked_energy_dhw_in_watt_hour,
             )
             stsv.set_output_value(
                 self.water_output_temperature_dhw_channel,
@@ -683,6 +708,19 @@ class DistrictHeating(Component):
             thermal_power_delivered_in_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
         return thermal_power_delivered_in_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
+
+    def _book_accepted_dhw_heat(
+        self, stsv: SingleTimeStepValues, thermal_power_delivered_in_w: float
+    ) -> Tuple[float, float]:
+        """The hot-water heat to book: what the tank accepted when it says so (hisim-4g9.16), else our own.
+
+        Returns:
+            Tuple[float, float]: The thermal power in W and the thermal energy of the timestep in Wh.
+        """
+        booked_in_w, _ = AcceptedHeat.booked(
+            thermal_power_delivered_in_w, self.thermal_power_accepted_dhw_channel, stsv
+        )
+        return booked_in_w, booked_in_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
 
     def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
         water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius

@@ -30,6 +30,7 @@ from hisim.config import (
 )
 from hisim import loadtypes, log, utils
 from hisim.caching import atomic_cache_write
+from hisim.components.accepted_heat import AcceptedHeat
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -232,6 +233,8 @@ class SolarThermalSystem(Component):
     ApparentZenith: ClassVar[str] = "ApparentZenith"
     TemperatureCollectorInletDegC: ClassVar[str] = "TemperatureCollectorInletDegC"
     ControlSignal: ClassVar[str] = "ControlSignal"
+    #: The heat the hot-water tank accepted from the collectors (hisim-4g9.16): booked instead of their own.
+    ThermalPowerAcceptedByStorage: ClassVar[str] = "ThermalPowerAcceptedByStorage"
 
     # Outputs
     ThermalPowerOutput: ClassVar[str] = "ThermalPowerOutput"
@@ -336,6 +339,15 @@ class SolarThermalSystem(Component):
             loadtypes.LoadTypes.ANY,
             loadtypes.Units.BINARY,
             True,
+        )
+
+        # What the tank accepted of the collectors' heat. Unconnected, the system books its own heat.
+        self.thermal_power_accepted_channel: ComponentInput = self.add_input(
+            self.component_name,
+            SolarThermalSystem.ThermalPowerAcceptedByStorage,
+            loadtypes.LoadTypes.HEATING,
+            loadtypes.Units.WATT,
+            False,
         )
 
         # Add outputs
@@ -594,6 +606,13 @@ class SolarThermalSystem(Component):
                 SimpleDHWStorage.WaterTemperatureToHeatGenerator,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.ThermalPowerAcceptedByStorage,
+                storage_classname,
+                SimpleDHWStorage.ThermalPowerFromHeatGenerator,
+            )
+        )
         return connections
 
     def get_default_connections_from_weather(self) -> List[ComponentConnection]:
@@ -806,7 +825,20 @@ class SolarThermalSystem(Component):
             thermal_energy_output_wh = 0
             electric_power_demand_solar_pump_w = 0
         else:
-            mass_flow_output_kg_s = required_mass_flow_output_kg_s
+            if thermal_power_output_w > 0:
+                # The flow carries the collectors' heat and no more: m c (T_out - T_in) = P with the
+                # rise of 2 * delta_temperature_n_k set above (hisim-4g9.16). The required mass flow the
+                # controller reads keeps its own definition, P / (c * delta_temperature_n_k).
+                mass_flow_output_kg_s = required_mass_flow_output_kg_s / 2
+            else:
+                mass_flow_output_kg_s = required_mass_flow_output_kg_s
+            # A tank that took less than the flow offered is what the system books.
+            thermal_power_output_w, _ = AcceptedHeat.booked(
+                thermal_power_output_w, self.thermal_power_accepted_channel, stsv
+            )
+            thermal_energy_output_wh = (
+                thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+            )
             # Calculate electricity consumption of solar pump
             electric_power_demand_solar_pump_w = 35 if self.config.old_solar_pump else 10
 

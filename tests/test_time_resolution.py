@@ -46,6 +46,12 @@ def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
 # regressions such as a 20x error.  See values_are_same_order_of_magnitude.
 _ORDER_OF_MAGNITUDE_FACTOR: float = 15.0
 
+# A storage's net energy increase over the whole period (end content minus start content) is not
+# compared across resolutions but bounded: 20 kWh is more than the cluster house's buffer holds
+# between its lowest and highest temperature (a few hundred litres over ~40 K).
+NET_STORED_ENERGY_SUFFIX: str = "ThermalEnergyIncreaseInStorage"
+MAX_NET_STORED_ENERGY_IN_WH: float = 20_000.0
+
 
 def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGNITUDE_FACTOR) -> bool:
     """Check if values are within a multiplicative *factor* of each other.
@@ -204,6 +210,15 @@ def test_cluster_house_for_several_time_resolutions():
                 assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+            if key.endswith(NET_STORED_ENERGY_SUFFIX):
+                # A storage's net energy increase over the period is its end content minus its
+                # start content: near zero, of either sign, and not a flow that scales with the
+                # resolution. Since the storages conserve the heat they are booked (hisim-4g9.16)
+                # it is bounded by what the vessel can hold, so that is what is checked.
+                assert all(abs(float(value)) <= MAX_NET_STORED_ENERGY_IN_WH for value in values), (
+                    f"{key}: {values} exceed the {MAX_NET_STORED_ENERGY_IN_WH} Wh a buffer can hold."
+                )
+                continue
             if not is_invariant:
                 # Computed (non-invariant) components legitimately vary across
                 # time resolutions, but should stay within a multiplicative
@@ -266,6 +281,15 @@ def test_cluster_house_for_several_time_resolutions():
                 assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+            if key.endswith(NET_STORED_ENERGY_SUFFIX):
+                # A storage's net energy increase over the period is its end content minus its
+                # start content: near zero, of either sign, and not a flow that scales with the
+                # resolution. Since the storages conserve the heat they are booked (hisim-4g9.16)
+                # it is bounded by what the vessel can hold, so that is what is checked.
+                assert all(abs(float(value)) <= MAX_NET_STORED_ENERGY_IN_WH for value in values), (
+                    f"{key}: {values} exceed the {MAX_NET_STORED_ENERGY_IN_WH} Wh a buffer can hold."
+                )
+                continue
             if not is_invariant:
                 # Computed (non-invariant) components legitimately vary across
                 # time resolutions, but should stay within a multiplicative

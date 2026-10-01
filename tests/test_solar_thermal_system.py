@@ -9,6 +9,7 @@ import pytest
 from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate, flat_plate_precalc
 from hisim import sim_repository, component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
+from hisim.components.configuration import PhysicsConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
@@ -72,6 +73,19 @@ def test_solar_thermal_system() -> None:
     print(stsv.values)
 
     assert pytest.approx(stsv.values[my_sts.thermal_power_w_output_channel.global_index]) == 3260.3754293283737
+
+    # The flow carries exactly the collectors' heat (hisim-4g9.16): m c (T_out - T_in) = P with the doubled rise
+    # 2 * delta_temperature_n_k, the inlet being the unconnected 0 degC.
+    specific_heat_in_joule_per_kg_per_kelvin = PhysicsConfig.get_properties_for_energy_carrier(
+        energy_carrier=LoadTypes.WATER
+    ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+    temperature_rise_in_kelvin = stsv.values[my_sts.water_temperature_deg_c_output_channel.global_index]
+    assert temperature_rise_in_kelvin == pytest.approx(2 * my_sts.config.delta_temperature_n_k)
+    assert stsv.values[
+        my_sts.water_mass_flow_kg_s_output_channel.global_index
+    ] * specific_heat_in_joule_per_kg_per_kelvin * temperature_rise_in_kelvin == pytest.approx(
+        stsv.values[my_sts.thermal_power_w_output_channel.global_index], rel=1e-12
+    )
 
 
 @pytest.mark.base

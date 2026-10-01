@@ -307,6 +307,21 @@ def setup_function(
         my_gas_heater.WaterOutputMassFlowDhw,
     )
 
+    # The gas heater is the tank's secondary generator, so it reads its return temperature and the heat the
+    # tank accepted from it on the secondary slot (hisim-4g9.16). Its automatic wiring would take the primary
+    # slot, the solar collectors', so it is wired by hand.
+    my_gas_heater.connect_only_predefined_connections(my_gas_heater_controller, my_simple_water_storage)
+    my_gas_heater.connect_input(
+        my_gas_heater.WaterInputTemperatureDhw,
+        my_dhw_storage.component_name,
+        my_dhw_storage.WaterTemperatureToSecondaryHeatGenerator,
+    )
+    my_gas_heater.connect_input(
+        my_gas_heater.ThermalPowerAcceptedByStorageDhw,
+        my_dhw_storage.component_name,
+        my_dhw_storage.ThermalPowerFromSecondaryHeatGenerator,
+    )
+
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     # =================================================================================================================================
     # Add Components to Simulation Parameters
@@ -319,7 +334,7 @@ def setup_function(
     my_sim.add_component(my_dhw_storage, connect_automatically=False)
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
-    my_sim.add_component(my_gas_heater, connect_automatically=True)
+    my_sim.add_component(my_gas_heater)
     my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
     my_sim.add_component(my_gas_meter, connect_automatically=True)
     my_sim.add_component(my_solar_thermal_system, connect_automatically=True)

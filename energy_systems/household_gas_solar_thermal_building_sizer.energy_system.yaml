@@ -48,8 +48,11 @@ components:
     preset: condensing_gas
     inputs:
       - ModulatingBoilerController
-      - DHWStorage
       - SimpleHotWaterStorage
+      - input: ThermalPowerAcceptedByStorageDhw
+        from: DHWStorage.ThermalPowerFromSecondaryHeatGenerator
+      - input: WaterInputTemperatureDhw
+        from: DHWStorage.WaterTemperatureToSecondaryHeatGenerator
   ModulatingBoilerController:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating

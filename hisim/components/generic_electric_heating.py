@@ -8,6 +8,7 @@ from typing import ClassVar, List, Optional, Tuple
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from hisim.components.accepted_heat import AcceptedHeat
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
@@ -158,6 +159,8 @@ class ElectricHeating(Component):
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
+    #: The heat the hot-water tank accepted from this heater (hisim-4g9.16): booked instead of its own.
+    ThermalPowerAcceptedByStorageDhw = "ThermalPowerAcceptedByStorageDhw"
 
     # Output
     ThermalOutputShPower = "ThermalOutputShPower"
@@ -235,6 +238,14 @@ class ElectricHeating(Component):
                 LoadTypes.WARM_WATER,
                 Units.KG_PER_SEC,
                 True,
+            )
+            # What the tank accepted of this heater's heat. Unconnected, the heater books its own heat.
+            self.thermal_power_accepted_dhw_channel: ComponentInput = self.add_input(
+                self.component_name,
+                ElectricHeating.ThermalPowerAcceptedByStorageDhw,
+                LoadTypes.HEATING,
+                Units.WATT,
+                False,
             )
 
         # Outputs Space Heating
@@ -376,6 +387,11 @@ class ElectricHeating(Component):
                 hws_classname,
                 component_class.WaterMassFlowRateOfDHW,
             ),
+            ComponentConnection(
+                ElectricHeating.ThermalPowerAcceptedByStorageDhw,
+                hws_classname,
+                component_class.ThermalPowerFromHeatGenerator,
+            ),
         ]
 
     def i_prepare_simulation(self) -> None:
@@ -509,6 +525,16 @@ class ElectricHeating(Component):
 
         else:
             raise ValueError("Unknown heating mode")
+
+        # A tank that took less than the flow offered (hisim-4g9.16) is what the heater books and draws
+        # electricity for; the flow itself -- mass and temperature -- is its own either way.
+        if self.config.with_domestic_hot_water_preparation:
+            thermal_power_dhw_delivered_w, _ = AcceptedHeat.booked(
+                thermal_power_dhw_delivered_w, self.thermal_power_accepted_dhw_channel, stsv
+            )
+            thermal_energy_dhw_delivered_in_watt_hour = (
+                thermal_power_dhw_delivered_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+            )
 
         # set outputs
         stsv.set_output_value(self.thermal_output_power_dhw_channel, thermal_power_dhw_delivered_w)

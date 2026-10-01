@@ -84,6 +84,7 @@ from hisim.economics.subsidies.solver import (
     CapRatios,
     CumulationLimits,
     SchemeMaximumNotes,
+    UnpricedMeasures,
     scheme_maximum,
     solve_cumulation,
 )
@@ -128,6 +129,7 @@ __all__ = [
     "TaxCreditBenefit",
     "Tier",
     "TieredPerUnitBenefit",
+    "UnpricedMeasures",
     "assess_schemes",
     "describe_condition",
     "evaluate_condition",

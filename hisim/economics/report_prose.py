@@ -217,8 +217,9 @@ class ReportProse:
                 (
                     "The rows are read directly from the booked timeline, not from catalog assumptions — a "
                     "component's service period spans from its actual purchase event to its actual replacement "
-                    "or the horizon. The payback milestone is drawn as a *range*, from the year the renovation "
-                    "has paid for itself in the optimistic world to the year it has in the pessimistic world; a"
+                    "or the horizon. The payback milestone is drawn as a *range*, from the first year the "
+                    "renovation has paid for itself in any world to the year it has in every world, and "
+                    "stays open at the late end when one world does not pay back within the horizon; a"
                     " single payback year would pretend a precision the input bands cannot support. The deepest"
                     " out-of-pocket milestone is the maximum of the cumulative undiscounted cash curve (see "
                     "*Cash curve*)."
@@ -2104,7 +2105,7 @@ def payback_year_phrase(year: Optional[int]) -> str:
 
 
 def payback_interval_sentence(
-    low: Optional[int], best_estimate: Optional[int], high: Optional[int]
+    earliest: Optional[int], central: Optional[int], latest: Optional[int]
 ) -> str:
     """The payback sentence under a discounted-savings panel, with the open end spelled out.
 
@@ -2113,30 +2114,32 @@ def payback_interval_sentence(
     to one reader and as "not computed" to another. All three worlds are consulted, because a
     sentence built from two of them cannot say where the answer actually lands.
 
-    **Which world is which.** Savings are reference minus variant, so the slot with the *larger*
-    savings pays back *earlier*: the HIGH savings slot is the optimistic world and the LOW one
-    the pessimistic. The sentence used to have those two the other way round in the HTML report,
-    and the PNG caption — a second implementation of the same sentence — never had the third
-    world at all, so the two renderings of one figure could disagree in front of the same reader.
+    **No world is named optimistic or pessimistic.** Savings are reference minus variant within
+    one world, and which world saves most depends on which uncertainty dominates: the reference's
+    energy bill (the HIGH world saves most) or the plan's investment (the LOW world does). The
+    sentence used to name the slots by position and was wrong in one of the two cases; it now
+    states the range by value, :class:`~hisim.economics.results.PaybackEnvelope`
+    (renovisorissues #73), whose ``None`` in ``latest`` means that at least one world never pays
+    back.
 
     Args:
-        low: The zero-crossing year of the LOW savings curve — the pessimistic world — or None.
-        best_estimate: The crossing of the central world, or None.
-        high: The crossing of the HIGH savings curve — the optimistic world — or None.
+        earliest: The first year any world has paid back, or None when none does.
+        central: The crossing of the central (best-estimate) world, or None.
+        latest: The year every world has paid back, or None when one never does.
 
     Returns:
-        One sentence naming the interval, or saying that there is none.
+        One sentence naming the range, or saying that there is none.
     """
-    if low is None and best_estimate is None and high is None:
+    if earliest is None:
         return "The investment does not pay back within the horizon in any of the three worlds."
-    if low is None and best_estimate is None:
+    if central is None:
         return (
-            f"Payback lands in year {high} in the optimistic world only; in the central and the "
-            "pessimistic world the curve never reaches zero within the horizon."
+            f"Payback lands in year {earliest} at the earliest, but not in the central world: there "
+            "the curve never reaches zero within the horizon."
         )
     return (
-        f"Payback lands in {payback_year_phrase(best_estimate)} in the central world, between "
-        f"{payback_year_phrase(high)} (optimistic) and {payback_year_phrase(low)} (pessimistic)."
+        f"Payback lands in {payback_year_phrase(central)} in the central world; across the three "
+        f"worlds between {payback_year_phrase(earliest)} and {payback_year_phrase(latest)}."
     )
 
 

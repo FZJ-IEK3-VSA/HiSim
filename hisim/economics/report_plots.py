@@ -106,6 +106,7 @@ from hisim.economics.results import (  # noqa: E402
     VariantComparison,
     compare,
     cumulative_discounted_savings,
+    PaybackEnvelope,
 )
 from hisim.economics.timeline import CostCategory  # noqa: E402
 from hisim.economics.uncertainty import Slot  # noqa: E402
@@ -715,8 +716,10 @@ def plot_payback_curve(
     years = list(range(len(curves["best_estimate"])))
     with _figure(height=3.6) as (figure, axes):
         axis = axes[0]
-        styles = {"low": (":", 1.2, "optimistic"), "best_estimate": ("-", 2.2, "expected"),
-                  "high": ("--", 1.2, "pessimistic")}
+        # Named by world, not as optimistic/pessimistic: which one pays back first depends on
+        # which uncertainty dominates the savings (renovisorissues #73).
+        styles = {"low": (":", 1.2, "LOW world"), "best_estimate": ("-", 2.2, "expected"),
+                  "high": ("--", 1.2, "HIGH world")}
         for slot, (linestyle, linewidth, label) in styles.items():
             axis.plot(years, curves[slot], linestyle, linewidth=linewidth,
                       color=PresentationStyle.GROUP_COLORS_LIGHT[0], label=label)
@@ -1082,10 +1085,8 @@ def plot_liquidity_fan(
                     "evaluations of the same observation period."
                 )
             lower_label = "cumulative discounted savings [EUR]"
-            crossings = views.band_zero_crossings(curves)
-            note = payback_interval_sentence(
-                crossings.get("low"), crossings.get("best_estimate"), crossings.get("high")
-            )
+            envelope = PaybackEnvelope.of(views.band_zero_crossings(curves))
+            note = payback_interval_sentence(envelope.earliest, envelope.central, envelope.latest)
         else:
             discounted = views.cumulative_discounted_cost_series(result)
             low = discounted[Slot.LOW]

@@ -448,3 +448,31 @@ class TestTheEnhancedAtticGrant:
             ),
         )
         assert list(awards) == ["IE_SEAI_WARMER_HOMES"]
+
+
+class TestWarmerHomesCoversTheWholeHeatPumpMeasure:
+    """The buffer and the cylinder bought with a heat pump are in the 100 % scheme (#69)."""
+
+    STORAGE_CLASSES = (ComponentType.SPACE_HEATING_STORAGE, ComponentType.DOMESTIC_HOT_WATER_STORAGE)
+
+    @pytest.mark.parametrize("asset_class", STORAGE_CLASSES)
+    def test_warmer_homes_pays_the_whole_storage(self, asset_class) -> None:
+        """100 % of the storage's investment and planning, as for the heat pump beside it."""
+        awards = IrishCatalogueCase.awards(
+            IrishCatalogueCase.measure(asset_class, 3000.0),
+            IrishCatalogueCase.context(
+                construction_year=1990,
+                dwelling_type=DwellingType.DETACHED,
+                receives_means_tested_benefit=True,
+            ),
+        )
+        assert awards == {"IE_SEAI_WARMER_HOMES": pytest.approx(3300.0)}
+
+    def test_only_the_share_scheme_and_the_loan_list_the_storages(self) -> None:
+        """A fixed amount is per installation and stated once, on the heat pump itself."""
+        listing = {
+            scheme.id
+            for scheme in IrishCatalogueCase.catalog().schemes
+            if set(self.STORAGE_CLASSES) & set(scheme.asset_classes)
+        }
+        assert listing == {"IE_SEAI_WARMER_HOMES", "IE_HEULS_LOAN"}

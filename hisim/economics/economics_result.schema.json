@@ -233,7 +233,7 @@
         },
         "monthly_cost_year1_delta_in_euro": {"$ref": "#/$defs/nullableBand"},
         "discounted_payback_year": {
-          "description": "The first year the plan has paid back, per uncertainty slot; null means never within the horizon.",
+          "description": "The first year the plan has paid back, as the range across the three worlds (renovisorissues #73): min the earliest world's year, max the latest world's, best the central world's; null means never within the horizon and orders as later than every year, so max is null as soon as one world never pays back and min is null only when none does. Not per slot: which world pays back first depends on whether the reference's energy bill or the plan's investment dominates the uncertainty, so the LOW world is not always the earliest.",
           "type": "object",
           "required": ["min", "best", "max"],
           "properties": {
@@ -396,7 +396,10 @@
             "properties": {
               "subject": {"type": "string"},
               "kind": {"enum": ["component", "carrier"]},
-              "asset_class": {"type": ["string", "null"]},
+              "asset_class": {
+                "type": ["string", "null"],
+                "description": "The cost class the row's subject is priced as. On a kept envelope row (subject envelope_<element>, renovisorissues #69) it is the cost class of the like-for-like renewal product that dates the element's due years -- a double-glazed window is WindowsTripleGlazed, a pitched roof WarmRoofInsulation -- not a description of the existing element; readers name such a row by its subject."
+              },
               "measure_id": {"type": ["string", "null"]},
               "stage": {
                 "type": ["integer", "null"],
@@ -586,11 +589,11 @@
                 ]
               },
               "max_amount_in_euro": {
-                "description": "The most the scheme can pay for the row's subject under the house and plan as stated, whatever the row's status, negative like amount_in_euro and moved into the plan the way the stage's award is: LUMP_SUM its amount, PER_UNIT and TIERED_PER_UNIT the amount for the stated size (each clamped to the eligible cost where the scheme counts cost categories), SHARE_OF_ELIGIBLE_COST and BONUS_SHARE the scheme's full rate times the eligible cost capped by the scheme's eligible-basis cap (a rate a cumulation group would scale down, depending on which answers stack, is stated at its larger, unscaled value), TAX_CREDIT the whole credit, SOFT_LOAN its repayment grant (null for a loan with none), OPERATIONAL the rate times the annual energy times the duration; the catalogue's overall state-aid share bounds it as it bounds an award. Nominal amounts (LUMP_SUM, PER_UNIT, TIERED_PER_UNIT, an eligible-basis cap) are clamped to the eligible cost in the money of plan year 0 (plan_start_year), not of the price basis year; a stage starting later books that figure unescalated. Null where the scheme states no amount it pays: a VAT reduction, a soft loan without a repayment grant (a loan, no grant element: its benefit is in the financing costs), a plan with no catalogue; `note` then says so.",
+                "description": "The most the scheme can pay for the row's subject under the house and plan as stated, whatever the row's status, negative like amount_in_euro and moved into the plan the way the stage's award is: LUMP_SUM its amount, PER_UNIT and TIERED_PER_UNIT the amount for the stated size (each clamped to the eligible cost where the scheme counts cost categories), SHARE_OF_ELIGIBLE_COST and BONUS_SHARE the scheme's full rate times the eligible cost capped by the scheme's eligible-basis cap (a rate a cumulation group would scale down, depending on which answers stack, is stated at its larger, unscaled value), TAX_CREDIT the whole credit, SOFT_LOAN its repayment grant (null for a loan with none), OPERATIONAL the rate times the annual energy times the duration; the catalogue's overall state-aid share bounds it as it bounds an award. Nominal amounts (LUMP_SUM, PER_UNIT, TIERED_PER_UNIT, an eligible-basis cap) are clamped to the eligible cost in the money of plan year 0 (plan_start_year), not of the price basis year; a stage starting later books that figure unescalated. Null where the scheme states no amount it pays: a VAT reduction, a soft loan without a repayment grant (a loan, no grant element: its benefit is in the financing costs), a plan with no catalogue; and null on an unpriced subject for every scheme whose amount is capped at or a share of the eligible cost (LUMP_SUM, PER_UNIT, TIERED_PER_UNIT, SHARE_OF_ELIGIBLE_COST, BONUS_SHARE, TAX_CREDIT, and a SOFT_LOAN's non-zero repayment grant, where the scheme counts cost categories), since that cost is unknown, not zero (renovisorissues #77); `note` then says so. Such a scheme is never awarded on an unpriced subject: where the answers would award it, the row is undetermined, books nothing, and its open_questions ask for the measure's price.",
                 "oneOf": [{"$ref": "#/$defs/band"}, {"type": "null"}]
               },
               "max_amount_for_measure_in_euro": {
-                "description": "The most the scheme can pay for the row's whole measure in the row's stage: the slot-wise sum of max_amount_in_euro over the rows of the same scheme, measure_id and stage (one row per subject of the measure the scheme covers), stated on each of them. Null where max_amount_in_euro is null and on a row with no measure_id.",
+                "description": "The most the scheme can pay for the row's whole measure in the row's stage: the slot-wise sum of max_amount_in_euro over the rows of the same scheme, measure_id and stage (one row per subject of the measure the scheme covers), stated on each of them. Null on a row with no measure_id, and on every row of the scheme, measure_id and stage as soon as one of them states max_amount_in_euro null (a sum with an unknown term is unknown).",
                 "oneOf": [{"$ref": "#/$defs/band"}, {"type": "null"}]
               },
               "binding_cap": {"type": ["string", "null"]},

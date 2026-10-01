@@ -1397,3 +1397,103 @@ class TestTheEnergyEcho:
         broken["parameters"]["origins"]["escalation"]["energy"]["ELECTRICITY"] = "configuration"
         with pytest.raises(jsonschema.ValidationError):
             StagedDocument.validate(broken)
+
+
+class TestACostlessPartKeepsItsRow:
+    """A costless subject with cost facts and no flow still has its row (renovisorissues #77).
+
+    The battery's energy-management controller is part of the battery system: the translator's
+    context zeroes its facts, and a kept controller whose renewal falls after the horizon books no
+    flow at all -- zero maintenance is not booked -- so the engine's pivot has no row for it. The
+    document gives it one, all zero, ``unpriced: false``, with the note saying why.
+    """
+
+    CONTROLLER = "L2EMSElectricityController"
+    NOTE = "part of the battery system"
+
+    def _with_controller(self, stage):
+        """The stage with a kept, costless controller whose renewal falls after the horizon."""
+        from hisim.economics.evaluator import SubjectCostFacts  # pylint: disable=import-outside-toplevel
+        from hisim.economics.facts import (  # pylint: disable=import-outside-toplevel
+            ComponentCostFacts,
+            ExistingAsset,
+            ExistingAssetRegister,
+        )
+        from hisim.loadtypes import Units  # pylint: disable=import-outside-toplevel
+
+        zero = UncertainValue.exact(0.0)
+        facts = ComponentCostFacts(
+            asset_class=ComponentType.ENERGY_MANAGEMENT_SYSTEM,
+            size=1.0,
+            size_unit=Units.ANY,
+            investment_cost_override_in_euro=zero,
+            installation_cost_override_in_euro=zero,
+            maintenance_rate_override=zero,
+            fixed_operation_cost_override_in_euro_per_year=zero,
+            embodied_co2_override_in_kg=0.0,
+            lifetime_override_in_years=40.0,
+            override_source=self.NOTE,
+        )
+        register = stage.inputs.existing_assets
+        kept = ExistingAsset(
+            asset_class=ComponentType.ENERGY_MANAGEMENT_SYSTEM,
+            size=1.0,
+            size_unit=Units.ANY,
+            installation_year=SyntheticPlan.YEAR - 1,
+            is_functional=True,
+        )
+        inputs = replace(
+            stage.inputs,
+            cost_facts=[*stage.inputs.cost_facts, SubjectCostFacts(self.CONTROLLER, facts)],
+            existing_assets=ExistingAssetRegister(assets=[*register.assets, kept]),
+        )
+        return replace(stage, inputs=inputs)
+
+    def test_the_kept_controller_has_a_zero_row_with_its_note(self, tmp_path, parameters, database) -> None:
+        """On the reference and on the plan: no flow, a zero row, not unpriced, the note."""
+        perspective = brownfield_perspective()
+        stages = [self._with_controller(stage) for stage in (baseline_stage(), envelope_stage(0), heat_pump_stage(4))]
+        result = StagedEvaluator(database).evaluate(stages, parameters, perspective)
+        assert self.CONTROLLER not in result.plan.component_breakdowns
+        document = StagedDocument(
+            result,
+            parameters,
+            perspective,
+            measure_ids={
+                SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation",
+                SyntheticPlan.HEAT_PUMP_SUBJECT: "heating_system",
+            },
+            unpriced_subjects={SyntheticPlan.ENVELOPE_SUBJECT},
+            costless_subjects={self.CONTROLLER},
+            subject_notes={self.CONTROLLER: self.NOTE},
+        ).write(tmp_path / StagedDocument.FILE_NAME)
+        zero = {"min": 0.0, "best": 0.0, "max": 0.0}
+        for variant in ("reference", "plan"):
+            rows = [row for row in document[variant]["by_subject"] if row["subject"] == self.CONTROLLER]
+            assert len(rows) == 1, variant
+            row = rows[0]
+            assert row["unpriced"] is False
+            assert row["note"] == self.NOTE
+            assert row["npv_in_euro"] == zero and row["investment_in_euro"] == zero
+            assert row["replacement_years"] == []
+            assert row["service_life_years"] == 40.0
+
+    def test_the_companion_class_travels_with_the_facts(self) -> None:
+        """``lifetime_of_asset_class`` survives ``economic_inputs.json``; an older file reads as none."""
+        from hisim.economics.facts import ComponentCostFacts  # pylint: disable=import-outside-toplevel
+        from hisim.economics.serialization import (  # pylint: disable=import-outside-toplevel
+            facts_from_json,
+            facts_to_json,
+        )
+        from hisim.loadtypes import Units  # pylint: disable=import-outside-toplevel
+
+        facts = ComponentCostFacts(
+            asset_class=ComponentType.ENERGY_MANAGEMENT_SYSTEM,
+            size=1.0,
+            size_unit=Units.ANY,
+            lifetime_of_asset_class=ComponentType.BATTERY,
+        )
+        raw = facts_to_json(facts)
+        assert facts_from_json(raw).lifetime_of_asset_class is ComponentType.BATTERY
+        raw.pop("lifetime_of_asset_class")
+        assert facts_from_json(raw).lifetime_of_asset_class is None

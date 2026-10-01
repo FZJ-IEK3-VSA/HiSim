@@ -2048,7 +2048,8 @@ class StagedEvaluator:
 
         An explicit ``lifetime_override_in_years`` wins, exactly as it does in
         ``calculators/context_resolution.py``; otherwise the cost database's entry for the
-        subject's asset class at the plan's price basis year states it. The splice needs the same
+        subject's asset class at the plan's price basis year states it -- or the entry of
+        ``lifetime_of_asset_class``, the class whose system the subject is part of. The splice needs the same
         number the stage's own schedule was built from, so it must not read the database when an
         override exists.
 
@@ -2068,7 +2069,10 @@ class StagedEvaluator:
         if facts.lifetime_override_in_years is not None:
             origin = LifeOrigin.ENGINE_FALLBACK if facts.lifetime_is_engine_fallback else LifeOrigin.REQUEST
             return float(facts.lifetime_override_in_years), origin
-        entry = self.database.get_device_entry(facts.asset_class, price_basis_year, parameters.country)
+        # A subject renewed with another's system lives that class's life (renovisorissues #77).
+        entry = self.database.get_device_entry(
+            facts.lifetime_of_asset_class or facts.asset_class, price_basis_year, parameters.country
+        )
         return float(entry.service_life_in_years), LifeOrigin.COST_DATABASE
 
     def _subject_lives(

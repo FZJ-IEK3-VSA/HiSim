@@ -554,10 +554,10 @@ def build_cost_summary_markdown(
         lines.append(
             f"- Equivalent annual cost delta: {_band_str(comparison.equivalent_annual_cost_delta_in_euro, 'EUR/a')}"
         )
-        payback = comparison.discounted_payback_years
+        payback = comparison.discounted_payback_envelope
         lines.append(
-            f"- Discounted payback [a]: best {payback.get('low')}, expected {payback.get('best_estimate')}, "
-            f"worst {payback.get('high')} (None = never within horizon)"
+            f"- Discounted payback [a]: earliest {payback.earliest}, expected {payback.central}, "
+            f"latest {payback.latest} across the three worlds (None = never within horizon)"
         )
         lines.append("")
         lines.append("| Subject | NPV delta |")

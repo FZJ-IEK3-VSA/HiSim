@@ -38,6 +38,7 @@ from hisim.economics.results import (
     CashFlowTimeline,
     LifecycleCo2Result,
     LifecycleCostResult,
+    PaybackEnvelope,
     compare,
     cumulative_discounted_savings,
 )
@@ -349,25 +350,53 @@ class TestLifecycleLanes:
         loan_free = [event for event in lanes.financing.events if event.label == "loan-free"]
         assert loan_free[0].year == views.loan_amortization_series(result).loan_free_year() == 5
 
-    def test_payback_range_equals_the_band_crossing_interval(self):
-        """The range bar is exactly the payback crossings — the same helper, not a second derivation."""
+    @staticmethod
+    def payback_spans(reference_gas_band: float, investment_band: float):
+        """The lanes' payback spans and the per-slot crossings of one reference/variant pair.
+
+        The reference burns 2,000 EUR of gas a year; the variant invests 6,000 EUR once and then
+        pays 500 EUR of electricity a year. The two bands decide which uncertainty dominates the
+        savings: a wide gas band makes the LOW world (cheap gas) save least, an investment band
+        makes it the cheap-investment world.
+        """
         reference = make_result(
             [entry(year, 2000.0, CostCategory.ENERGY_WORKING, subject="GAS",
-                   subject_kind=SubjectKind.CARRIER) for year in range(1, 11)],
+                   subject_kind=SubjectKind.CARRIER, band=reference_gas_band) for year in range(1, 11)],
             horizon=10,
         )
         variant = make_result(
-            [entry(0, 6000.0, CostCategory.INVESTMENT)]
+            [entry(0, 6000.0, CostCategory.INVESTMENT, band=investment_band)]
             + [entry(year, 500.0, CostCategory.ENERGY_WORKING, subject="ELECTRICITY",
                      subject_kind=SubjectKind.CARRIER) for year in range(1, 11)],
             horizon=10,
         )
         comparison = compare(reference, variant)
         lanes = views.lifecycle_lanes(variant, comparison)
-        crossings = comparison.discounted_payback_years
         payback = [span for span in lanes.milestones.spans if "payback" in span.label]
-        assert payback[0].start_year == crossings["low"]
-        assert payback[0].end_year == crossings["high"]
+        return payback, comparison.discounted_payback_years
+
+    def test_payback_range_runs_from_the_earliest_to_the_latest_world_when_low_pays_back_last(self):
+        """The energy-dominated shape of renovisorissues #73: the span is read by value, not by slot.
+
+        With the investment exact and the reference's gas bill uncertain, the LOW world saves least
+        and pays back last, so a span drawn from the LOW crossing to the HIGH one would run
+        backwards. The fixture's crossings are distinct and reversed, which is what makes the
+        positional reading differ and the assertion able to fail.
+        """
+        payback, crossings = self.payback_spans(reference_gas_band=600.0, investment_band=0.0)
+        assert crossings["high"] < crossings["best_estimate"] < crossings["low"], crossings
+        envelope = PaybackEnvelope.of(crossings)
+        assert (payback[0].start_year, payback[0].end_year) == (envelope.earliest, envelope.latest)
+        assert (payback[0].start_year, payback[0].end_year) == (crossings["high"], crossings["low"])
+        assert (payback[0].start_year, payback[0].end_year) != (crossings["low"], crossings["high"])
+
+    def test_payback_range_runs_from_the_earliest_to_the_latest_world_when_low_pays_back_first(self):
+        """The investment-dominated shape: the LOW world is the cheap-investment world and pays back first."""
+        payback, crossings = self.payback_spans(reference_gas_band=0.0, investment_band=2000.0)
+        assert crossings["low"] < crossings["best_estimate"] < crossings["high"], crossings
+        envelope = PaybackEnvelope.of(crossings)
+        assert (payback[0].start_year, payback[0].end_year) == (envelope.earliest, envelope.latest)
+        assert (payback[0].start_year, payback[0].end_year) == (crossings["low"], crossings["high"])
 
     def test_all_lane_events_lie_inside_the_horizon(self):
         """Nothing is drawn off the axis, milestones included."""

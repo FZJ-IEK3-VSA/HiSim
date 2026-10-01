@@ -402,7 +402,10 @@ def resolve_device(
         for field_name, is_overridden in (
             ("specific_investment", facts.investment_cost_override_in_euro is not None),
             ("maintenance_rate_per_year", facts.maintenance_rate_override is not None),
-            ("service_life_in_years", facts.lifetime_override_in_years is not None),
+            (
+                "service_life_in_years",
+                facts.lifetime_override_in_years is not None or facts.lifetime_of_asset_class is not None,
+            ),
         )
         if not is_overridden
     ]
@@ -460,6 +463,13 @@ def resolve_device(
     if facts.lifetime_override_in_years is not None:
         service_life = facts.lifetime_override_in_years
         provenance_ids.append(override_record("lifetime_override_in_years", service_life))
+    elif facts.lifetime_of_asset_class is not None:
+        # Part of another subject's system: renewed on that class's life (renovisorissues #77).
+        companion = database.resolve_device_entry(
+            facts.lifetime_of_asset_class, year, parameters.country, ledger, ["service_life_in_years"]
+        )
+        service_life = companion.entry.service_life_in_years
+        provenance_ids.append(companion.provenance_id("service_life_in_years"))
     else:
         assert resolved is not None
         service_life = resolved.entry.service_life_in_years

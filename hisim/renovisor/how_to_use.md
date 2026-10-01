@@ -256,7 +256,16 @@ marks each `by_subject` row's `investment_origin` (`reader_quote`, `included_in_
 `request`, `cost_database`) with its `investment_source`. Every `subsidies[]` row carries
 `max_amount_in_euro`, the most the scheme can pay, whatever its status (renovisorissues #54; null
 for a soft loan without a repayment grant), and `max_amount_for_measure_in_euro`, that summed over
-all of the measure's subjects in the stage (renovisorissues #65).
+all of the measure's subjects in the stage (renovisorissues #65; null when one of them is null). A
+grant capped at or a share of the measure's cost (lump sum, per unit, tiered, share, bonus share,
+tax credit, a soft loan's repayment grant) cannot be stated on an unpriced measure (an envelope
+measure without a `cost` block and without a quote): its maximum is null with a note saying why, and
+a grant the answers would award stays `undetermined`, books nothing, and asks for the measure's
+price in `open_questions` (renovisorissues #77); a soft loan without a repayment grant and a per-kWh
+payment keep their rules. The energy-management
+controller that comes with a battery is part of the battery system: a subject of its own, costless
+(no investment, maintenance or renewal cost), dated and renewed with the battery (no due years of
+its own), carrying `battery_system` where the package installs the battery (renovisorissues #77).
 
 The do-nothing reference renews the building's fabric (renovisorissues #59, schema version 7):
 every envelope element with an area that no measure replaces is a cost subject `envelope_<element>`
@@ -264,12 +273,21 @@ every envelope element with an area that no measure replaces is a cost subject `
 service life (the engine's fallback, `service_life_origin: engine_fallback`, where it has none), dated
 from its `installation_year` (mid-life when the request states none), on the reference and on every
 stage that keeps it. The renewal is unpriced: HiSim prices no envelope work, and a cost band reaches
-the translator only on a measure, so the row states the due years and no money. The plan is priced by
+the translator only on a measure, so the row states the due years and no money. Its `asset_class` is
+the cost class of the like-for-like renewal product that dates those years (a double-glazed window is
+`WindowsTripleGlazed`, a pitched roof `WarmRoofInsulation`), not a description of the element the
+house has; name such a row by its `subject` (renovisorissues #69). The plan is priced by
 the full-cost method: the reference pays every end-of-life renewal, so no stage books an anyway-cost
 credit for what it replaces (the modernisation-levy basis still deducts it). A plan row states `replaces_subjects`, the
 reference subjects its subject takes over (`external_insulation` -> `envelope_facade`, a new heat pump
 -> the reference's boiler), from the mapping report's `replaces_subjects`; a report written before
 the field is completed from the stages' stored registers by the same rule.
+
+`comparison.discounted_payback_year` is the range of the three worlds' payback years, taken by value
+(renovisorissues #73): `min` the earliest world, `max` the latest (`null` as soon as one world never
+pays back within the horizon, `null` reading as later than every year), `best` the central world.
+Which world pays back first depends on whether the reference's energy bill or the plan's investment
+dominates the uncertainty, so the band is never read off the LOW and HIGH slots by position.
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

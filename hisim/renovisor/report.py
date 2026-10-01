@@ -374,11 +374,13 @@ class MappingReport:
         return tuple(self._unpriced_subjects)
 
     def set_costless_subjects(self, subjects: Sequence[str]) -> None:
-        """Store the subjects of measures that cost nothing.
+        """Store the subjects that cost nothing: of a setting, or part of another's purchase.
 
         A measure that changes a setting buys nothing; its row in ``economics_result.json`` is a
         real zero, where an unpriced row is an unknown one, and the two are told apart by these
-        lists rather than by the amount (renovisorissues #58).
+        lists rather than by the amount (renovisorissues #58). The energy-management controller
+        of a battery is listed too: it is part of the battery system and costs nothing of its own
+        (renovisorissues #77).
 
         Args:
             subjects: The costless subjects, in package order.

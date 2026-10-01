@@ -74,6 +74,7 @@ from hisim.economics.results import (
     RateOrigin,
     ResolvedRate,
     VariantComparison,
+    PaybackEnvelope,
     discounted_payback_year,
 )
 from hisim.economics.subsidies import PayoutKind, SubsidyAward, SubsidySchemeLabels
@@ -3244,16 +3245,18 @@ def lifecycle_lanes(
         )
     )
     if comparison is not None:
-        crossings = band_zero_crossings(comparison.cumulative_discounted_savings_in_euro)
-        first = crossings.get("low")
-        last = crossings.get("high")
-        if first is not None:
+        # The range by value (renovisorissues #73): which world pays back first is not a
+        # property of its slot.
+        envelope = PaybackEnvelope.of(
+            band_zero_crossings(comparison.cumulative_discounted_savings_in_euro)
+        )
+        if envelope.earliest is not None:
             milestone_spans.append(
                 LaneSpan(
-                    start_year=first,
-                    end_year=last,
-                    label="payback range (LOW to HIGH world)" if last is not None
-                    else "payback range (no payback in the HIGH world)",
+                    start_year=envelope.earliest,
+                    end_year=envelope.latest,
+                    label="payback range (earliest to latest world)" if envelope.latest is not None
+                    else "payback range (no payback in at least one world)",
                 )
             )
     milestones = Lane(name="Milestones", events=milestone_events, spans=milestone_spans)

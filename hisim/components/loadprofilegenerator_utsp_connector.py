@@ -896,7 +896,6 @@ class UtspLpgConnector(cp.Component):
 
         # go through list of file_exists and cache_filepaths and get caches if possible,
         # otherwise send request to UTSP
-        cache_complete = False
         value_dict: Dict = {
             "electricity_consumption": [],
             "water_consumption": [],
@@ -912,6 +911,7 @@ class UtspLpgConnector(cp.Component):
         self.flexibility_data_dict: Dict = {"flexibility": []}
         # iterate over all unique utsp configs and either take cache results or calculate for each household and sum up later
         for list_index, list_item in enumerate(self.list_of_file_exists_and_cache_files):
+            cache_complete = False
             file_exists = list_item[0]
             cache_filepath = list_item[1]
             log.information("Lpg cache filepath " + cache_filepath)

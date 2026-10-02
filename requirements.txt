@@ -12,7 +12,7 @@ pytest
 # pytest-cov 7 dropped the .pth hook that also measured subprocesses; the '>=7' keeps the measured
 # set what 'coverage run' measured before (the pytest processes only).
 pytest-xdist
-pytest-cov>=7
+pytest-cov>=7.1.0
 sphinx
 sphinx-rtd-theme
 # Documentation build (docs/conf.py extensions): renders the ```mermaid blocks

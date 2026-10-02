@@ -88,7 +88,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         cfg.NameSyntax.require_identifier(object_name, "component")
         cfg.NameSyntax.require_identifier(field_name, "component output")
         if energy_port is not None:
-            EnergyPort.kilowatt_hours_per_step(unit, 1.0)
+            EnergyPort.validate_unit(unit)
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name

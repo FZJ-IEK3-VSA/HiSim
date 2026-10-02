@@ -4,8 +4,9 @@ An output that carries energy states it with an :class:`EnergyPort`, passed to
 :meth:`hisim.component.Component.add_output` as ``energy_port=``: its role in the balance
 (:class:`~hisim.loadtypes.EnergyRole`), its carrier (:class:`~hisim.loadtypes.EnergyBalanceCarrier`) and,
 for the Sankey, who is on the other side. The balance check and the Sankeys in
-:mod:`hisim.postprocessing.energy_balance` read nothing else: a component whose outputs declare no port is
-*undeclared*, which is reported, never a failure.
+:mod:`hisim.postprocessing.energy_balance` read nothing else. The check runs in every simulation and fails
+the run on a balance that does not close; a component whose outputs declare no port is *undeclared*, which is
+reported, never a failure.
 
 The other side of a port is found from the wiring:
 
@@ -13,12 +14,13 @@ The other side of a port is found from the wiring:
   the peer (a storage's heat from its generator: the generator feeds the storage's mass-flow input).
 * otherwise the peer is the component reading ``peer_output`` -- one of the component's own outputs,
   by default the port's own output for an ``OUT`` port (the building reads the heat a distribution
-  system delivers).
+  system delivers). A port names ``peer_input`` or ``peer_output``, never both.
 * ``environment`` names an environment node instead; an ``IN`` port of carrier ``AMBIENT_HEAT`` or
   ``SOLAR`` defaults to the node of that name and a ``LOSS`` port to ``OUTDOORS``.
 
-A power output (W, kW) is converted to energy with the timestep, an energy output (Wh, kWh, J, kJ) is
-taken per step as it is; any other unit is refused when the output is declared.
+A power output (W, kW) is converted to energy with the timestep, an energy output (Wh, kWh, kWh per timestep, J,
+kJ) is taken per step as it is; any other unit is refused when the output is declared
+(:meth:`EnergyPort.validate_unit`).
 """
 
 from __future__ import annotations
@@ -56,11 +58,26 @@ class EnergyPort:
     POWER_UNITS_IN_KILOWATT: ClassVar[Dict[lt.Units, float]] = {lt.Units.WATT: 1e-3, lt.Units.KILOWATT: 1.0}
 
     def __post_init__(self) -> None:
-        """Refuse a port whose role or carrier is not one of the enums, or that names two kinds of peer."""
+        """Refuse a port whose role or carrier is not one of the enums, or that names two peers."""
         lt.EnergyRole(self.role)
         lt.EnergyBalanceCarrier(self.carrier)
         if self.environment is not None and (self.peer_input is not None or self.peer_output is not None):
             raise ValueError("An energy port's peer is either an environment node or a component, not both.")
+        if self.peer_input is not None and self.peer_output is not None:
+            raise ValueError(
+                f"An energy port names its peer by one of peer_input or peer_output, not both: "
+                f"peer_input={self.peer_input!r}, peer_output={self.peer_output!r}."
+            )
+
+    @classmethod
+    def validate_unit(cls, unit: lt.Units) -> None:
+        """Refuse a unit that is neither a power nor an energy.
+
+        Raises:
+            ValueError: If ``unit`` is neither a power nor an energy.
+        """
+        if unit not in cls.ENERGY_UNITS_IN_KILOWATT_HOUR and unit not in cls.POWER_UNITS_IN_KILOWATT:
+            raise ValueError(f"An energy port must be a power or an energy, not {unit!r}.")
 
     @classmethod
     def kilowatt_hours_per_step(cls, unit: lt.Units, seconds_per_timestep: float) -> float:
@@ -69,11 +86,10 @@ class EnergyPort:
         Raises:
             ValueError: If ``unit`` is neither a power nor an energy.
         """
+        cls.validate_unit(unit)
         if unit in cls.ENERGY_UNITS_IN_KILOWATT_HOUR:
             return cls.ENERGY_UNITS_IN_KILOWATT_HOUR[unit]
-        if unit in cls.POWER_UNITS_IN_KILOWATT:
-            return cls.POWER_UNITS_IN_KILOWATT[unit] * seconds_per_timestep / 3600.0
-        raise ValueError(f"An energy port must be a power or an energy, not {unit!r}.")
+        return cls.POWER_UNITS_IN_KILOWATT[unit] * seconds_per_timestep / 3600.0
 
     def default_environment(self) -> Optional[lt.EnvironmentNode]:
         """The environment node this port is linked to when it names no peer of its own."""

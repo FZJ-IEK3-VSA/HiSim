@@ -54,7 +54,7 @@ class PostProcessingOptions(IntEnum):
     # lifecycle_report.html (plausibility panel + charts along the calculation chain) and
     # matplotlib PNGs. Implies COMPUTE_LIFECYCLE_COSTS.
     LIFECYCLE_COST_REPORT = 29
-    # Checks every component's energy balance from its declared energy ports and writes
-    # balance_report.json plus a Sankey per energy carrier (hisim-9uoo). Opt-in; only writes new
-    # files. HISIM_ENERGY_BALANCE=strict fails the run when a balance does not close.
+    # Writes balance_report.json plus a Sankey per energy carrier (hisim-9uoo). Only decides the
+    # files: the energy balance of every component that declares energy ports is checked in every
+    # run, and one that does not close fails the run whether this is set or not.
     EXPORT_ENERGY_BALANCE = 30

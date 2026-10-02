@@ -2,9 +2,13 @@
 
 :class:`DeclaredPorts` reads the result table once: every output that declares an
 :class:`~hisim.energy_port.EnergyPort` becomes a :class:`PortSeries`, its column converted to kWh per step
-(a power with the timestep) and to the sign of its role. A component none of whose outputs declares a port is
-*undeclared*. The peer of each port comes from the wiring the simulator left on the components' inputs
+(a power with the timestep) and turned round when the port is declared ``negated``; the sign of its role is
+applied by the check (:mod:`.check`). A component none of whose outputs declares a port is *undeclared*. The
+peer of each port comes from the wiring the simulator left on the components' inputs
 (:attr:`~hisim.component.ComponentInput.src_object_name`), as :mod:`hisim.energy_port` describes.
+
+:meth:`DeclaredPorts.paired_links` pairs a sender's ``OUT`` port with its receiver's ``IN`` port where both
+describe the same transfer: the check compares their totals, the Sankey draws the transfer once.
 """
 
 from __future__ import annotations
@@ -99,10 +103,13 @@ class DeclaredPorts:
         components = [wrapped.my_component for wrapped in wrapped_components]
         wiring = Wiring(components)
         declared = cls(index=results.index)
-        values = results.to_numpy(dtype=float, copy=False)
-        for column, output in enumerate(all_outputs):
+        columns = [column for column, output in enumerate(all_outputs) if output.energy_port is not None]
+        # only the declared columns are copied: the check costs what the ports are, not the whole table
+        values = results.iloc[:, columns].to_numpy(dtype=float) if columns else np.empty((len(results), 0))
+        for position, column in enumerate(columns):
+            output = all_outputs[column]
             port = output.energy_port
-            if port is None:
+            if port is None:  # pragma: no cover - the columns are the declared ones
                 continue
             factor = EnergyPort.kilowatt_hours_per_step(output.unit, seconds_per_timestep)
             sign = -1.0 if port.negated else 1.0
@@ -111,7 +118,7 @@ class DeclaredPorts:
                 output=output,
                 port=port,
                 peer=wiring.peer_of(output.component_name, output.field_name, port),
-                kilowatt_hours=values[:, column] * (factor * sign),
+                kilowatt_hours=values[:, position] * (factor * sign),
             )
             declared.by_component.setdefault(output.component_name, []).append(series)
         for component in components:
@@ -123,6 +130,33 @@ class DeclaredPorts:
     def is_declared(self, component_name: str) -> bool:
         """Whether the component declares at least one port."""
         return component_name in self.by_component
+
+    def all_series(self) -> List[PortSeries]:
+        """Every declared port of the run, component by component."""
+        return [series for ports in self.by_component.values() for series in ports]
+
+    def paired_links(self) -> Dict[Tuple[str, str, str], Tuple[float, float]]:
+        """The transfers both sides declare: ``(sender, receiver, carrier) -> (sent kWh, received kWh)``.
+
+        A receiver's ``IN`` port whose peer is a declared component pairs with that sender's ``OUT`` ports of the
+        same carrier whose peer is the receiver; a transfer only one side declares is not listed.
+        """
+        received: Dict[Tuple[str, str, str], float] = {}
+        for component, ports in self.by_component.items():
+            for series in ports:
+                if series.port.role != lt.EnergyRole.IN or series.peer.kind != Peer.COMPONENT:
+                    continue
+                if not self.is_declared(series.peer.name):
+                    continue
+                key = (series.peer.name, component, series.port.carrier.value)
+                received[key] = received.get(key, 0.0) + series.annual_kilowatt_hours
+        sent: Dict[Tuple[str, str, str], float] = {}
+        for component, ports in self.by_component.items():
+            for series in ports:
+                key = (component, series.peer.name, series.port.carrier.value)
+                if series.port.role == lt.EnergyRole.OUT and key in received:
+                    sent[key] = sent.get(key, 0.0) + series.annual_kilowatt_hours
+        return {key: (total, received[key]) for key, total in sent.items()}
 
 
 class Wiring:

@@ -4,17 +4,19 @@ The links come from the declared ports and their peers (:mod:`.ports`): an ``IN`
 an ``OUT`` port a link to it, a ``LOSS`` a link to its environment node (``outdoors``), a storage change a link
 to or from the component's store, and a residual a link to or from the red ``unaccounted`` node. A transfer
 both sides declare is drawn once, at the value the receiver books; what the sender booked beyond that goes to
-``unaccounted``. A peer that declares no ports is drawn as a grey ``undeclared`` node, so the diagram also shows
-how much of the house the balance covers.
+``unaccounted``. The check fails the run when the two differ beyond the tolerance, so that is at most 0.1 % of
+the transfer, and a receiver that books more than was sent draws nothing there. A peer that declares no ports is
+drawn as a grey ``undeclared`` node, so the diagram also shows how much of the house the balance covers.
 
-So every declared component node carries as much out as in over all carriers (the residual link closes it); in a
+So every declared component node carries as much out as in over all carriers (the residual link closes it, up to
+a receiver's within-tolerance surplus); in a
 carrier's own diagram the same holds for a component whose ports all carry that carrier.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
 from hisim.postprocessing.energy_balance.check import ComponentBalance
 from hisim.postprocessing.energy_balance.ports import DeclaredPorts, Peer
@@ -81,24 +83,10 @@ class SankeyBuilder:
             source, target, kilowatt_hours = target, source, -kilowatt_hours
         self.links.append(SankeyLink(source, target, kilowatt_hours, carrier, label))
 
-    def received_from(self) -> Dict[Tuple[str, str, str], float]:
-        """What each declared receiver books as coming from each declared sender, per carrier."""
-        received: Dict[Tuple[str, str, str], float] = {}
-        for component, ports in self.declared.by_component.items():
-            for series in ports:
-                if series.port.role != lt.EnergyRole.IN or series.peer.kind != Peer.COMPONENT:
-                    continue
-                if not self.declared.is_declared(series.peer.name):
-                    continue
-                key = (series.peer.name, component, series.port.carrier.value)
-                received[key] = received.get(key, 0.0) + series.annual_kilowatt_hours
-        return received
-
     def build(self) -> List[SankeyLink]:
         """All yearly links of the run."""
         self.links = []
-        received = self.received_from()
-        sent: Dict[Tuple[str, str, str], float] = {}
+        paired = self.declared.paired_links()
         for component, ports in self.declared.by_component.items():
             for series in ports:
                 carrier = series.port.carrier.value
@@ -109,16 +97,17 @@ class SankeyBuilder:
                     self.add(self.node_of(series.peer), component, total, carrier, label)
                 elif role == lt.EnergyRole.STORED_CHANGE:
                     self.add(component, series.peer.name, total, carrier, label)
-                elif role == lt.EnergyRole.OUT and (component, series.peer.name, carrier) in received:
-                    key = (component, series.peer.name, carrier)
-                    sent[key] = sent.get(key, 0.0) + total
+                elif role == lt.EnergyRole.OUT and (component, series.peer.name, carrier) in paired:
+                    continue  # drawn once, at the receiver's value, by the receiver's IN port
                 else:
                     self.add(component, self.node_of(series.peer), total, carrier, label)
-        for (sender, receiver, carrier), total in sent.items():
+        for (sender, receiver, carrier), (sent, received) in paired.items():
+            # within the tolerance (the check fails the run beyond it): only what was sent and not received is
+            # drawn, never a negative remainder against the receiver's side
             self.add(
                 sender,
                 SankeyNodes.UNACCOUNTED,
-                total - received[(sender, receiver, carrier)],
+                max(sent - received, 0.0),
                 carrier,
                 f"{sender} -> {receiver}: sent but not received",
             )

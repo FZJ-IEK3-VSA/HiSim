@@ -15,7 +15,8 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
-from hisim.loadtypes import LoadTypes, Units, ComponentType
+from hisim.energy_port import EnergyPort
+from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, ComponentType
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -207,6 +208,8 @@ class DistrictHeating(Component):
     ThermalOutputDhwPower = "ThermalOutputDhwPower"
     ThermalOutputDhwEnergy = "ThermalOutputDhwEnergy"
     WaterOutputDhwMassFlowRate = "WaterOutputDhwMassFlowRate"
+    #: The heat taken from the network in this step, what the meter bills: space heating plus hot water (Wh).
+    DistrictHeatDrawn = "DistrictHeatDrawn"
 
     def __init__(
         self,
@@ -300,6 +303,9 @@ class DistrictHeating(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Thermal power output for space heating",
+            energy_port=EnergyPort(
+                EnergyRole.OUT, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.WaterOutputShTemperature
+            ),
         )
         self.thermal_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -330,6 +336,24 @@ class DistrictHeating(Component):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT,
             output_description="Thermal power output for domestic hot water.",
+            energy_port=EnergyPort(
+                EnergyRole.OUT,
+                EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+                peer_output=self.WaterOutputDhwMassFlowRate,
+            ),
+        )
+        self.district_heat_drawn_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.DistrictHeatDrawn,
+            load_type=LoadTypes.DISTRICTHEATING,
+            unit=Units.WATT_HOUR,
+            output_description=(
+                "Heat taken from the district heating network in this timestep, what the meter bills: "
+                "ThermalOutputShEnergy plus ThermalOutputDhwEnergy. The connection has no loss of its own."
+            ),
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.DISTRICT_HEAT, peer_output=self.ThermalOutputShEnergy
+            ),
         )
         self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -475,6 +499,7 @@ class DistrictHeating(Component):
                 available_load_in_w=concrete(self.config.connected_load_in_w),
             )
 
+            district_heat_in_watt_hour = thermal_energy_delivered_in_watt_hour
             # Set outputs
             stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_delivered_in_w)
             stsv.set_output_value(
@@ -517,6 +542,7 @@ class DistrictHeating(Component):
                 delta_temperature_needed_for_dhw_in_celsius,
             )
 
+            district_heat_in_watt_hour = thermal_energy_delivered_in_watt_hour
             # Set outputs
             stsv.set_output_value(
                 self.thermal_output_power_dhw_channel,
@@ -602,6 +628,9 @@ class DistrictHeating(Component):
                 available_load_in_w=connected_load_in_w - thermal_power_delivered_for_dhw_w,
             )
 
+            district_heat_in_watt_hour = (
+                thermal_energy_delivered_for_dhw_in_watt_hour + thermal_energy_delivered_for_sh_in_watt_hour
+            )
             # Set outputs
             stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_delivered_for_sh_w)
             stsv.set_output_value(
@@ -618,6 +647,7 @@ class DistrictHeating(Component):
             )
 
         elif heating_mode == HeatingMode.OFF:
+            district_heat_in_watt_hour = 0.0
             stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
             stsv.set_output_value(self.thermal_output_energy_dhw_channel, 0)
             current_dhw_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
@@ -637,6 +667,7 @@ class DistrictHeating(Component):
             stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
         else:
             raise ValueError("Unknown heating mode")
+        stsv.set_output_value(self.district_heat_drawn_channel, district_heat_in_watt_hour)
 
     def _check_delta_temperature(self, delta_temperature: float, timestep: int):
         if delta_temperature < 0:

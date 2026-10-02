@@ -18,6 +18,12 @@ The other side of a port is found from the wiring:
 * ``environment`` names an environment node instead; an ``IN`` port of carrier ``AMBIENT_HEAT`` or
   ``SOLAR`` defaults to the node of that name and a ``LOSS`` port to ``OUTDOORS``.
 
+A transfer between two components that both declare ports is booked by both: the sender's ``OUT`` port whose
+peer is the receiver, and the receiver's ``IN`` port of the same carrier whose peer is the sender. The check
+compares the two totals and fails the run when they disagree beyond its tolerance, and when only one side books
+the transfer (owner, 2026-10-02: always fail hard). A one-sided booking is allowed only toward a component that
+declares no ports at all, an environment node or nobody the wiring names.
+
 A power output (W, kW) is converted to energy with the timestep, an energy output (Wh, kWh, kWh per timestep, J,
 kJ) is taken per step as it is; any other unit is refused when the output is declared
 (:meth:`EnergyPort.validate_unit`).

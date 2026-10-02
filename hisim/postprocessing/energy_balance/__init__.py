@@ -1,8 +1,8 @@
 """Energy balances per component and Sankeys per carrier, from the declared energy ports (epic hisim-9uoo).
 
-``ports`` reads the declared ports of a run, ``check`` closes each component's balance and each paired link,
-``sankey`` draws the yearly flows and ``export`` fails the run when they do not hold and writes both into the
-result directory. The check runs in every simulation;
+``ports`` reads the declared ports of a run, ``check`` closes each component's balance and each link between
+declared components (both sides must book it), ``sankey`` draws the yearly flows and ``export`` fails the run when
+they do not hold and writes both into the result directory. The check runs in every simulation;
 :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only writes the files.
 
 Coverage: the water storages and the heat distribution system declare their ports with the hydronic coupling

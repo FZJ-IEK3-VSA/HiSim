@@ -7,8 +7,11 @@ applied by the check (:mod:`.check`). A component none of whose outputs declares
 peer of each port comes from the wiring the simulator left on the components' inputs
 (:attr:`~hisim.component.ComponentInput.src_object_name`), as :mod:`hisim.energy_port` describes.
 
-:meth:`DeclaredPorts.paired_links` pairs a sender's ``OUT`` port with its receiver's ``IN`` port where both
-describe the same transfer: the check compares their totals, the Sankey draws the transfer once.
+:meth:`DeclaredPorts.declared_links` pairs a sender's ``OUT`` port with its receiver's ``IN`` port where both
+describe the same transfer, and lists a transfer between two declared components that only one side books with
+the other side None: the check compares the totals of a pair and fails a one-sided booking, the Sankey draws a
+pair once (:meth:`DeclaredPorts.paired_links`). A booking toward a component that declares no ports at all, an
+environment node or nobody stays one-sided without failing.
 """
 
 from __future__ import annotations
@@ -135,28 +138,47 @@ class DeclaredPorts:
         """Every declared port of the run, component by component."""
         return [series for ports in self.by_component.values() for series in ports]
 
-    def paired_links(self) -> Dict[Tuple[str, str, str], Tuple[float, float]]:
-        """The transfers both sides declare: ``(sender, receiver, carrier) -> (sent kWh, received kWh)``.
+    def declared_links(self) -> Dict[Tuple[str, str, str], Tuple[Optional[float], Optional[float]]]:
+        """Every transfer between two declared components: ``(sender, receiver, carrier) -> (sent, received)``.
 
         A receiver's ``IN`` port whose peer is a declared component pairs with that sender's ``OUT`` ports of the
-        same carrier whose peer is the receiver; a transfer only one side declares is not listed.
+        same carrier whose peer is the receiver. A side that books nothing of the transfer is None: a receiver's
+        ``IN`` port with no such ``OUT`` port has ``sent`` None, a sender's ``OUT`` port whose declared peer has no
+        ``IN`` port of the same carrier from it has ``received`` None. Both are one-sided bookings, which the
+        check fails (owner, 2026-10-02: always fail hard). A booking toward a component that declares no ports,
+        an environment node, a store or nobody the wiring names is not a link between declared components and is
+        not listed.
         """
         received: Dict[Tuple[str, str, str], float] = {}
-        for component, ports in self.by_component.items():
-            for series in ports:
-                if series.port.role != lt.EnergyRole.IN or series.peer.kind != Peer.COMPONENT:
-                    continue
-                if not self.is_declared(series.peer.name):
-                    continue
-                key = (series.peer.name, component, series.port.carrier.value)
-                received[key] = received.get(key, 0.0) + series.annual_kilowatt_hours
         sent: Dict[Tuple[str, str, str], float] = {}
         for component, ports in self.by_component.items():
             for series in ports:
-                key = (component, series.peer.name, series.port.carrier.value)
-                if series.port.role == lt.EnergyRole.OUT and key in received:
+                if series.peer.kind != Peer.COMPONENT or not self.is_declared(series.peer.name):
+                    continue
+                if series.port.role == lt.EnergyRole.IN:
+                    key = (series.peer.name, component, series.port.carrier.value)
+                    received[key] = received.get(key, 0.0) + series.annual_kilowatt_hours
+                elif series.port.role == lt.EnergyRole.OUT:
+                    key = (component, series.peer.name, series.port.carrier.value)
                     sent[key] = sent.get(key, 0.0) + series.annual_kilowatt_hours
-        return {key: (total, received[key]) for key, total in sent.items()}
+        links: Dict[Tuple[str, str, str], Tuple[Optional[float], Optional[float]]] = {
+            key: (sent.get(key), total) for key, total in received.items()
+        }
+        for key, total in sent.items():
+            if key not in received:
+                links[key] = (total, None)
+        return links
+
+    def paired_links(self) -> Dict[Tuple[str, str, str], Tuple[float, float]]:
+        """The transfers both sides declare: ``(sender, receiver, carrier) -> (sent kWh, received kWh)``.
+
+        The subset of :meth:`declared_links` with both sides booked; the Sankey draws each of them once.
+        """
+        return {
+            key: (sent, received)
+            for key, (sent, received) in self.declared_links().items()
+            if sent is not None and received is not None
+        }
 
 
 class Wiring:

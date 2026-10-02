@@ -1,12 +1,13 @@
 """The yearly energy flows of a run as Sankey diagrams, one per carrier and one over all (hisim-9uoo.9).
 
-The links come from the declared ports and their peers (:mod:`.ports`): an ``IN`` port is a link from its peer,
-an ``OUT`` port a link to it, a ``LOSS`` a link to its environment node (``outdoors``), a storage change a link
-to or from the component's store, and a residual a link to or from the red ``unaccounted`` node. A transfer
-both sides declare is drawn once, at the value the receiver books; what the sender booked beyond that goes to
-``unaccounted``. The check fails the run when the two differ beyond the tolerance, so that is at most 0.1 % of
-the transfer, and a receiver that books more than was sent draws nothing there. A peer that declares no ports is
-drawn as a grey ``undeclared`` node, so the diagram also shows how much of the house the balance covers.
+The links come from the declared ports and their peers (:mod:`.ports`): an ``IN`` port is a link from its peer, an
+``OUT`` port a link to it, a ``LOSS`` a link to its environment node (``outdoors``), a storage change a link to or
+from the component's store, and a residual a link to or from the red ``unaccounted`` node. A transfer both sides
+declare is drawn once, at the value the receiver books; what the sender booked beyond that goes to ``unaccounted``.
+The check fails the run when the two differ beyond the tolerance, so that is at most 0.1 % of the transfer, and a
+receiver that books more than was sent draws nothing there. A transfer only one of two declared components books
+fails the run too; it is still drawn, at the value of the side that books it. A peer that declares no ports is drawn
+as a grey ``undeclared`` node, so the diagram also shows how much of the house the balance covers.
 
 So every declared component node carries as much out as in over all carriers (the residual link closes it, up to
 a receiver's within-tolerance surplus); in a

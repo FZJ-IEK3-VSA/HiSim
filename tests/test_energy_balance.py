@@ -472,3 +472,116 @@ def test_a_link_whose_two_sides_disagree_fails_the_run_in_either_direction(
         f"link Tank -> Loop (space_heating_heat): Tank sends 0.7 kWh, Loop receives {received_watt_hour / 1000:g} kWh "
         f"({percent} % of the larger)"
     ) in str(raised.value)
+
+
+# --- one-sided bookings between declared components (owner, 2026-10-02: always fail hard) ----------------------
+
+
+def receiver_only() -> EnergyBalanceReport:
+    """The loop books 0.7 kWh of heat from the tank; the tank declares ports, but none sends heat to the loop."""
+    columns: List[Column] = [
+        ("Tank", "Power", lt.Units.KWH, EnergyPort(IN, ELECTRICITY), [1.0]),
+        ("Tank", "Loss", lt.Units.KWH, EnergyPort(LOSS, SH), [1.0]),
+        ("Loop", "Received", lt.Units.KWH, EnergyPort(IN, SH, peer_input="HeatFromTank"), [0.7]),
+        ("Loop", "Delivered", lt.Units.KWH, EnergyPort(OUT, SH), [0.7]),
+    ]
+    inputs = {
+        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut")],
+        "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
+    }
+    return report(columns, inputs=inputs, extra_components=["Building"])
+
+
+def sender_only() -> EnergyBalanceReport:
+    """The tank sends 0.7 kWh of heat, read by the loop; the loop declares ports, but none receives it."""
+    columns: List[Column] = [
+        ("Tank", "Power", lt.Units.KWH, EnergyPort(IN, ELECTRICITY), [0.7]),
+        ("Tank", "HeatOut", lt.Units.KWH, EnergyPort(OUT, SH), [0.7]),
+        ("Loop", "Power", lt.Units.KWH, EnergyPort(IN, ELECTRICITY), [0.7]),
+        ("Loop", "Delivered", lt.Units.KWH, EnergyPort(OUT, SH), [0.7]),
+    ]
+    inputs = {
+        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut")],
+        "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
+    }
+    return report(columns, inputs=inputs, extra_components=["Building"])
+
+
+@pytest.mark.base
+def test_a_booking_only_the_receiver_declares_fails_the_run_naming_both_the_carrier_and_the_amount(
+    tmp_path: Path,
+) -> None:
+    """Both components declare ports, only the loop books the transfer: the link fails, the report lists it."""
+    balance_report = receiver_only()
+    assert all(balance.closes for balance in balance_report.balances)
+    (link,) = balance_report.failing_links
+    assert (link.sender, link.receiver, link.carrier, link.sent) == ("Tank", "Loop", "space_heating_heat", None)
+    with pytest.raises(EnergyBalanceError) as raised:
+        balance_report.conclude(str(tmp_path), with_html=False)
+    assert (
+        "link Tank -> Loop (space_heating_heat): Loop books 0.7 kWh of space_heating_heat from Tank, "
+        "but Tank declares nothing sent to Loop"
+    ) in str(raised.value)
+    written = json.loads((tmp_path / "balance_report.json").read_text())
+    (entry,) = written["links"]
+    assert entry["sent_kwh"] is None and entry["received_kwh"] == pytest.approx(0.7)
+    assert entry["verdict"] == "one_sided" and "declares nothing sent" in entry["reason"]
+    assert written["verdict"] == "does_not_close"
+    assert flows(balance_report.sankeys()["space_heating_heat"])[("Tank", "Loop")] == pytest.approx(0.7)
+
+
+@pytest.mark.base
+def test_a_booking_only_the_sender_declares_fails_the_run_naming_both_the_carrier_and_the_amount() -> None:
+    """Both components declare ports, only the tank books the transfer: the link fails."""
+    balance_report = sender_only()
+    assert all(balance.closes for balance in balance_report.balances)
+    (link,) = balance_report.failing_links
+    assert (link.sender, link.receiver, link.received) == ("Tank", "Loop", None)
+    assert link.as_dict()["sent_kwh"] == pytest.approx(0.7)
+    with pytest.raises(EnergyBalanceError) as raised:
+        balance_report.conclude(None)
+    assert (
+        "link Tank -> Loop (space_heating_heat): Tank sends 0.7 kWh of space_heating_heat to Loop, "
+        "but Loop declares nothing received from Tank"
+    ) in str(raised.value)
+    assert flows(balance_report.sankeys()["space_heating_heat"])[("Tank", "Loop")] == pytest.approx(0.7)
+
+
+@pytest.mark.base
+def test_a_one_sided_booking_toward_a_component_without_ports_passes(tmp_path: Path) -> None:
+    """The tank books heat from an undeclared boiler and to an undeclared building: no link, the run passes."""
+    columns: List[Column] = [
+        ("Tank", "HeatIn", lt.Units.KWH, EnergyPort(IN, SH, peer_input="FlowFromBoiler"), [0.7]),
+        ("Tank", "HeatOut", lt.Units.KWH, EnergyPort(OUT, SH), [0.7]),
+    ]
+    inputs = {
+        "Tank": [wired_input("FlowFromBoiler", "Boiler", "Flow")],
+        "Building": [wired_input("HeatFromTank", "Tank", "HeatOut")],
+    }
+    balance_report = report(columns, inputs=inputs, extra_components=["Boiler", "Building"])
+    report_path = balance_report.conclude(str(tmp_path), with_html=False)
+    assert report_path is not None
+    written = json.loads(report_path.read_text())
+    assert written["verdict"] == "closes" and written["links"] == []
+    assert [entry["component"] for entry in written["undeclared"]] == ["Boiler", "Building"]
+
+
+@pytest.mark.base
+def test_a_transfer_both_declared_sides_book_alike_passes(tmp_path: Path) -> None:
+    """The tank sends 0.7 kWh, the loop books 0.7 kWh from it: the link closes and states no reason."""
+    columns: List[Column] = [
+        ("Tank", "Power", lt.Units.KWH, EnergyPort(IN, ELECTRICITY), [0.7]),
+        ("Tank", "HeatOut", lt.Units.KWH, EnergyPort(OUT, SH), [0.7]),
+        ("Loop", "Received", lt.Units.KWH, EnergyPort(IN, SH, peer_input="HeatFromTank"), [0.7]),
+        ("Loop", "Delivered", lt.Units.KWH, EnergyPort(OUT, SH), [0.7]),
+    ]
+    inputs = {
+        "Loop": [wired_input("HeatFromTank", "Tank", "HeatOut")],
+        "Building": [wired_input("HeatFromLoop", "Loop", "Delivered")],
+    }
+    balance_report = report(columns, inputs=inputs, extra_components=["Building"])
+    report_path = balance_report.conclude(str(tmp_path), with_html=False)
+    assert report_path is not None
+    (entry,) = json.loads(report_path.read_text())["links"]
+    assert entry["verdict"] == "closes" and entry["reason"] is None
+    assert entry["sent_kwh"] == pytest.approx(0.7) and entry["received_kwh"] == pytest.approx(0.7)

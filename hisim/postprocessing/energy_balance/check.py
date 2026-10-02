@@ -12,10 +12,12 @@ component's throughput over the run, and every step's residual at most
 over its steps.
 
 Beside the balances, two more things are checked (owner, 2026-10-02: always fail hard): every declared port is
-finite in every step, and where both sides of a transfer declare it (a sender's ``OUT`` port and its receiver's
-``IN`` port, :meth:`~.ports.DeclaredPorts.paired_links`) the two totals agree within the run's tolerance,
-relative to the larger of the two. The check runs in every simulation; whatever does not hold fails the run
-with :class:`EnergyBalanceError`. A run in which no component declares a port passes.
+finite in every step, and every transfer between two declared components
+(:meth:`~.ports.DeclaredPorts.declared_links`) is booked by both sides -- a sender's ``OUT`` port and its
+receiver's ``IN`` port -- with the two totals agreeing within the run's tolerance, relative to the larger of the
+two. A transfer only one of two declared components books fails; one toward a component that declares no ports at
+all, an environment node or nobody does not. The check runs in every simulation; whatever does not hold fails
+the run with :class:`EnergyBalanceError`. A run in which no component declares a port passes.
 """
 
 from __future__ import annotations
@@ -139,28 +141,56 @@ class ComponentBalance:
 
 @dataclass(frozen=True)
 class LinkBalance:
-    """One transfer both sides declare: what the sender books as sent and the receiver as received, in kWh."""
+    """One transfer between two declared components: what the sender books as sent and the receiver as received.
+
+    A side that books nothing of the transfer is None: a one-sided booking, which never closes.
+    """
 
     sender: str
     receiver: str
     carrier: str
-    sent: float
-    received: float
+    sent: Optional[float]
+    received: Optional[float]
     closes: bool
 
     @property
+    def one_sided(self) -> bool:
+        """Whether only one of the two declared components books the transfer."""
+        return self.sent is None or self.received is None
+
+    @property
     def difference(self) -> float:
-        """Sent minus received, in kWh."""
-        return self.sent - self.received
+        """Sent minus received, in kWh; a side that books nothing counts as 0."""
+        return (self.sent or 0.0) - (self.received or 0.0)
 
     @property
     def difference_percent(self) -> float:
         """The difference in percent of the larger total (0 when both are 0)."""
-        larger = max(abs(self.sent), abs(self.received))
+        larger = max(abs(self.sent or 0.0), abs(self.received or 0.0))
         return 100.0 * self.difference / larger if larger > 0 else 0.0
 
+    @property
+    def reason(self) -> Optional[str]:
+        """Why the link fails, in one sentence; None for a link that closes."""
+        if self.received is None:
+            return (
+                f"{self.sender} sends {self.sent:.6g} kWh of {self.carrier} to {self.receiver}, "
+                f"but {self.receiver} declares nothing received from {self.sender}"
+            )
+        if self.sent is None:
+            return (
+                f"{self.receiver} books {self.received:.6g} kWh of {self.carrier} from {self.sender}, "
+                f"but {self.sender} declares nothing sent to {self.receiver}"
+            )
+        if self.closes:
+            return None
+        return (
+            f"{self.sender} sends {self.sent:.6g} kWh, {self.receiver} receives {self.received:.6g} kWh "
+            f"({self.difference_percent:.4g} % of the larger)"
+        )
+
     def as_dict(self) -> Dict[str, object]:
-        """The link as the balance report lists it."""
+        """The link as the balance report lists it; a side that books nothing is null."""
         return {
             "sender": self.sender,
             "receiver": self.receiver,
@@ -169,7 +199,8 @@ class LinkBalance:
             "received_kwh": self.received,
             "difference_kwh": self.difference,
             "difference_percent": self.difference_percent,
-            "verdict": "closes" if self.closes else "does_not_close",
+            "verdict": "closes" if self.closes else ("one_sided" if self.one_sided else "does_not_close"),
+            "reason": self.reason,
         }
 
 
@@ -188,7 +219,7 @@ class NonFinitePort:
 
 
 class BalanceCheck:
-    """Computes every declared component's balance, every paired link and every port that is not finite."""
+    """Computes every declared component's balance, every link between declared components and every port not finite."""
 
     SIGN_OF_ROLE: ClassVar[Dict[lt.EnergyRole, float]] = {
         lt.EnergyRole.IN: 1.0,
@@ -209,7 +240,11 @@ class BalanceCheck:
         ]
 
     def links(self, declared: DeclaredPorts) -> List[LinkBalance]:
-        """Every transfer both sides declare, with whether its two totals agree within the run's tolerance."""
+        """Every transfer between declared components, with whether it closes.
+
+        A pair closes when its two totals agree within the run's tolerance, relative to the larger; a one-sided
+        booking never closes.
+        """
         return [
             LinkBalance(
                 sender=sender,
@@ -217,9 +252,11 @@ class BalanceCheck:
                 carrier=carrier,
                 sent=sent,
                 received=received,
-                closes=abs(sent - received) <= self.tolerance.annual_relative * max(abs(sent), abs(received)),
+                closes=sent is not None
+                and received is not None
+                and abs(sent - received) <= self.tolerance.annual_relative * max(abs(sent), abs(received)),
             )
-            for (sender, receiver, carrier), (sent, received) in declared.paired_links().items()
+            for (sender, receiver, carrier), (sent, received) in declared.declared_links().items()
         ]
 
     @staticmethod

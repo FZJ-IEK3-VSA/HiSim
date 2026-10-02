@@ -1,14 +1,16 @@
 """Checks a finished run's energy flows, fails it when they do not hold, and writes its report and Sankeys.
 
-The check runs in every simulation (owner, 2026-10-02: always fail hard). :meth:`EnergyBalanceReport.conclude`
-fails the run with :class:`EnergyBalanceError` when a declared port is NaN or infinite, when a component's
-balance does not close, or when the two sides of a transfer disagree beyond the tolerance; the message names
-every one of them. A run in which no component declares a port passes.
+The check runs in every simulation (owner, 2026-10-02: always fail hard). :meth:`EnergyBalanceReport.conclude` fails
+the run with :class:`EnergyBalanceError` when a declared port is NaN or infinite, when a component's balance does
+not close, when the two sides of a transfer disagree beyond the tolerance, or when only one of two declared
+components books a transfer between them; the message names every one of them. A run in which no component declares
+a port passes.
 
 :class:`~hisim.postprocessingoptions.PostProcessingOptions` ``EXPORT_ENERGY_BALANCE`` only decides whether the
 files are written, before the run is failed: ``balance_report.json`` lists, per declared component, the run's in /
 out / loss / storage change in kWh (in total and per carrier), the residual in kWh and in percent of the
-throughput, the worst step and the verdict, then every paired link and every undeclared component. Beside it,
+throughput, the worst step and the verdict, then every link between declared components (a side that books
+nothing is null, and a failing link states its reason) and every undeclared component. Beside it,
 ``energy_sankeys/`` holds ``energy_sankey.json`` (every diagram's nodes and links) and one plotly HTML per
 carrier plus ``overall.html``, which share one ``plotly.min.js``.
 """
@@ -68,7 +70,7 @@ class EnergyBalanceReport:
 
     @property
     def failing_links(self) -> List[LinkBalance]:
-        """The transfers whose two sides disagree beyond the tolerance."""
+        """The transfers whose two sides disagree beyond the tolerance, or that only one side books."""
         return [link for link in self.links if not link.closes]
 
     @property
@@ -164,15 +166,15 @@ class EnergyBalanceReport:
             The path of ``balance_report.json`` when it was written.
 
         Raises:
-            EnergyBalanceError: When a declared port is not finite, a balance does not close, or a link's two
-                sides disagree beyond the tolerance.
+            EnergyBalanceError: When a declared port is not finite, a balance does not close, a link's two
+                sides disagree beyond the tolerance, or only one of two declared components books a transfer.
         """
         if self.nonfinite:
             raise EnergyBalanceError(self.nonfinite_message())
         report_path = None if result_directory is None else self.write(result_directory, with_html)
         log.information(
             f"Energy balance: {len(self.balances) - len(self.failing)} of {len(self.balances)} declared components "
-            f"close, {len(self.links) - len(self.failing_links)} of {len(self.links)} paired links close, "
+            f"close, {len(self.links) - len(self.failing_links)} of {len(self.links)} links between them close, "
             f"{len(self.declared.undeclared)} components undeclared"
             + ("." if report_path is None else f"; report in {report_path}.")
         )
@@ -190,7 +192,7 @@ class EnergyBalanceReport:
         return "The declared energy flows of this run are not finite:\n" + "\n".join(lines)
 
     def failure_message(self, report_path: Optional[Path] = None) -> str:
-        """The error of a run whose balances or links do not close, naming every one."""
+        """The error of a run whose balances or links do not close, naming every one with its reason."""
         lines: List[str] = []
         for balance in self.failing:
             carriers = ", ".join(
@@ -209,10 +211,7 @@ class EnergyBalanceReport:
                 f"{carriers}; {int(balance.step_failures.sum())} steps beyond tolerance, worst {worst_text}"
             )
         for link in self.failing_links:
-            lines.append(
-                f"- link {link.sender} -> {link.receiver} ({link.carrier}): {link.sender} sends {link.sent:.6g} kWh, "
-                f"{link.receiver} receives {link.received:.6g} kWh ({link.difference_percent:.4g} % of the larger)"
-            )
+            lines.append(f"- link {link.sender} -> {link.receiver} ({link.carrier}): {link.reason}")
         where = "" if report_path is None else f"\nSee {report_path}."
         return (
             f"The energy balance of this run does not close (tolerance: {self.tolerance.describe()}):\n"

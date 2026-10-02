@@ -286,6 +286,18 @@ class ComponentCostFacts:
     # energy-management controller lives and is renewed with the battery (renovisorissues #77).
     # The engine reads that class's `service_life_in_years`; `lifetime_override_in_years` still wins.
     lifetime_of_asset_class: Optional[ComponentType] = None
+    # True for a subject matched only against the register entry bound to its own name
+    # (`ExistingAsset.subject`), and bought new when the register binds none to it, whatever else
+    # the register holds of its class. Only the staged evaluator sets it, for the increment a later
+    # stage adds to a subject the house keeps (hisim-1y0m): a same-class lookup would find the
+    # enlarged asset and call the increment kept. Every other subject ignores bound entries.
+    own_register_entry: bool = False
+    # The share of the house's energy sold that per-kWh (OPERATIONAL) subsidies of this subject are
+    # paid on, in (0, 1]. 1.0 -- the whole -- for every subject but a piece of one a staged plan
+    # split (hisim-1y0m): the unit a later stage enlarges and each increment are paid on their size
+    # share of the energy the enlarged installation sells (owner decision 2026-10-01), so the same
+    # kWh is never paid twice.
+    share_of_energy_sold: float = 1.0
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).
     technical_attributes: Dict[str, Any] = field(default_factory=dict)
 
@@ -319,8 +331,9 @@ class ComponentCostFacts:
         Raises:
             ValueError: If the asset class is not a `ComponentType`, the size is negative or not
                 finite, the size unit is not priceable, `count` is below 1, the maintenance-rate
-                override is negative in any slot, a non-positive lifetime override was given, or the
-                technical attributes are not JSON-serializable.
+                override is negative in any slot, a non-positive lifetime override was given, the
+                share of energy sold lies outside (0, 1], or the technical attributes are not
+                JSON-serializable.
         """
         self.investment_cost_override_in_euro = _coerce_uncertain(self.investment_cost_override_in_euro)
         self.installation_cost_override_in_euro = _coerce_uncertain(self.installation_cost_override_in_euro)
@@ -351,6 +364,8 @@ class ComponentCostFacts:
             raise ValueError("lifetime_override_in_years must be > 0.")
         if self.lifetime_of_asset_class is not None and not isinstance(self.lifetime_of_asset_class, ComponentType):
             raise ValueError(f"lifetime_of_asset_class must be a ComponentType, got {self.lifetime_of_asset_class!r}.")
+        if not 0.0 < self.share_of_energy_sold <= 1.0:
+            raise ValueError(f"share_of_energy_sold must lie in (0, 1], got {self.share_of_energy_sold!r}.")
         if self.lifetime_is_engine_fallback and self.lifetime_override_in_years is None:
             raise ValueError("lifetime_is_engine_fallback needs the fallback in lifetime_override_in_years.")
         try:
@@ -600,6 +615,11 @@ class ExistingAsset:
     #: falls one service life after its purchase; replaced, its age in the year the replacing stage
     #: starts, which is when it is written off and when the anyway-cost test is taken.
     stated_age_in_years: Optional[int] = None
+    #: The cost subject this entry is bound to, or `None` for an entry any subject of its class
+    #: matches (every register of a house). Only the staged evaluator binds one: the increment a
+    #: later stage bought for a kept subject, which is matched by that increment's subject alone
+    #: (`ComponentCostFacts.own_register_entry`, hisim-1y0m), so it ages beside the unit it enlarges.
+    subject: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validation: normalizes the replacement-cost override and rejects impossible inputs.

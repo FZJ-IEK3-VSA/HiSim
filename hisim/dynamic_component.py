@@ -395,7 +395,6 @@ class DynamicComponent(Component):
             field_name=label,
             load_type=source_load_type,
             unit=source_unit,
-            sankey_flow_direction=True,
             output_description=output_description,
             source_component_class=source_component_class,
             component_id=self.config.component_id,
@@ -557,7 +556,6 @@ class DynamicComponent(Component):
             field_name=label,
             load_type=connection.channel.load_type,
             unit=connection.channel.unit,
-            sankey_flow_direction=True,
             output_description=(
                 f"Dispatch signal the aggregator sends to '{connection.source_name}' on the "
                 f"channel '{connection.channel.key}'."

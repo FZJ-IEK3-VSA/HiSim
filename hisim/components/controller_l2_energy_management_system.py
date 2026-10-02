@@ -296,7 +296,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.TotalElectricityToOrFromGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.TotalElectricityToOrFromGrid} will follow.",
         )
 
@@ -305,7 +304,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.TotalElectricityConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
         )
 
@@ -314,7 +312,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.BuildingIndoorTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.BuildingIndoorTemperatureModifier} will follow.",
         )
 
@@ -323,7 +320,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.DomesticHotWaterStorageTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.DomesticHotWaterStorageTemperatureModifier} will follow.",
         )
 
@@ -332,7 +328,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.SpaceHeatingWaterStorageTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.SpaceHeatingWaterStorageTemperatureModifier} will follow.",
         )
 
@@ -341,7 +336,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.PeakShavingStatus,
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.PeakShavingStatus} will follow.",
         )
 
@@ -350,7 +344,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.ElectricityToBuildingFromDistrictEMSOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
 

@@ -17,6 +17,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
+from hisim.energy_port import EnergyPort
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from tests import functions_for_testing as fft
@@ -39,7 +40,7 @@ def test_component_output_and_input() -> None:
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
         postprocessing_flag=[],
-        sankey_flow_direction=True,
+        energy_port=EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ELECTRICITY),
         output_description="Test output description",
         source_component_class="TestComponentClass",
         component_id=ComponentID("TestComponent"),
@@ -55,7 +56,7 @@ def test_component_output_and_input() -> None:
     assert output.unit == lt.Units.WATT
     assert output.global_index == -1  # Default value
     assert output.postprocessing_flag == []
-    assert output.sankey_flow_direction is True
+    assert output.energy_port == EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.ELECTRICITY)
     assert output.output_description == "Test output description"
     assert output.source_component_class == "TestComponentClass"
 

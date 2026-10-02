@@ -43,6 +43,11 @@ Execution flow
    pyam-style output preparation for scenario evaluation.
 7. **JSON outputs** -- component configurations, scenario-evaluation configs, and KPIs
    (including the building-sizer format) are written to JSON files.
+8. **Energy balance** -- in every run, whatever the options: every component that declares energy
+   ports must close its balance, and the run fails with
+   :class:`~hisim.postprocessing.energy_balance.EnergyBalanceError` when one does not
+   (:mod:`hisim.postprocessing.energy_balance`). ``EXPORT_ENERGY_BALANCE`` also writes the report
+   and the Sankeys.
 """
 from __future__ import annotations
 import importlib
@@ -66,6 +71,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
+    from hisim.postprocessing.energy_balance import EnergyBalanceReport
     from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 
 
@@ -267,6 +273,8 @@ class PostProcessor:
             ValueError: If ``WRITE_COMPONENTS_TO_REPORT``, ``WRITE_ALL_OUTPUTS_TO_REPORT``,
                 or ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while
                 ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``.
+            EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
+                balance does not close or the two sides of a transfer disagree (a ``ValueError``).
         """
         # Define the directory name
         log.information("Main post processing function")
@@ -280,6 +288,8 @@ class PostProcessor:
         single_day_plot_selection = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
+        # Collected first, from the result table as the simulator left it; concluded last (below)
+        energy_balance = self.check_energy_balance(ppdt)
 
         # Make plots
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
@@ -488,6 +498,9 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_KPIS_TO_JSON in ppdt.post_processing_options:
             log.information("Write all KPIs to json file.")
             self.write_kpis_to_json_file(ppdt)
+
+        # In every run, last, so every other output is written when a balance that does not close fails the run
+        self.export_sankeys(ppdt, energy_balance)
 
         log.information("Finished main post processing function.")
 
@@ -985,12 +998,35 @@ class PostProcessor:
         else:
             log.information("Not on Windows. Can't open explorer.")
 
-    def export_sankeys(self):
-        """Exports Sankeys plots.
+    @staticmethod
+    def check_energy_balance(ppdt: PostProcessingDataTransfer) -> "EnergyBalanceReport":
+        """Check every declared component's energy balance and every paired link of the run (in every run).
 
-        ToDo: implement
+        Reads only the declared energy ports (:mod:`hisim.postprocessing.energy_balance`); a run in which no
+        component declares a port has nothing to check. :meth:`export_sankeys` concludes it.
         """
-        pass  # noqa: unnecessary-pass
+        from hisim.postprocessing.energy_balance import EnergyBalanceReport  # pylint: disable=import-outside-toplevel
+
+        return EnergyBalanceReport(
+            results=ppdt.results,
+            all_outputs=ppdt.all_outputs,
+            wrapped_components=ppdt.wrapped_components,
+            seconds_per_timestep=ppdt.simulation_parameters.seconds_per_timestep,
+        )
+
+    @staticmethod
+    def export_sankeys(ppdt: PostProcessingDataTransfer, energy_balance: "EnergyBalanceReport") -> None:
+        """Write the balance report and the Sankeys when asked; fail the run when a balance does not hold.
+
+        ``EXPORT_ENERGY_BALANCE`` writes ``balance_report.json`` and ``energy_sankeys/`` into the result directory;
+        whether it is set or not, a declared port that is not finite, a balance that does not close or a link
+        whose two sides disagree fails the run with
+        :class:`~hisim.postprocessing.energy_balance.EnergyBalanceError`.
+        """
+        write = PostProcessingOptions.EXPORT_ENERGY_BALANCE in ppdt.post_processing_options
+        start = timer()
+        energy_balance.conclude(ppdt.simulation_parameters.result_directory if write else None)
+        log.information(f"Concluding the energy balance took {timer() - start:1.2f}s.")
 
     @utils.measure_execution_time
     def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:

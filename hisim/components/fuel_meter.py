@@ -218,7 +218,6 @@ class FuelMeter(DynamicComponent):
             field_name=self.HeatConsumption,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatConsumption} will follow.",
         )
 
@@ -227,7 +226,6 @@ class FuelMeter(DynamicComponent):
             field_name=self.CumulativeConsumption,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
         )
 

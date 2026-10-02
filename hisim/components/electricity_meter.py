@@ -168,7 +168,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityToGridInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToGridInWatt} will follow.",
         )
         self.electricity_from_grid_in_watt_channel: cp.ComponentOutput = self.add_output(
@@ -176,7 +175,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityFromGridInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityFromGridInWatt} will follow.",
         )
         self.electricity_production_in_watt_channel: cp.ComponentOutput = self.add_output(
@@ -184,7 +182,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityProductionInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProductionInWatt} will follow.",
         )
         if lt.DistrictNames.is_district(config.component_id.building):
@@ -193,7 +190,6 @@ class ElectricityMeter(DynamicComponent):
                 field_name=self.SurplusUnusedFromBuildingEMSOutput,
                 load_type=lt.LoadTypes.ELECTRICITY,
                 unit=lt.Units.WATT,
-                sankey_flow_direction=False,
                 output_description=f"here a description for {self.SurplusUnusedFromBuildingEMSOutput} will follow.",
                 postprocessing_flag=(
                     [
@@ -210,7 +206,6 @@ class ElectricityMeter(DynamicComponent):
                 field_name=self.ElectricityConsumptionOfBuildingsInWatt,
                 load_type=lt.LoadTypes.ELECTRICITY,
                 unit=lt.Units.WATT,
-                sankey_flow_direction=False,
                 output_description=f"here a description for {self.ElectricityConsumptionOfBuildingsInWatt} will follow.",
                 postprocessing_flag=(
                     [
@@ -227,7 +222,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityConsumptionInWatt,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityConsumptionInWatt} will follow.",
             postprocessing_flag=(
                 [
@@ -243,7 +237,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityAvailable,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityAvailable} will follow.",
         )
         self.electricity_to_and_from_grid_channel: cp.ComponentOutput = self.add_output(
@@ -251,7 +244,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityToAndFromGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToAndFromGrid} will follow.",
         )
         self.electricity_to_grid_channel: cp.ComponentOutput = self.add_output(
@@ -259,7 +251,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityToGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToGrid} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
@@ -268,7 +259,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityFromGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityFromGrid} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
@@ -278,7 +268,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityConsumption} will follow.",
         )
 
@@ -287,7 +276,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.ElectricityProduction,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProduction} will follow.",
         )
 
@@ -296,7 +284,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.CumulativeConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
         )
 
@@ -305,7 +292,6 @@ class ElectricityMeter(DynamicComponent):
             field_name=self.CumulativeProduction,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())

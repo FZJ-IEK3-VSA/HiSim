@@ -23,6 +23,7 @@ from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
+from hisim.energy_port import EnergyPort
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -50,7 +51,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         load_type: lt.LoadTypes,
         unit: lt.Units,
         postprocessing_flag: Optional[List[Any]] = None,
-        sankey_flow_direction: Optional[bool] = None,
+        energy_port: Optional[EnergyPort] = None,
         output_description: Optional[str] = None,
         source_component_class: Optional[str] = None,
         *,
@@ -73,14 +74,21 @@ class ComponentOutput:  # noqa: too-few-public-methods
         fails the moment the class declaring it is built, instead of years later when something
         first tries to write that system down.
 
+        An output that carries energy states its role and carrier in the component's energy
+        balance with ``energy_port`` (:mod:`hisim.energy_port`); the balance check and the
+        Sankeys read nothing else.
+
         Raises:
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 The prefix is normally the already-validated component name, but a direct
                 construction can pass anything, and an unusable prefix would defeat the rule
-                on the very column name it exists for.
+                on the very column name it exists for. Also if ``energy_port`` is given for an
+                output that is neither a power nor an energy.
         """
         cfg.NameSyntax.require_identifier(object_name, "component")
         cfg.NameSyntax.require_identifier(field_name, "component output")
+        if energy_port is not None:
+            EnergyPort.validate_unit(unit)
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -89,7 +97,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.unit: lt.Units = unit
         self.global_index: int = -1
         self.postprocessing_flag: Optional[List[Any]] = postprocessing_flag
-        self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
+        self.energy_port: Optional[EnergyPort] = energy_port
         self.output_description: Optional[str] = output_description
         self.source_component_class: Optional[str] = source_component_class
         self.component_id: cfg.ComponentID = component_id
@@ -376,10 +384,10 @@ class Component:
         load_type: lt.LoadTypes,
         unit: lt.Units,
         postprocessing_flag: Optional[List[Any]] = None,
-        sankey_flow_direction: Optional[bool] = None,
+        energy_port: Optional[EnergyPort] = None,
         output_description: Optional[str] = None,
     ) -> ComponentOutput:
-        """Adds an output definition."""
+        """Adds an output definition; ``energy_port`` declares its role in the energy balance."""
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
@@ -389,7 +397,7 @@ class Component:
             load_type,
             unit,
             postprocessing_flag,
-            sankey_flow_direction,
+            energy_port,
             output_description,
             component_id=self.config.component_id,
         )

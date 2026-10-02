@@ -203,7 +203,6 @@ class GasMeter(DynamicComponent):
             field_name=self.GasAvailable,
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.GasAvailable} will follow.",
         )
 
@@ -212,7 +211,6 @@ class GasMeter(DynamicComponent):
             field_name=self.GasFromGrid,
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.GasFromGrid} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
@@ -222,7 +220,6 @@ class GasMeter(DynamicComponent):
             field_name=self.GasConsumption,
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.GasConsumption} will follow.",
         )
 
@@ -231,7 +228,6 @@ class GasMeter(DynamicComponent):
             field_name=self.GasProduction,
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.GasProduction} will follow.",
         )
 
@@ -240,7 +236,6 @@ class GasMeter(DynamicComponent):
             field_name=self.CumulativeConsumption,
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
         )
 
@@ -249,7 +244,6 @@ class GasMeter(DynamicComponent):
             field_name=self.CumulativeProduction,
             load_type=self.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
 

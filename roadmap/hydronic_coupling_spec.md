@@ -119,6 +119,18 @@ port values; the electricity and fuel meters read only fuel or electricity outpu
 energy-balance branch the generators', storages' and HDS's heat ports thus reduce to one `HydronicPort` each, and
 a vessel's balance is `Σ circuits − loss − ΔU = 0` from the values the simulation used.
 
+**The two ends come from the wiring, never from a declared peer.** A `HydronicPort` names no other component and
+needs no `peer_input`/`peer_output` pointer: the circuit's mass-flow output is read by exactly the component at
+the other end of the loop, so the balance check pairs the OUT and IN ports of a circuit through that connection.
+A component therefore never knows what it is coupled to, and one boiler serves any vessel, a second circuit
+serves a second vessel, and a vessel feeds another vessel through a circuit of its own. Two rules keep the pairing
+unambiguous, and both fail the run (owner, 2026-10-02: always fail hard): a mass-flow output read by more than one
+component that declares a `HydronicPort` on it (one flow cannot deliver its heat twice; a split is a valve
+component with one circuit per branch), and a circuit whose one end declares a `HydronicPort` while the other,
+declared component does not declare the matching one. A circuit whose other end declares no ports at all is
+reported as undeclared, as today. The `EnergyPort` peer pointer remains only for carriers that are not water: fuel,
+electricity, ambient heat and solar.
+
 ## 4. The mixed node step
 
 ### 4.1 Equation and exact solution

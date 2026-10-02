@@ -368,7 +368,7 @@ class GenericBoiler(Component):
     ThermalOutputPowerDhw = "ThermalOutputPowerDhw"
     ThermalOutputEnergyDhw = "ThermalOutputEnergyDhw"
     TotalFuelConsumption = "TotalFuelConsumption"
-    #: The fuel energy of this step that did not become booked heat: flue and burner loss (hisim-9uoo.4).
+    #: The fuel power (W) of this step that did not become booked heat: flue and burner loss (hisim-9uoo.4).
     CombustionHeatLoss = "CombustionHeatLoss"
 
     def __init__(

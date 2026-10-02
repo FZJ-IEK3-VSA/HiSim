@@ -32,7 +32,8 @@ kJ) is taken per step as it is; any other unit is refused when the output is dec
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Dict, Optional
+from types import MappingProxyType
+from typing import ClassVar, Dict, Mapping, Optional
 
 from hisim import loadtypes as lt
 
@@ -97,17 +98,19 @@ class EnergyPort:
             return cls.ENERGY_UNITS_IN_KILOWATT_HOUR[unit]
         return cls.POWER_UNITS_IN_KILOWATT[unit] * seconds_per_timestep / 3600.0
 
-    #: The balance carrier of a fuel a component names by its :class:`~hisim.loadtypes.LoadTypes`.
-    FUEL_CARRIERS: ClassVar[Dict[lt.LoadTypes, lt.EnergyBalanceCarrier]] = {
-        lt.LoadTypes.GAS: lt.EnergyBalanceCarrier.NATURAL_GAS,
-        lt.LoadTypes.OIL: lt.EnergyBalanceCarrier.HEATING_OIL,
-        lt.LoadTypes.PELLETS: lt.EnergyBalanceCarrier.PELLETS,
-        lt.LoadTypes.WOOD_CHIPS: lt.EnergyBalanceCarrier.WOOD_CHIPS,
-        lt.LoadTypes.GREEN_HYDROGEN: lt.EnergyBalanceCarrier.HYDROGEN,
-        lt.LoadTypes.DIESEL: lt.EnergyBalanceCarrier.DIESEL,
-        lt.LoadTypes.DISTRICTHEATING: lt.EnergyBalanceCarrier.DISTRICT_HEAT,
-        lt.LoadTypes.ELECTRICITY: lt.EnergyBalanceCarrier.ELECTRICITY,
-    }
+    #: The balance carrier of a fuel a component names by its :class:`~hisim.loadtypes.LoadTypes` (read-only).
+    FUEL_CARRIERS: ClassVar[Mapping[lt.LoadTypes, lt.EnergyBalanceCarrier]] = MappingProxyType(
+        {
+            lt.LoadTypes.GAS: lt.EnergyBalanceCarrier.NATURAL_GAS,
+            lt.LoadTypes.OIL: lt.EnergyBalanceCarrier.HEATING_OIL,
+            lt.LoadTypes.PELLETS: lt.EnergyBalanceCarrier.PELLETS,
+            lt.LoadTypes.WOOD_CHIPS: lt.EnergyBalanceCarrier.WOOD_CHIPS,
+            lt.LoadTypes.GREEN_HYDROGEN: lt.EnergyBalanceCarrier.HYDROGEN,
+            lt.LoadTypes.DIESEL: lt.EnergyBalanceCarrier.DIESEL,
+            lt.LoadTypes.DISTRICTHEATING: lt.EnergyBalanceCarrier.DISTRICT_HEAT,
+            lt.LoadTypes.ELECTRICITY: lt.EnergyBalanceCarrier.ELECTRICITY,
+        }
+    )
 
     @classmethod
     def carrier_of_fuel(cls, load_type: lt.LoadTypes) -> lt.EnergyBalanceCarrier:

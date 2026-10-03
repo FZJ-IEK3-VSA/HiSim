@@ -23,8 +23,9 @@ controller's priority list. Optional
 ports are bound like required ones: the isolation run exercises the whole interface the assembly
 offers with these parameters, and an optional end its members cannot run without would otherwise
 stay untested. The verbs are written out — ``bind:`` for a required port, ``optional-bind:`` for
-an optional one — except for an electricity need and a provision, which the format binds by its
-default rule alone (§3.2, §4.3). A port no registered partner serves refuses the build
+an optional one — except for an electricity need, a ``many: true`` fact need (it binds every
+provider in scope and takes no verb, §6) and a provision, which the format binds by its default
+rule alone (§3.2, §4.3). A port no registered partner serves refuses the build
 (:class:`~.errors.TestPartnerMissingError`).
 
 **The run.** One calculation (:class:`~hisim.calculation_scope.CalculationScope`) in a fresh
@@ -182,7 +183,7 @@ class IsolationBuilder:
             partner = self.registry.for_carrier(port.carrier or "", *where)
             return partner, ("default" if port.carrier == Carriers.ELECTRICITY else verb)
         if kind == PortKind.FACT:
-            return self.registry.for_fact(port.fact or "", *where), verb
+            return self.registry.for_fact(port.fact or "", *where), ("default" if port.many else verb)
         raise HarnessUsageError(
             f"the port '{port.name}' of '{assembly.path}' is a {kind.value} port, which the harness cannot partner."
         )

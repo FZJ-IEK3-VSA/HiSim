@@ -131,7 +131,6 @@ class AssemblyFormatDefinitions:
                     "meter": {"$ref": "#/$defs/name"},
                     "fact": {"type": ["string", "object"]},
                     "many": {"type": "boolean"},
-                    "export": {"type": "boolean"},
                     "controllable": {
                         "type": "object",
                         "additionalProperties": False,

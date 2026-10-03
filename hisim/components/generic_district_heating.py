@@ -114,24 +114,38 @@ class DistrictHeatingConfig(ConfigBase):
 
     @staticmethod
     def sizing_facts(config: "DistrictHeatingConfig", ctx: SizingContext) -> dict:
-        """Contributes the connection's resolved power and its carrier for the components around it.
+        """Contributes the connection's resolved power for the components sized from it.
 
         Runs after the connection itself resolved, so the power is the final concrete number
-        whether it came from the law, from the preset or from an override. The fuel half is the
-        three class constants: the meter accounting the heat taken from the network copies them
-        instead of stating a carrier and two constants of its own, exactly as it copies a
-        boiler's.
+        whether it came from the law, from the preset or from an override.
 
         Args:
             config: this district heating configuration, fully resolved.
             ctx: the sizing context; unused, every value is this config's own.
 
         Returns:
-            dict: the four facts named in :attr:`SIZING_CONTRIBUTIONS`.
+            dict: the power fact of the first entry of :attr:`SIZING_CONTRIBUTIONS`.
         """
         del ctx
+        return {"maximal_thermal_power_in_watt": concrete(config.connected_load_in_w)}
+
+    @staticmethod
+    def fuel_facts(config: "DistrictHeatingConfig", ctx: SizingContext) -> dict:
+        """Contributes the connection's carrier and its two fuel constants, the class constants.
+
+        The meter accounting the heat taken from the network copies them instead of stating a
+        carrier and two constants of its own, exactly as it copies a boiler's. Nothing here is
+        sized, so the expansion of imports can read them before sizing (``assemblies_spec.md`` §6).
+
+        Args:
+            config: this district heating configuration, as written or resolved.
+            ctx: the sizing context; unused.
+
+        Returns:
+            dict: the three fuel facts of the second entry of :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del config, ctx
         return {
-            "maximal_thermal_power_in_watt": concrete(config.connected_load_in_w),
             "energy_carrier": DistrictHeatingConfig.ENERGY_CARRIER,
             "heating_value_of_fuel_in_kwh_per_liter": DistrictHeatingConfig.HEATING_VALUE_IN_KWH_PER_LITER,
             "fuel_density_in_kg_per_m3": DistrictHeatingConfig.FUEL_DENSITY_IN_KG_PER_M3,
@@ -139,17 +153,14 @@ class DistrictHeatingConfig(ConfigBase):
 
     #: Sizing facts this config contributes: its resolved power, under the name the
     #: heating-generator family shares, and its carrier plus the two fuel constants, for the meter
-    #: that accounts what it delivers. With two generators in one scenario each is addressable as
+    #: that accounts what it delivers; the fuel is a contribution of its own because it needs no
+    #: sizing. With two generators in one scenario each is addressable as
     #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it means.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(facts=("maximal_thermal_power_in_watt",), compute=sizing_facts),
         FactContribution(
-            facts=(
-                "maximal_thermal_power_in_watt",
-                "energy_carrier",
-                "heating_value_of_fuel_in_kwh_per_liter",
-                "fuel_density_in_kg_per_m3",
-            ),
-            compute=sizing_facts,
+            facts=("energy_carrier", "heating_value_of_fuel_in_kwh_per_liter", "fuel_density_in_kg_per_m3"),
+            compute=fuel_facts,
         ),
     )
 

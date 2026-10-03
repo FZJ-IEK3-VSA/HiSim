@@ -234,6 +234,6 @@ def test_describe_prints_circuit_carrier_and_fact_ports(monkeypatch: pytest.Monk
         "fuel needs carrier natural_gas for Boiler.FuelUse; required",
         "dhw circuit dhw at Boiler (MassFlowDhw, SupplyTemperatureDhw, ReturnTemperatureDhw); optional",
         "pv_power needs fact pv_peak_power_in_watt into Battery; required",
-        "peak_power provides fact pv_peak_power_in_watt from PVSystem; provided",
+        "peak_power exports fact pv_peak_power_in_watt from PVSystem; provided",
     ):
         assert expected in text, expected

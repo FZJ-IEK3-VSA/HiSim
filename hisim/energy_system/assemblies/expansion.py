@@ -35,15 +35,29 @@ electricity to nothing but the check that exactly one provider exists (§5). A f
 ``sizing_sources`` line naming the provider (§6). ``{$switch: …}`` values are resolved with the
 parameters.
 
+**Sizing across assemblies** (hisim-lt0b.4, §6). A fact need with ``many: true`` binds every
+provider of its fact in scope, in written order (site entries or the assembly's own members, then
+the imports as written, each instance as written), and lowers to a ``sizing_sources`` list, which
+the law reading it must sum (``Sum(Many(...))``); a one-provider port into a summing law, or a list
+into a one-provider law, is refused (``EF-7X``). A member's contribution is internal to its
+assembly unless the assembly exports it — ``provides: {<port>: {fact: …, member: …}}``, re-exported
+through every enclosing assembly with ``from:`` like any port. A bare read binds within its own
+assembly first, and never to an internal contribution of another: wherever the engine's bare-fact
+rule would bind elsewhere, or find the read ambiguous, the expansion writes the explicit line to the
+provider the reader's scope gives and records it (``ImportRecord.scoped_sizing``); a read only an
+internal contribution answers is refused (``EF-7Y``). A fuel provider whose consumers would need
+different fuel constants is refused (``EF-7Z``, D10).
+
 **Observe and actuate** (hisim-lt0b.3, §4). Once every port is bound, every observer — a site
 entry's ``observes:``, an assembly's observer port with its import's ``observes:`` — is lowered by
 :mod:`.selectors`: its matches become aggregator feeds where its ``{$observes: …}`` placeholder
 stands, a controller derives its weights from its priorities, and the double count, duplicate feeds,
 derived port names and actuations are checked.
 
-**What the expansion does not lower** — many-reads and fact exports (hisim-lt0b.4), and the
-``$fact`` and ``$derived`` values — is listed in the import record and refused as a whole with
-``EF-7L``, never ignored.
+**What the expansion does not lower** — the ``$fact`` and ``$derived`` values — is listed in the
+import record and refused as a whole with ``EF-7L``, never ignored. ``$fact`` stays refused: a value
+that follows a fact is a sized field whose law reads it, declared in the class and fed by a fact port
+(D10), and the format gives a field no law.
 
 **Evaluation order** (D23): ``order:`` on a top-level component or import positions it, a member's
 relative ``order:`` positions it inside its assembly, an import's instances follow their written
@@ -61,9 +75,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.component_interface import ClassInterface
-from hisim.config import AddressStep, ComponentID
-from hisim.config.contributions import declared_facts_of
-from hisim.config.sizing import declared_field_unit
+from hisim.config import AddressStep, Cardinality, ComponentID, SizingContext, SizingLaw
+from hisim.config.contributions import FactContribution, declared_facts_of
+from hisim.config.sizing import auto_fields, declared_field_unit, sizable_fields
 from hisim.energy_system.assemblies.model import MemberTemplate, ParameterDeclaration
 from hisim.energy_system.assemblies.library import CheckStrength, require_valid
 from hisim.energy_system.assemblies.parameters import (
@@ -80,6 +94,7 @@ from hisim.energy_system.assemblies.record import (
     InstanceRecord,
     NotLowered,
     PortRecord,
+    ScopedSizingSource,
     SourceMapEntry,
 )
 from hisim.energy_system.bindings import facts_read_by
@@ -91,10 +106,12 @@ from hisim.energy_system.assemblies.selectors import (
     resolve_priorities,
 )
 from hisim.energy_system.classes import ClassBinder
+from hisim.energy_system.configure import EntryConfigurator
 from hisim.energy_system.errors import (
     EnergySystemAssemblyError,
     EnergySystemErrorId,
 )
+from hisim.energy_system.groups import enabled_component_names
 from hisim.energy_system.imports_model import (
     BindingVerbs,
     Carriers,
@@ -111,16 +128,41 @@ from hisim.energy_system.imports_model import (
 from hisim.energy_system.model import (
     AggregatorFeed,
     AnyInputItem,
+    AnySizingSource,
     ComponentEntry,
     DefaultInputs,
     EnergySystemFile,
     ExplicitWire,
     SourceReference,
 )
+from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.source_lines import LineIndex, SourceLocation
 
 #: The nesting depth beyond which the expansion refuses (§2.5, D7): a safeguard, not a model limit.
 MAXIMUM_DEPTH = 4
+
+#: The facts a fuel's consumer states for the meter accounting it: what it burns and the two constants
+#: the meter converts kilowatt hours with (``fuel_meter.py``, ``GenericBoilerConfig.fuel_constants``).
+FUEL_FACTS: Tuple[str, ...] = ("energy_carrier", "heating_value_of_fuel_in_kwh_per_liter", "fuel_density_in_kg_per_m3")
+
+
+@dataclass(frozen=True)
+class FactRead:
+    """One read of a fact by a configuration as it stands before sizing (§6).
+
+    Attributes:
+        reader: What reads it: a field (``capacity``) or the class's contribution.
+        law: The law that reads it, as it describes itself.
+        cardinality: Whether it reads one provider or sums every provider (``Sum(Many(...))``).
+    """
+
+    reader: str
+    law: str
+    cardinality: Cardinality
+
+    def text(self, config_class: str) -> str:
+        """The read as a message names it: ``BatteryConfig.capacity <- (0.001 * Size.X).rounded(2)``."""
+        return f"{config_class}.{self.reader} <- {self.law}"
 
 
 class ClassFacts:
@@ -184,7 +226,7 @@ class Unit:
     block_path: Tuple[str, ...]
     lowered: Dict[int, List[AnyInputItem]] = field(default_factory=dict)
     notes: Dict[int, str] = field(default_factory=dict)
-    lowered_sizing: Dict[str, SourceReference] = field(default_factory=dict)
+    lowered_sizing: Dict[str, AnySizingSource] = field(default_factory=dict)
     sizing_notes: Dict[str, str] = field(default_factory=dict)
 
     @property
@@ -360,6 +402,7 @@ class OfferedPort:
         end_classes: The class names of a circuit end's members.
         carrier: A carrier port's carrier, resolved.
         fact: A fact port's fact, resolved.
+        many: Whether a fact need reads every provider in scope (``many: true``), which no verb binds.
         observer_classes: The class names of an observer port's members.
         controlled_class: For a provided output actuated through ``controllable: {target_input: …}``,
             the class name of its member, which needs a controller beside it.
@@ -374,6 +417,7 @@ class OfferedPort:
     end_classes: Tuple[str, ...] = ()
     carrier: Optional[str] = None
     fact: Optional[str] = None
+    many: bool = False
     observer_classes: Tuple[str, ...] = ()
     controlled_class: Optional[str] = None
 
@@ -441,7 +485,13 @@ class Level:
 class ImportExpander:
     """Expands the imports of one energy-system file. Single use; :func:`expand_imports` drives it."""
 
-    def __init__(self, model: EnergySystemFile, resolver: AssemblyResolver, lines: Optional[LineIndex] = None) -> None:
+    def __init__(
+        self,
+        model: EnergySystemFile,
+        resolver: AssemblyResolver,
+        lines: Optional[LineIndex] = None,
+        path_resolver: Optional[PathResolver] = None,
+    ) -> None:
         """Prepares the expansion of one file.
 
         Args:
@@ -449,10 +499,14 @@ class ImportExpander:
             resolver: Finds the assemblies its imports name.
             lines: The file's line index, for the source map; an empty one when the file exists
                 only in memory.
+            path_resolver: Expands the ``${var}`` paths of a configuration the sizing checks build
+                before sizing (§6); this machine's default registry when omitted, as the
+                configuring stage uses.
         """
         self.model = model
         self.resolver = resolver
         self.lines = lines or LineIndex.empty("<energy system>")
+        self.path_resolver = path_resolver
         self.classes = ClassFacts()
         self.record = ImportRecord()
         self._site_handles_cache: Dict[str, Dict[str, Handle]] = {}
@@ -462,6 +516,10 @@ class ImportExpander:
         self._recorded: List[Tuple[InstanceRecord, Mapping[str, Handle]]] = []
         self._slots: List[ObserverSlot] = []
         self._controllables: List[Controllable] = []
+        self._instance_handles: Dict[Tuple[AddressStep, ...], Mapping[str, Handle]] = {}
+        self._fact_lowerings: List[Tuple[Handle, Unit, str, Tuple[str, ...]]] = []
+        self._unsized: Dict[str, Any] = {}
+        self._grouped_sizing: Dict[str, Dict[str, AnySizingSource]] = {}
 
     # ------------------------------------------------------------------------------------------ errors
 
@@ -543,6 +601,9 @@ class ImportExpander:
                 + ".",
                 remedy="They are parsed and recorded, never ignored; the steps named deliver them.",
             )
+        self._check_read_cardinalities()
+        self._check_fuel_constants(all_units)
+        self._scope_bare_reads(all_units)
         return self._assemble(site_units, all_units), self.record
 
     def offered_ports(self, key: str) -> Dict[str, "OfferedPort"]:
@@ -608,6 +669,7 @@ class ImportExpander:
                 else (),
                 carrier=handle.carrier,
                 fact=handle.fact,
+                many=port.many,
                 observer_classes=observer_classes,
                 controlled_class=controlled,
             )
@@ -813,9 +875,6 @@ class ImportExpander:
         selected, dropped = self._select_variants(assembly, parameters, record, where)
         selections = {**dict(parameters.resolved), **record.variants}
         states = {name: self._state(port, parameters.resolved) for name, port in model.ports.items()}
-        for name, port in model.ports.items():
-            if states[name] != "inactive":
-                self._note_unlowered_port(import_path, port)
         units = {
             name: self._member_unit(
                 assembly, template, parameters, selections, path, chain, selected, dropped, f"{where}, {source}"
@@ -857,6 +916,7 @@ class ImportExpander:
             if unit.identity is not None:
                 self.record.addresses[unit.name] = unit.identity
         self._recorded.append((record, handles))
+        self._instance_handles[path] = handles
         self.record.instances.append(record)
         return Instance(import_path=import_path, units=all_units, handles=handles, record=record)
 
@@ -929,16 +989,6 @@ class ImportExpander:
         if port.kind == PortKind.PROVIDED or port.section == "provides" or port.is_provision or port.optional:
             return "optional"
         return "required"
-
-    #: The bead that delivers sizing over all providers and fact exports (§6, §13 step 3).
-    MANY_SIZING_STEP = "hisim-lt0b.4 (Many with Sum, fact exports; spec §6, §13 step 3)"
-
-    def _note_unlowered_port(self, import_path: str, port: Port) -> None:
-        """Notes an active port, or a part of one, the expansion does not lower yet."""
-        if port.kind == PortKind.FACT and port.many:
-            self.not_lowered(f"{import_path}: port {port.name} (fact, many: true)", self.MANY_SIZING_STEP)
-        if port.kind == PortKind.FACT and "export" in port.raw:
-            self.not_lowered(f"{import_path}: port {port.name} (fact export)", self.MANY_SIZING_STEP)
 
     def _member_unit(
         self,
@@ -1491,8 +1541,7 @@ class ImportExpander:
         """Gives a fact port its fact, and a need the members it lowers into or a provision its provider (§6)."""
         port = handle.port
         name = port.name
-        if handle.state == "inactive" or port.many or (port.is_provision and not port.members):
-            # A many-read and a fact export are step 3's; the expansion refuses them (EF-7L) at the end.
+        if handle.state == "inactive":
             handle.fact = fact if isinstance(fact, str) else None
             return
         if not isinstance(fact, str) or not fact:
@@ -1773,8 +1822,7 @@ class ImportExpander:
             handle.decided = True
             return
         if port.kind == PortKind.FACT and port.many:
-            handle.record = {"state": "not lowered"}
-            handle.decided = True
+            self._decide_many_fact(handle, written, level, top)
             return
         if port.kind == PortKind.CIRCUIT:
             self._decide_cross(handle, written, level, top, self._circuit_rule(handle, level))
@@ -2719,31 +2767,428 @@ class ImportExpander:
         fact = handle.fact or ""
         lowered: List[str] = []
         for unit in handle.fact_into:
-            config_class = self.classes.config_class(unit.class_path, f"components.{unit.name}", unit.name)
-            readable = facts_read_by(config_class)
-            if fact not in readable:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    handle.owner,
-                    f"fact port '{handle.port.name}' lowers {fact} into {unit.name}, whose class "
-                    f"{config_class.__name__} reads no such fact {handle.source_text()}.",
-                    alternatives=readable,
-                    alternatives_label=f"facts {config_class.__name__} reads",
-                    offending_value=fact,
-                )
-            if fact in unit.entry.sizing_sources or fact in unit.lowered_sizing:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    handle.owner,
-                    f"fact port '{handle.port.name}' lowers {fact} into {unit.name}, which already names a source "
-                    f"for it {handle.source_text()}.",
-                )
+            self._check_fact_target(handle, unit, fact)
             unit.lowered_sizing[fact] = SourceReference(component=provider, fact=fact)
             unit.sizing_notes[fact] = f"port {handle.port.name} bound to {provider} ({verb})"
             lowered.append(f"{unit.name}.sizing_sources.{fact}: {provider}.{fact}")
+            self._fact_lowerings.append((handle, unit, fact, (provider,)))
         handle.record = {"state": handle.state, "partner": provider, "verb": verb, "lowered_to": tuple(lowered)}
         handle.decided = True
         self.record.decisions.append(f"{handle.owner_path}.{handle.port.name} -> {provider} (fact {fact}, {verb})")
+
+    def _check_fact_target(self, handle: Handle, unit: Unit, fact: str) -> None:
+        """Refuses lowering a fact into a member whose class reads no such fact, or that names a source already."""
+        config_class = self.classes.config_class(unit.class_path, f"components.{unit.name}", unit.name)
+        readable = facts_read_by(config_class)
+        if fact not in readable:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                handle.owner,
+                f"fact port '{handle.port.name}' lowers {fact} into {unit.name}, whose class "
+                f"{config_class.__name__} reads no such fact {handle.source_text()}.",
+                alternatives=readable,
+                alternatives_label=f"facts {config_class.__name__} reads",
+                offending_value=fact,
+            )
+        if fact in unit.entry.sizing_sources or fact in unit.lowered_sizing:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                handle.owner,
+                f"fact port '{handle.port.name}' lowers {fact} into {unit.name}, which already names a source "
+                f"for it {handle.source_text()}.",
+            )
+
+    def _decide_many_fact(
+        self, handle: Handle, written: Optional[Tuple[str, Optional[str]]], level: Level, top: bool
+    ) -> None:
+        """Decides a ``many: true`` fact need: it binds every provider of its fact in scope (§3.2, §6).
+
+        The providers are the default rule's candidates, in their order: the members of the level
+        (the site's entries, or the assembly's own members) as written, then every import's
+        provided fact, import by import and instance by instance as written. A verb cannot choose
+        among them, and the port cannot be optional: a sum over no provider is refused, never zero.
+        """
+        port = handle.port
+        fact = handle.fact or ""
+        rule = self._fact_rule(handle, level)
+        providers = [str(candidate.payload) for candidate in rule.candidates]
+        listed = ", ".join(providers) or "none"
+        if handle.state == "optional":
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                handle.owner,
+                f"fact port '{port.name}' (fact {fact}, many: true) is optional, but a many read sums every "
+                f"provider in scope and a sum over none is refused, never zero {handle.source_text()}.",
+                remedy="Make the port required; an assembly whose member may stand without a provider pins the field.",
+            )
+        if written is not None:
+            verb = written[0]
+            if verb == "none":
+                raise self.error(
+                    EnergySystemErrorId.REQUIRED_PORT_DECLINED,
+                    handle.owner,
+                    f"port '{port.name}' (fact {fact}, many: true) is required, yet {handle.verb_site} declines it "
+                    f"with 'none:'; providers: {listed} {handle.source_text()}.",
+                    remedy="A many fact port binds every provider in scope; remove the 'none:' line.",
+                )
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                handle.owner,
+                f"fact port '{port.name}' (fact {fact}, many: true) binds every provider of {fact} in scope "
+                f"({listed}); '{verb}' cannot choose among them {handle.source_text()}.",
+                remedy=(
+                    f"Remove the '{verb}' line for '{port.name}' from {handle.verb_site}: a provider that is not "
+                    "to count is not imported, or its assembly does not export the fact."
+                ),
+            )
+        if not providers:
+            if not top:
+                self._refuse_unresolved_inner(handle, level, ["<partner>"])
+            error_id, problem, remedy = rule.missing()
+            raise self.error(error_id, handle.owner, f"{problem} {handle.source_text()}.", remedy=remedy)
+        lowered: List[str] = []
+        references = tuple(SourceReference(component=provider, fact=fact) for provider in providers)
+        for unit in handle.fact_into:
+            self._check_fact_target(handle, unit, fact)
+            unit.lowered_sizing[fact] = references
+            unit.sizing_notes[fact] = f"port {port.name} (many) bound to {listed} (default)"
+            lowered.append(
+                f"{unit.name}.sizing_sources.{fact}: [{', '.join(f'{provider}.{fact}' for provider in providers)}]"
+            )
+            self._fact_lowerings.append((handle, unit, fact, tuple(providers)))
+        handle.record = {"state": handle.state, "partner": listed, "verb": "default", "lowered_to": tuple(lowered)}
+        handle.decided = True
+        self.record.decisions.append(f"{handle.owner_path}.{port.name} -> [{listed}] (fact {fact}, many, default)")
+
+    # ------------------------------------------------------------------ sizing across assemblies (§6)
+
+    def _unsized_config(self, unit: Unit) -> Any:
+        """The configuration of one unit as it stands before sizing: origin and overrides applied.
+
+        Built the way the configuring stage builds it, so the reads it shows are the reads the
+        sizing engine will make: a field the file or the preset pins reads nothing, a preset's own
+        law replaces the class law.
+        """
+        if unit.name not in self._unsized:
+            binding = ClassBinder(self.model).bind_entry(unit.name, unit.entry)
+            resolver = self.path_resolver if self.path_resolver is not None else PathResolver.default()
+            _origin, config = EntryConfigurator(binding, resolver, unit.identity).build()
+            self._unsized[unit.name] = config
+        return self._unsized[unit.name]
+
+    def _effective_reads(self, unit: Unit) -> Dict[str, List[FactRead]]:
+        """Every fact one unit's configuration will read when it is sized, with who reads it and how.
+
+        The fields still to be sized (``auto_fields``) read through their effective law — the one
+        a preset assigned, else the class's — and the class's contributions read what they declare,
+        which is exactly what the sizing engine will bind.
+        """
+        config = self._unsized_config(unit)
+        laws = sizable_fields(type(config))
+        reads: Dict[str, List[FactRead]] = {}
+        for field_name in auto_fields(config):
+            value = getattr(config, field_name)
+            effective = value if isinstance(value, SizingLaw) else laws.get(field_name)
+            if effective is None:
+                continue
+            for fact, cardinality in effective.facts_read():
+                reads.setdefault(fact, []).append(FactRead(field_name, effective.describe(), cardinality))
+        for contribution in getattr(type(config), FactContribution.CLASS_ATTRIBUTE, ()):
+            for fact in contribution.reads:
+                reads.setdefault(fact, []).append(FactRead("SIZING_CONTRIBUTIONS", "its contribution", Cardinality.ONE))
+        return reads
+
+    def _check_read_cardinalities(self) -> None:
+        """Refuses a fact port whose cardinality is not that of the law reading it (``EF-7X``, §6).
+
+        A ``many: true`` port lowers a list, which only a summing law reads; a port without it lowers
+        one provider, which a summing law refuses. A field the file or the preset pins reads nothing
+        and is not checked.
+        """
+        for handle, unit, fact, providers in self._fact_lowerings:
+            many = handle.port.many
+            config_class = type(self._unsized_config(unit)).__name__
+            wrong = [
+                read
+                for read in self._effective_reads(unit).get(fact, [])
+                if (read.cardinality is Cardinality.MANY) != many
+            ]
+            if not wrong:
+                continue
+            reads = "; ".join(read.text(config_class) for read in wrong)
+            listed = ", ".join(providers)
+            if many:
+                problem = (
+                    f"fact port '{handle.port.name}' (many: true) lowers the list [{listed}] into {unit.name}, but "
+                    f"{reads} reads {fact} from one provider"
+                )
+                remedy = (
+                    f"A list feeds a law that sums it, Sum(Many(Size.{fact.upper()})): give the field such a law "
+                    "(a preset's one-provider law is replaced by the class law when the field is written AUTO), "
+                    "or drop many: true and bind one provider."
+                )
+            else:
+                problem = (
+                    f"fact port '{handle.port.name}' lowers the one provider {listed} into {unit.name}, but {reads} "
+                    f"sums every provider of {fact}"
+                )
+                remedy = f"Declare the port many: true, so that it lowers the list of every provider of {fact}."
+            raise self.error(
+                EnergySystemErrorId.FACT_READ_CARDINALITY,
+                handle.owner,
+                f"{problem} {handle.source_text()}.",
+                remedy=remedy,
+            )
+
+    def _check_fuel_constants(self, all_units: Sequence[Unit]) -> None:
+        """Refuses a fuel provider whose consumers would need different fuel constants (``EF-7Z``, D10).
+
+        The provider's meter converts kilowatt hours with one carrier, one heating value and one
+        density, which it copies from the consumer beside it (``fuel_meter.py``). Until it converts
+        per participant, every consumer bound to one provider must state the same three, read off
+        each consumer's own fuel contribution — the derivation its class declares, such as
+        ``GenericBoilerConfig.fuel_constants`` from carrier and boiler type — on its configuration
+        before sizing.
+        """
+        units = {unit.name: unit for unit in all_units}
+        seen: Set[int] = set()
+        for provision, handle in self._provisions:
+            if id(provision) in seen or provision.is_electricity:
+                continue
+            seen.add(id(provision))
+            outputs = [reference for consumer in provision.record.consumers for reference in consumer.outputs]
+            consumers = list(dict.fromkeys(reference.rsplit(".", 1)[0] for reference in outputs))
+            if len(consumers) < 2:
+                continue
+            constants = [(name, self._fuel_constants(units[name], provision, handle, consumers)) for name in consumers]
+            if len({values for _name, values in constants}) == 1:
+                continue
+            meter = f" (meter {provision.meter.name})" if provision.meter is not None else ""
+            served = " and ".join(f"{name} ({self._constants_text(values)})" for name, values in constants)
+            raise self.error(
+                EnergySystemErrorId.FUEL_CONSTANTS_DIFFER,
+                handle.owner,
+                f"provider {provision.label}{meter} of {provision.carrier} serves {served}; its meter converts with "
+                f"one carrier, heating value and density, so the consumers of one provider must share them "
+                f"{handle.source_text()}.",
+                remedy=(
+                    "Give each fuel its own provider, or consumers of one fuel and type; a meter converting per "
+                    "participant is the step that lifts this (assemblies_spec.md §6, D10)."
+                ),
+            )
+
+    def _fuel_constants(
+        self, unit: Unit, provision: Provision, handle: Handle, consumers: Sequence[str]
+    ) -> Tuple[Any, ...]:
+        """The carrier, heating value and density one consumer's fuel contribution states before sizing."""
+        config = self._unsized_config(unit)
+        config_class = type(config)
+        contribution = next(
+            (
+                item
+                for item in getattr(config_class, FactContribution.CLASS_ATTRIBUTE, ())
+                if set(FUEL_FACTS) <= set(item.facts)
+            ),
+            None,
+        )
+        if contribution is None:
+            raise self.error(
+                EnergySystemErrorId.FUEL_CONSTANTS_DIFFER,
+                handle.owner,
+                f"provider {provision.label} of {provision.carrier} serves {', '.join(consumers)}, and {unit.name} "
+                f"({config_class.__name__}) states no fuel constants: its class contributes none of "
+                f"{', '.join(FUEL_FACTS)} in one contribution, so whether the consumers of one meter agree cannot be "
+                f"checked {handle.source_text()}.",
+                remedy=f"Declare the three facts in one FactContribution of {config_class.__name__}.",
+            )
+        try:
+            values = contribution.compute(config, SizingContext())
+        except Exception as error:  # pylint: disable=broad-except  # a contribution may raise anything
+            raise self.error(
+                EnergySystemErrorId.FUEL_CONSTANTS_DIFFER,
+                handle.owner,
+                f"{unit.name} ({config_class.__name__}) derives its fuel constants only once it is sized ({error}); "
+                f"the provider {provision.label} compares its consumers' constants before sizing "
+                f"{handle.source_text()}.",
+                remedy=(
+                    f"Declare {', '.join(FUEL_FACTS)} in a FactContribution of their own that reads the configuration "
+                    "as written."
+                ),
+            ) from error
+        return tuple(values[fact] for fact in FUEL_FACTS)
+
+    @staticmethod
+    def _constants_text(values: Tuple[Any, ...]) -> str:
+        """A consumer's fuel constants as a message lists them: ``Gas, 10.5 kWh/l, 0.79 kg/m3``."""
+        carrier, heating_value, density = values
+        return ", ".join(
+            (
+                str(getattr(carrier, "name", carrier)),
+                "no heating value" if heating_value is None else f"{heating_value:g} kWh/l",
+                "no density" if density is None else f"{density:g} kg/m3",
+            )
+        )
+
+    @staticmethod
+    def _path_of(unit: Unit) -> Tuple[AddressStep, ...]:
+        """The import path of a unit as address steps; empty for a site entry."""
+        return tuple(unit.identity.path) if unit.identity is not None else ()
+
+    @staticmethod
+    def _shared(first: Tuple[AddressStep, ...], second: Tuple[AddressStep, ...]) -> int:
+        """The length of the common prefix of two import paths."""
+        length = 0
+        for left, right in zip(first, second):
+            if left != right:
+                break
+            length += 1
+        return length
+
+    def _exported_facts(self) -> Dict[Tuple[AddressStep, ...], Set[Tuple[str, str]]]:
+        """Per import instance, the ``(member, fact)`` contributions it exports through a provided fact port.
+
+        A re-export (``from: <inner>.<port>``) carries the inner provider, so an instance exports what
+        an inner instance exports exactly when it re-exports that port.
+        """
+        exported: Dict[Tuple[AddressStep, ...], Set[Tuple[str, str]]] = {}
+        for path, handles in self._instance_handles.items():
+            for handle in handles.values():
+                port = handle.port
+                if (
+                    port.kind == PortKind.FACT
+                    and port.is_provision
+                    and handle.state != "inactive"
+                    and handle.provider is not None
+                    and handle.fact
+                ):
+                    exported.setdefault(path, set()).add((handle.provider[0], handle.fact))
+        return exported
+
+    def _sees(
+        self, reader: Unit, provider: Unit, fact: str, exported: Mapping[Tuple[AddressStep, ...], Set[Tuple[str, str]]]
+    ) -> bool:
+        """Whether a provider's contribution of a fact reaches a reader through every assembly boundary between them."""
+        provider_path, reader_path = self._path_of(provider), self._path_of(reader)
+        shared = self._shared(provider_path, reader_path)
+        return all(
+            (provider.name, fact) in exported.get(provider_path[:depth], set())
+            for depth in range(shared + 1, len(provider_path) + 1)
+        )
+
+    def _innermost(self, reader: Unit, visible: Sequence[Unit]) -> List[Unit]:
+        """The visible providers of the reader's innermost scope that has any: its own assembly first."""
+        reader_path = self._path_of(reader)
+        for depth in range(len(reader_path), -1, -1):
+            scoped = [unit for unit in visible if self._shared(self._path_of(unit), reader_path) >= depth]
+            if scoped:
+                return scoped
+        return []
+
+    def _scope_bare_reads(self, all_units: Sequence[Unit]) -> None:
+        """Writes the ``sizing_sources`` line wherever a bare read's scope decides its provider (§6).
+
+        The sizing engine binds a bare fact over the whole expanded system. Two rules of the
+        assemblies narrow that: a member's contribution its assembly does not export is internal and
+        reaches no reader outside it, and a read inside an assembly binds to its own member first.
+        Wherever they give another provider set than the bare rule would — an unexported burner beside
+        the site's boiler, a buffer inside a heating assembly beside a second generator — the reader
+        gets the explicit line to the provider of its scope (a list for a summing law) and the record
+        says why. A read with several providers in its scope stays ambiguous (``EF-4B``), and one only
+        internal contributions answer is refused (``EF-7Y``). A file in which every provider is
+        visible to every reader is left untouched.
+
+        The site's live components in groups and variants take part as site entries — the enabled
+        groups' members and each variant's selected option, the set the engine sizes — and a line one
+        of them needs is written into its group or option entry (:meth:`_assemble`).
+        """
+        exported = self._exported_facts()
+        live = [
+            self._site_unit_of(name, entry)
+            for name, entry in self.model.all_components().items()
+            if name not in self.model.components and name in enabled_component_names(self.model)
+        ]
+        units = list(all_units) + live
+        providers_of: Dict[str, List[Unit]] = {}
+        for unit in units:
+            config_class = self.classes.config_class(unit.class_path, f"components.{unit.name}", unit.name)
+            for fact in declared_facts_of(config_class):
+                providers_of.setdefault(fact, []).append(unit)
+        for reader in units:
+            config_class = self.classes.config_class(reader.class_path, f"components.{reader.name}", reader.name)
+            for fact in facts_read_by(config_class):
+                every = providers_of.get(fact, [])
+                if not every or fact in reader.entry.sizing_sources or fact in reader.lowered_sizing:
+                    continue
+                visible = [unit for unit in every if self._sees(reader, unit, fact, exported)]
+                scoped = self._innermost(reader, visible)
+                if len(visible) == len(every) and len(scoped) == len(every):
+                    continue
+                reads = self._effective_reads(reader).get(fact, [])
+                if not reads:
+                    continue
+                many = any(read.cardinality is Cardinality.MANY for read in reads)
+                chosen = visible if many else scoped
+                if len(chosen) == len(every):
+                    continue
+                self._write_scoped_line(reader, fact, chosen, [unit for unit in every if unit not in visible], many)
+        for unit in live:
+            if unit.lowered_sizing:
+                self._grouped_sizing[unit.name] = dict(unit.lowered_sizing)
+
+    def _write_scoped_line(
+        self, reader: Unit, fact: str, chosen: Sequence[Unit], internal: Sequence[Unit], many: bool
+    ) -> None:
+        """Writes one scoped ``sizing_sources`` line, or refuses the read it cannot answer (§6)."""
+        where = f"components.{reader.name}"
+        internal_text = ", ".join(f"{unit.name} (import {unit.import_path})" for unit in internal)
+        if not chosen:
+            raise self.error(
+                EnergySystemErrorId.FACT_NOT_EXPORTED,
+                where,
+                f"'{reader.name}' reads {fact}, and its only providers {internal_text} are internal to their "
+                "assemblies, which do not export the fact.",
+                remedy=(
+                    f"Export it from the assembly — provides: {{<port>: {{fact: {fact}, member: <member>}}}}, "
+                    "re-exported with from: through every enclosing assembly — or add a provider beside the reader."
+                ),
+            )
+        names = tuple(unit.name for unit in chosen)
+        if not many and len(chosen) > 1:
+            raise self.error(
+                EnergySystemErrorId.SIZING_AMBIGUOUS,
+                where,
+                f"'{reader.name}' reads {fact} from one provider, and its scope holds {len(chosen)}: "
+                f"{', '.join(names)}"
+                + (f" (internal and not counted: {internal_text})" if internal else "")
+                + ".",
+                remedy=(
+                    f"Write sizing_sources: {{{fact}: <one of {' or '.join(f'{name}.{fact}' for name in names)}>}} "
+                    f"on '{reader.name}' (in its assembly, by member name, for a member), or bind it with a fact port."
+                ),
+            )
+        reasons: List[str] = []
+        if internal:
+            reasons.append(f"{internal_text} {'is' if len(internal) == 1 else 'are'} internal, not exported")
+        if reader.identity is not None and all(
+            self._shared(self._path_of(unit), self._path_of(reader)) == len(self._path_of(reader)) for unit in chosen
+        ):
+            reasons.append(f"the read binds inside its own import {reader.import_path} first")
+        reason = "; ".join(reasons) or "the reader's scope"
+        references = tuple(SourceReference(component=name, fact=fact) for name in names)
+        reader.lowered_sizing[fact] = references if many else references[0]
+        reader.sizing_notes[fact] = f"written by the expansion: {reason}"
+        self.record.scoped_sizing.append(
+            ScopedSizingSource(
+                reader=reader.name,
+                fact=fact,
+                providers=names,
+                internal=tuple(unit.name for unit in internal),
+                reason=reason,
+            )
+        )
+        self.record.decisions.append(
+            f"{reader.name}.sizing_sources.{fact} -> {', '.join(names)} (fact {fact}, scope: {reason})"
+        )
 
     @staticmethod
     def _item_text(item: AnyInputItem) -> str:
@@ -3293,8 +3738,45 @@ class ImportExpander:
                 "components": components,
                 "imports": {},
                 "addresses": {**dict(self.model.addresses), **self.record.addresses},
+                **self._grouped_with_scoped_lines(),
             }
         )
+
+    def _grouped_with_scoped_lines(self) -> Dict[str, Any]:
+        """The groups and variants with the scoped ``sizing_sources`` lines their live entries needed (§6).
+
+        Returns:
+            ``groups`` and ``variants`` updates for the flat file; empty when no grouped entry needed one,
+            so that the groups and variants are the very objects the file was read with.
+        """
+        if not self._grouped_sizing:
+            return {}
+
+        def entry_of(name: str, entry: ComponentEntry) -> ComponentEntry:
+            lines = self._grouped_sizing.get(name)
+            if not lines:
+                return entry
+            return entry.model_copy(update={"sizing_sources": {**dict(entry.sizing_sources), **lines}})
+
+        groups = {
+            key: group.model_copy(
+                update={"components": {name: entry_of(name, entry) for name, entry in group.components.items()}}
+            )
+            if group.enabled
+            else group
+            for key, group in self.model.groups.items()
+        }
+        variants = {}
+        for key, variant in self.model.variants.items():
+            option = variant.options.get(variant.selected)
+            if option is None:
+                variants[key] = variant
+                continue
+            updated = option.model_copy(
+                update={"components": {name: entry_of(name, entry) for name, entry in option.components.items()}}
+            )
+            variants[key] = variant.model_copy(update={"options": {**dict(variant.options), variant.selected: updated}})
+        return {"groups": groups, "variants": variants}
 
 
 def check_consumer_carriers(record: ImportRecord, components: Sequence[Tuple[str, Any]]) -> None:
@@ -3340,6 +3822,7 @@ def expand_imports(
     resolver: Optional[AssemblyResolver] = None,
     *,
     lines: Optional[LineIndex] = None,
+    path_resolver: Optional[PathResolver] = None,
 ) -> Tuple[EnergySystemFile, ImportRecord]:
     """Expands every import of a file into the flat file it stands for (``assemblies_spec.md`` §2.3).
 
@@ -3352,6 +3835,8 @@ def expand_imports(
         resolver: Finds the assemblies; this machine's default search path when omitted, which is
             only consulted when the file imports something.
         lines: The file's line index, for the source map.
+        path_resolver: Expands the ``${var}`` paths of the configurations the sizing checks build
+            before sizing; the default registry when omitted.
 
     Returns:
         The flat file and the import record.
@@ -3361,4 +3846,6 @@ def expand_imports(
     """
     if not model.uses_assemblies and model.schema_version == EnergySystemFile.SUPPORTED_SCHEMA_VERSION:
         return model, ImportRecord()
-    return ImportExpander(model, resolver if resolver is not None else AssemblyResolver.default(), lines).expand()
+    return ImportExpander(
+        model, resolver if resolver is not None else AssemblyResolver.default(), lines, path_resolver
+    ).expand()

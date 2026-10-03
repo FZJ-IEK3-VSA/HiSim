@@ -52,7 +52,9 @@ class EnergySystemErrorId(enum.Enum):
     a value in a ``config`` block can hit, ``EF-2A``/``EF-2B`` close the connection band with a
     tag name no enum knows and two participants claiming one control signal, and ``EF-4A`` …
     ``EF-4H`` wrap the eight failure modes of the sizing
-    kernel one-to-one, with ``EF-4X`` for a kernel failure that matches none of them. The
+    kernel one-to-one (``EF-4G`` is a many read's sources list naming no provider, or one provider
+    twice, since a sum over it would be a silent zero or a double count), with ``EF-4X`` for a
+    kernel failure that matches none of them. The
     ``EF-6x`` band closes the list with the two ways writing a run record can fail, neither
     of which an author can cause: a record that is not fully concrete, and a re-execution
     that did not reproduce the record it was handed.
@@ -72,7 +74,12 @@ class EnergySystemErrorId(enum.Enum):
     (a controllable output no controller selects, a target input actuated twice, a ``controllable``
     naming an input the controller may not actuate), ``EF-7V`` for the weights a controller derives
     from its priorities, and ``EF-7W`` for two participants of one observer whose derived port names
-    collide. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero.
+    collide. Three close the band for sizing across assemblies (§6): ``EF-7X`` for a fact port whose
+    cardinality is not that of the law reading it (a ``many: true`` list into a one-provider law, or
+    one provider into a ``Sum(Many(...))``), ``EF-7Y`` for a read only a contribution internal to an
+    assembly — one it does not export — would answer, and ``EF-7Z`` for a fuel provider whose
+    consumers need different fuel constants (D10). The letters ``I`` and ``O`` are skipped, as they
+    read like a one and a zero.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -135,7 +142,7 @@ class EnergySystemErrorId(enum.Enum):
     SIZING_NULL_VALUE = "EF-4D"
     SIZING_SHAPE_MISMATCH = "EF-4E"
     SIZING_FIELD_CYCLE = "EF-4F"
-    SIZING_MANY_UNSUPPORTED = "EF-4G"
+    SIZING_MANY_LIST = "EF-4G"
     SIZING_DUPLICATE_NAME = "EF-4H"
     SIZING_FAILED = "EF-4X"
     NESTED_GROUP = "EF-50"
@@ -177,6 +184,9 @@ class EnergySystemErrorId(enum.Enum):
     ACTUATION = "EF-7U"
     PRIORITY_WEIGHTS = "EF-7V"
     DERIVED_PORT_COLLISION = "EF-7W"
+    FACT_READ_CARDINALITY = "EF-7X"
+    FACT_NOT_EXPORTED = "EF-7Y"
+    FUEL_CONSTANTS_DIFFER = "EF-7Z"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
     RECORDED_NAME_INVALID = "EF-R1"

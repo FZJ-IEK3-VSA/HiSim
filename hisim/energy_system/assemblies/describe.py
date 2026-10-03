@@ -172,14 +172,10 @@ class AssemblyDescription:
         elif port.kind == PortKind.CARRIER:
             text = f"needs carrier {cls._written(port.carrier)} for {', '.join(port.outputs)}"
         elif port.kind == PortKind.FACT and port.is_provision:
-            text = (
-                f"provides fact {cls._written(port.fact)} from {port.members[0]}"
-                if port.members
-                else f"exports fact {cls._written(port.fact)} (fact exports: hisim-lt0b.4)"
-            )
+            text = f"exports fact {cls._written(port.fact)} from {port.members[0]}"
         elif port.kind == PortKind.FACT:
             text = f"needs fact {cls._written(port.fact)} into {', '.join(port.into)}" + (
-                " (many: true, hisim-lt0b.4)" if port.many else ""
+                " from every provider in scope, summed (many: true)" if port.many else ""
             )
         elif port.kind == PortKind.OBSERVER:
             text = f"observes into {', '.join(port.into)}, default {port.selection.text() if port.selection else '-'}"

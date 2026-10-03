@@ -13,7 +13,7 @@ import pytest
 
 from hisim.config import AddressStep, ComponentID
 from hisim.energy_system.assemblies.expansion import expand_imports
-from hisim.energy_system.errors import EnergySystemAssemblyError
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemError
 from hisim.energy_system.executor import EnergySystemExecutor
 from hisim.energy_system.loader import dump_energy_system, parse_energy_system
 from hisim.energy_system.model import DefaultInputs
@@ -343,7 +343,7 @@ def test_nesting_deeper_than_four_is_refused(tmp_path: Path) -> None:
 
 @pytest.mark.base
 def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -> None:
-    """Many-reads, fact exports and ``$fact`` are recorded and refused (EF-7L); selectors are lowered since step 2."""
+    """``$fact`` and ``$derived`` are recorded and refused (EF-7L); many-reads and exports are lowered since step 3."""
     library = Library(tmp_path)
     library.add(
         "later/everything",
@@ -356,14 +356,10 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
             class: tests.assemblies.fixture_components.FakeTank
             preset: standard
             config: {volume_in_liter: {$fact: storage_volume}}
-          Battery:
-            class: tests.assemblies.fixture_components.FakeBattery
-            preset: sized_to_pv
-        interface:
-          needs:
-            pv_power: {fact: pv_peak_power_in_watt, many: true, into: [Battery]}
-          provides:
-            capacity: {fact: pv_peak_power_in_watt, export: true}
+          Heater:
+            class: tests.assemblies.fixture_components.FakeHeater
+            preset: standard
+            config: {power_in_watt: {$derived: instance_index}}
         """,
     )
 
@@ -375,12 +371,33 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
     message = str(raised.value)
     assert "EF-7L" in message
     for construct in (
-        "x: port pv_power (fact, many: true) — not lowered yet, delivered by hisim-lt0b.4",
-        "x: port capacity (fact export) — not lowered yet, delivered by hisim-lt0b.4",
         "x: member Tank config.volume_in_liter ($fact) — not lowered yet, delivered by no step: the sizing engine "
         "reads a fact only through a law its class declares on the field",
+        "x: member Heater config.power_in_watt ($derived) — not lowered yet, delivered by no step yet (dry-run gap G12",
     ):
         assert construct in message, construct
+
+
+@pytest.mark.base
+def test_an_export_key_on_a_provided_fact_is_refused_by_name(tmp_path: Path) -> None:
+    """The provided fact port is the export (§6); a separate ``export:`` key would be a second spelling of it."""
+    library = Library(tmp_path)
+    library.add(
+        "later/export",
+        """
+        schema_version: 4
+        kind: assembly
+        name: later/export
+        components:
+          PVSystem: {class: tests.assemblies.fixture_components.FakePVSystem, preset: rooftop}
+        interface:
+          provides:
+            capacity: {fact: pv_peak_power_in_watt, export: true}
+        """,
+    )
+
+    with pytest.raises(EnergySystemError, match=r"writes 'export:'; a provided fact port is the export itself"):
+        expand_text(site(WEATHER) + "imports:\n  x: {assembly: later/export}\n", library.resolver())
 
 
 @pytest.mark.base

@@ -232,12 +232,18 @@ def test_the_contributed_facts_carry_the_carrier_and_its_two_constants() -> None
     )
 
     contributions = generic_boiler.GenericBoilerConfig.SIZING_CONTRIBUTIONS
-    assert len(contributions) == 1
-    facts = contributions[0].compute(config, SizingContext())
+    assert [contribution.facts for contribution in contributions] == [
+        ("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
+        ("energy_carrier", "heating_value_of_fuel_in_kwh_per_liter", "fuel_density_in_kg_per_m3"),
+    ]
+    facts = contributions[1].compute(config, SizingContext())
 
     assert facts["energy_carrier"] is lt.LoadTypes.GAS
     assert facts["heating_value_of_fuel_in_kwh_per_liter"] == component.heating_value_of_fuel_in_kwh_per_liter
     assert facts["fuel_density_in_kg_per_m3"] == component.fuel_density_in_kg_per_m3
+    # The fuel needs no sizing: the expansion of imports reads it off the unsized preset (assemblies_spec.md §6).
+    unsized = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler")
+    assert contributions[1].compute(unsized, SizingContext()) == facts
 
 
 @pytest.mark.base
@@ -260,8 +266,8 @@ def test_district_heating_has_no_heating_value_and_no_fuel_density() -> None:
         maximal_thermal_power_in_watt=FuelConstants.HEATING_LOAD_IN_WATT,
     )
     contributions = generic_boiler.GenericBoilerConfig.SIZING_CONTRIBUTIONS
-    assert len(contributions) == 1
-    facts = contributions[0].compute(config, SizingContext())
+    assert len(contributions) == 2
+    facts = contributions[1].compute(config, SizingContext())
 
     assert facts["heating_value_of_fuel_in_kwh_per_liter"] is None
     assert facts["fuel_density_in_kg_per_m3"] is None

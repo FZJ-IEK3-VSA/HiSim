@@ -3,7 +3,8 @@
 This module holds the *law* half of the declarative sizing design: the
 :class:`SizingLaw` base class, the expression-tree terms built by operator overloading
 (so a linear law reads like the formula it is, describes itself in error messages and
-names what it reads), the sibling term :func:`Self`, the cardinality hook :func:`Many`,
+names what it reads), the sibling term :func:`Self`, the many-cardinality read :func:`Many`
+with its one aggregation :func:`Sum`,
 the wrapper for genuinely computational function laws, and the :func:`law` normalizer
 that turns any of the three allowed spellings — expression, function, constant — into a
 law object. The sizing errors live here too, at the bottom of the package's import
@@ -18,6 +19,7 @@ laws and how configs *resolve* them lives in :mod:`hisim.config.sizing`. Per the
 from __future__ import annotations
 
 import enum
+import math
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
@@ -57,9 +59,9 @@ class Cardinality(enum.Enum):
 
     Every fact a law reads carries a cardinality so that the fact engine knows whether a
     bare fact name must resolve to a single provider (``ONE``, what every term produces
-    unless the author wraps it in :func:`Many`) or collects every declared provider into
-    a tuple (``MANY``, declared-but-unimplemented: it raises on evaluation, so a law can
-    be written for the multi-provider case while the aggregation is still open).
+    unless the author wraps it in :func:`Many`) or collects every provider the consumer's
+    sources list names into a tuple (``MANY``). A many read is only ever evaluated through
+    its explicit aggregation, :func:`Sum` (``assemblies_spec.md`` §6, D10).
     """
 
     ONE = "one"
@@ -201,7 +203,7 @@ class _FactTerm(SizingLaw):
 class _UnaryLaw(SizingLaw):
     """Base class of every law that wraps exactly one other law and post-processes it.
 
-    Scaling, clamping, rounding and the many-cardinality hook all have the same shape:
+    Scaling, clamping, rounding, the many read and its sum all have the same shape:
     one inner law plus a little extra behaviour. Collecting the wrapping here forwards a
     composite law's reads — context facts and sibling fields — in exactly one place, so a
     new operator cannot forget them and silently drop an edge out of the graph.
@@ -221,24 +223,23 @@ class _UnaryLaw(SizingLaw):
 
 
 class _ManyTerm(_UnaryLaw):
-    """A declared-but-unimplemented law input reading *every* provider of one fact.
+    """A law input reading *every* provider of one fact, which only an aggregation evaluates.
 
-    The term exists so that a law for the multi-provider case (several PV arrays feeding
-    one battery) can already be written and introspected, and so the fact engine can tell
-    a many-read from a one-read when it reports an ambiguity. Evaluating it raises: the
-    aggregation is deliberately undecided, and summing or picking the first value would
-    be exactly the guessing the binding rule forbids.
+    Written ``Many(Size.PV_PEAK_POWER_IN_WATT)``, it names a fact the engine binds to the whole
+    list of providers the consumer's sources name (several PV arrays feeding one battery). The
+    term on its own has no value: what one number "every provider" stands for is the
+    aggregation's to say, so the term only ever appears inside :func:`Sum`, and
+    :func:`normalize_law` refuses a law in which it stands anywhere else. Evaluating it directly
+    therefore raises, naming the missing aggregation.
     """
 
-    #: The message the term raises when a resolution actually reaches it.
-    NOT_IMPLEMENTED_MESSAGE: ClassVar[str] = (
-        "many-cardinality is declared but not implemented; see plan parking lot"
-    )
-
     def evaluate(self, ctx: "SizingContext", own: Optional[OwnFieldsView] = None) -> Any:
-        """Always raises: the many-cardinality aggregation is not implemented."""
+        """Always raises: a many read has a value only through its aggregation."""
         del ctx, own
-        raise NotImplementedError(self.NOT_IMPLEMENTED_MESSAGE)
+        raise ConfigSizingError(
+            f"{self.describe()} reads every provider of a fact and has no value of its own; "
+            f"aggregate it explicitly, Sum({self.describe()})"
+        )
 
     def describe(self) -> str:
         """Renders as ``Many(inner)``."""
@@ -247,6 +248,62 @@ class _ManyTerm(_UnaryLaw):
     def facts_read(self) -> Tuple[Tuple[str, Cardinality], ...]:
         """Re-labels the wrapped term's facts as many-cardinality reads."""
         return tuple((fact, Cardinality.MANY) for fact, _ in self.inner.facts_read())
+
+    @property
+    def fact(self) -> str:
+        """The one fact the wrapped term reads."""
+        return self.inner.facts_read()[0][0]
+
+
+class _SumLaw(_UnaryLaw):
+    """The sum over every provider of one fact: ``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))``.
+
+    The one aggregation a many read has (``assemblies_spec.md`` §6, D10): a battery sized to
+    every array it stands beside reads their peak powers summed. The engine hands the law the
+    providers' values as a tuple, in the order the consumer's sources list writes them.
+
+    The sum is order-independent and exact where it can be: one provider's value is returned
+    as it is, so a law over one array computes the very number the scalar read computed and a
+    record does not move by a float; integers are summed as integers; anything else goes
+    through :func:`math.fsum`, which rounds the exact sum once, so the order the providers are
+    listed in cannot change the result.
+    """
+
+    def __init__(self, inner: _ManyTerm) -> None:
+        """Stores the many read it aggregates."""
+        super().__init__(inner)
+        self.many = inner
+
+    def evaluate(self, ctx: "SizingContext", own: Optional[OwnFieldsView] = None) -> Any:
+        """Sums the providers' values the context carries for the fact.
+
+        Raises:
+            ConfigSizingError: If the context carries no tuple of values for the fact (a
+                hand-built context with a single number, or none), an empty one, or a null
+                value among them.
+        """
+        del own
+        fact = self.many.fact
+        values = getattr(ctx, fact)
+        if not isinstance(values, tuple):
+            raise ConfigSizingError(
+                f"{self.describe()} sums every provider of '{fact}', but the SizingContext carries "
+                f"{values!r} instead of the providers' values; a many read is bound by the sizing "
+                "engine to the list of providers its sources name"
+            )
+        if not values:
+            raise ConfigSizingError(f"{self.describe()} sums no provider of '{fact}'; a sum over nothing is refused")
+        if any(value is None for value in values):
+            raise ConfigSizingError(f"{self.describe()} reads a null '{fact}' among {list(values)}")
+        if len(values) == 1:
+            return values[0]
+        if all(isinstance(value, int) and not isinstance(value, bool) for value in values):
+            return sum(values)
+        return math.fsum(values)
+
+    def describe(self) -> str:
+        """Renders as ``Sum(Many(...))``."""
+        return f"Sum({self.inner.describe()})"
 
 
 class _SelfTerm(SizingLaw):
@@ -444,15 +501,104 @@ def Self(field_name: str) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid
     return _SelfTerm(field_name)
 
 
-def Many(term: SizingLaw) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid-name
-    """Wraps a fact term so the law declares it as a read of *every* provider of that fact.
+def _rendered(term: Any) -> str:
+    """A law as its formula, anything else as its ``repr``, for a refusal naming what was passed."""
+    return term.describe() if isinstance(term, SizingLaw) else repr(term)
 
-    The result is accepted everywhere a term is — in an expression, in a function law's
-    ``reads`` — and reports its facts at :attr:`Cardinality.MANY`, which makes the engine
-    demand a list rather than a single reference when the binding is ambiguous.
-    Evaluating it raises: the term is a declaration hook, not a working aggregation.
+
+def Many(term: SizingLaw) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid-name
+    """Wraps one fact term so the law reads it from *every* provider the consumer's sources name.
+
+    The result has no value of its own: it is written inside its aggregation,
+    ``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))``, and reports its fact at
+    :attr:`Cardinality.MANY`, which makes the engine bind the fact to a list of providers.
+
+    Raises:
+        SizingError: If ``term`` is not a single ``Size.*`` fact term.
     """
+    if not isinstance(term, _FactTerm):
+        raise SizingError(f"Many() wraps one fact term, Many(Size.<FACT>); got {_rendered(term)}")
     return _ManyTerm(term)
+
+
+def Sum(term: SizingLaw) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid-name
+    """Adds up a many read over every provider its sources list names.
+
+    Written ``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))``: the one aggregation a many read has
+    (``assemblies_spec.md`` §6, D10). The result is a law
+    like any other, so it scales, clamps and rounds:
+    ``(Sum(Many(Size.PV_PEAK_POWER_IN_WATT)) * 1e-3).rounded(2)``.
+
+    Raises:
+        SizingError: If ``term`` is not a :func:`Many` read.
+    """
+    if not isinstance(term, _ManyTerm):
+        raise SizingError(f"Sum() aggregates a many read, Sum(Many(Size.<FACT>)); got {_rendered(term)}")
+    return _SumLaw(term)
+
+
+def _refuse_aggregation(name: str) -> SizingError:
+    """The refusal of an aggregation no law needs yet."""
+    return SizingError(
+        f"the aggregation {name}() over a many read is not implemented; Sum() is the only one "
+        "(assemblies_spec.md §6, D10). Add it when a law needs it."
+    )
+
+
+def Max(term: SizingLaw) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid-name
+    """Refused by name: the maximum over a many read waits for a law that needs it.
+
+    Raises:
+        SizingError: Always.
+    """
+    del term
+    raise _refuse_aggregation("Max")
+
+
+def Min(term: SizingLaw) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid-name
+    """Refused by name: the minimum over a many read waits for a law that needs it.
+
+    Raises:
+        SizingError: Always.
+    """
+    del term
+    raise _refuse_aggregation("Min")
+
+
+def _unaggregated_many_reads(rule: SizingLaw) -> List[str]:
+    """Renders every many read of an expression law that no :func:`Sum` aggregates.
+
+    Args:
+        rule: The law to inspect.
+
+    Returns:
+        The renderings of the stray many reads, empty for a law whose every many read is summed.
+    """
+    if isinstance(rule, _SumLaw):
+        return []
+    if isinstance(rule, _ManyTerm):
+        return [rule.describe()]
+    if isinstance(rule, _UnaryLaw):
+        return _unaggregated_many_reads(rule.inner)
+    return []
+
+
+def _reject_unaggregated_many(rule: SizingLaw) -> None:
+    """Rejects a law that reads a fact many-fold without summing it.
+
+    A many read stands for a list of values, and only its aggregation turns that into the one
+    number a field holds; scaling or rounding a list, or returning it, would be a guess at what
+    the author meant. The check runs at declaration time, so the law fails on import.
+
+    Raises:
+        SizingError: Naming the stray many read and the spelling that aggregates it.
+    """
+    stray = _unaggregated_many_reads(rule)
+    if stray:
+        raise SizingError(
+            f"the law {rule.describe()} reads {', '.join(stray)} without an aggregation; a many read "
+            f"is summed explicitly, Sum({stray[0]})"
+        )
 
 
 def _read_pairs(reads: Tuple[Any, ...]) -> Tuple[Tuple[str, Cardinality], ...]:
@@ -535,6 +681,7 @@ def normalize_law(
     if isinstance(rule, SizingLaw):
         _reject_description_without_function(rule, description)
         _reject_mixed_cardinality(rule.facts_read(), rule.describe())
+        _reject_unaggregated_many(rule)
         return rule
     if callable(rule):
         if reads is None:
@@ -546,6 +693,13 @@ def normalize_law(
             )
         pairs = _read_pairs(reads)
         _reject_mixed_cardinality(pairs, getattr(rule, "__qualname__", repr(rule)))
+        many = [fact for fact, cardinality in pairs if cardinality is Cardinality.MANY]
+        if many:
+            raise SizingError(
+                f"the function law {getattr(rule, '__qualname__', repr(rule))} reads {', '.join(many)} "
+                "many-fold; a many read is aggregated by an expression law, Sum(Many(Size.<FACT>)), "
+                "never inside a function"
+            )
         return _FunctionLaw(rule, pairs, tuple(fields or ()), description)
     _reject_description_without_function(rule, description)
     return _ConstantLaw(rule)

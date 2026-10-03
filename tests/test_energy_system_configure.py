@@ -32,7 +32,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
 from hisim.component import Coordinates
-from hisim.config import ComponentID, ConfigBase, Many, Self, Sizable, Size, sized_field
+from hisim.config import ComponentID, ConfigBase, Many, Self, Sizable, Size, Sum, sized_field
 from hisim.config.contributions import FactContribution
 from hisim.config.engine import resolve_all
 from hisim.config.laws import SizingError
@@ -219,10 +219,10 @@ class _CyclicConfig(ConfigBase):
 @dataclass_json
 @dataclass
 class _ManyReaderConfig(ConfigBase):
-    """A consumer whose law aggregates over every provider of one fact."""
+    """A consumer whose law sums every provider of one fact."""
 
     component_id: ComponentID
-    total_in_watt: Sizable[float] = sized_field(rule=Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))
+    total_in_watt: Sizable[float] = sized_field(rule=Sum(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT)))
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -800,26 +800,36 @@ def test_the_kernels_ambiguity_and_unprovided_messages_stay_distinguishable() ->
 
 
 @pytest.mark.base
-def test_a_many_cardinality_read_is_reported_as_the_unimplemented_condition() -> None:
-    """Catches a many-reader failing as an unclassified error instead of the known gap.
+def test_a_many_read_sums_the_listed_providers_and_an_empty_list_is_refused() -> None:
+    """Catches a many read summing silently to zero, or failing unclassified.
 
-    Aggregating over several providers is declared in the format and not implemented in the
-    kernel, so a file using it has to be told precisely that rather than being handed a raw
-    ``NotImplementedError`` from inside a law.
+    ``Sum(Many(...))`` reads every provider its sources list names; a list that names nobody --
+    a group switched off may shrink one to ``[]`` -- would sum to a plausible zero, so it is the
+    catalogue's ``EF-4G`` naming the consumer, never a number.
     """
     from hisim.energy_system.sizing_bridge import resolve_sizing
 
-    with pytest.raises(EnergySystemSizingError) as raised:
-        resolve_sizing(
-            [
-                _PowerProviderConfig(component_id=ComponentID(name="provider")),
-                _ManyReaderConfig(component_id=ComponentID(name="aggregator")),
-            ],
-            {},
-            ["provider", "aggregator"],
-        )
+    configs = [
+        _PowerProviderConfig(component_id=ComponentID(name="left")),
+        _PowerProviderConfig(component_id=ComponentID(name="right")),
+        _ManyReaderConfig(component_id=ComponentID(name="aggregator")),
+    ]
+    names = ["left", "right", "aggregator"]
+    both = {
+        "maximal_thermal_power_in_watt": ["left.maximal_thermal_power_in_watt", "right.maximal_thermal_power_in_watt"]
+    }
+    resolved, report = resolve_sizing(configs, {"aggregator": both}, names)
+    single = resolve_sizing(configs[:1] + configs[2:], {}, ["left", "aggregator"])[0][1]
 
-    assert raised.value.error_id is EnergySystemErrorId.SIZING_MANY_UNSUPPORTED
+    assert resolved[2].total_in_watt == 2 * single.total_in_watt
+    assert [(lookup.source, lookup.many) for lookup in report.lookups if lookup.consumer == "aggregator"] == [
+        ("left", True),
+        ("right", True),
+    ]
+    with pytest.raises(EnergySystemSizingError) as raised:
+        resolve_sizing(configs, {"aggregator": {"maximal_thermal_power_in_watt": []}}, names)
+    assert raised.value.error_id is EnergySystemErrorId.SIZING_MANY_LIST
+    assert "components.aggregator" in str(raised.value)
 
 
 @pytest.mark.base

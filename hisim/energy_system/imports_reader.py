@@ -452,17 +452,18 @@ class ImportsReader:
                         f"{location}.{key}",
                         f"the provided fact '{name}' names the 'member' providing it; '{key}' belongs to a fact need.",
                     )
-            export = block.get("export")
-            if export is not None and not isinstance(export, bool):
-                raise RawDocument.malformed(f"{location}.export", export, "true or false")
+            if "export" in block:
+                raise cls.shape_error(
+                    f"{location}.export",
+                    f"the provided fact '{name}' writes 'export:'; a provided fact port is the export itself (§6): "
+                    "write {fact: <fact>, member: <member>} to export a member's contribution, or "
+                    "{from: <inner import>.<port>} to re-export an inner import's.",
+                )
             if "member" not in block:
-                if export is None:
-                    raise cls.shape_error(
-                        location,
-                        f"the provided fact '{name}' names the 'member' that provides it (or is a fact export, "
-                        "'export:', §6).",
-                    )
-                return {"fact": fact}
+                raise cls.shape_error(
+                    location,
+                    f"the provided fact '{name}' names the 'member' that provides it; providing it exports it (§6).",
+                )
             member = NameRules.check_identifier(block.get("member"), f"{location}.member", "member")
             return {"fact": fact, "members": (member,)}
         if "member" in block or "export" in block:

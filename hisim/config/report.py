@@ -47,6 +47,10 @@ class FactLookupRecord:
     the resolved set that declares the fact, sorted, before the mode picked one of them —
     with more than one entry the mode is necessarily ``EXPLICIT``, which is what makes a
     finished run show *why* a multi-provider fact was unambiguous.
+
+    A many read (``Sum(Many(Size.X))``) is recorded as one lookup per provider it summed, in
+    the order its sources list names them, each with ``many`` set: the audit lists every
+    provider and its value, and a provider read by a sum is never reported as unconsumed.
     """
 
     consumer: str
@@ -55,6 +59,7 @@ class FactLookupRecord:
     value: Any
     mode: str
     candidates: Tuple[str, ...] = ()
+    many: bool = False
 
 
 @dataclass(frozen=True)
@@ -122,9 +127,10 @@ class ResolutionReport:
                 lines.append(f"  waiting: '{consumer}' on {list(missing)}")
         for lookup in self.lookups:
             candidates = f" of candidates {sorted(lookup.candidates)}" if len(lookup.candidates) > 1 else ""
+            many = " (one of a many read)" if lookup.many else ""
             lines.append(
                 f"lookup: '{lookup.consumer}' read {lookup.fact}={lookup.value!r}"
-                f" from '{lookup.source}' [{lookup.mode}]{candidates}"
+                f" from '{lookup.source}' [{lookup.mode}]{candidates}{many}"
             )
         for producer, fact in self.unconsumed:
             lines.append(f"unconsumed: '{producer}' provided {fact}, which nobody read")
@@ -135,7 +141,9 @@ class ResolutionReport:
 
         Values are emitted as-is: they are sizing facts (numbers, enum members, strings),
         and the artifact writer owns any further encoding, exactly as it does for the
-        ``sizing_record`` entries it emits alongside this.
+        ``sizing_record`` entries it emits alongside this. A lookup that is one provider of a
+        many read carries ``many: true``; a scalar lookup carries no such key, so the audit of
+        a run without many reads is what it always was.
         """
         return {
             "sweeps": [
@@ -154,18 +162,23 @@ class ResolutionReport:
                 }
                 for sweep in self.sweeps
             ],
-            "lookups": [
-                {
-                    "consumer": entry.consumer,
-                    "fact": entry.fact,
-                    "source": entry.source,
-                    "value": entry.value,
-                    "mode": entry.mode,
-                    "candidates": list(entry.candidates),
-                }
-                for entry in self.lookups
-            ],
+            "lookups": [self._lookup_document(entry) for entry in self.lookups],
             "unconsumed": [
                 {"producer": producer, "fact": fact} for producer, fact in self.unconsumed
             ],
         }
+
+    @staticmethod
+    def _lookup_document(entry: FactLookupRecord) -> Dict[str, Any]:
+        """One lookup as plain data; ``many`` only where it is one provider of a many read."""
+        document: Dict[str, Any] = {
+            "consumer": entry.consumer,
+            "fact": entry.fact,
+            "source": entry.source,
+            "value": entry.value,
+            "mode": entry.mode,
+            "candidates": list(entry.candidates),
+        }
+        if entry.many:
+            document["many"] = True
+        return document

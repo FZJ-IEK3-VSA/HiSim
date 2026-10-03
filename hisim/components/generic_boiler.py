@@ -214,30 +214,47 @@ class GenericBoilerConfig(ConfigBase):
 
     @staticmethod
     def sizing_facts(config: "GenericBoilerConfig", ctx: SizingContext) -> dict:
-        """Contributes the boiler's resolved power band and fuel for the components around it.
+        """Contributes the boiler's resolved power band for the components sized from it.
 
         Runs after the boiler itself resolved, so the values are the final concrete numbers
         whether they came from a law, a preset constant or an override.
-
-        The fuel half — the carrier and the two constants :meth:`fuel_constants` derives from it
-        and from the boiler type — is what the gas and fuel meters copy instead of repeating, so
-        a meter accounting this boiler's consumption cannot state a different fuel from the one
-        it burns. Both constants are ``None`` for district heating, which burns nothing.
 
         Args:
             config: this boiler configuration, fully resolved.
             ctx: the sizing context; unused, every value is this config's own.
 
         Returns:
-            dict: the five facts named in :attr:`SIZING_CONTRIBUTIONS`.
+            dict: the two power facts of the first entry of :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        return {
+            "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
+            "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
+        }
+
+    @staticmethod
+    def fuel_facts(config: "GenericBoilerConfig", ctx: SizingContext) -> dict:
+        """Contributes the boiler's fuel: the carrier and the two constants derived from it.
+
+        What the gas and fuel meters copy instead of repeating, so a meter accounting this
+        boiler's consumption cannot state a different fuel from the one it burns. The two
+        constants come from :meth:`fuel_constants`, from the carrier and the boiler type, and are
+        ``None`` for district heating, which burns nothing. Nothing here is sized, so the fuel can
+        be read off the configuration as written: the expansion of imports compares the fuels of
+        one provider's consumers before sizing (``assemblies_spec.md`` §6, D10).
+
+        Args:
+            config: this boiler configuration, as written or resolved.
+            ctx: the sizing context; unused, every value is this config's own.
+
+        Returns:
+            dict: the three fuel facts of the second entry of :attr:`SIZING_CONTRIBUTIONS`.
         """
         del ctx
         heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
             config.energy_carrier, config.boiler_type
         )
         return {
-            "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
-            "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
             "energy_carrier": config.energy_carrier,
             "heating_value_of_fuel_in_kwh_per_liter": heating_value_in_kwh_per_liter,
             "fuel_density_in_kg_per_m3": density_in_kg_per_m3,
@@ -245,19 +262,17 @@ class GenericBoilerConfig(ConfigBase):
 
     #: Sizing facts this config contributes: its resolved power band, for consumers that size
     #: from this boiler (its controller), and its fuel — the carrier plus the two constants
-    #: derived from it — for the meter that accounts what it burns. With two boilers in one
-    #: scenario each is addressable as "<its name>.maximal_thermal_power_in_watt" and a consumer
-    #: must say which one it means.
+    #: derived from it — for the meter that accounts what it burns. The fuel is a contribution of
+    #: its own because it needs no sizing. With two boilers in one scenario each is addressable as
+    #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it means.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
-            facts=(
-                "maximal_thermal_power_in_watt",
-                "minimal_thermal_power_in_watt",
-                "energy_carrier",
-                "heating_value_of_fuel_in_kwh_per_liter",
-                "fuel_density_in_kg_per_m3",
-            ),
+            facts=("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
             compute=sizing_facts,
+        ),
+        FactContribution(
+            facts=("energy_carrier", "heating_value_of_fuel_in_kwh_per_liter", "fuel_density_in_kg_per_m3"),
+            compute=fuel_facts,
         ),
     )
 

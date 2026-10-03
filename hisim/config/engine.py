@@ -19,7 +19,10 @@ declares it; with two or more the engine refuses to guess and names every candid
 together with a paste-ready ``sources`` snippet, and with none it names the consumer and
 the fact. The consumer's ``sources`` entry — ``{consumer: {fact: "provider.fact"}}`` —
 decides every other case; it may only *redirect* an input, never compute one, so its
-values are qualified references and nothing else. Providership comes from the
+values are qualified references and nothing else. A many read (``Sum(Many(Size.X))``) binds
+to the list its sources entry names, in the written order, or — with no entry — to the one
+provider when there is exactly one; a list naming nobody, or one provider twice, is refused,
+so a sum is never silently zero or double. Providership comes from the
 declarations alone and is fixed before the first sweep: a provider whose value happens
 to be ``None`` (its feature is off) still counts, so toggling a feature flag never
 silently re-binds a consumer to a different component.
@@ -90,6 +93,12 @@ class _Binding:
     mode: str
     candidates: Tuple[str, ...]
     pending: bool = False
+    providers: Tuple[str, ...] = ()
+
+    @property
+    def is_many(self) -> bool:
+        """Whether this binds a many read: ``value`` is then the providers' values, in ``providers`` order."""
+        return bool(self.providers)
 
 
 class SizingFactEngine:
@@ -300,7 +309,7 @@ class SizingFactEngine:
             return ConfigSizingError(
                 f"'{fact}' is read many-fold by '{consumer}' and is provided by "
                 f"{', '.join(candidates) or 'nobody'}; write "
-                f"sources={{'{consumer}': {{'{fact}': [{listed}]}}}} (an empty list for none)"
+                f"sources={{'{consumer}': {{'{fact}': [{listed}]}}}} (the providers it sums, at least one)"
             )
         if not candidates:
             return ConfigSizingError(
@@ -335,7 +344,8 @@ class SizingFactEngine:
         mapped = self._sources.get(consumer, {}).get(fact)
         if mapped is None:
             if cardinality is Cardinality.MANY and len(candidates) == 1:
-                return self._bind_many(fact, candidates, candidates)
+                mode = LookupMode.SEED if candidates[0] == self.SEED_PROVIDER else LookupMode.UNIQUE
+                return self._bind_many(consumer, fact, candidates, candidates, mode)
             if cardinality is Cardinality.MANY or len(candidates) != 1:
                 raise self._unbindable_error(consumer, fact, cardinality, candidates)
             provider = candidates[0]
@@ -345,7 +355,7 @@ class SizingFactEngine:
             if isinstance(mapped, str) or not isinstance(mapped, (list, tuple)):
                 raise self._shape_error(consumer, fact, "a list of", mapped)
             chosen = tuple(self._reference_provider(consumer, fact, entry) for entry in mapped)
-            return self._bind_many(fact, chosen, candidates)
+            return self._bind_many(consumer, fact, chosen, candidates, LookupMode.EXPLICIT)
         if not isinstance(mapped, str):
             raise self._shape_error(consumer, fact, "one", mapped)
         provider = self._reference_provider(consumer, fact, mapped)
@@ -388,32 +398,66 @@ class SizingFactEngine:
             )
         return _Binding(provider=provider, value=value, mode=mode, candidates=candidates)
 
-    def _bind_many(self, fact: str, chosen: Tuple[str, ...], candidates: Tuple[str, ...]) -> _Binding:
+    def _bind_many(
+        self, consumer: str, fact: str, chosen: Tuple[str, ...], candidates: Tuple[str, ...], mode: str
+    ) -> _Binding:
         """Collects several providers' values into a tuple for a many-cardinality read.
 
         The tuple is assembled in the order the author wrote (or, for the single-provider
-        shortcut, the one candidate) so the eventual aggregation has a defined input
-        order. Evaluating a many term still raises: this value is a hook, not a result.
+        shortcut, the one candidate), which is the order the sizing record and the audit list
+        the providers in; the aggregation itself (:func:`~hisim.config.laws.Sum`) does not
+        depend on it.
+
+        Args:
+            consumer: The instance name of the config reading the fact.
+            fact: The fact being read.
+            chosen: The providers, in the order read.
+            candidates: Every declared provider of the fact, for the lookup record.
+            mode: How the providers were chosen, for the lookup record.
+
+        Returns:
+            The binding, pending while a provider has not contributed yet.
+
+        Raises:
+            ConfigSizingError: If the list names no provider, names one twice, or a provider
+                computed ``None`` for the fact.
         """
-        label = ", ".join(chosen) or "<none>"
+        if not chosen:
+            raise ConfigSizingError(
+                f"'{fact}' is read many-fold by '{consumer}', and its sources list names no provider; a many "
+                f"read sums at least one (providers: {', '.join(candidates) or 'nobody'})"
+            )
+        repeated = sorted({name for name in chosen if chosen.count(name) > 1})
+        if repeated:
+            raise ConfigSizingError(
+                f"sources['{consumer}']['{fact}'] names {', '.join(repeated)} more than once; a many read "
+                "counts every provider once"
+            )
+        label = ", ".join(chosen)
         if any(fact not in self._pool.get(provider, {}) for provider in chosen):
-            return _Binding(provider=label, value=None, mode=LookupMode.EXPLICIT,
-                            candidates=candidates, pending=True)
-        return _Binding(provider=label, value=tuple(self._pool[name][fact] for name in chosen),
-                        mode=LookupMode.EXPLICIT, candidates=candidates)
+            return _Binding(provider=label, value=None, mode=mode, candidates=candidates, pending=True,
+                            providers=chosen)
+        values = tuple(self._pool[name][fact] for name in chosen)
+        for name, value in zip(chosen, values):
+            if value is None:
+                raise ConfigSizingError(
+                    f"'{fact}' provided as null by '{name}' (feature off); '{consumer}' cannot size from it."
+                )
+        return _Binding(provider=label, value=values, mode=mode, candidates=candidates, providers=chosen)
 
     def _visible_context(
         self, node: _Node
-    ) -> Tuple[Optional[SizingContext], List[str], Dict[str, str], List[FactLookupRecord]]:
+    ) -> Tuple[Optional[SizingContext], List[str], Dict[str, Union[str, Tuple[str, ...]]], List[FactLookupRecord]]:
         """Assembles the fact view of one consumer, or reports what is still missing.
 
         Returns a ``(context, missing, fact_sources, lookups)`` quadruple: the context
-        with an empty missing list, the fact → provider-name map the sizing record needs,
-        and one :class:`FactLookupRecord` per fact read; or ``None`` with the missing
-        facts (an incomplete view has not *read* anything, so it records no lookups).
+        with an empty missing list, the fact → provider-name map the sizing record needs (a
+        tuple of names for a many read), and one :class:`FactLookupRecord` per fact and
+        provider read; or ``None`` with the missing facts (an incomplete view has not *read*
+        anything, so it records no lookups).
         """
         values: Dict[str, Any] = {}
-        providers: Dict[str, str] = {}
+        providers: Dict[str, Union[str, Tuple[str, ...]]] = {}
         missing: List[str] = []
         lookups: List[FactLookupRecord] = []
         for fact, cardinality in node.needed_facts:  # binding order is irrelevant
@@ -422,6 +466,14 @@ class SizingFactEngine:
                 missing.append(fact)
                 continue
             values[fact] = binding.value
+            if binding.is_many:
+                providers[fact] = binding.providers
+                lookups.extend(
+                    FactLookupRecord(
+                        consumer=node.name, fact=fact, source=provider, value=value,
+                        mode=binding.mode, candidates=binding.candidates, many=True)
+                    for provider, value in zip(binding.providers, binding.value))
+                continue
             providers[fact] = binding.provider
             lookups.append(FactLookupRecord(
                 consumer=node.name, fact=fact, source=binding.provider, value=binding.value,

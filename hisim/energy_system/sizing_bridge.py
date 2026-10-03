@@ -7,7 +7,7 @@ carries exactly that information, spread across the entries that read the facts,
 module's first job is a plain translation: it collects the ``sizing_sources`` blocks into the
 one mapping the kernel expects, inventing nothing and reordering nothing.
 
-Its second job is the return direction. The kernel distinguishes eight failure modes and
+Its second job is the return direction. The kernel distinguishes its failure modes and
 spells the difference between them only in prose, which is right for a Python setup where the
 message is read by whoever wrote the setup, but too coarse for a file: a caller wants to know
 which condition it hit without parsing English, and an author wants to be told which line of
@@ -39,7 +39,7 @@ KernelSourceValue = Union[str, List[str]]
 
 @enum.unique
 class KernelFailure(enum.Enum):
-    """The eight failure modes of the sizing kernel, recognized by their message.
+    """The failure modes of the sizing kernel, recognized by their message.
 
     The kernel raises one exception type for every binding problem and distinguishes the cases
     only in prose, which is right for a Python setup — the message *is* the diagnosis — but too
@@ -60,6 +60,8 @@ class KernelFailure(enum.Enum):
     NOT_A_PROVIDER = (EnergySystemErrorId.SIZING_NOT_A_PROVIDER, ("does not declare",))
     SHAPE_MISMATCH = (EnergySystemErrorId.SIZING_SHAPE_MISMATCH, ("reference(s) of the form",))
     FIELD_CYCLE = (EnergySystemErrorId.SIZING_FIELD_CYCLE, ("via Self",))
+    MANY_EMPTY = (EnergySystemErrorId.SIZING_MANY_LIST, ("its sources list names no provider",))
+    MANY_TWICE = (EnergySystemErrorId.SIZING_MANY_LIST, ("a many read counts every provider once",))
     AMBIGUOUS = (EnergySystemErrorId.SIZING_AMBIGUOUS, ("is provided by", "sources="))
     AMBIGUOUS_MANY = (EnergySystemErrorId.SIZING_AMBIGUOUS, ("is read many-fold by",))
 
@@ -199,12 +201,6 @@ def resolve_sizing(
     engine = SizingFactEngine(seed=None, sources=sources)
     try:
         resolved = engine.resolve_all(list(configs))
-    except NotImplementedError as error:
-        raise EnergySystemSizingError(
-            EnergySystemErrorId.SIZING_MANY_UNSUPPORTED,
-            "components",
-            f"the sizing kernel cannot evaluate a many-cardinality read yet: {error}",
-        ) from error
     except SizingError as error:
         message = str(error)
         raise EnergySystemSizingError(

@@ -5,7 +5,7 @@ one binding rule that replaced the old fact scoping: a bare fact binds only when
 one config in the resolved set declares it, an explicit ``sources`` mapping decides every
 other case, the seed context is a provider like any other, and a provider whose value is
 ``None`` still counts. Also covers the sibling-read machinery (``Self`` terms, intra-config
-ordering, the cycle error), the many-cardinality hook, and the provenance the resolution
+ordering, the cycle error), the many read and its one aggregation ``Sum``, and the provenance the resolution
 leaves behind in ``sizing_record`` and the ``ResolutionReport``.
 """
 
@@ -23,12 +23,15 @@ from hisim.config import (
     ConfigBase,
     ConfigSizingError,
     Many,
+    Max,
+    Min,
     Self,
     Sizable,
     Size,
     SizingContext,
     SizingError,
     SizingFactEngine,
+    Sum,
     law,
     sized_field,
 )
@@ -566,68 +569,185 @@ def test_a_two_node_cycle_is_diagnosed_naming_both_members_and_the_history():
     assert "Resolution history up to the deadlock" in message
 
 
-# ------------------------------------------------------------- T-6: the many hook
+# ------------------------------------------------------- T-6: Many with its one aggregation, Sum
+
+
+@dataclass_json
+@dataclass
+class _SummingConfig(ConfigBase):
+    """Fixture whose law sums every provider of one fact its sources list names."""
+
+    component_id: ComponentID
+    total_in_watt: Sizable[float] = sized_field(rule=Sum(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT)))
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_sizing_engine._SummingConfig"
+
+
+@dataclass_json
+@dataclass
+class _FixedProducerConfig(ConfigBase):
+    """A fixture producer contributing a fixed, configurable power."""
+
+    component_id: ComponentID
+    power_in_watt: float = 0.0
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_sizing_engine._FixedProducerConfig"
+
+
+_FixedProducerConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(
+        facts=("maximal_thermal_power_in_watt",),
+        compute=lambda config, ctx: {"maximal_thermal_power_in_watt": config.power_in_watt},
+    ),
+)
+
+
+def _fixed(name: str, power_in_watt: float) -> _FixedProducerConfig:
+    """A fixed producer of the given power."""
+    return _FixedProducerConfig(component_id=ComponentID(name=name), power_in_watt=power_in_watt)
+
+
+def _summing(*providers: str) -> SizingFactEngine:
+    """An engine whose summing consumer 'Aggregator' reads the given providers, in that order."""
+    return SizingFactEngine(sources={"Aggregator": {
+        "maximal_thermal_power_in_watt": [f"{name}.maximal_thermal_power_in_watt" for name in providers]}})
 
 
 @pytest.mark.base
-def test_a_many_term_is_declarable_and_raises_when_it_is_evaluated():
-    """``Many(...)`` binds like a fact but refuses to aggregate, naming the parking lot.
+def test_sum_adds_the_listed_providers_and_the_record_names_each_of_them():
+    """``Sum(Many(...))`` reads every listed provider, in the written order, and records each.
 
-    Failure mode caught: the hook quietly evaluating to the first value or to a sum — a
-    law written for several providers would then produce a plausible but undecided
-    number instead of failing until the aggregation is specified.
+    Failure mode caught: a sum that drops or duplicates a provider, or a record that names the
+    list as one source -- the battery's capacity would then not be traceable to its arrays.
     """
+    engine = _summing("East", "West")
+    resolved = engine.resolve_all(
+        [_fixed("East", 3000.0), _fixed("West", 2000.0), _SummingConfig(component_id=ComponentID(name="Aggregator"))]
+    )
 
-    @dataclass_json
-    @dataclass
-    class _ManyReaderConfig(ConfigBase):
-        """Fixture whose law reads every provider of one fact."""
+    assert resolved[2].total_in_watt == 5000.0
+    assert resolved[2].sizing_record[0].law == "Sum(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))"
+    assert resolved[2].sizing_record[0].inputs == (
+        ("East.maximal_thermal_power_in_watt", 3000.0),
+        ("West.maximal_thermal_power_in_watt", 2000.0),
+    )
+    many = [
+        (entry.source, entry.value, entry.many) for entry in engine.report.lookups if entry.consumer == "Aggregator"
+    ]
+    assert many == [("East", 3000.0, True), ("West", 2000.0, True)]
+    assert engine.report.unconsumed == []
+    assert engine.report.to_dict()["lookups"][-1]["many"] is True
 
-        component_id: ComponentID
-        total_in_watt: Sizable[float] = sized_field(rule=Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))
 
-        @classmethod
-        def get_main_classname(cls) -> str:
-            """Returns a dummy classname, as the ConfigBase contract requires."""
-            return "tests.test_sizing_engine._ManyReaderConfig"
+@pytest.mark.base
+def test_the_order_of_the_list_changes_the_record_but_never_the_sum():
+    """A shuffled list reorders the providers in the record; the sum is bit-identical.
 
-    with pytest.raises(NotImplementedError, match="many-cardinality is declared but not implemented"):
-        resolve_all(
-            [_producer("Boiler"), _ManyReaderConfig(component_id=ComponentID(name="Aggregator"))],
-            seed=SizingContext(heating_load_in_watt=10_000.0),
+    Failure mode caught: a float sum depending on the order the arrays are listed in, which
+    would make two files describing the same house size the battery differently.
+    """
+    powers = {"A": 0.1, "B": 0.2, "C": 0.3, "D": 1e16, "E": -1e16}
+    names = list(powers)
+    results = set()
+    generator = random.Random(4)
+    for _ in range(6):
+        generator.shuffle(names)
+        engine = _summing(*names)
+        resolved = engine.resolve_all(
+            [_fixed(name, power) for name, power in powers.items()]
+            + [_SummingConfig(component_id=ComponentID(name="Aggregator"))]
         )
+        results.add(resolved[-1].total_in_watt)
+        assert [entry.source for entry in engine.report.lookups if entry.consumer == "Aggregator"] == names
+    assert len(results) == 1
+
+
+@pytest.mark.base
+def test_the_sum_of_one_provider_is_the_providers_value_unchanged():
+    """One provider: the sum is that provider's value itself, so a one-array record cannot move."""
+    resolved = resolve_all([_fixed("Only", 22272.28), _SummingConfig(component_id=ComponentID(name="Aggregator"))])
+    assert resolved[1].total_in_watt == 22272.28
+    assert resolved[1].sizing_record[0].inputs == (("Only.maximal_thermal_power_in_watt", 22272.28),)
 
 
 @pytest.mark.base
 def test_a_many_read_of_an_ambiguous_fact_asks_for_a_list():
-    """The ambiguity error for a many-read tells the author to write a list, not one reference."""
-
-    @dataclass_json
-    @dataclass
-    class _ManyAmbiguousConfig(ConfigBase):
-        """Fixture reading a fact declared by two configs at many cardinality."""
-
-        component_id: ComponentID
-        total_in_watt: Sizable[float] = sized_field(rule=Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))
-
-        @classmethod
-        def get_main_classname(cls) -> str:
-            """Returns a dummy classname, as the ConfigBase contract requires."""
-            return "tests.test_sizing_engine._ManyAmbiguousConfig"
-
+    """With two providers and no list, the error tells the author to write one, never guessing."""
     with pytest.raises(ConfigSizingError) as raised:
-        resolve_all(
-            [
-                _producer("Boiler1"),
-                _producer("Boiler2"),
-                _ManyAmbiguousConfig(component_id=ComponentID(name="Aggregator")),
-            ],
-            seed=SizingContext(heating_load_in_watt=10_000.0),
-        )
+        resolve_all([_fixed("Boiler1", 1.0), _fixed("Boiler2", 2.0), _SummingConfig(
+            component_id=ComponentID(name="Aggregator"))])
     message = str(raised.value)
     assert "read many-fold by 'Aggregator'" in message
     assert "'Boiler1.maximal_thermal_power_in_watt', 'Boiler2.maximal_thermal_power_in_watt'" in message
-    assert "an empty list for none" in message
+    assert "at least one" in message
+
+
+@pytest.mark.base
+def test_an_empty_or_repeating_many_list_is_refused():
+    """A list naming nobody would sum to zero, one naming a provider twice would count it twice."""
+    with pytest.raises(ConfigSizingError, match="its sources list names no provider"):
+        _summing().resolve_all([_fixed("Only", 1.0), _SummingConfig(component_id=ComponentID(name="Aggregator"))])
+    with pytest.raises(ConfigSizingError, match="names Only more than once"):
+        _summing("Only", "Only").resolve_all(
+            [_fixed("Only", 1.0), _SummingConfig(component_id=ComponentID(name="Aggregator"))]
+        )
+
+
+@pytest.mark.base
+def test_a_scalar_reference_for_a_many_read_and_a_list_for_a_scalar_read_are_refused():
+    """The shape of a sources line must match the cardinality of the law reading it."""
+    reference = "Only.maximal_thermal_power_in_watt"
+    summing = SizingFactEngine(sources={"Aggregator": {"maximal_thermal_power_in_watt": reference}})
+    with pytest.raises(ConfigSizingError, match="expected a list of reference"):
+        summing.resolve_all([_fixed("Only", 1.0), _SummingConfig(component_id=ComponentID(name="Aggregator"))])
+    scalar = SizingFactEngine(sources={"battery": {"maximal_thermal_power_in_watt": [reference]}})
+    with pytest.raises(ConfigSizingError, match="expected one reference"):
+        scalar.resolve_all([_fixed("Only", 1.0), _consumer("battery")])
+
+
+@pytest.mark.base
+def test_a_null_provider_of_a_many_read_is_refused():
+    """A switched-off provider in the list is a refusal, not a zero term of the sum."""
+    with pytest.raises(ConfigSizingError, match="provided as null by 'Off'"):
+        _summing("On", "Off").resolve_all([
+            _fixed("On", 1.0),
+            _NullProducerConfig(component_id=ComponentID(name="Off")),
+            _SummingConfig(component_id=ComponentID(name="Aggregator")),
+        ])
+
+
+@pytest.mark.base
+def test_a_many_read_must_be_aggregated_by_sum_and_only_sum():
+    """``Many`` alone, ``Many`` under another operator, ``Max``/``Min`` and many-reading functions fail on import."""
+    with pytest.raises(SizingError, match=r"without an aggregation; a many read is summed explicitly"):
+        sized_field(rule=Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))
+    with pytest.raises(SizingError, match=r"without an aggregation"):
+        sized_field(rule=(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT) * 2.0).rounded(1))
+    with pytest.raises(SizingError, match=r"aggregation Max\(\) over a many read is not implemented"):
+        Max(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))
+    with pytest.raises(SizingError, match=r"aggregation Min\(\)"):
+        Min(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))
+    with pytest.raises(SizingError, match=r"Sum\(\) aggregates a many read"):
+        Sum(Size.MAXIMAL_THERMAL_POWER_IN_WATT)
+    with pytest.raises(SizingError, match=r"Many\(\) wraps one fact term"):
+        Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT * 2.0)
+    with pytest.raises(SizingError, match="never inside a function"):
+        law(lambda ctx: 0.0, reads=(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT),))
+
+
+@pytest.mark.base
+def test_sum_against_a_hand_built_context_with_one_value_is_refused():
+    """``.resolve(ctx)`` with a scalar for a many read fails naming the engine's list binding."""
+    with pytest.raises(ConfigSizingError, match="bound by the sizing engine to the list of providers"):
+        _SummingConfig(component_id=ComponentID(name="Aggregator")).resolve(
+            SizingContext(maximal_thermal_power_in_watt=5.0)
+        )
 
 
 @pytest.mark.base

@@ -263,10 +263,10 @@ a grouped file or a twin changes rather than edited by hand.
 
 Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_systems/assemblies_spec.md`,
 on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
-which a file imports instead of writing their components out. These are steps 1 and 2 of that spec
-(beads hisim-lt0b.1, hisim-lt0b.2, hisim-lt0b.8 and hisim-lt0b.3): the format, the loader, the
-expansion, the checks, the test harness, and observe and actuate, proven on fixtures under
-`tests/assemblies/`. No real assembly ships yet, so
+which a file imports instead of writing their components out. These are steps 1 to 3 of that spec
+(beads hisim-lt0b.1, hisim-lt0b.2, hisim-lt0b.8, hisim-lt0b.3 and hisim-lt0b.4): the format, the
+loader, the expansion, the checks, the test harness, observe and actuate, and sizing across
+assemblies, proven on fixtures under `tests/assemblies/`. No real assembly ships yet, so
 `energy_systems/assemblies/` does not exist.
 
 ```yaml
@@ -344,13 +344,53 @@ are built against the output's `EnergyPort` otherwise.
 contributes the fact, or an import's provided fact, `provides: {peak_power: {fact:
 pv_peak_power_in_watt, member: PVSystem}}`, which must be in the member class's
 `SIZING_CONTRIBUTIONS`. Two providers and no `bind:` is the sizing engine's ambiguity (`EF-4B`),
-raised at load time with the candidates and a paste-ready line. `many: true` and fact exports are
-step 3's (hisim-lt0b.4).
+raised at load time with the candidates and a paste-ready line.
+
+**Sizing across assemblies** (§6, D10, hisim-lt0b.4). A law may read a fact from *every* provider and
+sum it: `Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`, which scales, clamps and rounds like any law. `Sum`
+is the one aggregation; `Many` outside a `Sum`, a function law reading `Many`, and `Max`/`Min` are
+refused when the class is defined. The engine binds a many read to the list its `sizing_sources`
+names — `pv_peak_power_in_watt: [pv-east-PVSystem.pv_peak_power_in_watt, …]` — or, with no line, to
+the one provider when there is exactly one; a list naming nobody (a group switched off may shrink one
+to `[]`) or one provider twice is `EF-4G`, never a zero or a double count. The sum of one provider is
+that provider's value, integers sum as integers and anything else exactly rounded (`math.fsum`), so
+the order of the list never moves the number. The sizing record, the audit and the resolution report
+name every provider with its value; the realized record writes the list. The real battery's class
+laws sum every array (`BatteryConfig.CAPACITY_LAW`, `INVERTER_POWER_LAW`); its preset `sized_to_pv`
+keeps the one-array laws the recorded twins were written with, so every twin sizes, records and runs
+exactly as before, and writing the two fields `AUTO` selects the sums.
+
+- *A fact read over all instances.* `{fact: pv_peak_power_in_watt, many: true, into: [Battery]}`
+  binds every provider of the fact in scope — the level's own members as written, then every
+  import's provided fact, import by import and instance by instance as written — and lowers to the
+  list. The field's law must sum it: a list into a one-provider law, or one provider into a sum, is
+  `EF-7X`, naming the field and its law (a pinned field reads nothing and is not checked). A many
+  port takes no verb and cannot be optional; with no provider it is `EF-7R`.
+- *Exports.* A member's contribution is internal to its assembly unless the assembly exports it:
+  `provides: {<port>: {fact: …, member: …}}` is the export, re-exported through every enclosing
+  assembly with `from: <inner>.<port>` like any port (an `export:` key is refused). A bare read binds
+  within its own assembly first, and never to another assembly's internal contribution: wherever the
+  engine's bare rule would bind elsewhere or be ambiguous, the expansion writes the explicit line to
+  the provider the reader's scope gives — a site buffer stays on the site boiler beside a DHW
+  assembly's unexported burner; a buffer inside a heating assembly takes that assembly's generator —
+  and records it (`metadata.imports.scoped_sizing_sources`, with the source map's note). An exported
+  contribution joins the provider set like a site entry's. Several providers in the reader's scope stay
+  the ambiguity `EF-4B`; a read only internal contributions answer is `EF-7Y`.
+- *Fuel constants.* A fuel provider's meter converts with one carrier, heating value and density,
+  which it copies from its consumer. Until it converts per participant, the consumers of one
+  provider must state the same three (D10): each consumer's fuel contribution — for the boiler
+  `GenericBoilerConfig.fuel_constants` from carrier and boiler type, a contribution of its own since it
+  needs no sizing — is read before sizing, and a mismatch, or a consumer stating none, is `EF-7Z`
+  ("provider gas.connection (meter gas-Meter) of natural_gas serves space-Burner (GAS, …) and
+  water-Burner (GAS, …)").
 
 **Values.** Besides `{$param: <name>}`, a value may be `{$switch: <selector>, <case>: <value>, …}`:
 the case the selector chooses, where the selector is a parameter (cases: its values) or an internal
 variant (cases: its options), and the cases must cover every value exactly once. `{$fact: …}` stays
-refused (`EF-7L`): the sizing engine reads a fact only through a law its class declares on the field.
+refused (`EF-7L`): a value that follows a fact is a sized field whose law reads it, declared in its
+class and fed by a fact port, so `$fact` would either repeat that or put a law into the file (D10 b);
+the mockup's uses (`household_name`, a constructor argument, and the charging station, from facts no
+class contributes) need those declarations first.
 
 **Display names.** A member's `display:` template, rendered over the resolved parameters
 (`"PV array, {facing}, azimuth {azimuth_in_degree}"`), becomes its `ComponentID.display_name` and the
@@ -503,9 +543,11 @@ consuming output's energy carrier); `EF-7R` a fact port bound to, or finding, no
 fact; `EF-7S` an observer's selection (a required selector or a whole selection matching nothing, a
 ranked feed on an observer that is no controller, `observes:` on an import without an observer port,
 a verb on an observer port); `EF-7T` the double count; `EF-7U` an actuation; `EF-7V` a controller's
-priorities and weights; `EF-7W` two participants of one observer with one derived port name. A scalar
-fact with two providers is the sizing engine's `EF-4B`; an output selected and fed explicitly to one
-observer is `EF-25`.
+priorities and weights; `EF-7W` two participants of one observer with one derived port name; `EF-7X`
+a fact port whose cardinality is not the law's; `EF-7Y` a read only an internal contribution answers;
+`EF-7Z` a fuel provider whose consumers need different fuel constants. A scalar fact with two
+providers is the sizing engine's `EF-4B`, a many read's list naming nobody or one provider twice its
+`EF-4G`; an output selected and fed explicitly to one observer is `EF-25`.
 
 ## Simulation-parameters files are shared, never duplicated
 

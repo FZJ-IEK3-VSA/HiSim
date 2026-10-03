@@ -37,8 +37,10 @@ from hisim.config import (
     ConfigBase,
     DisplayConfig,
     FactContribution,
+    Many,
     Sizable,
     Size,
+    Sum,
     concrete,
     preset,
     sized_field,
@@ -51,6 +53,7 @@ from hisim.dynamic_component import (
     DynamicConnectionOutput,
 )
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
+from hisim.components.generic_boiler import BoilerType, GenericBoilerConfig
 from hisim.economics.facts import CostRelevance
 from hisim.energy_port import EnergyPort
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -581,6 +584,16 @@ SUPPLY_TEMPERATURE_DHW = "SupplyTemperatureDhw"
 RETURN_TEMPERATURE_DHW = "ReturnTemperatureDhw"
 
 
+def fuel_facts(carrier: lt.LoadTypes, boiler_type: BoilerType) -> Dict[str, Any]:
+    """The three fuel facts of a burner, derived as the real boiler derives them."""
+    heating_value, density = GenericBoilerConfig.fuel_constants(carrier, boiler_type)
+    return {
+        "energy_carrier": carrier,
+        "heating_value_of_fuel_in_kwh_per_liter": heating_value,
+        "fuel_density_in_kg_per_m3": density,
+    }
+
+
 @dataclass_json
 @dataclass
 class FakeBoilerConfig(ConfigBase):
@@ -591,6 +604,15 @@ class FakeBoilerConfig(ConfigBase):
     component_id: ComponentID
     power_in_watt: float = field(default=3000.0, metadata={UNIT: lt.Units.WATT})
     efficiency: float = field(default=0.9, metadata={UNIT: lt.Units.ANY})
+
+    #: The natural gas it burns, for the meter accounting it: a condensing gas boiler's constants,
+    #: derived the way the real boiler derives them (``GenericBoilerConfig.fuel_constants``).
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=("energy_carrier", "heating_value_of_fuel_in_kwh_per_liter", "fuel_density_in_kg_per_m3"),
+            compute=lambda config, ctx: fuel_facts(lt.LoadTypes.GAS, BoilerType.CONDENSING),
+        ),
+    )
 
     @preset
     @classmethod
@@ -743,11 +765,14 @@ class FakeGasMeter(DynamicComponent):
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort("GasConsumption", lt.LoadTypes.GAS, lt.Units.WATT_HOUR),),
         kpis=(CONSUMPTION_KPI,),
-        default_feeds=(DeclaredFeed("FakeBoiler", "FuelUse", ("GAS_CONSUMPTION_UNCONTROLLED",), 999),),
+        default_feeds=(
+            DeclaredFeed("FakeBoiler", "FuelUse", ("GAS_CONSUMPTION_UNCONTROLLED",), 999),
+            DeclaredFeed("FakeBurner", "FuelUse", ("GAS_CONSUMPTION_UNCONTROLLED",), 999),
+        ),
     )
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeGasMeterConfig) -> None:
-        """Builds the meter and its one declared default feed."""
+        """Builds the meter and its declared default feeds, one per consuming class."""
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
         self.config = config
@@ -777,6 +802,19 @@ class FakeGasMeter(DynamicComponent):
                     source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
                     source_weight=999,
                 )
+            ]
+        )
+        self.add_dynamic_default_connections(
+            [
+                DynamicComponentConnection(
+                    source_component_class=FakeBurner,
+                    source_class_name=FakeBurner.get_classname(),
+                    source_component_field_name="FuelUse",
+                    source_load_type=lt.LoadTypes.GAS,
+                    source_unit=lt.Units.WATT_HOUR,
+                    source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+                    source_weight=999,
+                ),
             ]
         )
 
@@ -870,6 +908,141 @@ class FakeBattery(FixtureComponent):
         limit = 1000.0 * capacity
         self.set(stsv, "Capacity", capacity)
         self.set(stsv, "AcBatteryPowerUsed", max(-limit, min(limit, self.value(stsv, "LoadingPowerInput"))))
+
+
+@dataclass_json
+@dataclass
+class FakeArrayBatteryConfig(ConfigBase):
+    """A battery sized to every PV array its sources list names, summed (``assemblies_spec.md`` §6)."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeArrayBattery"
+
+    component_id: ComponentID
+    #: One kWh per kWp of all arrays it is bound to, unless pinned.
+    capacity_in_kwh: Sizable[float] = sized_field(
+        rule=(Sum(Many(Size.PV_PEAK_POWER_IN_WATT)) * 1e-3).rounded(2), unit=lt.Units.KWH
+    )
+
+    @preset
+    @classmethod
+    def preset_sized_to_all_arrays(cls, name: str) -> "FakeArrayBatteryConfig":
+        """Capacity AUTO: the sum over every array."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeArrayBattery(FakeBattery):
+    """The fixture battery, sized by a sum over the arrays (a many read) instead of one array."""
+
+    def __init__(  # pylint: disable=useless-parent-delegation  # the annotation names the config class
+        self, my_simulation_parameters: SimulationParameters, config: FakeArrayBatteryConfig
+    ) -> None:
+        """Builds the battery."""
+        super().__init__(my_simulation_parameters, config)  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------------- burners and a buffer (§6)
+
+
+@dataclass_json
+@dataclass
+class FakeBurnerConfig(ConfigBase):
+    """A gas burner of a fixed power: a heat generator's power and fuel, for sizing across assemblies."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeBurner"
+
+    component_id: ComponentID
+    power_in_watt: float = field(default=10000.0, metadata={UNIT: lt.Units.WATT})
+    boiler_type: BoilerType = BoilerType.CONDENSING
+
+    #: Its power, which a buffer beside it is sized from, and the gas it burns, for its meter.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=("maximal_thermal_power_in_watt",),
+            compute=lambda config, ctx: {"maximal_thermal_power_in_watt": config.power_in_watt},
+        ),
+        FactContribution(
+            facts=("energy_carrier", "heating_value_of_fuel_in_kwh_per_liter", "fuel_density_in_kg_per_m3"),
+            compute=lambda config, ctx: fuel_facts(lt.LoadTypes.GAS, config.boiler_type),
+        ),
+    )
+
+    @preset
+    @classmethod
+    def preset_condensing(cls, name: str) -> "FakeBurnerConfig":
+        """A 10 kW condensing gas burner."""
+        return cls(component_id=ComponentID(name=name))
+
+    @preset
+    @classmethod
+    def preset_conventional(cls, name: str) -> "FakeBurnerConfig":
+        """A 10 kW conventional gas burner, whose gas has the lower heating value."""
+        return cls(component_id=ComponentID(name=name), boiler_type=BoilerType.CONVENTIONAL)
+
+
+class FakeBurner(FixtureComponent):
+    """Burns gas at a constant half of its power and loses a tenth of it up the flue."""
+
+    CLASS_INTERFACE = ClassInterface(
+        outputs=(
+            DeclaredPort(
+                "ThermalPower", lt.LoadTypes.HEATING, lt.Units.WATT, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT
+            ),
+            DeclaredPort("FuelUse", lt.LoadTypes.GAS, lt.Units.WATT_HOUR, lt.EnergyBalanceCarrier.NATURAL_GAS),
+            DeclaredPort("FlueLoss", lt.LoadTypes.GAS, lt.Units.WATT, lt.EnergyBalanceCarrier.NATURAL_GAS),
+        ),
+    )
+    ENERGY_PORTS = {
+        "FuelUse": EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
+        "ThermalPower": EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.SPACE_HEATING_HEAT),
+        "FlueLoss": EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.NATURAL_GAS),
+    }
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeBurnerConfig) -> None:
+        """Builds the burner."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Half power, nine tenths of the fuel as heat; the fuel booked as energy per step, as the boiler books it."""
+        fuel_power = 0.5 * self.config.power_in_watt
+        self.set(stsv, "FuelUse", fuel_power * self.my_simulation_parameters.seconds_per_timestep / 3600.0)
+        self.set(stsv, "ThermalPower", 0.9 * fuel_power)
+        self.set(stsv, "FlueLoss", 0.1 * fuel_power)
+
+
+@dataclass_json
+@dataclass
+class FakeBufferConfig(ConfigBase):
+    """A buffer vessel sized from the heat generator's power, as the real buffer's volume law reads it."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeBuffer"
+
+    component_id: ComponentID
+    #: Twenty litres per kilowatt of the generator it buffers, unless pinned.
+    volume_in_liter: Sizable[float] = sized_field(
+        rule=(Size.MAXIMAL_THERMAL_POWER_IN_WATT * 0.02).rounded(2), unit=lt.Units.LITER
+    )
+
+    @preset
+    @classmethod
+    def preset_sized_to_generator(cls, name: str) -> "FakeBufferConfig":
+        """Volume AUTO."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeBuffer(FixtureComponent):
+    """Holds water at a temperature that falls with its volume (a toy)."""
+
+    CLASS_INTERFACE = ClassInterface(
+        outputs=(DeclaredPort("WaterTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
+    )
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeBufferConfig) -> None:
+        """Builds the buffer."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """A temperature from the volume."""
+        self.set(stsv, "WaterTemperature", 60.0 - concrete(self.config.volume_in_liter) / 100.0)
 
 
 # -------------------------------------------------------------------------------- a solar circuit

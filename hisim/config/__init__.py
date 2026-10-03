@@ -15,7 +15,8 @@ the other way round:
       giving a config class its typed named defaults and named constructors, their
       registries (``presets_of``, ``constructors_of``) and the preset-provenance stamp.
     - :mod:`hisim.config.laws` — the ``SizingLaw`` expression algebra (including the
-      ``Self`` sibling term and the ``Many`` cardinality hook) and the sizing errors:
+      ``Self`` sibling term, the ``Many`` read over every provider of a fact and its one
+      aggregation ``Sum``; ``Max``/``Min`` are refused by name) and the sizing errors:
       *how* a sized value derives from the surrounding system.
     - :mod:`hisim.config.context` — the ``SizingContext`` fact snapshot and the
       ``Size`` term vocabulary over exactly its fields: *what* laws may read.
@@ -80,10 +81,13 @@ from hisim.config.laws import (
     Cardinality,
     ConfigSizingError,
     Many,
+    Max,
+    Min,
     NothingToSizeError,
     Self,
     SizingError,
     SizingLaw,
+    Sum,
     law,
 )
 from hisim.config.context import Size, SizingContext
@@ -144,6 +148,8 @@ __all__ = [
     "declared_facts_of",
     "FieldInfo",
     "Many",
+    "Max",
+    "Min",
     "NameSyntax",
     "NothingToSizeError",
     "OwnFields",
@@ -163,6 +169,7 @@ __all__ = [
     "SizingFactEngine",
     "SizingLaw",
     "SizingRecordEntry",
+    "Sum",
     "auto_fields",
     "canonical_preset",
     "check_builder_declarations",

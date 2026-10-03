@@ -42,6 +42,7 @@ from dataclasses_json import config as dataclasses_json_config
 
 from hisim import log
 from hisim.config.laws import (
+    Cardinality,
     ConfigSizingError,
     NothingToSizeError,
     OwnFieldsView,
@@ -523,17 +524,47 @@ def _resolution_order(
     return order
 
 
-def _qualified_source(fact: str, fact_sources: Optional[Mapping[str, str]]) -> str:
+#: What the fact engine names as the source of one fact: a provider, or the providers of a many read.
+FactSource = Union[str, Tuple[str, ...]]
+
+
+def _qualified_source(fact: str, fact_sources: Optional[Mapping[str, FactSource]]) -> str:
     """Renders one fact as ``"<provider>.<fact>"`` when the provider is known, else bare."""
     if fact_sources is None:
         return fact
     provider = fact_sources.get(fact)
-    return f"{provider}.{fact}" if provider else fact
+    return f"{provider}.{fact}" if isinstance(provider, str) and provider else fact
+
+
+def _fact_inputs(
+    fact: str, cardinality: Cardinality, ctx: "SizingContext", fact_sources: Optional[Mapping[str, FactSource]]
+) -> Tuple[Tuple[str, Any], ...]:
+    """The ``(source, value)`` inputs one fact read contributes to a field's record entry.
+
+    A scalar read is one pair. A many read is one pair per provider it summed, in the order
+    read, so the record names every array a battery was sized to and what each contributed.
+
+    Args:
+        fact: The fact read.
+        cardinality: How the law reads it.
+        ctx: The facts visible to the config.
+        fact_sources: Fact-to-provider names, as the fact engine bound them; may be None.
+
+    Returns:
+        The input pairs.
+    """
+    value = getattr(ctx, fact, None)
+    if cardinality is not Cardinality.MANY or not isinstance(value, tuple):
+        return ((_qualified_source(fact, fact_sources), value),)
+    providers = fact_sources.get(fact) if fact_sources is not None else None
+    if isinstance(providers, tuple) and len(providers) == len(value):
+        return tuple((f"{provider}.{fact}", item) for provider, item in zip(providers, value))
+    return tuple((fact, item) for item in value)
 
 
 def _resolution_entry(
     field_name: str, law: SizingLaw, value: Any, ctx: "SizingContext",
-    own: "OwnFields", fact_sources: Optional[Mapping[str, str]],
+    own: "OwnFields", fact_sources: Optional[Mapping[str, FactSource]],
 ) -> SizingRecordEntry:
     """Builds one field's audit entry: the law, the facts it read, their values and the result.
 
@@ -544,22 +575,24 @@ def _resolution_entry(
         ctx: The facts visible to this config, read for the entry's input values.
         own: The view of the config's own fields, read for sibling inputs.
         fact_sources: Fact-to-provider names, so an input reads ``provider.fact``; may be None.
+            A many read maps its fact to the tuple of providers it summed.
 
     Returns:
         The record entry, ready to append to the config's sizing record.
     """
-    facts = tuple(fact for fact, _cardinality in law.facts_read())
+    reads = law.facts_read()
+    facts = tuple(fact for fact, _cardinality in reads)
     return SizingRecordEntry(
         field=field_name, law=law.describe(), facts_read=facts, value=value,
         inputs=tuple(
-            (_qualified_source(fact, fact_sources), getattr(ctx, fact, None)) for fact in facts
+            pair for fact, cardinality in reads for pair in _fact_inputs(fact, cardinality, ctx, fact_sources)
         ) + tuple(
             (f"self.{name}", own.value_of(name)) for name in law.fields_read()
         ))
 
 
 def resolve_config(
-    config: ConfigT, ctx: "SizingContext", fact_sources: Optional[Mapping[str, str]] = None
+    config: ConfigT, ctx: "SizingContext", fact_sources: Optional[Mapping[str, FactSource]] = None
 ) -> ConfigT:
     """Returns a copy of ``config`` in which every AUTO field is computed by its law.
 
@@ -580,9 +613,10 @@ def resolve_config(
         config: The config to resolve; it is never mutated.
         ctx: The facts to size against.
         fact_sources: Fact name → the name of the config instance that provided it, as
-            the fact engine bound them. Given, the record's inputs name their provider
-            (``"boiler.maximal_thermal_power_in_watt"``); omitted — a config resolved
-            against a hand-built context — the inputs carry the bare fact name.
+            the fact engine bound them, or the tuple of names a many read summed. Given, the
+            record's inputs name their provider (``"boiler.maximal_thermal_power_in_watt"``);
+            omitted — a config resolved against a hand-built context — the inputs carry the
+            bare fact name.
 
     Returns:
         A resolved copy of the config.
@@ -626,10 +660,6 @@ def resolve_config(
             continue
         try:
             value = effective_law.evaluate(ctx, own)
-        except NotImplementedError:
-            # A declared-but-unimplemented term (Many(...)) must surface as itself rather
-            # than as a generic "law raised" wrapper, so the parking-lot message survives.
-            raise
         except ConfigSizingError as error:
             raise ConfigSizingError(
                 f"{type(config).__name__}.{field_name} <- {effective_law.describe()}: {error}"

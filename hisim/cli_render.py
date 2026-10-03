@@ -381,7 +381,10 @@ class FactsRenderer(Report):
 
     @classmethod
     def _resolved(cls, configured: Any, stream: TextIO) -> None:
-        """Writes one line per fact that was actually read, naming the provider and the rule."""
+        """Writes one line per fact that was actually read, naming the provider and the rule.
+
+        A many read (``Sum(Many(...))``) writes one line per provider it summed, each marked ``sum``.
+        """
         cls._heading("resolution", stream)
         lookups = configured.report.lookups
         if not lookups:
@@ -391,7 +394,8 @@ class FactsRenderer(Report):
             candidates = ""
             if len(lookup.candidates) > 1:
                 candidates = f"  of {', '.join(sorted(lookup.candidates))}"
-            cls._item(f"{consumer}<- {lookup.source}  [{lookup.mode}]{candidates}", stream)
+            mode = f"{lookup.mode}, sum" if lookup.many else lookup.mode
+            cls._item(f"{consumer}<- {lookup.source}  [{mode}]{candidates}", stream)
 
     @classmethod
     def _warnings(cls, warnings: Sequence[str], stream: TextIO) -> None:

@@ -6298,9 +6298,6 @@
         "many": {
           "type": "boolean"
         },
-        "export": {
-          "type": "boolean"
-        },
         "controllable": {
           "type": "object",
           "additionalProperties": false,

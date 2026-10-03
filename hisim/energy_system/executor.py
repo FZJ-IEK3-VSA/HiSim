@@ -285,7 +285,9 @@ class EnergySystemExecutor:
                 the earliest stage that can decide it, and nothing is constructed before the
                 sizing of the whole system has succeeded.
         """
-        imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines)
+        imported, imports = expand_imports(
+            self.model, self.assembly_resolver, lines=self.source_lines, path_resolver=self.path_resolver
+        )
         expanded, expansion = expand_groups(imported)
         try:
             validate_structure(expanded)

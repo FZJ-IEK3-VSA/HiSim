@@ -333,6 +333,47 @@ class CarrierRecord:
 
 
 @dataclass(frozen=True)
+class ScopedSizingSource:
+    """A ``sizing_sources`` line the expansion wrote for a bare read (``assemblies_spec.md`` §6).
+
+    A reader that names no provider is bound by the sizing engine's bare-fact rule over the whole
+    expanded system. An assembly member's contribution its assembly does not export is internal to
+    it, and a read inside an assembly binds to its own member first; wherever either would let the
+    bare rule bind a different provider than the reader's scope gives — or make it ambiguous — the
+    expansion writes the explicit line to the provider the scope gives and records it here.
+
+    Attributes:
+        reader: The expanded component that reads the fact.
+        fact: The fact.
+        providers: The provider written, or the providers of a many read, in written order.
+        internal: The providers of the fact the reader does not see, being internal to their
+            assemblies.
+        reason: Why the line was written, in a sentence.
+    """
+
+    reader: str
+    fact: str
+    providers: Tuple[str, ...]
+    internal: Tuple[str, ...]
+    reason: str
+
+    def text(self) -> str:
+        """The line as a message and the record's description print it."""
+        listed = ", ".join(f"{provider}.{self.fact}" for provider in self.providers)
+        return f"{self.reader}.sizing_sources.{self.fact} -> {listed} ({self.reason})"
+
+    def to_document(self) -> Dict[str, Any]:
+        """The line as plain data."""
+        return {
+            "reader": self.reader,
+            "fact": self.fact,
+            "providers": list(self.providers),
+            "internal": list(self.internal),
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
 class FeedRecord:
     """One aggregator feed an observer's selection lowered to (``assemblies_spec.md`` §4.2).
 
@@ -500,7 +541,9 @@ class ImportRecord:
     it (the expansion works innermost first); ``decisions`` lists every port binding in the order
     it was made, an inner assembly's before its importer's; ``sequence`` is the final evaluation
     sequence with each component's order path; ``circuits`` lists every bound hydronic circuit
-    with both its ends, and ``carriers`` every provider of a carrier with the needs bound to it.
+    with both its ends, ``carriers`` every provider of a carrier with the needs bound to it, and
+    ``scoped_sizing`` every ``sizing_sources`` line the expansion wrote for a bare read because an
+    unexported contribution or the reader's own assembly decides its provider (§6).
 
     An expansion that imported nothing produces an empty record, which keeps every consumer free
     of a case distinction, as :class:`~hisim.energy_system.groups.ExpansionRecord` does.
@@ -517,6 +560,7 @@ class ImportRecord:
     carriers: List[CarrierRecord] = field(default_factory=list)
     observers: List[ObserverRecord] = field(default_factory=list)
     actuations: List[ActuationRecord] = field(default_factory=list)
+    scoped_sizing: List[ScopedSizingSource] = field(default_factory=list)
 
     def observer(self, name: str) -> Optional[ObserverRecord]:
         """The record of one observing component, or ``None``."""
@@ -562,6 +606,7 @@ class ImportRecord:
             "carriers": [record.to_document() for record in self.carriers],
             "observers": [record.to_document() for record in self.observers],
             "actuations": [record.to_document() for record in self.actuations],
+            "scoped_sizing_sources": [record.to_document() for record in self.scoped_sizing],
         }
 
     def describe(self) -> Tuple[str, ...]:
@@ -598,6 +643,8 @@ class ImportRecord:
                 lines.append(f"  {feed.text()} -> {feed.input_port} ({feed.control}, selected by {feed.selected_by}).")
         for actuation in self.actuations:
             lines.append(f"{actuation.text()}.")
+        for scoped in self.scoped_sizing:
+            lines.append(f"sizing: {scoped.text()}.")
         if self.sequence:
             lines.append("sequence: " + ", ".join(f"{name} {'.'.join(map(str, path))}" for name, path in self.sequence))
         return tuple(lines)

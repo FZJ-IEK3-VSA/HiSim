@@ -13,7 +13,7 @@ kind: assembly
 name: supply/gas_connection
 description: Natural-gas grid connection with its meter.
 
-parameters:
+parameters: {}                                             # a bare connection has no numeric parameter
 
 presets:
   de_twin: {}

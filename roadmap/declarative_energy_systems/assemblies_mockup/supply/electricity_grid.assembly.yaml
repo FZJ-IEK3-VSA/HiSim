@@ -20,7 +20,7 @@ kind: assembly
 name: supply/electricity_grid
 description: Public grid connection with its bidirectional meter.
 
-parameters:
+parameters: {}                                             # a bare connection has no numeric parameter
 
 presets:
   de_twin: {}

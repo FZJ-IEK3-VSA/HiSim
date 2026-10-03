@@ -698,17 +698,11 @@ All by the owner on 2026-10-03.
 
 **D2 — Tag-selector scope.** (a) Runtime output tags after construction (descriptive tags, nothing in the expanded
 file); (b) published ports of imports only (forces the site into assemblies); (c) imports and site entries with a
-`provides` block. Recommendation: **(c)**, statically. **D3 — Recording.** (a) A decision file over recordings; (b)
-twins flat, site and composed files authored, equality test (§8). Recommendation: **(b)**.
+`provides` block. Recommendation: **(c)**, statically. **D3 — Recording (decided, owner, 2026-10-03).** (b): twins stay flat; the site and the composed files are authored and maintained by hand, and a test expands each composed file and compares it with its generator's twin under the rename map (the migration gate of §13). A one-time split tool bootstraps the first site and assembly files from a twin plus an assignment of each component to a member, so nothing is retyped; it is not a maintained layer.
 
-**D6 — Provider handling.** (a) A missing provider fails; the translator adds providers explicitly and reports them
-(§5.2). (b) The expansion adds a default provider. (c) Providers implicit per carrier. (b) and (c) add structure nobody
-wrote and hide #77-type billing errors. Recommendation: **(a)**, with an idle provider refused.
+**D6 — Provider handling (decided, owner, 2026-10-03).** (a): a missing provider is a load-time error naming import, port and carrier; the RenoVisor translator adds the provider assembly explicitly, reports it, and costs the connection (fee, standing charge, exit fee when a stage leaves it idle); an idle provider is refused.
 
-**D8 (ii)–(iv) — Port refinements.** (ii) `required_when`/`active_when` as a structured mapping or an expression
-grammar; (iii) a fallback as a config patch or as an internal variant; (iv) sizing facts as a connector type or outside
-the interface. Recommendation: the structured mapping, in line with the owner's ruling on constraints; the config patch;
-`sizing_fact` ports.
+**D8 (ii)–(iv) — Port refinements (decided, owner, 2026-10-03).** (ii) `required_when`/`active_when` are structured mappings `{parameter: [values]}`, conjunctive, checked against the parameter types; no expression grammar. (iii) An optional port's fallback is a config patch on members, never a structural change. (iv) Sizing facts are the `sizing_fact` connector type of §3.2.
 
 **D9 — Staging.** (a) The six steps of §13, per heating assembly behind the equality gate; (b) big-bang; (c) assemblies
 for new structure only. Recommendation: **(a)**. **D10 — Sizing across assemblies.** (a) `Many`/`Sum` plus fact exports

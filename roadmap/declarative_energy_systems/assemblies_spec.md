@@ -743,12 +743,13 @@ and `KpiAddress`, (a) for columns and names; to be settled on renovisorissues be
 present, suffix otherwise, neither an error (§2.6). Recommendation: **(c)**; declared units grow with the fields that
 assemblies feed.
 
-**D18 — Installation year and the economics' view of an import.** Every piece of equipment the request describes carries an
+**D18 — Installation year and quote: the reserved per-instance fields the economics read.** Every piece of equipment the request describes carries an
 `installation_year`, and the economics need it per instance. (a) A reserved import-level field (`installation_year:` next to
 `assembly:`), read by the economics through the import record and never by a component; (b) an ordinary parameter every
 assembly redeclares; (c) outside the file, in the economics context keyed by instance address. (b) repeats one field in
 every assembly and lets one forget it; (c) splits "what the house is" from the file that says so. Recommendation: **(a)**,
-with `applicant.*` and the measures' `cost` blocks staying in the economics context (they are not properties of the house).
+decided (owner, 2026-10-03) together with D22: the reserved fields are `installation_year` and `quote`; the applicant and
+the calculation-wide economics inputs are not properties of the house and live in the economics file.
 
 **D19 — The building as an aggregator.** A wood stove, an electric room heater, an air conditioner, a mechanical
 ventilation unit and a second heat distribution all deliver heat, cold or air into the building directly, and a house may
@@ -771,6 +772,21 @@ smart heating control), and the heat pump is reachable by both. (a) Controllers 
 controller; a port that two controllers of the same type claim is a load error. (b) One controller assembly for everything.
 (c) A controller hierarchy (the EMS asks the thermostat). Recommendation: **(a)**; it keeps today's split and the
 "exactly one controller per controllable port" rule, (c) when a control strategy needs it.
+
+**D22 — Where the economics inputs live (decided, owner, 2026-10-03).** The decision situation is split by what it is a
+statement about. (i) **Per calculation, about nobody in particular:** `location.country` (also the presets' country),
+`applicant.*` (role, means-tested benefit, first-time buyer, managed full retrofit, income, household size, main
+residence), plan start and price-basis year, the subsidy catalogue and the tariff choice go into a third file kind,
+`*.economics.yaml`, written beside the composed files and recorded with the run like `realized.simulation.yaml`; it is
+what `EconomicContext` and `EconomicParameters` hold in code today, made declarative, so one house pairs with several
+economics cases and the energy-system file keeps a single audience. (ii) **Per instance, about this file:** a quote is a
+statement about one instance (or envelope element) the plan buys, so it is a reserved field on that instance in the
+composed plan file, `quote: {amount_in_euro: {min, max}, per: m2 | unit | kw | kwh, source}`. A quote elsewhere could
+drift from the file it prices and fail silently; inline it cannot name a missing instance, a quote on an instance the
+plan keeps unchanged is a load-time error ("quote on `pv.roof_south`, which the plan keeps", the class of #67), and the
+engine checks `per` against the subject's size unit at load time (the class of #74). Staged plans carry each stage's
+quotes in that stage's file, so `investment_overrides.system_id` (§10.4) is not needed. `location.country` appears in
+both files and a mismatch is refused.
 
 ## 15. Related
 

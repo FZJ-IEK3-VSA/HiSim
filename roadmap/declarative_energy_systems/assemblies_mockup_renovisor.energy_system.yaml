@@ -8,8 +8,8 @@
 # their import records. Each line names the request leaf (R:) or measure (M:) it comes from.
 #
 # Conventions: a site value is ordinary component config, as today. An import's `parameters` are the assembly's
-# interface; `preset` is a named parameter set of the assembly; `installation_year` is a reserved import-level field
-# read by the economics (D18); `bind:` names a port partner where the default rule would be ambiguous, `none`
+# interface; `preset` is a named parameter set of the assembly; `installation_year` and `quote` are reserved
+# per-instance fields read by the economics (D18, D22); `bind:` names a port partner where the default rule would be ambiguous, `none`
 # declines an optional port. `AUTO` leaves a sized parameter to the class law against the expanded system.
 
 schema_version: 4                                   # the assemblies extension of the v3 format (spec §2)
@@ -46,7 +46,8 @@ components:
                                    air_barrier: true}}
       facade:  {u_value_in_watt_per_m2_per_kelvin: 1.2, area_in_m2: 150, installation_year: 1965,
                 added_insulation: {placement: external_wall_external, thickness_in_mm: 120,
-                                   material: {asp_id: eps_032, thermal_conductivity_w_mk: 0.032, lifespan_years: 40}}}
+                                   material: {asp_id: eps_032, thermal_conductivity_w_mk: 0.032, lifespan_years: 40},
+                                   quote: {amount_in_euro: {min: 110, max: 140}, per: m2, source: "SEAI typical"}}}
       floor:   {u_value_in_watt_per_m2_per_kelvin: 0.9, area_in_m2: 70, installation_year: 1965}
       window:  {u_value_in_watt_per_m2_per_kelvin: 1.1, glazing_panes: 3, frame_material: plastic,
                 low_emissivity_coating: true, area_in_m2: 22, installation_year: 2024,
@@ -181,6 +182,7 @@ imports:
                      shading_losses_in_percent: 5}
       roof_east:                                    # added by M: photovoltaic_system (no `replaces`)
         installation_year: 2026
+        quote: {amount_in_euro: {min: 7500, max: 9600}, per: unit, source: "installer quote 2026-03"}  # M: cost (D22)
         parameters: {azimuth_in_degree: 90, tilt_in_degree: 35, size_in_percent_of_roof_area: 30,
                      shading_losses_in_percent: 0}  # exactly_one_of: [power_in_watt, size_in_percent_of_roof_area]
     bind: {production: grid}                        # electricity_flow production -> the grid's meter (and the EMS via control)
@@ -225,7 +227,8 @@ imports:
   # heat_network: {assembly: supply/district_heating_connection}   # when heating or dhw is district heating
   # sub_meter_hp: {assembly: supply/sub_meter, parameters: {metering: sub, selects: heating.electricity_use}}  # D13
 
-# ---- what stays OUTSIDE this file (it says what the house is, not what it costs or who applies):
-#   R: applicant.* (role, means-tested benefit, first-time buyer, income, household size, main residence) -> subsidy
-#      context; M: measures[].cost (min/max per m², source) -> investment overrides; both keyed by instance address.
-#   R: location.country also selects the economics country and the presets' country variants.
+# ---- what lives in the economics file beside this one (D22): statements about the calculation, not about the house:
+#   R: location.country (also the presets' country here), R: applicant.* (role, means-tested benefit, first-time buyer,
+#   managed full retrofit, income, household size, main residence), plan start and price-basis year, subsidy catalogue,
+#   tariff. M: measures[].cost stays IN this file as `quote:` on the instance or element the plan buys (see pv.roof_east
+#   and Building.facade): a quote is a statement about this file and would drift anywhere else.

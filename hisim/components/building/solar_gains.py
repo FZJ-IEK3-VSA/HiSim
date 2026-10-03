@@ -210,7 +210,7 @@ class SolarGainsInputs:
 def produce_solar_gains(inputs: SolarGainsInputs) -> pd.DataFrame:
     """Produce the solar-gain series the building simulates from.
 
-    One value per timestep: the sum over the windows of the plane-of-array direct irradiance times
+    One value per timestep: the sum over the windows of the total plane-of-array irradiance times
     each window's reduction factor and area. The result is a pure function of ``inputs``; it is what
     the cache stores under the key built from them.
 

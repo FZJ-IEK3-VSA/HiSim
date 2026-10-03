@@ -385,6 +385,35 @@ class TestSerializationRoundtrip:
         path.write_text(json_module.dumps(raw), encoding="utf-8")
         assert read_inputs(str(tmp_path)).component_sources is None
 
+    @pytest.mark.parametrize(
+        "change, message",
+        [
+            (lambda source: source.pop("name"), r"component_sources\['HeatPump'\]: the KPI source has no 'name'"),
+            (
+                lambda source: source.update(imports=source.pop("import")),
+                r"component_sources\['HeatPump'\]: the KPI source carries the unknown key\(s\) 'imports'",
+            ),
+        ],
+    )
+    def test_a_component_source_with_a_missing_name_or_an_unknown_key_is_refused(self, tmp_path, change, message):
+        """Catches the economics reader dropping a misspelt source key, or failing with a bare KeyError."""
+        import json as json_module
+        from dataclasses import replace
+
+        from hisim.config import ComponentID, DisplayConfig
+        from hisim.economics.serialization import SerializationFileNames, read_inputs, write_inputs
+        from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
+
+        source = KpiSource.for_component(ComponentID("HeatPump"), DisplayConfig.show("Heat pump"))
+        write_inputs(replace(self._inputs(), component_sources={"HeatPump": source}), str(tmp_path))
+        path = tmp_path / SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME
+        raw = json_module.loads(path.read_text(encoding="utf-8"))
+        change(raw["component_sources"]["HeatPump"])
+        path.write_text(json_module.dumps(raw), encoding="utf-8")
+
+        with pytest.raises(ValueError, match=message):
+            read_inputs(str(tmp_path))
+
     def test_neither_fact_is_a_field_of_the_extract_record(self):
         """`inputs_to_json` stays exactly the fields of `EvaluationInputs`, and nothing more."""
         from hisim.economics.serialization import inputs_to_json

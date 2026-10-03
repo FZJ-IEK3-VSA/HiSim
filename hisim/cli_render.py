@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import json
 from pathlib import Path
-from typing import Any, Sequence, TextIO
+from typing import Any, Mapping, Sequence, TextIO, Tuple
 
 from hisim.cli_exit import ExitCodes
 from hisim.config.introspection import ConfigDescription, ConstructorInfo, FieldInfo
@@ -400,10 +401,13 @@ class FactsRenderer(Report):
 
 
 class KpiAddressRenderer:
-    """Lists the addresses of a KPI collection, one dotted address per line (``hisim kpis list``).
+    """Lists the KPIs of a collection, one ``<dotted address> = <value> <unit>`` per line (``hisim kpis list``).
 
-    The dotted form is the one the golden references use, ``<building>.<tag>.<key>``, so a line
-    can be pasted into a golden diff search as it stands. The addresses come from
+    The dotted form is the one the golden references use, ``<building>.<tag>.<key>``, so the part
+    before `` = `` can be pasted into a golden diff search as it stands. The value is written as
+    JSON (``null`` for a value that was not computed, a quoted string for a descriptive KPI), the
+    unit as the entry carries it, and nothing after the value when the unit is empty. The entries
+    come from
     :class:`~hisim.postprocessing.kpi_computation.kpi_address.KpiFinder`, which reads each entry's
     source from the entry and refuses a collection whose keys disagree with their entries.
     """
@@ -426,7 +430,14 @@ class KpiAddressRenderer:
         return candidate
 
     @classmethod
-    def render(cls, addresses: Sequence[Any], stream: TextIO) -> None:
-        """Writes one dotted address per line, in collection order."""
-        for address in addresses:
-            print(address.dotted, file=stream)
+    def line(cls, address: Any, entry: Mapping[str, Any]) -> str:
+        """The line of one KPI: ``<dotted address> = <value> <unit>``."""
+        value = json.dumps(entry["value"], ensure_ascii=False)
+        unit = entry.get("unit")
+        return f"{address.dotted} = {value} {unit}" if unit else f"{address.dotted} = {value}"
+
+    @classmethod
+    def render(cls, entries: Sequence[Tuple[Any, Mapping[str, Any]]], stream: TextIO) -> None:
+        """Writes one ``<dotted address> = <value> <unit>`` line per ``(address, entry)``, in collection order."""
+        for address, entry in entries:
+            print(cls.line(address, entry), file=stream)

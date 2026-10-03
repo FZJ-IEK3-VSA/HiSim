@@ -343,7 +343,8 @@ def test_the_kpi_document_refuses_a_name_two_components_report() -> None:
         document.number("Total energy from grid")
     with pytest.raises(ValueError, match="2 KPIs named"):
         document.unit("Total energy from grid")
-    assert document.has("Total energy from grid")
+    with pytest.raises(ValueError, match="2 KPIs named"):
+        document.has("Total energy from grid")
 
 
 def test_the_kpi_document_reads_a_file_written_by_the_run(tmp_path: Path) -> None:

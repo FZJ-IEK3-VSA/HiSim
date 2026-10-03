@@ -98,6 +98,17 @@ class KpiSource:
     display_name: Optional[str] = field(default=None, metadata=dataclasses_json_config(field_name="display_name"))
     label: Optional[str] = field(default=None, metadata=dataclasses_json_config(field_name="label"))
 
+    #: The JSON names of the fields, in their serialized order: the only keys a source object has.
+    JSON_NAMES: ClassVar[Tuple[str, ...]] = (
+        "import",
+        "instance",
+        "member",
+        "assembly",
+        "name",
+        "display_name",
+        "label",
+    )
+
     def __post_init__(self) -> None:
         """Refuse a source without a name: the name is what the KPI key is qualified with."""
         if not isinstance(self.name, str) or not self.name:
@@ -150,8 +161,9 @@ class KpiSource:
             The source, or ``None`` for a derived KPI.
 
         Raises:
-            ValueError: If ``source`` is neither ``None`` nor an object, or if an entry carries
-                both fields and they name different components.
+            ValueError: If ``source`` is neither ``None`` nor a source object
+                (:meth:`from_json_object`), or if an entry carries both fields and they name
+                different components.
         """
         if "source" not in entry:
             legacy_name = entry.get(KpiEntry.NAME_OF_SOURCE_COMPONENT_KEY)
@@ -159,16 +171,59 @@ class KpiSource:
         raw = entry["source"]
         if raw is None:
             return None
-        if not isinstance(raw, Mapping):
-            raise ValueError(f"The KPI entry '{entry.get('name')}' carries a source that is not an object: {raw!r}.")
-        source: KpiSource = cls.from_dict(dict(raw))
-        legacy_name = entry.get(KpiEntry.NAME_OF_SOURCE_COMPONENT_KEY)
-        if legacy_name is not None and legacy_name != source.name:
-            raise ValueError(
-                f"The KPI entry '{entry.get('name')}' names two different sources: source.name "
-                f"'{source.name}' and {KpiEntry.NAME_OF_SOURCE_COMPONENT_KEY} '{legacy_name}'."
-            )
+        where = f"the KPI entry '{entry.get('name')}'"
+        source = cls.from_json_object(raw, where)
+        KpiEntry.require_same_source_name(
+            kpi_name=entry.get("name"),
+            source_name=source.name,
+            name_of_source_component=entry.get(KpiEntry.NAME_OF_SOURCE_COMPONENT_KEY),
+            where=where,
+        )
         return source
+
+    @classmethod
+    def from_json_object(cls, raw: Any, where: str) -> "KpiSource":
+        """Decode one serialized source strictly: the only decoder for a source read from outside.
+
+        Unlike the ``from_dict`` that ``@dataclass_json`` injects, which drops a key it does not
+        know and fails with a bare ``KeyError`` on a missing one, this refuses every key that is
+        not one of :attr:`JSON_NAMES` and requires ``name``; ``import``, ``instance``,
+        ``member``, ``assembly``, ``display_name`` and ``label`` may be absent and then are
+        ``None``. Every present value is a string or ``null``.
+
+        Args:
+            raw: The parsed JSON object.
+            where: What holds the object (a file and a key), named in every error.
+
+        Returns:
+            The source.
+
+        Raises:
+            ValueError: If ``raw`` is not an object, lacks ``name``, carries a key that is not
+                one of :attr:`JSON_NAMES`, or holds a value that is neither a string nor ``null``.
+        """
+        if not isinstance(raw, Mapping):
+            raise ValueError(f"{where}: a KPI source must be a JSON object, got {raw!r}.")
+        unknown = [key for key in raw if key not in cls.JSON_NAMES]
+        if unknown:
+            raise ValueError(
+                f"{where}: the KPI source carries the unknown key(s) {', '.join(repr(key) for key in unknown)}; "
+                f"a source has exactly the keys {', '.join(cls.JSON_NAMES)}."
+            )
+        if "name" not in raw:
+            raise ValueError(f"{where}: the KPI source has no 'name', the runtime name its KPI key is qualified with.")
+        for key, value in raw.items():
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"{where}: source.{key} is neither a string nor null: {value!r}.")
+        return cls(
+            import_key=raw.get("import"),
+            instance=raw.get("instance"),
+            member=raw.get("member"),
+            assembly=raw.get("assembly"),
+            name=raw["name"],
+            display_name=raw.get("display_name"),
+            label=raw.get("label"),
+        )
 
     if TYPE_CHECKING:
 
@@ -251,6 +306,50 @@ class KpiEntry:
     # legacy KPIs leave these unset during the parallel phase of the lifecycle cost engine.
     value_min: Optional[float] = None
     value_max: Optional[float] = None
+
+    @staticmethod
+    def require_same_source_name(
+        kpi_name: Any, source_name: str, name_of_source_component: Optional[str], where: str
+    ) -> None:
+        """Refuse an entry whose deprecated ``nameOfSourceComponent`` names another component than its source.
+
+        The one statement of the invariant ``name_of_source_component == source.name``, for an
+        entry object (:meth:`require_consistent_source`) and a serialized one
+        (:meth:`KpiSource.from_entry_dict`) alike. An absent deprecated field is consistent.
+
+        Args:
+            kpi_name: The entry's name, for the message.
+            source_name: ``source.name``.
+            name_of_source_component: The deprecated field, or ``None``.
+            where: Who checks, named in the message.
+
+        Raises:
+            ValueError: If the deprecated field is set and differs from ``source.name``.
+        """
+        if name_of_source_component is not None and name_of_source_component != source_name:
+            raise ValueError(
+                f"{where}: the KPI entry '{kpi_name}' names two different sources: source.name "
+                f"'{source_name}' and {KpiEntry.NAME_OF_SOURCE_COMPONENT_KEY} '{name_of_source_component}'. "
+                "The deprecated field must equal source.name."
+            )
+
+    def require_consistent_source(self, where: str) -> None:
+        """Fill the deprecated ``name_of_source_component`` from ``source``, refusing a different one.
+
+        Does nothing for an entry without a source (a derived KPI, or one whose source the caller
+        still has to stamp).
+
+        Args:
+            where: Who checks, named in the message.
+
+        Raises:
+            ValueError: If ``name_of_source_component`` is set and differs from ``source.name``.
+        """
+        if self.source is None:
+            return
+        self.require_same_source_name(self.name, self.source.name, self.name_of_source_component, where)
+        if self.name_of_source_component is None:
+            self.name_of_source_component = self.source.name
 
     if TYPE_CHECKING:
         # The serialization API is injected at runtime by the @dataclass_json decorator,

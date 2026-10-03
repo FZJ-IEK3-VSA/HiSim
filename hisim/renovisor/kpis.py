@@ -39,6 +39,7 @@ from types import MappingProxyType
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.components.building.building import Building
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.renovisor.constants import ComfortGrades, GradeScale
 from hisim.renovisor.layers import EnvelopeLayers
 from hisim.renovisor.provenance import MissingField, Period, ProvenancedValue
@@ -74,10 +75,11 @@ class KpiDocument:
     one entry per KPI -- whose innermost key of every component KPI is *qualified with its source
     component*, ``"<name> (<source.name>)"`` (``roadmap/kpi_address_spec.md``). The entries
     themselves always carry their plain ``name``, so that is what this class looks values up by,
-    exactly as ``kpi_preparation.py`` does internally when it sums the meters.
+    through :class:`~hisim.postprocessing.kpi_computation.kpi_address.KpiFinder`, the one index of
+    a KPI collection in the repository.
 
-    A RenoVisor calculation is one dwelling, so the first building object that carries a name is
-    the answer; the district case the collection also serves does not arise here.
+    A RenoVisor calculation is one dwelling, so a name is expected once in the whole document; the
+    district case the collection also serves does not arise here, and a name found twice raises.
 
     Args:
         document: The parsed ``all_kpis.json``.
@@ -96,40 +98,37 @@ class KpiDocument:
     UNIT_KEY: ClassVar[str] = "unit"
 
     def __init__(self, document: Mapping[str, Any]) -> None:
-        """Index every entry of the document by its plain KPI name.
+        """Index the document with the repository's one KPI index, :class:`KpiFinder`.
 
-        A name two entries carry -- two components reporting it, or two buildings -- is indexed
-        as ambiguous, and reading it raises (:meth:`_entry`): taking the first one would publish
-        one component's figure as the dwelling's.
-        """
-        self._by_name: Dict[str, Any] = {}
-        self._units_by_name: Dict[str, Any] = {}
-        self._keys_by_name: Dict[str, List[str]] = {}
-        for building, groups in document.items():
-            if not isinstance(groups, Mapping):
-                continue
-            for tag, entries in groups.items():
-                if not isinstance(entries, Mapping):
-                    continue
-                for key, entry in entries.items():
-                    if isinstance(entry, Mapping) and self.NAME_KEY in entry:
-                        name = str(entry[self.NAME_KEY])
-                        self._keys_by_name.setdefault(name, []).append(f"{building}.{tag}.{key}")
-                        self._by_name.setdefault(name, entry.get(self.VALUE_KEY))
-                        self._units_by_name.setdefault(name, entry.get(self.UNIT_KEY))
-
-    def _require_unambiguous(self, name: str) -> None:
-        """Raise if two entries of the document carry the KPI name.
+        The finder refuses a document that is not the collection ``WRITE_KPIS_TO_JSON`` writes --
+        a level that is not an object, an entry without a name or a value, a key its entry does
+        not address -- rather than skipping it.
 
         Raises:
-            ValueError: Naming every entry of that name.
+            ValueError: If the finder refuses the document.
         """
-        keys = self._keys_by_name.get(name, [])
-        if len(keys) > 1:
+        self._finder = KpiFinder(document)
+
+    def _entry(self, name: str) -> Optional[Mapping[str, Any]]:
+        """The one entry of the document carrying the KPI name, or ``None`` when none does.
+
+        A name two entries carry -- two components reporting it, or two buildings -- is an
+        error wherever it is read: taking the first one would publish one component's figure as
+        the dwelling's.
+
+        Raises:
+            ValueError: Naming every entry of that name, if there are several.
+        """
+        found = self._finder.entries(name=name)
+        if not found:
+            return None
+        if len(found) > 1:
+            addresses = ", ".join(address.dotted for address, _ in found)
             raise ValueError(
-                f"all_kpis.json carries {len(keys)} KPIs named '{name}' ({', '.join(keys)}); a RenoVisor "
+                f"all_kpis.json carries {len(found)} KPIs named '{name}' ({addresses}); a RenoVisor "
                 "field reads exactly one, and taking either would publish one of them as the dwelling's."
             )
+        return found[0][1]
 
     @classmethod
     def load(cls, results_directory: Path) -> Optional["KpiDocument"]:
@@ -160,8 +159,8 @@ class KpiDocument:
         Raises:
             ValueError: If two entries of the document carry the name.
         """
-        self._require_unambiguous(name)
-        value = self._by_name.get(name)
+        entry = self._entry(name)
+        value = None if entry is None else entry[self.VALUE_KEY]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
         return float(value)
@@ -178,17 +177,22 @@ class KpiDocument:
         Raises:
             ValueError: If two entries of the document carry the name.
         """
-        self._require_unambiguous(name)
-        unit = self._units_by_name.get(name)
+        entry = self._entry(name)
+        unit = None if entry is None else entry.get(self.UNIT_KEY)
         return unit if isinstance(unit, str) and unit else None
 
     def has(self, name: str) -> bool:
-        """Return whether the document carries a KPI of that name."""
-        return name in self._by_name
+        """Return whether the document carries a KPI of that name.
+
+        Raises:
+            ValueError: If two entries of the document carry the name, as :meth:`number` and
+                :meth:`unit` do: ambiguity is an error wherever it is read.
+        """
+        return self._entry(name) is not None
 
     def names(self) -> Tuple[str, ...]:
-        """Return every KPI name the document carries, sorted."""
-        return tuple(sorted(self._by_name))
+        """Return every KPI name the document carries, sorted, each once."""
+        return tuple(sorted({address.name for address in self._finder.addresses()}))
 
 
 class KpiSources:

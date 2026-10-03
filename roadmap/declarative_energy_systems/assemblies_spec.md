@@ -743,6 +743,35 @@ and `KpiAddress`, (a) for columns and names; to be settled on renovisorissues be
 present, suffix otherwise, neither an error (§2.6). Recommendation: **(c)**; declared units grow with the fields that
 assemblies feed.
 
+**D18 — Installation year and the economics' view of an import.** Every piece of equipment the request describes carries an
+`installation_year`, and the economics need it per instance. (a) A reserved import-level field (`installation_year:` next to
+`assembly:`), read by the economics through the import record and never by a component; (b) an ordinary parameter every
+assembly redeclares; (c) outside the file, in the economics context keyed by instance address. (b) repeats one field in
+every assembly and lets one forget it; (c) splits "what the house is" from the file that says so. Recommendation: **(a)**,
+with `applicant.*` and the measures' `cost` blocks staying in the economics context (they are not properties of the house).
+
+**D19 — The building as an aggregator.** A wood stove, an electric room heater, an air conditioner, a mechanical
+ventilation unit and a second heat distribution all deliver heat, cold or air into the building directly, and a house may
+have several of each; today the `Building` has one fixed input per kind. (a) The building's thermal zone becomes a
+many-cardinality connector (`space_heat_direct`, `space_cooling_direct`, `air_exchange`) and the `Building` an aggregator
+like the meter, selecting every bound port; (b) a separate `thermal_zone` summing component between the sources and the
+building; (c) one source per kind, more refused. Recommendation: **(a)**: the aggregator mechanism of §4 is the same, the
+building is where the sum physically happens, and (c) cannot express a stove beside a heat pump.
+
+**D20 — Optional ports on the providing side.** A DHW tank or a heating buffer may carry a solar coil, and the solar
+thermal assembly binds its circuits to those coils; a combi boiler has none. (a) A `provides` port may be optional: unbound
+it is simply unused (no fallback needed), bound it is checked like any circuit; the solar assembly's `bind:` to a DHW import
+without that port is a load error naming the two assemblies — the incompatibility is explicit instead of hidden in a twin.
+(b) Every DHW assembly must provide a solar coil (a combi would need a preheat tank it does not have). Recommendation:
+**(a)**; `dhw/solar_preheat_combi` is a later assembly where the market has it.
+
+**D21 — Several controllers.** The house has an electricity controller (the EMS, §4.4) and a heating controller (thermostats,
+smart heating control), and the heat pump is reachable by both. (a) Controllers are scoped by connector type: a controllable
+`electricity_flow` port binds to exactly one electricity controller, a `control_signal` set point to exactly one heating
+controller; a port that two controllers of the same type claim is a load error. (b) One controller assembly for everything.
+(c) A controller hierarchy (the EMS asks the thermostat). Recommendation: **(a)**; it keeps today's split and the
+"exactly one controller per controllable port" rule, (c) when a control strategy needs it.
+
 ## 15. Related
 
 - renovisorissues **#83** (several PV systems and batteries), **#85** (seven hot-water types), **#77** (LPG houses

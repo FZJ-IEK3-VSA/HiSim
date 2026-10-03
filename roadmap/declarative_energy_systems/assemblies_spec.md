@@ -601,6 +601,11 @@ peers (`energy_port.py:12-17`). The check allows a one-sided booking toward a co
 
 ## 12. Worked examples
 
+A full mockup of the composed file the translator would write for one calculation request — every leaf of the request
+schema and every measure of the catalogue, including features HiSim does not model yet — is
+`assemblies_mockup_renovisor.energy_system.yaml` beside this file. It is design, not loadable, and §14.2 D18–D21 are the
+decisions it raised.
+
 Each example is the `imports` block the translator adds to the site file (§10.1).
 
 (a) An air-source heat pump with four arrays and two batteries:

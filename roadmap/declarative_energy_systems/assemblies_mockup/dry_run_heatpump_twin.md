@@ -19,6 +19,9 @@ per D9's list, or **(iii)** a GAP. The gaps are numbered G1–G18; §9 lists the
   (`bind: {circuit: heating.dhw}`), `pv: pv/array` (instance `pv_system`), `battery: storage/battery` (instance
   `battery`), `control: control/ems_self_consumption`, `grid: supply/electricity_grid` (`observes: [{connector:
   electricity_flow, flow: net}]`).
+- Evaluation order (spec §2.3, D23): `order:` Building 1, UTSPConnector 2, Weather 3, `pv` 4,
+  HeatDistributionController 5, `heating` 6, `dhw` 9, HeatDistributionSystem 11, `grid` 12, `battery` 13, `control` 14;
+  `heating/air_source_heat_pump` orders its members ControllerSH, ControllerDHW, HeatPump, Buffer (`order:` 1–4).
 - Assemblies: the files of this directory. Connector types: `connectors.yaml`.
 
 ## 2. Step 1 — resolve, preset, parameters
@@ -69,6 +72,11 @@ Inactive ports: none. Declined ports: none. Fallbacks applied: none.
 | `Battery` | `battery__battery__Battery` | `[battery/battery]`, `Battery` |
 | `L2EMSElectricityController` | `control__EMS` | `[control]`, `EMS` |
 | `ElectricityMeter` | `grid__ElectricityMeter` | `[grid]`, `ElectricityMeter` |
+
+Order paths and the flat sequence (§9.1): Building 1, UTSPConnector 2, Weather 3, `pv__pv_system__PVSystem` 4.1.1,
+HeatDistributionController 5, `heating__ControllerSH` 6.1, `heating__ControllerDHW` 6.2, `heating__HeatPump` 6.3,
+`heating__Buffer` 6.4, `dhw__DHWStorage` 9.1, HeatDistributionSystem 11, `grid__ElectricityMeter` 12.1,
+`battery__battery__Battery` 13.1.1, `control__EMS` 14.1.
 
 Every internal reference is rewritten (`Buffer` → `heating__Buffer` in `ControllerSH`, `HeatPump`; `ControllerDHW`
 and `ControllerSH` in `HeatPump`; `HeatPump` in `Buffer`). No member of the unselected variants exists, so no input
@@ -176,15 +184,15 @@ for one array. The import record is the comment block at the end of `expanded_he
 | 1 | `Building` (:8-19) | `Building` | equal | `Weather`, `L2EMSElectricityController`→`control__EMS`, `UTSPConnector`, `HeatDistributionSystem`; same order | (i) |
 | 2 | `UTSPConnector` (:20-24) | `UTSPConnector` | equal | none in both (its `WarmWaterMassInput`/`WarmWaterTemperatureInput` are optional, `loadprofilegenerator_utsp_connector.py:449-462`, and unbound in both) | equal |
 | 3 | `Weather` (:25-32) | `Weather` | equal | none | equal |
-| 4 | `PVSystem` (:33-39) | `pv__pv_system__PVSystem` | equal (`location: AACHEN` from the parameter default; azimuth/tilt/share/power write nothing, G9) | `Weather` | (i), but **position** moves: G14 |
+| 4 | `PVSystem` (:33-39) | `pv__pv_system__PVSystem` | equal (`location: AACHEN` from the parameter default; azimuth/tilt/share/power write nothing, G9) | `Weather` | (i) |
 | 5 | `HeatDistributionController` (:40-46) | same name | equal | `L2EMS…`→`control__EMS`, `Weather`, `Building` | (i) |
 | 6 | `MoreAdvancedHeatPumpHPLibControllerSH` (:47-54) | `heating__ControllerSH` | equal | `Weather`, `HeatDistributionController`, `control__EMS`, `heating__Buffer`; same order | (i) |
-| 7 | `HeatPumpControllerDHW` (:55-60) | `heating__ControllerDHW` | equal | `control__EMS`, `dhw__DHWStorage` | (i); position: G14 |
+| 7 | `HeatPumpControllerDHW` (:55-60) | `heating__ControllerDHW` | equal | `control__EMS`, `dhw__DHWStorage` | (i) |
 | 8 | `MoreAdvancedHeatPumpHPLib` (:61-74) | `heating__HeatPump` | equal (`with_domestic_hot_water_preparation: true`; AUTO power, `none` SCOPs write nothing: G9) | 4 bare + 2 explicit weather wires, same order | (i) |
-| 9 | `DHWStorage` (:75-80) | `dhw__DHWStorage` | equal | `UTSPConnector`, `heating__HeatPump` | (i); position: G14 |
+| 9 | `DHWStorage` (:75-80) | `dhw__DHWStorage` | equal | `UTSPConnector`, `heating__HeatPump` | (i); position: **neutral swap** with #10 (ii, §9.1) |
 | 10 | `SimpleHotWaterStorage` (:81-88) | `heating__Buffer` | equal (`sizing_option` written, volume AUTO not) | `HeatDistributionSystem`, `heating__HeatPump` | (i) |
-| 11 | `HeatDistributionSystem` (:89-95) | same name | equal | `Building`, `HeatDistributionController`, `heating__Buffer` | (i); position: G14 |
-| 12 | `ElectricityMeter` (:102-109) | `grid__ElectricityMeter` | equal | one feed, equal | (i); position: G14 |
+| 11 | `HeatDistributionSystem` (:89-95) | same name | equal | `Building`, `HeatDistributionController`, `heating__Buffer` | (i) |
+| 12 | `ElectricityMeter` (:102-109) | `grid__ElectricityMeter` | equal | one feed, equal | (i) |
 | 13 | `Battery` (:110-112) | `battery__battery__Battery` | equal | none in both | (i) |
 | 14 | `L2EMSElectricityController` (:113-146) | `control__EMS` | equal | five feeds, equal (§6) | (i) |
 
@@ -198,7 +206,7 @@ expansion adds: nothing beyond `metadata.imports` (ii, "the EMS as an import").
 |---|---|
 | Component names, result columns, KPI source names, economics subjects, the EMS's dispatch port names, every test or translator target that names a twin component (`hisim/renovisor/translate.py` `Targets`, `tests/renovisor/test_twin_cost_declarations.py`) | (i) under the rename map |
 | `metadata.imports` and the source maps | (ii) |
-| **Component order.** Twin: Building, UTSP, Weather, **PV**, HDSCtrl, CtrlSH, CtrlDHW, HP, **DHWStorage**, Buffer, **HDS**, Meter, Battery, EMS. Expanded: Building, UTSP, Weather, HDSCtrl, **HDS**, CtrlSH, HP, CtrlDHW, Buffer, **DHWStorage**, **PV**, Battery, EMS, Meter | **(iii) G14** |
+| **Component order.** Twin: Building, UTSP, Weather, PV, HDSCtrl, CtrlSH, CtrlDHW, HP, **DHWStorage**, **Buffer**, HDS, Meter, Battery, EMS. Expanded (`order:`, §9.1): the same, with **Buffer** before **DHWStorage** | (ii) neutral swap (§9.1) |
 
 ### 8.3 The other twin shape (`metered_directly`, :147-171)
 
@@ -232,19 +240,71 @@ means a decision is needed.
 | **G11** | `PVSystemConfig.location` repeats a site value in an import (documentation only today). | Minor: drop the parameter or read a site fact; does not affect results. |
 | **G12** | (EV, not in this twin.) An EV's commuting distance and charging power select the LPG travel route set and charging station — occupancy settings; `CarConfig.source_weight` must differ per car (`generic_car.py:122-124`). | Design change: an import whose parameters change the occupancy needs a declared occupancy-side contract (the request decides both at once); the per-instance weight is derived like the EMS weights. |
 | **G13** | Optional ports on **site** entries (the two `BuildingTemperatureModifier`s) need intent (D8), and with `bind:` as the only verb the site names an import, so the no-EMS world needs a different site file — against D17's one site. | **Resolved** (owner, 2026-10-03; spec §3.1, §3.3, D8 (i)): three verbs alike on site entries and imports — `bind:` (partner must exist), `optional-bind:` (binds if the partner exists, else inert and recorded "not bound: partner absent"), `none:` (declines). The site carries `optional-bind: {temperature_modifier: control}` on `Building` and `HeatDistributionController`; `heating` and `dhw` write `optional-bind: {ems_modifier: control}`. The residents' `electricity_use` is observed, never bound: a `bind:` on electricity is refused. |
-| **G14** | Component order cannot be reproduced: imports follow the site, so the twin's PV-before-HDS-controller and HDS-last order is out of reach. File order is registration order, hence the order components are iterated within a time step (`executor.py:304-311`); convergence is absolute 1e-4 per output (`component.py:197-203`), the goldens compare at relative 1e-9 (`tests/test_golden_kpis.py:117-118`). The D9 gate "one-week run equals the existing golden" may fail on order alone. | Design decision, must be settled before §13 step 4: (a) reorder the Python setup once to the composed order and re-record twin and golden in a PR of its own, then gate byte-for-byte; or (b) gate on a canonical (sorted) comparison of the files and a tolerance for the run. Recommendation (a): it keeps the 1e-9 policy. Run the twin in both orders first to measure the effect. |
+| **G14** | Component order: with imports after the site, the twin's sequence (PV before the HDS controller, the HDS after the storages) was out of reach, and order is the evaluation order within a time step, which moves results (`roadmap/convergence_order_findings.md`). | **Resolved** (owner, 2026-10-03; spec §2.3, D23): a declared, nested `order:`. The composed file reproduces the twin's sequence up to one exchange, buffer before cylinder, proven neutral in §9.1 and listed in D9 as a "neutral swap". No twin or golden is re-recorded. |
 | **G15** | The meter's occupancy feed has no `component_type` in the twin, while the port carries `RESIDENTS` (only `metered_directly`). | Intended difference to add to D9's reviewed list (the meter channels match by subset, so it lands in the same channel); or the meter declaration drops component types. |
 | **G16** | §3.2 gave `hot_water_demand` as kg/s and °C; the occupancy's output is `WaterConsumption`, litres per step, `WARM_WATER` (`loadprofilegenerator_utsp_connector.py:503`). | Fixed in the spec with this dry run. |
 | **G17** | `serves_dhw` must agree with whether the `dhw` import binds `heating.dhw`. | No gap: both directions fail loudly (an active required circuit unbound; a `bind:` to an inactive port). Recorded because the translator writes the same fact twice. |
 | **G18** | D21 says the EMS actuates only L1 modifiers and the battery, but it also *ranks* consumers it cannot steer: residents (weight 1), solar thermal (4), and the heat pump feeds themselves, all with `dispatch: {}` (twin :129, :135, :146). | Not written yet: a `controllable: {}` port (rank-only) and a `via:` port both lower to `dispatch: {}`; one sentence in §4.4. |
+
+### 9.1 G14 resolved: the evaluation order and the neutral swap
+
+**Sequence.** The composed file sets `order:` (§1), so the expansion writes Building, UTSPConnector, Weather, PV,
+HeatDistributionController, ControllerSH, ControllerDHW, HeatPump, **Buffer**, **DHWStorage**, HeatDistributionSystem,
+ElectricityMeter, Battery, EMS (order paths in §4). The twin has the same fourteen components in the same places except
+that it evaluates DHWStorage (its 9th) before SimpleHotWaterStorage (its 10th). No number puts the cylinder between 6.3
+and 6.4: it belongs to the `dhw` import, and an importer never orders inside an assembly (spec §2.3).
+
+**Claim.** In a Gauss-Seidel pass, exchanging two adjacent components A and B that read no output of each other gives a
+bit-identical vector after the pass, for the same vector before it.
+
+**Proof.** A pass calls, for each component in sequence, `restore_state` and then `calculate_component` on one shared
+vector `stsv` (`hisim/simulator.py:397-401`); a component reads its inputs from the slots of their source outputs and
+writes only its own outputs' slots (`hisim/component.py:191`, `:193-195`). Let v be the vector after the components
+before A and B. Order A, B: A reads v and writes O_A; B reads v with O_A written, but none of its inputs is in O_A, so
+it reads exactly what it would read from v and writes O_B. Order B, A: B reads v, the same inputs, and writes the same
+O_B (same code, same floating-point operations, its own state only); A reads v with O_B written, none of which it reads,
+and writes the same O_A. The slots are disjoint, so the vector after both is identical, and every later component sees
+an identical vector. By induction every pass is identical; the convergence test is element-wise over the whole vector
+against a fixed 1e-4 (`component.py:197-203`), so the step ends after the same pass, `force_convergence` is set on the
+same try (`simulator.py:416`), and `i_doublecheck` and the saved states are per component. So every time step, and the
+whole run, is bit-identical. ∎
+
+**The premise holds here.** DHWStorage reads `UTSPConnector` and `MoreAdvancedHeatPumpHPLib` (twin :75-80);
+SimpleHotWaterStorage reads `HeatDistributionSystem` and `MoreAdvancedHeatPumpHPLib` (twin :81-88). A bare name wires
+only from the component it names, so neither reads the other; `simple_water_storage.py` uses no SimRepository and no
+class-level mutable state, so they share nothing outside the vector either. The heat pump, which reads both, is
+evaluated before both in either order and so reads both from the previous pass, as before.
+
+**What moves, and does not matter.** The output slots' global indices and the order of the two blocks of result columns
+(columns are compared by name); a post-processing sum over components adds the same terms in another order, which can
+change a last bit for three or more terms, far inside the goldens' relative 1e-9 (`tests/test_golden_kpis.py:117-118`).
+
+**Conclusion.** The exchange is a **neutral swap**, an intended difference on D9's reviewed list. The D9 gate passes
+byte for byte under the rename map and that list; the existing golden stands; G14 is resolved without re-recording any
+twin.
+
+**The other base files** (spec §13). The gas, hydrogen, oil, pellet and wood-chip twins evaluate site, generator,
+controller, DHWStorage, SimpleHotWaterStorage, HDS, fuel meter; district heating the same without a buffer; electric
+heating site, controller, generator, DHWStorage. With the heat-pump numbering (a boiler assembly ordering generator,
+controller, buffer) each comes out equal up to the same neutral swap where there is a buffer (DHWStorage reads occupancy
+and generator, the buffer HDS and generator, in all five) and up to the fuel provider: it takes 15, after `control`,
+where the twins evaluate the fuel meter before the electricity meter, battery and EMS. That is a chain of neutral swaps:
+the meter reads only the generator, and no component of the ten twins reads a gas or fuel meter. `gas_solar_thermal`
+evaluates solar thermal and the cylinder after the HDS; its composed file numbers `solar_thermal` 12, `dhw` 13, `gas`
+14, `grid` 15, `battery` 16, `control` 17 and equals its twin exactly. `heatpump_solar_thermal` is the exception: its
+twin evaluates the heat pump and buffer before the HDS, solar thermal and DHWStorage, and the two heat-pump controllers
+last. No contiguous `heating` block reaches that by neutral swaps — `ControllerDHW` reads DHWStorage, the heat pump
+reads both controllers — so that one setup is reordered once and its twin and golden re-recorded, in its PR of spec §13
+step 5.
 
 ### Verdict
 
 The design reproduces the twin's **graph** exactly: every component, class, preset, config line, input item, feed tag,
 weight and dispatch block of `ems_with_battery` comes out of the composed file under the rename map, and
 `metered_directly` comes out of the same file without `control`, `battery` and the grid's `observes:` line, up to one
-tag (G15). It does **not yet
-reproduce the file byte for byte, nor guarantee the golden**: G14 (component order) is the one finding that can make
-the D9 gate fail on numbers, and G10 makes the composed file fail to load before anything else runs. Two points need
-an owner decision (G8, G14; G4 and G13 are resolved), one is a component change (G5, EMS modifiers per feed), and the rest are rules
-and declarations the spec or the classes owe (G1–G3, G6, G7, G9, G10, G18).
+tag (G15). With the declared `order:` (G14 resolved, §9.1) it also reproduces the twin's **sequence**, up to one neutral
+swap that leaves every pass bit-identical, so the D9 gate can pass byte for byte against the existing golden. What still
+stands between the composed file and that gate: G10 makes it fail to load before anything else runs. **One point needs
+an owner decision: G8** (G4, G13 and G14 are resolved). One is a component change (G5, EMS modifiers per feed); the rest
+are rules and declarations the spec or the classes owe (G1–G3, G6, G7, G9, G10, G18), plus G15 for the reviewed list,
+G11 (minor) and G12 (EV, outside this twin).

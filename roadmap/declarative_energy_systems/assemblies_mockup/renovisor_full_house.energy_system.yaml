@@ -20,6 +20,9 @@
 # has no link: an electricity need is only the check that the one grid connection exists, never bound (a `bind:` on
 # it is refused), and its flows are observed.
 # `AUTO` leaves a sized parameter to the class law against the expanded system.
+# `order:` is the evaluation order within a time step (spec §2.3, D23), not the file position: the entries the base
+# files share keep the base-file numbers (Weather 3 although written first; heating 6, dhw 9, HeatDistribution 11,
+# grid 12, battery 13, control 14, the fuel provider 15), the rest take free numbers; the translator writes them all.
 
 schema_version: 4                                   # the assemblies extension of the v3 format (spec §2)
 name: renovisor_calculation_<job id>
@@ -28,6 +31,7 @@ description: Composed by hisim.renovisor.translate from calculation request <id>
 # ----------------------------------------------------------------------------------------------- the site
 components:
   Weather:
+    order: 3
     class: hisim.components.weather.Weather
     constructor: for_location                       # R: location.country + location.postcode -> station († IE data)
     arguments: {location: DUBLIN, heating_reference_temperature_in_celsius: -3.0}   # † no Irish station in LocationEnum
@@ -36,6 +40,7 @@ components:
       design_temperature: {connector: sizing_fact, fact: heating_reference_temperature_in_celsius}
 
   Building:
+    order: 1
     class: hisim.components.building.building.Building
     constructor: for_tabula_code                    # R: house.building.tabula_building_code | derived from
     arguments:                                      #    building_type + construction_year + retrofit_status (+ country)
@@ -85,6 +90,7 @@ components:
       room_setpoint:     {connector: sizing_fact, fact: set_heating_temperature_in_celsius}
 
   Occupancy:
+    order: 2
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work                     # R: occupancy.number_of_residents -> household († mapping)
     config:
@@ -102,6 +108,7 @@ components:
       household:        {connector: sizing_fact, fact: occupancy_identity}
 
   HeatDistribution:                                 # D12 (b): HDS and its controller stay on the site
+    order: 11
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived                        # emitter type AUTO: the controller's heat_distribution_system_type
     inputs: [Building, HeatDistributionController]
@@ -109,6 +116,7 @@ components:
       sh: {connector: hydronic_circuit, medium: heating_water, end: {pump: true, legs: [return]}}
           # WaterMassFlowHDS and WaterTemperatureOutput out, WaterTemperatureInput in; the heating import binds here
   HeatDistributionController:
+    order: 5
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     config:
@@ -129,6 +137,7 @@ imports:
 
   # ---- space heating: one import, the assembly chosen by R: heating.type_of_system / M: heating_system.type_of_system
   heating:
+    order: 6
     assembly: heating/air_source_heat_pump          # one of: condensing_gas_boiler, conventional_gas_boiler,
                                                     # condensing_oil_boiler, conventional_oil_boiler, condensing_lpg_boiler (†),
                                                     # conventional_lpg_boiler (†), hvo_boiler (†), hydrogen_boiler, pellet_boiler,
@@ -159,16 +168,18 @@ imports:
 
   # ---- secondary room heating: R: heating.secondary (†). One named Building input (D19), no circuit.
   stove:
+    order: 7
     assembly: heating_secondary/wood_stove          # or open_fireplace, electric_heater
     installation_year: 2005
     parameters: {thermal_power_in_watt: 6000, operating_schedule: evenings_heating_season}
     bind: {room_heat: Building.secondary_heating, room_temperature: Building.zone, fuel: logs}
 
   # ---- cooking: R: heating.cooking_range (†): a gas hob's consumption on the gas supply, no heat model.
-  cooker: {assembly: appliances/gas_cooker, installation_year: 2010, bind: {fuel: gas, usage: Occupancy}}
+  cooker: {order: 20, assembly: appliances/gas_cooker, installation_year: 2010, bind: {fuel: gas, usage: Occupancy}}
 
   # ---- hot water: the assembly chosen by R: hot_water.type_of_system (#85) / M: hot_water_system
   dhw:
+    order: 9
     assembly: dhw/storage_water_heater              # one of: from_space_heating_combi, from_space_heating_cylinder
                                                     # (dhw/indirect_cylinder, binds `circuit: heating.dhw`),
                                                     # storage_water_heater, instantaneous_water_heater (†),
@@ -187,6 +198,7 @@ imports:
 
   # ---- solar thermal: R: house.solar_thermal_system / M: solar_thermal_system (two coils into two imports)
   solar_thermal:
+    order: 8
     assembly: heating/solar_thermal
     installation_year: 2016
     parameters:
@@ -202,6 +214,7 @@ imports:
   # ---- ventilation: R: ventilation.type_of_system / M: ventilation_system (†: natural and trickle vents are site
   #      config of the Building; the mechanical systems are equipment with a year and a price -> assemblies)
   ventilation:
+    order: 17
     assembly: ventilation/mechanical_with_heat_recovery   # or mechanical_extract, demand_controlled_extract
     installation_year: 2024
     parameters: {heat_recovery_efficiency_in_percent: 85}
@@ -210,6 +223,7 @@ imports:
   # ---- air conditioning: R: house.air_conditioning / M: air_conditioners. One unit (the request allows one, D19);
   #      SimpleAirConditioner exists, its Building input (†) does not.
   cooling:
+    order: 18
     assembly: cooling/split_unit
     installation_year: 2021
     parameters: {power_in_watt: 3500}               # R: power_in_watt
@@ -217,6 +231,7 @@ imports:
 
   # ---- photovoltaics: R: house.pv_systems[] (#83, list with ids) / M: photovoltaic_system (replaces | adds)
   pv:
+    order: 4
     assembly: pv/array
     instances:
       roof_south:                                   # instance key = the request's system id
@@ -231,6 +246,7 @@ imports:
 
   # ---- batteries: R: house.batteries[] / M: battery_system (replaces | adds)
   battery:
+    order: 13
     assembly: storage/battery
     instances:
       main: {installation_year: 2026,
@@ -240,6 +256,7 @@ imports:
 
   # ---- electric vehicles: R: house.electric_vehicles (number 1..2) / M: electric_vehicle (†: 2 cars, G12)
   ev:
+    order: 19
     assembly: mobility/electric_vehicle
     instances:
       car_1: {installation_year: 2023, parameters: {commuting_distance_in_km: 20, charging_power_in_watt: 11000}}
@@ -250,6 +267,7 @@ imports:
   # ---- control: the L2 EMS. Present when anything is controllable. Smart HEATING control is not here: it is the
   #      heating import's `control:` parameter (its L1, D21); there is no thermostat import.
   control:
+    order: 14
     assembly: control/ems_self_consumption          # R: occupancy.pv_self_consumption_optimised selects the policy
     observes: [{connector: electricity_flow, flow: [production, consumption, storage]}]   # the flows; publishes `net`
     parameters:
@@ -263,10 +281,12 @@ imports:
 
   # ---- supplies: one provider per carrier the house draws (D6: missing provider fails; the translator adds it)
   grid:                                             # the grid connection and its meter; with an EMS the meter observes
+    order: 12
     assembly: supply/electricity_grid               # the EMS's net only (observing the flows too: double count, §4.3)
     observes: [{connector: electricity_flow, flow: net}]
-  gas:   {assembly: supply/gas_connection}          # present because the cooker draws gas (a boiler house too)
-  logs:  {assembly: supply/delivered_fuel, parameters: {carrier: wood_logs}}   # pellets, wood chips, oil, HVO (†), LPG (†)
+  gas:   {order: 15, assembly: supply/gas_connection}        # present because the cooker draws gas (a boiler house too)
+  logs:  {order: 16, assembly: supply/delivered_fuel, parameters: {carrier: wood_logs}}
+                                                    # also pellets, wood chips, oil, HVO (†), LPG (†)
   # heat_network: {assembly: supply/district_heating_connection}   # when heating or dhw is district heating
   # a second meter is one more observer, priced by a tariff in the economics file (D13, D22):
   # hp_tariff_meter: {assembly: supply/meter,

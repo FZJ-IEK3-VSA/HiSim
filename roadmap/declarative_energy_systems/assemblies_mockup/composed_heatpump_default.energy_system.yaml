@@ -5,6 +5,11 @@
 #
 # Site component names are the twin's, so the rename map touches only imported members. `{$provides: <port>}` in a
 # site entry's `inputs` marks where a bound port's wires land (gap G3), like `{$port: ...}` inside an assembly.
+#
+# `order:` (spec §2.3, D23) is the evaluation order within a time step, independent of file position. The numbers
+# reproduce the twin's sequence: Building 1, UTSPConnector 2, Weather 3, pv 4, HeatDistributionController 5, heating 6
+# (members 6.1-6.4 in the assembly's order), dhw 9, HeatDistributionSystem 11, grid 12, battery 13, control 14. The
+# one exchange against the twin, the buffer (6.4) before the DHW cylinder (9), is a neutral swap (dry run §9.1).
 
 schema_version: 4
 name: household_heatpump_building_sizer
@@ -12,6 +17,7 @@ description: Basic household new system setup.
 
 components:
   Building:
+    order: 1
     class: hisim.components.building.building.Building
     preset: german_single_family_home
     config:
@@ -34,6 +40,7 @@ components:
       roof_area:          {connector: sizing_fact, fact: roof_area_in_m2}
       room_setpoint:      {connector: sizing_fact, fact: set_heating_temperature_in_celsius}
   UTSPConnector:
+    order: 2
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
     config:
@@ -44,6 +51,7 @@ components:
       hot_water_demand: {connector: hot_water_demand}
       internal_gains:   {connector: internal_gains}
   Weather:
+    order: 3
     class: hisim.components.weather.Weather
     config:
       location: Aachen
@@ -56,6 +64,7 @@ components:
       design_temperature: {connector: sizing_fact, fact: heating_reference_temperature_in_celsius}
       weather_id:         {connector: sizing_fact, fact: weather_identity}
   HeatDistributionController:
+    order: 5
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
@@ -70,6 +79,7 @@ components:
       emitter_type:       {connector: sizing_fact, fact: heat_distribution_system_type}
       heating_threshold:  {connector: sizing_fact, fact: set_heating_threshold_outside_temperature_in_celsius}
   HeatDistributionSystem:
+    order: 11
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
     inputs:
@@ -81,23 +91,29 @@ components:
 
 imports:
   heating:
+    order: 6                                        # the assembly as a whole; its members are 6.1-6.4
     assembly: heating/air_source_heat_pump          # parameter defaults = the twin (preset de_twin)
     optional-bind: {ems_modifier: control}          # optional port: intent required (D8 i); a heat pump without
                                                     # an EMS is a normal house, so inert when `control` is absent;
                                                     # sh, flow_temperature, weather bind their one partner;
                                                     # electricity: only the check that one grid connection exists
   dhw:
+    order: 9
     assembly: dhw/indirect_cylinder
     bind: {circuit: heating.dhw}
   pv:
+    order: 4
     assembly: pv/array
     instances: {pv_system: {}}                      # the legacy single object's id (spec §10.4)
   battery:
+    order: 13
     assembly: storage/battery
     instances: {battery: {}}
   control:
+    order: 14
     assembly: control/ems_self_consumption          # observes the flows (its default selection), publishes `net`
   grid:
+    order: 12
     assembly: supply/electricity_grid
     observes: [{connector: electricity_flow, flow: net}]   # the EMS's net only: the twin's ems_with_battery meter.
                                                     # Without this line the default (every electricity_flow) would

@@ -116,10 +116,24 @@ import (and instance) it:
    input feeds, `sizing_sources` lines, config values (§3.2) — and resolves the selectors (§4);
 5. attaches a source map entry to everything it produced (§9.2) and writes an **import record** (data, like
    `ExpansionRecord`, `groups.py:133-151`): assembly path and content hash, preset, parameters as given and as
-   defaulted, internal variants, the members' addresses, every port's state and partner, every derived weight.
+   defaulted, internal variants, the members' addresses and order paths, every port's state and partner, every
+   derived weight, and the file's final evaluation sequence.
 
 Everything downstream — wiring, sizing, simulator, realized record, energy balance, economics — sees ordinary
 components, exactly as nothing downstream knows that a variant existed (`groups.py:30-36`).
+
+**Evaluation order** (decided, owner, 2026-10-03; resolves G14). The order of components within a time step is a
+declared, nested property. `order:` is an optional integer on every top-level component and import; an assembly's
+members follow their position in its file or an explicit relative `order:` (needed when a variant's member sits between
+plain ones); an import's instances follow in written order and an inner import's members nest again. The flat sequence
+is the order paths compared element by element as integers (6 < 6.1 < 6.2 < 6.3.1 < 7, 9 < 11). Numbers need not be
+consecutive; a repeated number at one level is a load error (no tie-break), and a level numbers all its entries or none.
+Without `order:` the sequence is today's (components, then imports, each in file order with its members), so flat files
+need nothing. The importer positions an assembly as a whole, never inside it: the members' order is the author's (§2.5).
+Import and realized record state the final sequence, in which the simulator adds the components (`executor.py:343-344`):
+order is reviewed and pinned, since it moves a week's results by 0.1–7 % through on/off decisions and forced convergence
+(`roadmap/convergence_order_findings.md`, beads hisim-4g9.23–.28); once a canonical dependency order makes results
+order-independent, the numbers become harmless rather than wrong.
 
 ### 2.4 Addresses and expanded names
 
@@ -755,6 +769,13 @@ natural_gas) is required and no provider of natural_gas exists", with the import
 6. **New structure.** #83 request contract and N instances; LPG carrier and `supply/lpg_tank` (#77); DHW assemblies as
    their components land (hisim-epc.21, hisim-lenz); #85 contract; further controllers.
 
+**Order in the base files** (§2.3). The composed files set `order:` to reproduce the twin's sequence: Building 1,
+UTSPConnector 2, Weather 3, pv 4, HeatDistributionController 5, heating 6 (6.1 ControllerSH, 6.2 ControllerDHW, 6.3
+HeatPump, 6.4 Buffer), dhw 9, HeatDistributionSystem 11, grid 12, battery 13, control 14; buffer before cylinder is a
+neutral swap. The gas, hydrogen, oil, pellet, wood-chip and district-heating twins have this shape and electric heating a
+subset, so the numbering serves them (fuel provider 15, neutral); `gas_solar_thermal` numbers its imports apart, and
+`heatpump_solar_thermal` alone is reordered and re-recorded once (dry run, G14).
+
 ## 14. Decisions
 
 ### 14.1 Decided
@@ -784,9 +805,11 @@ All by the owner on 2026-10-03.
   connector type (§3.2).
 - **D9 — Staging:** (a), the gate being "the assembly's defaults reproduce the twin": per generator one PR adds
   `heating/<generator>` (and its DHW assembly) with the twin's presets and, where sensible, the twin's values as
-  defaults. Its expansion equals the twin under the rename map modulo a reviewed list of intended differences (names;
-  pins become `AUTO`; "no PV" as no import; the EMS as an import), the sized values are identical and the one-week run
-  equals the setup's **existing golden**, so the ten `household_*_building_sizer` goldens police the assemblies. The
+  defaults. Its expansion, in the sequence the composed file's `order:` declares (§2.3), equals the twin under the
+  rename map modulo a reviewed list of intended differences (names; pins become `AUTO`; "no PV" as no import; the EMS
+  as an import; a **neutral swap**, two components that read nothing from each other exchanged, which leaves every
+  pass bit-identical), the sized values are identical and the one-week run equals the setup's **existing golden**: no
+  twin or golden is re-recorded (except `heatpump_solar_thermal`, §13), and the ten goldens police the assemblies. The
   twins' test artefacts (Aachen weather, the German single-family-home preset, `couple_both_at_work`) are site values;
   the equality test stays in the freshness workflow permanently.
 - **D10 — Sizing across assemblies:** (a): `Many` with an explicit `Sum`, a many-cardinality `sizing_fact` port lowered
@@ -820,6 +843,8 @@ All by the owner on 2026-10-03.
   `quote: {amount_in_euro: {min, max}, per: m2 | unit | kw | kwh, source}`; a quote on a kept instance is a load-time
   error (#67), `per` is checked against the subject's size unit (#74), and each stage's file carries its quotes.
   `location.country` in both files must agree.
+- **D23 — Evaluation order:** declared and nested: `order:` on top-level components and imports, members in their
+  assembly's order, the sequence by order path, duplicates refused, pinned in the records; resolves G14 (§2.3, §13).
 - Also: units, descriptions, constraints and the variant partition check (§2.6); presets (§2.7); source maps (§9.2);
   `describe`, index, examples, isolation tests and the resolver's search path (§9.3).
 

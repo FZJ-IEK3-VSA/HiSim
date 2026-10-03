@@ -10,6 +10,11 @@
 # land in this member's input list; the expansion replaces it by a bare name or explicit wires (connectors.yaml,
 # "Lowering form"), or drops it when the port is inactive or declined. A member name that the selected internal
 # variants do not contain is dropped the same way (as group expansion drops items to disabled components).
+#
+# Evaluation order (spec §2.3, D23): the members carry an explicit relative `order:` because two of them live in
+# internal variants and the sequence interleaves them: ControllerSH 1, ControllerDHW 2, HeatPump 3, Buffer 4 — the
+# twin's order of the four. The importer positions the whole assembly (`order: 6` in the composed file) and never
+# orders inside it.
 
 schema_version: 4
 kind: assembly
@@ -44,6 +49,7 @@ presets:
 
 components:
   ControllerSH:
+    order: 1
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard                                        # smart: † preset_smart
     inputs:
@@ -52,6 +58,7 @@ components:
       - {$port: ems_modifier, signal: sh_storage_temperature_offset}   # SimpleHotWaterStorageTemperatureModifier :2701
       - Buffer                                              # WaterTemperatureInput <- WaterTemperatureToHeatGenerator
   HeatPump:
+    order: 3
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
     preset: air_water
     config:
@@ -74,6 +81,7 @@ variants:
         when: [true]
         components:
           ControllerDHW:
+            order: 2                                        # between ControllerSH and HeatPump, as in the twin
             class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
             preset: standard
             inputs:
@@ -89,6 +97,7 @@ variants:
         when: [true]
         components:
           Buffer:
+            order: 4
             class: hisim.components.simple_water_storage.SimpleHotWaterStorage
             preset: buffer
             config:

@@ -22,8 +22,8 @@ and `"<name> (<source component>)"` as soon as a second one does (`keyed_compone
 car's "Distance driven" for every consumer, and a reader of `all_kpis.json` cannot know a key's shape
 without knowing the whole setup. Consumers rebuild key strings by hand: 29 lookups in ten test files,
 one in `tests/test_fuel_meter.py` that already had to change. Assemblies sharpen this: a member's name
-serializes a structured address (`pv__east__PVSystem`, assemblies spec §2.4), and "every KPI of import
-`pv`" would mean splitting that string, which the spec forbids (`__` is derived, never parsed back).
+serializes a structured address (`pv-east-PVSystem`, assemblies spec §2.4), and "every KPI of import
+`pv`" would mean splitting that string, which the spec forbids (the hyphen-joined name is derived, never parsed back).
 
 ## Goal
 
@@ -44,7 +44,12 @@ serializes a structured address (`pv__east__PVSystem`, assemblies spec §2.4), a
 | `instance` | the instance key = the request's system id; `null` if the import has none | `null` | `east` |
 | `member` | the name inside its assembly, or the plain component name | `Building` | `PVSystem` |
 | `assembly` | library path of the innermost owning assembly; informative, not identity | `null` | `pv/array` |
-| `name` | runtime name = serialized address `<import>[__<instance>]__…__<member>` | `Building` | `pv__east__PVSystem` |
+| `name` | runtime name = serialized address `<import>[-<instance>]-…-<member>` | `Building` | `pv-east-PVSystem` |
+| `display_name` | English default label from assembly metadata (the assembly's `name:`, an optional per-member `display:` template with parameters); `DisplayConfig` for site components; never an identifier | `Building` | `PV array, east` |
+| `label` | the request's own name for the system, verbatim (optional, `pv_systems[].label`); wins over `display_name` in the frontend | null | `Garage roof panels` |
+
+HiSim ships no translations (owner, 2026-10-03): `display_name` is the English fallback, `label` is passed through
+untouched, and the frontend translates by the stable fields (`assembly`, `member`), as it does for KPI names.
 
 - `import` is a Python keyword, so the dataclass field is `import_key`, pinned to the JSON name
   `import` with `dataclasses_json` field metadata, as `KpiEntry` already pins its own spelling (`:63-65`).
@@ -79,23 +84,24 @@ entry also keeps `nameOfSourceComponent` = `source.name`:
   "General": {
     "Self-consumption rate": {"value": 41.2, "unit": "%", "source": null}},
   "PV": {
-    "Electricity production (pv__east__PVSystem)": {"value": 3120.5, "unit": "kWh",
+    "Electricity production (pv-east-PVSystem)": {"value": 3120.5, "unit": "kWh",
       "source": {"import": "pv", "instance": "east", "member": "PVSystem",
-                 "assembly": "pv/array", "name": "pv__east__PVSystem"}},
-    "Electricity production (pv__west__PVSystem)": {"value": 2875.0, "unit": "kWh",
+                 "assembly": "pv/array", "name": "pv-east-PVSystem",
+                 "display_name": "PV array, east", "label": "Garage roof panels"}},
+    "Electricity production (pv-west-PVSystem)": {"value": 2875.0, "unit": "kWh",
       "source": {"import": "pv", "instance": "west", "member": "PVSystem",
-                 "assembly": "pv/array", "name": "pv__west__PVSystem"}}},
+                 "assembly": "pv/array", "name": "pv-west-PVSystem"}}},
   "Heat Pump For Space Heating": {
-    "Seasonal performance factor (heating__HeatPump)": {"value": 3.4, "unit": "-",
+    "Seasonal performance factor (heating-HeatPump)": {"value": 3.4, "unit": "-",
       "source": {"import": "heating", "instance": null, "member": "HeatPump",
-                 "assembly": "heating/air_source_heat_pump", "name": "heating__HeatPump"}}},
+                 "assembly": "heating/air_source_heat_pump", "name": "heating-HeatPump"}}},
   "Building": {
     "Heating load (Building)": {"value": 7.9, "unit": "kW",
       "source": {"import": null, "instance": null, "member": "Building",
                  "assembly": null, "name": "Building"}}}}}
 ```
 
-The golden form of the first array is `BUI1.PV.Electricity production (pv__east__PVSystem)`; adding a
+The golden form of the first array is `BUI1.PV.Electricity production (pv-east-PVSystem)`; adding a
 third array adds a key and renames none.
 
 ## Finder

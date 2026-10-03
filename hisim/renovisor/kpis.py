@@ -71,10 +71,10 @@ class KpiDocument:
     """The run's ``all_kpis.json``, addressed by KPI name rather than by key.
 
     ``WRITE_KPIS_TO_JSON`` writes a three-level document -- building object, then KPI group, then
-    one entry per KPI -- whose innermost keys are *qualified with the source component* as soon as
-    two components of one building report a KPI of the same name. The entries themselves always
-    carry their plain ``name``, so that is what this class looks values up by, exactly as
-    ``kpi_preparation.py`` does internally when it sums the meters.
+    one entry per KPI -- whose innermost key of every component KPI is *qualified with its source
+    component*, ``"<name> (<source.name>)"`` (``roadmap/kpi_address_spec.md``). The entries
+    themselves always carry their plain ``name``, so that is what this class looks values up by,
+    exactly as ``kpi_preparation.py`` does internally when it sums the meters.
 
     A RenoVisor calculation is one dwelling, so the first building object that carries a name is
     the answer; the district case the collection also serves does not arise here.
@@ -96,19 +96,40 @@ class KpiDocument:
     UNIT_KEY: ClassVar[str] = "unit"
 
     def __init__(self, document: Mapping[str, Any]) -> None:
-        """Index every entry of the document by its plain KPI name."""
+        """Index every entry of the document by its plain KPI name.
+
+        A name two entries carry -- two components reporting it, or two buildings -- is indexed
+        as ambiguous, and reading it raises (:meth:`_entry`): taking the first one would publish
+        one component's figure as the dwelling's.
+        """
         self._by_name: Dict[str, Any] = {}
         self._units_by_name: Dict[str, Any] = {}
-        for groups in document.values():
+        self._keys_by_name: Dict[str, List[str]] = {}
+        for building, groups in document.items():
             if not isinstance(groups, Mapping):
                 continue
-            for entries in groups.values():
+            for tag, entries in groups.items():
                 if not isinstance(entries, Mapping):
                     continue
-                for entry in entries.values():
+                for key, entry in entries.items():
                     if isinstance(entry, Mapping) and self.NAME_KEY in entry:
-                        self._by_name.setdefault(str(entry[self.NAME_KEY]), entry.get(self.VALUE_KEY))
-                        self._units_by_name.setdefault(str(entry[self.NAME_KEY]), entry.get(self.UNIT_KEY))
+                        name = str(entry[self.NAME_KEY])
+                        self._keys_by_name.setdefault(name, []).append(f"{building}.{tag}.{key}")
+                        self._by_name.setdefault(name, entry.get(self.VALUE_KEY))
+                        self._units_by_name.setdefault(name, entry.get(self.UNIT_KEY))
+
+    def _require_unambiguous(self, name: str) -> None:
+        """Raise if two entries of the document carry the KPI name.
+
+        Raises:
+            ValueError: Naming every entry of that name.
+        """
+        keys = self._keys_by_name.get(name, [])
+        if len(keys) > 1:
+            raise ValueError(
+                f"all_kpis.json carries {len(keys)} KPIs named '{name}' ({', '.join(keys)}); a RenoVisor "
+                "field reads exactly one, and taking either would publish one of them as the dwelling's."
+            )
 
     @classmethod
     def load(cls, results_directory: Path) -> Optional["KpiDocument"]:
@@ -135,7 +156,11 @@ class KpiDocument:
 
         Returns:
             The value, or ``None``.
+
+        Raises:
+            ValueError: If two entries of the document carry the name.
         """
+        self._require_unambiguous(name)
         value = self._by_name.get(name)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
@@ -149,7 +174,11 @@ class KpiDocument:
 
         Returns:
             The unit, e.g. ``"°C*h"``, or ``None``.
+
+        Raises:
+            ValueError: If two entries of the document carry the name.
         """
+        self._require_unambiguous(name)
         unit = self._units_by_name.get(name)
         return unit if isinstance(unit, str) and unit else None
 

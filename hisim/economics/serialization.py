@@ -78,7 +78,7 @@ from hisim.economics.tariffs import TariffContract, contract_to_json, load_tarif
 from hisim.economics.timeline import Actor, CashFlowEntry, CashFlowTimeline, CostCategory, SubjectKind
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource, KpiTagEnumClass
 
 
 class SerializationFileNames:
@@ -471,6 +471,13 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
         "heated_floor_area_in_m2": inputs.heated_floor_area_in_m2,
         "living_area_in_m2": inputs.living_area_in_m2,
         "current_cold_rent_in_euro_per_m2_month": inputs.current_cold_rent_in_euro_per_m2_month,
+        # Which subjects are HiSim components, and their KPI source (kpi_address_spec.md); the
+        # staged document's rows carry it. None only for a record read from a file older than it.
+        "component_sources": (
+            None
+            if inputs.component_sources is None
+            else {subject: source.to_dict() for subject, source in inputs.component_sources.items()}
+        ),
     }
 
 
@@ -564,7 +571,39 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
         heated_floor_area_in_m2=raw.get("heated_floor_area_in_m2"),
         living_area_in_m2=raw.get("living_area_in_m2"),
         current_cold_rent_in_euro_per_m2_month=raw.get("current_cold_rent_in_euro_per_m2_month"),
+        component_sources=_component_sources_from_json(raw),
     )
+
+
+def _component_sources_from_json(raw: dict) -> Optional[Dict[str, KpiSource]]:
+    """Reads the subject -> KPI source map of an inputs file.
+
+    Absent from a file written before the field existed: the record then says ``None`` (not
+    known), never an empty map (no component), so a reader that needs the sources -- the staged
+    document's ``by_subject[].source`` -- refuses it instead of calling every subject a
+    non-component.
+
+    Raises:
+        ValueError: If the field is present but not a map of subject to source object, or if a
+            source's name is not the subject it is filed under.
+    """
+    if "component_sources" not in raw or raw["component_sources"] is None:
+        return None
+    entries = raw["component_sources"]
+    if not isinstance(entries, dict):
+        raise ValueError(f"economic_inputs.json: component_sources is not an object: {entries!r}")
+    sources: Dict[str, KpiSource] = {}
+    for subject, source_raw in entries.items():
+        if not isinstance(source_raw, dict):
+            raise ValueError(f"economic_inputs.json: the source of '{subject}' is not an object: {source_raw!r}")
+        source = KpiSource.from_dict(source_raw)
+        if source.name != subject:
+            raise ValueError(
+                f"economic_inputs.json: component_sources files the source named '{source.name}' under "
+                f"the subject '{subject}'; a component's subject is its runtime name."
+            )
+        sources[subject] = source
+    return sources
 
 
 def write_inputs(

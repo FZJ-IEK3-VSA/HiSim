@@ -393,3 +393,36 @@ class FactsRenderer(Report):
         cls._heading("warnings", stream)
         for warning in warnings or ("(none)",):
             cls._item(warning, stream)
+
+
+class KpiAddressRenderer:
+    """Lists the addresses of a KPI collection, one dotted address per line (``hisim kpis list``).
+
+    The dotted form is the one the golden references use, ``<building>.<tag>.<key>``, so a line
+    can be pasted into a golden diff search as it stands. The addresses come from
+    :class:`~hisim.postprocessing.kpi_computation.kpi_address.KpiFinder`, which reads each entry's
+    source from the entry and refuses a collection whose keys disagree with their entries.
+    """
+
+    #: The file a result directory holds the KPI collection in.
+    FILE_NAME: str = "all_kpis.json"
+
+    @classmethod
+    def document_path(cls, path: Path) -> Path:
+        """The ``all_kpis.json`` a caller means: the file itself, or the one in a result directory.
+
+        Raises:
+            FileNotFoundError: If the path is neither such a file nor a directory holding one.
+        """
+        candidate = path / cls.FILE_NAME if path.is_dir() else path
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"No KPI collection at {candidate}: pass a result directory or its {cls.FILE_NAME}."
+            )
+        return candidate
+
+    @classmethod
+    def render(cls, addresses: Sequence[Any], stream: TextIO) -> None:
+        """Writes one dotted address per line, in collection order."""
+        for address in addresses:
+            print(address.dotted, file=stream)

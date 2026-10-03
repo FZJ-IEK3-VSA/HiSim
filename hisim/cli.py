@@ -16,6 +16,8 @@ reads, and which provider each read resolved to — without running a single tim
 record`` goes the other way and writes a Python setup out as such a file, which is how the setups
 this repository already has become declarative twins without anybody retyping them. And ``hisim
 energy-system run`` runs a file, which is the same thing ``hisim_main.py`` does when handed one.
+A second noun reads what a run wrote: ``hisim kpis list`` prints the address of every KPI of one
+``all_kpis.json``, filtered by building, tag, name or source.
 
 Two conventions hold throughout. Nothing here decides anything: every command asks the same code
 the executor asks, so a command can never report something a run would contradict. And a failure
@@ -28,6 +30,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
+import json
 import sys
 from pathlib import Path
 from typing import Optional, Sequence, TextIO
@@ -37,7 +40,7 @@ from dotenv import load_dotenv
 from hisim.cli_exit import ExitCodes
 from hisim.cli_grouping import GroupingCommands, GroupingPaths
 from hisim.config.introspection import describe_config
-from hisim.cli_render import DescriptionRenderer, FactsRenderer
+from hisim.cli_render import DescriptionRenderer, FactsRenderer, KpiAddressRenderer
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.executor import SimulationParametersReader
@@ -45,6 +48,7 @@ from hisim.energy_system.recording.grouping_overview import OverviewPage
 from hisim.energy_system.recording.session import RecordingSession, record_setup
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import default_schema_path, export_schema
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 
 
 class ClassLookup:
@@ -189,6 +193,39 @@ class EnergySystemCommands:
         return ExitCodes.OK
 
 
+class KpiCommands:
+    """The verbs of the ``kpis`` noun: reading a run's KPI collection by address.
+
+    ``hisim kpis list`` prints the address of every KPI of one ``all_kpis.json`` that matches the
+    filters, one dotted address per line (``roadmap/kpi_address_spec.md``, "Finder"). The filters
+    are the finder's own and are exact: building, tag, KPI name, and the source's import and
+    instance keys.
+    """
+
+    @classmethod
+    def list(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
+        """Prints the dotted address of every KPI matching the filters."""
+        try:
+            path = KpiAddressRenderer.document_path(Path(arguments.path))
+        except FileNotFoundError as error:
+            print(str(error), file=error_stream)
+            return ExitCodes.FILE_REJECTED
+        try:
+            finder = KpiFinder(json.loads(path.read_text(encoding="utf-8")))
+        except ValueError as error:  # json.JSONDecodeError is a ValueError, and so is a refused collection
+            print(f"{path}: {error}", file=error_stream)
+            return ExitCodes.FILE_REJECTED
+        addresses = finder.addresses(
+            building=arguments.building,
+            tag=arguments.tag,
+            name=arguments.name,
+            import_key=arguments.import_key,
+            instance=arguments.instance,
+        )
+        KpiAddressRenderer.render(addresses, out)
+        return ExitCodes.OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Builds the whole argument parser, nouns and verbs included.
 
@@ -279,6 +316,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--result-dir", dest="result_dir", default=None, help="where the results go")
     run.add_argument("--rerun", action="store_true",
                      help="the file is a generated run record and is expected to reproduce it")
+
+    kpis = nouns.add_parser("kpis", help="read a run's all_kpis.json by address")
+    kpi_verbs = kpis.add_subparsers(dest="verb")
+    kpi_list = kpi_verbs.add_parser("list", help="print the dotted address of every matching KPI")
+    kpi_list.add_argument("path", metavar="PATH", help="a result directory, or its all_kpis.json")
+    kpi_list.add_argument("--building", default=None, help="only this building object")
+    kpi_list.add_argument("--tag", default=None, help="only this KPI tag, as written in the JSON")
+    kpi_list.add_argument("--name", default=None, help="only KPIs of this name")
+    kpi_list.add_argument("--import", dest="import_key", default=None, help="only KPIs whose source has this import")
+    kpi_list.add_argument("--instance", default=None, help="only KPIs whose source has this instance")
     return parser
 
 
@@ -308,16 +355,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         arguments = parser.parse_args(list(argv) if argv is not None else None)
     except SystemExit as exit_request:  # argparse reports usage errors by exiting
         return int(exit_request.code or ExitCodes.OK)
-    verbs = {
-        "describe": EnergySystemCommands.describe,
-        "facts": EnergySystemCommands.facts,
-        "grouping": EnergySystemCommands.grouping,
-        "record": EnergySystemCommands.record,
-        "schema": EnergySystemCommands.schema,
-        "run": EnergySystemCommands.run,
+    verbs_by_noun = {
+        "energy-system": {
+            "describe": EnergySystemCommands.describe,
+            "facts": EnergySystemCommands.facts,
+            "grouping": EnergySystemCommands.grouping,
+            "record": EnergySystemCommands.record,
+            "schema": EnergySystemCommands.schema,
+            "run": EnergySystemCommands.run,
+        },
+        "kpis": {"list": KpiCommands.list},
     }
-    verb = verbs.get(getattr(arguments, "verb", None) or "")
-    if arguments.noun != "energy-system" or verb is None:
+    verb = verbs_by_noun.get(arguments.noun or "", {}).get(getattr(arguments, "verb", None) or "")
+    if verb is None:
         parser.print_help(sys.stderr)
         return ExitCodes.USAGE
     try:

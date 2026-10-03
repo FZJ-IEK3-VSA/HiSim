@@ -5,7 +5,7 @@ https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiede
 """
 
 import os
-from typing import List, Tuple, Dict, Optional
+from typing import Any, List, Tuple, Dict, Optional
 from pathlib import Path
 import pandas as pd
 from hisim.component import ComponentOutput
@@ -14,7 +14,8 @@ from hisim.loadtypes import ComponentType, InandOutputType, DistrictNames
 from hisim import log
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiSource
+from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress, KpiFinder
 
 
 class KpiPreparation:
@@ -27,12 +28,30 @@ class KpiPreparation:
         self.post_processing_data_transfer = post_processing_data_transfer
         self.building_objects_in_district_list = building_objects_in_district_list
         self.kpi_collection_dict_unsorted: Dict = {}
+        #: The tag-sorted collection, ``building -> tag -> key -> entry``; set by ``KpiGenerator``
+        #: once every KPI is computed, and read through :attr:`finder`.
+        self.kpi_collection_dict_sorted: Optional[Dict[str, Dict[Any, Dict[str, Any]]]] = None
         # get important variables
         self.wrapped_components = self.post_processing_data_transfer.wrapped_components
         self.results = self.post_processing_data_transfer.results
         self.all_outputs = self.post_processing_data_transfer.all_outputs
         self.simulation_parameters = self.post_processing_data_transfer.simulation_parameters
         self.get_all_component_kpis(wrapped_components=self.wrapped_components)
+
+    @property
+    def finder(self) -> KpiFinder:
+        """A :class:`KpiFinder` over the tag-sorted collection, the way to look a KPI up by its fields.
+
+        Raises:
+            RuntimeError: If the collection has not been sorted yet: the finder reads what
+                ``all_kpis.json`` will hold, and a half-built collection is not that.
+        """
+        if self.kpi_collection_dict_sorted is None:
+            raise RuntimeError(
+                "The KPI collection is not sorted by tag yet; KpiGenerator sorts it once every KPI "
+                "is computed, and only then can it be searched."
+            )
+        return KpiFinder(self.kpi_collection_dict_sorted)
 
     def filter_results_according_to_postprocessing_flags(
         self,
@@ -1866,16 +1885,15 @@ class KpiPreparation:
 
     @staticmethod
     def keyed_component_entries(kpi_entries: List[KpiEntry]) -> Dict[str, Dict]:
-        """Keys one building's component KPI entries, telling same-named entries apart by source.
+        """Keys one building's component KPI entries by name and source (``kpi_address_spec.md``).
 
         The key is what the report table, the webtool JSON and the flattened golden comparison
-        address a KPI by. Two components of one class emit the same entry names — the two CHPs of
-        the ``dynamic_components`` setup both report "Electrical energy produced" — and keying by
-        name alone let the second instance silently overwrite the first, so one of the two CHPs
-        vanished from every KPI consumer without anything failing. Where several components share
-        an entry name, each of their entries is keyed as ``"<name> (<source component>)"`` instead,
-        so every instance stays visible; a building where a name is emitted by exactly one
-        component keeps the unqualified name, so single-instance setups do not rename anything.
+        address a KPI by. Every component entry is keyed ``"<name> (<source.name>)"``
+        (:meth:`KpiAddress.key_for`), whether or not another component of the building reports the
+        same name, so a key is a property of the KPI and never changes when a neighbour is added.
+        Two components of one class emit the same entry names -- the two CHPs of the
+        ``dynamic_components`` setup both report "Electrical energy produced" -- and the source
+        keeps both visible.
 
         Args:
             kpi_entries: Every component KPI entry of one building object.
@@ -1884,29 +1902,37 @@ class KpiPreparation:
             The entries as the collection stores them, ``{key: entry.to_dict()}``.
 
         Raises:
-            ValueError: If same-named entries collide and one of them names no source component,
-                leaving nothing to tell them apart by — entries collected through
-                :meth:`hisim.component.Component.component_kpi_entries` always name their source,
-                so that can only come from a caller keying entries it built itself; or if two
-                entries still produce one key, which means one component emitted the same KPI
-                name twice and no consumer could have read both of them.
+            ValueError: If an entry carries no source (entries collected through
+                :meth:`hisim.component.Component.component_kpi_entries` always do, so that is a
+                caller keying entries it built itself), if its deprecated
+                ``name_of_source_component`` differs from ``source.name``, if two entries name one
+                source name with different sources, or if two entries produce one key, which
+                means one component emitted the same KPI name twice and no consumer could have
+                read both of them.
         """
-        sources_per_name: Dict[str, List[Optional[str]]] = {}
-        for entry in kpi_entries:
-            sources_per_name.setdefault(entry.name, []).append(entry.name_of_source_component)
-
+        sources_by_name: Dict[str, KpiSource] = {}
         keyed: Dict[str, Dict] = {}
         for entry in kpi_entries:
-            if len(sources_per_name[entry.name]) == 1:
-                key = entry.name
-            elif entry.name_of_source_component is None or None in sources_per_name[entry.name]:
+            source = entry.source
+            if source is None:
                 raise ValueError(
-                    f"Several components report a KPI named '{entry.name}' and at least one of "
-                    "them carries no name_of_source_component, so their entries cannot be told "
-                    "apart. Every component KPI entry has to name its source component."
+                    f"The component KPI entry '{entry.name}' carries no source. Every component KPI "
+                    "entry has to name the component it is reported for; collect entries through "
+                    "Component.component_kpi_entries, which stamps it."
                 )
-            else:
-                key = f"{entry.name} ({entry.name_of_source_component})"
+            if entry.name_of_source_component != source.name:
+                raise ValueError(
+                    f"The component KPI entry '{entry.name}' names its source twice and differently: "
+                    f"source.name '{source.name}', name_of_source_component "
+                    f"'{entry.name_of_source_component}'. The deprecated field must equal source.name."
+                )
+            known = sources_by_name.setdefault(source.name, source)
+            if known != source:
+                raise ValueError(
+                    f"Two KPI entries of one building name the source '{source.name}' with different "
+                    f"addresses: {known} and {source}. A component has exactly one source."
+                )
+            key = KpiAddress.key_for(entry.name, source)
             if key in keyed:
                 raise ValueError(
                     f"Two KPI entries of one building key as '{key}'. A component must not emit "

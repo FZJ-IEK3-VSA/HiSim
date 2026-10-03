@@ -134,6 +134,7 @@ def _stage(
             ],
             existing_assets=inventory_register(),
             annual_heat_demand_in_kwh=11000.0,
+            component_sources={PV: SyntheticPlan.component_source(PV)} if pv_size else {},
         ),
         from_year=from_year,
         label=label,
@@ -265,6 +266,9 @@ class TestTheDocumentRow:
         assert increment["investment_by_stage"][0]["investment_in_euro"]["best"] == pytest.approx(5202.0)
         assert increment["installation_year"] == SyntheticPlan.YEAR + 2
         assert rows[PV]["stage"] == 1
+        # The increment is a piece of the array: it carries the array component's KPI source.
+        assert rows[PV]["source"] == SyntheticPlan.component_source(PV).to_dict()
+        assert increment["source"] == rows[PV]["source"]
 
 
 class TestAnOverridePricedEnlargement:

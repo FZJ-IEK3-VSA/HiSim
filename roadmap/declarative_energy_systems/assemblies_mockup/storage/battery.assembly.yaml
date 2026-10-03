@@ -1,0 +1,58 @@
+# Mockup (design, not loadable): energy_systems/assemblies/storage/battery.assembly.yaml
+# A home battery (bslib). It has no L1 controller: the EMS writes its LoadingPowerInput directly (D21), which is why
+# its controllable port names a device input and is REQUIRED — a battery without a controller is refused.
+
+schema_version: 4
+kind: assembly
+name: storage/battery
+description: AC-coupled home battery, sized to the PV arrays it stands beside unless pinned.
+
+parameters:
+  capacity_in_kwh:
+    {type: float, unit: KWH, default: AUTO, range: {min: 1, max: 30},
+     description: Usable capacity; AUTO is 1 kWh per kWp of all arrays.}
+     # range: home batteries on the market, 1 to 30 kWh
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, range: {min: 500, max: 15000},
+     description: Charge/discharge power; AUTO is 0.5 W per Wp of all arrays.}
+     # range: 0.5 W per Wp over the PV box, up to a 15 kW hybrid inverter
+  days_to_cover:
+    {type: float, default: none, range: {min: 0.5, max: 3},
+     description: "Request leaf `days_to_cover` († no law reads it; the translator converts it into capacity_in_kwh or reports it)."}
+     # range: half a day to three days of autonomy; no unit (lt.Units has no day), feeds no field
+
+presets:
+  de_twin: {}                                              # the twin's sized_to_pv battery
+
+components:
+  Battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    preset: sized_to_pv                                    # both fields AUTO, advanced_battery_bslib.py:103-121
+    config:
+      custom_battery_capacity_generic_in_kilowatt_hour: {$param: capacity_in_kwh}   # _in_kilowatt_hour: † suffix table entry
+      custom_pv_inverter_power_generic_in_watt: {$param: power_in_watt}
+    # no inputs: LoadingPowerInput is filled by the EMS feed's `dispatch.target_input` (twin :117-123)
+
+interface:
+  needs:
+    pv_peak_power:
+      fact: pv_peak_power_in_watt
+      many: true                                           # D10: Sum over every array, in instance order
+      into: [Battery]                                      # CAPACITY_LAW / INVERTER_POWER_LAW, :58, :65
+  provides:
+    electricity:
+      output: Battery.AcBatteryPowerUsed                   # observed by its tags (BATTERY), never linked
+      controllable: {target_input: LoadingPowerInput}      # required: binds the one controller
+
+tests:
+  # One day at 900 s beside a PV partner (the fact provider) and the residents. The battery's AC and DC power stay
+  # within the box's 15 kW inverter, with margin; the signs of the charging/discharging outputs are not checked
+  # against advanced_battery_bslib.py, so those bands are symmetric.
+  bounds:
+    - {output: Battery.AcBatteryPowerUsed, unit: WATT, min: -20000, max: 20000}        # signed: charge > 0, discharge < 0
+    - {output: Battery.DcBatteryPowerUsed, unit: WATT, min: -20000, max: 20000}        # signed, as the AC side
+    - {output: Battery.ChargingPower, unit: WATT, min: -20000, max: 20000}             # sign unchecked
+    - {output: Battery.DischargingPower, unit: WATT, min: -20000, max: 20000}          # sign unchecked
+  monotone:
+    - {parameter: capacity_in_kwh, kpi: Battery charging energy, member: Battery, direction: increasing}
+      # a larger battery absorbs at least as much surplus in a day

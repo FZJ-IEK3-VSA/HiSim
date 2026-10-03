@@ -1,7 +1,8 @@
 # Spec: stable KPI addresses and a way to find them
 
-**Date:** 2026-09-08 · **Owner:** Noah Pflugradt · **Status:** proposed, its own PR after
-`kpi_multi_instance` (#653) is on main.
+**Date:** 2026-09-08, revised 2026-10-03 · **Owner:** Noah Pflugradt · **Status:** proposed; step 0 of the
+assemblies staging (`roadmap/declarative_energy_systems/assemblies_spec.md` §13, decisions D5/D15/D18), before its
+step 1 and independent of the hydronic stages (hisim-fxix). Bead **hisim-b3b.1, P1** (the gating step).
 
 ## Problem
 
@@ -13,39 +14,120 @@ components happen to live in the same building:
 | Collection (`KpiPreparation.kpi_collection_dict_unsorted`) | `building -> key -> entry dict` |
 | Tag-sorted collection, `all_kpis.json`, webtool JSON | `building -> tag -> key -> entry dict` |
 | Report table (`return_table_for_report`) | one row per `building`, `key` |
-| Golden references (`scripts/golden_kpis.py::flatten`) | `building.tag.key` |
+| Golden references (`scripts/golden_kpis.py::flatten`) | `building.tag.key` -> value, no unit, no source |
 
-Since #653 the `key` is the bare entry name while exactly one component of the building emits
-it, and `"<name> (<source component>)"` as soon as a second one does. So a key is not a property
-of the KPI: adding a second car to a setup renames the first car's "Distance driven" for every
-consumer, the fuel meter's CO2 entry is qualified only because an oil boiler shares its name, and
-a reader of `all_kpis.json` cannot know a key's shape without knowing the whole setup. Every
-consumer that wants one component's entry rebuilds the key string by hand; there are 29 such
-lookups in ten test files and one in `tests/test_fuel_meter.py` that already had to change.
+Since #653 the `key` is the bare entry name while exactly one component of the building emits it,
+and `"<name> (<source component>)"` as soon as a second one does (`keyed_component_entries`,
+`kpi_preparation.py:1868`). So a key is not a property of the KPI: a second car renames the first
+car's "Distance driven" for every consumer, and a reader of `all_kpis.json` cannot know a key's shape
+without knowing the whole setup. Consumers rebuild key strings by hand: 29 lookups in ten test files,
+one in `tests/test_fuel_meter.py` that already had to change. Assemblies sharpen this: a member's name
+serializes a structured address (`pv-east-PVSystem`, assemblies spec §2.4), and "every KPI of import
+`pv`" would mean splitting that string, which the spec forbids (the hyphen-joined name is derived, never parsed back).
 
 ## Goal
 
 1. Every KPI has one address that is a function of the KPI itself: its building, its tag, its
-   name and, for component KPIs, its source component. Nothing about the neighbours enters it.
-2. Callers never build a key string. A finder enumerates and resolves entries by their fields,
-   in process and on a loaded `all_kpis.json` alike.
+   name and, for component KPIs, its structured source. Nothing about the neighbours enters it.
+2. Callers never build or split a key string. A finder enumerates and resolves entries by their
+   fields, in process and on a loaded `all_kpis.json` alike.
+3. KPIs, the economics' per-subject cost rows and the RenoVisor request ids join on one field set.
+
+## The source of a component KPI
+
+`KpiEntry` (`hisim/postprocessing/kpi_computation/kpi_structure.py:60`) gains
+`source: Optional[KpiSource]`, serialized by its `to_dict` next to the existing fields:
+
+| Field (JSON) | Meaning | Site | Member |
+|---|---|---|---|
+| `import` | the import key | `null` | `pv` |
+| `instance` | the instance key = the request's system id; `null` if the import has none | `null` | `east` |
+| `member` | the name inside its assembly, or the plain component name | `Building` | `PVSystem` |
+| `assembly` | library path of the innermost owning assembly; informative, not identity | `null` | `pv/array` |
+| `name` | runtime name = serialized address `<import>[-<instance>]-…-<member>` | `Building` | `pv-east-PVSystem` |
+| `display_name` | English default label from assembly metadata (the assembly's `name:`, an optional per-member `display:` template with parameters); `DisplayConfig` for site components; never an identifier | `Building` | `PV array, east` |
+| `label` | the request's own name for the system, verbatim (optional, `pv_systems[].label`); wins over `display_name` in the frontend | null | `Garage roof panels` |
+
+HiSim ships no translations (owner, 2026-10-03): `display_name` is the English fallback, `label` is passed through
+untouched, and the frontend translates by the stable fields (`assembly`, `member`), as it does for KPI names.
+
+- `import` is a Python keyword, so the dataclass field is `import_key`, pinned to the JSON name
+  `import` with `dataclasses_json` field metadata, as `KpiEntry` already pins its own spelling (`:63-65`).
+- `Component.component_kpi_entries` (`hisim/component.py:630`, stamping at `:658-659`) fills
+  `source` from the component's `ComponentID` (its `path` and member, assemblies D5) wherever an
+  entry has none; an entry that reports on behalf of another component (the EMS,
+  `controller_l2_energy_management_system.py:990`) sets that component's source.
+- Derived KPIs (General tag, meter-derived cost totals, district totals) keep `source: null`.
+- **`name_of_source_component` is kept for one release** as the same string as `source.name`,
+  marked deprecated in the docstring and the contract note: `nameOfSourceComponent` is part of the
+  webtool JSON wire format (`kpi_structure.py:63-65`), so its readers get one release offering both.
 
 ## Address scheme
 
-- **Component KPIs** (entries a `Component.get_component_kpi_entries` produced) are always keyed
-  `"<name> (<source component>)"`, whether or not anything collides. The source component is the
-  entry's `name_of_source_component`, which the base class stamps on every entry (#653).
-- **Derived KPIs** (entries `KpiPreparation` computes itself: the General tag, the meter-derived
-  cost totals, district totals) have no source component and stay keyed by bare name. They are
-  singletons per building by construction.
-- The rule that decides a key's shape is therefore "who produced it", which is fixed at the
-  producer, never "who else is present". `keyed_component_entries` keeps refusing an entry
-  without a source and a duplicate key; both now mean a component defect, never a setup shape.
-- The tag level and the dotted golden form `building.tag.key` stay as they are, so the nesting of
-  `all_kpis.json` and the webtool JSON does not change; only the leaf keys of component entries
-  gain their qualifier. (Adding a nesting level per source component was considered and
-  rejected: it changes the JSON shape for every consumer, while the qualified string only changes
-  the leaf key and keeps `jsondata[building][tag][key]` working.)
+- **Component KPIs** are always keyed `"<name> (<source.name>)"`, whether or not anything collides.
+  The leaf key stays a string, so `jsondata[building][tag][key]` keeps working, and a key never
+  changes when a neighbour is added.
+- **Derived KPIs** have no source and stay keyed by bare name; they are singletons per building.
+- A key's shape is fixed by its producer, never by who else is present. `keyed_component_entries`
+  keeps refusing an entry without a source and a duplicate key; both now mean a component defect.
+- Consumers **filter on `source.*`**; nobody splits strings. The tag level and the JSON nesting stay
+  (a nesting level per source was rejected: it changes the shape for every consumer).
+
+## Worked example: `all_kpis.json`
+
+Two PV arrays (import `pv`, instances `east`/`west`), a heat pump in import `heating`, a site
+`Building`, one derived General KPI. Entries abridged to `value`, `unit` and `source`; every component
+entry also keeps `nameOfSourceComponent` = `source.name`:
+
+```json
+{"BUI1": {
+  "General": {
+    "Self-consumption rate": {"value": 41.2, "unit": "%", "source": null}},
+  "PV": {
+    "Electricity production (pv-east-PVSystem)": {"value": 3120.5, "unit": "kWh",
+      "source": {"import": "pv", "instance": "east", "member": "PVSystem",
+                 "assembly": "pv/array", "name": "pv-east-PVSystem",
+                 "display_name": "PV array, east", "label": "Garage roof panels"}},
+    "Electricity production (pv-west-PVSystem)": {"value": 2875.0, "unit": "kWh",
+      "source": {"import": "pv", "instance": "west", "member": "PVSystem",
+                 "assembly": "pv/array", "name": "pv-west-PVSystem"}}},
+  "Heat Pump For Space Heating": {
+    "Seasonal performance factor (heating-HeatPump)": {"value": 3.4, "unit": "-",
+      "source": {"import": "heating", "instance": null, "member": "HeatPump",
+                 "assembly": "heating/air_source_heat_pump", "name": "heating-HeatPump"}}},
+  "Building": {
+    "Heating load (Building)": {"value": 7.9, "unit": "kW",
+      "source": {"import": null, "instance": null, "member": "Building",
+                 "assembly": null, "name": "Building"}}}}}
+```
+
+The golden form of the first array is `BUI1.PV.Electricity production (pv-east-PVSystem)`; adding a
+third array adds a key and renames none.
+
+## The goldens are a consumer too
+
+The golden references (`golden_references/*.json`) used to be a flat `{"<building>.<tag>.<key>": value}` map,
+so they split the key string for history stitching, carried no unit (a unit change passed the gate as a
+numeric diff) and never saw the structured source. Decided (owner, 2026-10-03): a golden leaf is the KPI
+address plus value and unit, keyed by the dotted address for readable diffs and checked against its fields:
+
+```json
+"BUI1.Building.Conditioned floor area (Building)": {
+  "value": 121.2, "unit": "m2",
+  "building": "BUI1", "tag": "Building", "name": "Conditioned floor area",
+  "source": {"import": null, "instance": null, "member": "Building", "assembly": null, "name": "Building"}
+}
+```
+
+- `source` carries the five identity fields only; `display_name` and `label` are presentation and stay out.
+  A derived KPI carries `source: null`.
+- The gate compares `value` with its tolerances and `unit` exactly; a unit change is a failure of its own kind.
+- A key that disagrees with its fields, a leaf missing a field, or a file in the old flat form is refused by
+  every reader of current goldens, with the instruction to re-bless. The one reader of old commits, the
+  history walker (`scripts/golden_history.py`), reads both forms: a new-form series is identified by its
+  structured fields, so a later change of the serialized source name is one series without a rename-table
+  entry; an old-form series is stitched to a new one where the old key equals the new leaf's dotted key or its
+  bare `building.tag.name`. That comparison reads historical data and is the one place a string is compared.
 
 ## Finder
 
@@ -56,55 +138,78 @@ A small module `hisim/postprocessing/kpi_computation/kpi_address.py`, importing 
 @dataclass(frozen=True)
 class KpiAddress:
     building: str
-    tag: str                      # the KpiTagEnumClass value as written in the JSON
-    name: str                     # the entry's own name, never qualified
-    source: Optional[str] = None  # name_of_source_component; None for derived KPIs
+    tag: str                          # the KpiTagEnumClass value as written in the JSON
+    name: str                         # the entry's own name, never qualified
+    source: Optional[KpiSource] = None  # None for derived KPIs
 
     @property
-    def key(self) -> str: ...     # "<name> (<source>)" or "<name>"
+    def key(self) -> str: ...         # "<name> (<source.name>)" or "<name>"
     @property
-    def dotted(self) -> str: ...  # "<building>.<tag>.<key>", the golden form
+    def dotted(self) -> str: ...      # "<building>.<tag>.<key>", the golden form
 
 class KpiFinder:
     def __init__(self, sorted_collection: Mapping[str, Mapping[str, Mapping[str, dict]]]): ...
-    def addresses(self, *, building=None, tag=None, name=None, source=None) -> List[KpiAddress]
+    def addresses(self, *, building=None, tag=None, name=None, source=None,
+                  import_key=None, instance=None, member=None, assembly=None) -> List[KpiAddress]
     def entries(self, **same) -> List[Tuple[KpiAddress, dict]]
     def one(self, **same) -> Tuple[KpiAddress, dict]   # exactly one match or ValueError naming the candidates
     def value(self, **same) -> float                   # one(...) and its "value"
 ```
 
-- Every filter is optional and exact; omitting all of them enumerates the whole collection, which
-  is the "way to find keys" a reader needs when they do not know what a setup reports.
+- Every filter is optional and exact; `source` matches `source.name`. "Every KPI of import pv" is
+  `addresses(import_key="pv")`, "the array with instance east" `entries(import_key="pv", instance="east")`.
+  Omitting all filters enumerates the whole collection.
+- The finder reads `source` from the entry dict, never from the key; a JSON written before this
+  spec (no `source`) is read with `source.name` from `nameOfSourceComponent` and the rest `null`.
 - `one` raises with the list of matching addresses when zero or several match, so a test that
   meant "the car's distance" in a two-car setup fails by name rather than by KeyError.
-- `KpiPreparation` and `KpiGenerator` expose a `finder` built on the sorted collection, and the
-  post-processing entry that writes `all_kpis.json` is unchanged; the finder reads the same dict.
-- A CLI is optional and cheap once the finder exists:
-  `hisim kpis list <results dir or all_kpis.json> [--building B] [--tag T] [--name N]`, printing
-  one dotted address and value per line.
+- `KpiPreparation` and `KpiGenerator` expose a `finder` on the sorted collection; the writer is unchanged.
+- Optional CLI: `hisim kpis list <dir or all_kpis.json> [--building|--tag|--name|--import|--instance]`.
+
+## The same source on the cost rows
+
+The economics' per-subject rows of `result.json`, `plan.by_subject[]` (`hisim/renovisor/costs.py:88-93`),
+carry the same `source` object beside their `subject` string, so the frontend joins KPIs, cost rows and
+request ids (`source.instance`) on one field set. This is a contract change: it is settled with the
+frontend as a spec MR on renovisorissues (assemblies D15, recommendation (b)) before the first composed
+energy-system file ships. Until then a flat file's rows carry `source` with `import`/`instance` `null`.
 
 ## Migration
 
-1. `keyed_component_entries`: qualify every component entry; drop the "exactly one emitter keeps
-   the bare name" branch. Its tests move with it.
-2. `read_opex_and_capex_costs_from_results` already matches on the entry's own name and tag, so it
-   is unaffected; confirm with the existing two-meter test.
-3. Replace the 29 hand-built lookups in tests with `finder.value(...)`; `tests/test_fuel_meter.py`
-   loses its f-string key.
-4. Re-bless all golden references through the `golden-update` workflow (every component KPI key
-   in every golden changes; the values do not). The manifest's config hash moves with it.
-5. Record the key format in the webtool JSON contract note in `kpi_structure.py` and in the
-   `energy_systems/README.md` KPI section, with one before/after example.
-6. Remove the "volatile keys" remark from `roadmap/p3_cleanup_todos.md` once merged. → hisim-b3b.1
+1. `KpiSource` and `KpiEntry.source`, stamped by `component_kpi_entries` (the EMS sets its target's);
+   `name_of_source_component` stays, deprecated, equal to `source.name`.
+2. `keyed_component_entries` qualifies every component entry by `source.name`; the "exactly one
+   emitter keeps the bare name" branch goes, its tests move with it. `read_opex_and_capex_costs_from_results`
+   matches on name and tag and is unaffected (confirm with the existing two-meter test).
+3. `kpi_address.py` with the finder's `import_key`/`instance`/`member`/`assembly` filters; replace
+   the 29 hand-built lookups in tests with `finder.value(...)`; `tests/test_fuel_meter.py` loses its
+   f-string key.
+4. The golden scripts write and read the structured leaf (`golden_kpis`, `golden_update`, `golden_check`,
+   `golden_validate`; `golden_history` reads both forms), then re-bless all golden references once through
+   the `golden-update` workflow with force rewrite (every component KPI key changes and every leaf gains
+   its fields; no value does). Done before the hydronic stages re-bless values, so the two diffs never
+   mix. The manifest's config hash moves with it.
+5. `plan.by_subject[]` rows gain `source`; the renovisorissues spec MR for `result.json` and the KPI
+   JSON is opened with this PR and merged before the first composed file ships.
+6. Record the key format and `source` in the webtool JSON contract note in `kpi_structure.py` and in
+   the `energy_systems/README.md` KPI section, with one before/after example.
+7. Remove the "volatile keys" remark from `roadmap/p3_cleanup_todos.md` once merged. → hisim-b3b.1
 
 ## Acceptance
 
 - Adding a second instance of any component to any setup changes no existing key of the first
-  instance; the golden diff shows only added keys.
-- No production or test code outside `kpi_address.py` and `keyed_component_entries` builds a key
-  string; `grep -rn '(\{' tests hisim --include=*.py | grep -i kpi` finds nothing.
-- `KpiFinder(...).addresses()` on any golden's source `all_kpis.json` lists every leaf, and
-  `one(name=..., source=...)` resolves every component KPI in the fleet without a collision error.
+  instance; the golden diff shows only added keys, and the re-bless diff changes no value and no unit.
+- Every golden leaf carries `value`, `unit`, `building`, `tag`, `name` and `source`, and its key equals the
+  dotted address of those fields; the check refuses a flat-form file and fails distinctly on a unit change.
+- Every component entry in every golden's `all_kpis.json` carries a `source` whose `name` equals its
+  `nameOfSourceComponent` and the qualifier of its key; every derived entry carries `source: null`.
+- No production or test code outside `kpi_address.py` and `keyed_component_entries` builds or splits
+  a key string; `grep -rn '(\{' tests hisim --include=*.py | grep -i kpi` finds nothing.
+- `KpiFinder(...).addresses()` on any golden's source `all_kpis.json` lists every leaf;
+  `one(name=..., source=...)` resolves every component KPI without a collision error, and on a
+  composed two-array file `addresses(import_key="pv")` returns both arrays' KPIs and nothing else.
+- Every `plan.by_subject[]` row of a RenoVisor `result.json` carries `source`, and the frontend spec MR
+  is merged on renovisorissues.
 - The base suite and the one-week golden gate are green; the full-year goldens are re-blessed in
   the same PR.
 
@@ -112,5 +217,7 @@ class KpiFinder:
 
 - Renaming or restructuring derived (General, district) KPIs.
 - Changing the tag vocabulary or the JSON nesting.
-- Stable identifiers for the *source* itself: the qualifier is the runtime `component_name`, and a
-  setup that renames a component renames its KPI keys. That is the correct behaviour for a name.
+- Removing `name_of_source_component` (the release after this one).
+- (Replaced:) stable identifiers for the source. The source is now the structured address: a renamed
+  site component still renames its KPI keys, which is correct for a name; an assembly member's identity
+  is its address, which the RenoVisor keeps stable per system id across a plan's stages (assemblies §2.4).

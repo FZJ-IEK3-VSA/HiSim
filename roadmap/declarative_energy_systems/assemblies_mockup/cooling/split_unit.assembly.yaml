@@ -1,0 +1,65 @@
+# Mockup (design, not loadable): energy_systems/assemblies/cooling/split_unit.assembly.yaml
+# Request leaf house.air_conditioning (cardinality one) / measure air_conditioners. The components EXIST:
+# hisim.components.simple_air_conditioner.SimpleAirConditioner and its L1 SimpleAirConditionerController
+# (simple_air_conditioner.py:97, :595; twin energy_systems/simple_air_conditioner_household_building_sizer.*).
+# (air_conditioner.AirConditioner with AirConditionerController is the other, older model.)
+#
+# † What is missing is the Building side: today the air conditioner writes Building.ThermalPowerDelivered (twin
+# :16-17), the input the HDS fills in every heated house, so a heat pump house with an air conditioner cannot be wired.
+# D19: the Building gains ONE named cooling input (†, `ThermalPowerCooling`) and this port fills it.
+
+schema_version: 4
+kind: assembly
+name: cooling/split_unit
+description: A split air conditioner with its own L1 thermostat.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: 2000, range: {min: 1000, max: 7000},
+     description: "Rated cooling power (SimpleAirConditionerConfig default; no sizing law)."}
+     # range: single-room split units, 1 to 7 kW cooling
+
+presets:
+  standard: {}
+
+components:
+  AirConditioner:
+    class: hisim.components.simple_air_conditioner.SimpleAirConditioner
+    preset: standard
+    config: {nominal_cooling_power_w: {$param: power_in_watt}}     # suffix `_w` is not in the D16 table: gap G10
+    inputs:
+      - Controller                                         # ModulatingPowerSignal
+      - {$port: zone}                                      # TemperatureIndoorAir
+      - {$port: weather}                                   # TemperatureOutside
+  Controller:
+    class: hisim.components.simple_air_conditioner.SimpleAirConditionerController
+    preset: standard
+    inputs:
+      - {$port: zone}                                      # TemperatureIndoorAir
+
+interface:
+  needs:
+    weather:     {into: [AirConditioner], partner: Weather}
+    zone:        {into: [AirConditioner, Controller], partner: Building}                 # TemperatureIndoorAir
+    electricity: {carrier: electricity, outputs: [electricity_use]}
+  provides:
+    room_cooling:    {output: AirConditioner.ThermalPowerDelivered}
+                     # the Building's default connections from SimpleAirConditioner fill ThermalPowerCooling (†, D19)
+    electricity_use: {output: AirConditioner.ElectricalPowerConsumption}
+                     # † no lt.ComponentType AIR_CONDITIONER; not controllable: the EMS has no cooling modifier (D21)
+
+tests:
+  # One day at 900 s on the test weather beside the Building partner. Cooling is negative (simple_air_conditioner.py:
+  # "ThermalPowerDelivered is negative when cooling"), at most the box's 7 kW, with margin; the Carnot-limited COP stays
+  # above 1, so the electricity is below the cooling power. Controller's one output is PERCENT, no energy.
+  bounds:
+    - {output: AirConditioner.ThermalPowerDelivered, unit: WATT, min: -10000, max: 0}          # cooling only, 7 kW with margin
+    - {output: AirConditioner.ThermalEnergyDelivered, unit: WATT_HOUR, min: -2500, max: 0}     # per step: 10 kW x 0.25 h
+    - {output: AirConditioner.ElectricalPowerConsumption, unit: WATT, min: 0, max: 7000}       # below the cooling power (COP > 1)
+    - {output: AirConditioner.ElectricalEnergyConsumption, unit: WATT_HOUR, min: 0, max: 1750} # per step: 7 kW x 0.25 h
+  monotone:
+    - {parameter: power_in_watt, kpi: Thermal energy delivered - cooling, member: AirConditioner, direction: decreasing}
+      # the KPI is negative: a larger unit removes at least as much heat on the same day
+  expect:
+    - {preset: standard, kpi: Electrical energy consumption, member: AirConditioner, min: 0, max: 48}
+      # kWh in one day: at most 2 kW x 24 h at a COP of at least 1

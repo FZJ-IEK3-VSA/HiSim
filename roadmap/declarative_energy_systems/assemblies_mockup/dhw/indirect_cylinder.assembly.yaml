@@ -1,0 +1,70 @@
+# Mockup (design, not loadable): energy_systems/assemblies/dhw/indirect_cylinder.assembly.yaml
+# Request type `from_space_heating_cylinder` (spec §10.3): a cylinder charged through a coil by the space-heating
+# generator. This is the DHW shape of every heat-pump and boiler twin today: SimpleDHWStorage fed by the generator's
+# DHW outputs and drained by the occupancy (household_heatpump_building_sizer.grouped.energy_system.yaml:75-80).
+#
+# The cylinder has no controller of its own: its loop is closed by the GENERATOR's DHW L1 controller, which reads the
+# cylinder temperature (MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage) through a need of
+# the heating assembly whose partner class is SimpleDHWStorage, not through the circuit. So the EMS's DHW modifier is
+# the heating import's `ems_modifier`, not a port of this assembly.
+
+schema_version: 4
+kind: assembly
+name: dhw/indirect_cylinder
+description: Indirectly heated DHW cylinder charged by the heating assembly's dhw circuit.
+
+parameters:
+  volume_in_liter:
+    {type: float, unit: LITER, default: AUTO, range: {min: 100, max: 1000},
+     description: Usable volume; AUTO is the class law per apartment.}
+     # range: a flat's 100 l cylinder up to a multi-apartment 1000 l one (the law gives 250 l per apartment)
+  tank_and_pipe_insulated:
+    {type: bool, default: true, description: "Insulation of tank and pipes († no field yet: standby loss is fixed)."}
+
+presets:
+  de_twin: {}
+
+components:
+  DHWStorage:
+    class: hisim.components.simple_water_storage.SimpleDHWStorage
+    preset: standard                                       # volume AUTO: VOLUME_LAW, number_of_apartments
+    config:
+      volume_heating_water_storage_in_liter: {$param: volume_in_liter}
+    inputs:
+      - {$port: hot_water_demand}                          # bare UTSPConnector: WaterConsumption
+      - {$port: circuit}                                   # bare generator: WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator
+      - {$port: solar_coil}                                # WaterTemperature/MassFlowFromSecondaryHeatGenerator (D20)
+
+interface:
+  needs:
+    hot_water_demand: {into: [DHWStorage], partner: [UtspLpgConnector]}   # SimpleDHWStorage's default connections
+    circuit:          {circuit: dhw, member: DHWStorage}
+                      # binds heating.dhw: supply leg and pump are the generator's, the return leg
+                      # (WaterTemperatureToHeatGenerator) is this cylinder's, read by the heat pump; the DHW L1 reads
+                      # the cylinder by its own need (heating.dhw_temperature), not through this circuit
+    apartments:       {fact: number_of_apartments, into: [DHWStorage]}
+  provides:
+    solar_coil:       {circuit: solar_dhw, member: DHWStorage, optional: true}   # D20 (a): unbound it is unused
+
+tests:
+  # One day at 900 s beside the occupancy partner and the other end of the dhw circuit (a generator of at most about
+  # 40 kW). Water stays liquid; energies per step are at most 40 kW x 0.25 h.
+  bounds:
+    - {output: DHWStorage.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}            # liquid water
+    - {output: DHWStorage.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}   # liquid water
+    - {output: DHWStorage.WaterTemperatureFromHeatGenerator, unit: CELSIUS, min: 0, max: 100}          # liquid water
+    - {output: DHWStorage.WaterTemperatureFromSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100} # liquid water
+    - {output: DHWStorage.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}              # liquid water
+    - {output: DHWStorage.StandbyTemperatureLoss, unit: CELSIUS, min: 0, max: 10}      # a temperature drop per step: well below 1 K
+    - {output: DHWStorage.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 150000}   # 1000 l at 100 °C over 0 °C is 116 kWh
+    - {output: DHWStorage.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}    # per step, either direction
+    - {output: DHWStorage.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}   # zero without solar_coil
+    - {output: DHWStorage.ThermalEnergyConsumptionDHW, unit: WATT_HOUR, min: 0, max: 15000}   # per step: a 60 kW draw x 0.25 h
+    - {output: DHWStorage.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -25000, max: 25000}    # per step: in minus out
+    - {output: DHWStorage.StandbyHeatLoss, unit: WATT, min: 0, max: 500}               # a 1000 l cylinder loses about 100-200 W
+    - {output: DHWStorage.ThermalPowerConsumptionDHW, unit: WATT, min: 0, max: 60000}  # step-average tapping, below a 60 kW shower peak
+    - {output: DHWStorage.ThermalPowerFromHeatGenerator, unit: WATT, min: -40000, max: 40000}   # the partner generator's rating
+    - {output: DHWStorage.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}   # zero without solar_coil
+  monotone:
+    - {parameter: volume_in_liter, kpi: Standby heat loss of DHW storage, member: DHWStorage, direction: increasing}
+      # a larger cylinder has more surface

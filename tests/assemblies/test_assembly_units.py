@@ -29,15 +29,10 @@ from hisim.energy_system.schema_export import SchemaBuilder, build_schema
 from tests.assemblies.fixture_components import FakeBatteryConfig
 from tests.assemblies.helpers import Fixtures
 
-#: Numeric parameters the mockup declares without a unit, by ``(assembly, parameter)``; each feeds a
-#: dimensionless field, which declares ``ANY``. A mockup defect under D16 b: the loader refuses a
-#: numeric parameter whose unit differs from the field's.
-PARAMETERS_WITHOUT_UNIT: Set[Tuple[str, str]] = {
-    ("heating/air_source_heat_pump", "scop_en14825_w35"),
-    ("heating/air_source_heat_pump", "scop_en14825_w55"),
-    ("mobility/electric_vehicle", "battery_set_soc"),
-    ("pv/array", "share_of_surface"),
-}
+#: Numeric parameters the mockup declares without a unit, by ``(assembly, parameter)``: none since the
+#: mockup states ``unit: ANY`` on the parameters that feed a dimensionless field (docs/assemblies
+#: d40ff770). The loader refuses a numeric parameter whose unit differs from the field's (D16 b).
+PARAMETERS_WITHOUT_UNIT: Set[Tuple[str, str]] = set()
 
 #: Classes the mockup names that do not exist yet (†), whose fields therefore cannot be checked.
 CLASSES_NOT_YET_WRITTEN: Set[str] = {

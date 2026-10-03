@@ -8,7 +8,8 @@ The component with the lowest source weight is activated first.
 
 from dataclasses import dataclass, field
 
-from typing import Any, List, Tuple, Optional, cast
+from types import MappingProxyType
+from typing import Any, ClassVar, List, Mapping, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -138,6 +139,24 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     """
 
     cost_relevance = CostRelevance.PRICED
+
+    #: The weight each kind of participant the controller ranks is fed at by default: its rank in the
+    #: surplus distribution, lowest first (residents, space heating, hot water, solar thermal, the
+    #: home battery). The dynamic default connections below take their weights from here, and a
+    #: controller assembly's priority list starts from these values (``assemblies_spec.md`` §4.4):
+    #: the k-th further participant of one kind gets ``default + k``. 999 is never a rank, it marks a
+    #: participant that is only measured.
+    DEFAULT_WEIGHTS: ClassVar[Mapping[lt.ComponentType, int]] = MappingProxyType(
+        {
+            lt.ComponentType.RESIDENTS: 1,
+            lt.ComponentType.HEAT_PUMP_BUILDING: 2,
+            lt.ComponentType.ELECTRIC_HEATING_SH: 2,
+            lt.ComponentType.HEAT_PUMP_DHW: 3,
+            lt.ComponentType.ELECTRIC_HEATING_DHW: 3,
+            lt.ComponentType.SOLAR_THERMAL_SYSTEM: 4,
+            lt.ComponentType.BATTERY: 6,
+        }
+    )
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
@@ -404,7 +423,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=1,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.RESIDENTS],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
                     source_tags=[
@@ -439,7 +458,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.HEAT_PUMP_BUILDING,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=2,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.HEAT_PUMP_BUILDING],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOfSH{more_advanced_heat_pump_class_name}_",
                     source_tags=[
@@ -461,7 +480,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.HEAT_PUMP_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=3,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.HEAT_PUMP_DHW],
                 # The DHW electrical power output only exists when the heat pump
                 # has domestic hot water preparation enabled; allow this mandatory
                 # input to remain unconnected when DHW is deactivated.
@@ -498,7 +517,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.ELECTRIC_HEATING_SH,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=2,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.ELECTRIC_HEATING_SH],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
                     source_tags=[
@@ -520,7 +539,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.ELECTRIC_HEATING_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=3,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.ELECTRIC_HEATING_DHW],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
                     source_tags=[
@@ -550,7 +569,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=6,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.BATTERY],
             )
         )
 
@@ -576,7 +595,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.SOLAR_THERMAL_SYSTEM,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=4,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.SOLAR_THERMAL_SYSTEM],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOf{solar_thermal_class_name}_",
                     source_tags=[

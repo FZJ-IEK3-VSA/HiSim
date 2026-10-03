@@ -62,7 +62,8 @@ components:
     preset: standard
     inputs:
       - control-EMS                                # heating.ems_modifier (dhw_storage_temperature_offset)
-      - dhw-DHWStorage                             # heating.dhw, return leg read by the L1
+      - dhw-DHWStorage                             # heating.dhw_temperature: the L1's default connections from
+                                                    # SimpleDHWStorage (the cylinder temperature), not the circuit
   heating-HeatPump:                              # order 6.3
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
     preset: air_water
@@ -161,11 +162,13 @@ components:
 #                        HeatPump: heating-HeatPump 6.3, Buffer: heating-Buffer 6.4},
 #              ports: {weather: Weather (default), flow_temperature: HeatDistributionController
 #                      (default), sh: HeatDistributionSystem.sh (default), electricity: grid.connection (exists),
-#                      dhw: dhw.circuit (bound by dhw), electricity_sh: observed by control-EMS, weight 2,
+#                      dhw: dhw.circuit (bound by dhw), dhw_temperature: dhw-DHWStorage (default),
+#                      electricity_sh: observed by control-EMS, weight 2,
 #                      electricity_dhw: observed by control-EMS, weight 3, ems_modifier: control (optional-bind, bound),
 #                      solar_coil: unbound (optional, no candidate), heat_load: Building, design_temperature: Weather,
 #                      room_setpoint: Building, emitter_type: HeatDistributionController,
-#                      heating_threshold: HeatDistributionController}}
+#                      heating_threshold: HeatDistributionController,
+#                      thermal_power: provided by heating-HeatPump, read by heating-Buffer}}
 #   dhw:      {assembly: dhw/indirect_cylinder, order: 9,
 #              parameters: {volume_in_liter: AUTO, tank_and_pipe_insulated: true},
 #              members: {DHWStorage: dhw-DHWStorage 9.1},

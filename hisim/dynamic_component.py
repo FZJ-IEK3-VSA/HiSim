@@ -8,6 +8,7 @@ from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim.component_interface import ClassInterfaceViolation
 from hisim.config import ConfigBase, DisplayConfig
+from hisim.config.names import NameSyntax
 from hisim.config.channels import (
     ChannelDeclarationError,
     DynamicConnectionChannel,
@@ -623,7 +624,8 @@ class DynamicComponent(Component):
 
         # Label Input and generate variable
         num_inputs = len(self.inputs)
-        label = f"Input_{source_object_name}_{source_component_output}_{num_inputs}"
+        # The participant enters the label by the one scheme every derived port name follows.
+        label = f"Input_{NameSyntax.port_name_part(source_object_name)}_{source_component_output}_{num_inputs}"
         vars(self)[label] = label
 
         log.trace(f"Added component input and connection {label}")
@@ -678,7 +680,10 @@ class DynamicComponent(Component):
                 if source_component_field_name in output_var.display_name:
                     source_component_output = output_var.display_name
 
-                    label = label = f"Input_{component.component_name}_{source_component_output}_{num_inputs}"
+                    label = (
+                        f"Input_{NameSyntax.port_name_part(component.component_name)}_"
+                        f"{source_component_output}_{num_inputs}"
+                    )
                     vars(self)[label] = label
 
                     # Define Input as Component Input and add it to inputs
@@ -823,7 +828,7 @@ class DynamicComponent(Component):
             return
         declared = interface.feed(connection.source_class_name, connection.source_component_field_name)
         tags = tuple(tag.name for tag in connection.source_tags)
-        if declared is None or tuple(declared.tags) != tags or declared.weight != connection.source_weight:
+        if declared is None or declared.all_tags != tags or declared.weight != connection.source_weight:
             raise ClassInterfaceViolation(
                 f"{self.get_full_classname()} adds a dynamic default connection from "
                 f"{connection.source_class_name}.{connection.source_component_field_name} (tags {list(tags)}, "

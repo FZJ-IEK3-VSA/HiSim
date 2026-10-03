@@ -5,8 +5,9 @@
 schema (:attr:`AssemblySchemaBuilder.FILENAME`). The assembly schema is format-only — an assembly
 names its members' classes as plain dotted strings, and whether they exist is the library check's
 question — and it states the library contract of D24 as schema rules: every parameter carries a
-description, every numeric parameter a ``range``, and the file a ``tests`` block with at least one
-``monotone`` entry. Validating a draft against it therefore lists exactly what the draft still owes.
+description, every numeric parameter a ``range``, and the file a ``tests`` block, with at least one
+``monotone`` entry while it has a numeric parameter. Validating a draft against it therefore lists
+exactly what the draft still owes.
 
 The blocks both files share — an import, its instances and verbs, a port, the ``{$port: …}``
 placeholder — are defined once here, in :class:`AssemblyFormatDefinitions`, and spliced into both.
@@ -45,6 +46,12 @@ class AssemblyFormatDefinitions:
         }
 
     @classmethod
+    def tag_names(cls, enumeration: Any) -> Dict[str, Any]:
+        """One member name of a tag enumeration, or a non-empty list of them."""
+        names = list(enumeration.__members__)
+        return {"oneOf": [{"enum": names}, {"type": "array", "minItems": 1, "items": {"enum": names}}]}
+
+    @classmethod
     def conditions(cls) -> Dict[str, Any]:
         """``required_when``/``active_when``: parameter to a non-empty list of values."""
         return {
@@ -64,6 +71,7 @@ class AssemblyFormatDefinitions:
                 "additionalProperties": {"$ref": "#/$defs/port"},
             },
             **cls.verb_properties(),
+            "observes": {"$ref": "#/$defs/selection"},
         }
 
     @classmethod
@@ -124,7 +132,24 @@ class AssemblyFormatDefinitions:
                     "fact": {"type": ["string", "object"]},
                     "many": {"type": "boolean"},
                     "export": {"type": "boolean"},
-                    "controllable": {"type": "object"},
+                    "controllable": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "target_input": {"$ref": "#/$defs/name"},
+                            "via": {"$ref": "#/$defs/name"},
+                            "optional": {"type": "boolean"},
+                        },
+                        "oneOf": [
+                            {"required": ["target_input"], "not": {"required": ["via"]}},
+                            {"required": ["via"], "not": {"required": ["target_input", "optional"]}},
+                        ],
+                        "description": (
+                            "How a controller actuates this provided output (assemblies_spec.md §4.4, D21): "
+                            "target_input, an input of its member the controller writes directly (the battery's), "
+                            "or via, the need whose binding lowers to the member's L1 modifier."
+                        ),
+                    },
                     "optional": {"type": "boolean"},
                     "required_when": cls.conditions(),
                     "active_when": cls.conditions(),
@@ -139,7 +164,38 @@ class AssemblyFormatDefinitions:
             "observer_port": {
                 "type": "object",
                 "additionalProperties": False,
-                "properties": {"into": cls.names(), "default": {"type": "string"}},
+                "required": ["into", "default"],
+                "properties": {"into": cls.names(), "default": {"$ref": "#/$defs/selection"}},
+            },
+            "selector": {
+                "type": "object",
+                "additionalProperties": False,
+                "anyOf": [{"required": ["component_type"]}, {"required": ["flow"]}, {"required": ["output"]}],
+                "properties": {
+                    "component_type": cls.tag_names(lt.ComponentType),
+                    "flow": cls.tag_names(lt.InandOutputType),
+                    "output": {"$ref": "#/$defs/name"},
+                    "feed": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "component_type": {"enum": list(lt.ComponentType.__members__)},
+                            "tags": {"type": "array", "items": {"enum": list(lt.InandOutputType.__members__)}},
+                            "weight": {"type": "integer"},
+                        },
+                    },
+                    "required": {"type": "boolean"},
+                },
+                "description": (
+                    "Matches the outputs the observer's class declares feeds from by component type, flow tag or "
+                    "output name (assemblies_spec.md §4.1)."
+                ),
+            },
+            "selection": {
+                "oneOf": [
+                    {"const": "declared"},
+                    {"type": "array", "items": {"$ref": "#/$defs/selector"}},
+                ]
             },
             "instance": {
                 "oneOf": [
@@ -185,7 +241,16 @@ class AssemblyFormatDefinitions:
                         "additionalProperties": {"$ref": "#/$defs/instance"},
                     },
                     **cls.verb_properties(),
-                    "observes": {"type": "array"},
+                    "observes": {
+                        "oneOf": [
+                            {"$ref": "#/$defs/selection"},
+                            {
+                                "type": "object",
+                                "propertyNames": {"$ref": "#/$defs/name"},
+                                "additionalProperties": {"$ref": "#/$defs/selection"},
+                            },
+                        ]
+                    },
                     "actuates": {},
                     "installation_year": {"type": "integer"},
                     "quote": {"type": "object"},
@@ -225,6 +290,7 @@ class AssemblySchemaBuilder:
         }
         definitions.update(AssemblyFormatDefinitions.definitions())
         definitions.update(self._own_definitions())
+        numeric = [kind.value for kind in ParameterType if kind.is_numeric]
         return {
             "$schema": self.DIALECT,
             "$id": self.FILENAME,
@@ -271,6 +337,20 @@ class AssemblySchemaBuilder:
                 "interface": {"$ref": "#/$defs/interface"},
                 "tests": {"$ref": "#/$defs/tests"},
             },
+            # D24: at least one monotone entry while the assembly has a numeric parameter.
+            "if": {
+                "required": ["parameters"],
+                "properties": {
+                    "parameters": {
+                        "not": {
+                            "additionalProperties": {
+                                "not": {"required": ["type"], "properties": {"type": {"enum": numeric}}}
+                            }
+                        }
+                    }
+                },
+            },
+            "then": {"properties": {"tests": {"properties": {"monotone": {"minItems": 1}}}}},
             "$defs": definitions,
         }
 
@@ -293,7 +373,13 @@ class AssemblySchemaBuilder:
             "provides": {"$ref": "#/$defs/port"},
             "internal": {"$ref": "#/$defs/internal_port"},
             "observes": {"$ref": "#/$defs/observer_port"},
-            "actuates": {},
+            "actuates": {
+                "oneOf": [
+                    {"type": "array", "items": {"$ref": "#/$defs/selector"}},
+                    {"type": "object", "required": ["$param"], "additionalProperties": False,
+                     "properties": {"$param": {"$ref": "#/$defs/name"}}},
+                ]
+            },
         }
         return {
             "parameter": {
@@ -385,7 +471,7 @@ class AssemblySchemaBuilder:
                 "required": ["bounds", "monotone"],
                 "properties": {
                     "bounds": {"type": "array", "items": {"$ref": "#/$defs/bounds"}},
-                    "monotone": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/monotone"}},
+                    "monotone": {"type": "array", "items": {"$ref": "#/$defs/monotone"}},
                     "expect": {"type": "array", "items": {"$ref": "#/$defs/expect"}},
                 },
             },

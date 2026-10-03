@@ -17,16 +17,21 @@ from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple
 
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
+from hisim import loadtypes as lt
 from hisim.energy_system.imports_model import (
     AnyPlaceholder,
     BindingVerbs,
+    FeedOverride,
     ImportEntry,
+    ImportObserves,
     InstanceEntry,
     ObservesPlaceholder,
     ParameterReference,
     Port,
     PortKind,
     PortPlaceholder,
+    Selection,
+    Selector,
     SwitchValue,
 )
 from hisim.energy_system.names import NameRules
@@ -150,12 +155,27 @@ class ImportsReader:
         """
         NameRules.check_identifier(name, location, "port")
         if section == "actuates":
-            return Port(name=name, section=section, kind=PortKind.ACTUATES, raw={"value": raw})
+            return Port(
+                name=name,
+                section=section,
+                kind=PortKind.ACTUATES,
+                priorities=cls.priorities(raw, location),
+                raw={"value": raw},
+            )
         block = RawDocument.mapping(raw, location)
         if section == "observes":
             cls.check_keys(block, location, cls.KIND_KEYS[PortKind.OBSERVER], "an observer port")
-            into = cls.names(block.get("into"), f"{location}.into", "member") if "into" in block else ()
-            return Port(name=name, section=section, kind=PortKind.OBSERVER, into=into, raw=block)
+            if "into" not in block:
+                raise cls.shape_error(location, f"the observer port '{name}' names the member it lowers into ('into').")
+            into = cls.names(block.get("into"), f"{location}.into", "member")
+            if "default" not in block:
+                raise cls.shape_error(
+                    location,
+                    f"the observer port '{name}' states its default selection ('default: declared' or a list of "
+                    "selectors), which an import's observes: replaces.",
+                )
+            selection = cls.selection(block.get("default"), f"{location}.default")
+            return Port(name=name, section=section, kind=PortKind.OBSERVER, into=into, selection=selection, raw=block)
         kinds = cls.SECTION_KINDS.get(section, ())
         kind = next((kind for kind in kinds if cls.MARKER_KEYS[kind] in block), None)
         if kind is None:
@@ -196,6 +216,8 @@ class ImportsReader:
             output = block.get("output")
             NameRules.split_reference(output, f"{location}.output", require_member=True)
             common["output"] = output
+            if "controllable" in block:
+                common.update(cls._controllable(name, block.get("controllable"), f"{location}.controllable"))
         elif kind == PortKind.REEXPORT:
             reference = block.get("from")
             NameRules.split_reference(reference, f"{location}.from", require_member=True)
@@ -212,6 +234,141 @@ class ImportsReader:
         elif kind == PortKind.FACT:
             common.update(cls._fact(name, block, location, section))
         return Port(**common)
+
+    @classmethod
+    def _controllable(cls, name: str, raw: Any, location: str) -> Dict[str, Any]:
+        """Reads ``controllable: {target_input: <input>}`` or ``controllable: {via: <need>}`` (§4.4, D21)."""
+        block = RawDocument.mapping(raw, location)
+        cls.check_keys(block, location, ("target_input", "via", "optional"), "a controllable block")
+        optional = block.get("optional", False)
+        if not isinstance(optional, bool):
+            raise RawDocument.malformed(f"{location}.optional", optional, "true or false")
+        if "optional" in block and "target_input" not in block:
+            raise cls.shape_error(
+                f"{location}.optional",
+                f"the provided output '{name}' is controllable via a need, whose own verb already decides whether it "
+                "is controlled; 'optional' belongs to a 'target_input'.",
+            )
+        if len([key for key in block if key != "optional"]) != 1:
+            raise cls.shape_error(
+                location,
+                f"the provided output '{name}' is controllable through exactly one of 'target_input' (an input of "
+                "its member the controller actuates, the battery's) or 'via' (the need whose binding lowers to "
+                "its L1 controller's modifier).",
+                allowed=("target_input", "via"),
+            )
+        if "target_input" in block:
+            return {
+                "controllable_target": NameRules.check_identifier(block["target_input"], location, "input"),
+                "controllable_optional": optional,
+            }
+        return {"controllable_via": NameRules.check_identifier(block["via"], location, "port")}
+
+    @classmethod
+    def selector(cls, raw: Any, location: str) -> Selector:
+        """Reads one selector of §4.1, with ``component_type``, ``flow``, ``output``, ``feed`` and ``required``.
+
+        Raises:
+            EnergySystemFormatError: ``EF-70`` for a selector that selects by nothing or carries an
+                unknown key, ``EF-2A`` for a tag name no enumeration knows.
+        """
+        block = RawDocument.mapping(raw, location)
+        cls.check_keys(block, location, Selector.KEYS, "a selector")
+        if not any(key in block for key in Selector.MATCH_KEYS):
+            raise cls.shape_error(
+                location,
+                "a selector selects by at least one of 'component_type', 'flow' or 'output'.",
+                allowed=Selector.MATCH_KEYS,
+            )
+        required = block.get("required", False)
+        if not isinstance(required, bool):
+            raise RawDocument.malformed(f"{location}.required", required, "true or false")
+        output = block.get("output")
+        feed = None
+        if "feed" in block:
+            feed = cls._feed_override(block["feed"], f"{location}.feed")
+        return Selector(
+            component_types=cls._tag_names(block.get("component_type"), f"{location}.component_type", lt.ComponentType)
+            if "component_type" in block
+            else (),
+            flows=cls._tag_names(block.get("flow"), f"{location}.flow", lt.InandOutputType) if "flow" in block else (),
+            output=NameRules.check_identifier(output, f"{location}.output", "output") if output is not None else None,
+            feed=feed,
+            required=required,
+        )
+
+    @classmethod
+    def _feed_override(cls, raw: Any, location: str) -> FeedOverride:
+        """Reads a selector's ``feed: {component_type, tags, weight}``."""
+        block = RawDocument.mapping(raw, location)
+        cls.check_keys(block, location, FeedOverride.KEYS, "a selector's feed block")
+        weight = block.get("weight")
+        if weight is not None and (isinstance(weight, bool) or not isinstance(weight, int)):
+            raise RawDocument.malformed(f"{location}.weight", weight, "an integer")
+        component_type = None
+        if "component_type" in block:
+            names = cls._tag_names(block["component_type"], f"{location}.component_type", lt.ComponentType)
+            if len(names) != 1:
+                raise RawDocument.malformed(f"{location}.component_type", block["component_type"], "one component type")
+            component_type = names[0]
+        return FeedOverride(
+            component_type=component_type,
+            tags=cls._tag_names(block["tags"], f"{location}.tags", lt.InandOutputType) if "tags" in block else None,
+            weight=weight,
+        )
+
+    @classmethod
+    def _tag_names(cls, value: Any, location: str, enumeration: Any) -> Tuple[str, ...]:
+        """Reads one tag name or a list of them, each a member name of the enumeration."""
+        items = value if isinstance(value, list) else [value]
+        if not items:
+            raise RawDocument.malformed(location, value, f"an {enumeration.__name__} member name or a list of them")
+        for item in items:
+            if not isinstance(item, str) or item not in enumeration.__members__:
+                raise EnergySystemFormatError(
+                    EnergySystemErrorId.UNKNOWN_TAG,
+                    location,
+                    f"'{item}' is no member of lt.{enumeration.__name__}.",
+                    alternatives=tuple(enumeration.__members__),
+                    alternatives_label=f"{enumeration.__name__} members",
+                    offending_value=str(item),
+                )
+        return tuple(items)
+
+    @classmethod
+    def selectors(cls, raw: Any, location: str) -> Tuple[Selector, ...]:
+        """Reads a list of selectors."""
+        if not isinstance(raw, list):
+            raise RawDocument.malformed(location, raw, "a list of selectors")
+        return tuple(cls.selector(item, f"{location}[{index}]") for index, item in enumerate(raw))
+
+    @classmethod
+    def selection(cls, raw: Any, location: str) -> Selection:
+        """Reads a selection: ``declared`` or a list of selectors (§4.1)."""
+        if raw == Selection.DECLARED:
+            return Selection(declared=True)
+        if isinstance(raw, str):
+            raise RawDocument.malformed(location, raw, f"'{Selection.DECLARED}' or a list of selectors")
+        return Selection(selectors=cls.selectors(raw, location))
+
+    @classmethod
+    def import_observes(cls, raw: Any, location: str) -> ImportObserves:
+        """Reads an import's ``observes:``: a selection, or observer port to selection."""
+        if isinstance(raw, Mapping):
+            by_port = {}
+            for port, value in raw.items():
+                NameRules.check_identifier(port, location, "port")
+                by_port[port] = cls.selection(value, f"{location}.{port}")
+            return ImportObserves(by_port=by_port, raw=raw)
+        return ImportObserves(selection=cls.selection(raw, location), raw=raw)
+
+    @classmethod
+    def priorities(cls, raw: Any, location: str) -> Any:
+        """Reads an ``actuates:`` port's value: a list of selectors, or ``{$param: …}`` naming the list (§4.4)."""
+        if ParameterReference.name_of(raw) is not None:
+            return dict(raw)
+        cls.selectors(raw, location)
+        return list(raw)
 
     @classmethod
     def _value_or_placeholder(cls, value: Any, location: str, role: str) -> Any:
@@ -416,7 +573,7 @@ class ImportsReader:
             instances=instances,
             verbs=cls.verbs(block, location),
             order=cls.order(block.get("order"), f"{location}.order"),
-            observes=block.get("observes"),
+            observes=cls.import_observes(block["observes"], f"{location}.observes") if "observes" in block else None,
             actuates=block.get("actuates"),
             installation_year=block.get("installation_year"),
             quote=block.get("quote"),

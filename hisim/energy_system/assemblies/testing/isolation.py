@@ -12,9 +12,14 @@ active port whose binding changes what the assembly computes gets a test partner
   classes of its members;
 - a carrier need gets the carrier's registered provider, and a carrier the assembly provides gets
   a registered consumer (a fuel provider nobody consumes is refused, §5.2);
-- a fact need gets a component whose class contributes the fact.
+- a fact need gets a component whose class contributes the fact;
+- an observer port gets a component its members' class declares a feed from (§4.1);
+- a provided output actuated through ``controllable: {target_input: …}`` gets the controller it binds
+  (§4.4), a partner that is an import of a controller assembly.
 
-A provided output or a provided fact only offers a value to others and gets no partner. Optional
+A provided output or a provided fact only offers a value to others and gets no partner, nor does an
+electricity provision (electricity has no link, and an idle grid connection is not refused) or a
+controller's priority list. Optional
 ports are bound like required ones: the isolation run exercises the whole interface the assembly
 offers with these parameters, and an optional end its members cannot run without would otherwise
 stay untested. The verbs are written out — ``bind:`` for a required port, ``optional-bind:`` for
@@ -123,15 +128,21 @@ class IsolationBuilder:
             entry["parameters"] = given
         return entry
 
-    def document(self, assembly: ResolvedAssembly, components: Mapping[str, Any], entry: Mapping[str, Any]) -> Dict:
-        """An isolation document: the site entries, then the import."""
+    def document(
+        self,
+        assembly: ResolvedAssembly,
+        components: Mapping[str, Any],
+        entry: Mapping[str, Any],
+        imports: Optional[Mapping[str, Any]] = None,
+    ) -> Dict:
+        """An isolation document: the site entries, then the import, then the partners that are imports."""
         document: Dict[str, Any] = {
             "schema_version": 4,
             "name": f"isolation_{assembly.path.replace('/', '_')}",
             "description": f"The isolation system of {assembly.path} (assemblies_spec.md §9.4).",
         }
         document["components"] = dict(components)
-        document["imports"] = {SUBJECT: dict(entry)}
+        document["imports"] = {SUBJECT: dict(entry), **dict(imports or {})}
         return document
 
     def offered(self, assembly: ResolvedAssembly, entry: Mapping[str, Any]) -> Dict[str, OfferedPort]:
@@ -141,32 +152,39 @@ class IsolationBuilder:
         model = EnergySystemReader.build(RawDocument.parse_text(text, origin), origin)
         return ImportExpander(model, self.resolver).offered_ports(SUBJECT)
 
-    def partner_for(self, assembly: ResolvedAssembly, port: OfferedPort) -> Optional[Tuple[TestPartner, str]]:
+    def partner_for(  # pylint: disable=too-many-return-statements  # one return per kind of port
+        self, assembly: ResolvedAssembly, port: OfferedPort
+    ) -> Optional[Tuple[TestPartner, str]]:
         """The test partner of one offered port and the verb that binds it; ``None`` for a port that only offers.
 
         Raises:
             TestPartnerMissingError: When no registered partner serves the port.
-            HarnessUsageError: For an observer or actuator port, which the expansion does not lower yet.
+            HarnessUsageError: For a port of a kind the harness does not know.
         """
         kind = port.kind
         verb = "bind" if port.state == "required" else "optional-bind"
         where = (port.name, assembly.path)
-        if kind == PortKind.PROVIDED or (kind == PortKind.FACT and port.is_provision):
+        if kind == PortKind.PROVIDED and port.controlled_class is not None:
+            return self.registry.for_controller(port.controlled_class, *where), "default"
+        if kind in (PortKind.PROVIDED, PortKind.ACTUATES) or (kind == PortKind.FACT and port.is_provision):
             return None
+        if kind == PortKind.OBSERVER:
+            return self.registry.for_observed(port.observer_classes, *where), "default"
         if kind == PortKind.NEED:
             return self.registry.for_partner(port.partner, *where), verb
         if kind == PortKind.CIRCUIT:
             return self.registry.for_circuit(port.circuit or "", port.end_classes, *where), verb
         if kind == PortKind.CARRIER:
             if port.is_provision:
+                if port.carrier == Carriers.ELECTRICITY:
+                    return None
                 return self.registry.for_consumer(port.carrier or "", *where), "default"
             partner = self.registry.for_carrier(port.carrier or "", *where)
             return partner, ("default" if port.carrier == Carriers.ELECTRICITY else verb)
         if kind == PortKind.FACT:
             return self.registry.for_fact(port.fact or "", *where), verb
         raise HarnessUsageError(
-            f"the port '{port.name}' of '{assembly.path}' is a {kind.value} port, which the expansion does not "
-            f"lower yet ({kind.delivering_step}); the harness cannot partner it."
+            f"the port '{port.name}' of '{assembly.path}' is a {kind.value} port, which the harness cannot partner."
         )
 
     def build(self, assembly: ResolvedAssembly, space: ParameterSpace, sample: Sample) -> IsolationSystem:
@@ -197,13 +215,21 @@ class IsolationBuilder:
         for verb, mapping in verbs.items():
             if mapping:
                 entry[verb] = mapping
+        closure = self.registry.closure(partners)
         components = {
-            name: dict(self.registry.partners[name].component) for name in self.registry.closure(partners)
+            name: dict(self.registry.partners[name].component)
+            for name in closure
+            if self.registry.partners[name].import_entry is None
+        }
+        imports = {
+            name: dict(self.registry.partners[name].import_entry or {})
+            for name in closure
+            if self.registry.partners[name].import_entry is not None
         }
         return IsolationSystem(
             assembly=assembly.path,
             sample_id=sample.sample_id,
-            document=self.document(assembly, components, entry),
+            document=self.document(assembly, components, entry, imports),
             bindings=tuple(bindings),
         )
 

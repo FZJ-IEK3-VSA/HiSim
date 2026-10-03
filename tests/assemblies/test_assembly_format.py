@@ -1,58 +1,102 @@
 """Reading assembly files and checking them against their schema (``assemblies_spec.md`` §2, §9.4).
 
 The mockup of the spec (``tests/assemblies/mockup``, a snapshot of
-``roadmap/declarative_energy_systems/assemblies_mockup`` at docs/assemblies df91d5f0, PR #881) is the
-shape the format must accept. It predates the test contract of §9.4, so validated against the
-assembly schema its assemblies report the missing ``tests`` block and the missing ``range`` of each
-numeric parameter — the listing pinned here — and nothing else, except one defect of the mockup
-itself, pinned as such. Of the three defects the snapshot of 087b3ce8 carried, the unquoted comma in
-a flow mapping of ``control/ems_self_consumption`` is fixed; the constructor calls of
-``mobility/electric_vehicle`` and of the composed RenoVisor house are now written
-``constructor: {name: <name>, arguments: {...}}``, which is still not the format's spelling —
-``constructor: {<name>: {<arguments>}}`` (``hisim/energy_system/entries.py``, the emitter writes the
-same) — so both files keep that one defect.
+``roadmap/declarative_energy_systems/assemblies_mockup`` at docs/assemblies d40ff770, PR #881) is the
+shape the format must accept. Since that commit every mockup assembly carries its test contract and a
+``range`` on every numeric parameter, and the constructor calls are spelled as the format reads them,
+so the whole mockup validates against the assembly schema and reads into the model without a defect.
+
+Run through the library check, it lists exactly what the repository still owes it, pinned here by
+kind so the lists shrink as the classes catch up: the real classes that declare no ``CLASS_INTERFACE``
+yet (hisim-lt0b.12), the classes that do not exist yet (†), and the carriers that are no
+``lt.EnergyBalanceCarrier`` yet (†: ``wood_logs``, ``lpg``, ``hvo``). What the expansion refuses by
+design until a later step (``EF-7L``: ``$fact``, ``$derived``, ``many: true``, fact exports) is pinned
+beside them.
 """
 
+import re
 from pathlib import Path
-from typing import Any, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import jsonschema
 import pytest
 import yaml
 
-from hisim.energy_system.assemblies.model import ParameterType, MonotoneDirection
+from hisim.energy_system.assemblies.library import CheckStrength, check_assembly
+from hisim.energy_system.assemblies.model import MonotoneDirection
+from hisim.energy_system.assemblies.parameters import ParameterSubstitution
 from hisim.energy_system.assemblies.reader import AssemblyReader
+from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder
 from hisim.energy_system.errors import EnergySystemFormatError
-from hisim.energy_system.imports_model import PortKind
+from hisim.energy_system.imports_model import PortKind, Selection, Selector
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import build_schema, build_structural_schema, default_schema_path, render_schema
 from tests.assemblies.helpers import Fixtures
 
 
-class MockupDefects:
-    """The one problem of the mockup that is not about the test contract: the constructor spelling."""
+class MockupOwes:
+    """What the library check of the mockup lists, by kind: what the repository owes the mockup."""
 
-    #: The files writing ``constructor: {name: …, arguments: …}``.
-    CONSTRUCTOR_SPELLING: Tuple[str, ...] = (
-        "mobility/electric_vehicle.assembly.yaml",
-        "renovisor_full_house.energy_system.yaml",
-    )
+    #: Real classes the mockup names that declare no ``CLASS_INTERFACE`` yet (hisim-lt0b.12).
+    WITHOUT_CLASS_INTERFACE: Set[str] = {
+        "hisim.components.advanced_battery_bslib.Battery",
+        "hisim.components.advanced_ev_battery_bslib.CarBattery",
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller",
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+        "hisim.components.electricity_meter.ElectricityMeter",
+        "hisim.components.fuel_meter.FuelMeter",
+        "hisim.components.gas_meter.GasMeter",
+        "hisim.components.generic_boiler.GenericBoiler",
+        "hisim.components.generic_car.Car",
+        "hisim.components.generic_pv_system.PVSystem",
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+        "hisim.components.simple_air_conditioner.SimpleAirConditioner",
+        "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
+        "hisim.components.simple_water_storage.SimpleDHWStorage",
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage",
+        "hisim.components.solar_thermal_system.SolarThermalSystem",
+        "hisim.components.solar_thermal_system.SolarThermalSystemController",
+    }
 
-    @classmethod
-    def is_defect(cls, name: str, where: str, message: str) -> bool:
-        """Whether a schema problem is the pinned constructor spelling of that file."""
-        return (
-            name in cls.CONSTRUCTOR_SPELLING
-            and where.endswith("/constructor")
-            and message.endswith("has too many properties")
-        )
+    #: Classes the mockup names that do not exist yet (†); they import from no module.
+    NOT_YET_WRITTEN: Set[str] = {
+        "hisim.components.gas_cooker.GasCooker",
+        "hisim.components.immersion_heater.ImmersionHeater",
+        "hisim.components.immersion_heater.StorageHeaterController",
+        "hisim.components.mechanical_ventilation.MechanicalVentilation",
+        "hisim.components.wood_stove.WoodStove",
+        "hisim.components.wood_stove.WoodStoveController",
+    }
+
+    #: Carriers the mockup writes that are no ``lt.EnergyBalanceCarrier`` yet (†), by assembly.
+    CARRIERS_NOT_YET: Set[Tuple[str, str]] = {
+        ("dhw/storage_water_heater", "lpg"),
+        ("heating_secondary/wood_stove", "wood_logs"),
+        ("supply/delivered_fuel", "hvo"),
+        ("supply/delivered_fuel", "lpg"),
+        ("supply/delivered_fuel", "wood_logs"),
+    }
+
+    #: Constructs the expansion refuses by design until their step (``EF-7L``), by assembly.
+    REFUSED_UNTIL_THEIR_STEP: Set[Tuple[str, str]] = {
+        ("mobility/electric_vehicle", "$derived"),
+        ("mobility/electric_vehicle", "$fact"),
+        ("storage/battery", "fact, many: true"),
+    }
 
 
 def mockup_assemblies() -> List[Path]:
     """Every assembly of the mockup snapshot."""
     return sorted(Fixtures.MOCKUP.rglob("*.assembly.yaml"))
+
+
+def library_path(path: Path) -> str:
+    """The library path of a mockup assembly."""
+    return path.relative_to(Fixtures.MOCKUP).as_posix()[: -len(".assembly.yaml")]
 
 
 def problems(validator: Any, document: Any) -> List[Tuple[str, str]]:
@@ -80,37 +124,113 @@ def test_the_committed_assembly_schema_is_what_an_export_writes_today() -> None:
 
 @pytest.mark.base
 def test_the_mockup_has_fifteen_assemblies_and_three_energy_systems() -> None:
-    """The snapshot is complete, so the listing below covers every file."""
+    """The snapshot is complete, so the listings below cover every file."""
     assert len(mockup_assemblies()) == 15
     assert len(list(Fixtures.MOCKUP.glob("*.energy_system.yaml"))) == 3
 
 
 @pytest.mark.base
-def test_the_mockup_assemblies_owe_only_their_test_contract(assembly_validator: Any) -> None:
-    """Validated against the assembly schema, the mockup lists the test contract it predates, and nothing else.
+def test_every_mockup_assembly_validates_against_the_assembly_schema(assembly_validator: Any) -> None:
+    """The mockup carries the whole contract: tests, ranges, descriptions, and selectors of the right shape.
 
-    Every assembly misses ``tests``; every numeric parameter misses its ``range``.
+    The bare supply connections declare no numeric parameter and an empty ``monotone`` list, which the
+    schema accepts exactly because they have nothing to sweep (D24 as amended).
     """
-    contract: Set[Tuple[str, str]] = set()
-    other: List[Tuple[str, str, str]] = []
+    found = {
+        path.relative_to(Fixtures.MOCKUP).as_posix(): problems(
+            assembly_validator, yaml.safe_load(path.read_text(encoding="utf-8"))
+        )
+        for path in mockup_assemblies()
+    }
+    assert {name: listed for name, listed in found.items() if listed} == {}
+
+
+@pytest.mark.base
+def test_the_schema_requires_a_monotone_entry_only_beside_a_numeric_parameter(assembly_validator: Any) -> None:
+    """``monotone: []`` is legal without a numeric parameter and refused with one."""
+    base: Dict[str, Any] = {
+        "schema_version": 4,
+        "kind": "assembly",
+        "name": "x/y",
+        "tests": {"bounds": [], "monotone": []},
+    }
+    assert problems(assembly_validator, {**base, "parameters": {}}) == []
+    assert problems(assembly_validator, {**base, "parameters": {"p": {"type": "bool", "description": "d"}}}) == []
+    numeric = {"p": {"type": "float", "description": "d", "default": 1, "range": {"min": 0, "max": 2}}}
+    assert problems(assembly_validator, {**base, "parameters": numeric}) == [
+        ("tests/monotone", "[] should be non-empty")
+    ]
+
+
+@pytest.mark.base
+def test_the_library_check_of_the_mockup_lists_only_what_the_repository_owes_it() -> None:
+    """Missing class interfaces (lt0b.12), † classes and † carriers, and nothing else."""
+    resolver = AssemblyResolver([Fixtures.MOCKUP])
+    without_interface: Set[str] = set()
+    not_written: Set[str] = set()
+    carriers: Set[Tuple[str, str]] = set()
+    other: List[str] = []
     for path in mockup_assemblies():
-        name = path.relative_to(Fixtures.MOCKUP).as_posix()
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        for where, message in problems(assembly_validator, document):
-            if message == "'tests' is a required property" and where == "":
-                contract.add((name, "tests"))
-            elif message == "'range' is a required property" and where.startswith("parameters/"):
-                declared = document["parameters"][where.split("/")[1]]
-                assert ParameterType(declared["type"]).is_numeric
-                contract.add((name, where))
-            elif not MockupDefects.is_defect(name, where, message):
-                other.append((name, where, message))
+        name = library_path(path)
+        for problem in check_assembly(resolver.resolve(name, "test"), resolver, CheckStrength.LIBRARY):
+            interface = re.search(
+                r"\((hisim\.[\w.]+)\)(?: in option '\w+' of the variant '\w+')? declares no CLASS_INTERFACE", problem
+            )
+            missing = re.search(r"the module '([\w.]+)' of '\w+' cannot be imported", problem)
+            carrier = re.search(
+                r"(?:names|takes the carrier) '(\w+)'(?: with some parameters)?, which is no carrier", problem
+            )
+            if interface is not None:
+                without_interface.add(interface.group(1))
+            elif missing is not None:
+                not_written.add(missing.group(1))
+            elif carrier is not None:
+                carriers.add((name, carrier.group(1)))
+            else:
+                other.append(problem)
 
     assert not other, other
-    assert {name for name, item in contract if item == "tests"} == {
-        path.relative_to(Fixtures.MOCKUP).as_posix() for path in mockup_assemblies()
-    }
-    assert ("pv/array.assembly.yaml", "parameters/azimuth_in_degree") in contract
+    assert without_interface == MockupOwes.WITHOUT_CLASS_INTERFACE | MockupOwes.NOT_YET_WRITTEN
+    assert not_written == {class_path.rsplit(".", 1)[0] for class_path in MockupOwes.NOT_YET_WRITTEN}
+    assert carriers == MockupOwes.CARRIERS_NOT_YET
+
+
+@pytest.mark.base
+def test_a_member_written_in_two_options_is_checked_against_each_options_class() -> None:
+    """hisim-lt0b.13 on the mockup's storage water heater: ``Heater`` is checked as each option's class."""
+    resolver = AssemblyResolver([Fixtures.MOCKUP])
+    listed = check_assembly(resolver.resolve("dhw/storage_water_heater", "test"), resolver, CheckStrength.LIBRARY)
+
+    for option, class_path in (
+        ("immersion", "hisim.components.immersion_heater.ImmersionHeater"),
+        ("burner", "hisim.components.generic_boiler.GenericBoiler"),
+    ):
+        assert any(
+            f"'Heater' ({class_path}) in option '{option}' of the variant 'heater' declares no CLASS_INTERFACE, so "
+            "the outputs its test contract must bound are unknown." in problem
+            for problem in listed
+        ), option
+
+
+@pytest.mark.base
+def test_the_mockup_constructs_refused_until_their_step_are_exactly_the_pinned_ones() -> None:
+    """``$fact``, ``$derived``, ``many: true`` and fact exports: what the expansion refuses with ``EF-7L``."""
+    found: Set[Tuple[str, str]] = set()
+    for path in mockup_assemblies():
+        model, _lines = AssemblyReader.read(path)
+        for member in model.declared_members().values():
+            trees = {"config": dict(member.entry.config)}
+            if member.entry.constructor is not None:
+                trees["arguments"] = dict(member.entry.constructor.arguments)
+            for key, _value_path in ParameterSubstitution.unlowered_in(trees):
+                found.add((library_path(path), key))
+        for port in model.ports.values():
+            if port.kind == PortKind.FACT and port.many:
+                found.add((library_path(path), "fact, many: true"))
+            if port.kind == PortKind.FACT and "export" in port.raw:
+                found.add((library_path(path), "fact export"))
+
+    assert found == MockupOwes.REFUSED_UNTIL_THEIR_STEP
 
 
 @pytest.mark.base
@@ -120,12 +240,7 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
     full = jsonschema.Draft202012Validator(build_schema(ComponentClassScan.collect()))
     for name in ("composed_heatpump_default.energy_system.yaml", "renovisor_full_house.energy_system.yaml"):
         document = yaml.safe_load((Fixtures.MOCKUP / name).read_text(encoding="utf-8"))
-        found = [
-            (where, message)
-            for where, message in problems(structural, document)
-            if not MockupDefects.is_defect(name, where, message)
-        ]
-        assert found == [], name
+        assert problems(structural, document) == [], name
     heat_pump = yaml.safe_load(
         (Fixtures.MOCKUP / "composed_heatpump_default.energy_system.yaml").read_text(encoding="utf-8")
     )
@@ -134,7 +249,7 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
 
 @pytest.mark.base
 def test_the_heat_pump_composed_file_reads_into_the_model() -> None:
-    """The reader takes the composed file: imports, verbs, site ports, placeholders, order."""
+    """The reader takes the composed file: imports, verbs, site ports, placeholders, order, the grid's selection."""
     model = parse_energy_system(Fixtures.MOCKUP / "composed_heatpump_default.energy_system.yaml")
 
     assert model.schema_version == 4
@@ -145,23 +260,36 @@ def test_the_heat_pump_composed_file_reads_into_the_model() -> None:
     assert building.ports["temperature_modifier"].kind == PortKind.NEED
     assert [placed.position for placed in building.placeholders] == [1]
     assert model.imports["pv"].instances is not None and list(model.imports["pv"].instances) == ["pv_system"]
-    assert model.imports["grid"].observes == [{"output": "TotalElectricityToOrFromGrid"}]
+    observes = model.imports["grid"].observes
+    assert observes is not None and observes.raw == [{"output": "TotalElectricityToOrFromGrid"}]
+    assert observes.selection == Selection(selectors=(Selector(output="TotalElectricityToOrFromGrid"),))
 
 
 @pytest.mark.base
 @pytest.mark.parametrize("path", mockup_assemblies(), ids=lambda path: path.relative_to(Fixtures.MOCKUP).as_posix())
-def test_every_mockup_assembly_reads_except_its_pinned_defect(path: Path) -> None:
-    """The reader takes the mockup's every construct: ports of all kinds, variants, placeholders, ``$`` values."""
+def test_every_mockup_assembly_reads(path: Path) -> None:
+    """The reader takes the mockup's every construct: ports of all kinds, selectors, variants, placeholders, tests."""
     name = path.relative_to(Fixtures.MOCKUP).as_posix()
-    if name in MockupDefects.CONSTRUCTOR_SPELLING:
-        with pytest.raises(EnergySystemFormatError, match="names exactly one constructor"):
-            AssemblyReader.read(path)
-        return
     model, lines = AssemblyReader.read(path)
 
     assert model.name == name[: -len(".assembly.yaml")]
-    assert model.tests is None
+    assert model.tests is not None and model.tests.bounds
     assert lines.line("components") > 0
+
+
+@pytest.mark.base
+def test_the_controller_mockup_reads_its_observer_port_and_its_priorities() -> None:
+    """``control/ems_self_consumption``: an observer port with ``default: declared``, priorities from a parameter."""
+    model, _lines = AssemblyReader.read(Fixtures.MOCKUP / "control" / "ems_self_consumption.assembly.yaml")
+    battery, _lines = AssemblyReader.read(Fixtures.MOCKUP / "storage" / "battery.assembly.yaml")
+    heat_pump, _lines = AssemblyReader.read(Fixtures.MOCKUP / "heating" / "air_source_heat_pump.assembly.yaml")
+
+    assert model.ports["flows"].kind == PortKind.OBSERVER
+    assert model.ports["flows"].selection == Selection(declared=True)
+    assert model.ports["priorities"].kind == PortKind.ACTUATES
+    assert model.ports["priorities"].priorities == {"$param": "priorities"}
+    assert battery.ports["electricity"].controllable_target == "LoadingPowerInput"
+    assert heat_pump.ports["electricity_sh"].controllable_via == "ems_modifier"
 
 
 @pytest.mark.base

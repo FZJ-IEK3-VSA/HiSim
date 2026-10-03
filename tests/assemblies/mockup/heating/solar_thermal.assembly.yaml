@@ -18,9 +18,12 @@ parameters:
     {type: enum, values: [flat_plate, evacuated_tube], default: flat_plate,
      description: "Collector type; evacuated_tube is † (only preset_flat_plate exists)."}
   area_in_m2:
-    {type: float, unit: SQUARE_METER, default: 6, description: Aperture area.}
+    {type: float, unit: SQUARE_METER, default: 6, range: {min: 2, max: 20}, description: Aperture area.}
+     # range: one small collector (2 m²) up to a combi system for a large house (20 m²)
   storage_volume_in_liter:
-    {type: float, unit: LITER, default: none, description: "A dedicated solar store († not modelled; the coils charge the existing tanks)."}
+    {type: float, unit: LITER, default: none, range: {min: 100, max: 1000},
+     description: "A dedicated solar store († not modelled; the coils charge the existing tanks)."}
+     # range: solar cylinders on the market, 100 l to a 1000 l combi store; feeds no field yet
 
 presets:
   flat_plate_6m2: {}
@@ -47,8 +50,27 @@ interface:
     dhw_coil:    {circuit: solar_dhw, member: [Collector, Controller]}     # the collector owns pump and supply leg
     sh_coil:     {circuit: solar_sh, member: [Collector], required_when: {supplies: [dhw_and_space_heating]},
                   active_when: {supplies: [dhw_and_space_heating]}}                      # † valve assembly
-    pump_electricity: {carrier: ELECTRICITY, outputs: [pump_electricity_use]}
+    pump_electricity: {carrier: electricity, outputs: [pump_electricity_use]}
   provides:
     pump_electricity_use: {output: Collector.ElectricityConsumptionOutput}
                   # tagged SOLAR_THERMAL_SYSTEM; the EMS ranks it (weight 4, dispatch {}) from its own declaration but
                   # has no modifier for it, so there is no ems_modifier port (rank-only, dry run G18)
+
+tests:
+  # One day at 900 s on the test weather, beside a DHW cylinder partner at the solar_dhw end. Irradiance on the
+  # collector is at most about 1200 W/m², so over the box's 20 m² at most 24 kW; a flat plate converts at most ~80 %.
+  # Controller's one output (ControlSignalToSolarThermalSystem) is BINARY, no energy or temperature.
+  bounds:
+    - {output: Collector.ThermalPowerOutput, unit: WATT, min: -5000, max: 20000}       # 20 m² x 1000 W/m² x 0.8, small night losses below 0
+    - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: -1250, max: 5000}  # per step: the power band x 0.25 h
+    - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}    # winter night to flat-plate stagnation
+    - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}   # a solar circulation pump is 30-100 W
+    - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}        # 20 m² x 1200 W/m²
+    - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}        # at most the incident power; sign unchecked
+    - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}              # at most the pump's electricity
+  monotone:
+    - {parameter: area_in_m2, kpi: Total thermal energy delivered, member: Collector, direction: increasing}
+      # more aperture collects more heat (non-decreasing once the cylinder is full)
+  expect:
+    - {preset: flat_plate_6m2, kpi: Total thermal energy delivered, member: Collector, min: 0, max: 40}
+      # kWh in one day: 6 m² x at most 8 kWh/m² of daily irradiation x 0.8

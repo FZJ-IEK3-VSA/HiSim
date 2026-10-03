@@ -26,6 +26,7 @@ from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple, Union
 from pydantic import BaseModel, ConfigDict, Field
 
 from hisim import loadtypes as lt
+from hisim.component_interface import DeclaredFeed
 
 
 class ParameterReference:
@@ -51,7 +52,7 @@ class ParameterReference:
             "(sized_field(rule=...)); give the field a law and feed it with a fact port"
         ),
         "$derived": "no step yet (dry-run gap G12: a value derived per instance)",
-        "$observes": "hisim-lt0b.3 (observe and actuate selectors)",
+        "$observes": "no step: {$observes: <observer port>} is a placeholder of an inputs list, never a value",
     }
 
     @classmethod
@@ -181,9 +182,14 @@ class PortPlaceholder(BaseModel):
 class ObservesPlaceholder(BaseModel):
     """``{$observes: <observer port>}`` in an ``inputs`` list: where an observer's feeds land.
 
-    Parsed so that a file using it can be read; the expansion refuses it, because observer ports
-    are lowered by hisim-lt0b.3.
+    In an assembly member it names the observer port of the interface that lowers into the member;
+    on a site entry, whose selection is its own ``observes:`` key, it is written
+    ``{$observes: observes}`` (:attr:`SITE_PORT`). The expansion replaces it by one aggregator feed
+    per output the selection matches (``assemblies_spec.md`` §4.2).
     """
+
+    #: The observer port a site entry's own ``observes:`` selection is known by.
+    SITE_PORT: ClassVar[str] = "observes"
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -229,14 +235,9 @@ class PortKind(enum.Enum):
     ACTUATES = "actuates"
 
     @property
-    def is_lowered(self) -> bool:
-        """Whether the expansion lowers ports of this kind (observers and actuators wait for hisim-lt0b.3)."""
-        return self not in (PortKind.OBSERVER, PortKind.ACTUATES)
-
-    @property
-    def delivering_step(self) -> str:
-        """The bead that lowers ports of a kind the expansion does not lower yet."""
-        return "hisim-lt0b.3 (observe and actuate selectors, controller lowering)"
+    def is_selector(self) -> bool:
+        """Whether ports of this kind are lowered by the selection pass rather than by a binding (§4)."""
+        return self in (PortKind.OBSERVER, PortKind.ACTUATES)
 
 
 class CircuitNaming:
@@ -301,12 +302,154 @@ class Carriers:
         return cls.SUPPLY_ASSEMBLIES.get(carrier, f"a supply assembly providing {carrier}")
 
 
+class FeedOverride(BaseModel):
+    """A selector's ``feed:``: the tags and weight its matches are fed with instead of the declared ones (§4.1).
+
+    Attributes:
+        component_type: An ``lt.ComponentType`` member name, or ``None`` to keep the declared one.
+        tags: ``lt.InandOutputType`` member names, or ``None`` to keep the declared ones.
+        weight: The weight, or ``None`` to keep the declared one; a controller derives its weights
+            from its priorities and refuses one written here (§4.4).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The keys of a ``feed:`` block.
+    KEYS: ClassVar[Tuple[str, ...]] = ("component_type", "tags", "weight")
+
+    component_type: Optional[str] = None
+    tags: Optional[Tuple[str, ...]] = None
+    weight: Optional[int] = None
+
+    def to_document(self) -> Dict[str, Any]:
+        """The block as the file writes it."""
+        document: Dict[str, Any] = {}
+        if self.component_type is not None:
+            document["component_type"] = self.component_type
+        if self.tags is not None:
+            document["tags"] = list(self.tags)
+        if self.weight is not None:
+            document["weight"] = self.weight
+        return document
+
+
+class Selector(BaseModel):
+    """One selector of an ``observes:`` list or of a controller's ``priorities`` (``assemblies_spec.md`` §4.1).
+
+    A selector matches by the runtime tags the meter and the EMS already find their inputs by —
+    ``component_type`` (``lt.ComponentType`` member names) and ``flow`` (``lt.InandOutputType``
+    member names) — or by an output's name; the keys it writes hold together (a selector with
+    ``component_type`` and ``flow`` matches a feed carrying both), and a list of selectors observes
+    the union of its matches. What is matched is never an output itself but an output *together
+    with the observer's declaration for it* (:class:`~hisim.component_interface.DeclaredFeed`): an
+    output the observer's class declares no dynamic default connection from is no candidate.
+
+    Attributes:
+        component_types: The component types any of which a match carries.
+        flows: The flow tags any of which a match carries.
+        output: The name a match's output has.
+        feed: The tags and weight to feed the matches with instead of the declared ones.
+        required: Whether a selection matching nothing through this selector is refused.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The keys a selector may carry, in canonical order.
+    KEYS: ClassVar[Tuple[str, ...]] = ("component_type", "flow", "output", "feed", "required")
+
+    #: The keys that select (a selector writes at least one).
+    MATCH_KEYS: ClassVar[Tuple[str, ...]] = ("component_type", "flow", "output")
+
+    component_types: Tuple[str, ...] = ()
+    flows: Tuple[str, ...] = ()
+    output: Optional[str] = None
+    feed: Optional[FeedOverride] = None
+    required: bool = False
+
+    def matches(self, declared: DeclaredFeed) -> bool:
+        """Whether a declared feed (an output with the observer's declaration for it) is a match."""
+        if self.component_types and declared.component_type not in self.component_types:
+            return False
+        if self.flows and not any(flow in declared.tags for flow in self.flows):
+            return False
+        return self.output is None or declared.output == self.output
+
+    def text(self) -> str:
+        """The selector as the file writes it, in flow style."""
+        parts = []
+        for key, value in self.to_document().items():
+            if isinstance(value, list):
+                rendered = value[0] if len(value) == 1 else "[" + ", ".join(str(item) for item in value) + "]"
+            elif isinstance(value, dict):
+                rendered = "{" + ", ".join(f"{name}: {item}" for name, item in value.items()) + "}"
+            else:
+                rendered = str(value).lower() if isinstance(value, bool) else str(value)
+            parts.append(f"{key}: {rendered}")
+        return "{" + ", ".join(parts) + "}"
+
+    def to_document(self) -> Dict[str, Any]:
+        """The selector as the file writes it."""
+        document: Dict[str, Any] = {}
+        if self.component_types:
+            document["component_type"] = list(self.component_types)
+        if self.flows:
+            document["flow"] = list(self.flows)
+        if self.output is not None:
+            document["output"] = self.output
+        if self.feed is not None:
+            document["feed"] = self.feed.to_document()
+        if self.required:
+            document["required"] = True
+        return document
+
+
+class Selection(BaseModel):
+    """What one observer observes: every output its class declares (``declared``) or a list of selectors.
+
+    Attributes:
+        declared: Whether the selection is ``declared``, every candidate.
+        selectors: The selectors of a written list.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The spelling of the selection of every candidate.
+    DECLARED: ClassVar[str] = "declared"
+
+    declared: bool = False
+    selectors: Tuple[Selector, ...] = ()
+
+    def text(self) -> str:
+        """The selection as the file writes it."""
+        if self.declared:
+            return self.DECLARED
+        return "[" + ", ".join(selector.text() for selector in self.selectors) + "]"
+
+
+class ImportObserves(BaseModel):
+    """An import's ``observes:``: the selection that replaces the default of its assembly's observer port.
+
+    Written as a selection — a list of selectors, or ``declared`` — for the assembly's one observer
+    port, or as a mapping from observer port to selection for an assembly with several.
+
+    Attributes:
+        selection: The selection of the one observer port, or ``None`` for the mapping form.
+        by_port: Observer port to selection, in the mapping form.
+        raw: The block as written.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    selection: Optional[Selection] = None
+    by_port: Mapping[str, Selection] = Field(default_factory=dict)
+    raw: Any = None
+
+
 class Port(BaseModel):
     """One port of an assembly's interface or of a site entry (``assemblies_spec.md`` §3).
 
-    The fields every kind shares are typed; what only an unlowered kind uses (a provided
-    output's ``controllable``) stays in ``raw``, which also keeps the port's whole written block
-    for the import record.
+    The fields every kind shares are typed; ``raw`` keeps the port's whole written block for the
+    import record.
 
     Attributes:
         name: The port's key.
@@ -328,6 +471,16 @@ class Port(BaseModel):
         meter: The member that meters a provided fuel carrier, and where its feeds land.
         fact: The sizing fact of a fact port, as written (a name, or a ``{$switch: …}``).
         many: Whether a fact need reads the fact over every provider (``many: true``, step 3).
+        selection: An observer port's ``default:``, the selection an import may replace (§4.1).
+        controllable_target: A provided output's ``controllable: {target_input: …}``: the input of
+            the output's member a controller actuates directly (the battery's, D21).
+        controllable_via: A provided output's ``controllable: {via: …}``: the need, partnered with
+            the controller, whose binding lowers to the member's L1 modifier (§4.4).
+        controllable_optional: Whether a ``target_input`` output may stay without a controller
+            (``optional: true``, an EV's L1 that charges on its own); otherwise it binds the one
+            controller and is refused without one.
+        priorities: An ``actuates:`` port's value as written: a list of selectors, or a
+            ``{$param: …}`` resolving to one.
         optional: Whether the port may stay unbound (with a verb saying so).
         required_when: Parameter to values for which the port is required; conjunctive.
         active_when: Parameter to values outside which the port is inactive; conjunctive.
@@ -352,6 +505,11 @@ class Port(BaseModel):
     meter: Optional[str] = None
     fact: Optional[Any] = None
     many: bool = False
+    selection: Optional[Selection] = None
+    controllable_target: Optional[str] = None
+    controllable_via: Optional[str] = None
+    controllable_optional: bool = False
+    priorities: Optional[Any] = None
     optional: bool = False
     required_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
     active_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
@@ -373,6 +531,11 @@ class Port(BaseModel):
         if self.kind == PortKind.CARRIER:
             return not self.outputs
         return False
+
+    @property
+    def is_controllable(self) -> bool:
+        """Whether a provided output states that a controller may actuate it (§4.4)."""
+        return self.controllable_target is not None or self.controllable_via is not None
 
     @property
     def output_member(self) -> Optional[str]:
@@ -439,8 +602,9 @@ class ImportEntry(BaseModel):
         instances: The named instances, or ``None`` for an import of one.
         verbs: The binding verbs written on the import.
         order: The import's place in its level's evaluation order, or ``None``.
-        observes: An ``observes:`` selection (parsed; lowered by hisim-lt0b.3).
-        actuates: An ``actuates:`` block (parsed; lowered by hisim-lt0b.3).
+        observes: An ``observes:`` selection replacing its assembly's observer default (§4.1).
+        actuates: An ``actuates:`` block as written; the expansion refuses it on an import, since
+            a controller's priorities are its assembly's ``priorities`` parameter (§4.4).
         installation_year: The reserved economics field of D18, recorded, never read here.
         quote: The reserved economics field of D22, recorded, never read here.
     """
@@ -470,7 +634,7 @@ class ImportEntry(BaseModel):
     instances: Optional[Mapping[str, InstanceEntry]] = None
     verbs: BindingVerbs = Field(default_factory=BindingVerbs)
     order: Optional[int] = None
-    observes: Optional[Any] = None
+    observes: Optional[ImportObserves] = None
     actuates: Optional[Any] = None
     installation_year: Optional[Any] = None
     quote: Optional[Any] = None
@@ -489,7 +653,7 @@ class ImportEntry(BaseModel):
             document["instances"] = {name: instance.to_document() for name, instance in self.instances.items()}
         document.update(self.verbs.to_document())
         for key, value in (
-            ("observes", self.observes),
+            ("observes", self.observes.raw if self.observes is not None else None),
             ("actuates", self.actuates),
             ("installation_year", self.installation_year),
             ("quote", self.quote),

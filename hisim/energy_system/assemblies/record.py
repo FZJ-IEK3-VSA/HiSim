@@ -333,6 +333,149 @@ class CarrierRecord:
 
 
 @dataclass(frozen=True)
+class FeedRecord:
+    """One aggregator feed an observer's selection lowered to (``assemblies_spec.md`` §4.2).
+
+    Attributes:
+        source: The observed component.
+        output: Its observed output.
+        component_type: The feed's component type, or ``None``.
+        tags: The feed's flow tags.
+        weight: The feed's weight: the declared one, or the one a controller derived (§4.4).
+        dispatch: ``None`` for a measured feed, ``{}`` for a ranked one without a target, or the
+            target input a controller actuates.
+        input_port: The aggregator input the feed grows (the derived port name, D of hisim-lt0b.11).
+        dispatch_port: The dispatch output it grows, or ``None``.
+        selected_by: The selector that matched it, or ``declared``.
+        control: How a controller treats it: ``measured``, ``rank-only``, ``target_input <input>``
+            or ``via <need>``.
+    """
+
+    source: str
+    output: str
+    component_type: Optional[str]
+    tags: Tuple[str, ...]
+    weight: int
+    dispatch: Optional[str]
+    input_port: str
+    dispatch_port: Optional[str]
+    selected_by: str
+    control: str
+
+    def text(self) -> str:
+        """The feed as the file would write it, with the ports it grows."""
+        parts = [f"from: {self.source}.{self.output}"]
+        if self.component_type is not None:
+            parts.append(f"component_type: {self.component_type}")
+        parts.append(f"tags: [{', '.join(self.tags)}]")
+        parts.append(f"weight: {self.weight}")
+        if self.dispatch is not None:
+            parts.append(f"dispatch: {self.dispatch}")
+        return "{" + ", ".join(parts) + "}"
+
+    def to_document(self) -> Dict[str, Any]:
+        """The feed as plain data."""
+        document: Dict[str, Any] = {
+            "from": f"{self.source}.{self.output}",
+            "component_type": self.component_type,
+            "tags": list(self.tags),
+            "weight": self.weight,
+            "dispatch": self.dispatch,
+            "input_port": self.input_port,
+            "selected_by": self.selected_by,
+            "control": self.control,
+        }
+        if self.dispatch_port is not None:
+            document["dispatch_port"] = self.dispatch_port
+        return document
+
+
+@dataclass(frozen=True)
+class PriorityRecord:
+    """One entry of a controller's priority list and the weights it gave (§4.4).
+
+    Attributes:
+        entry: The entry's selector, as written.
+        ranked: Per output it ranks, ``<component>.<output> (<type>): class default <d> -> weight <w>``.
+    """
+
+    entry: str
+    ranked: Tuple[str, ...]
+
+    def to_document(self) -> Dict[str, Any]:
+        """The entry as plain data."""
+        return {"entry": self.entry, "ranked": list(self.ranked)}
+
+
+@dataclass
+class ObserverRecord:
+    """One observer and what its selection lowered to (§4.1-§4.4).
+
+    Attributes:
+        observer: The expanded observing component.
+        owner: The import path or site component whose port (or ``observes:``) selected.
+        port: The observer port.
+        selection: The selection as written (``declared`` or the list).
+        feeds: Every feed the selection lowered to, in the order written into the inputs.
+        priorities: For a controller, its priority list with the weights each entry gave.
+    """
+
+    observer: str
+    owner: str
+    port: str
+    selection: str
+    feeds: List[FeedRecord] = field(default_factory=list)
+    priorities: List[PriorityRecord] = field(default_factory=list)
+
+    def to_document(self) -> Dict[str, Any]:
+        """The observer as plain data."""
+        document: Dict[str, Any] = {
+            "observer": self.observer,
+            "owner": self.owner,
+            "port": self.port,
+            "selection": self.selection,
+            "feeds": [feed.to_document() for feed in self.feeds],
+        }
+        if self.priorities:
+            document["priorities"] = [entry.to_document() for entry in self.priorities]
+        return document
+
+
+@dataclass(frozen=True)
+class ActuationRecord:
+    """One target a controller actuates (§4.3, D21): each target exactly once.
+
+    Attributes:
+        controller: The expanded controller.
+        output: The controlled output, ``<component>.<output>``.
+        weight: The weight the controller ranks it at.
+        target: What is actuated: ``<component>.<input>`` for a direct target, or the L1 the
+            ``via`` need lowered into (``<component>`` through ``<need>``).
+        kind: ``target_input`` or ``via``.
+    """
+
+    controller: str
+    output: str
+    weight: int
+    target: str
+    kind: str
+
+    def text(self) -> str:
+        """The actuation as a line."""
+        return f"{self.controller} actuates {self.target} for {self.output} at weight {self.weight} ({self.kind})"
+
+    def to_document(self) -> Dict[str, Any]:
+        """The actuation as plain data."""
+        return {
+            "controller": self.controller,
+            "output": self.output,
+            "weight": self.weight,
+            "target": self.target,
+            "kind": self.kind,
+        }
+
+
+@dataclass(frozen=True)
 class NotLowered:
     """A construct the expansion met that a later step of the assemblies work lowers.
 
@@ -372,6 +515,12 @@ class ImportRecord:
     decisions: List[str] = field(default_factory=list)
     circuits: List[CircuitRecord] = field(default_factory=list)
     carriers: List[CarrierRecord] = field(default_factory=list)
+    observers: List[ObserverRecord] = field(default_factory=list)
+    actuations: List[ActuationRecord] = field(default_factory=list)
+
+    def observer(self, name: str) -> Optional[ObserverRecord]:
+        """The record of one observing component, or ``None``."""
+        return next((record for record in self.observers if record.observer == name), None)
 
     def carrier(self, carrier: str) -> List[CarrierRecord]:
         """The providers of one carrier."""
@@ -385,7 +534,8 @@ class ImportRecord:
     def is_empty(self) -> bool:
         """Whether the expansion did nothing at all."""
         return (
-            not (self.instances or self.addresses or self.site_ports or self.not_lowered) and self.source_map.is_empty
+            not (self.instances or self.addresses or self.site_ports or self.not_lowered or self.observers)
+            and self.source_map.is_empty
         )
 
     def instance(self, path: str) -> Optional[InstanceRecord]:
@@ -410,6 +560,8 @@ class ImportRecord:
             "bindings": list(self.decisions),
             "circuits": [record.to_document() for record in self.circuits],
             "carriers": [record.to_document() for record in self.carriers],
+            "observers": [record.to_document() for record in self.observers],
+            "actuations": [record.to_document() for record in self.actuations],
         }
 
     def describe(self) -> Tuple[str, ...]:
@@ -437,6 +589,15 @@ class ImportRecord:
                 + (f" (meter {carrier.meter})" if carrier.meter else " (no link)")
                 + f", consumers {consumers or 'none'}."
             )
+        for observer in self.observers:
+            lines.append(
+                f"observer {observer.observer} ({observer.owner}.{observer.port}, selection {observer.selection}): "
+                f"{len(observer.feeds)} feeds."
+            )
+            for feed in observer.feeds:
+                lines.append(f"  {feed.text()} -> {feed.input_port} ({feed.control}, selected by {feed.selected_by}).")
+        for actuation in self.actuations:
+            lines.append(f"{actuation.text()}.")
         if self.sequence:
             lines.append("sequence: " + ", ".join(f"{name} {'.'.join(map(str, path))}" for name, path in self.sequence))
         return tuple(lines)

@@ -64,8 +64,15 @@ class EnergySystemErrorId(enum.Enum):
     ``EF-7M`` for a verb naming a port the assembly does not have, ``EF-7N`` for the two ends of a
     hydronic circuit that do not fit together, ``EF-7P`` for a carrier need without exactly one
     provider (and a provider without a consumer), ``EF-7Q`` for a consuming output whose energy
-    carrier is not the need's, and ``EF-7R`` for a fact port bound to a component that does not
-    provide the fact. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero.
+    carrier is not the need's, ``EF-7R`` for a fact port bound to a component that does not
+    provide the fact, and five for observe and actuate (§4): ``EF-7S`` for an observer's selection
+    (a class that declares no feeds, a required selector matching nothing, an idle observer, a
+    ranked feed on an observer that is no controller), ``EF-7T`` for the double count of a meter
+    reading a controller's balance and a flow that controller observes, ``EF-7U`` for an actuation
+    (a controllable output no controller selects, a target input actuated twice, a ``controllable``
+    naming an input the controller may not actuate), ``EF-7V`` for the weights a controller derives
+    from its priorities, and ``EF-7W`` for two participants of one observer whose derived port names
+    collide. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -165,6 +172,11 @@ class EnergySystemErrorId(enum.Enum):
     CARRIER_PROVIDER = "EF-7P"
     CARRIER_MISMATCH = "EF-7Q"
     FACT_NOT_PROVIDED = "EF-7R"
+    OBSERVER_SELECTION = "EF-7S"
+    DOUBLE_COUNT = "EF-7T"
+    ACTUATION = "EF-7U"
+    PRIORITY_WEIGHTS = "EF-7V"
+    DERIVED_PORT_COLLISION = "EF-7W"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
     RECORDED_NAME_INVALID = "EF-R1"

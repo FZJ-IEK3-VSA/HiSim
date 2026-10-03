@@ -91,6 +91,43 @@
       "$ref": "#/$defs/tests"
     }
   },
+  "if": {
+    "required": [
+      "parameters"
+    ],
+    "properties": {
+      "parameters": {
+        "not": {
+          "additionalProperties": {
+            "not": {
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "float",
+                    "int"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "tests": {
+        "properties": {
+          "monotone": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  },
   "$defs": {
     "name": {
       "type": "string",
@@ -308,7 +345,43 @@
           "type": "boolean"
         },
         "controllable": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "target_input": {
+              "$ref": "#/$defs/name"
+            },
+            "via": {
+              "$ref": "#/$defs/name"
+            },
+            "optional": {
+              "type": "boolean"
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "target_input"
+              ],
+              "not": {
+                "required": [
+                  "via"
+                ]
+              }
+            },
+            {
+              "required": [
+                "via"
+              ],
+              "not": {
+                "required": [
+                  "target_input",
+                  "optional"
+                ]
+              }
+            }
+          ],
+          "description": "How a controller actuates this provided output (assemblies_spec.md \u00a74.4, D21): target_input, an input of its member the controller writes directly (the battery's), or via, the need whose binding lowers to the member's L1 modifier."
         },
         "optional": {
           "type": "boolean"
@@ -355,6 +428,10 @@
     "observer_port": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "into",
+        "default"
+      ],
       "properties": {
         "into": {
           "oneOf": [
@@ -371,9 +448,350 @@
           ]
         },
         "default": {
-          "type": "string"
+          "$ref": "#/$defs/selection"
         }
       }
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "component_type"
+          ]
+        },
+        {
+          "required": [
+            "flow"
+          ]
+        },
+        {
+          "required": [
+            "output"
+          ]
+        }
+      ],
+      "properties": {
+        "component_type": {
+          "oneOf": [
+            {
+              "enum": [
+                "PV",
+                "WINDTURBINE",
+                "SMART_DEVICE",
+                "SURPLUS_CONTROLLER",
+                "SURPLUS_CONTROLLER_DISTRICT",
+                "PREDICTIVE_CONTROLLER",
+                "HEAT_PUMP",
+                "GAS_HEATER",
+                "OIL_HEATER",
+                "PELLET_HEATER",
+                "WOOD_CHIP_HEATER",
+                "HYDROGEN_HEATER",
+                "DISTRICT_HEATING",
+                "BATTERY",
+                "CAR_BATTERY",
+                "CAR",
+                "FUEL_CELL",
+                "ELECTROLYZER",
+                "TRANSFORMER_AND_RECTIFIER",
+                "CHP",
+                "H2_STORAGE",
+                "ELECTRIC_VEHICLE",
+                "ELECTRIC_HEATER",
+                "ELECTRIC_HEATING_SH",
+                "ELECTRIC_HEATING_DHW",
+                "BOILER",
+                "BUFFER",
+                "THERMAL_ENERGY_STORAGE",
+                "SPACE_HEATING_STORAGE",
+                "DOMESTIC_HOT_WATER_STORAGE",
+                "HEATERS",
+                "RESIDENTS",
+                "BUILDINGS",
+                "SOLAR_THERMAL_SYSTEM",
+                "ELECTRICITY_METER",
+                "GAS_METER",
+                "ENERGY_MANAGEMENT_SYSTEM",
+                "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+                "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+                "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR",
+                "NO_HDS",
+                "WALL_EXTERNAL_INSULATION",
+                "WALL_INTERNAL_INSULATION",
+                "ROOF_INSULATION_BETWEEN_JOISTS",
+                "ROOF_INSULATION_OVER_JOISTS",
+                "WARM_ROOF_INSULATION",
+                "TOP_CEILING_UPPER_INSULATION",
+                "BASEMENT_CEILING_BOTTOM_INSULATION",
+                "BASEMENT_WALLS_INTERNAL_INSULATION",
+                "GROUND_EXTERNAL_INSULATION",
+                "WINDOWS_TRIPLE_GLAZED",
+                "EXTERIOR_DOOR",
+                "AIR_SEALING",
+                "VENTILATION_SYSTEM",
+                "HEAT_PUMP_BUILDING",
+                "HEAT_PUMP_DHW"
+              ]
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "PV",
+                  "WINDTURBINE",
+                  "SMART_DEVICE",
+                  "SURPLUS_CONTROLLER",
+                  "SURPLUS_CONTROLLER_DISTRICT",
+                  "PREDICTIVE_CONTROLLER",
+                  "HEAT_PUMP",
+                  "GAS_HEATER",
+                  "OIL_HEATER",
+                  "PELLET_HEATER",
+                  "WOOD_CHIP_HEATER",
+                  "HYDROGEN_HEATER",
+                  "DISTRICT_HEATING",
+                  "BATTERY",
+                  "CAR_BATTERY",
+                  "CAR",
+                  "FUEL_CELL",
+                  "ELECTROLYZER",
+                  "TRANSFORMER_AND_RECTIFIER",
+                  "CHP",
+                  "H2_STORAGE",
+                  "ELECTRIC_VEHICLE",
+                  "ELECTRIC_HEATER",
+                  "ELECTRIC_HEATING_SH",
+                  "ELECTRIC_HEATING_DHW",
+                  "BOILER",
+                  "BUFFER",
+                  "THERMAL_ENERGY_STORAGE",
+                  "SPACE_HEATING_STORAGE",
+                  "DOMESTIC_HOT_WATER_STORAGE",
+                  "HEATERS",
+                  "RESIDENTS",
+                  "BUILDINGS",
+                  "SOLAR_THERMAL_SYSTEM",
+                  "ELECTRICITY_METER",
+                  "GAS_METER",
+                  "ENERGY_MANAGEMENT_SYSTEM",
+                  "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+                  "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+                  "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR",
+                  "NO_HDS",
+                  "WALL_EXTERNAL_INSULATION",
+                  "WALL_INTERNAL_INSULATION",
+                  "ROOF_INSULATION_BETWEEN_JOISTS",
+                  "ROOF_INSULATION_OVER_JOISTS",
+                  "WARM_ROOF_INSULATION",
+                  "TOP_CEILING_UPPER_INSULATION",
+                  "BASEMENT_CEILING_BOTTOM_INSULATION",
+                  "BASEMENT_WALLS_INTERNAL_INSULATION",
+                  "GROUND_EXTERNAL_INSULATION",
+                  "WINDOWS_TRIPLE_GLAZED",
+                  "EXTERIOR_DOOR",
+                  "AIR_SEALING",
+                  "VENTILATION_SYSTEM",
+                  "HEAT_PUMP_BUILDING",
+                  "HEAT_PUMP_DHW"
+                ]
+              }
+            }
+          ]
+        },
+        "flow": {
+          "oneOf": [
+            {
+              "enum": [
+                "MASS_FLOW",
+                "CONTROL_SIGNAL",
+                "ELECTRICITY_TARGET",
+                "LAST_ACTIVATION",
+                "LATEST_ACTIVATION",
+                "EARLIEST_ACTIVATION",
+                "RECOMMENDED_ACTIVATION",
+                "ELECTRICITY_PRODUCTION",
+                "ELECTRICITY_INJECTION",
+                "ELECTRICITY_CONSUMPTION",
+                "ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",
+                "ELECTRICITY_CONSUMPTION_UNCONTROLLED",
+                "STORAGE_CONTENT",
+                "CHARGE_DISCHARGE",
+                "CHARGE",
+                "DISCHARGE",
+                "GAS_PRODUCTION",
+                "GAS_CONSUMPTION_UNCONTROLLED",
+                "HEAT_DELIVERED",
+                "HEAT_CONSUMPTION",
+                "HEAT_TO_BUILDING",
+                "HEAT_TO_BUFFER",
+                "THERMAL_PRODUCTION",
+                "FUEL_CONSUMPTION",
+                "WATER_HEATING",
+                "HEATING"
+              ]
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "MASS_FLOW",
+                  "CONTROL_SIGNAL",
+                  "ELECTRICITY_TARGET",
+                  "LAST_ACTIVATION",
+                  "LATEST_ACTIVATION",
+                  "EARLIEST_ACTIVATION",
+                  "RECOMMENDED_ACTIVATION",
+                  "ELECTRICITY_PRODUCTION",
+                  "ELECTRICITY_INJECTION",
+                  "ELECTRICITY_CONSUMPTION",
+                  "ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",
+                  "ELECTRICITY_CONSUMPTION_UNCONTROLLED",
+                  "STORAGE_CONTENT",
+                  "CHARGE_DISCHARGE",
+                  "CHARGE",
+                  "DISCHARGE",
+                  "GAS_PRODUCTION",
+                  "GAS_CONSUMPTION_UNCONTROLLED",
+                  "HEAT_DELIVERED",
+                  "HEAT_CONSUMPTION",
+                  "HEAT_TO_BUILDING",
+                  "HEAT_TO_BUFFER",
+                  "THERMAL_PRODUCTION",
+                  "FUEL_CONSUMPTION",
+                  "WATER_HEATING",
+                  "HEATING"
+                ]
+              }
+            }
+          ]
+        },
+        "output": {
+          "$ref": "#/$defs/name"
+        },
+        "feed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "component_type": {
+              "enum": [
+                "PV",
+                "WINDTURBINE",
+                "SMART_DEVICE",
+                "SURPLUS_CONTROLLER",
+                "SURPLUS_CONTROLLER_DISTRICT",
+                "PREDICTIVE_CONTROLLER",
+                "HEAT_PUMP",
+                "GAS_HEATER",
+                "OIL_HEATER",
+                "PELLET_HEATER",
+                "WOOD_CHIP_HEATER",
+                "HYDROGEN_HEATER",
+                "DISTRICT_HEATING",
+                "BATTERY",
+                "CAR_BATTERY",
+                "CAR",
+                "FUEL_CELL",
+                "ELECTROLYZER",
+                "TRANSFORMER_AND_RECTIFIER",
+                "CHP",
+                "H2_STORAGE",
+                "ELECTRIC_VEHICLE",
+                "ELECTRIC_HEATER",
+                "ELECTRIC_HEATING_SH",
+                "ELECTRIC_HEATING_DHW",
+                "BOILER",
+                "BUFFER",
+                "THERMAL_ENERGY_STORAGE",
+                "SPACE_HEATING_STORAGE",
+                "DOMESTIC_HOT_WATER_STORAGE",
+                "HEATERS",
+                "RESIDENTS",
+                "BUILDINGS",
+                "SOLAR_THERMAL_SYSTEM",
+                "ELECTRICITY_METER",
+                "GAS_METER",
+                "ENERGY_MANAGEMENT_SYSTEM",
+                "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+                "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+                "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR",
+                "NO_HDS",
+                "WALL_EXTERNAL_INSULATION",
+                "WALL_INTERNAL_INSULATION",
+                "ROOF_INSULATION_BETWEEN_JOISTS",
+                "ROOF_INSULATION_OVER_JOISTS",
+                "WARM_ROOF_INSULATION",
+                "TOP_CEILING_UPPER_INSULATION",
+                "BASEMENT_CEILING_BOTTOM_INSULATION",
+                "BASEMENT_WALLS_INTERNAL_INSULATION",
+                "GROUND_EXTERNAL_INSULATION",
+                "WINDOWS_TRIPLE_GLAZED",
+                "EXTERIOR_DOOR",
+                "AIR_SEALING",
+                "VENTILATION_SYSTEM",
+                "HEAT_PUMP_BUILDING",
+                "HEAT_PUMP_DHW"
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "MASS_FLOW",
+                  "CONTROL_SIGNAL",
+                  "ELECTRICITY_TARGET",
+                  "LAST_ACTIVATION",
+                  "LATEST_ACTIVATION",
+                  "EARLIEST_ACTIVATION",
+                  "RECOMMENDED_ACTIVATION",
+                  "ELECTRICITY_PRODUCTION",
+                  "ELECTRICITY_INJECTION",
+                  "ELECTRICITY_CONSUMPTION",
+                  "ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",
+                  "ELECTRICITY_CONSUMPTION_UNCONTROLLED",
+                  "STORAGE_CONTENT",
+                  "CHARGE_DISCHARGE",
+                  "CHARGE",
+                  "DISCHARGE",
+                  "GAS_PRODUCTION",
+                  "GAS_CONSUMPTION_UNCONTROLLED",
+                  "HEAT_DELIVERED",
+                  "HEAT_CONSUMPTION",
+                  "HEAT_TO_BUILDING",
+                  "HEAT_TO_BUFFER",
+                  "THERMAL_PRODUCTION",
+                  "FUEL_CONSUMPTION",
+                  "WATER_HEATING",
+                  "HEATING"
+                ]
+              }
+            },
+            "weight": {
+              "type": "integer"
+            }
+          }
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "description": "Matches the outputs the observer's class declares feeds from by component type, flow tag or output name (assemblies_spec.md \u00a74.1)."
+    },
+    "selection": {
+      "oneOf": [
+        {
+          "const": "declared"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/selector"
+          }
+        }
+      ]
     },
     "instance": {
       "oneOf": [
@@ -495,7 +913,20 @@
           }
         },
         "observes": {
-          "type": "array"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/selection"
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/selection"
+              }
+            }
+          ]
         },
         "actuates": {},
         "installation_year": {
@@ -780,7 +1211,28 @@
         },
         "actuates": {
           "type": "object",
-          "additionalProperties": {}
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "$param"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "$param": {
+                    "$ref": "#/$defs/name"
+                  }
+                }
+              }
+            ]
+          }
         }
       }
     },
@@ -800,7 +1252,6 @@
         },
         "monotone": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "$ref": "#/$defs/monotone"
           }

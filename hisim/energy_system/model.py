@@ -28,7 +28,7 @@ from typing import Annotated, Any, ClassVar, Dict, Literal, Mapping, Optional, T
 from pydantic import BaseModel, ConfigDict, Field
 
 from hisim.config import ComponentID
-from hisim.energy_system.imports_model import BindingVerbs, ImportEntry, PlacedPlaceholder, Port
+from hisim.energy_system.imports_model import BindingVerbs, ImportEntry, PlacedPlaceholder, Port, Selection
 from hisim.energy_system.names import NameRules
 
 
@@ -248,11 +248,12 @@ class ComponentEntry(BaseModel):
     #: Wire spelling of the ``class_path`` field: ``class`` is a Python keyword.
     CLASS_KEY: ClassVar[str] = "class"
 
-    #: The keys schema version 4 adds to a top-level entry (``assemblies_spec.md`` §2.3, §3.1):
-    #: its evaluation order, the ports an import binds to, and the three binding verbs. A v3
+    #: The keys schema version 4 adds to a top-level entry (``assemblies_spec.md`` §2.3, §3.1, §4.1):
+    #: its evaluation order, the ports an import binds to, the three binding verbs, and the
+    #: selection of an entry that observes (its feeds land at ``{$observes: observes}``). A v3
     #: file refuses them as unknown keys; the expansion of imports consumes them, so no later
     #: stage ever sees one.
-    V4_ENTRY_KEYS: ClassVar[Tuple[str, ...]] = ("order", "ports", "bind", "optional-bind", "none")
+    V4_ENTRY_KEYS: ClassVar[Tuple[str, ...]] = ("order", "ports", "bind", "optional-bind", "none", "observes")
 
     name: str
     class_path: str
@@ -264,12 +265,19 @@ class ComponentEntry(BaseModel):
     order: Optional[int] = None
     ports: Mapping[str, Port] = Field(default_factory=dict)
     verbs: BindingVerbs = Field(default_factory=BindingVerbs)
+    observes: Optional[Selection] = None
     placeholders: Tuple[PlacedPlaceholder, ...] = ()
 
     @property
     def has_v4_extensions(self) -> bool:
         """Whether the entry uses any key or placeholder schema version 4 adds."""
-        return self.order is not None or bool(self.ports) or not self.verbs.is_empty or bool(self.placeholders)
+        return (
+            self.order is not None
+            or bool(self.ports)
+            or not self.verbs.is_empty
+            or self.observes is not None
+            or bool(self.placeholders)
+        )
 
     def sizing_references(self) -> Tuple[Tuple[str, SourceReference], ...]:
         """Flattens ``sizing_sources`` into ``(fact, reference)`` pairs.

@@ -336,20 +336,59 @@ class ResolvedDynamicConnection:
         combined.extend(self.flow_tags)
         return tuple(combined)
 
+    @classmethod
+    def input_name_for(cls, source_name: str, source_output: str) -> str:
+        """The aggregator input a feed from one participant's output creates.
+
+        The one derivation the expansion of imports previews (to refuse a collision per observer
+        before anything is built) and the port creation uses, so the two can never disagree.
+
+        Args:
+            source_name: The participant's runtime name.
+            source_output: The participant's measured output.
+
+        Returns:
+            ``<output>From<participant>``, the participant entering through
+            :meth:`~hisim.config.names.NameSyntax.port_name_part`.
+        """
+        return cls.AGGREGATOR_INPUT_TEMPLATE.format(
+            source_output=source_output, source_name=NameSyntax.port_name_part(source_name)
+        )
+
+    @classmethod
+    def dispatch_name_for(cls, source_name: str, source_output: str, target_input: Optional[str]) -> str:
+        """The dispatch output a feed with a dispatch block creates.
+
+        Args:
+            source_name: The participant's runtime name.
+            source_output: The participant's measured output.
+            target_input: The participant's input the signal is wired into, or ``None`` for a
+                signal recorded for postprocessing.
+
+        Returns:
+            ``DispatchTo<participant>_<input>`` or ``DispatchFor<participant>_<output>``.
+        """
+        participant = NameSyntax.port_name_part(source_name)
+        if target_input is not None:
+            return cls.DISPATCH_OUTPUT_TEMPLATE.format(source_name=participant, target_input=target_input)
+        return cls.RECORDED_DISPATCH_OUTPUT_TEMPLATE.format(source_name=participant, source_output=source_output)
+
     @property
     def port_source_name(self) -> str:
         """The participant's name as it enters a derived port name.
 
         A port name is an identifier, and an assembly member's name is its serialized address,
-        whose ``-`` separates identifiers (``boiler-Boiler``, ``assemblies_spec.md`` §2.4). The
-        separator becomes ``_`` here (``boiler_Boiler``); every other name passes unchanged, so
-        the derived ports of every file without assemblies keep their names. A derived name that
-        collides with another port is refused where the ports are created (``EF-32``).
+        whose ``-`` separates identifiers (``boiler-Boiler``, ``assemblies_spec.md`` §2.4); the
+        one scheme of :meth:`~hisim.config.names.NameSyntax.port_name_part` turns it into
+        ``boiler_Boiler`` and passes every other name unchanged, so the derived ports of every
+        file without assemblies keep their names. A derived name that collides with another port
+        is refused where the ports are created (``EF-32``), and the expansion refuses two
+        participants of one observer that map to one name before (``EF-7W``).
 
         Returns:
             The source name with the address separator replaced.
         """
-        return self.source_name.replace(NameSyntax.ADDRESS_SEPARATOR, "_")
+        return NameSyntax.port_name_part(self.source_name)
 
     @property
     def aggregator_input_name(self) -> str:
@@ -358,9 +397,7 @@ class ResolvedDynamicConnection:
         Returns:
             The derived name, for example ``ElectricityOutputFromBoiler``.
         """
-        return self.AGGREGATOR_INPUT_TEMPLATE.format(
-            source_output=self.source_output, source_name=self.port_source_name
-        )
+        return self.input_name_for(self.source_name, self.source_output)
 
     @property
     def dispatch_output_name(self) -> Optional[str]:
@@ -378,13 +415,7 @@ class ResolvedDynamicConnection:
         """
         if self.dispatch is None:
             return None
-        if self.dispatch.target_input is not None:
-            return self.DISPATCH_OUTPUT_TEMPLATE.format(
-                source_name=self.port_source_name, target_input=self.dispatch.target_input
-            )
-        return self.RECORDED_DISPATCH_OUTPUT_TEMPLATE.format(
-            source_name=self.port_source_name, source_output=self.source_output
-        )
+        return self.dispatch_name_for(self.source_name, self.source_output, self.dispatch.target_input)
 
     @staticmethod
     def order_key(weight: int, source_name: str, source_output: str) -> Tuple[int, str, str]:

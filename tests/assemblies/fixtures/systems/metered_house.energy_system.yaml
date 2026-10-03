@@ -1,0 +1,21 @@
+# Fixture: the twin shape metered_directly on fixture assemblies (the twin's :145-171). No energy manager:
+# the grid's meter keeps its default selection and observes every flow its class declares.
+schema_version: 4
+name: fixture_metered_house
+description: A composed fixture house metered directly, without an energy manager.
+
+components:
+  Weather:
+    class: tests.assemblies.fixture_components.FakeWeather
+    preset: standard
+  Occupancy:
+    class: tests.assemblies.fixture_components.FakeOccupancy
+    preset: standard
+
+imports:
+  pv:
+    assembly: pv/array
+  heater:
+    assembly: generator/smart_heater
+  grid:
+    assembly: supply/electricity_grid

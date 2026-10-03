@@ -35,9 +35,15 @@ electricity to nothing but the check that exactly one provider exists (§5). A f
 ``sizing_sources`` line naming the provider (§6). ``{$switch: …}`` values are resolved with the
 parameters.
 
-**What the expansion does not lower** — observer and actuator selectors and controllable outputs
-(hisim-lt0b.3), many-reads and fact exports (hisim-lt0b.4), and the ``$fact`` and ``$derived``
-values — is listed in the import record and refused as a whole with ``EF-7L``, never ignored.
+**Observe and actuate** (hisim-lt0b.3, §4). Once every port is bound, every observer — a site
+entry's ``observes:``, an assembly's observer port with its import's ``observes:`` — is lowered by
+:mod:`.selectors`: its matches become aggregator feeds where its ``{$observes: …}`` placeholder
+stands, a controller derives its weights from its priorities, and the double count, duplicate feeds,
+derived port names and actuations are checked.
+
+**What the expansion does not lower** — many-reads and fact exports (hisim-lt0b.4), and the
+``$fact`` and ``$derived`` values — is listed in the import record and refused as a whole with
+``EF-7L``, never ignored.
 
 **Evaluation order** (D23): ``order:`` on a top-level component or import positions it, a member's
 relative ``order:`` positions it inside its assembly, an import's instances follow their written
@@ -78,6 +84,12 @@ from hisim.energy_system.assemblies.record import (
 )
 from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
+from hisim.energy_system.assemblies.selectors import (
+    Controllable,
+    ObserverSlot,
+    SelectionLowering,
+    resolve_priorities,
+)
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import (
     EnergySystemAssemblyError,
@@ -88,11 +100,13 @@ from hisim.energy_system.imports_model import (
     Carriers,
     CircuitNaming,
     ImportEntry,
+    ImportObserves,
     ObservesPlaceholder,
     ParameterReference,
     Port,
     PortKind,
     PortPlaceholder,
+    Selection,
 )
 from hisim.energy_system.model import (
     AggregatorFeed,
@@ -278,6 +292,7 @@ class Handle:
         consumer_outputs: A carrier need's consuming outputs, as ``(unit, output)``.
         fact: A fact port's fact, resolved.
         fact_into: The units a fact need lowers into.
+        bound_partner: The expanded name a need was lowered to, once bound.
     """
 
     owner: str
@@ -298,6 +313,7 @@ class Handle:
     consumer_outputs: List[Tuple[Unit, str]] = field(default_factory=list)
     fact: Optional[str] = None
     fact_into: List[Unit] = field(default_factory=list)
+    bound_partner: Optional[str] = None
 
     @property
     def partner_text(self) -> str:
@@ -344,6 +360,9 @@ class OfferedPort:
         end_classes: The class names of a circuit end's members.
         carrier: A carrier port's carrier, resolved.
         fact: A fact port's fact, resolved.
+        observer_classes: The class names of an observer port's members.
+        controlled_class: For a provided output actuated through ``controllable: {target_input: …}``,
+            the class name of its member, which needs a controller beside it.
     """
 
     name: str
@@ -355,6 +374,8 @@ class OfferedPort:
     end_classes: Tuple[str, ...] = ()
     carrier: Optional[str] = None
     fact: Optional[str] = None
+    observer_classes: Tuple[str, ...] = ()
+    controlled_class: Optional[str] = None
 
 
 @dataclass
@@ -439,6 +460,8 @@ class ImportExpander:
         self._carrier_checks: List[Tuple[str, str, str]] = []
         self._checked: Set[str] = set()
         self._recorded: List[Tuple[InstanceRecord, Mapping[str, Handle]]] = []
+        self._slots: List[ObserverSlot] = []
+        self._controllables: List[Controllable] = []
 
     # ------------------------------------------------------------------------------------------ errors
 
@@ -500,6 +523,14 @@ class ImportExpander:
         for verbs, handle in self._decision_order(handles):
             self._decide(handle, verbs, level, top=True)
         self._check_provisions()
+        SelectionLowering(
+            all_units,
+            self._slots,
+            self._controllables,
+            lambda unit: self.classes.interface(unit.class_path, f"components.{unit.name}", unit.name),
+            self.record,
+            self._item_text,
+        ).lower()
         self._order_top(site_units, instances)
         for record, instance_handles in self._recorded:
             record.ports = [self._port_record(handle) for handle in instance_handles.values()]
@@ -549,8 +580,22 @@ class ImportExpander:
                 + ".",
             )
         offered: Dict[str, OfferedPort] = {}
-        for name, handle in results[0][1].handles.items():
+        instance = results[0][1]
+        for name, handle in instance.handles.items():
             port = handle.port
+            observer_classes = tuple(
+                ClassFacts.short_name(slot.unit.class_path)
+                for slot in self._slots
+                if slot.handle is handle
+            )
+            controlled = next(
+                (
+                    ClassFacts.short_name(item.unit.class_path)
+                    for item in self._controllables
+                    if item.port is port and port.controllable_target is not None and not port.controllable_optional
+                ),
+                None,
+            )
             offered[name] = OfferedPort(
                 name=name,
                 kind=port.kind,
@@ -563,6 +608,8 @@ class ImportExpander:
                 else (),
                 carrier=handle.carrier,
                 fact=handle.fact,
+                observer_classes=observer_classes,
+                controlled_class=controlled,
             )
         return offered
 
@@ -585,13 +632,49 @@ class ImportExpander:
             seen.add(unit.name)
 
     def _site_unit(self, name: str, entry: ComponentEntry) -> Unit:
-        """A site entry as a unit of the top level."""
-        for placed in entry.placeholders:
-            if isinstance(placed.placeholder, ObservesPlaceholder):
-                self.not_lowered(
-                    f"component {name}: placeholder $observes {placed.placeholder.observer}",
-                    "hisim-lt0b.3 (observe and actuate selectors)",
+        """A site entry as a unit of the top level; an entry with ``observes:`` becomes an observer (§4.1)."""
+        unit = self._site_unit_of(name, entry)
+        placed = [item for item in entry.placeholders if isinstance(item.placeholder, ObservesPlaceholder)]
+        site_port = ObservesPlaceholder.SITE_PORT
+        if entry.observes is None and placed:
+            raise self.error(
+                EnergySystemErrorId.OBSERVER_SELECTION,
+                f"components.{name}.inputs[{placed[0].position}]",
+                f"'{name}' carries an '{{$observes: …}}' placeholder but writes no 'observes:' selection.",
+                remedy="Write the selection, observes: [<selector>, ...], or remove the placeholder.",
+            )
+        if entry.observes is not None:
+            observers = [
+                (item.position, item.placeholder.observer)
+                for item in placed
+                if isinstance(item.placeholder, ObservesPlaceholder)
+            ]
+            fitting = [position for position, observer in observers if observer == site_port]
+            if len(fitting) != 1 or len(placed) != 1:
+                raise self.error(
+                    EnergySystemErrorId.OBSERVER_SELECTION,
+                    f"components.{name}",
+                    f"'{name}' observes, so its feeds land where it writes exactly one '{{$observes: {site_port}}}' "
+                    f"placeholder in its inputs; it writes {len(placed)} observer placeholder"
+                    f"{'s' if len(placed) != 1 else ''}"
+                    + (f" ({', '.join(observer for _position, observer in observers)})" if observers else "")
+                    + ".",
                 )
+            self._slots.append(
+                ObserverSlot(
+                    unit=unit,
+                    owner=f"component {name}",
+                    owner_path=name,
+                    port=site_port,
+                    selection=entry.observes,
+                    position=fitting[0],
+                    source=unit.chain[-1].text,
+                )
+            )
+        return unit
+
+    def _site_unit_of(self, name: str, entry: ComponentEntry) -> Unit:
+        """The unit of one site entry."""
         return Unit(
             name=name,
             entry=entry,
@@ -607,7 +690,7 @@ class ImportExpander:
 
     def _expand_top_import(self, key: str, entry: ImportEntry) -> List[Tuple[Optional[str], Instance]]:
         """Expands one top-level import, each of its instances."""
-        self._note_import_selectors(key, entry)
+        self._refuse_import_actuates(f"imports.{key}", key, entry)
         results: List[Tuple[Optional[str], Instance]] = []
         location = f"imports.{key}"
         assembly = self.resolver.resolve(entry.assembly, location)
@@ -630,6 +713,7 @@ class ImportExpander:
                 chain=(chain_root,) if instance_key is None else (chain_tail,),
                 stack=(),
                 reserved=self._reserved_of(entry, instance_key),
+                observes=entry.observes,
             )
             results.append((instance_key, instance))
         return results
@@ -647,12 +731,17 @@ class ImportExpander:
                 reserved[key] = value
         return reserved
 
-    def _note_import_selectors(self, key: str, entry: ImportEntry) -> None:
-        """Notes an import's ``observes:``/``actuates:``, which hisim-lt0b.3 lowers."""
-        if entry.observes is not None:
-            self.not_lowered(f"import {key}: observes", "hisim-lt0b.3 (observe and actuate selectors)")
+    def _refuse_import_actuates(self, location: str, key: str, entry: ImportEntry) -> None:
+        """Refuses ``actuates:`` on an import: a controller's priorities are its assembly's parameter (§4.4)."""
         if entry.actuates is not None:
-            self.not_lowered(f"import {key}: actuates", "hisim-lt0b.3 (observe and actuate selectors)")
+            raise self.error(
+                EnergySystemErrorId.ACTUATION,
+                location,
+                f"the import '{key}' writes 'actuates:'; what a controller actuates is the priority list its assembly "
+                "declares as the parameter 'priorities' (assemblies_spec.md §4.4), and devices state only that an "
+                "output is controllable.",
+                remedy="Write parameters: {priorities: [<selector>, ...]} on the controller's import instead.",
+            )
 
     @staticmethod
     def _instances_of(
@@ -685,6 +774,7 @@ class ImportExpander:
         chain: Tuple[SourceLocation, ...],
         stack: Tuple[str, ...],
         reserved: Mapping[str, Any],
+        observes: Optional[ImportObserves] = None,
     ) -> Instance:
         """Expands one instance of one assembly, its inner imports first."""
         import_path = self.path_text(path)
@@ -759,6 +849,7 @@ class ImportExpander:
             where_verbs=f"'{assembly.label}'",
         )
         handles = self._own_handles(assembly, units, inner, states, selections, path, chain)
+        self._observers_of(assembly, units, handles, observes, parameters, selections, where)
         self._bind_inside(assembly, level, inner, units, import_path)
         self._check_placeholders(assembly, units, where)
         self._order_level(assembly, units, inner, where)
@@ -780,7 +871,7 @@ class ImportExpander:
         stack: Tuple[str, ...],
     ) -> List[Tuple[Optional[str], Instance]]:
         """Expands one inner import of an assembly, its parameters substituted from the outer ones."""
-        self._note_import_selectors(f"{self.path_text(path)} → {key}", entry)
+        self._refuse_import_actuates(f"{assembly.label}: imports.{key}", key, entry)
         inner_assembly = self.resolver.resolve(entry.assembly, f"{assembly.label}: imports.{key}")
         results: List[Tuple[Optional[str], Instance]] = []
         for instance_key, preset, given, location in self._instances_of(entry, ("imports", key), assembly.lines):
@@ -795,6 +886,7 @@ class ImportExpander:
                         chain=chain + (location,),
                         stack=stack + (assembly.path,),
                         reserved=self._reserved_of(entry, instance_key),
+                        observes=entry.observes,
                     ),
                 )
             )
@@ -843,13 +935,6 @@ class ImportExpander:
 
     def _note_unlowered_port(self, import_path: str, port: Port) -> None:
         """Notes an active port, or a part of one, the expansion does not lower yet."""
-        if not port.kind.is_lowered:
-            self.not_lowered(f"{import_path}: port {port.name} ({port.kind.value})", port.kind.delivering_step)
-        if port.kind == PortKind.PROVIDED and "controllable" in port.raw:
-            self.not_lowered(
-                f"{import_path}: port {port.name} (controllable)",
-                "hisim-lt0b.3 (observe and actuate selectors, controller lowering)",
-            )
         if port.kind == PortKind.FACT and port.many:
             self.not_lowered(f"{import_path}: port {port.name} (fact, many: true)", self.MANY_SIZING_STEP)
         if port.kind == PortKind.FACT and "export" in port.raw:
@@ -890,12 +975,6 @@ class ImportExpander:
                 f"{self.path_text(path)}: member {name} {'.'.join(value_path)} ({key})",
                 ParameterReference.UNLOWERED_KEYS[key],
             )
-        for placed in entry.placeholders:
-            if isinstance(placed.placeholder, ObservesPlaceholder):
-                self.not_lowered(
-                    f"{self.path_text(path)}: member {name} placeholder $observes {placed.placeholder.observer}",
-                    "hisim-lt0b.3 (observe and actuate selectors)",
-                )
 
         def check_config_unit(parameter: str, value_path: Tuple[str, ...]) -> None:
             self._check_unit(declarations[parameter], entry.class_path, value_path, location, name, where, assembly)
@@ -1080,6 +1159,17 @@ class ImportExpander:
                         )
                 else:
                     handle.provider = (unit.name, output or "")
+                    if port.is_controllable and handle.state != "inactive":
+                        self._controllables.append(
+                            Controllable(
+                                unit=unit,
+                                output=output or "",
+                                port=port,
+                                owner=import_path,
+                                via_handle=None,
+                                source=handle.source_text(),
+                            )
+                        )
             elif port.kind == PortKind.CIRCUIT:
                 self._circuit_handle(handle, [units[member] for member in port.members if member in units], location)
             elif port.kind == PortKind.CARRIER:
@@ -1089,7 +1179,132 @@ class ImportExpander:
             elif port.kind == PortKind.REEXPORT:
                 self._reexport(handle, assembly, inner, import_path, location)
             handles[name] = handle
+        for controllable in self._controllables:
+            if controllable.owner == import_path and controllable.port.controllable_via is not None:
+                via = handles.get(controllable.port.controllable_via)
+                if via is None or via.port.kind != PortKind.NEED:
+                    raise self.error(
+                        EnergySystemErrorId.PORT_CONTRACT,
+                        f"{assembly.label}: interface.provides.{controllable.port.name}",
+                        f"the provided output '{controllable.port.name}' is controllable via "
+                        f"'{controllable.port.controllable_via}', which is no need of '{assembly.path}' "
+                        f"{controllable.source}.",
+                        alternatives=tuple(name for name, item in handles.items() if item.port.kind == PortKind.NEED),
+                        alternatives_label="needs",
+                    )
+                controllable.via_handle = via
         return handles
+
+    def _observers_of(  # pylint: disable=too-many-arguments
+        self,
+        assembly: ResolvedAssembly,
+        units: Mapping[str, Unit],
+        handles: Mapping[str, Handle],
+        observes: Optional[ImportObserves],
+        parameters: ResolvedParameters,
+        selections: Mapping[str, Any],
+        where: str,
+    ) -> None:
+        """Registers the observers of one instance, each with its selection and, for a controller, its priorities.
+
+        An observer port lowers into the members it names, each at its ``{$observes: <port>}``
+        placeholder; the import's ``observes:`` replaces the port's default (§4.1). An assembly
+        that ``actuates:`` a priority list is a controller: its one observer port ranks by it (§4.4).
+        """
+        model = assembly.model
+        observer_ports = {name: port for name, port in model.ports.items() if port.kind == PortKind.OBSERVER}
+        location = f"{assembly.label}: interface.observes"
+        if observes is not None:
+            if observes.selection is not None and len(observer_ports) != 1:
+                raise self.error(
+                    EnergySystemErrorId.OBSERVER_SELECTION,
+                    where,
+                    f"the import writes observes: {observes.selection.text()}, but '{assembly.path}' declares "
+                    f"{len(observer_ports)} observer ports"
+                    + (
+                        f" ({', '.join(observer_ports)}); name the port: observes: {{<port>: [...]}}"
+                        if observer_ports
+                        else ""
+                    )
+                    + ".",
+                    alternatives=tuple(observer_ports),
+                    alternatives_label="observer ports",
+                )
+            for name in observes.by_port:
+                if name not in observer_ports:
+                    raise self.error(
+                        EnergySystemErrorId.OBSERVER_SELECTION,
+                        where,
+                        f"the import's observes: names the port '{name}', which is no observer port of "
+                        f"'{assembly.path}'.",
+                        alternatives=tuple(observer_ports),
+                        alternatives_label="observer ports",
+                        offending_value=name,
+                    )
+        priorities = None
+        actuating = [
+            (name, port)
+            for name, port in model.ports.items()
+            if port.kind == PortKind.ACTUATES and handles[name].state != "inactive"
+        ]
+        if actuating:
+            name, port = actuating[0]
+            if len(actuating) != 1 or len(observer_ports) != 1:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    f"{assembly.label}: interface.actuates",
+                    f"'{assembly.path}' actuates {len(actuating)} priority lists over {len(observer_ports)} observer "
+                    f"ports; a controller ranks the feeds of its one observer port by its one list ({where}).",
+                )
+            raw = ParameterSubstitution(parameters.resolved, selections=selections).apply(port.priorities)
+            priorities = resolve_priorities(raw, f"{assembly.label}: interface.actuates.{name}")
+        for name, port in observer_ports.items():
+            handle = handles[name]
+            if handle.state == "inactive":
+                continue
+            selection: Optional[Selection] = port.selection
+            if observes is not None:
+                selection = observes.selection or observes.by_port.get(name, selection)
+            assert selection is not None
+            members = [units[member] for member in port.into if member in units]
+            if not members or (priorities is not None and len(members) != 1):
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    f"{location}.{name}",
+                    f"the observer port '{name}' lowers into {', '.join(unit.name for unit in members) or 'no member'}"
+                    + (
+                        "; a controller's observer port lowers into its one controller member"
+                        if priorities is not None
+                        else " with these parameters"
+                    )
+                    + f" {handle.source_text()}.",
+                )
+            for unit in members:
+                positions = [
+                    placed.position
+                    for placed in unit.entry.placeholders
+                    if isinstance(placed.placeholder, ObservesPlaceholder) and placed.placeholder.observer == name
+                ]
+                if len(positions) != 1:
+                    raise self.error(
+                        EnergySystemErrorId.PORT_CONTRACT,
+                        f"{location}.{name}",
+                        f"the member '{unit.name}' carries {len(positions)} '{{$observes: {name}}}' placeholders; the "
+                        f"feeds of the observer port '{name}' land at exactly one {handle.source_text()}.",
+                    )
+                self._slots.append(
+                    ObserverSlot(
+                        unit=unit,
+                        owner=handle.owner,
+                        owner_path=handle.owner_path,
+                        port=name,
+                        selection=selection,
+                        position=positions[0],
+                        source=handle.source_text(),
+                        handle=handle,
+                        priorities=priorities,
+                    )
+                )
 
     def _reexport(
         self,
@@ -1218,7 +1433,7 @@ class ImportExpander:
                     location,
                     f"the electricity provision '{name}' names the meter '{port.meter}'; electricity has no link, "
                     f"so nothing lands in a meter through this port {handle.source_text()}.",
-                    remedy="Drop 'meter:'; the meter's selection is written as observes: (hisim-lt0b.3).",
+                    remedy="Drop 'meter:'; an electricity meter observes, through its observer port (§4.3).",
                 )
             landing: Optional[Landing] = None
             if not electricity:
@@ -1342,8 +1557,6 @@ class ImportExpander:
                 chain=(self.lines.location("components", unit.name, "ports", name),),
             )
             location = f"components.{unit.name}.ports.{name}"
-            if not port.kind.is_lowered:
-                self.not_lowered(f"component {unit.name}: port {name} ({port.kind.value})", port.kind.delivering_step)
             if port.kind == PortKind.CIRCUIT:
                 self._circuit_handle(handle, [unit], location)
             elif port.kind == PortKind.CARRIER:
@@ -1546,7 +1759,20 @@ class ImportExpander:
             handle.record = {"state": "provided"}
             handle.decided = True
             return
-        if not port.kind.is_lowered or (port.kind == PortKind.FACT and port.many):
+        if port.kind.is_selector:
+            if written is not None:
+                raise self.error(
+                    EnergySystemErrorId.OBSERVER_SELECTION,
+                    handle.owner,
+                    f"port '{port.name}' is an {port.kind.value} port, which selects by tags and is bound by no verb, "
+                    f"yet {handle.verb_site} writes '{written[0]}' for it {handle.source_text()}.",
+                    remedy=f"Remove the '{written[0]}' line; an import's observes: replaces an observer's selection.",
+                )
+            if port.kind == PortKind.ACTUATES:
+                handle.record = {"state": "priorities", "partner": "ranks the feeds of the observer port"}
+            handle.decided = True
+            return
+        if port.kind == PortKind.FACT and port.many:
             handle.record = {"state": "not lowered"}
             handle.decided = True
             return
@@ -1689,6 +1915,7 @@ class ImportExpander:
             lowered.extend(f"{landing.unit.name}.inputs: {self._item_text(item)}" for item in items)
         handle.record = {"state": handle.state, "partner": partner.name, "verb": verb, "lowered_to": tuple(lowered)}
         handle.decided = True
+        handle.bound_partner = partner.name
         self.record.decisions.append(f"{handle.owner_path}.{port.name} -> {partner.name} ({verb})")
 
     # ------------------------------------------------------------------ circuits, carriers and facts
@@ -2785,7 +3012,17 @@ class ImportExpander:
         for member, unit in units.items():
             for placed in unit.entry.placeholders:
                 placeholder = placed.placeholder
-                if not isinstance(placeholder, PortPlaceholder):
+                if isinstance(placeholder, ObservesPlaceholder):
+                    observer = ports.get(placeholder.observer)
+                    if observer is None or observer.kind != PortKind.OBSERVER or member not in observer.into:
+                        raise self.error(
+                            EnergySystemErrorId.PORT_CONTRACT,
+                            f"{assembly.label}: {'.'.join(unit.block_path)}.inputs[{placed.position}]",
+                            f"the member '{member}' carries a placeholder for the observer '{placeholder.observer}', "
+                            f"which is no observer port lowering into it ({where}).",
+                            alternatives=tuple(name for name, port in ports.items() if port.kind == PortKind.OBSERVER),
+                            alternatives_label="observer ports",
+                        )
                     continue
                 port = ports.get(placeholder.port)
                 fits = port is not None and (
@@ -2936,6 +3173,7 @@ class ImportExpander:
                 "order": None,
                 "ports": {},
                 "verbs": BindingVerbs(),
+                "observes": None,
                 "placeholders": (),
             }
         )

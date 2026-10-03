@@ -21,7 +21,7 @@ one produces.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict, Type
+from typing import Any, ClassVar, Dict, List, Type
 
 import numpy as np
 import yaml
@@ -262,6 +262,8 @@ class EnergySystemEmitter:
         if model.description is not None:
             document["description"] = model.description
         document["components"] = {name: cls.entry(entry) for name, entry in model.components.items()}
+        if model.imports:
+            document["imports"] = {name: entry.to_document() for name, entry in model.imports.items()}
         if model.groups:
             document["groups"] = {name: cls._group(group) for name, group in model.groups.items()}
         if model.variants:
@@ -313,21 +315,39 @@ class EnergySystemEmitter:
         Returns:
             The entry's mapping, without the blocks it does not use.
         """
-        document: Dict[str, Any] = {ComponentEntry.CLASS_KEY: entry.class_path}
+        document: Dict[str, Any] = {}
+        if entry.order is not None:
+            document["order"] = entry.order
+        document[ComponentEntry.CLASS_KEY] = entry.class_path
         if entry.preset is not None:
             document["preset"] = entry.preset
         if entry.constructor is not None:
             document["constructor"] = {entry.constructor.name: dict(entry.constructor.arguments)}
         if entry.config:
             document["config"] = dict(entry.config)
-        if entry.inputs:
-            document["inputs"] = [cls._input_item(item) for item in entry.inputs]
+        if entry.inputs or entry.placeholders:
+            document["inputs"] = cls._inputs_with_placeholders(entry)
         if entry.sizing_sources:
             document["sizing_sources"] = {
                 fact: ([reference.text for reference in value] if isinstance(value, tuple) else value.text)
                 for fact, value in entry.sizing_sources.items()
             }
+        document.update(entry.verbs.to_document())
+        if entry.ports:
+            document["ports"] = {name: dict(port.raw) for name, port in entry.ports.items()}
         return document
+
+    @classmethod
+    def _inputs_with_placeholders(cls, entry: ComponentEntry) -> List[Any]:
+        """Renders an entry's inputs with its placeholders back at the positions they were written.
+
+        Returns:
+            The written list: ordinary items in their order, each placeholder at its index.
+        """
+        rendered: List[Any] = [cls._input_item(item) for item in entry.inputs]
+        for placed in sorted(entry.placeholders, key=lambda placed: placed.position):
+            rendered.insert(placed.position, placed.placeholder.to_document())
+        return rendered
 
     @classmethod
     def _input_item(cls, item: InputItem) -> Any:

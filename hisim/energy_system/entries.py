@@ -30,6 +30,8 @@ from hisim.energy_system.model import (
     Group,
     SourceReference,
 )
+from hisim.energy_system.imports_model import PlacedPlaceholder
+from hisim.energy_system.imports_reader import ImportsReader
 from hisim.energy_system.names import NameRules
 
 
@@ -61,7 +63,9 @@ class EntryReader:
     DISPATCH_KEYS: ClassVar[Tuple[str, ...]] = ("target_input", "tags")
 
     @classmethod
-    def components(cls, raw: Any, location: str) -> Dict[str, ComponentEntry]:
+    def components(
+        cls, raw: Any, location: str, *, extensions: Tuple[str, ...] = (), placeholders: bool = False
+    ) -> Dict[str, ComponentEntry]:
         """Builds the entries of one components mapping, at the top level or in a group.
 
         Both places hold the same kind of block, because a group is a set of components
@@ -76,16 +80,36 @@ class EntryReader:
         entries: Dict[str, ComponentEntry] = {}
         for name, value in block.items():
             NameRules.check_identifier(name, location, "component")
-            entries[name] = cls.entry(name, value, f"{location}.{name}")
+            entries[name] = cls.entry(
+                name, value, f"{location}.{name}", extensions=extensions, placeholders=placeholders
+            )
         return entries
 
     @classmethod
-    def entry(cls, name: str, raw: Any, location: str) -> ComponentEntry:
+    def entry(
+        cls,
+        name: str,
+        raw: Any,
+        location: str,
+        *,
+        extensions: Tuple[str, ...] = (),
+        placeholders: bool = False,
+    ) -> ComponentEntry:
         """Builds one component entry from its mapping.
 
         An entry carrying a group's keys is reported as an attempted nested group rather
         than as two unknown keys, because that is what the author meant and groups do not
         nest.
+
+        Args:
+            name: The component's name.
+            raw: Its block.
+            location: Key path of the block.
+            extensions: The keys of schema version 4 this entry may carry
+                (:attr:`ComponentEntry.V4_ENTRY_KEYS`, or ``("order",)`` for an assembly member);
+                empty for an entry of a version-3 file, which refuses them as unknown keys.
+            placeholders: Whether ``{$port: ...}`` and ``{$observes: ...}`` placeholders may
+                appear in its ``inputs``.
 
         Raises:
             EnergySystemFormatError: ``EF-50`` if the entry looks like a group, ``EF-18``
@@ -100,26 +124,65 @@ class EntryReader:
                 alternatives=ComponentEntry.ENTRY_KEYS,
                 alternatives_label="entry keys",
             )
+        allowed = ComponentEntry.ENTRY_KEYS + tuple(extensions)
         for key in entry:
-            if key not in ComponentEntry.ENTRY_KEYS:
+            if key not in allowed:
                 raise EnergySystemFormatError(
                     EnergySystemErrorId.UNKNOWN_ENTRY_KEY,
                     f"{location}.{key}",
                     f"'{key}' is not a key of a component entry.",
-                    alternatives=ComponentEntry.ENTRY_KEYS,
+                    alternatives=allowed,
                     alternatives_label="entry keys",
                     offending_value=str(key),
                 )
         class_path = RawDocument.string(entry.get(ComponentEntry.CLASS_KEY), f"{location}.class", required=True)
+        if placeholders:
+            inputs, placed = cls.inputs_with_placeholders(entry.get("inputs"), f"{location}.inputs")
+        else:
+            inputs, placed = cls._inputs(entry.get("inputs"), f"{location}.inputs"), ()
         return ComponentEntry(
             name=name,
             class_path=class_path or "",
             preset=RawDocument.string(entry.get("preset"), f"{location}.preset", required=False),
             constructor=cls._constructor(entry.get("constructor"), f"{location}.constructor"),
             config=RawDocument.mapping(entry.get("config"), f"{location}.config"),
-            inputs=cls._inputs(entry.get("inputs"), f"{location}.inputs"),
+            inputs=inputs,
             sizing_sources=cls._sizing_sources(entry.get("sizing_sources"), f"{location}.sizing_sources"),
+            order=ImportsReader.order(entry.get("order"), f"{location}.order"),
+            ports=ImportsReader.ports(entry.get("ports"), f"{location}.ports", "ports", site_entry=name),
+            verbs=ImportsReader.verbs(entry, location),
+            placeholders=placed,
         )
+
+    @classmethod
+    def inputs_with_placeholders(
+        cls, raw: Any, location: str
+    ) -> Tuple[Tuple[AnyInputItem, ...], Tuple[PlacedPlaceholder, ...]]:
+        """Builds an input list that may hold placeholders, keeping each placeholder's position.
+
+        The ordinary items go where every later stage reads them; each placeholder is kept with
+        the index it was written at, so the expansion of imports puts the items a port lowers to
+        exactly there (``assemblies_spec.md`` dry run gap G3).
+
+        Returns:
+            The ordinary items in written order, and the placeholders with their positions.
+        """
+        if raw is None:
+            return (), ()
+        if not isinstance(raw, list):
+            raise RawDocument.malformed(location, raw, "a list of input items")
+        items = []
+        placed = []
+        for index, item in enumerate(raw):
+            if ImportsReader.is_placeholder(item):
+                placed.append(
+                    PlacedPlaceholder(
+                        position=index, placeholder=ImportsReader.placeholder(item, f"{location}[{index}]")
+                    )
+                )
+            else:
+                items.append(cls._input_item(item, f"{location}[{index}]"))
+        return tuple(items), tuple(placed)
 
     @classmethod
     def _constructor(cls, raw: Any, location: str) -> Optional[ConstructorCall]:

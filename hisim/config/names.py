@@ -51,6 +51,21 @@ class NameSyntax:
     #: a location, so any of them means a path was written where a name belongs.
     PATH_CHARACTERS: ClassVar[str] = "/\\"
 
+    #: The separator of a serialized component address (``assemblies_spec.md`` §2.4, D5): an
+    #: assembly member's runtime name joins the import keys, the instance keys and the member
+    #: name with it, ``pv-east-PVSystem``. No identifier contains it, so an address can never
+    #: collide with an authored name, and it is the only character a runtime component name
+    #: may carry beyond the identifier alphabet.
+    ADDRESS_SEPARATOR: ClassVar[str] = "-"
+
+    #: A runtime component name: identifiers joined by :attr:`ADDRESS_SEPARATOR`. A component
+    #: written directly into a file or a setup has one part, which is the identifier rule
+    #: itself; an assembly member has one part per import, instance and member. The string is
+    #: derived from ``ComponentID`` and never parsed back.
+    COMPONENT_KEY_PATTERN: ClassVar[Pattern[str]] = re.compile(
+        r"^[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*$"
+    )
+
     @classmethod
     def is_identifier(cls, value: Any) -> TypeGuard[str]:
         """Reports whether ``value`` is a string that satisfies the identifier grammar.
@@ -127,3 +142,44 @@ class NameSyntax:
         problem = cls.explain_violation(value)
         if problem is not None:
             raise ValueError(f"'{value}' is not a usable {role} name: {problem}.")
+
+    @classmethod
+    def is_component_key(cls, value: Any) -> TypeGuard[str]:
+        """Reports whether ``value`` is a usable runtime component name.
+
+        A runtime name is an identifier, or the serialization of an assembly member's address:
+        identifiers joined by :attr:`ADDRESS_SEPARATOR` (``pv-east-PVSystem``). Only the
+        component name itself may take the second form; output, input, fact and port names, and
+        every name an author writes, stay identifiers.
+
+        Args:
+            value: The candidate runtime name, of any type.
+
+        Returns:
+            ``True`` if ``value`` is a ``str`` matching :attr:`COMPONENT_KEY_PATTERN`.
+        """
+        return isinstance(value, str) and cls.COMPONENT_KEY_PATTERN.match(value) is not None
+
+    @classmethod
+    def require_component_key(cls, value: Any) -> None:
+        """Raises unless ``value`` is a usable runtime component name.
+
+        The enforcing form of :meth:`is_component_key`, used where a component's runtime name
+        becomes real (the component and the ports it owns). A value that is not even a string,
+        or that carries a wildcard or a path, is refused with the wording
+        :meth:`explain_violation` gives it, so the refusal reads like the identifier rule's.
+
+        Args:
+            value: The candidate runtime name.
+
+        Raises:
+            ValueError: If ``value`` is not a component key; the message names it and the rule.
+        """
+        if cls.is_component_key(value):
+            return
+        parts = value.split(cls.ADDRESS_SEPARATOR) if isinstance(value, str) else [value]
+        problem = next((cls.explain_violation(part) for part in parts if cls.explain_violation(part)), None)
+        raise ValueError(
+            f"'{value}' is not a usable component name: "
+            f"{problem or 'a name is identifiers joined by ' + repr(cls.ADDRESS_SEPARATOR)}."
+        )

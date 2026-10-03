@@ -1,0 +1,32 @@
+# Mockup (design, not loadable): energy_systems/assemblies/appliances/gas_cooker.assembly.yaml
+# † Request leaf heating.cooking_range = gas: a gas hob's consumption on the gas connection; no heat model.
+# Today the occupancy's electricity profile contains an ELECTRIC cooker; a gas cooker must take its cooking energy
+# OUT of UtspLpgConnector.ElectricalPowerConsumption and put it on the gas meter, which needs the LPG household to
+# expose cooking as its own series (†). Until then the translator reports the leaf as not acted on.
+
+schema_version: 4
+kind: assembly
+name: appliances/gas_cooker
+description: A gas hob and oven drawing gas when the occupants cook.
+
+parameters:
+  efficiency_in_percent:
+    {type: float, unit: PERCENT, default: 55, description: Share of the gas energy that reaches the pot.}
+
+presets:
+  standard: {}
+
+components:
+  Cooker:
+    class: hisim.components.gas_cooker.GasCooker                   # †
+    preset: standard
+    config: {efficiency_in_percent: {$param: efficiency_in_percent}}
+    inputs:
+      - {$port: usage}
+
+interface:
+  needs:
+    usage: {into: [Cooker], partner: UtspLpgConnector}              # † no cooking series, no default connections yet
+    fuel:  {carrier: NATURAL_GAS, outputs: [gas_use]}
+  provides:
+    gas_use: {output: Cooker.GasEnergyDemand}             # † GasMeter feed once GasMeter declares one from GasCooker

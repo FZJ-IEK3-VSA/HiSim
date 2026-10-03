@@ -1,0 +1,44 @@
+# Mockup (design, not loadable): energy_systems/assemblies/dhw/indirect_cylinder.assembly.yaml
+# Request type `from_space_heating_cylinder` (spec §10.3): a cylinder charged through a coil by the space-heating
+# generator. This is the DHW shape of every heat-pump and boiler twin today: SimpleDHWStorage fed by the generator's
+# DHW outputs and drained by the occupancy (household_heatpump_building_sizer.grouped.energy_system.yaml:75-80).
+#
+# The cylinder has no controller of its own: its loop is closed by the GENERATOR's DHW L1 controller, which reads the
+# cylinder temperature through the circuit's return leg (MoreAdvancedHeatPumpHPLibControllerDHW.
+# WaterTemperatureInputFromDHWStorage). So the EMS's DHW modifier is the heating import's `ems_modifier`, not a port of
+# this assembly.
+
+schema_version: 4
+kind: assembly
+name: dhw/indirect_cylinder
+description: Indirectly heated DHW cylinder charged by the heating assembly's dhw circuit.
+
+parameters:
+  volume_in_liter:
+    {type: float, unit: LITER, default: AUTO, description: Usable volume; AUTO is the class law per apartment.}
+  tank_and_pipe_insulated:
+    {type: bool, default: true, description: "Insulation of tank and pipes († no field yet: standby loss is fixed)."}
+
+presets:
+  de_twin: {}
+
+components:
+  DHWStorage:
+    class: hisim.components.simple_water_storage.SimpleDHWStorage
+    preset: standard                                       # volume AUTO: VOLUME_LAW, number_of_apartments
+    config:
+      volume_heating_water_storage_in_liter: {$param: volume_in_liter}
+    inputs:
+      - {$port: hot_water_demand}                          # bare UTSPConnector: WaterConsumption
+      - {$port: circuit}                                   # bare generator: WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator
+      - {$port: solar_coil}                                # WaterTemperature/MassFlowFromSecondaryHeatGenerator (D20)
+
+interface:
+  needs:
+    hot_water_demand: {into: [DHWStorage], partner: [UtspLpgConnector]}   # SimpleDHWStorage's default connections
+    circuit:          {circuit: dhw, member: DHWStorage}
+                      # binds heating.dhw: supply leg and pump are the generator's, the return leg
+                      # (WaterTemperatureToHeatGenerator) is this cylinder's, read by the heat pump AND its DHW L1
+    apartments:       {fact: number_of_apartments, into: [DHWStorage]}
+  provides:
+    solar_coil:       {circuit: solar_dhw, member: DHWStorage, optional: true}   # D20 (a): unbound it is unused

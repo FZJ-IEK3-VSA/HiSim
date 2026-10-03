@@ -1,0 +1,82 @@
+# Mockup (design, not loadable): energy_systems/assemblies/dhw/storage_water_heater.assembly.yaml
+# Spec §5.3, pattern 2 (parameter-selected internal variants). Request type `storage_water_heater`.
+# † ImmersionHeater and its L1 thermostat do not exist (hisim-epc.21); LPG is not a carrier yet (spec §5.1).
+#
+# Control (D21): the heater's L1 thermostat is hardcoded in both options; the EMS may only raise its set point through
+# `ems_modifier`. Gap G5 of the dry-run: the EMS has no DHW modifier for an ELECTRIC_HEATING_DHW consumer today — it
+# raises DomesticHotWaterStorageTemperatureModifier only while a HEAT_PUMP_DHW or HEAT_PUMP feed is ranked
+# (controller_l2_energy_management_system.py:778-790), so binding `ems_modifier: control` needs that EMS change.
+
+schema_version: 4
+kind: assembly
+name: dhw/storage_water_heater
+description: A directly heated storage water heater, electric (immersion) or fuel-fired (burner).
+
+parameters:
+  energy_carrier:
+    {type: enum, values: [electricity, natural_gas, lpg, oil], description: What heats the tank.}
+  volume_in_liter:
+    {type: float, unit: LITER, default: AUTO, description: Usable tank volume; AUTO is the class law per apartment.}
+  tank_and_pipe_insulated:
+    {type: bool, default: true, description: "Insulation of tank and pipes († no field yet)."}
+  heater_power_in_watt:
+    {type: float, unit: WATT, default: 3000, description: "Immersion rating or burner input († field of ImmersionHeater)."}
+
+presets:
+  ie_immersion_120l: {energy_carrier: electricity, volume_in_liter: 120}
+  gas_storage_150l:  {energy_carrier: natural_gas, volume_in_liter: 150}
+
+components:
+  Tank:
+    class: hisim.components.simple_water_storage.SimpleDHWStorage
+    preset: standard
+    config: {volume_heating_water_storage_in_liter: {$param: volume_in_liter}}   # suffix _in_liter = LITER
+    inputs:
+      - {$port: hot_water_demand}
+      - Heater                                             # WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator
+  HeaterController:                                        # † L1 thermostat on the tank temperature
+    class: hisim.components.immersion_heater.StorageHeaterController
+    preset: standard
+    inputs:
+      - Tank                                               # WaterTemperatureToHeatGenerator (the loop's measured variable)
+      - {$port: ems_modifier}                              # † StorageTemperatureModifier
+
+variants:
+  heater:
+    selected_by: energy_carrier                            # the when: lists partition energy_carrier's values (§2.6)
+    options:
+      immersion:
+        when: [electricity]
+        components:
+          Heater:
+            class: hisim.components.immersion_heater.ImmersionHeater   # †
+            preset: standard
+            config: {rated_power_in_watt: {$param: heater_power_in_watt}}
+            inputs: [HeaterController, Tank]
+      burner:
+        when: [natural_gas, lpg, oil]
+        components:
+          Heater:
+            # GenericBoiler can run a DHW-only boiler today (generic_boiler.py:198, energy_carrier), and its
+            # EnergyDemandDhw is what GasMeter/FuelMeter default-feed on; its own DHW controller would replace
+            # HeaterController here, which is why the controller is shared only in this mockup.
+            class: hisim.components.generic_boiler.GenericBoiler
+            preset: condensing_gas
+            config: {energy_carrier: {$param: energy_carrier}}   # carrier name -> LoadTypes in the loader
+            inputs: [HeaterController, Tank]
+
+interface:
+  needs:
+    hot_water_demand: {into: [Tank], partner: [UtspLpgConnector]}
+    electricity: {carrier: electricity, outputs: [heater_electricity], required_when: {energy_carrier: [electricity]}}
+    fuel:        {carrier: {$param: energy_carrier}, outputs: [heater_fuel],
+                  required_when: {energy_carrier: [natural_gas, lpg, oil]}}
+    apartments:  {fact: number_of_apartments, into: [Tank]}
+    ems_modifier: {into: [HeaterController], partner: L2GenericEnergyManagementSystem,                    # † L1 input
+                   optional: true, active_when: {energy_carrier: [electricity]}}
+  provides:
+    heater_electricity: {output: Heater.ElectricityInput, controllable: {via: ems_modifier},              # † tagged
+                         active_when: {energy_carrier: [electricity]}}                       # ELECTRIC_HEATING_DHW
+    heater_fuel:        {output: Heater.EnergyDemandDhw, active_when: {energy_carrier: [natural_gas, lpg, oil]}}
+                        # its EnergyPort carries the carrier (EnergyPort.carrier_of_fuel); the provider's meter observes it
+    solar_coil:         {circuit: solar_dhw, member: Tank, optional: true}                               # D20 (a)

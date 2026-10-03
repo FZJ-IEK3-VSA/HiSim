@@ -1,0 +1,57 @@
+# Mockup (design, not loadable): energy_systems/assemblies/pv/array.assembly.yaml
+# One PV array; a house with several arrays imports it with one instance per request system id (spec §10.4, #83).
+
+schema_version: 4
+kind: assembly
+name: pv/array
+description: One PV array on a roof or a facade, with its inverter (pvlib, CEC databases).
+
+parameters:
+  mounted_on:
+    {type: enum, values: [roof, facade], default: roof,
+     description: "The surface the array sits on; the share and the fill check are per surface (§10.4). Later a named roof face or facade."}
+  azimuth_in_degree:
+    {type: float, unit: DEGREES, default: 180, description: "Orientation, 180 is south; a facade array defaults to its facade's azimuth."}
+    # feeds PVSystemConfig.azimuth, a field with no unit suffix and no declared unit: a load error under D16 (c)
+    # until the field declares `unit=DEGREES` (gap G10, not written yet)
+  tilt_in_degree:
+    {type: float, unit: DEGREES, default: 30, description: "Tilt from horizontal; 90 for a facade array."}
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, description: Peak power; AUTO is the roof share times the module density.}
+  share_of_surface:
+    {type: float, default: 1.0, description: "Share of the usable mounting surface (0, 1]; the request's percent is divided by 100 by the translator, never here (D16)."}
+  shading_losses_in_percent:
+    {type: float, unit: PERCENT, default: 0, description: "Shading losses († no field: PVSystem has no shading)."}
+  location:
+    {type: string, default: AACHEN, description: "PVSystemConfig.location, documentation only today (pv_system.py:85); a site value repeated here (gap G11). Default = the twin's value (D9)."}
+
+constraints:
+  - {at_most_one_of: [power_in_watt, share_of_surface]}   # a stated power is never capped; a share is (§10.4)
+
+presets:
+  de_twin: {}                                              # the defaults are the twin's values (D9)
+
+components:
+  PVSystem:
+    class: hisim.components.generic_pv_system.PVSystem
+    preset: rooftop                                        # power AUTO: ROOFTOP_POWER_LAW over roof_area_in_m2
+    display: "PV array, {mounted_on}, azimuth {azimuth_in_degree}°"   # English display_name default (spec §2.4)
+    config:
+      location: {$param: location}
+      azimuth: {$param: azimuth_in_degree}
+      tilt: {$param: tilt_in_degree}
+      power_in_watt: {$param: power_in_watt}
+      share_of_maximum_pv_potential: {$param: share_of_surface}   # † the law reads roof_area_in_m2 only; a facade array needs the facade area fact (below)
+    inputs:
+      - {$port: weather}                                   # bare Weather: PVSystem's default connections from Weather
+
+interface:
+  needs:
+    weather:     {into: [PVSystem], partner: Weather}
+    surface_area: {fact: {$switch: mounted_on, roof: roof_area_in_m2, facade: facade_area_in_m2}, into: [PVSystem]}
+                  # † facade_area_in_m2 is not a sizing contribution of the Building yet; the fact name follows mounted_on
+    weather_id:  {fact: weather_identity, into: [PVSystem]}
+  provides:
+    production:  {output: PVSystem.ElectricityOutput}
+                 # observed by its tags, never linked (spec §4.3): each observer's feed is ELECTRICITY_PRODUCTION at 999
+    peak_power:  {fact: pv_peak_power_in_watt, export: true}   # config.py:181-186; read by batteries

@@ -1,0 +1,60 @@
+# Mockup (design, not loadable): energy_systems/assemblies/control/ems_self_consumption.assembly.yaml
+# The L2 controller (D11, D21). It observes electricity flows and actuates ONLY L1 set-point modifiers and the
+# battery's LoadingPowerInput (and an EV's L1 charge target). It owns the priority list; no device declares a weight.
+#
+# It OBSERVES the electricity outputs its class declares dynamic default connections from (its own `observes:`
+# selection, spec §4.3) and outputs their sum, TotalElectricityToOrFromGrid. The grid's meter observes that output only
+# when the `grid` import says so (`observes: [{output: TotalElectricityToOrFromGrid}]`); nothing changes implicitly.
+# A meter observing that output and an output this EMS observes is a load error (double count). Twin :100-146.
+
+schema_version: 4
+kind: assembly
+name: control/ems_self_consumption
+description: Surplus controller maximising PV self-consumption (L2GenericEnergyManagementSystem).
+
+parameters:
+  priorities:
+    type: list
+    description: Ordered selectors of the controllable ports it actuates; the weights are derived (spec §4.4).
+    default:
+      - {component_type: RESIDENTS}                                   # class default 1
+      - {component_type: [HEAT_PUMP_BUILDING, ELECTRIC_HEATING_SH]}   # 2
+      - {component_type: [HEAT_PUMP_DHW, ELECTRIC_HEATING_DHW]}       # 3
+      - {component_type: SOLAR_THERMAL_SYSTEM}                        # 4
+      - {component_type: CAR_BATTERY}                                 # 5 (car twin)
+      - {component_type: BATTERY}                                     # 6, then 7, 8 ...
+  building_offset_in_kelvin:
+    {type: float, unit: CELSIUS, default: 2, description: Building set point raise on surplus (EMSConfig, controller_l2_energy_management_system.py:54).}
+  sh_storage_offset_in_kelvin:
+    {type: float, unit: CELSIUS, default: 10, description: Buffer set point raise on surplus.}
+  dhw_storage_offset_in_kelvin:
+    {type: float, unit: CELSIUS, default: 10, description: DHW cylinder set point raise on surplus.}
+  # the three offsets equal EMSConfig's defaults and therefore write nothing into the expanded config (gap G9)
+
+presets:
+  de_twin: {}
+
+components:
+  EMS:
+    class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+    preset: optimize_own_consumption
+    config:
+      building_indoor_temperature_offset_value: {$param: building_offset_in_kelvin}
+      space_heating_water_storage_temperature_offset_value: {$param: sh_storage_offset_in_kelvin}
+      domestic_hot_water_storage_temperature_offset_value: {$param: dhw_storage_offset_in_kelvin}
+    inputs:
+      - {$observes: flows}                                 # every observed flow, sorted by feed resolution
+
+interface:
+  observes:
+    flows:
+      into: [EMS]
+      default: declared                                    # every electricity output the EMS class declares; never its own
+  actuates:
+    priorities: {$param: priorities}                       # controllable electricity outputs, weights derived
+    # The modifier wires need no port here: an L1 that binds `ems_modifier: control` (and the site's
+    # `temperature_modifier`) lowers to its own class's default connections from L2GenericEnergyManagementSystem,
+    # which pick SpaceHeatingWaterStorageTemperatureModifier, DomesticHotWaterStorageTemperatureModifier or
+    # BuildingIndoorTemperatureModifier. battery / EV targets come out of the feed's dispatch output.
+  provides:
+    grid_balance: {output: EMS.TotalElectricityToOrFromGrid}   # the sum of what `flows` observes: the double-count check

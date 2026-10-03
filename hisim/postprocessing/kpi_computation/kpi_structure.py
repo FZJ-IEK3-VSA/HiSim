@@ -107,9 +107,13 @@ class KpiSource:
     def for_component(cls, component_id: "ComponentID", display_config: "DisplayConfig") -> "KpiSource":
         """The source of a component's KPIs: the one place a source is built from a component.
 
-        Assemblies do not exist yet, so every component is a plain one: no import, no instance,
-        no assembly, no label; its member is its name and its runtime name is its key. The
-        assemblies work (``assemblies_spec.md`` §2.4) extends this method and nothing else.
+        A component written directly into an energy system has no import, no instance and no
+        assembly; its member is its name. An assembly member (``assemblies_spec.md`` §2.4) fills
+        ``import`` and ``instance`` from the outermost step of its address, so that "every KPI of
+        import ``pv``" is a filter on a field, ``member`` with its name inside the assembly and
+        ``assembly`` with the innermost owning assembly's library path. In both cases the runtime
+        name is the component's key, the serialized address (``pv-east-PVSystem``). ``label`` is
+        the request's own name for a system and stays ``None`` until a request supplies one.
 
         Args:
             component_id: The component's structured identity.
@@ -120,11 +124,12 @@ class KpiSource:
             The component's source.
         """
         pretty_name = display_config.pretty_name
+        outermost = component_id.path[0] if component_id.path else None
         return cls(
-            import_key=None,
-            instance=None,
+            import_key=outermost.import_key if outermost is not None else None,
+            instance=outermost.instance if outermost is not None else None,
             member=component_id.name,
-            assembly=None,
+            assembly=component_id.assembly,
             name=component_id.key,
             display_name=pretty_name if pretty_name else component_id.name,
             label=None,

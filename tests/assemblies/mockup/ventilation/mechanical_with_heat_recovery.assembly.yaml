@@ -1,0 +1,43 @@
+# Mockup (design, not loadable): energy_systems/assemblies/ventilation/mechanical_with_heat_recovery.assembly.yaml
+# † No ventilation component; the Building computes its ventilation loss from a fixed air-change rate. Request leaf
+# ventilation.type_of_system (cardinality one; natural ventilation and trickle vents stay site config of the Building).
+# D19: the Building gains ONE named input of this kind (†, `VentilationHeatRecovered`, W, the heat the unit returns
+# to the supply air) when the component exists; a second ventilation unit is refused.
+
+schema_version: 4
+kind: assembly
+name: ventilation/mechanical_with_heat_recovery
+description: Balanced mechanical ventilation with a heat-recovery exchanger and its fans.
+
+parameters:
+  heat_recovery_efficiency_in_percent:
+    {type: float, unit: PERCENT, default: 85, description: Temperature efficiency of the exchanger.}
+  air_flow_in_m3_per_hour:
+    {type: float, default: AUTO, description: "Nominal air flow; AUTO is 0.5 air changes per hour of the zone volume († law)."}
+  specific_fan_power_in_watt_per_m3_per_hour:
+    {type: float, default: 0.35, description: Fan electricity per unit air flow.}
+
+presets:
+  standard: {}
+
+components:
+  Ventilation:
+    class: hisim.components.mechanical_ventilation.MechanicalVentilation    # †
+    preset: with_heat_recovery
+    config:
+      heat_recovery_efficiency_in_percent: {$param: heat_recovery_efficiency_in_percent}
+      air_flow_in_m3_per_hour: {$param: air_flow_in_m3_per_hour}
+    inputs:
+      - {$port: weather}                                   # TemperatureOutside
+      - {$port: zone}                                      # TemperatureIndoorAir
+
+interface:
+  needs:
+    weather:     {into: [Ventilation], partner: Weather}
+    zone:        {into: [Ventilation], partner: Building}                                # TemperatureIndoorAir
+    electricity: {carrier: ELECTRICITY, outputs: [electricity_use]}
+    volume:      {fact: conditioned_floor_area_in_m2, into: [Ventilation]}
+  provides:
+    air_exchange:    {output: Ventilation.HeatRecovered}   # Building's default connections fill VentilationHeatRecovered (†)
+    electricity_use: {output: Ventilation.ElectricalPowerConsumption}
+                     # no lt.ComponentType for ventilation (†); not controllable: the EMS has no modifier for it

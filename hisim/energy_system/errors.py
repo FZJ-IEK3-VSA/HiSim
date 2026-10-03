@@ -57,6 +57,13 @@ class EnergySystemErrorId(enum.Enum):
     of which an author can cause: a record that is not fully concrete, and a re-execution
     that did not reproduce the record it was handed.
 
+    The ``EF-7x`` band is the assemblies' (``assemblies_spec.md``): ``EF-70`` … ``EF-75`` for reading,
+    resolving and library-checking an assembly file, ``EF-76`` … ``EF-79`` for an import's
+    parameters and their units, ``EF-7A`` … ``EF-7J`` for the binding of ports (§3.3), ``EF-7K`` for
+    the evaluation order, ``EF-7L`` for a construct a later step of the assemblies work lowers, and
+    ``EF-7M`` for a verb naming a port the assembly does not have. The letter ``I`` is skipped, as
+    it reads like a one.
+
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
     files that describe how that setup is probed, not an energy-system file. ``EF-R8`` is
@@ -129,6 +136,28 @@ class EnergySystemErrorId(enum.Enum):
     UNKNOWN_VARIANT_OPTION = "EF-55"
     EMPTY_VARIANT = "EF-56"
     COMPONENT_IN_TWO_VARIANTS = "EF-57"
+    ASSEMBLY_SHAPE = "EF-70"
+    ASSEMBLY_NOT_FOUND = "EF-71"
+    ASSEMBLY_FOUND_TWICE = "EF-72"
+    ASSEMBLY_CYCLE = "EF-73"
+    ASSEMBLY_TOO_DEEP = "EF-74"
+    ASSEMBLY_LIBRARY_CHECK = "EF-75"
+    PARAMETER_INVALID = "EF-76"
+    CONSTRAINT_VIOLATED = "EF-77"
+    PARAMETER_UNIT_MISMATCH = "EF-78"
+    FED_FIELD_WITHOUT_UNIT = "EF-79"
+    PORT_WITHOUT_PARTNER = "EF-7A"
+    PORT_AMBIGUOUS = "EF-7B"
+    REQUIRED_PORT_DECLINED = "EF-7C"
+    BOUND_PARTNER_ABSENT = "EF-7D"
+    OPTIONAL_PORT_UNDECIDED = "EF-7E"
+    VERB_ON_INACTIVE_PORT = "EF-7F"
+    INNER_PORT_UNRESOLVED = "EF-7G"
+    PARTNER_WITHOUT_DEFAULT_CONNECTIONS = "EF-7H"
+    PORT_CONTRACT = "EF-7J"
+    ORDER_INVALID = "EF-7K"
+    NOT_LOWERED_IN_THIS_STEP = "EF-7L"
+    UNKNOWN_PORT = "EF-7M"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
     RECORDED_NAME_INVALID = "EF-R1"
@@ -368,6 +397,23 @@ class EnergySystemSizingError(EnergySystemCatalogueError):
     The kernel's own message is kept verbatim inside this one, because it already names the
     candidates and prints the paste-ready ``sizing_sources`` block; the wrapper adds what
     the kernel cannot know, namely which entry of which file the failing config came from.
+    """
+
+
+class EnergySystemAssemblyError(EnergySystemCatalogueError):
+    """A file's imports could not be expanded into the components they stand for.
+
+    Raised by the expansion stage (``assemblies_spec.md`` §2.3), which runs before anything else
+    sees the file: an assembly that cannot be found or is found twice, a cycle or a nesting
+    deeper than four, a parameter of the wrong type, value, range or unit, a violated
+    constraint, a port that cannot be bound (§3.3), an evaluation order that is not a valid
+    numbering, and a construct the current step of the assemblies work does not lower yet.
+
+    Every message names the import and, where there is one, the instance and the port, and
+    carries the source map of the import — the files and lines it came from — so that a failure
+    deep inside a nested assembly can be found from the message alone. A binding failure ends in
+    a paste-ready ``bind:`` line where one exists. The library check (``EF-75``) is the one
+    member that lists every problem of a file at once rather than the first.
     """
 
 

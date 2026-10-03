@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "energy_system_v3.schema.json",
-  "title": "HiSim energy system, schema version 3",
+  "title": "HiSim energy system, schema versions 3 and 4",
   "description": "A declarative description of one simulated household: its components, how each is configured, where each takes its inputs from and, where that is ambiguous, where each takes its sizing facts from.",
   "type": "object",
   "additionalProperties": false,
@@ -11,8 +11,11 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 3,
-      "description": "The format version this file is written against."
+      "enum": [
+        3,
+        4
+      ],
+      "description": "The format version this file is written against: 3 for a flat file, 4 for a file that imports assemblies."
     },
     "name": {
       "type": "string",
@@ -23,6 +26,16 @@
     },
     "components": {
       "$ref": "#/$defs/components"
+    },
+    "imports": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/import"
+      },
+      "description": "Assemblies this file imports (schema version 4, assemblies_spec.md \u00a72.2)."
     },
     "groups": {
       "type": "object",
@@ -47,6 +60,22 @@
       "description": "Written by a generated run record and never by hand; a file carrying it is re-run explicitly rather than run as an authored energy system."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "imports"
+        ]
+      },
+      "then": {
+        "properties": {
+          "schema_version": {
+            "const": 4
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "name": {
       "type": "string",
@@ -207,6 +236,44 @@
         },
         "sizing_sources": {
           "$ref": "#/$defs/sizing_sources"
+        },
+        "order": {
+          "$ref": "#/$defs/order"
+        },
+        "ports": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/port"
+          }
+        },
+        "bind": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+          }
+        },
+        "optional-bind": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+          }
+        },
+        "none": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
         }
       },
       "allOf": [
@@ -6080,8 +6147,339 @@
         },
         {
           "$ref": "#/$defs/aggregator_feed"
+        },
+        {
+          "$ref": "#/$defs/port_placeholder"
+        },
+        {
+          "$ref": "#/$defs/observes_placeholder"
         }
       ]
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Evaluation order (assemblies_spec.md \u00a72.3)."
+    },
+    "port_placeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "$port"
+      ],
+      "properties": {
+        "$port": {
+          "$ref": "#/$defs/name"
+        },
+        "wires": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/name"
+          }
+        }
+      }
+    },
+    "observes_placeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "$observes"
+      ],
+      "properties": {
+        "$observes": {
+          "$ref": "#/$defs/name"
+        }
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "into": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "partner": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "wires": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "output": {
+          "$ref": "#/$defs/reference"
+        },
+        "from": {
+          "$ref": "#/$defs/reference"
+        },
+        "circuit": {
+          "$ref": "#/$defs/name"
+        },
+        "member": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "carrier": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "fact": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
+        "many": {
+          "type": "boolean"
+        },
+        "export": {
+          "type": "boolean"
+        },
+        "controllable": {
+          "type": "object"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "required_when": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "active_when": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "internal_port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bind"
+      ],
+      "properties": {
+        "bind": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "observer_port": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "into": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "default": {
+          "type": "string"
+        }
+      }
+    },
+    "instance": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "parameters"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "preset": {
+              "type": [
+                "string",
+                "object"
+              ]
+            },
+            "parameters": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              }
+            },
+            "installation_year": {
+              "type": "integer"
+            },
+            "quote": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "preset",
+                "parameters",
+                "installation_year",
+                "quote"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "installation_year": {
+              "type": "integer"
+            },
+            "quote": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "import": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assembly"
+      ],
+      "properties": {
+        "order": {
+          "$ref": "#/$defs/order"
+        },
+        "assembly": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "preset": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
+        "parameters": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "instances": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/instance"
+          }
+        },
+        "bind": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+          }
+        },
+        "optional-bind": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+          }
+        },
+        "none": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "observes": {
+          "type": "array"
+        },
+        "actuates": {},
+        "installation_year": {
+          "type": "integer"
+        },
+        "quote": {
+          "type": "object"
+        }
+      },
+      "not": {
+        "required": [
+          "instances",
+          "parameters"
+        ]
+      }
     },
     "default_inputs": {
       "$ref": "#/$defs/name"

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, TypeVar
 
+from dataclasses_json import config as dataclasses_json_config
 from dataclasses_json import dataclass_json
 
 # Imported from the submodules rather than through the package, so that this module
@@ -171,6 +172,37 @@ def _check_component_identity(config_class: type) -> None:
 
 @dataclass_json
 @dataclass(frozen=True)
+class AddressStep:
+    """One step of an assembly member's address: an import key and, where it has one, an instance.
+
+    ``assemblies_spec.md`` §2.4 (D5): a member's identity is the path of imports leading to it,
+    outermost first, each with the instance key of the import's instance where the import has
+    instances, plus the member name. ``pv`` with instance ``east`` is ``AddressStep("pv", "east")``;
+    the single import ``heating`` is ``AddressStep("heating")``. Both keys obey the identifier
+    rule, so the serialized address, which joins them with ``-``, splits unambiguously.
+    """
+
+    import_key: str
+    instance: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validates both keys against the identifier rule.
+
+        Raises:
+            ValueError: If the import key, or a present instance key, is not an identifier.
+        """
+        NameSyntax.require_identifier(self.import_key, "import")
+        if self.instance is not None:
+            NameSyntax.require_identifier(self.instance, "instance")
+
+    @property
+    def parts(self) -> Tuple[str, ...]:
+        """The keys this step contributes to a serialized address, in order."""
+        return (self.import_key,) if self.instance is None else (self.import_key, self.instance)
+
+
+@dataclass_json
+@dataclass(frozen=True)
 class ComponentID:
     """Structured, first-class identity of one component instance in a simulation.
 
@@ -204,11 +236,27 @@ class ComponentID:
 
     The class is frozen, so instances are hashable and safe to share between a configuration
     and everything derived from it; use :py:func:`dataclasses.replace` to obtain a variant.
+
+    An assembly member (``assemblies_spec.md`` §2.4, D5) additionally carries its **address**:
+    ``path``, the imports leading to it from the outermost, each with its instance key, and
+    ``assembly``, the library path of the innermost assembly that owns it (informative, not part
+    of the identity's key). ``name`` stays the member's own name inside its assembly. The key then
+    joins building, unit and the serialized address, which is the path's keys and the name joined
+    by ``-``: ``ComponentID("PVSystem", path=(AddressStep("pv", "east"),)).key`` is
+    ``"pv-east-PVSystem"``. With an empty path the key is exactly what it was before. Both fields
+    are left out of the serialized form while empty, so a configuration of a component outside
+    every assembly dumps, hashes and caches byte for byte as before.
     """
 
     name: str
     building: Optional[str] = None
     unit: Optional[str] = None
+    path: Tuple[AddressStep, ...] = dc.field(
+        default=(), metadata=dataclasses_json_config(exclude=lambda value: not value)
+    )
+    assembly: Optional[str] = dc.field(
+        default=None, metadata=dataclasses_json_config(exclude=lambda value: value is None)
+    )
 
     #: Building label used for grouping when a component carries no explicit building.
     #: Historically every configuration defaulted to the decorative string ``"BUI1"``, and
@@ -237,6 +285,23 @@ class ComponentID:
             NameSyntax.require_identifier(self.building, "building label")
         if self.unit is not None:
             NameSyntax.require_identifier(self.unit, "unit label")
+        # A path given as a list (a JSON round trip, a caller's literal) is frozen into the tuple
+        # the field declares, so two equal identities are equal and hash alike.
+        object.__setattr__(self, "path", tuple(self.path))
+        for step in self.path:
+            if not isinstance(step, AddressStep):
+                raise ValueError(f"A component address step must be an AddressStep, not {step!r}.")
+
+    @property
+    def address(self) -> str:
+        """The serialized address: the path's import and instance keys, then the name, joined by ``-``.
+
+        Without a path this is the name itself. It is the component's name in a declarative
+        energy-system file and the name the sizing engine addresses the configuration by; like
+        the key it is display-only and never parsed back (``assemblies_spec.md`` §2.4).
+        """
+        parts = [part for step in self.path for part in step.parts]
+        return NameSyntax.ADDRESS_SEPARATOR.join(parts + [self.name])
 
     @property
     def key(self) -> str:
@@ -244,12 +309,24 @@ class ComponentID:
 
         The key is the string that HiSim uses as the component name, as the prefix of every
         output's full name and therefore as the prefix of every result column. It is built by
-        joining the present fields with ``"_"`` in the order building, unit, name; fields that
-        are ``None`` simply do not appear. The key is derived-only and is never parsed back
-        into building/unit/name anywhere in the code base.
+        joining the present fields with ``"_"`` in the order building, unit, :attr:`address`;
+        fields that are ``None`` simply do not appear, and an empty path leaves the address the
+        bare name, so the key of a component outside every assembly is what it always was. The
+        key is derived-only and is never parsed back into its parts anywhere in the code base.
         """
-        parts = [part for part in (self.building, self.unit, self.name) if part is not None]
+        parts = [part for part in (self.building, self.unit, self.address) if part is not None]
         return "_".join(parts)
+
+    if typing.TYPE_CHECKING:
+
+        def to_dict(self, encode_json: bool = False) -> Dict[str, Any]:
+            """Stub for the dict dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
+
+        @classmethod
+        def from_dict(cls, kvs: Any, *, infer_missing: bool = False) -> "ComponentID":
+            """Stub for the dict decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
     @property
     def building_label(self) -> str:
@@ -465,7 +542,9 @@ class ConfigBase:
         component_id = getattr(view, "component_id", None)
         if component_id is not None:
             # The identity is frozen, hence the replacement rather than an assignment.
-            setattr(view, "component_id", dc.replace(component_id, building=None))
+            # The address is cleared with it: where a member sits in a system decides as little
+            # about the series it computes as which house it sits in.
+            setattr(view, "component_id", dc.replace(component_id, building=None, path=(), assembly=None))
         self._clear_non_key_fields(view)
         return view
 

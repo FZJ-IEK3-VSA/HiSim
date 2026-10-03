@@ -46,6 +46,7 @@ from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
 from hisim.energy_system.schema_classes import ComponentClassScan, JsonTypes
+from hisim.energy_system.assemblies.schema import AssemblyFormatDefinitions, AssemblySchemaBuilder
 
 
 class SchemaBuilder:
@@ -75,14 +76,18 @@ class SchemaBuilder:
     #: Pattern of a plain name — a component, a group, a fact or a port.
     NAME_PATTERN: str = NameRules.IDENTIFIER_PATTERN.pattern
 
-    def __init__(self, classes: Sequence[type]) -> None:
+    def __init__(self, classes: Sequence[type], *, structural: bool = False) -> None:
         """Prepares a builder for one set of component classes.
 
         Args:
             classes: The component classes the schema will accept under ``class``, in the order
                 they should appear in the completion list.
+            structural: Build the format-only variant: any dotted ``class``, no per-class
+                branch. It checks the shape of a file whose classes do not exist yet, such as the
+                design mockups of ``assemblies_spec.md``, and is never written as the committed file.
         """
         self.classes = tuple(classes)
+        self.structural = structural
 
     def build(self) -> Dict[str, Any]:
         """Builds the complete schema document.
@@ -93,7 +98,10 @@ class SchemaBuilder:
         return {
             "$schema": self.DIALECT,
             "$id": self.FILENAME,
-            "title": f"HiSim energy system, schema version {EnergySystemFile.SUPPORTED_SCHEMA_VERSION}",
+            "title": (
+                "HiSim energy system, schema versions "
+                + " and ".join(str(version) for version in EnergySystemFile.SUPPORTED_SCHEMA_VERSIONS)
+            ),
             "description": (
                 "A declarative description of one simulated household: its components, how each "
                 "is configured, where each takes its inputs from and, where that is ambiguous, "
@@ -103,6 +111,12 @@ class SchemaBuilder:
             "additionalProperties": False,
             "required": ["schema_version", "name"],
             "properties": self._top_level(),
+            "allOf": [
+                {
+                    "if": {"required": ["imports"]},
+                    "then": {"properties": {"schema_version": {"const": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION}}},
+                }
+            ],
             "$defs": self._definitions(),
         }
 
@@ -114,12 +128,21 @@ class SchemaBuilder:
         """
         return {
             "schema_version": {
-                "const": EnergySystemFile.SUPPORTED_SCHEMA_VERSION,
-                "description": "The format version this file is written against.",
+                "enum": list(EnergySystemFile.SUPPORTED_SCHEMA_VERSIONS),
+                "description": (
+                    "The format version this file is written against: 3 for a flat file, 4 for a file "
+                    "that imports assemblies."
+                ),
             },
             "name": {"type": "string", "description": "The name of the energy system."},
             "description": {"type": "string"},
             "components": {"$ref": "#/$defs/components"},
+            "imports": {
+                "type": "object",
+                "propertyNames": {"$ref": "#/$defs/name"},
+                "additionalProperties": {"$ref": "#/$defs/import"},
+                "description": "Assemblies this file imports (schema version 4, assemblies_spec.md §2.2).",
+            },
             "groups": {
                 "type": "object",
                 "propertyNames": {"$ref": "#/$defs/name"},
@@ -189,8 +212,11 @@ class SchemaBuilder:
                     {"$ref": "#/$defs/default_inputs"},
                     {"$ref": "#/$defs/explicit_wire"},
                     {"$ref": "#/$defs/aggregator_feed"},
+                    {"$ref": "#/$defs/port_placeholder"},
+                    {"$ref": "#/$defs/observes_placeholder"},
                 ]
             },
+            **AssemblyFormatDefinitions.definitions(),
             "default_inputs": {"$ref": "#/$defs/name"},
             "explicit_wire": {
                 "type": "object",
@@ -244,21 +270,26 @@ class SchemaBuilder:
             "additionalProperties": False,
             "required": [ComponentEntry.CLASS_KEY],
             "properties": {
-                ComponentEntry.CLASS_KEY: {
-                    "enum": [
-                        path
-                        for component in self.classes
-                        for path in ComponentClassScan.paths_of(component)
-                    ],
-                    "description": "The component class, as a dotted path.",
-                },
+                ComponentEntry.CLASS_KEY: (
+                    {"type": "string", "pattern": AssemblyFormatDefinitions.CLASS_PATTERN}
+                    if self.structural
+                    else {
+                        "enum": [
+                            path
+                            for component in self.classes
+                            for path in ComponentClassScan.paths_of(component)
+                        ],
+                        "description": "The component class, as a dotted path.",
+                    }
+                ),
                 "preset": {"type": "string"},
                 "constructor": {"type": "object", "minProperties": 1, "maxProperties": 1},
                 "config": {"type": "object"},
                 "inputs": {"type": "array", "items": {"$ref": "#/$defs/input_item"}},
                 "sizing_sources": {"$ref": "#/$defs/sizing_sources"},
+                **AssemblyFormatDefinitions.entry_extensions(),
             },
-            "allOf": [self._class_branch(component) for component in self.classes],
+            "allOf": [] if self.structural else [self._class_branch(component) for component in self.classes],
         }
 
     def _class_branch(self, component_class: type) -> Dict[str, Any]:
@@ -442,6 +473,18 @@ class SchemaBuilder:
         return f"^{name}{member}$"
 
 
+def build_structural_schema() -> Dict[str, Any]:
+    """Builds the format-only schema: every key and shape, no class list and no class branch.
+
+    It validates the shape of a file whose classes do not exist yet — the design mockups of
+    ``assemblies_spec.md`` among them — and is not written as a committed file.
+
+    Returns:
+        The schema as plain data.
+    """
+    return SchemaBuilder((), structural=True).build()
+
+
 def build_schema(classes: Sequence[type]) -> Dict[str, Any]:
     """Builds the JSON Schema of the energy-system format for one set of component classes.
 
@@ -471,15 +514,20 @@ def default_schema_path() -> Path:
 def export_schema(path: Any = None) -> Path:
     """Writes the schema of every component class this repository can configure from a file.
 
+    The assembly file's schema (:class:`~hisim.energy_system.assemblies.schema.AssemblySchemaBuilder`)
+    is written into the same directory, so the two committed files always travel together.
+
     Args:
-        path: Where to write it; the committed location when omitted.
+        path: Where to write the energy-system schema; the committed location when omitted.
 
     Returns:
-        The path written to.
+        The path the energy-system schema was written to.
     """
     target = Path(path) if path is not None else default_schema_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render_schema(build_schema(ComponentClassScan.collect())), encoding="utf-8")
+    assembly_target = target.parent / AssemblySchemaBuilder.FILENAME
+    assembly_target.write_text(render_schema(AssemblySchemaBuilder().build()), encoding="utf-8")
     return target
 
 
@@ -509,6 +557,9 @@ def schema_is_current() -> bool:
         ``True`` when the committed file exists and is byte-identical to a fresh export.
     """
     path = default_schema_path()
-    if not path.exists():
+    assembly_path = path.parent / AssemblySchemaBuilder.FILENAME
+    if not path.exists() or not assembly_path.exists():
         return False
-    return path.read_text(encoding="utf-8") == render_schema(build_schema(ComponentClassScan.collect()))
+    return path.read_text(encoding="utf-8") == render_schema(
+        build_schema(ComponentClassScan.collect())
+    ) and assembly_path.read_text(encoding="utf-8") == render_schema(AssemblySchemaBuilder().build())

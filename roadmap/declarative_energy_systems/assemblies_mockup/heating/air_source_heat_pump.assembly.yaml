@@ -132,7 +132,7 @@ interface:
     # A ground-source assembly publishes the brine pump as a third consumption port.
     ems_modifier:                                            # an actuation target (D21): the L1 set-point modifiers
       connector: control_signal
-      optional: true                                         # bind: control, or none (thermostat-only operation)
+      optional: true                                         # optional-bind: control; unbound = thermostat only
       signals:
         sh_storage_temperature_offset:  ControllerSH.SimpleHotWaterStorageTemperatureModifier
         dhw_storage_temperature_offset: {target: ControllerDHW.DHWStorageTemperatureModifier,

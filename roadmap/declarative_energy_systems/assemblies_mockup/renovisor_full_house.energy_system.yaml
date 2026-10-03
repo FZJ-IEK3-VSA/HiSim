@@ -11,12 +11,14 @@
 #
 # Conventions: a site value is ordinary component config, as today. An import's `parameters` are the assembly's
 # interface; `preset` is a named parameter set of the assembly; `installation_year` and `quote` are reserved
-# per-instance fields read by the economics (D18, D22); `bind:` names a port's partner where the default rule would be
-# ambiguous or the port is optional (D8), `none` declines an optional port. Three relations only (spec §4.3): a LINK
-# (`bind:`: a fuel need to its provider, the two ends of a circuit, a device's zone_heat to its Building input), an
-# OBSERVATION (`observes:`, read-only; each meter and the EMS write their own) and an ACTUATION (a controller into one
-# L1 set-point modifier, `ems_modifier`, or into the battery's LoadingPowerInput; D21). Electricity has no link: an
-# electricity need is only the check that the one grid connection exists, never bound, and its flows are observed.
+# per-instance fields read by the economics (D18, D22). Three binding verbs, alike on site entries and imports (D8):
+# `bind:` names a partner that must exist (where the default rule is ambiguous or the port optional), `optional-bind:`
+# binds if the partner exists and is otherwise inert, `none:` declines an optional port. Three relations only (spec
+# §4.3): a LINK (`bind:`: a fuel need to its provider, the two ends of a circuit, a device's zone_heat to its Building
+# input), an OBSERVATION (`observes:`, read-only; each meter and the EMS write their own) and an ACTUATION (a
+# controller into one L1 set-point modifier, `ems_modifier`, or into the battery's LoadingPowerInput; D21). Electricity
+# has no link: an electricity need is only the check that the one grid connection exists, never bound (a `bind:` on
+# it is refused), and its flows are observed.
 # `AUTO` leaves a sized parameter to the class law against the expanded system.
 
 schema_version: 4                                   # the assemblies extension of the v3 format (spec §2)
@@ -67,6 +69,7 @@ components:
       air_tightness: professionally_sealed          # R: ventilation.air_tightness; M: shallow_air_tightness_measures,
                                                     #    diy_sealing_of_air_leaks (†: infiltration rate from class)
     inputs: [Weather, Occupancy, HeatDistribution]  # site-internal wiring, as the twin writes it
+    optional-bind: {temperature_modifier: control}  # binds the EMS if imported, else inert: one site, EMS or not (G13)
     provides:
       # D19: one named input per kind acting on the zone, each linked exactly once (building.py:244-331).
       # ThermalPowerDelivered is taken by the site's HeatDistribution (inputs above); ThermalPowerCHP stays unbound.
@@ -74,8 +77,8 @@ components:
       cooling:           {connector: zone_heat, kind: cooling, input: ThermalPowerCooling}                     # †
       ventilation:       {connector: zone_heat, kind: ventilation, input: VentilationHeatRecovered}            # †
       zone:              {connector: building_thermal}                      # TemperatureIndoorAir, demand
-      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
-                           input: BuildingTemperatureModifier, optional: true, bind: control}   # EMS actuates (D21)
+      temperature_modifier: {connector: control_signal, signal: building_temperature_offset,
+                             input: BuildingTemperatureModifier, optional: true}   # EMS actuates (D21)
       heat_load:         {connector: sizing_fact, fact: heating_load_in_watt}
       apartments:        {connector: sizing_fact, fact: number_of_apartments}
       roof_area:         {connector: sizing_fact, fact: roof_area_in_m2}
@@ -92,7 +95,7 @@ components:
       #    are occupancy settings)
     provides:
       electricity_use:  {connector: electricity_flow, flow: consumption, component_type: RESIDENTS,
-                         controllable: {}, bind: control}   # dispatch {} as in the twin; site-port intent: gap G13
+                         controllable: {}}  # dispatch {} as in the twin; observed, never bound (a `bind:` is refused)
       hot_water_demand: {connector: hot_water_demand}
       internal_gains:   {connector: internal_gains}
       car_usage:        {connector: car_usage}        # read by ev instances, through the SimRepository
@@ -113,10 +116,11 @@ components:
       flow_temperature_in_celsius: 45               # R: heating.flow_temperature_in_celsius († no such field: the
                                                     #    curve follows from heating_system today)
     inputs: [Weather, Building]
+    optional-bind: {temperature_modifier: control}  # as on Building
     provides:
       flow_temperature: {connector: control_signal, signal: heating_flow_temperature}   # read by the heating L1
-      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
-                           input: BuildingTemperatureModifier, optional: true, bind: control}
+      temperature_modifier: {connector: control_signal, signal: building_temperature_offset,
+                             input: BuildingTemperatureModifier, optional: true}
       emitter_type:     {connector: sizing_fact, fact: heat_distribution_system_type}
       heating_threshold: {connector: sizing_fact, fact: set_heating_threshold_outside_temperature_in_celsius}
 
@@ -147,9 +151,11 @@ imports:
     bind:
       sh: HeatDistribution.sh                       # hydronic_circuit, heating_water: buffer <-> HDS
       flow_temperature: HeatDistributionController.flow_temperature
-                                                    # electricity: no bind, the one grid connection (a boiler: `fuel: gas`)
+                                                    # electricity: no bind (refused): the one grid connection
+    optional-bind:
       ems_modifier: control                         # the EMS raises the L1 set points on surplus (D21); makes both
-                                                    # electricity ports controlled feeds (weights 2 and 3)
+                                                    # electricity ports controlled feeds (weights 2 and 3); inert
+                                                    # without an EMS (a heat pump without one is a normal house)
 
   # ---- secondary room heating: R: heating.secondary (†). One named Building input (D19), no circuit.
   stove:
@@ -175,6 +181,7 @@ imports:
     bind:
       hot_water_demand: Occupancy.hot_water_demand
                                                     # electricity: no bind; inactive for a fuel carrier, then `fuel: gas`
+    optional-bind:
       ems_modifier: control                         # the EMS raises the immersion thermostat on PV surplus
                                                     # († EMS has no ELECTRIC_HEATING_DHW modifier yet, gap G5)
 
@@ -190,7 +197,7 @@ imports:
     bind:
       dhw_coil: dhw.solar_coil                      # optional PROVIDED port on the DHW tank (D20); combi has none
       sh_coil: heating.solar_coil                   # optional provided port on the heating buffer (D20)
-      ems_modifier: none                            # SOLAR_THERMAL_SYSTEM could be EMS-ranked (weight 4); declined
+    none: [ems_modifier]                            # SOLAR_THERMAL_SYSTEM could be EMS-ranked (weight 4); declined
 
   # ---- ventilation: R: ventilation.type_of_system / M: ventilation_system (†: natural and trickle vents are site
   #      config of the Building; the mechanical systems are equipment with a year and a price -> assemblies)
@@ -228,8 +235,8 @@ imports:
     instances:
       main: {installation_year: 2026,
              parameters: {capacity_in_kwh: AUTO, power_in_watt: AUTO, days_to_cover: 1}}   # R: capacity | days_to_cover
-    # electricity: observed by the EMS; its controllable side is REQUIRED and binds the one controller (§4.4):
-    # LoadingPowerInput, weight 6
+    # electricity: observed by the EMS; its controllable side is REQUIRED (a battery needs a controller) and binds the
+    # one controller by the default rule, or a `bind:`, never `optional-bind:` (§4.4): LoadingPowerInput, weight 6
 
   # ---- electric vehicles: R: house.electric_vehicles (number 1..2) / M: electric_vehicle (†: 2 cars, G12)
   ev:
@@ -237,7 +244,8 @@ imports:
     instances:
       car_1: {installation_year: 2023, parameters: {commuting_distance_in_km: 20, charging_power_in_watt: 11000}}
       car_2: {installation_year: 2026, parameters: {commuting_distance_in_km: 10, charging_power_in_watt: 3700}}
-    bind: {usage: Occupancy.car_usage, ems_modifier: control}   # weights 5 and 6 -> battery 7
+    bind: {usage: Occupancy.car_usage}
+    optional-bind: {ems_modifier: control}          # an EV without an EMS charges on its own L1; weights 5 and 6 -> battery 7
 
   # ---- control: the L2 EMS. Present when anything is controllable. Smart HEATING control is not here: it is the
   #      heating import's `control:` parameter (its L1, D21); there is no thermostat import.

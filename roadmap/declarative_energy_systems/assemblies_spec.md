@@ -96,8 +96,8 @@ imports:
   battery: {assembly: storage/battery, instances: {main: {capacity_in_kwh: 10}}}
 ```
 
-Parameters given next to a preset override its values, as `config` overrides a component preset. An import carries
-`bind:` to name the partner of a port and `none` to decline an optional one (§3.1, §3.3), and `observes:`/`actuates:`
+Parameters given next to a preset override its values, as `config` overrides a component preset. An import, like a
+site entry, carries the binding verbs `bind:`, `optional-bind:` and `none:` (§3.1, §3.3), and `observes:`/`actuates:`
 for a reader or a controller (§4.3).
 
 ### 2.3 Expansion
@@ -157,7 +157,7 @@ refuses an inner port left in none:
 - **internal** — bound inside the assembly to another inner import (`bind:` on the inner import) or to a member (an
   `internal:` entry); invisible from outside;
 - **re-exported** — an outer port declared `from: <inner import>.<port>`, bound by the outer importer as its own;
-- **inactive** or **declined** (`none`), as at top level (§3.1).
+- **inactive** or **declined** (`none:`), as at top level (§3.1).
 
 A member of the outer assembly never names an inner member; it reaches an inner import only through that import's ports,
 so an inner assembly stays a black box and keeps its isolation test. Worked example — a heat-pump water heater built
@@ -233,12 +233,15 @@ Every port is in one of three states, decided per import (or instance) before bi
 - **conditionally required** — `required_when` names parameter values; when they hold the port is required, otherwise it
   is **inactive**: never bound, never lowered, and an explicit `bind:` to it is refused. A house with gas and
   electricity wires an electric storage water heater to electricity only, although a gas provider exists;
-- **optional with a declared fallback** — decided (owner, 2026-10-03, D8 (i); principle: always fail hard, and adding
-  one import never silently changes another): an optional port binds only when the import names the partner (`bind:`) or
-  declines it (`none`, the fallback applies: a config patch on named members, recorded). Left unmentioned it is a
-  load-time error when a partner exists — "import 'dhw': optional port 'ems_modifier' (control_signal) has 1
-  candidate `control__EMS`; add `bind: {ems_modifier: control}` or `bind: {ems_modifier: none}`" — and the fallback applies only when none exists. The translator writes every such line
-  explicitly, and the mapping report lists every binding.
+- **optional with a declared fallback** — decided (owner, 2026-10-03, D8 (i), G13; principle: always fail hard, and
+  adding one import never silently changes another): the intent is written where the port lives, with one of three
+  verbs, alike on site entries and imports: `bind: {port: partner}`, the partner must exist; `optional-bind: {port:
+  partner}`, binds if the partner exists in the fully expanded system, else the port keeps its default (unbound; a
+  fallback only if the assembly declares one); `none: [port]`, declines it although a partner exists (its fallback, a
+  config patch on named members, applies). With a candidate and no verb it is a load error — "import 'dhw': optional
+  port 'ems_modifier' (control_signal) has 1 candidate `control__EMS`; add `optional-bind: {ems_modifier: control}`,
+  `bind:` or `none: [ems_modifier]`". So one site serves houses with and without an EMS (`optional-bind:
+  {temperature_modifier: control}` on `Building` and `HeatDistributionController`); the translator writes every line.
 
 Rejected (2026-10-02): choosing the carrier by optional connections alone; a missing needed connection would pass
 silently, fuel burned and drawn from no provider (the balance accepts a booking toward "nobody the wiring names",
@@ -281,15 +284,18 @@ the one partner in scope that implements a **compatible connector** — same typ
 direction, units equal — and `bind:` decides every other case. Each of these fails at load time with the source map of
 the import (§9.2), naming the instance, the port and every candidate, with a paste-ready `bind:` line:
 
-- a required (or conditionally required and active) port with no partner, or with several and no `bind:`;
-- an optional port with candidates and neither `bind:` nor `none` (§3.1);
-- `bind:` on an inactive port, `none` on a required one, an inner port neither bound nor re-exported;
+- a required (or active conditional) port with no partner, or several and no `bind:`; `none:` on a required port;
+- a `bind:` whose partner is absent; an optional port with candidates and no verb (§3.1); a verb on an inactive port;
+  an inner port neither bound nor re-exported; a `bind:` on an electricity need or an `electricity_flow` port, which
+  has no link end (§4.3): refused, not ignored (owner, 2026-10-03);
 - a `bind:` naming a partner whose connector is incompatible (type, medium, carrier, direction or unit);
 - a carrier need without exactly one provider of its carrier (§3.2); a target input actuated twice; a meter observing
   a `net` port and a flow it covers (§4.3); observers are otherwise never counted, so an output read by many is legal;
 - a contract check, run once per assembly in tests and again after expansion: every port names a member whose class
   declares that connector type; every quantity maps to an input or output that exists with the declared unit and load
   type; every provided fact is in the member class's `SIZING_CONTRIBUTIONS`.
+
+An `optional-bind:` never fails: the import record (§2.3) says "bound `control__EMS`" or "not bound: partner absent".
 
 ### 3.4 Energy-balance ports from connectors
 
@@ -599,7 +605,7 @@ The `heating/<generator>` assemblies — `condensing_gas_boiler`, `oil_boiler`, 
 `heating/solar_thermal` beside one of them — each expose an `sh` and a `dhw` `hydronic_circuit` port and their
 `energy_carrier_supply` needs, and hold their buffer vessel (D12). The translator's rule R4 becomes **"may only pick
 tested assemblies, their presets and parameters"**: it writes the site's configuration values as today and an `imports`
-block (assemblies, presets, instance keys, parameters, `bind:`/`none` lines), nothing else; `DiffRule`
+block (assemblies, presets, instance keys, parameters, binding verbs), nothing else; `DiffRule`
 (`translate.py:386-483`) checks the `imports` block against the library.
 
 ### 10.2 Coverage
@@ -684,7 +690,7 @@ Each example is the `imports` block the translator adds to the site file (§10.1
 
 ```yaml
 imports:
-  heating: {assembly: heating/air_source_heat_pump, bind: {ems_modifier: control}}
+  heating: {assembly: heating/air_source_heat_pump, optional-bind: {ems_modifier: control}}
   dhw:     {assembly: dhw/indirect_cylinder, bind: {circuit: heating.dhw}}
   supply:  {assembly: supply/electricity_grid, observes: [{connector: electricity_flow, flow: net}]}
   control: {assembly: control/ems_self_consumption}
@@ -708,17 +714,17 @@ series, since the cache key holds neither power nor name (`hisim/components/gene
 
 ```yaml
 imports:
-  heating: {assembly: heating/condensing_gas_boiler, bind: {dhw: none}}
+  heating: {assembly: heating/condensing_gas_boiler, none: [dhw]}
   supply:  {assembly: supply/electricity_grid}
   gas:     {assembly: supply/gas_connection}
-  dhw:     {assembly: dhw/storage_water_heater, preset: ie_immersion_120l}
+  dhw:     {assembly: dhw/storage_water_heater, preset: ie_immersion_120l, optional-bind: {ems_modifier: control}}
 ```
 
 `dhw.fuel` is inactive, so the gas connection is never offered to the heater although it exists; `dhw.electricity` is
-met by the one grid connection, `supply`, whose meter observes every flow; `ems_modifier` has no controller to bind,
-so the heater runs on its L1 thermostat alone, recorded. The boiler's `dhw` circuit is declined, which sets its
-controller to run without hot water. Adding a `control` import later makes this file fail until `dhw` says
-`bind: {ems_modifier: control}` or `none` (§3.1) and `supply` observes `flow: net` (the double count, §4.3).
+met by the one grid connection, `supply`, whose meter observes every flow; `ems_modifier`'s `optional-bind:` finds no
+`control`, so the heater runs on its L1 thermostat alone, recorded "not bound: partner absent". The boiler's `dhw`
+circuit is declined, which sets its controller to run without hot water. Adding a `control` import later binds
+`ems_modifier` as the file already says; the file then fails only until `supply` observes `flow: net` (§4.3).
 
 (c) After a `hot_water_system` measure to a heat-pump water heater only the `dhw` line changes, to `{assembly:
 dhw/heat_pump_water_heater, parameters: {volume_in_liter: 200}}`. The economics retire every member of the old import
@@ -769,7 +775,10 @@ All by the owner on 2026-10-03.
   stage leaves it idle); an idle provider is refused (§5.2).
 - **D7 — Nesting:** from the start, depth-limited to 4, ports internal or re-exported, binding innermost-first (§2.5).
   Groups and variants stay, imports never inside them; retiring them is revisited when no grouped twin is read.
-- **D8 — Ports:** (i) optional ports need explicit intent; unmentioned with a candidate is a load error (§3.1). (ii)
+- **D8 — Ports:** (i) an optional port's intent is written where it lives, alike on site entries and imports: `bind:`
+  (partner must exist), `optional-bind:` (binds if it exists, else inert and recorded), `none:` (declines); unmentioned
+  with a candidate is a load error (§3.1, §3.3). Resolves G13: one site, `optional-bind: {temperature_modifier:
+  control}`, with or without an EMS. A `bind:` on an electricity need is refused, not ignored. (ii)
   `required_when`/`active_when` are structured, conjunctive mappings `{parameter: [values]}`, no expression grammar.
   (iii) A fallback is a config patch on members, never a structural change. (iv) Sizing facts are the `sizing_fact`
   connector type (§3.2).

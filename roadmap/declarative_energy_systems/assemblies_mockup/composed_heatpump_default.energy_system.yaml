@@ -20,12 +20,14 @@ components:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
-      - {$provides: temperature_offset}
+      - {$provides: temperature_modifier}
       - UTSPConnector
       - HeatDistributionSystem
+    optional-bind: {temperature_modifier: control}  # G13 resolved: binds if a `control` import exists, else
+                                                    # inert ("not bound: partner absent"); one site, EMS or not
     provides:
-      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
-                           input: BuildingTemperatureModifier, optional: true, bind: control}     # gap G13
+      temperature_modifier: {connector: control_signal, signal: building_temperature_offset,
+                             input: BuildingTemperatureModifier, optional: true}
       zone:               {connector: building_thermal}
       heat_load:          {connector: sizing_fact, fact: heating_load_in_watt}
       apartments:         {connector: sizing_fact, fact: number_of_apartments}
@@ -38,7 +40,7 @@ components:
       data_acquisition_mode: USE_LOCAL_LPG
     provides:
       electricity_use:  {connector: electricity_flow, output: ElectricalPowerConsumption, flow: consumption,
-                         component_type: RESIDENTS, controllable: {}, bind: control}                  # gap G13
+                         component_type: RESIDENTS, controllable: {}}   # observed, never bound (§3.3)
       hot_water_demand: {connector: hot_water_demand}
       internal_gains:   {connector: internal_gains}
   Weather:
@@ -57,13 +59,14 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - {$provides: temperature_offset}
+      - {$provides: temperature_modifier}
       - Weather
       - Building
+    optional-bind: {temperature_modifier: control}  # as on Building (G13 resolved)
     provides:
       flow_temperature:   {connector: control_signal, signal: heating_flow_temperature, output: HeatingFlowTemperature}
-      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
-                           input: BuildingTemperatureModifier, optional: true, bind: control}     # gap G13
+      temperature_modifier: {connector: control_signal, signal: building_temperature_offset,
+                             input: BuildingTemperatureModifier, optional: true}
       emitter_type:       {connector: sizing_fact, fact: heat_distribution_system_type}
       heating_threshold:  {connector: sizing_fact, fact: set_heating_threshold_outside_temperature_in_celsius}
   HeatDistributionSystem:
@@ -79,7 +82,8 @@ components:
 imports:
   heating:
     assembly: heating/air_source_heat_pump          # parameter defaults = the twin (preset de_twin)
-    bind: {ems_modifier: control}                   # optional port with a candidate: intent required (D8 i);
+    optional-bind: {ems_modifier: control}          # optional port: intent required (D8 i); a heat pump without
+                                                    # an EMS is a normal house, so inert when `control` is absent;
                                                     # sh, flow_temperature, weather bind their one partner;
                                                     # electricity: only the check that one grid connection exists
   dhw:
@@ -98,4 +102,5 @@ imports:
     observes: [{connector: electricity_flow, flow: net}]   # the EMS's net only: the twin's ems_with_battery meter.
                                                     # Without this line the default (every electricity_flow) would
                                                     # also match the flows `net` covers: a load error (double count).
-                                                    # metered_directly: drop `control` and this line (spec §4.3).
+                                                    # metered_directly: drop `control`, `battery` and this line;
+                                                    # no site or `heating` line changes (spec §4.3).

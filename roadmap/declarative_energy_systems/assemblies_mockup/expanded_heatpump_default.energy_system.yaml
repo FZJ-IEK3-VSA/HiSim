@@ -18,7 +18,7 @@ components:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
-      - control__EMS                                # Building.temperature_offset (bare: one default connection)
+      - control__EMS                                # Building.temperature_modifier (optional-bind, bound)
       - UTSPConnector
       - HeatDistributionSystem
   UTSPConnector:
@@ -38,7 +38,7 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - control__EMS                                # HeatDistributionController.temperature_offset
+      - control__EMS                                # HeatDistributionController.temperature_modifier (optional-bind)
       - Weather
       - Building
   HeatDistributionSystem:
@@ -144,6 +144,9 @@ components:
         weight: 999
 
 # metadata.imports (the import record, spec §2.3 step 5; abbreviated):
+#   site:     {Building.temperature_modifier: control__EMS (optional-bind, bound),
+#              HeatDistributionController.temperature_modifier: control__EMS (optional-bind, bound)}
+#              (without the `control` import both read "not bound: partner absent")
 #   heating:  {assembly: heating/air_source_heat_pump, sha256: <hash>, preset: null,
 #              parameters: {thermal_power_in_watt: AUTO, scop_en14825_w35: none, scop_en14825_w55: none,
 #                           with_buffer: true, buffer_volume_in_liter: AUTO, serves_dhw: true, control: traditional},
@@ -153,7 +156,7 @@ components:
 #              ports: {weather: Weather (default), flow_temperature: HeatDistributionController.flow_temperature
 #                      (default), sh: HeatDistributionSystem.sh (default), electricity: grid.connection (exists),
 #                      dhw: dhw.circuit (bound by dhw), electricity_sh: observed by control__EMS, weight 2,
-#                      electricity_dhw: observed by control__EMS, weight 3, ems_modifier: control (written),
+#                      electricity_dhw: observed by control__EMS, weight 3, ems_modifier: control (optional-bind, bound),
 #                      solar_coil: unbound (optional, no candidate), heat_load: Building, design_temperature: Weather,
 #                      room_setpoint: Building, emitter_type: HeatDistributionController,
 #                      heating_threshold: HeatDistributionController}}

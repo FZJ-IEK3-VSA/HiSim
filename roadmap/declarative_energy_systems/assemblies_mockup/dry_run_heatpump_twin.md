@@ -14,7 +14,8 @@ per D9's list, or **(iii)** a GAP. The gaps are numbered G1–G18; §9 lists the
 
 - Site (`components:`): `Building`, `UTSPConnector`, `Weather`, `HeatDistributionController`, `HeatDistributionSystem`
   with the twin's names and values (D9: Aachen, `german_single_family_home`, `couple_both_at_work`).
-- `imports:` `heating: heating/air_source_heat_pump` (`bind: {ems_modifier: control}`), `dhw: dhw/indirect_cylinder`
+- Site binding verbs: `optional-bind: {temperature_modifier: control}` on `Building` and `HeatDistributionController`.
+- `imports:` `heating: heating/air_source_heat_pump` (`optional-bind: {ems_modifier: control}`), `dhw: dhw/indirect_cylinder`
   (`bind: {circuit: heating.dhw}`), `pv: pv/array` (instance `pv_system`), `battery: storage/battery` (instance
   `battery`), `control: control/ems_self_consumption`, `grid: supply/electricity_grid` (`observes: [{connector:
   electricity_flow, flow: net}]`).
@@ -45,8 +46,9 @@ Internal variants: `heating.dhw_side` = `with_dhw` (`serves_dhw: true`), `heatin
 | `heating.dhw` (provided circuit) | required, active | `serves_dhw: true` |
 | `heating.electricity_dhw`, `heating.ems_modifier.dhw_storage_temperature_offset` | active | `serves_dhw: true` |
 | `heating.solar_coil`, `dhw.solar_coil` | optional, **unbound** | no candidate (no solar import); no fallback to apply |
-| `heating.ems_modifier` | optional, **bound** `control` | candidate `control__EMS` exists, intent written (D8 i) |
-| `Building.temperature_offset`, `HeatDistributionController.temperature_offset`, `UTSPConnector.electricity_use` | optional, **bound** `control` | intent written on the site entry (`bind: control`) — **G13** |
+| `heating.ems_modifier` | optional, **bound** `control` | `optional-bind:`, partner `control__EMS` exists (D8 i) |
+| `Building.temperature_modifier`, `HeatDistributionController.temperature_modifier` | optional, **bound** `control` | `optional-bind:` on the site entry, partner exists — **G13 resolved** |
+| `UTSPConnector.electricity_use` | observed (no binding) | an `electricity_flow` port has no link end; a `bind:` on it is refused (spec §3.3) |
 | `control.flows` (observer port) | default selection | `electricity_flow` of flow production, consumption, storage |
 | `grid.reading` (observer port) | **written** | `observes: [{connector: electricity_flow, flow: net}]` on the import (spec §4.3; G4 resolved) |
 | everything else | required, active | — |
@@ -85,7 +87,7 @@ is what the lowering wrote, decided by the lowering-form rule of G2.
 | `heating.sh` | link (circuit) | `HeatDistributionSystem.sh` | default | bare `HeatDistributionSystem` in `heating__Buffer` (return temperature + mass flow, both the HDS's outputs); bare `heating__Buffer` in `HeatDistributionSystem` (supply temperature, the buffer's) |
 | `heating.electricity` | existence check | `grid.connection` | exists | nothing: electricity has no link; the two `electricity_flow` ports it covers are observed (below) |
 | `heating.electricity_sh`, `.electricity_dhw` | observed + controlled | `control.flows` | via `ems_modifier` | two EMS feeds, `dispatch: {}` |
-| `heating.ems_modifier` | actuate | `control` | written | bare `control__EMS` in `heating__ControllerSH` (`SimpleHotWaterStorageTemperatureModifier`) and in `heating__ControllerDHW` (`DHWStorageTemperatureModifier`) |
+| `heating.ems_modifier` | actuate | `control` | `optional-bind:` | bare `control__EMS` in `heating__ControllerSH` (`SimpleHotWaterStorageTemperatureModifier`) and in `heating__ControllerDHW` (`DHWStorageTemperatureModifier`) |
 | `heating.dhw` ↔ `dhw.circuit` | link (circuit) | each other | written (`dhw`) | bare `heating__HeatPump` in `dhw__DHWStorage` (supply + mass flow, the heat pump's); bare `dhw__DHWStorage` in `heating__HeatPump` and in `heating__ControllerDHW` (return leg = cylinder temperature, read by the generator and by its L1) |
 | `heating.heat_load`, `.design_temperature`, `.room_setpoint`, `.emitter_type`, `.heating_threshold` | sizing | `Building`, `Weather`, `Building`, `HeatDistributionController` ×2 | default | nothing: the bare-fact rule binds the same single providers — **G7** |
 | `dhw.hot_water_demand` | link (data) | `UTSPConnector.hot_water_demand` | default | bare `UTSPConnector` in `dhw__DHWStorage` |
@@ -95,9 +97,9 @@ is what the lowering wrote, decided by the lowering-form rule of G2.
 | `pv.pv_system.production` | observed | `control.flows` | selection | EMS feed, production |
 | `battery.battery.pv_peak_power` | sizing, many | `[pv__pv_system__PVSystem]` | default | nothing (one provider) — **G7** |
 | `battery.battery.electricity` | observed + controlled (required) | `control.flows`, `control__EMS` | selection | EMS feed with `dispatch: {target_input: LoadingPowerInput}`; no input on the battery itself |
-| `UTSPConnector.electricity_use` | observed + controlled | `control.flows`, `control__EMS` | written on the site | EMS feed, `dispatch: {}` |
-| `Building.temperature_offset` | actuate | `control` | written on the site | bare `control__EMS` in `Building` |
-| `HeatDistributionController.temperature_offset` | actuate | `control` | written on the site | bare `control__EMS` in `HeatDistributionController` |
+| `UTSPConnector.electricity_use` | observed, ranked | `control.flows` | selection (`controllable: {}`) | EMS feed, `dispatch: {}` |
+| `Building.temperature_modifier` | actuate | `control` | `optional-bind:` on the site | bare `control__EMS` in `Building` |
+| `HeatDistributionController.temperature_modifier` | actuate | `control` | `optional-bind:` on the site | bare `control__EMS` in `HeatDistributionController` |
 | `control.flows` | observe | the four flows above + residents | default selection | the five feeds of §6 |
 | `grid.reading` | observe | `control.grid_net` (`flow: net`, `covers: flows`) | written selection | `grid__ElectricityMeter`'s one input `control__EMS.TotalElectricityToOrFromGrid`, tags `[ELECTRICITY_PRODUCTION]`, weight 999 (the meter's declaration maps `net` to its production channel) — **G6** |
 
@@ -187,7 +189,7 @@ for one array. The import record is the comment block at the end of `expanded_he
 | 14 | `L2EMSElectricityController` (:113-146) | `control__EMS` | equal | five feeds, equal (§6) | (i) |
 
 Anything the twin wires that no port carries: **nothing left** once `flow_temperature` (G1) is a port — the earlier
-mockup lacked it, and the Building/HDS controller modifiers needed site `provides` entries (G13). Anything the
+mockup lacked it, and the Building/HDS controller modifiers needed site `provides` entries with `optional-bind:` (G13). Anything the
 expansion adds: nothing beyond `metadata.imports` (ii, "the EMS as an import").
 
 ### 8.2 Beyond the components
@@ -200,14 +202,15 @@ expansion adds: nothing beyond `metadata.imports` (ii, "the EMS as an import").
 
 ### 8.3 The other twin shape (`metered_directly`, :147-171)
 
-Composed file: drop the `control` and `battery` imports, `heating`'s `bind: {ems_modifier: control}` and — G13 — the
-three `bind: control` lines on site entries (otherwise the file names a missing import), and the `grid` import's
-`observes:` line, which would now match nothing. Expansion: the meter observes its default selection, every
-`electricity_flow`; `heating.ems_modifier` has no candidate (unbound, legal); the four flows become meter feeds with tags from flow and binding: HP DHW and SH `ELECTRICITY_CONSUMPTION_UNCONTROLLED` 999 with
+Composed file: drop the `control` and `battery` imports and the `grid` import's `observes:` line, which would now
+match nothing. Nothing else changes: the site's two `optional-bind: {temperature_modifier: control}` lines and
+`heating`'s `optional-bind: {ems_modifier: control}` stay and are inert, recorded "not bound: partner absent" (G13
+resolved). Expansion: the meter observes its default selection, every `electricity_flow`; the three modifier inputs
+stay unwired, as in the twin; the four flows become meter feeds with tags from flow and binding: HP DHW and SH `ELECTRICITY_CONSUMPTION_UNCONTROLLED` 999 with
 `HEAT_PUMP_DHW`/`HEAT_PUMP_BUILDING`, PV `ELECTRICITY_PRODUCTION` 999 with `PV`, the occupancy
 `ELECTRICITY_CONSUMPTION_UNCONTROLLED` 999 **with `RESIDENTS`** — the twin's line :168-171 has no `component_type`,
 because the meter's declared feed for `UtspLpgConnector` carries none (`electricity_meter.py:304-326`) while its feeds
-for the heat pump and PV do. Both shapes are two selections of the meter, up to that tag (G15) and G13.
+for the heat pump and PV do. Both shapes are one site and two selections of the meter, up to that tag (G15).
 
 ## 9. Gaps (iii), with assessment
 
@@ -220,7 +223,7 @@ means a decision is needed.
 | **G2** | §3.2 lowers `hydronic_circuit` and `control_signal` to explicit wires; the twin writes every crossing edge as a bare name, except the heat pump's two weather wires, which are explicit. | Design change (small, spec text): lower to a **bare name iff the target class's default connections from the partner's class are exactly the wires the binding makes**, else explicit wires. Checked against all 14 input items of the twin that cross an import boundary: it reproduces each, including the explicit weather pair. |
 | **G3** | Nothing in the spec says where a port's lowered items go inside a member's `inputs`, or how a member refers to a port. Order of items is part of byte identity. | Not written yet: `{$port: <name>}` / `{$provides: <name>}` placeholders in `inputs` (as in these files); a placeholder of an inactive or unbound port expands to nothing. |
 | **G4** | The meter's wiring seemed to depend on whether a `control` import exists, which D8's principle forbids. | **Resolved: no decision needed** (owner, 2026-10-03). Electricity has no link end; meter and EMS each write their own `observes:`, and the twin shapes are two meter selector configurations (flows, or the EMS's `net`). Adding `control` changes the `grid` import only through its author; left at the default, the double-count check fails the file. |
-| **G5** | The EMS's modifier outputs are fixed per component type, not per feed: `SpaceHeatingWaterStorageTemperatureModifier` and `BuildingIndoorTemperatureModifier` move only while a `HEAT_PUMP_BUILDING` feed is ranked, the DHW modifier only for `HEAT_PUMP_DHW`/`HEAT_PUMP` (`controller_l2_energy_management_system.py:747-790`). Hence (a) the site's `temperature_offset` ports are inert unless the heating import is a heat pump with `ems_modifier` bound — a coupling of three imports no port shows; (b) an immersion heater's `ems_modifier` (`dhw/storage_water_heater`) has no EMS output; (c) two heat pumps would share one modifier. | Design change in the **component**, not the format: modifier outputs per controlled feed (as dispatch outputs already are), then `ems_modifier` lowers like a dispatch target. Not needed for the twin (wiring is equal); needed before any second heat-pump-like consumer or the immersion heater. |
+| **G5** | The EMS's modifier outputs are fixed per component type, not per feed: `SpaceHeatingWaterStorageTemperatureModifier` and `BuildingIndoorTemperatureModifier` move only while a `HEAT_PUMP_BUILDING` feed is ranked, the DHW modifier only for `HEAT_PUMP_DHW`/`HEAT_PUMP` (`controller_l2_energy_management_system.py:747-790`). Hence (a) the site's `temperature_modifier` ports are inert unless the heating import is a heat pump with `ems_modifier` bound — a coupling of three imports no port shows; (b) an immersion heater's `ems_modifier` (`dhw/storage_water_heater`) has no EMS output; (c) two heat pumps would share one modifier. | Design change in the **component**, not the format: modifier outputs per controlled feed (as dispatch outputs already are), then `ems_modifier` lowers like a dispatch target. Not needed for the twin (wiring is equal); needed before any second heat-pump-like consumer or the immersion heater. |
 | **G6** | The meter reads the EMS's grid balance as `ELECTRICITY_PRODUCTION` at 999 (twin :106-109); no connector flow said "grid balance". | Written: flow `net` with `covers:` in the registry (spec §3.2), mapped by the meter's declaration to its production channel; no `feed:` override. |
 | **G7** | The battery's many-cardinality `pv_peak_power` and every single-provider fact read across a boundary must write **no** `sizing_sources` line, or the expansion differs from the twin. | Not written yet: "a `sizing_fact` port lowers to nothing when the engine's bare-fact rule binds the same providers". §13 step 3 (`Many` + `Sum`) must land first. |
 | **G8** | `with_buffer: false` needs the site's `HeatDistribution.position_hot_water_storage_in_system` (and the heat pump's) to switch, and moves the pump to the generator: a parameter of an import changing a site config. Not exercised by the defaults (`PARALLEL` on both sides). | Design change (small, with hydronic stage D): the circuit binding carries pump ownership (`end.pump`), and the HDS's storage position becomes a sized field fed by a fact the heating assembly exports — never a direct patch of a site entry. |
@@ -228,7 +231,7 @@ means a decision is needed.
 | **G10** | D16 (c) refuses real fields: `PVSystemConfig.azimuth`/`tilt` (no suffix), the battery's `_in_kilowatt_hour`, the EMS's `*_temperature_offset_value`, the air conditioner's `nominal_cooling_power_w`, the collector's `area_m2`. As written, **the default composed file fails to load** on `pv/array` and `control`. | Not written yet, but blocking: declare units on these fields (`field(metadata={"unit": …})`) or extend the suffix table, before §13 step 4. |
 | **G11** | `PVSystemConfig.location` repeats a site value in an import (documentation only today). | Minor: drop the parameter or read a site fact; does not affect results. |
 | **G12** | (EV, not in this twin.) An EV's commuting distance and charging power select the LPG travel route set and charging station — occupancy settings; `CarConfig.source_weight` must differ per car (`generic_car.py:122-124`). | Design change: an import whose parameters change the occupancy needs a declared occupancy-side contract (the request decides both at once); the per-instance weight is derived like the EMS weights. |
-| **G13** | Optional ports on **site** entries (residents' consumption, the two `BuildingTemperatureModifier`s) need intent (D8), and the only place the format offers is the site entry (`bind: control`). The site then names an import, so the no-EMS world needs a different site file — against D17's one site. | Design change (small): intents for site ports are written on the controller import (`control: {…, controls: [UTSPConnector.electricity_use, Building.temperature_offset, HeatDistributionController.temperature_offset]}`); the site only publishes. |
+| **G13** | Optional ports on **site** entries (the two `BuildingTemperatureModifier`s) need intent (D8), and with `bind:` as the only verb the site names an import, so the no-EMS world needs a different site file — against D17's one site. | **Resolved** (owner, 2026-10-03; spec §3.1, §3.3, D8 (i)): three verbs alike on site entries and imports — `bind:` (partner must exist), `optional-bind:` (binds if the partner exists, else inert and recorded "not bound: partner absent"), `none:` (declines). The site carries `optional-bind: {temperature_modifier: control}` on `Building` and `HeatDistributionController`; `heating` and `dhw` write `optional-bind: {ems_modifier: control}`. The residents' `electricity_use` is observed, never bound: a `bind:` on electricity is refused. |
 | **G14** | Component order cannot be reproduced: imports follow the site, so the twin's PV-before-HDS-controller and HDS-last order is out of reach. File order is registration order, hence the order components are iterated within a time step (`executor.py:304-311`); convergence is absolute 1e-4 per output (`component.py:197-203`), the goldens compare at relative 1e-9 (`tests/test_golden_kpis.py:117-118`). The D9 gate "one-week run equals the existing golden" may fail on order alone. | Design decision, must be settled before §13 step 4: (a) reorder the Python setup once to the composed order and re-record twin and golden in a PR of its own, then gate byte-for-byte; or (b) gate on a canonical (sorted) comparison of the files and a tolerance for the run. Recommendation (a): it keeps the 1e-9 policy. Run the twin in both orders first to measure the effect. |
 | **G15** | The meter's occupancy feed has no `component_type` in the twin, while the port carries `RESIDENTS` (only `metered_directly`). | Intended difference to add to D9's reviewed list (the meter channels match by subset, so it lands in the same channel); or the meter declaration drops component types. |
 | **G16** | §3.2 gave `hot_water_demand` as kg/s and °C; the occupancy's output is `WaterConsumption`, litres per step, `WARM_WATER` (`loadprofilegenerator_utsp_connector.py:503`). | Fixed in the spec with this dry run. |
@@ -242,6 +245,6 @@ weight and dispatch block of `ems_with_battery` comes out of the composed file u
 `metered_directly` comes out of the same file without `control`, `battery` and the grid's `observes:` line, up to one
 tag (G15). It does **not yet
 reproduce the file byte for byte, nor guarantee the golden**: G14 (component order) is the one finding that can make
-the D9 gate fail on numbers, and G10 makes the composed file fail to load before anything else runs. Three points need
-an owner decision (G8, G13, G14; G4 is resolved), one is a component change (G5, EMS modifiers per feed), and the rest are rules
+the D9 gate fail on numbers, and G10 makes the composed file fail to load before anything else runs. Two points need
+an owner decision (G8, G14; G4 and G13 are resolved), one is a component change (G5, EMS modifiers per feed), and the rest are rules
 and declarations the spec or the classes owe (G1–G3, G6, G7, G9, G10, G18).

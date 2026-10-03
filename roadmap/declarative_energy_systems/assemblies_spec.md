@@ -704,8 +704,17 @@ file); (b) published ports of imports only (forces the site into assemblies); (c
 
 **D8 (ii)–(iv) — Port refinements (decided, owner, 2026-10-03).** (ii) `required_when`/`active_when` are structured mappings `{parameter: [values]}`, conjunctive, checked against the parameter types; no expression grammar. (iii) An optional port's fallback is a config patch on members, never a structural change. (iv) Sizing facts are the `sizing_fact` connector type of §3.2.
 
-**D9 — Staging.** (a) The six steps of §13, per heating assembly behind the equality gate; (b) big-bang; (c) assemblies
-for new structure only. Recommendation: **(a)**. **D10 — Sizing across assemblies (decided, owner, 2026-10-03).** (a): the engine implements the many-cardinality aggregation with an explicit `Sum`; a `sizing_fact` port of cardinality many lowers to a `sizing_sources` list over every provider in instance order; an assembly exports only the facts meant for outside, so an inner burner cannot make a site read ambiguous. Laws stay in the classes. (b), passing the summed fact as a parameter, was rejected: it moves the law to whoever writes the file, drifts silently when an array changes, and cannot work at all when an array's power is itself sized (`size_in_percent_of_roof_area`), because the sum is unknown before the engine runs. The meter's per-participant fuel constants follow when a second burner on one meter is needed. `location.country` appears in
+**D9 — Staging (decided, owner, 2026-10-03).** (a), with the gate defined as "the assembly's defaults reproduce the
+twin": per generator one PR adds `heating/<generator>` (and its DHW assembly) whose members use the twin's presets and whose
+parameter defaults are the twin's values wherever those are sensible library defaults; the composed base file states only
+what the setup itself overrode, as the twin does. The gate: the expansion equals the twin under the rename map, modulo a
+reviewed list of intended differences (names; pins that become `AUTO` because the assembly now supplies the provider;
+"no PV" as no import and the EMS as a controller import), the realized record's sized values are identical, and the
+setup's one-week run equals its **existing golden** under the rename map, so the ten `household_*_building_sizer`
+goldens police the assemblies and no new goldens are needed. Test artefacts of the twins (Aachen weather, the German
+single-family-home preset, the `couple_both_at_work` household) are site values of the composed base file, not assembly
+defaults. The equality test stays in the freshness workflow permanently, so a later default change fails CI until the
+composed file or the golden is changed deliberately. The RenoVisor switches each generator in its PR. **D10 — Sizing across assemblies (decided, owner, 2026-10-03).** (a): the engine implements the many-cardinality aggregation with an explicit `Sum`; a `sizing_fact` port of cardinality many lowers to a `sizing_sources` list over every provider in instance order; an assembly exports only the facts meant for outside, so an inner burner cannot make a site read ambiguous. Laws stay in the classes. (b), passing the summed fact as a parameter, was rejected: it moves the law to whoever writes the file, drifts silently when an array changes, and cannot work at all when an array's power is itself sized (`size_in_percent_of_roof_area`), because the sum is unknown before the engine runs. The meter's per-participant fuel constants follow when a second burner on one meter is needed. `location.country` appears in
 both files and a mismatch is refused.
 
 ## 15. Related

@@ -2,15 +2,18 @@
 # The grid connection (the provider of the electricity carrier, and the economics' connection subject) plus the
 # ElectricityMeter, an OBSERVER whose selection the importing file writes (spec §4.3, §5.1). Electricity has no link:
 # an electricity need only checks that exactly one grid connection exists; no wire goes to it (spec §3.2).
+# The meter's candidates are the outputs its class declares dynamic default connections from
+# (electricity_meter.py:298-326 and the get_default_connections_from_* methods), with their tags and weights.
 #
 # The meter sums what it observes on its production and consumption channels (electricity_meter.py:504, :520) and
 # books the difference as grid exchange. The two twin shapes are two selections, written on the importing `grid` line:
-#  - no EMS: `observes: [{connector: electricity_flow}]` (the default) -> every flow is a meter feed
+#  - no EMS: the default selection -> every electricity output the meter declares is a feed
 #    (twin option `metered_directly`, :145-171);
-#  - with an EMS: `observes: [{connector: electricity_flow, flow: net}]` -> the meter's one input is the EMS's `net`
-#    port (twin option `ems_with_battery`, :105-109).
-# Adding a `control` import changes nothing here. Left at the default, the meter would observe the EMS's `net` port AND
-# the flows that net covers: a load error (double count), so the author edits the `grid` line.
+#  - with an EMS: `observes: [{output: TotalElectricityToOrFromGrid}]` -> the meter's one input is the EMS's grid
+#    balance (twin option `ems_with_battery`, :105-109).
+# Adding a `control` import changes nothing here. Left at the default, the meter would observe the EMS's grid balance
+# AND the outputs the EMS observes: a load error (double count), so the author edits the `grid` line. († The meter does
+# not yet declare a dynamic default connection from the EMS; the twin writes that feed explicitly, dry run G6.)
 
 schema_version: 4
 kind: assembly
@@ -30,12 +33,10 @@ components:
 
 interface:
   provides:
-    connection:
-      connector: energy_carrier_supply
-      carrier: ELECTRICITY                                 # the one electricity provider; an existence check, no wire
+    connection: {carrier: ELECTRICITY}                     # the one electricity provider; an existence check, no wire
   observes:
     reading:
       into: [ElectricityMeter]
-      default: [{connector: electricity_flow}]             # replaced by the importing file's `observes:`
-      # tags and weight from the meter's connector declaration: production -> ELECTRICITY_PRODUCTION 999,
-      # consumption -> ELECTRICITY_CONSUMPTION_UNCONTROLLED 999, net -> the production channel at 999 (twin :106-109)
+      default: declared                                    # replaced by the importing file's `observes:`
+      # tags and weight from the meter's own dynamic default connections: production -> ELECTRICITY_PRODUCTION 999,
+      # consumption -> ELECTRICITY_CONSUMPTION_UNCONTROLLED 999, the EMS's grid balance -> production at 999 (:106-109)

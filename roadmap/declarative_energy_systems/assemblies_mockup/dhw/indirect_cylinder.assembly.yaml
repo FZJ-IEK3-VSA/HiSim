@@ -29,17 +29,16 @@ components:
     config:
       volume_heating_water_storage_in_liter: {$param: volume_in_liter}
     inputs:
-      - {$port: hot_water_demand}                          # WaterConsumption <- UtspLpgConnector.WaterConsumption
-      - {$port: circuit}                                   # WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator
+      - {$port: hot_water_demand}                          # bare UTSPConnector: WaterConsumption
+      - {$port: circuit}                                   # bare generator: WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator
       - {$port: solar_coil}                                # WaterTemperature/MassFlowFromSecondaryHeatGenerator (D20)
 
 interface:
   needs:
-    hot_water_demand: {connector: hot_water_demand, into: [DHWStorage]}
-    circuit:          {connector: hydronic_circuit, medium: dhw, end: {pump: false, legs: [return]}, into: [DHWStorage]}
+    hot_water_demand: {into: [DHWStorage], partner: [UtspLpgConnector]}   # SimpleDHWStorage's default connections
+    circuit:          {circuit: dhw, member: DHWStorage}
                       # binds heating.dhw: supply leg and pump are the generator's, the return leg
                       # (WaterTemperatureToHeatGenerator) is this cylinder's, read by the heat pump AND its DHW L1
-    apartments:       {connector: sizing_fact, fact: number_of_apartments, into: [DHWStorage]}
+    apartments:       {fact: number_of_apartments, into: [DHWStorage]}
   provides:
-    solar_coil:       {connector: hydronic_circuit, medium: solar_fluid, end: {pump: false, legs: [return]},
-                       into: [DHWStorage], optional: true}          # D20 (a), open: unbound it is unused
+    solar_coil:       {circuit: solar_dhw, member: DHWStorage, optional: true}   # D20 (a): unbound it is unused

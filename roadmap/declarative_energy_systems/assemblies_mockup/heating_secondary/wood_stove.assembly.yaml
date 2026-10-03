@@ -37,9 +37,9 @@ components:
 
 interface:
   needs:
-    fuel:             {connector: energy_carrier_supply, carrier: wood_logs, outputs: [fuel_use]}     # † carrier
-    room_temperature: {connector: building_thermal, quantity: indoor_air_temperature, into: [StoveController]}
+    fuel:             {carrier: wood_logs, outputs: [fuel_use]}                              # † carrier
+    room_temperature: {into: [StoveController], partner: Building}                         # TemperatureIndoorAir
   provides:
-    room_heat: {connector: zone_heat, kind: secondary_heating, output: Stove.ThermalPowerDelivered}
-               # one wire into Building.ThermalPowerSecondaryHeating (†, D19)
-    fuel_use:  {connector: energy_carrier_supply, output: Stove.FuelEnergyDemand, carrier: wood_logs}
+    room_heat: {output: Stove.ThermalPowerDelivered}
+               # the Building's default connections from WoodStove fill ThermalPowerSecondaryHeating (†, D19)
+    fuel_use:  {output: Stove.FuelEnergyDemand}

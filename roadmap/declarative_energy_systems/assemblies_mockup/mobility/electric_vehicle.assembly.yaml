@@ -55,18 +55,14 @@ components:
 
 interface:
   needs:
-    usage:       {connector: car_usage, into: [Car]}       # lowers to nothing but a check (connectors.yaml)
-    electricity: {connector: energy_carrier_supply, carrier: ELECTRICITY, outputs: [charging]}
-    occupancy:   {connector: sizing_fact, fact: occupancy_identity, into: [Car]}
+    usage:       {into: [Car], partner: UtspLpgConnector, wires: {}}
+                 # no wire: the occupancy publishes each car's profile into the SimRepository and the Car reads its own
+                 # by car_name; the binding only checks that car_name exists in the occupancy's household (G12)
+    electricity: {carrier: ELECTRICITY, outputs: [charging]}
+    occupancy:   {fact: occupancy_identity, into: [Car]}
   provides:
     charging:
-      connector: electricity_flow
-      output: ChargeController.BatteryChargingPowerToEMS   # controller_l1_generic_ev_charge.py:269
-      flow: consumption
-      component_type: CAR_BATTERY
-      controllable: {via: ems_modifier}
-    ems_modifier:                                          # the L1's input the EMS writes (D21); optional
-      connector: control_signal
-      signal: ev_charging_target                           # a dispatch-borne signal: lowers into the feed's
-      into: [ChargeController.ElectricityTargetFromEMS]    # dispatch.target_input, as in the car twin
-      optional: true
+      output: ChargeController.BatteryChargingPowerToEMS   # controller_l1_generic_ev_charge.py:269; tagged CAR_BATTERY
+      controllable: {target_input: ElectricityTargetFromEMS, optional: true}
+      # the L1's input the EMS writes (D21), lowered into the feed's dispatch.target_input, as in the car twin;
+      # optional: without a controller the L1 charges to battery_set_soc on its own

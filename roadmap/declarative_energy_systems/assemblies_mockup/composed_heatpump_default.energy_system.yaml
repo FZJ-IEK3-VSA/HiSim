@@ -3,8 +3,11 @@
 # that should reproduce energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml, option
 # `ems_with_battery`. Expanded by hand in dry_run_heatpump_twin.md into expanded_heatpump_default.energy_system.yaml.
 #
-# Site component names are the twin's, so the rename map touches only imported members. `{$provides: <port>}` in a
-# site entry's `inputs` marks where a bound port's wires land (gap G3), like `{$port: ...}` inside an assembly.
+# Site component names are the twin's, so the rename map touches only imported members. A site entry carries a
+# `ports:` block only where an import binds to it; `{$port: <port>}` in its `inputs` marks where the bound port's wires
+# land (gap G3), as inside an assembly. Everything else an import needs from the site (weather, occupancy, the
+# Building, the HDS controller, sizing facts) it finds by class: its members' default connections and the facts the
+# site classes contribute.
 #
 # `order:` (spec §2.3, D23) is the evaluation order within a time step, independent of file position. The numbers
 # reproduce the twin's sequence: Building 1, UTSPConnector 2, Weather 3, pv 4, HeatDistributionController 5, heating 6
@@ -26,30 +29,21 @@ components:
       weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
     inputs:
       - Weather
-      - {$provides: temperature_modifier}
+      - {$port: temperature_modifier}
       - UTSPConnector
       - HeatDistributionSystem
     optional-bind: {temperature_modifier: control}  # G13 resolved: binds if a `control` import exists, else
                                                     # inert ("not bound: partner absent"); one site, EMS or not
-    provides:
-      temperature_modifier: {connector: control_signal, signal: building_temperature_offset,
-                             input: BuildingTemperatureModifier, optional: true}
-      zone:               {connector: building_thermal}
-      heat_load:          {connector: sizing_fact, fact: heating_load_in_watt}
-      apartments:         {connector: sizing_fact, fact: number_of_apartments}
-      roof_area:          {connector: sizing_fact, fact: roof_area_in_m2}
-      room_setpoint:      {connector: sizing_fact, fact: set_heating_temperature_in_celsius}
+    ports:
+      temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
   UTSPConnector:
     order: 2
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
     config:
       data_acquisition_mode: USE_LOCAL_LPG
-    provides:
-      electricity_use:  {connector: electricity_flow, output: ElectricalPowerConsumption, flow: consumption,
-                         component_type: RESIDENTS, controllable: {}}   # observed, never bound (§3.3)
-      hot_water_demand: {connector: hot_water_demand}
-      internal_gains:   {connector: internal_gains}
+    # no ports: ElectricalPowerConsumption is observed by its tags (RESIDENTS, ranked rank-only by the EMS's own
+    # declaration), and the DHW tank and the Building read it through their default connections from UtspLpgConnector
   Weather:
     order: 3
     class: hisim.components.weather.Weather
@@ -59,25 +53,17 @@ components:
       data_source: DWD_TRY
       heating_reference_temperature_in_celsius: -7.0
       predictive_control: false
-    provides:
-      weather:            {connector: weather_data}
-      design_temperature: {connector: sizing_fact, fact: heating_reference_temperature_in_celsius}
-      weather_id:         {connector: sizing_fact, fact: weather_identity}
   HeatDistributionController:
     order: 5
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - {$provides: temperature_modifier}
+      - {$port: temperature_modifier}
       - Weather
       - Building
     optional-bind: {temperature_modifier: control}  # as on Building (G13 resolved)
-    provides:
-      flow_temperature:   {connector: control_signal, signal: heating_flow_temperature, output: HeatingFlowTemperature}
-      temperature_modifier: {connector: control_signal, signal: building_temperature_offset,
-                             input: BuildingTemperatureModifier, optional: true}
-      emitter_type:       {connector: sizing_fact, fact: heat_distribution_system_type}
-      heating_threshold:  {connector: sizing_fact, fact: set_heating_threshold_outside_temperature_in_celsius}
+    ports:
+      temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
   HeatDistributionSystem:
     order: 11
     class: hisim.components.heat_distribution_system.HeatDistribution
@@ -85,9 +71,9 @@ components:
     inputs:
       - Building
       - HeatDistributionController
-      - {$provides: sh}
-    provides:
-      sh: {connector: hydronic_circuit, medium: heating_water, end: {pump: true, legs: [return]}}
+      - {$port: sh}
+    ports:
+      sh: {circuit: sh}                             # pump and return leg are the HDS's (naming convention)
 
 imports:
   heating:
@@ -111,12 +97,13 @@ imports:
     instances: {battery: {}}
   control:
     order: 14
-    assembly: control/ems_self_consumption          # observes the flows (its default selection), publishes `net`
+    assembly: control/ems_self_consumption          # observes the flows (its default selection), sums them
   grid:
     order: 12
     assembly: supply/electricity_grid
-    observes: [{connector: electricity_flow, flow: net}]   # the EMS's net only: the twin's ems_with_battery meter.
-                                                    # Without this line the default (every electricity_flow) would
-                                                    # also match the flows `net` covers: a load error (double count).
+    observes: [{output: TotalElectricityToOrFromGrid}]   # the EMS's grid balance only: the twin's ems_with_battery
+                                                    # meter. Without this line the default (every electricity output
+                                                    # the meter declares) would also match the outputs the EMS
+                                                    # observes: a load error (double count).
                                                     # metered_directly: drop `control`, `battery` and this line;
                                                     # no site or `heating` line changes (spec §4.3).

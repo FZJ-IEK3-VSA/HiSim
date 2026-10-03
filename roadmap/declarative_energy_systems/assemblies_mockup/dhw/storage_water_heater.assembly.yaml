@@ -67,20 +67,16 @@ variants:
 
 interface:
   needs:
-    hot_water_demand: {connector: hot_water_demand, into: [Tank]}
-    electricity: {connector: energy_carrier_supply, carrier: electricity, outputs: [heater_electricity],
-                  required_when: {energy_carrier: [electricity]}}
-    fuel:        {connector: energy_carrier_supply, carrier: {$param: energy_carrier}, outputs: [heater_fuel],
+    hot_water_demand: {into: [Tank], partner: [UtspLpgConnector]}
+    electricity: {carrier: electricity, outputs: [heater_electricity], required_when: {energy_carrier: [electricity]}}
+    fuel:        {carrier: {$param: energy_carrier}, outputs: [heater_fuel],
                   required_when: {energy_carrier: [natural_gas, lpg, oil]}}
-    apartments:  {connector: sizing_fact, fact: number_of_apartments, into: [Tank]}
+    apartments:  {fact: number_of_apartments, into: [Tank]}
+    ems_modifier: {into: [HeaterController], partner: L2GenericEnergyManagementSystem,                    # † L1 input
+                   optional: true, active_when: {energy_carrier: [electricity]}}
   provides:
-    heater_electricity: {connector: electricity_flow, output: Heater.ElectricityInput, flow: consumption,   # †
-                         component_type: ELECTRIC_HEATING_DHW, controllable: {via: ems_modifier},
-                         active_when: {energy_carrier: [electricity]}}
-    heater_fuel:        {connector: energy_carrier_supply, output: Heater.EnergyDemandDhw,
-                         carrier: {$param: energy_carrier}, active_when: {energy_carrier: [natural_gas, lpg, oil]}}
-    ems_modifier:       {connector: control_signal, signal: dhw_storage_temperature_offset, unit: CELSIUS,
-                         into: [HeaterController.StorageTemperatureModifier],                             # †
-                         optional: true, active_when: {energy_carrier: [electricity]}}
-    solar_coil:         {connector: hydronic_circuit, medium: solar_fluid, end: {pump: false, legs: [return]},
-                         into: [Tank], optional: true}                                                    # D20 (a)
+    heater_electricity: {output: Heater.ElectricityInput, controllable: {via: ems_modifier},              # † tagged
+                         active_when: {energy_carrier: [electricity]}}                       # ELECTRIC_HEATING_DHW
+    heater_fuel:        {output: Heater.EnergyDemandDhw, active_when: {energy_carrier: [natural_gas, lpg, oil]}}
+                        # its EnergyPort carries the carrier (EnergyPort.carrier_of_fuel); the provider's meter observes it
+    solar_coil:         {circuit: solar_dhw, member: Tank, optional: true}                               # D20 (a)

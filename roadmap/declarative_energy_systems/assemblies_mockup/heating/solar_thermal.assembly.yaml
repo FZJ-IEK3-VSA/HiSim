@@ -43,16 +43,12 @@ components:
 
 interface:
   needs:
-    weather:     {connector: weather_data, into: [Collector]}
-    dhw_coil:    {connector: hydronic_circuit, medium: solar_fluid, end: {pump: true, legs: [supply]},
-                  into: [Collector, Controller]}
-    sh_coil:     {connector: hydronic_circuit, medium: solar_fluid, end: {pump: true, legs: [supply]},
-                  into: [Collector], required_when: {supplies: [dhw_and_space_heating]},
+    weather:     {into: [Collector], partner: Weather}
+    dhw_coil:    {circuit: solar_dhw, member: [Collector, Controller]}     # the collector owns pump and supply leg
+    sh_coil:     {circuit: solar_sh, member: [Collector], required_when: {supplies: [dhw_and_space_heating]},
                   active_when: {supplies: [dhw_and_space_heating]}}                      # † valve assembly
-    pump_electricity: {connector: energy_carrier_supply, carrier: ELECTRICITY, outputs: [pump_electricity_use]}
+    pump_electricity: {carrier: ELECTRICITY, outputs: [pump_electricity_use]}
   provides:
-    pump_electricity_use: {connector: electricity_flow, output: Collector.ElectricityConsumptionOutput,
-                           flow: consumption, component_type: SOLAR_THERMAL_SYSTEM, controllable: {via: ems_modifier}}
-    ems_modifier: {connector: control_signal, signal: none, optional: true}
-                  # the EMS ranks SOLAR_THERMAL_SYSTEM (weight 4, dispatch {}) but has no modifier for it: binding it
-                  # only makes the feed controlled (an EMS-side decision, D21)
+    pump_electricity_use: {output: Collector.ElectricityConsumptionOutput}
+                  # tagged SOLAR_THERMAL_SYSTEM; the EMS ranks it (weight 4, dispatch {}) from its own declaration but
+                  # has no modifier for it, so there is no ems_modifier port (rank-only, dry run G18)

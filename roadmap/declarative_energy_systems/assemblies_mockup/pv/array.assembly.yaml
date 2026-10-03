@@ -35,6 +35,7 @@ components:
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem
     preset: rooftop                                        # power AUTO: ROOFTOP_POWER_LAW over roof_area_in_m2
+    display: "PV array, {mounted_on}, azimuth {azimuth_in_degree}°"   # English display_name default (spec §2.4)
     config:
       location: {$param: location}
       azimuth: {$param: azimuth_in_degree}
@@ -42,15 +43,15 @@ components:
       power_in_watt: {$param: power_in_watt}
       share_of_maximum_pv_potential: {$param: share_of_surface}   # † the law reads roof_area_in_m2 only; a facade array needs the facade area fact (below)
     inputs:
-      - {$port: weather}                                   # bare Weather: the eight weather default connections
+      - {$port: weather}                                   # bare Weather: PVSystem's default connections from Weather
 
 interface:
   needs:
-    weather:     {connector: weather_data, into: [PVSystem]}
-    surface_area: {connector: sizing_fact, fact: {$switch: mounted_on, roof: roof_area_in_m2, facade: facade_area_in_m2}, into: [PVSystem]}
+    weather:     {into: [PVSystem], partner: Weather}
+    surface_area: {fact: {$switch: mounted_on, roof: roof_area_in_m2, facade: facade_area_in_m2}, into: [PVSystem]}
                   # † facade_area_in_m2 is not a sizing contribution of the Building yet; the fact name follows mounted_on
-    weather_id:  {connector: sizing_fact, fact: weather_identity, into: [PVSystem]}
+    weather_id:  {fact: weather_identity, into: [PVSystem]}
   provides:
-    production:  {connector: electricity_flow, output: PVSystem.ElectricityOutput, flow: production, component_type: PV}
-                 # observed, never linked (spec §4.3): each observer's feed is ELECTRICITY_PRODUCTION at 999
-    peak_power:  {connector: sizing_fact, fact: pv_peak_power_in_watt, export: true}   # config.py:181-186; read by batteries
+    production:  {output: PVSystem.ElectricityOutput}
+                 # observed by its tags, never linked (spec §4.3): each observer's feed is ELECTRICITY_PRODUCTION at 999
+    peak_power:  {fact: pv_peak_power_in_watt, export: true}   # config.py:181-186; read by batteries

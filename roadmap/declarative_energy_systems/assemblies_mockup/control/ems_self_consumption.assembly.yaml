@@ -2,10 +2,10 @@
 # The L2 controller (D11, D21). It observes electricity flows and actuates ONLY L1 set-point modifiers and the
 # battery's LoadingPowerInput (and an EV's L1 charge target). It owns the priority list; no device declares a weight.
 #
-# It OBSERVES the electricity flows (its own `observes:` selection, spec §4.3) and publishes their sum as `grid_net`,
-# an electricity_flow port of flow `net` that declares which flows it covers. The grid's meter observes that port only
-# when the `grid` import says so (`observes: [{connector: electricity_flow, flow: net}]`); nothing changes implicitly.
-# A meter observing `grid_net` and a covered flow is a load error (double count). Twin :100-146.
+# It OBSERVES the electricity outputs its class declares dynamic default connections from (its own `observes:`
+# selection, spec §4.3) and outputs their sum, TotalElectricityToOrFromGrid. The grid's meter observes that output only
+# when the `grid` import says so (`observes: [{output: TotalElectricityToOrFromGrid}]`); nothing changes implicitly.
+# A meter observing that output and an output this EMS observes is a load error (double count). Twin :100-146.
 
 schema_version: 4
 kind: assembly
@@ -17,12 +17,12 @@ parameters:
     type: list
     description: Ordered selectors of the controllable ports it actuates; the weights are derived (spec §4.4).
     default:
-      - {connector: electricity_flow, component_type: RESIDENTS}                                   # class default 1
-      - {connector: electricity_flow, component_type: [HEAT_PUMP_BUILDING, ELECTRIC_HEATING_SH]}   # 2
-      - {connector: electricity_flow, component_type: [HEAT_PUMP_DHW, ELECTRIC_HEATING_DHW]}       # 3
-      - {connector: electricity_flow, component_type: SOLAR_THERMAL_SYSTEM}                        # 4
-      - {connector: electricity_flow, component_type: CAR_BATTERY}                                 # 5 (car twin)
-      - {connector: electricity_flow, component_type: BATTERY}                                     # 6, then 7, 8 ...
+      - {component_type: RESIDENTS}                                   # class default 1
+      - {component_type: [HEAT_PUMP_BUILDING, ELECTRIC_HEATING_SH]}   # 2
+      - {component_type: [HEAT_PUMP_DHW, ELECTRIC_HEATING_DHW]}       # 3
+      - {component_type: SOLAR_THERMAL_SYSTEM}                        # 4
+      - {component_type: CAR_BATTERY}                                 # 5 (car twin)
+      - {component_type: BATTERY}                                     # 6, then 7, 8 ...
   building_offset_in_kelvin:
     {type: float, unit: CELSIUS, default: 2, description: Building set point raise on surplus (EMSConfig, controller_l2_energy_management_system.py:54).}
   sh_storage_offset_in_kelvin:
@@ -49,17 +49,12 @@ interface:
   observes:
     flows:
       into: [EMS]
-      default: [{connector: electricity_flow, flow: [production, consumption, storage]}]   # never its own `net`
+      default: declared                                    # every electricity output the EMS class declares; never its own
   actuates:
-    priorities: {$param: priorities}                       # controllable electricity ports, weights derived
-    modifiers:                                             # the L1 targets of a bound `ems_modifier` or `controllable`
-      - {connector: control_signal, signal: sh_storage_temperature_offset,
-         from: EMS.SpaceHeatingWaterStorageTemperatureModifier}
-      - {connector: control_signal, signal: dhw_storage_temperature_offset,
-         from: EMS.DomesticHotWaterStorageTemperatureModifier}
-      - {connector: control_signal, signal: building_temperature_offset,
-         from: EMS.BuildingIndoorTemperatureModifier}      # into Building AND HeatDistributionController (site)
-      # battery_power_target / ev_charging_target come out of the feed's dispatch output, not a fixed output
+    priorities: {$param: priorities}                       # controllable electricity outputs, weights derived
+    # The modifier wires need no port here: an L1 that binds `ems_modifier: control` (and the site's
+    # `temperature_modifier`) lowers to its own class's default connections from L2GenericEnergyManagementSystem,
+    # which pick SpaceHeatingWaterStorageTemperatureModifier, DomesticHotWaterStorageTemperatureModifier or
+    # BuildingIndoorTemperatureModifier. battery / EV targets come out of the feed's dispatch output.
   provides:
-    grid_net: {connector: electricity_flow, output: EMS.TotalElectricityToOrFromGrid, flow: net,
-               covers: flows}                              # the flows this net already sums: the double-count check
+    grid_balance: {output: EMS.TotalElectricityToOrFromGrid}   # the sum of what `flows` observes: the double-count check

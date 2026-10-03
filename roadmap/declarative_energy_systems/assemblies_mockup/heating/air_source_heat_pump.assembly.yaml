@@ -7,8 +7,9 @@
 # device: it may only raise the two L1 set points through `ems_modifier`.
 #
 # Reference syntax inside `inputs` (proposed by the dry-run, gap G3): `{$port: <port>}` marks where the port's wires
-# land in this member's input list; the expansion replaces it by a bare name or explicit wires (connectors.yaml,
-# "Lowering form"), or drops it when the port is inactive or declined. A member name that the selected internal
+# land in this member's input list; the expansion replaces it by the bare partner name (the member class's default
+# connections from the partner's class, spec §3.2) or by the explicit wires the placeholder names, or drops it when the
+# port is inactive or declined. A member name that the selected internal
 # variants do not contain is dropped the same way (as group expansion drops items to disabled components).
 #
 # Evaluation order (spec §2.3, D23): the members carry an explicit relative `order:` because two of them live in
@@ -53,9 +54,9 @@ components:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
     preset: standard                                        # smart: † preset_smart
     inputs:
-      - {$port: weather}                                    # DailyAverageOutsideTemperature
-      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
-      - {$port: ems_modifier, signal: sh_storage_temperature_offset}   # SimpleHotWaterStorageTemperatureModifier :2701
+      - {$port: weather}                                    # bare Weather: DailyAverageOutsideTemperature
+      - {$port: flow_temperature}                           # bare HDS controller: HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: ems_modifier}                               # bare EMS: SimpleHotWaterStorageTemperatureModifier :2701
       - Buffer                                              # WaterTemperatureInput <- WaterTemperatureToHeatGenerator
   HeatPump:
     order: 3
@@ -71,7 +72,9 @@ components:
       - ControllerSH                                        # OnOffSwitchSH
       - {$port: dhw}                                        # TemperatureInputSecondaryDHW (the cylinder's return leg)
       - Buffer                                              # TemperatureInputSecondarySH
-      - {$port: weather}                                    # TemperatureAmbient, TemperatureInputPrimary: explicit wires
+      - {$port: weather,                                    # explicit wires, the last resort (spec §3.2): the class's
+         wires: {TemperatureAmbient: DailyAverageOutsideTemperatures,       # default connections from Weather are not
+                 TemperatureInputPrimary: DailyAverageOutsideTemperatures}}  # these two; fix the class, not the file
 
 variants:
   dhw_side:
@@ -85,7 +88,7 @@ variants:
             class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
             preset: standard
             inputs:
-              - {$port: ems_modifier, signal: dhw_storage_temperature_offset}   # DHWStorageTemperatureModifier :3230
+              - {$port: ems_modifier}                                          # DHWStorageTemperatureModifier :3230
               - {$port: dhw}                                                   # WaterTemperatureInputFromDHWStorage
       without_dhw:
         when: [false]
@@ -116,40 +119,30 @@ variants:
 
 interface:
   needs:
-    weather:          {connector: weather_data, into: [HeatPump, ControllerSH]}
-    flow_temperature: {connector: control_signal, signal: heating_flow_temperature, into: [ControllerSH]}   # gap G1
-    sh:               {connector: hydronic_circuit, medium: heating_water, end: {pump: false, legs: [supply]},
-                       into: [Buffer], active_when: {with_buffer: [true]}}        # the site's HDS owns pump and return
-    electricity:      {connector: energy_carrier_supply, carrier: ELECTRICITY, outputs: [electricity_sh, electricity_dhw]}
-    heat_load:        {connector: sizing_fact, fact: heating_load_in_watt, into: [HeatPump]}
-    design_temperature: {connector: sizing_fact, fact: heating_reference_temperature_in_celsius, into: [HeatPump]}
-    room_setpoint:    {connector: sizing_fact, fact: set_heating_temperature_in_celsius, into: [ControllerSH]}
-    emitter_type:     {connector: sizing_fact, fact: heat_distribution_system_type, into: [ControllerSH]}
-    heating_threshold: {connector: sizing_fact, fact: set_heating_threshold_outside_temperature_in_celsius,
-                        into: [ControllerSH]}
+    weather:          {into: [HeatPump, ControllerSH], partner: Weather}
+    flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (gap G1)
+    sh:               {circuit: sh, member: Buffer, active_when: {with_buffer: [true]}}
+                      # the naming convention gives the site's HDS pump and return leg, the buffer the supply leg
+    electricity:      {carrier: ELECTRICITY, outputs: [electricity_sh, electricity_dhw]}
+    ems_modifier:     {into: [ControllerSH, ControllerDHW], partner: L2GenericEnergyManagementSystem, optional: true}
+                      # the L1 set-point modifiers (D21); optional-bind: control; unbound = thermostat only
+    heat_load:        {fact: heating_load_in_watt, into: [HeatPump]}
+    design_temperature: {fact: heating_reference_temperature_in_celsius, into: [HeatPump]}
+    room_setpoint:    {fact: set_heating_temperature_in_celsius, into: [ControllerSH]}
+    emitter_type:     {fact: heat_distribution_system_type, into: [ControllerSH]}
+    heating_threshold: {fact: set_heating_threshold_outside_temperature_in_celsius, into: [ControllerSH]}
   provides:
-    dhw:              {connector: hydronic_circuit, medium: dhw, end: {pump: true, legs: [supply]},
-                       into: [HeatPump, ControllerDHW], required_when: {serves_dhw: [true]},
+    dhw:              {circuit: dhw, member: [HeatPump, ControllerDHW], required_when: {serves_dhw: [true]},
                        active_when: {serves_dhw: [true]}}           # an active dhw circuit must be bound by one importer
-    electricity_sh:   {connector: electricity_flow, output: HeatPump.ElectricalInputPowerSH, flow: consumption,
-                       component_type: HEAT_PUMP_BUILDING, controllable: {via: ems_modifier}}
-    electricity_dhw:  {connector: electricity_flow, output: HeatPump.ElectricalInputPowerDHW, flow: consumption,
-                       component_type: HEAT_PUMP_DHW, controllable: {via: ems_modifier},
+    electricity_sh:   {output: HeatPump.ElectricalInputPowerSH, controllable: {via: ems_modifier}}   # HEAT_PUMP_BUILDING
+    electricity_dhw:  {output: HeatPump.ElectricalInputPowerDHW, controllable: {via: ems_modifier},  # HEAT_PUMP_DHW
                        active_when: {serves_dhw: [true]}}
-    # HeatPump.ElectricalInputPowerForCooling and .ElectricalInputPowerBrinePump also carry electricity EnergyPorts
-    # (:971-994) and are fed to no meter and no EMS in the twin: zero for an air-source machine that never cools.
-    # A ground-source assembly publishes the brine pump as a third consumption port.
-    ems_modifier:                                            # an actuation target (D21): the L1 set-point modifiers
-      connector: control_signal
-      optional: true                                         # optional-bind: control; unbound = thermostat only
-      signals:
-        sh_storage_temperature_offset:  ControllerSH.SimpleHotWaterStorageTemperatureModifier
-        dhw_storage_temperature_offset: {target: ControllerDHW.DHWStorageTemperatureModifier,
-                                         active_when: {serves_dhw: [true]}}
-    thermal_power:    {connector: sizing_fact, fact: maximal_thermal_power_in_watt, export: false}   # read by Buffer only
-    solar_coil:       {connector: hydronic_circuit, medium: solar_fluid, end: {pump: false, legs: [return]},
-                       into: [Buffer], optional: true, active_when: {with_buffer: [true]}}
+    # The tags are the observers' own declarations. HeatPump.ElectricalInputPowerForCooling and .ElectricalInputPowerBrinePump
+    # also carry electricity EnergyPorts (:971-994) and are fed to no meter and no EMS in the twin: zero for an
+    # air-source machine that never cools. A ground-source assembly provides the brine pump as a third output.
+    thermal_power:    {fact: maximal_thermal_power_in_watt, export: false}   # read by Buffer only
+    solar_coil:       {circuit: solar_sh, member: Buffer, optional: true, active_when: {with_buffer: [true]}}
                        # SimpleHotWaterStorage.WaterTemperature/MassFlowRateFromSecondaryHeatGenerator (D20 a)
-  internal:
-    sh_generator_circuit: {connector: hydronic_circuit, medium: heating_water, bind: [HeatPump, Buffer]}   # bare names above
-    on_off: {connector: control_signal, bind: [ControllerSH.State_SH, HeatPump.OnOffSwitchSH]}
+  internal:                                                  # receiver's default connections from the sender's class
+    sh_generator_circuit: {bind: [HeatPump, Buffer]}         # the bare names above
+    on_off: {bind: [ControllerSH, HeatPump]}                 # State_SH -> OnOffSwitchSH

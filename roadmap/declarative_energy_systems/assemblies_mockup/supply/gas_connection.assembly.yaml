@@ -1,6 +1,7 @@
 # Mockup (design, not loadable): energy_systems/assemblies/supply/gas_connection.assembly.yaml
 # The natural-gas connection and its meter (spec §5.1). The meter OBSERVES the fuel outputs of the bound consumers (its
-# `observes:`, default every energy_carrier_supply port of carrier NATURAL_GAS); that observation is the fuel link, and
+# `observes:`, default every output GasMeter declares default feeds from, of carrier NATURAL_GAS by its EnergyPort);
+# that observation is the fuel link, and
 # the meter is the fuel port's energy-balance peer, as today GasMeter reads the burner's fuel output
 # (generic_boiler.py:450, :501; gas_meter.py default feeds from GenericBoiler.EnergyDemandSh and .EnergyDemandDhw).
 # Its carrier is pinned here, from the provider, instead of copied from "the generator beside it"
@@ -26,10 +27,8 @@ components:
 
 interface:
   provides:
-    connection:
-      connector: energy_carrier_supply
-      carrier: NATURAL_GAS                                 # lt.EnergyBalanceCarrier; every bound consumer is checked against it
+    connection: {carrier: NATURAL_GAS}                     # lt.EnergyBalanceCarrier; every bound consumer is checked against it
   observes:
     reading:
       into: [GasMeter]
-      default: [{connector: energy_carrier_supply, carrier: NATURAL_GAS}]   # the fuel outputs; the importer may narrow it
+      default: declared                                    # the fuel outputs GasMeter declares; the importer may narrow it

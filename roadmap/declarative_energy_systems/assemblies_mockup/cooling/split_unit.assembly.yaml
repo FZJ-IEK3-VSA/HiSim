@@ -37,10 +37,11 @@ components:
 
 interface:
   needs:
-    weather:     {connector: weather_data, into: [AirConditioner]}
-    zone:        {connector: building_thermal, quantity: indoor_air_temperature, into: [AirConditioner, Controller]}
-    electricity: {connector: energy_carrier_supply, carrier: ELECTRICITY, outputs: [electricity_use]}
+    weather:     {into: [AirConditioner], partner: Weather}
+    zone:        {into: [AirConditioner, Controller], partner: Building}                 # TemperatureIndoorAir
+    electricity: {carrier: ELECTRICITY, outputs: [electricity_use]}
   provides:
-    room_cooling:    {connector: zone_heat, kind: cooling, output: AirConditioner.ThermalPowerDelivered}   # † input
-    electricity_use: {connector: electricity_flow, output: AirConditioner.ElectricalPowerConsumption, flow: consumption}
+    room_cooling:    {output: AirConditioner.ThermalPowerDelivered}
+                     # the Building's default connections from SimpleAirConditioner fill ThermalPowerCooling (†, D19)
+    electricity_use: {output: AirConditioner.ElectricalPowerConsumption}
                      # † no lt.ComponentType AIR_CONDITIONER; not controllable: the EMS has no cooling modifier (D21)

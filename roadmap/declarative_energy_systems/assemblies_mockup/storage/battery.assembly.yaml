@@ -30,14 +30,10 @@ components:
 interface:
   needs:
     pv_peak_power:
-      connector: sizing_fact
       fact: pv_peak_power_in_watt
-      cardinality: many                                    # D10: Sum over every array, in instance order
+      many: true                                           # D10: Sum over every array, in instance order
       into: [Battery]                                      # CAPACITY_LAW / INVERTER_POWER_LAW, :58, :65
   provides:
     electricity:
-      connector: electricity_flow
-      output: Battery.AcBatteryPowerUsed
-      flow: storage
-      component_type: BATTERY
+      output: Battery.AcBatteryPowerUsed                   # observed by its tags (BATTERY), never linked
       controllable: {target_input: LoadingPowerInput}      # required: binds the one controller

@@ -26,7 +26,7 @@ components:
 
 interface:
   needs:
-    usage: {connector: cooking_demand, into: [Cooker]}              # † connector: the occupancy's cooking series
-    fuel:  {connector: energy_carrier_supply, carrier: NATURAL_GAS, outputs: [gas_use]}
+    usage: {into: [Cooker], partner: UtspLpgConnector}              # † no cooking series, no default connections yet
+    fuel:  {carrier: NATURAL_GAS, outputs: [gas_use]}
   provides:
-    gas_use: {connector: energy_carrier_supply, output: Cooker.GasEnergyDemand, carrier: NATURAL_GAS}   # GasMeter feed
+    gas_use: {output: Cooker.GasEnergyDemand}             # † GasMeter feed once GasMeter declares one from GasCooker

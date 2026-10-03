@@ -20,13 +20,21 @@ description: An electric car charged at home by an L1 charge controller.
 
 parameters:
   car_name:
-    {type: string, description: "Normalised LPG car name (e.g. Car_2_22kW_Charging_Power_avg_Speed_30_kmh); chosen by the translator from commuting distance and charging power."}
+    {type: string, default: Car_2_22kW_Charging_Power_avg_Speed_30_kmh,
+     description: "Normalised LPG car name (e.g. Car_2_22kW_Charging_Power_avg_Speed_30_kmh); chosen by the translator from commuting distance and charging power."}
+     # † default is a placeholder, the car twin's car: the translator always chooses the name
   charging_power_in_watt:
-    {type: float, unit: WATT, default: 11000, description: "Home charging station power; selects the LPG charging station set (occupancy side, G12)."}
+    {type: float, unit: WATT, default: 11000, range: {min: 3700, max: 22000},
+     description: "Home charging station power; selects the LPG charging station set (occupancy side, G12)."}
+     # range: a 16 A single-phase wallbox (3.7 kW) up to a 32 A three-phase one (22 kW); feeds no field (G12)
   commuting_distance_in_km:
-    {type: float, default: 10, description: "Selects the LPG travel route set (occupancy side, G12)."}
+    {type: float, default: 10, range: {min: 0, max: 100},
+     description: "Selects the LPG travel route set (occupancy side, G12)."}
+     # range: working from home up to a 100 km commute; no unit (lt.Units has no km), feeds no field (G12)
   battery_set_soc:
-    {type: float, default: 0.4, description: Target state of charge the L1 charges to on its own (car twin value).}
+    {type: float, unit: ANY, default: 0.4, range: {min: 0.1, max: 1.0},
+     description: Target state of charge the L1 charges to on its own (car twin value).}
+     # † unit ANY: the field declares ANY; a dimensionless unit is to be declared. Range: a state of charge, 10 to 100 %
 
 presets:
   car_twin: {car_name: Car_2_22kW_Charging_Power_avg_Speed_30_kmh}
@@ -35,12 +43,13 @@ components:
   Car:
     class: hisim.components.generic_car.Car
     constructor:
-      name: for_household
-      arguments:
+      for_household:
         household_name: {$fact: occupancy_household_name}  # † from the occupancy, today written by the setup
         car_name: {$param: car_name}
         source_weight: {$derived: instance_index}          # 1, 2, ... (G12)
     # occupancy_identity stays AUTO: Size.OCCUPANCY_IDENTITY from the site's UtspLpgConnector
+    inputs:
+      - {$port: usage}                                     # lowers to nothing (`wires: {}`); it marks where the port lands
   CarBattery:
     class: hisim.components.advanced_ev_battery_bslib.CarBattery
     preset: standard
@@ -59,7 +68,7 @@ interface:
     usage:       {into: [Car], partner: UtspLpgConnector, wires: {}}
                  # no wire: the occupancy publishes each car's profile into the SimRepository and the Car reads its own
                  # by car_name; the binding only checks that car_name exists in the occupancy's household (G12)
-    electricity: {carrier: ELECTRICITY, outputs: [charging]}
+    electricity: {carrier: electricity, outputs: [charging]}
     occupancy:   {fact: occupancy_identity, into: [Car]}
   provides:
     charging:
@@ -67,3 +76,18 @@ interface:
       controllable: {target_input: ElectricityTargetFromEMS, optional: true}
       # the L1's input the EMS writes (D21), lowered into the feed's dispatch.target_input, as in the car twin;
       # optional: without a controller the L1 charges to battery_set_soc on its own
+
+tests:
+  # One day at 900 s beside the occupancy partner, whose LPG household drives the car. Charging is limited by the box's
+  # 22 kW station; driving draws at most about 25 kW (20 kWh/100 km at 130 km/h). Signs of the car battery's outputs
+  # are not checked against advanced_ev_battery_bslib.py, so those bands are symmetric and cover driving too.
+  bounds:
+    - {output: Car.ElectricityOutput, unit: WATT, min: 0, max: 50000}                       # driving demand, 2x margin
+    - {output: CarBattery.AcBatteryChargingPower, unit: WATT, min: -60000, max: 60000}      # sign unchecked; driving or charging
+    - {output: CarBattery.DcBatteryChargingPower, unit: WATT, min: -60000, max: 60000}      # sign unchecked
+    - {output: CarBattery.AcBatteryDischargingPower, unit: WATT, min: -60000, max: 60000}   # sign unchecked
+    - {output: ChargeController.ElectricityTargetToOrFromCarBattery, unit: WATT, min: -25000, max: 25000}   # the station's 22 kW
+    - {output: ChargeController.BatteryChargingPowerToEMS, unit: WATT, min: -25000, max: 25000}            # the station's 22 kW
+  monotone:
+    - {parameter: battery_set_soc, kpi: Total charged electricity for electric car, member: CarBattery, direction: increasing}
+      # a higher target state of charge charges at least as much in a day

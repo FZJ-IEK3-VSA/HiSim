@@ -35,16 +35,14 @@ components:
     order: 3
     class: hisim.components.weather.Weather
     constructor:                                    # R: location.country + location.postcode -> station († IE data)
-      name: for_location
-      arguments: {location: DUBLIN, heating_reference_temperature_in_celsius: -3.0}   # † no Irish station in LocationEnum
+      for_location: {location: DUBLIN, heating_reference_temperature_in_celsius: -3.0}   # † no Irish station in LocationEnum
     # no ports: imports read it through their default connections from Weather and its sizing contributions
 
   Building:
     order: 1
     class: hisim.components.building.building.Building
     constructor:                                    # R: house.building.tabula_building_code | derived from
-      name: for_tabula_code                         #    building_type + construction_year + retrofit_status (+ country)
-      arguments:
+      for_tabula_code:                              #    building_type + construction_year + retrofit_status (+ country)
         building_code: IE.N.SFH.04.Gen.ReEx.001.001
         absolute_conditioned_floor_area_in_m2: 140  # R: absolute_conditioned_floor_area_in_m2
     config:
@@ -274,7 +272,8 @@ imports:
     observes: [{output: TotalElectricityToOrFromGrid}]
   gas:   {order: 15, assembly: supply/gas_connection}        # present because the cooker draws gas (a boiler house too)
   logs:  {order: 16, assembly: supply/delivered_fuel, parameters: {carrier: wood_logs}}
-                                                    # also pellets, wood chips, oil, HVO (†), LPG (†)
+                                                    # † wood_logs: no lt.EnergyBalanceCarrier member yet; also
+                                                    # heating_oil, pellets, wood_chips, hvo (†), lpg (†)
   # heat_network: {assembly: supply/district_heating_connection}   # when heating or dhw is district heating
   # a second meter is one more observer, priced by a tariff in the economics file (D13, D22):
   # hp_tariff_meter: {assembly: supply/meter,

@@ -208,3 +208,193 @@ def test_the_default_resolver_reads_the_environment_variable(tmp_path: Path, mon
     monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(tmp_path / "missing"))
     with pytest.raises(EnergySystemAssemblyError, match="EF-71 .*does not exist"):
         AssemblyResolver.default()
+
+
+#: A storage water heater of the mockup's shape (``dhw/storage_water_heater``) on fixture classes: the
+#: member ``Heater`` is an electric heater in one option and a gas boiler in the other.
+TWO_OPTION_HEATER = """
+schema_version: 4
+kind: assembly
+name: dhw/two_heaters
+description: A heater that is electric or gas-fired.
+parameters:
+  energy_carrier: {type: enum, values: [electricity, natural_gas], default: electricity, description: Carrier.}
+presets:
+  standard: {}
+components:
+  Tank:
+    class: tests.assemblies.fixture_components.FakeTank
+    preset: standard
+variants:
+  heater:
+    selected_by: energy_carrier
+    options:
+      immersion:
+        when: [electricity]
+        components:
+          Heater: {class: tests.assemblies.fixture_components.FakeHeater, preset: standard}
+      burner:
+        when: [natural_gas]
+        components:
+          Heater: {class: tests.assemblies.fixture_components.FakeBoiler, preset: condensing}
+interface:
+  provides:
+    electricity: {output: Heater.ElectricityInput, active_when: {energy_carrier: [electricity]}}
+tests:
+  bounds:
+{bounds}
+  monotone: []
+"""
+
+#: Every energy or temperature output both heaters and the tank declare.
+EVERY_BOUND = [
+    "Tank.WaterTemperature, unit: CELSIUS",
+    "Tank.HeatLoss, unit: WATT",
+    "Heater.ThermalPower, unit: WATT",
+    "Heater.ElectricityInput, unit: WATT",
+    "Heater.SupplyTemperatureDhw, unit: CELSIUS",
+    "Heater.ThermalPowerDhw, unit: WATT",
+    "Heater.FuelUse, unit: WATT_HOUR",
+    "Heater.FlueLoss, unit: WATT",
+]
+
+
+def two_heaters(tmp_path: Path, bounds: list) -> list:
+    """The library problems of the two-option heater with the given bounds entries."""
+    library = Library(tmp_path)
+    text = TWO_OPTION_HEATER.replace(
+        "{bounds}", "\n".join(f"    - {{output: {item}, min: -100000, max: 100000}}" for item in bounds)
+    )
+    library.add("dhw/two_heaters", text)
+    resolver = library.resolver()
+    return check_assembly(resolver.resolve("dhw/two_heaters", "test"), resolver, CheckStrength.LIBRARY)
+
+
+@pytest.mark.base
+def test_a_member_in_two_options_is_checked_against_each_options_class(tmp_path: Path) -> None:
+    """hisim-lt0b.13: a declaration holding for one option's class and not the other's is refused, naming the option.
+
+    Keyed by name, the check used to see only the last option's class — the boiler — so the electric
+    heater's outputs went unchecked. Every bounds entry is checked against both classes: one naming an
+    output only one option declares is refused for the other, as the harness would fail it in that
+    option's runs ("no result column"). The provided port is active only with electricity, so the
+    boiler owes it nothing.
+    """
+    listed = two_heaters(tmp_path, EVERY_BOUND)
+
+    expected = [
+        ("ThermalPower", "burner"),
+        ("ElectricityInput", "burner"),
+        ("SupplyTemperatureDhw", "immersion"),
+        ("ThermalPowerDhw", "immersion"),
+        ("FuelUse", "immersion"),
+        ("FlueLoss", "immersion"),
+    ]
+    assert len(listed) == len(expected), listed
+    for output, option in expected:
+        assert any(
+            f"the bounds entry names 'Heater.{output}', which is no output of 'Heater' in option '{option}' of the "
+            "variant 'heater'." in problem
+            for problem in listed
+        ), (output, option)
+    assert not any("the port 'electricity'" in problem for problem in listed)
+
+
+@pytest.mark.base
+def test_an_output_only_one_option_declares_must_be_bounded_for_that_option(tmp_path: Path) -> None:
+    """Every energy or temperature output of every option's class owes a bounds entry, named by option."""
+    listed = two_heaters(tmp_path, [item for item in EVERY_BOUND if not item.startswith("Heater.ThermalPower,")])
+
+    assert any(
+        "the WATT output 'Heater.ThermalPower' in option 'immersion' of the variant 'heater' has no bounds entry."
+        in problem
+        for problem in listed
+    ), listed
+
+
+@pytest.mark.base
+def test_monotone_is_required_only_beside_a_numeric_parameter(tmp_path: Path) -> None:
+    """D24 as amended: a bare connection with no numeric parameter has nothing to sweep."""
+    library = Library(tmp_path)
+    for name, parameters in (("x/bare", "{}"), ("x/numeric", "{p: {type: float, unit: WATT, default: 1, "
+                                                             "range: {min: 0, max: 2}, description: P.}}")):
+        library.add(
+            name,
+            f"""
+            schema_version: 4
+            kind: assembly
+            name: {name}
+            description: A weather station.
+            parameters: {parameters}
+            presets: {{standard: {{}}}}
+            components:
+              Weather: {{class: tests.assemblies.fixture_components.FakeWeather, preset: standard}}
+            tests:
+              bounds: [{{output: Weather.TemperatureOutside, unit: CELSIUS, min: -30, max: 50}}]
+              monotone: []
+            """,
+        )
+    resolver = library.resolver()
+
+    assert not check_assembly(resolver.resolve("x/bare", "test"), resolver, CheckStrength.LIBRARY)
+    assert [
+        problem.split(": ", 1)[1]
+        for problem in check_assembly(resolver.resolve("x/numeric", "test"), resolver, CheckStrength.LIBRARY)
+    ] == ["the test contract has no monotone entry; one is required while the assembly has a numeric parameter (p)."]
+
+
+@pytest.mark.base
+def test_the_contract_check_of_observers_controllables_and_priorities(tmp_path: Path) -> None:
+    """An observer port's member carries its placeholder and declares feeds; ``via`` names a need; priorities a list."""
+    library = Library(tmp_path)
+    library.add(
+        "control/broken",
+        """
+        schema_version: 4
+        kind: assembly
+        name: control/broken
+        description: Broken observers.
+        parameters:
+          order: {type: string, default: x, description: Not a list.}
+        presets: {standard: {}}
+        components:
+          EMS:
+            class: tests.assemblies.fixture_components.FakeEnergyManager
+            preset: optimize_own_consumption
+          Tank:
+            class: tests.assemblies.fixture_components.FakeTank
+            preset: standard
+            inputs: [{$observes: flows}]
+          Battery:
+            class: tests.assemblies.fixture_components.FakeBattery
+            preset: sized_to_pv
+        interface:
+          observes:
+            flows: {into: [EMS, Tank], default: declared}
+          actuates:
+            priorities: {$param: order}
+          provides:
+            charge: {output: Battery.AcBatteryPowerUsed, controllable: {target_input: NoSuchInput}}
+            heat: {output: Tank.HeatLoss, controllable: {via: nothing}}
+        tests:
+          bounds: []
+          monotone: []
+        """,
+    )
+    resolver = library.resolver()
+    listed = [
+        problem.split(": ", 1)[1]
+        for problem in check_assembly(resolver.resolve("control/broken", "test"), resolver, CheckStrength.EXPANSION)
+    ]
+
+    for expected in (
+        "'EMS' carries 0 '{$observes: flows}' placeholders; the feeds of the observer port 'flows' land at exactly "
+        "one.",
+        "'Tank' (FakeTank) declares no dynamic default connections (default_feeds), so the observer port 'flows' has "
+        "nothing to select.",
+        "the priorities of 'priorities' are taken from 'order', which is no list parameter of the assembly.",
+        "the provided output 'charge' is controllable through 'NoSuchInput', which is no input of 'Battery'.",
+        "the provided output 'heat' is controllable via 'nothing', which is no need of the assembly; 'via' names the "
+        "need whose binding lowers to the L1 controller's modifier.",
+    ):
+        assert expected in listed, (expected, listed)

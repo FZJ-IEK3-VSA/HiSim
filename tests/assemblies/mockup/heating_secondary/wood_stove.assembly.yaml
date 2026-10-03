@@ -11,12 +11,14 @@ description: A room stove burning logs, heating the zone directly by its own L1 
 
 parameters:
   thermal_power_in_watt:
-    {type: float, unit: WATT, default: 6000, description: Nominal heat output.}
+    {type: float, unit: WATT, default: 6000, range: {min: 3000, max: 12000}, description: Nominal heat output.}
+     # range: room stoves on the market, 3 to 12 kW
   operating_schedule:
     {type: enum, values: [evenings_heating_season, thermostat, always_heating_season], default: evenings_heating_season,
      description: When the occupants light it; fixed by the author of each option (no control theory in the format).}
   efficiency_in_percent:
-    {type: float, unit: PERCENT, default: 75, description: Seasonal efficiency of the stove.}
+    {type: float, unit: PERCENT, default: 75, range: {min: 50, max: 90}, description: Seasonal efficiency of the stove.}
+     # range: an old stove (50 %) up to a modern certified one (90 %)
 
 presets:
   typical_6kw: {}
@@ -37,9 +39,23 @@ components:
 
 interface:
   needs:
-    fuel:             {carrier: wood_logs, outputs: [fuel_use]}                              # † carrier
+    fuel:             {carrier: wood_logs, outputs: [fuel_use]}
+                      # † carrier: lt.EnergyBalanceCarrier has no WOOD_LOGS member yet; added with the stove component
     room_temperature: {into: [StoveController], partner: Building}                         # TemperatureIndoorAir
   provides:
     room_heat: {output: Stove.ThermalPowerDelivered}
                # the Building's default connections from WoodStove fill ThermalPowerSecondaryHeating (†, D19)
     fuel_use:  {output: Stove.FuelEnergyDemand}
+
+tests:
+  # † Both members' classes do not exist; the outputs are those this file names, their units and KPI names the ones the
+  # class is expected to declare. One day at 900 s beside the Building partner.
+  bounds:
+    - {output: Stove.ThermalPowerDelivered, unit: WATT, min: 0, max: 15000}            # the box's 12 kW rating, with margin
+    - {output: Stove.FuelEnergyDemand, unit: WATT_HOUR, min: 0, max: 6000}             # per step: 12 kW / 0.5 x 0.25 h
+  monotone:
+    - {parameter: efficiency_in_percent, kpi: Fuel energy consumption, member: Stove, direction: decreasing}
+      # † KPI name; the same heat from a better stove burns less wood
+  expect:
+    - {preset: typical_6kw, kpi: Thermal energy delivered, member: Stove, min: 0, max: 144}
+      # † KPI name; kWh in one day: at most 6 kW x 24 h

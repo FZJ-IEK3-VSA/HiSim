@@ -263,9 +263,10 @@ a grouped file or a twin changes rather than edited by hand.
 
 Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_systems/assemblies_spec.md`,
 on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
-which a file imports instead of writing their components out. This is step 1 of that spec (beads
-hisim-lt0b.1, hisim-lt0b.2 and hisim-lt0b.8): the format, the loader, the expansion, the checks and
-the test harness, proven on fixtures under `tests/assemblies/`. No real assembly ships yet, so
+which a file imports instead of writing their components out. These are steps 1 and 2 of that spec
+(beads hisim-lt0b.1, hisim-lt0b.2, hisim-lt0b.8 and hisim-lt0b.3): the format, the loader, the
+expansion, the checks, the test harness, and observe and actuate, proven on fixtures under
+`tests/assemblies/`. No real assembly ships yet, so
 `energy_systems/assemblies/` does not exist.
 
 ```yaml
@@ -356,8 +357,64 @@ refused (`EF-7L`): the sizing engine reads a fact only through a law its class d
 `display_name` of every KPI it reports; without a template the component's `DisplayConfig.pretty_name`
 and then its member name are used.
 
-Observer and actuator selectors (`observes:`, `actuates:`) and controllable outputs (hisim-lt0b.3)
-are read and recorded, and a file that uses one is refused (`EF-7L`) until its step lands.
+**Observe and actuate** (§4, hisim-lt0b.3). HiSim has no bus: a meter and an energy manager are
+dynamic components whose inputs are added as their selectors match. An **observer** is an assembly's
+observer port, `interface: {observes: {reading: {into: [Meter], default: declared}}}`, whose feeds land
+where its member writes `{$observes: reading}`, or a site entry with `observes: [...]` and
+`{$observes: observes}` in its inputs; an import's `observes:` replaces the port's default (a list for
+the assembly's one observer port, or `{<port>: [...]}`). The candidates are the outputs of every
+component of the expanded system that the observer's class declares a dynamic default connection
+from, `ClassInterface.default_feeds` (a class without them cannot observe, `EF-7H`), never its own.
+`declared` takes them all; a selector matches by `component_type` (an `lt.ComponentType` name or a
+list), `flow` (an `lt.InandOutputType` name or a list) or `output` (a name) — the keys of one
+selector hold together, a list observes the union — with an optional `feed: {component_type, tags,
+weight}` override and `required: true`. Each match becomes an ordinary aggregator feed with the
+declaration's tags and weight, in the order site entries, then imports, instances and members as
+written, then the outputs as the class declares them; the build's feed resolution sorts them again.
+Refused: a `required` selector or a whole selection matching nothing (an idle observer), a ranked feed
+on an observer that is no controller (`EF-7S`), and one output selected and fed explicitly to one
+observer (`EF-25`).
+
+The **grid** is `supply/electricity_grid`: the electricity provider (no link, no meter on the port)
+and a meter observing. Its two shapes are two selections on the `grid` import: left at `declared`,
+the meter observes every flow its class declares (the twins' `metered_directly`); beside an energy
+manager it observes the manager's grid balance by name, `observes: [{output:
+TotalElectricityToOrFromGrid}]`, on its production channel at 999 (`ems_with_battery`; the real
+`ElectricityMeter` declares that feed from `L2GenericEnergyManagementSystem`). A component reading
+another observer's output and an output that observer reads — the meter left at `declared` beside the
+manager — is the **double count**, refused with the paste-ready selection (`EF-7T`).
+
+**Actuate.** A device states only that a provided electricity output is controllable:
+`controllable: {target_input: LoadingPowerInput}` (a battery, which has no L1; it binds the one
+controller and is refused without one unless `optional: true`), or `controllable: {via: ems_modifier}`
+(an L1 modifier need partnered with the manager's class: binding it lowers to the L1's default
+connections from the manager, the modifier; unbound, the output is not controlled). A **controller**
+assembly (`control/ems_self_consumption`) declares `actuates: {priorities: {$param: priorities}}`, its
+priority list, an ordered list of selectors. Its observer port ranks every feed its class declares at
+a weight other than 999: residents and solar thermal rank-only with `dispatch: {}`, a `via` output with
+`dispatch: {}`, a battery with `dispatch: {target_input: LoadingPowerInput}`. **Weights are derived,
+never written**: each entry starts from the class default of its component types — the weight the
+class declares, for the real manager `L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS` (residents 1,
+space heating 2, hot water 3, solar thermal 4, battery 6) — the k-th further instance of a type gets
+`default + k`, and an entry not above every earlier entry's weights is raised to the next free one.
+One device each in the default order gives the class weights; a second battery gets 7; a list putting
+the battery before space heating gives 1, 6, 7. Refused (`EF-7V`): an entry selecting a measured
+output or one an earlier entry ranks, an entry with `feed:`, a ranked output no entry selects, a
+weight reaching 999, two ports of one type at one weight, a weight written on a controller's
+selection. Refused (`EF-7U`): a controllable output no controller ranks or two do, a `via` output
+ranked by a manager it is not bound to, a `controllable` naming an input the manager's class does not
+actuate (it actuates only L1 modifiers and what it declares, `DeclaredFeed.dispatch_target`, D21), a
+target input actuated and also wired, `actuates:` on an import. The import record lists every
+observer with its selection, its feeds (tags, weight, dispatch, the ports they grow, the selector),
+a controller's priorities with the weight each entry gave, and every actuation.
+
+**Derived port names** (hisim-lt0b.11). An observer grows one input per feed,
+`<output>From<participant>`, and a dispatch output, `DispatchTo<participant>_<input>` or
+`DispatchFor<participant>_<output>`; the participant enters by one function,
+`NameSyntax.port_name_part`, `_` for `-` (`ElectricityOutputFrompv_east_PVSystem`), which the
+imperative `Input_<participant>_<output>_<n>` labels use too. Two participants of one observer whose
+names map to one port name (`pv-east-PVSystem` beside a site entry `pv_east_PVSystem`) are refused
+(`EF-7W`); the record shows every port name.
 
 **Finding assemblies.** An `assembly:` path resolves under `energy_systems/assemblies/`, then under
 every directory `HISIM_ASSEMBLY_PATH` names (`os.pathsep`-separated); a path found twice is refused.
@@ -379,10 +436,13 @@ draft lists what it still owes.
 `range` on every numeric parameter — the box it is tested over — and under `tests:` a `bounds`
 entry for every energy-carrying or temperature output of every member (`{output: Tank.HeatLoss,
 unit: WATT, min: 0, max: 200}`; a KPI is bounded as `{kpi: PV production, member: PVSystem, min:
-0}`), at least one `monotone` entry (`{parameter: volume_in_liter, kpi: Standby heat losses, member:
-Tank, direction: increasing}`, or `decreasing`, `constant`), and optionally `expect` bands per preset.
-The library check refuses an assembly without them, or with a declaration naming a member, output,
-KPI, parameter or preset that does not exist. The generic harness,
+0}`), at least one `monotone` entry while it has a numeric parameter (`{parameter: volume_in_liter,
+kpi: Standby heat losses, member: Tank, direction: increasing}`, or `decreasing`, `constant`; a bare
+connection has nothing to sweep), and optionally `expect` bands per preset. The library check refuses
+an assembly without them, or with a declaration naming a member, output, KPI, parameter or preset
+that does not exist. A member written in several variant options is checked once per option, against
+that option's class, and a problem names the option (hisim-lt0b.13); a `{$param: …}` carrier must be
+a carrier for every value it takes while its port is active. The generic harness,
 `hisim/energy_system/assemblies/testing/`, executes the contract; nothing is written per assembly in
 Python.
 
@@ -398,9 +458,12 @@ Python.
 - *Isolation run.* Each sample runs one simulated day (15 min steps) in a minimal system: the assembly
   as the import `subject`, plus a test partner for every port whose binding changes what it computes
   — a need's partner class, a circuit's other end, a carrier's provider (or, for a carrier it
-  provides, a consumer), a fact's provider. The partners come from the `test_partners.yaml` of the
-  library directory, site entries written as a file writes them; a port without one is refused,
-  naming the class. Every run is checked for an exception, a NaN or infinity, an open energy balance
+  provides, a consumer; none for electricity), a fact's provider, something an observer port's class
+  observes (`serves: {observed_by: <class>}`), and the controller a `controllable: {target_input: …}`
+  output binds (`serves: {controls: <class>}`). The partners come from the `test_partners.yaml` of the
+  library directory, site entries written as a file writes them, or — for a controller, whose
+  priorities are a parameter — an import (`import: {assembly: control/ems_self_consumption}`); a port
+  without one is refused, naming the class. Every run is checked for an exception, a NaN or infinity, an open energy balance
   (`EnergyBalanceError`), and every `bounds` entry (each timestep of the output's column; a KPI through
   the KPI finder by name, import and member). `expect` is checked on its preset's run; `monotone` moves
   its parameter across its range in 4 steps from every sample, everything else fixed, and the KPI must
@@ -437,7 +500,12 @@ that do not fit (another medium, an output owned twice or by neither end, read b
 other end); `EF-7P` a carrier need without exactly one provider, a verb on an electricity need, and
 a fuel provider no need is bound to; `EF-7Q` a carrier that is not the need's (a provider's, or a
 consuming output's energy carrier); `EF-7R` a fact port bound to, or finding, no provider of its
-fact. A scalar fact with two providers is the sizing engine's `EF-4B`.
+fact; `EF-7S` an observer's selection (a required selector or a whole selection matching nothing, a
+ranked feed on an observer that is no controller, `observes:` on an import without an observer port,
+a verb on an observer port); `EF-7T` the double count; `EF-7U` an actuation; `EF-7V` a controller's
+priorities and weights; `EF-7W` two participants of one observer with one derived port name. A scalar
+fact with two providers is the sizing engine's `EF-4B`; an output selected and fed explicitly to one
+observer is `EF-25`.
 
 ## Simulation-parameters files are shared, never duplicated
 

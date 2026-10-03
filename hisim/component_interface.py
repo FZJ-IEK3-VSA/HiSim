@@ -56,29 +56,52 @@ class DeclaredPort:
 
 @dataclass(frozen=True)
 class DeclaredFeed:
-    """One dynamic default connection an aggregating component (a meter) declares from a source class.
+    """One dynamic default connection an aggregating component (a meter, an EMS) declares from a source class.
 
     The class-level statement of what ``DynamicComponent.add_dynamic_default_connections`` adds in
     the constructor: from components of ``source_class``, the output ``output`` is fed into this
     aggregator with these tags and this weight. An assembly's carrier need lowers to exactly these
     feeds on its provider's meter (``assemblies_spec.md`` §3.2, §5.1), the items a recorded twin
     writes (``from: CondensingGasBoiler.EnergyDemandSh, tags: [GAS_CONSUMPTION_UNCONTROLLED],
-    weight: 999``).
+    weight: 999``), and they are the candidates an observer's selectors choose from (§4.1, §4.2):
+    a class without them cannot observe.
+
+    The weight is the class's default rank: 999 marks an output the aggregator only measures, any
+    other weight one it ranks, which a controller assembly re-derives from its priorities (§4.4).
+    ``dispatch_target`` states which input of the source the aggregator may actuate directly through
+    this feed (the battery's ``LoadingPowerInput``, D21); an assembly's ``controllable:
+    {target_input: …}`` must name exactly that input.
 
     Attributes:
         source_class: The class name (``Component.get_classname()``) of the feeding component.
         output: The feeding component's output.
-        tags: The feed's tags, as ``lt.InandOutputType`` / ``lt.ComponentType`` member names.
+        tags: The feed's flow tags, as ``lt.InandOutputType`` member names.
         weight: The feed's weight.
         component_type: The feed's ``component_type`` (an ``lt.ComponentType`` member name), or
             ``None``.
+        dispatch_target: The source's input the aggregator may actuate through this feed, or
+            ``None``.
     """
+
+    #: The weight of a feed the aggregator only measures (``FeedRequest.MONITORED_ONLY_WEIGHT``).
+    MEASURED_ONLY_WEIGHT: ClassVar[int] = 999
 
     source_class: str
     output: str
     tags: Tuple[str, ...]
     weight: int
     component_type: Optional[str] = None
+    dispatch_target: Optional[str] = None
+
+    @property
+    def all_tags(self) -> Tuple[str, ...]:
+        """The component type followed by the flow tags, the order a runtime connection lists them in."""
+        return ((self.component_type,) if self.component_type is not None else ()) + tuple(self.tags)
+
+    @property
+    def is_ranked(self) -> bool:
+        """Whether the aggregator ranks this feed rather than only measuring it."""
+        return self.weight != self.MEASURED_ONLY_WEIGHT
 
 
 @dataclass(frozen=True)
@@ -133,6 +156,10 @@ class ClassInterface:
             (feed for feed in self.default_feeds if feed.source_class == source_class_name and feed.output == output),
             None,
         )
+
+    def feeds_from(self, source_class_name: str) -> Tuple[DeclaredFeed, ...]:
+        """The declared default feeds from components of that class, in declaration order."""
+        return tuple(feed for feed in self.default_feeds if feed.source_class == source_class_name)
 
     def declares_defaults_from(self, source_class_name: str) -> bool:
         """Whether the class declares default connections from components of that class."""

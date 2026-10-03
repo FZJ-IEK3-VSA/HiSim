@@ -31,7 +31,16 @@ serves and the other partners it reads::
 - ``{carrier: <carrier>}`` — the provider a carrier need of that carrier binds;
 - ``{consumes: <carrier>}`` — a consumer bound to a carrier the assembly provides (a fuel's
   provider without a bound consumer is refused, §5.2);
-- ``{fact: <fact>}`` — a component whose class contributes that sizing fact.
+- ``{fact: <fact>}`` — a component whose class contributes that sizing fact;
+- ``{observed_by: <class name>}`` — a component an observer of that class observes, so that an
+  observer port in isolation has something to select (§4.1; an observer that selects nothing is
+  refused as idle);
+- ``{controls: <class name>}`` — the controller of a provided output of a member of that class that
+  is actuated through ``controllable: {target_input: …}`` and binds one controller (§4.4).
+
+A controller is an assembly — its priorities are its parameter — so a partner may be written as an
+import instead of a site entry, ``import: {assembly: control/ems_self_consumption}``; it joins the
+isolation system under its partner name as a key of ``imports``.
 
 Every partner serves one thing, every thing is served by at most one partner, and every name a
 ``requires`` lists is a partner. A file that breaks any of this is refused as a whole
@@ -66,8 +75,9 @@ class TestPartner:
         name: Its site name in the isolation system.
         serves: What it serves, as written.
         requires: The partners it reads, which join the isolation system with it.
-        component: Its site entry, as an energy-system file writes it.
+        component: Its site entry, as an energy-system file writes it; empty for an import partner.
         origin: The registry file it is written in.
+        import_entry: For a partner that is an import (a controller assembly), its import block.
     """
 
     __test__: ClassVar[bool] = False
@@ -77,6 +87,7 @@ class TestPartner:
     requires: Tuple[str, ...]
     component: Mapping[str, Any]
     origin: str
+    import_entry: Optional[Mapping[str, Any]] = None
 
     @property
     def served_key(self) -> ServedKey:
@@ -93,7 +104,7 @@ class TestPartnerRegistry:
     FILENAME: ClassVar[str] = "test_partners.yaml"
 
     #: The keys of one partner entry.
-    ENTRY_KEYS: ClassVar[FrozenSet[str]] = frozenset({"serves", "requires", "component"})
+    ENTRY_KEYS: ClassVar[FrozenSet[str]] = frozenset({"serves", "requires", "component", "import"})
 
     def __init__(self, partners: Sequence[TestPartner], files: Sequence[str]) -> None:
         """Builds the registry from parsed partners and checks it whole.
@@ -168,9 +179,15 @@ class TestPartnerRegistry:
                 raise TestPartnerRegistryError(f"{where}: a partner's name is an identifier.")
             if not isinstance(entry, Mapping) or not set(entry) <= cls.ENTRY_KEYS or "serves" not in entry:
                 raise TestPartnerRegistryError(
-                    f"{where}: an entry has 'serves', 'component' and optionally 'requires', nothing else."
+                    f"{where}: an entry has 'serves', 'component' or 'import', and optionally 'requires', nothing else."
                 )
-            if not isinstance(entry.get("component"), Mapping) or "class" not in entry["component"]:
+            if ("component" in entry) == ("import" in entry):
+                raise TestPartnerRegistryError(f"{where}: an entry is either a site 'component' or an 'import'.")
+            if "import" in entry and (not isinstance(entry["import"], Mapping) or "assembly" not in entry["import"]):
+                raise TestPartnerRegistryError(f"{where}: 'import' is an import block with an 'assembly'.")
+            if "component" in entry and (
+                not isinstance(entry.get("component"), Mapping) or "class" not in entry["component"]
+            ):
                 raise TestPartnerRegistryError(f"{where}: 'component' is a site entry with a 'class'.")
             requires = entry.get("requires", [])
             if not isinstance(requires, list) or not all(isinstance(item, str) for item in requires):
@@ -182,15 +199,18 @@ class TestPartnerRegistry:
                 name=name,
                 serves=dict(serves),
                 requires=tuple(requires),
-                component=dict(entry["component"]),
+                component=dict(entry.get("component") or {}),
                 origin=where,
+                import_entry=dict(entry["import"]) if "import" in entry else None,
             )
             cls.key_of(partner.serves, where, name)
             partners.append(partner)
         return partners
 
     @staticmethod
-    def key_of(serves: Mapping[str, Any], origin: str, name: str) -> ServedKey:
+    def key_of(  # pylint: disable=too-many-return-statements  # one return per form of serves
+        serves: Mapping[str, Any], origin: str, name: str
+    ) -> ServedKey:
         """The key a ``serves`` block registers under.
 
         Raises:
@@ -217,31 +237,48 @@ class TestPartnerRegistry:
                 return (kind, serves[kind])
         if keys == {"fact"} and isinstance(serves["fact"], str):
             return ("fact", serves["fact"])
+        for kind in ("observed_by", "controls"):
+            if keys == {kind} and isinstance(serves[kind], str):
+                return (kind, serves[kind])
         raise TestPartnerRegistryError(
             f"{origin}: the test partner '{name}' serves {dict(serves)!r}; write one of {{partner: <class>}}, "
-            "{circuit: <circuit>, other_end: [<class>, ...]}, {carrier: <carrier>}, {consumes: <carrier>} or "
-            "{fact: <fact>}."
+            "{circuit: <circuit>, other_end: [<class>, ...]}, {carrier: <carrier>}, {consumes: <carrier>}, "
+            "{fact: <fact>}, {observed_by: <class>} or {controls: <class>}."
         )
 
-    @staticmethod
-    def describe_key(key: ServedKey) -> str:
+    #: How a message names what a served key stands for, by its kind (the circuit's is built apart).
+    KEY_TEXTS: ClassVar[Mapping[str, str]] = {
+        "partner": "the partner class {0}",
+        "carrier": "the provider of {0}",
+        "consumes": "a consumer of {0}",
+        "fact": "the provider of the fact {0}",
+        "observed_by": "a component an observer of the class {0} observes",
+        "controls": "the controller of a {0}'s controllable output",
+    }
+
+    @classmethod
+    def describe_key(cls, key: ServedKey) -> str:
         """A served key as a message names it."""
-        if key[0] == "partner":
-            return f"the partner class {key[1]}"
         if key[0] == "circuit":
             return f"the other end of the circuit {key[1]} for an end of {', '.join(sorted(key[2]))}"
-        if key[0] == "carrier":
-            return f"the provider of {key[1]}"
-        if key[0] == "consumes":
-            return f"a consumer of {key[1]}"
-        return f"the provider of the fact {key[1]}"
+        return cls.KEY_TEXTS[key[0]].format(key[1])
 
     def _check_reads(self, partner: TestPartner) -> None:
         """Reads the partner with the partners it requires as a site, so a malformed entry fails here."""
-        components = {name: dict(self.partners[name].component) for name in self.closure([partner.name])}
-        text = yaml.safe_dump(
-            {"schema_version": 4, "name": "test_partner_check", "components": components}, sort_keys=False
-        )
+        names = self.closure([partner.name])
+        document: Dict[str, Any] = {
+            "schema_version": 4,
+            "name": "test_partner_check",
+            "components": {
+                name: dict(self.partners[name].component) for name in names if self.partners[name].component
+            },
+        }
+        imports = {
+            name: dict(self.partners[name].import_entry or {}) for name in names if self.partners[name].import_entry
+        }
+        if imports:
+            document["imports"] = imports
+        text = yaml.safe_dump(document, sort_keys=False)
         try:
             EnergySystemReader.build(RawDocument.parse_text(text, partner.origin), partner.origin)
         except EnergySystemError as error:
@@ -292,6 +329,18 @@ class TestPartnerRegistry:
     def for_fact(self, fact: str, port: str, assembly: str) -> TestPartner:
         """The provider of a sizing fact."""
         return self._find(("fact", fact), port, assembly)
+
+    def for_observed(self, observer_classes: Sequence[str], port: str, assembly: str) -> TestPartner:
+        """Something an observer port's members observe: the partner of the first registered class."""
+        for class_name in observer_classes:
+            partner = self._served.get(("observed_by", class_name))
+            if partner is not None:
+                return partner
+        return self._find(("observed_by", next(iter(observer_classes), "")), port, assembly)
+
+    def for_controller(self, class_name: str, port: str, assembly: str) -> TestPartner:
+        """The controller of a controllable output of a member of that class."""
+        return self._find(("controls", class_name), port, assembly)
 
     def closure(self, names: Sequence[str]) -> List[str]:
         """The partners and every partner they require, transitively, each once.

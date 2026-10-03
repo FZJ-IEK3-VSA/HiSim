@@ -18,6 +18,8 @@ record are separate questions, and the expansion is the only module that needs a
     - :mod:`.library` — the library check, listing every problem of a file at once.
     - :mod:`.expansion` — :func:`~.expansion.expand_imports`, the stage in front of the group
       expansion: addresses, order paths, port binding and lowering.
+    - :mod:`.selectors` — observe and actuate (§4): observer selections lowered to aggregator
+      feeds, a controller's priorities to derived weights and dispatches, the double count.
     - :mod:`.record` — the import record and the source maps.
     - :mod:`.describe` — ``hisim energy-system describe <family>/<name>``.
     - :mod:`.schema` — the JSON Schema of the assembly file.

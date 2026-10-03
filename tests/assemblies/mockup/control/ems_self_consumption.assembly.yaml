@@ -24,11 +24,15 @@ parameters:
       - {component_type: CAR_BATTERY}                                 # 5 (car twin)
       - {component_type: BATTERY}                                     # 6, then 7, 8 ...
   building_offset_in_kelvin:
-    {type: float, unit: CELSIUS, default: 2, description: "Building set point raise on surplus (EMSConfig, controller_l2_energy_management_system.py:54)."}
+    {type: float, unit: CELSIUS, default: 2, range: {min: 0, max: 5},
+     description: "Building set point raise on surplus (EMSConfig, controller_l2_energy_management_system.py:54)."}
+     # range: no raise up to 5 K, beyond which comfort suffers
   sh_storage_offset_in_kelvin:
-    {type: float, unit: CELSIUS, default: 10, description: Buffer set point raise on surplus.}
+    {type: float, unit: CELSIUS, default: 10, range: {min: 0, max: 20}, description: Buffer set point raise on surplus.}
+     # range: no raise up to 20 K, within a buffer's 60-80 °C ceiling
   dhw_storage_offset_in_kelvin:
-    {type: float, unit: CELSIUS, default: 10, description: DHW cylinder set point raise on surplus.}
+    {type: float, unit: CELSIUS, default: 10, range: {min: 0, max: 20}, description: DHW cylinder set point raise on surplus.}
+     # range: no raise up to 20 K, within a cylinder's 60-80 °C ceiling
   # the three offsets equal EMSConfig's defaults and therefore write nothing into the expanded config (gap G9)
 
 presets:
@@ -58,3 +62,20 @@ interface:
     # BuildingIndoorTemperatureModifier. battery / EV targets come out of the feed's dispatch output.
   provides:
     grid_balance: {output: EMS.TotalElectricityToOrFromGrid}   # the sum of what `flows` observes: the double-count check
+
+tests:
+  # One day at 900 s beside the partners its observer selection finds (residents, at most about 50 kW of flows).
+  # The Dispatch* outputs exist per controlled feed, named after the feed (DispatchTo<instance>_<input>); the isolation
+  # run's feeds decide them, so they are bounded by no fixed name here. Signs of the two sums are not checked against
+  # controller_l2_energy_management_system.py, so those bands are symmetric.
+  bounds:
+    - {output: EMS.TotalElectricityToOrFromGrid, unit: WATT, min: -50000, max: 50000}            # signed grid balance
+    - {output: EMS.TotalElectricityConsumption, unit: WATT, min: -50000, max: 50000}             # sign unchecked
+    - {output: EMS.BuildingIndoorTemperatureModifier, unit: CELSIUS, min: 0, max: 5}             # 0 or the offset, at most the box's 5 K
+    - {output: EMS.DomesticHotWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}   # 0 or the offset, at most 20 K
+    - {output: EMS.SpaceHeatingWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}  # 0 or the offset, at most 20 K
+    - {output: EMS.ElectricityToBuildingFromDistrictEMSOutput, unit: WATT, min: -50000, max: 50000}   # zero outside a district
+  monotone:
+    - {parameter: building_offset_in_kelvin, kpi: "Residents' electricity consumption from grid", member: EMS,
+       direction: constant}
+      # a set-point raise moves heating loads, never the residents' own consumption

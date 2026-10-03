@@ -1,0 +1,34 @@
+# Fixture: a battery the energy manager charges directly (spec §4.4, D21): it has no L1, so its
+# controllable output names its own LoadingPowerInput, which lowers into the manager's feed's
+# dispatch.target_input. The port is required: a battery without a controller is refused.
+schema_version: 4
+kind: assembly
+name: storage/home_battery
+description: A fake home battery charged by an energy manager, sized to the PV array beside it.
+
+parameters:
+  capacity_in_kwh:
+    {type: float, unit: KWH, default: AUTO, range: {min: 1, max: 30}, description: "Capacity; AUTO is 1 kWh per kWp."}
+
+presets:
+  standard: {}
+
+components:
+  Battery:
+    class: tests.assemblies.fixture_components.FakeBattery
+    preset: sized_to_pv
+    config:
+      capacity_in_kwh: {$param: capacity_in_kwh}
+
+interface:
+  needs:
+    pv_power: {fact: pv_peak_power_in_watt, into: [Battery]}
+  provides:
+    electricity: {output: Battery.AcBatteryPowerUsed, controllable: {target_input: LoadingPowerInput}}
+
+tests:
+  bounds:
+    - {output: Battery.Capacity, unit: KWH, min: 0, max: 50}
+    - {output: Battery.AcBatteryPowerUsed, unit: WATT, min: -50000, max: 50000}
+  monotone:
+    - {parameter: capacity_in_kwh, kpi: Battery capacity, member: Battery, direction: increasing}

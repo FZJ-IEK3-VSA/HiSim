@@ -300,6 +300,7 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_car())
+        self.add_dynamic_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_from_utsp_occupancy(
         self,
@@ -472,6 +473,39 @@ class ElectricityMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_energy_management_system(
+        self,
+    ) -> List[DynamicComponentConnection]:
+        """Get the energy management system's default connection: its grid balance, on the production channel.
+
+        The EMS sums the flows it observes into ``TotalElectricityToOrFromGrid``; a meter beside it
+        reads that balance instead of the flows themselves, as production at 999 — exactly the feed
+        the recorded twins write by hand (``household_heatpump_building_sizer.grouped``, option
+        ``ems_with_battery``). Declaring it is what lets an assembly's ``grid`` import select the
+        balance by name and lets the double-count check compare the meter's selection with the
+        EMS's (``assemblies_spec.md`` §4.3, dry run G6). Setups that wire an EMS add the meter
+        without ``connect_automatically``, so no existing system grows this feed.
+        """
+
+        from hisim.components.controller_l2_energy_management_system import (  # pylint: disable=import-outside-toplevel
+            L2GenericEnergyManagementSystem,
+        )
+
+        dynamic_connections: List[DynamicComponentConnection] = []
+        ems_class_name = L2GenericEnergyManagementSystem.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=L2GenericEnergyManagementSystem,
+                source_class_name=ems_class_name,
+                source_component_field_name=L2GenericEnergyManagementSystem.TotalElectricityToOrFromGrid,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
                 source_weight=999,
             )
         )

@@ -1,0 +1,48 @@
+# Fixture: the controller assembly (assemblies_spec.md §4.3, §4.4, D11, D21). Its energy manager observes
+# the electricity flows its class declares, ranks the controllable ones by the priority list — the weights
+# are derived from the class's defaults, never written — and outputs their balance, which a meter may
+# observe instead of the flows (the double count of both is refused).
+schema_version: 4
+kind: assembly
+name: control/ems_self_consumption
+description: A fake surplus controller maximising self-consumption.
+
+parameters:
+  priorities:
+    type: list
+    description: Ordered selectors of the outputs it ranks; the weights are derived (spec §4.4).
+    default:
+      - {component_type: RESIDENTS}
+      - {component_type: [HEAT_PUMP_BUILDING, ELECTRIC_HEATING_SH]}
+      - {component_type: [HEAT_PUMP_DHW, ELECTRIC_HEATING_DHW]}
+      - {component_type: SOLAR_THERMAL_SYSTEM}
+      - {component_type: BATTERY}
+
+presets:
+  standard: {}
+  battery_first:
+    priorities:
+      - {component_type: RESIDENTS}
+      - {component_type: BATTERY}
+      - {component_type: [HEAT_PUMP_BUILDING, ELECTRIC_HEATING_SH]}
+
+components:
+  EMS:
+    class: tests.assemblies.fixture_components.FakeEnergyManager
+    preset: optimize_own_consumption
+    inputs:
+      - {$observes: flows}
+
+interface:
+  observes:
+    flows: {into: [EMS], default: declared}
+  actuates:
+    priorities: {$param: priorities}
+  provides:
+    grid_balance: {output: EMS.TotalElectricityToOrFromGrid}
+
+tests:
+  bounds:
+    - {output: EMS.TotalElectricityToOrFromGrid, unit: WATT, min: -20000, max: 20000}
+    - {output: EMS.Modifier, unit: KELVIN, min: 0, max: 5}
+  monotone: []

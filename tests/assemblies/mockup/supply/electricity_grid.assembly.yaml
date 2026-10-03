@@ -20,7 +20,8 @@ kind: assembly
 name: supply/electricity_grid
 description: Public grid connection with its bidirectional meter.
 
-parameters: {}
+parameters: {}                                             # a bare connection has no numeric parameter
+
 presets:
   de_twin: {}
 
@@ -33,10 +34,30 @@ components:
 
 interface:
   provides:
-    connection: {carrier: ELECTRICITY}                     # the one electricity provider; an existence check, no wire
+    connection: {carrier: electricity}                     # the one electricity provider; an existence check, no wire
+                                                           # and no `meter:` (refused for electricity: the meter observes)
   observes:
     reading:
       into: [ElectricityMeter]
       default: declared                                    # replaced by the importing file's `observes:`
       # tags and weight from the meter's own dynamic default connections: production -> ELECTRICITY_PRODUCTION 999,
       # consumption -> ELECTRICITY_CONSUMPTION_UNCONTROLLED 999, the EMS's grid balance -> production at 999 (:106-109)
+
+tests:
+  # One day at 900 s beside the partners the isolation run gives (occupancy, and the consumers and producers its
+  # observer selection finds, each at most about 30 kW): per-step energies <= 50 kW x 0.25 h, the day <= 50 kW x 24 h.
+  # Signs of the exchange outputs are not checked against electricity_meter.py: those bands are symmetric.
+  bounds:
+    - {output: ElectricityMeter.ElectricityToGridInWatt, unit: WATT, min: -50000, max: 50000}      # sign unchecked
+    - {output: ElectricityMeter.ElectricityFromGridInWatt, unit: WATT, min: -50000, max: 50000}    # sign unchecked
+    - {output: ElectricityMeter.ElectricityProductionInWatt, unit: WATT, min: 0, max: 50000}       # sum of production feeds
+    - {output: ElectricityMeter.ElectricityConsumptionInWatt, unit: WATT, min: 0, max: 50000}      # sum of consumption feeds
+    - {output: ElectricityMeter.ElectricityAvailable, unit: WATT, min: -50000, max: 50000}         # production minus consumption
+    - {output: ElectricityMeter.ElectricityToAndFromGrid, unit: WATT_HOUR, min: -12500, max: 12500}   # per step, signed
+    - {output: ElectricityMeter.ElectricityToGrid, unit: WATT_HOUR, min: -12500, max: 12500}       # per step, sign unchecked
+    - {output: ElectricityMeter.ElectricityFromGrid, unit: WATT_HOUR, min: -12500, max: 12500}     # per step, sign unchecked
+    - {output: ElectricityMeter.ElectricityConsumption, unit: WATT_HOUR, min: 0, max: 12500}       # per step
+    - {output: ElectricityMeter.ElectricityProduction, unit: WATT_HOUR, min: 0, max: 12500}        # per step
+    - {output: ElectricityMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1200000}      # one day
+    - {output: ElectricityMeter.CumulativeProduction, unit: WATT_HOUR, min: 0, max: 1200000}       # one day
+  monotone: []                                             # no numeric parameter: nothing to sweep

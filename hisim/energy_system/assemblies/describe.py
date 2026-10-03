@@ -108,7 +108,11 @@ class AssemblyDescription:
     @classmethod
     def state_of(cls, port: Port) -> str:
         """A port's requirement state as the page states it (§3.1)."""
-        if port.is_provision or (port.section == "provides" and port.kind != PortKind.CIRCUIT):
+        if port.kind == PortKind.OBSERVER:
+            state = "selected by tags, bound by no verb (an import's observes: replaces the default)"
+        elif port.kind == PortKind.ACTUATES:
+            state = "the controller's ranking (weights derived, §4.4)"
+        elif port.is_provision or (port.section == "provides" and port.kind != PortKind.CIRCUIT):
             state = "provided"
         elif port.required_when:
             state = "required when " + cls._conditions(port.required_when)
@@ -148,6 +152,10 @@ class AssemblyDescription:
                 text += f", wires {dict(port.wires)}"
         elif port.kind == PortKind.PROVIDED:
             text = f"provides {port.output}"
+            if port.controllable_target is not None:
+                text += f", controllable through its input {port.controllable_target}"
+            elif port.controllable_via is not None:
+                text += f", controllable via the need {port.controllable_via}"
         elif port.kind == PortKind.REEXPORT:
             text = f"re-exports {port.reexports}"
         elif port.kind == PortKind.INTERNAL:
@@ -173,13 +181,17 @@ class AssemblyDescription:
             text = f"needs fact {cls._written(port.fact)} into {', '.join(port.into)}" + (
                 " (many: true, hisim-lt0b.4)" if port.many else ""
             )
+        elif port.kind == PortKind.OBSERVER:
+            text = f"observes into {', '.join(port.into)}, default {port.selection.text() if port.selection else '-'}"
         else:
-            text = f"{port.kind.value} (not lowered yet: {port.kind.delivering_step})"
+            text = f"actuates the priorities {cls._written(port.priorities)}"
         return f"{text}; {cls.state_of(port)}"
 
     @staticmethod
     def _written(value: Any) -> str:
-        """A carrier or a fact as written: a name, a parameter reference or a switch."""
+        """A carrier, a fact or a priority list as written: a name, a parameter reference, a switch or a list."""
+        if isinstance(value, list):
+            return f"[{len(value)} selectors]"
         if isinstance(value, dict):
             if "$param" in value:
                 return f"{{$param: {value['$param']}}}"

@@ -66,6 +66,34 @@ class NameSyntax:
         r"^[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*$"
     )
 
+    #: What :attr:`ADDRESS_SEPARATOR` becomes where a component name enters a derived port name.
+    PORT_NAME_SEPARATOR: ClassVar[str] = "_"
+
+    @classmethod
+    def port_name_part(cls, component_name: str) -> str:
+        """A component's runtime name as it enters a port name derived from it.
+
+        An aggregator grows one input per participant, and an energy manager one dispatch output,
+        each named after the participant (``ElectricityOutputFrom<participant>``,
+        ``DispatchTo<participant>_<input>``, ``Input_<participant>_<output>_<n>``). A port name is
+        an identifier, while an assembly member's runtime name is its serialized address, whose
+        :attr:`ADDRESS_SEPARATOR` joins identifiers (``pv-east-PVSystem``,
+        ``assemblies_spec.md`` §2.4). The scheme, the one every derived port name follows: the
+        separator becomes :attr:`PORT_NAME_SEPARATOR` (``pv_east_PVSystem``) and every other
+        character passes unchanged, so a name without an address, which every file and setup
+        without assemblies writes, enters its ports as it is. Two participants whose names map to
+        one port name (``pv-east-PVSystem`` beside a site entry ``pv_east_PVSystem``) would grow
+        one port twice: the expansion of imports refuses that per observer (``EF-7W``), and the
+        port creation refuses any collision it meets (``EF-32``).
+
+        Args:
+            component_name: The runtime component name.
+
+        Returns:
+            The name with the address separator replaced.
+        """
+        return component_name.replace(cls.ADDRESS_SEPARATOR, cls.PORT_NAME_SEPARATOR)
+
     @classmethod
     def is_identifier(cls, value: Any) -> TypeGuard[str]:
         """Reports whether ``value`` is a string that satisfies the identifier grammar.

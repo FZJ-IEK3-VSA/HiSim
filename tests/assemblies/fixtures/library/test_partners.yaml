@@ -93,3 +93,21 @@ partners:
       class: tests.assemblies.fixture_components.FakePVSystem
       preset: rooftop
       inputs: [Weather]
+
+  # --------------------------------------------------------------------------- observe and actuate
+  MeteredResidents:
+    # A flow the electricity meter observes, so its observer port in isolation is not idle.
+    serves: {observed_by: FakeElectricityMeter}
+    component: {class: tests.assemblies.fixture_components.FakeOccupancy, preset: standard}
+  RankedResidents:
+    # A flow the energy manager observes and ranks (residents, rank-only), so its observer port is not idle.
+    serves: {observed_by: FakeEnergyManager}
+    component: {class: tests.assemblies.fixture_components.FakeOccupancy, preset: standard}
+  Control:
+    # The controller an L1's ems_modifier binds: a controller is an assembly (its priorities are a parameter).
+    serves: {partner: FakeEnergyManager}
+    import: {assembly: control/ems_self_consumption}
+  BatteryControl:
+    # The one controller a battery's controllable output binds (controllable: {target_input: LoadingPowerInput}).
+    serves: {controls: FakeBattery}
+    import: {assembly: control/ems_self_consumption}

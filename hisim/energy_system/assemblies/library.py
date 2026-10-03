@@ -12,8 +12,13 @@ the units of the parameters it substitutes it checks itself, with the named erro
 ``EF-79``. The **library** check adds what the library test requires of an assembly before it may
 be shipped (D24): a description on every parameter, a ``range`` on every numeric one, a ``name``
 that is its library path, and the test contract — a ``tests.bounds`` entry for every
-energy-carrying or temperature output of every member, at least one ``tests.monotone``, and every
-name a declaration uses resolving to a member, an output, a parameter, a preset or a KPI.
+energy-carrying or temperature output of every member, at least one ``tests.monotone`` when the
+assembly has a numeric parameter (a bare supply connection has nothing to sweep), and every name a
+declaration uses resolving to a member, an output, a parameter, a preset or a KPI.
+
+**A member written in several variant options** (``Heater`` as an immersion heater in one option and
+a boiler in another) is checked once per option, against that option's class: a declaration that
+holds for one option's class and not for another's is a problem naming the option (hisim-lt0b.13).
 
 **Energy-carrying or temperature** is decided by the output's declaration in its member's
 :class:`~hisim.component_interface.ClassInterface`: an output carries energy when its unit is a power
@@ -45,11 +50,14 @@ from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemEr
 from hisim.energy_system.imports_model import (
     Carriers,
     CircuitNaming,
+    ObservesPlaceholder,
+    ParameterReference,
     Port,
     PortKind,
     PortPlaceholder,
     SwitchValue,
 )
+from hisim.energy_system.imports_reader import ImportsReader
 
 
 class CheckStrength(enum.Enum):
@@ -290,6 +298,39 @@ class LibraryChecker:
                 members.extend(option.components.values())
         return members
 
+    def _templates(self) -> Dict[str, List[MemberTemplate]]:
+        """Member name to every template written under it: one, or one per variant option that writes it."""
+        templates: Dict[str, List[MemberTemplate]] = {}
+        for member in self._all_members():
+            templates.setdefault(member.name, []).append(member)
+        return templates
+
+    def _applies(self, port: Port, template: MemberTemplate) -> bool:
+        """Whether a port is active in the variant option a member template belongs to.
+
+        A port whose ``active_when`` or ``required_when`` restricts the variant's selector to values
+        the option does not cover is never lowered in that option, so the option's class owes it
+        nothing.
+        """
+        if template.variant is None:
+            return True
+        variant = self.model.variants.get(template.variant[0])
+        option = variant.options.get(template.variant[1]) if variant is not None else None
+        if variant is None or option is None:
+            return True
+        for conditions in (port.active_when, port.required_when):
+            allowed = conditions.get(variant.selected_by)
+            if allowed is not None and not set(option.when) & set(allowed):
+                return False
+        return True
+
+    @staticmethod
+    def _option(template: MemberTemplate, templates: Sequence[MemberTemplate]) -> str:
+        """`` in option 'o' of the variant 'v'`` for a member written in several options, else nothing."""
+        if len(templates) < 2 or template.variant is None:
+            return ""
+        return f" in option '{template.variant[1]}' of the variant '{template.variant[0]}'"
+
     def _check_members(self) -> None:
         """References between members, parameter references, classes, units, display templates."""
         names = set(self.model.member_names())
@@ -406,80 +447,50 @@ class LibraryChecker:
                 if allowed is not None and value not in allowed:
                     self.add(path, f"{what} lists {parameter}={value!r}, which the parameter does not allow.")
 
-    def _check_ports(self) -> None:
+    @staticmethod
+    def _placeholders_of(template: MemberTemplate) -> Set[str]:
+        """The ports a member template carries ``{$port: …}`` placeholders for."""
+        return {
+            placed.placeholder.port
+            for placed in template.entry.placeholders
+            if isinstance(placed.placeholder, PortPlaceholder)
+        }
+
+    def _check_ports(self) -> None:  # pylint: disable=too-many-branches  # one branch per port kind
         """The contract check of §3.3: every port names existing members, outputs and inputs."""
-        members = {member.name: member for member in self._all_members()}
-        placeholders: Dict[str, Set[str]] = {}
-        for member in members.values():
-            placeholders[member.name] = {
-                placed.placeholder.port
-                for placed in member.entry.placeholders
-                if isinstance(placed.placeholder, PortPlaceholder)
-            }
+        members = self._templates()
         for name, port in self.model.ports.items():
             path: Tuple[Any, ...] = ("interface", port.section, name)
             self._check_conditions(path, port.required_when, f"the port '{name}' required_when")
             self._check_conditions(path, port.active_when, f"the port '{name}' active_when")
             if port.kind == PortKind.NEED:
                 for into in port.into:
-                    template = members.get(into)
-                    if template is None:
+                    if into not in members:
                         self.add(path + ("into",), f"the port '{name}' lowers into '{into}', which is no member.")
                         continue
-                    if name not in placeholders[into]:
-                        self.add(
-                            path + ("into",),
-                            f"the port '{name}' lowers into '{into}', which carries no '{{$port: {name}}}' "
-                            "placeholder.",
-                        )
-                    interface = self.interface(template)
-                    if interface is None:
-                        if self.library:
-                            self.add(
-                                path + ("into",),
-                                f"'{into}' ({template.entry.class_path}) declares no CLASS_INTERFACE, so the port "
-                                f"'{name}' cannot be checked against its default connections.",
-                            )
-                        continue
-                    for partner in port.partner:
-                        if port.wires is None and not interface.declares_defaults_from(partner):
-                            self.add(
-                                path + ("partner",),
-                                f"'{into}' ({template.entry.class_path.rsplit('.', 1)[-1]}) declares no default "
-                                f"connections from {partner}, the partner of '{name}'.",
-                            )
-                    for wired in port.wires or {}:
-                        if interface.input(wired) is None:
-                            self.add(
-                                path + ("wires",),
-                                f"the port '{name}' wires '{wired}', which is no input of '{into}'.",
-                            )
+                    for template in members[into]:
+                        if self._applies(port, template):
+                            self._check_need_into(path, name, port, template, members[into])
             elif port.kind == PortKind.PROVIDED:
-                template = members.get(port.output_member or "")
-                if template is None:
+                if (port.output_member or "") not in members:
                     self.add(
                         path + ("output",),
                         f"the port '{name}' provides '{port.output}', but '{port.output_member}' is no member.",
                     )
                 else:
-                    interface = self.interface(template)
-                    if interface is None:
-                        if self.library:
-                            self.add(
-                                path + ("output",),
-                                f"'{template.name}' declares no CLASS_INTERFACE, so '{port.output}' cannot be checked.",
-                            )
-                    elif interface.output(port.output_name or "") is None:
-                        self.add(
-                            path + ("output",),
-                            f"the port '{name}' provides '{port.output}', which is no output of '{template.name}'.",
-                        )
+                    for template in members[port.output_member or ""]:
+                        if self._applies(port, template):
+                            self._check_provided(path, name, port, template, members[port.output_member or ""])
             elif port.kind == PortKind.CIRCUIT:
-                self._check_circuit_port(path, name, port, members, placeholders)
+                self._check_circuit_port(path, name, port, members)
             elif port.kind == PortKind.CARRIER:
-                self._check_carrier_port(path, name, port, members, placeholders)
+                self._check_carrier_port(path, name, port, members)
             elif port.kind == PortKind.FACT:
                 self._check_fact_port(path, name, port, members)
+            elif port.kind == PortKind.OBSERVER:
+                self._check_observer_port(path, name, port, members)
+            elif port.kind == PortKind.ACTUATES:
+                self._check_actuates_port(path, name, port)
             elif port.kind == PortKind.REEXPORT:
                 inner = (port.reexports or ".").split(".", 1)[0]
                 if inner not in self.model.imports:
@@ -503,20 +514,34 @@ class LibraryChecker:
                         f"the internal port '{name}' binds two members; members are wired by a bare name in the "
                         "receiver's inputs, and an internal entry binds a member to an inner import's port.",
                     )
-                elif (
-                    len(port.ends) == 2
-                    and "." not in port.ends[1]
-                    and name not in placeholders.get(port.ends[1], set())
-                ):
-                    self.add(
-                        path + ("bind",),
-                        f"the internal port '{name}' lands in '{port.ends[1]}', which carries no '{{$port: {name}}}' "
-                        "placeholder.",
-                    )
-        for holder in members.values():
+                elif len(port.ends) == 2 and "." not in port.ends[1]:
+                    for template in members.get(port.ends[1], []):
+                        if name not in self._placeholders_of(template):
+                            self.add(
+                                path + ("bind",),
+                                f"the internal port '{name}' lands in '{port.ends[1]}'"
+                                f"{self._option(template, members[port.ends[1]])}, which carries no "
+                                f"'{{$port: {name}}}' placeholder.",
+                            )
+        observers = [name for name, port in self.model.ports.items() if port.kind == PortKind.OBSERVER]
+        actuating = [name for name, port in self.model.ports.items() if port.kind == PortKind.ACTUATES]
+        if actuating and (len(actuating) != 1 or len(observers) != 1):
+            self.add(
+                ("interface", "actuates"),
+                f"the assembly actuates {len(actuating)} priority lists over {len(observers)} observer ports; a "
+                "controller ranks the feeds of its one observer port by its one priority list (§4.4).",
+            )
+        for holder in self._all_members():
             for placed in holder.entry.placeholders:
                 placeholder = placed.placeholder
-                if not isinstance(placeholder, PortPlaceholder):
+                if isinstance(placeholder, ObservesPlaceholder):
+                    observer = self.model.ports.get(placeholder.observer)
+                    if observer is None or observer.kind != PortKind.OBSERVER or holder.name not in observer.into:
+                        self.add(
+                            holder.source_path + ("inputs", placed.position),
+                            f"'{holder.name}' carries a placeholder for the observer '{placeholder.observer}', which "
+                            "is no observer port lowering into it.",
+                        )
                     continue
                 target = self.model.ports.get(placeholder.port)
                 if target is None:
@@ -542,6 +567,127 @@ class LibraryChecker:
                         + ".",
                     )
 
+    def _check_need_into(
+        self, path: Tuple[Any, ...], name: str, port: Port, template: MemberTemplate, templates: List[MemberTemplate]
+    ) -> None:
+        """A need's member template carries its placeholder and declares default connections from its partners."""
+        into = template.name
+        option = self._option(template, templates)
+        if name not in self._placeholders_of(template):
+            self.add(
+                path + ("into",),
+                f"the port '{name}' lowers into '{into}'{option}, which carries no '{{$port: {name}}}' placeholder.",
+            )
+        interface = self.interface(template)
+        if interface is None:
+            if self.library:
+                self.add(
+                    path + ("into",),
+                    f"'{into}' ({template.entry.class_path}){option} declares no CLASS_INTERFACE, so the port "
+                    f"'{name}' cannot be checked against its default connections.",
+                )
+            return
+        for partner in port.partner:
+            if port.wires is None and not interface.declares_defaults_from(partner):
+                self.add(
+                    path + ("partner",),
+                    f"'{into}' ({template.entry.class_path.rsplit('.', 1)[-1]}){option} declares no default "
+                    f"connections from {partner}, the partner of '{name}'.",
+                )
+        for wired in port.wires or {}:
+            if interface.input(wired) is None:
+                self.add(
+                    path + ("wires",), f"the port '{name}' wires '{wired}', which is no input of '{into}'{option}."
+                )
+
+    def _check_provided(
+        self, path: Tuple[Any, ...], name: str, port: Port, template: MemberTemplate, templates: List[MemberTemplate]
+    ) -> None:
+        """A provided output exists on its member's class; a controllable one names a real input or need (§4.4)."""
+        option = self._option(template, templates)
+        if port.controllable_via is not None:
+            via = self.model.ports.get(port.controllable_via)
+            if via is None or via.kind != PortKind.NEED:
+                self.add(
+                    path + ("controllable",),
+                    f"the provided output '{name}' is controllable via '{port.controllable_via}', which is no need of "
+                    "the assembly; 'via' names the need whose binding lowers to the L1 controller's modifier.",
+                )
+        interface = self.interface(template)
+        if interface is None:
+            if self.library:
+                self.add(
+                    path + ("output",),
+                    f"'{template.name}' ({template.entry.class_path}){option} declares no CLASS_INTERFACE, so "
+                    f"'{port.output}' cannot be checked.",
+                )
+            return
+        if interface.output(port.output_name or "") is None:
+            self.add(
+                path + ("output",),
+                f"the port '{name}' provides '{port.output}', which is no output of '{template.name}'{option}.",
+            )
+        if port.controllable_target is not None and interface.input(port.controllable_target) is None:
+            self.add(
+                path + ("controllable",),
+                f"the provided output '{name}' is controllable through '{port.controllable_target}', which is no "
+                f"input of '{template.name}'{option}.",
+            )
+
+    def _check_observer_port(
+        self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, List[MemberTemplate]]
+    ) -> None:
+        """An observer port lowers into members that carry its placeholder and whose class declares feeds (§4.1)."""
+        for into in port.into:
+            if into not in members:
+                self.add(path + ("into",), f"the observer port '{name}' lowers into '{into}', which is no member.")
+                continue
+            for template in members[into]:
+                option = self._option(template, members[into])
+                placed = [
+                    item
+                    for item in template.entry.placeholders
+                    if isinstance(item.placeholder, ObservesPlaceholder) and item.placeholder.observer == name
+                ]
+                if len(placed) != 1:
+                    self.add(
+                        path + ("into",),
+                        f"'{into}'{option} carries {len(placed)} '{{$observes: {name}}}' placeholders; the feeds of "
+                        f"the observer port '{name}' land at exactly one.",
+                    )
+                interface = self.interface(template)
+                if interface is None:
+                    if self.library:
+                        self.add(
+                            path + ("into",),
+                            f"'{into}' ({template.entry.class_path}){option} declares no CLASS_INTERFACE, so what the "
+                            f"observer port '{name}' may select is unknown.",
+                        )
+                elif not interface.default_feeds:
+                    self.add(
+                        path + ("into",),
+                        f"'{into}' ({template.entry.class_path.rsplit('.', 1)[-1]}){option} declares no dynamic "
+                        f"default connections (default_feeds), so the observer port '{name}' has nothing to select.",
+                    )
+
+    def _check_actuates_port(self, path: Tuple[Any, ...], name: str, port: Port) -> None:
+        """A priority list is a list of selectors, or a list parameter whose default is one (§4.4)."""
+        parameter = ParameterReference.name_of(port.priorities)
+        if parameter is None:
+            return
+        declaration = self.model.parameters.get(parameter)
+        if declaration is None or declaration.type != ParameterType.LIST:
+            self.add(
+                path,
+                f"the priorities of '{name}' are taken from '{parameter}', which is no list parameter of the assembly.",
+            )
+            return
+        if declaration.has_default and declaration.default is not None:
+            try:
+                ImportsReader.selectors(declaration.default, f"parameters.{parameter}.default")
+            except EnergySystemError as error:
+                self.add(("parameters", parameter, "default"), f"the default priorities are no selectors: {error}")
+
     @staticmethod
     def _lands_in(port: Port, member: str) -> bool:
         """Whether a port's lowered items may land in a member's placeholder for it."""
@@ -554,51 +700,57 @@ class LibraryChecker:
         return port.kind != PortKind.FACT
 
     def _check_circuit_port(
-        self,
-        path: Tuple[Any, ...],
-        name: str,
-        port: Port,
-        members: Mapping[str, MemberTemplate],
-        placeholders: Mapping[str, Set[str]],
+        self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, List[MemberTemplate]]
     ) -> None:
         """A circuit end names existing members, each declaring an input or an output of the circuit (§3.3)."""
         outputs = CircuitNaming.outputs(port.circuit or "")
         for member_name in port.members:
-            template = members.get(member_name)
-            if template is None:
+            if member_name not in members:
                 self.add(path + ("member",), f"the circuit port '{name}' names '{member_name}', which is no member.")
                 continue
-            interface = self.interface(template)
-            if interface is None:
-                if self.library:
+            for template in members[member_name]:
+                if not self._applies(port, template):
+                    continue
+                option = self._option(template, members[member_name])
+                interface = self.interface(template)
+                if interface is None:
+                    if self.library:
+                        self.add(
+                            path + ("member",),
+                            f"'{member_name}' ({template.entry.class_path}){option} declares no CLASS_INTERFACE, so "
+                            f"the circuit port '{name}' cannot be checked against {', '.join(outputs)}.",
+                        )
+                    continue
+                reads = [output for output in outputs if interface.input(output) is not None]
+                owns = [output for output in outputs if interface.output(output) is not None]
+                if not reads and not owns:
                     self.add(
                         path + ("member",),
-                        f"'{member_name}' ({template.entry.class_path}) declares no CLASS_INTERFACE, so the circuit "
-                        f"port '{name}' cannot be checked against {', '.join(outputs)}.",
+                        f"'{member_name}'{option} declares none of the circuit {port.circuit}'s outputs "
+                        f"{', '.join(outputs)}, neither as an input nor as an output, so it is no end of the circuit "
+                        f"'{name}'.",
                     )
-                continue
-            reads = [output for output in outputs if interface.input(output) is not None]
-            owns = [output for output in outputs if interface.output(output) is not None]
-            if not reads and not owns:
-                self.add(
-                    path + ("member",),
-                    f"'{member_name}' declares none of the circuit {port.circuit}'s outputs {', '.join(outputs)}, "
-                    f"neither as an input nor as an output, so it is no end of the circuit '{name}'.",
-                )
-            if reads and name not in placeholders.get(member_name, set()):
-                self.add(
-                    path + ("member",),
-                    f"'{member_name}' reads {', '.join(reads)} through the circuit port '{name}' but carries no "
-                    f"'{{$port: {name}}}' placeholder.",
-                )
+                if reads and name not in self._placeholders_of(template):
+                    self.add(
+                        path + ("member",),
+                        f"'{member_name}'{option} reads {', '.join(reads)} through the circuit port '{name}' but "
+                        f"carries no '{{$port: {name}}}' placeholder.",
+                    )
+
+    def _carrier_values(self, port: Port) -> List[Any]:
+        """The carriers a ``{$param: …}`` carrier port can take: the parameter's values while the port is active."""
+        parameter = ParameterReference.name_of(port.carrier)
+        declaration = self.model.parameters.get(parameter or "")
+        if declaration is None or declaration.allowed_values is None:
+            return []
+        values = list(declaration.allowed_values)
+        for conditions in (port.active_when, port.required_when):
+            if parameter in conditions:
+                values = [value for value in values if value in conditions[parameter or ""]]
+        return values
 
     def _check_carrier_port(
-        self,
-        path: Tuple[Any, ...],
-        name: str,
-        port: Port,
-        members: Mapping[str, MemberTemplate],
-        placeholders: Mapping[str, Set[str]],
+        self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, List[MemberTemplate]]
     ) -> None:
         """A carrier names a carrier; a need names existing outputs, a provision its meter (§5.1)."""
         literal = port.carrier if isinstance(port.carrier, str) else None
@@ -608,6 +760,18 @@ class LibraryChecker:
                 f"the carrier port '{name}' names '{literal}', which is no carrier; a carrier is written as an "
                 f"lt.EnergyBalanceCarrier value: {', '.join(Carriers.names())}.",
             )
+        cases = (
+            list(SwitchValue.cases_of(port.carrier).values())
+            if isinstance(port.carrier, Mapping) and SwitchValue.is_switch(port.carrier)
+            else []
+        )
+        for value in self._carrier_values(port) + [case for case in cases if isinstance(case, str)]:
+            if not Carriers.is_carrier(value):
+                self.add(
+                    path + ("carrier",),
+                    f"the carrier port '{name}' takes the carrier {value!r} with some parameters, which is no carrier; "
+                    f"a carrier is an lt.EnergyBalanceCarrier value: {', '.join(Carriers.names())}.",
+                )
         if port.is_provision:
             if port.meter is None:
                 if literal is not None and literal != Carriers.ELECTRICITY:
@@ -621,17 +785,19 @@ class LibraryChecker:
                 self.add(
                     path + ("meter",),
                     "an electricity provision names no 'meter': electricity has no link, and the meter's selection "
-                    "is written as observes: (hisim-lt0b.3).",
+                    "is its observer port (interface.observes, §4.3).",
                 )
             if port.meter not in members:
                 self.add(path + ("meter",), f"the carrier provision '{name}' names the meter '{port.meter}', which is "
                          "no member.")
-            elif name not in placeholders.get(port.meter, set()):
-                self.add(
-                    path + ("meter",),
-                    f"the meter '{port.meter}' of the carrier provision '{name}' carries no '{{$port: {name}}}' "
-                    "placeholder for its consumers' feeds.",
-                )
+            else:
+                for template in members[port.meter]:
+                    if name not in self._placeholders_of(template):
+                        self.add(
+                            path + ("meter",),
+                            f"the meter '{port.meter}'{self._option(template, members[port.meter])} of the carrier "
+                            f"provision '{name}' carries no '{{$port: {name}}}' placeholder for its consumers' feeds.",
+                        )
             return
         for item in port.outputs:
             if "." not in item:
@@ -644,58 +810,64 @@ class LibraryChecker:
                     )
                 continue
             member_name, output = item.split(".", 1)
-            template = members.get(member_name)
-            if template is None:
+            if member_name not in members:
                 self.add(path + ("outputs",), f"the carrier need '{name}' names '{item}', but '{member_name}' is no "
                          "member.")
                 continue
-            interface = self.interface(template)
-            declared = interface.output(output) if interface is not None else None
-            if interface is not None and declared is None:
-                self.add(path + ("outputs",), f"the carrier need '{name}' names '{item}', which is no output of "
-                         f"'{member_name}'.")
-            elif declared is not None and declared.carrier is not None and literal is not None:
-                if declared.carrier.value != literal:
-                    self.add(
-                        path + ("outputs",),
-                        f"the carrier need '{name}' is of '{literal}', but '{item}' carries "
-                        f"'{declared.carrier.value}' by its class's energy port.",
-                    )
+            for template in members[member_name]:
+                if not self._applies(port, template):
+                    continue
+                option = self._option(template, members[member_name])
+                interface = self.interface(template)
+                declared = interface.output(output) if interface is not None else None
+                if interface is not None and declared is None:
+                    self.add(path + ("outputs",), f"the carrier need '{name}' names '{item}', which is no output of "
+                             f"'{member_name}'{option}.")
+                elif declared is not None and declared.carrier is not None and literal is not None:
+                    if declared.carrier.value != literal:
+                        self.add(
+                            path + ("outputs",),
+                            f"the carrier need '{name}' is of '{literal}', but '{item}'{option} carries "
+                            f"'{declared.carrier.value}' by its class's energy port.",
+                        )
 
     def _check_fact_port(
-        self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, MemberTemplate]
+        self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, List[MemberTemplate]]
     ) -> None:
         """A fact need lowers into members whose classes read the fact; a provided fact is a contribution (§6)."""
         literal = port.fact if isinstance(port.fact, str) else None
         if port.is_provision:
             for member_name in port.members:
-                template = members.get(member_name)
-                if template is None:
+                if member_name not in members:
                     self.add(path + ("member",), f"the provided fact '{name}' names '{member_name}', which is no "
                              "member.")
                     continue
-                config_class = self.config_class(template)
-                if config_class is not None and literal is not None and literal not in declared_facts_of(config_class):
-                    self.add(
-                        path + ("member",),
-                        f"the provided fact '{literal}' is not among the SIZING_CONTRIBUTIONS of "
-                        f"{config_class.__name__} (member '{member_name}'), which declares "
-                        f"{', '.join(declared_facts_of(config_class)) or 'none'}.",
-                    )
+                for template in members[member_name]:
+                    config_class = self.config_class(template)
+                    if config_class is not None and literal is not None and literal not in declared_facts_of(
+                        config_class
+                    ):
+                        self.add(
+                            path + ("member",),
+                            f"the provided fact '{literal}' is not among the SIZING_CONTRIBUTIONS of "
+                            f"{config_class.__name__} (member '{member_name}'"
+                            f"{self._option(template, members[member_name])}), which declares "
+                            f"{', '.join(declared_facts_of(config_class)) or 'none'}.",
+                        )
             return
         for member_name in port.into:
-            template = members.get(member_name)
-            if template is None:
+            if member_name not in members:
                 self.add(path + ("into",), f"the fact port '{name}' lowers into '{member_name}', which is no member.")
                 continue
-            config_class = self.config_class(template)
-            if config_class is not None and literal is not None and literal not in facts_read_by(config_class):
-                self.add(
-                    path + ("into",),
-                    f"the fact port '{name}' lowers '{literal}' into '{member_name}', whose class "
-                    f"{config_class.__name__} reads no such fact (it reads "
-                    f"{', '.join(facts_read_by(config_class)) or 'none'}).",
-                )
+            for template in members[member_name]:
+                config_class = self.config_class(template)
+                if config_class is not None and literal is not None and literal not in facts_read_by(config_class):
+                    self.add(
+                        path + ("into",),
+                        f"the fact port '{name}' lowers '{literal}' into '{member_name}'"
+                        f"{self._option(template, members[member_name])}, whose class {config_class.__name__} reads "
+                        f"no such fact (it reads {', '.join(facts_read_by(config_class)) or 'none'}).",
+                    )
 
     def _check_switches(self) -> None:
         """Every ``{$switch: …}`` names one selector and covers each of its values exactly once."""
@@ -781,7 +953,7 @@ class LibraryChecker:
         if tests is None:
             self.add(("kind",), "the assembly carries no test contract ('tests:' with bounds and monotone, §9.4).")
             return
-        members = {member.name: member for member in self._all_members()}
+        members = self._templates()
         bounded: Set[Tuple[str, str]] = set()
         for index, bounds in enumerate(tests.bounds):
             path = ("tests", "bounds", index)
@@ -789,42 +961,39 @@ class LibraryChecker:
                 self.add(path, f"the unit '{bounds.unit}' is no member of lt.Units.")
             if bounds.output is not None:
                 member_name, output = bounds.output.split(".", 1)
-                template = members.get(member_name)
-                if template is None:
+                if member_name not in members:
                     self.add(path, f"the bounds entry names '{bounds.output}', but '{member_name}' is no member.")
                     continue
-                interface = self.interface(template)
-                declared = interface.output(output) if interface is not None else None
-                if interface is not None and declared is None:
-                    self.add(path, f"the bounds entry names '{bounds.output}', which is no output of '{member_name}'.")
-                elif declared is not None and bounds.unit != declared.unit.name:
-                    self.add(
-                        path,
-                        f"the bounds entry states {bounds.unit} for '{bounds.output}', whose unit is "
-                        f"{declared.unit.name}.",
-                    )
+                self._check_bounded_output(path, bounds.output, bounds.unit, members[member_name])
                 bounded.add((member_name, output))
             else:
                 self._check_kpi(path, members, bounds.member or "", bounds.kpi or "")
-        for template in members.values():
-            interface = self.interface(template)
-            if interface is None:
-                self.add(
-                    template.source_path,
-                    f"'{template.name}' ({template.entry.class_path}) declares no CLASS_INTERFACE, so the outputs its "
-                    "test contract must bound are unknown.",
-                )
-                continue
-            for declared_output in interface.outputs:
-                key = (template.name, declared_output.name)
-                if ClassInterface.carries_energy_or_temperature(declared_output) and key not in bounded:
+        for templates in members.values():
+            for template in templates:
+                option = self._option(template, templates)
+                interface = self.interface(template)
+                if interface is None:
                     self.add(
-                        ("tests", "bounds"),
-                        f"the {declared_output.unit.name} output '{template.name}.{declared_output.name}' has no "
-                        "bounds entry.",
+                        template.source_path,
+                        f"'{template.name}' ({template.entry.class_path}){option} declares no CLASS_INTERFACE, so the "
+                        "outputs its test contract must bound are unknown.",
                     )
-        if not tests.monotone:
-            self.add(("tests",), "the test contract has no monotone entry; at least one is required.")
+                    continue
+                for declared_output in interface.outputs:
+                    key = (template.name, declared_output.name)
+                    if ClassInterface.carries_energy_or_temperature(declared_output) and key not in bounded:
+                        self.add(
+                            ("tests", "bounds"),
+                            f"the {declared_output.unit.name} output '{template.name}.{declared_output.name}'{option} "
+                            "has no bounds entry.",
+                        )
+        numeric = [name for name, declaration in self.model.parameters.items() if declaration.type.is_numeric]
+        if numeric and not tests.monotone:
+            self.add(
+                ("tests",),
+                f"the test contract has no monotone entry; one is required while the assembly has a numeric parameter "
+                f"({', '.join(numeric)}).",
+            )
         for index, monotone in enumerate(tests.monotone):
             path = ("tests", "monotone", index)
             declaration = self.model.parameters.get(monotone.parameter)
@@ -841,15 +1010,37 @@ class LibraryChecker:
                 )
             self._check_kpi(path, members, expect.member, expect.kpi)
 
-    def _check_kpi(self, path: Tuple[Any, ...], members: Mapping[str, MemberTemplate], member: str, kpi: str) -> None:
-        """A test declaration's KPI names a KPI its member's class declares."""
-        template = members.get(member)
-        if template is None:
+    def _check_bounded_output(
+        self, path: Tuple[Any, ...], output_reference: str, unit: Optional[str], templates: List[MemberTemplate]
+    ) -> None:
+        """A bounded output exists, in the stated unit, on its member's class in every option that writes it."""
+        member_name, output = output_reference.split(".", 1)
+        for template in templates:
+            option = self._option(template, templates)
+            interface = self.interface(template)
+            declared = interface.output(output) if interface is not None else None
+            if interface is not None and declared is None:
+                self.add(
+                    path, f"the bounds entry names '{output_reference}', which is no output of '{member_name}'{option}."
+                )
+            elif declared is not None and unit != declared.unit.name:
+                self.add(
+                    path,
+                    f"the bounds entry states {unit} for '{output_reference}', whose unit is {declared.unit.name}"
+                    f"{option}.",
+                )
+
+    def _check_kpi(
+        self, path: Tuple[Any, ...], members: Mapping[str, List[MemberTemplate]], member: str, kpi: str
+    ) -> None:
+        """A test declaration's KPI names a KPI its member's class declares, in every option that writes it."""
+        if member not in members:
             self.add(path, f"the entry names the member '{member}', which does not exist.")
             return
-        interface = self.interface(template)
-        if interface is not None and kpi not in interface.kpis:
-            self.add(path, f"'{member}' reports no KPI '{kpi}'.")
+        for template in members[member]:
+            interface = self.interface(template)
+            if interface is not None and kpi not in interface.kpis:
+                self.add(path, f"'{member}'{self._option(template, members[member])} reports no KPI '{kpi}'.")
 
 
 def check_assembly(

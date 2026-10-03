@@ -151,6 +151,9 @@ class EntryReader:
             order=ImportsReader.order(entry.get("order"), f"{location}.order"),
             ports=ImportsReader.ports(entry.get("ports"), f"{location}.ports", "ports", site_entry=name),
             verbs=ImportsReader.verbs(entry, location),
+            observes=(
+                ImportsReader.selection(entry["observes"], f"{location}.observes") if "observes" in entry else None
+            ),
             placeholders=placed,
         )
 

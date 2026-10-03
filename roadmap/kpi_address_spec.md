@@ -14,7 +14,7 @@ components happen to live in the same building:
 | Collection (`KpiPreparation.kpi_collection_dict_unsorted`) | `building -> key -> entry dict` |
 | Tag-sorted collection, `all_kpis.json`, webtool JSON | `building -> tag -> key -> entry dict` |
 | Report table (`return_table_for_report`) | one row per `building`, `key` |
-| Golden references (`scripts/golden_kpis.py::flatten`) | `building.tag.key` |
+| Golden references (`scripts/golden_kpis.py::flatten`) | `building.tag.key` -> value, no unit, no source |
 
 Since #653 the `key` is the bare entry name while exactly one component of the building emits it,
 and `"<name> (<source component>)"` as soon as a second one does (`keyed_component_entries`,
@@ -65,8 +65,8 @@ untouched, and the frontend translates by the stable fields (`assembly`, `member
 ## Address scheme
 
 - **Component KPIs** are always keyed `"<name> (<source.name>)"`, whether or not anything collides.
-  The leaf key stays a string, so `jsondata[building][tag][key]` and the goldens' flat
-  `building.tag.key` keep working, and a key never changes when a neighbour is added.
+  The leaf key stays a string, so `jsondata[building][tag][key]` keeps working, and a key never
+  changes when a neighbour is added.
 - **Derived KPIs** have no source and stay keyed by bare name; they are singletons per building.
 - A key's shape is fixed by its producer, never by who else is present. `keyed_component_entries`
   keeps refusing an entry without a source and a duplicate key; both now mean a component defect.
@@ -103,6 +103,31 @@ entry also keeps `nameOfSourceComponent` = `source.name`:
 
 The golden form of the first array is `BUI1.PV.Electricity production (pv-east-PVSystem)`; adding a
 third array adds a key and renames none.
+
+## The goldens are a consumer too
+
+The golden references (`golden_references/*.json`) used to be a flat `{"<building>.<tag>.<key>": value}` map,
+so they split the key string for history stitching, carried no unit (a unit change passed the gate as a
+numeric diff) and never saw the structured source. Decided (owner, 2026-10-03): a golden leaf is the KPI
+address plus value and unit, keyed by the dotted address for readable diffs and checked against its fields:
+
+```json
+"BUI1.Building.Conditioned floor area (Building)": {
+  "value": 121.2, "unit": "m2",
+  "building": "BUI1", "tag": "Building", "name": "Conditioned floor area",
+  "source": {"import": null, "instance": null, "member": "Building", "assembly": null, "name": "Building"}
+}
+```
+
+- `source` carries the five identity fields only; `display_name` and `label` are presentation and stay out.
+  A derived KPI carries `source: null`.
+- The gate compares `value` with its tolerances and `unit` exactly; a unit change is a failure of its own kind.
+- A key that disagrees with its fields, a leaf missing a field, or a file in the old flat form is refused by
+  every reader of current goldens, with the instruction to re-bless. The one reader of old commits, the
+  history walker (`scripts/golden_history.py`), reads both forms: a new-form series is identified by its
+  structured fields, so a later change of the serialized source name is one series without a rename-table
+  entry; an old-form series is stitched to a new one where the old key equals the new leaf's dotted key or its
+  bare `building.tag.name`. That comparison reads historical data and is the one place a string is compared.
 
 ## Finder
 
@@ -159,9 +184,11 @@ energy-system file ships. Until then a flat file's rows carry `source` with `imp
 3. `kpi_address.py` with the finder's `import_key`/`instance`/`member`/`assembly` filters; replace
    the 29 hand-built lookups in tests with `finder.value(...)`; `tests/test_fuel_meter.py` loses its
    f-string key.
-4. Re-bless all golden references once through the `golden-update` workflow, for keys only (every
-   component KPI key changes; no value does). Done before the hydronic stages re-bless values, so the
-   two diffs never mix. The manifest's config hash moves with it.
+4. The golden scripts write and read the structured leaf (`golden_kpis`, `golden_update`, `golden_check`,
+   `golden_validate`; `golden_history` reads both forms), then re-bless all golden references once through
+   the `golden-update` workflow with force rewrite (every component KPI key changes and every leaf gains
+   its fields; no value does). Done before the hydronic stages re-bless values, so the two diffs never
+   mix. The manifest's config hash moves with it.
 5. `plan.by_subject[]` rows gain `source`; the renovisorissues spec MR for `result.json` and the KPI
    JSON is opened with this PR and merged before the first composed file ships.
 6. Record the key format and `source` in the webtool JSON contract note in `kpi_structure.py` and in
@@ -171,7 +198,9 @@ energy-system file ships. Until then a flat file's rows carry `source` with `imp
 ## Acceptance
 
 - Adding a second instance of any component to any setup changes no existing key of the first
-  instance; the golden diff shows only added keys, and the re-bless diff changes no value.
+  instance; the golden diff shows only added keys, and the re-bless diff changes no value and no unit.
+- Every golden leaf carries `value`, `unit`, `building`, `tag`, `name` and `source`, and its key equals the
+  dotted address of those fields; the check refuses a flat-form file and fails distinctly on a unit change.
 - Every component entry in every golden's `all_kpis.json` carries a `source` whose `name` equals its
   `nameOfSourceComponent` and the qualifier of its key; every derived entry carries `source: null`.
 - No production or test code outside `kpi_address.py` and `keyed_component_entries` builds or splits

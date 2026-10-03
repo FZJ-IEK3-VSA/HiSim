@@ -246,6 +246,15 @@ class ComponentID:
     ``"pv-east-PVSystem"``. With an empty path the key is exactly what it was before. Both fields
     are left out of the serialized form while empty, so a configuration of a component outside
     every assembly dumps, hashes and caches byte for byte as before.
+
+    ``display_name`` is the English label the expansion renders for a member from its assembly's
+    ``display:`` template over the resolved parameters (``assemblies_spec.md`` §2.4, "Display names
+    and labels"): ``"PV array, east, azimuth 90"``. It is presentation, never identity — it takes
+    no part in equality, hashing or the key, and a component outside every assembly has none — and
+    it is carried here because the identity is the one thing the expansion hands every member's
+    configuration (the configuration holds no ``DisplayConfig``, which the component builds
+    itself). :meth:`hisim.postprocessing.kpi_computation.kpi_structure.KpiSource.for_component`
+    reads it before the component's ``DisplayConfig.pretty_name``.
     """
 
     name: str
@@ -256,6 +265,9 @@ class ComponentID:
     )
     assembly: Optional[str] = dc.field(
         default=None, metadata=dataclasses_json_config(exclude=lambda value: value is None)
+    )
+    display_name: Optional[str] = dc.field(
+        default=None, compare=False, metadata=dataclasses_json_config(exclude=lambda value: value is None)
     )
 
     #: Building label used for grouping when a component carries no explicit building.

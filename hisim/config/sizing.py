@@ -253,6 +253,23 @@ def sized_field(
     return dataclasses.field(default=default, metadata=metadata, **field_kwargs)  # pylint: disable=invalid-field-call
 
 
+def unit_metadata(unit: Any) -> Dict[str, Any]:
+    """The field metadata that declares a plain configuration field's unit.
+
+    ``field(default=180.0, metadata=unit_metadata(lt.Units.DEGREES))`` is the plain field's
+    counterpart of ``sized_field(..., unit=lt.Units.DEGREES)``: both record the unit under
+    :attr:`SizedFieldMetadata.UNIT`, where :func:`declared_field_unit` reads it. An assembly
+    parameter feeding the field must state the same unit (``assemblies_spec.md`` §2.6, D16 b).
+
+    Args:
+        unit: The field's unit, an ``lt.Units`` member.
+
+    Returns:
+        The metadata mapping to pass to ``dataclasses.field``.
+    """
+    return {SizedFieldMetadata.UNIT: unit}
+
+
 def declared_field_unit(config_class: type, field_name: str) -> Any:
     """Returns the unit a configuration field declares, or ``None`` when it declares none.
 

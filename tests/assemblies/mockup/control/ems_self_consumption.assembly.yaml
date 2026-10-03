@@ -24,7 +24,7 @@ parameters:
       - {component_type: CAR_BATTERY}                                 # 5 (car twin)
       - {component_type: BATTERY}                                     # 6, then 7, 8 ...
   building_offset_in_kelvin:
-    {type: float, unit: CELSIUS, default: 2, description: Building set point raise on surplus (EMSConfig, controller_l2_energy_management_system.py:54).}
+    {type: float, unit: CELSIUS, default: 2, description: "Building set point raise on surplus (EMSConfig, controller_l2_energy_management_system.py:54)."}
   sh_storage_offset_in_kelvin:
     {type: float, unit: CELSIUS, default: 10, description: Buffer set point raise on surplus.}
   dhw_storage_offset_in_kelvin:

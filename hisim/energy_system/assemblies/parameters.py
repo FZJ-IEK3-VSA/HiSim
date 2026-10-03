@@ -17,7 +17,9 @@ the library check proves that every assembly's defaults and every preset satisfy
 
 :class:`ParameterSubstitution` replaces every ``{$param: <name>}`` of a member by the resolved
 value, wherever a value goes: a config value at any depth, a constructor argument, the preset, an
-inner import's parameter.
+inner import's parameter, a port's carrier or fact; and every ``{$switch: <selector>, <case>:
+<value>, …}`` by the value of the case its selector — a parameter's resolved value, or an internal
+variant's selected option — chooses (:class:`~hisim.energy_system.imports_model.SwitchValue`).
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ from hisim.energy_system.assemblies.model import (
     ParameterType,
 )
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
-from hisim.energy_system.imports_model import ParameterReference
+from hisim.energy_system.imports_model import ParameterReference, SwitchValue
 
 
 @dataclass(frozen=True)
@@ -212,7 +214,10 @@ class ParameterSubstitution:
     """Replaces every ``{$param: <name>}`` in a value tree by the resolved parameter value."""
 
     def __init__(
-        self, values: Mapping[str, Any], on_reference: Optional[Callable[[str, Tuple[str, ...]], None]] = None
+        self,
+        values: Mapping[str, Any],
+        on_reference: Optional[Callable[[str, Tuple[str, ...]], None]] = None,
+        selections: Optional[Mapping[str, Any]] = None,
     ):
         """Prepares the substitution.
 
@@ -220,22 +225,30 @@ class ParameterSubstitution:
             values: The resolved parameters.
             on_reference: Called with the parameter's name and the key path of every reference
                 substituted, so the caller can check units and record the source map.
+            selections: Selector to the case key a ``{$switch: …}`` takes: every parameter with
+                its resolved value and every internal variant with its selected option. ``None``
+                takes the parameters alone.
         """
         self.values = values
         self.on_reference = on_reference
+        self.selections: Mapping[str, Any] = selections if selections is not None else values
 
     def apply(self, value: Any, path: Tuple[str, ...] = ()) -> Any:
-        """Returns the tree with every reference substituted; the input is not modified.
+        """Returns the tree with every reference and switch substituted; the input is not modified.
 
         Raises:
-            KeyError: For a reference to a parameter the values do not hold; the library check
-                refuses such a reference before any expansion, so reaching it is a bug.
+            KeyError: For a reference to a parameter the values do not hold, or a switch whose
+                selector or selected case is missing; the library check refuses both before any
+                expansion, so reaching it is a bug.
         """
         name = ParameterReference.name_of(value)
         if name is not None:
             if self.on_reference is not None:
                 self.on_reference(name, path)
             return self.values[name]
+        if SwitchValue.is_switch(value):
+            selected = self.selections[SwitchValue.selector_of(value)]
+            return self.apply(SwitchValue.cases_of(value)[selected], path)
         if isinstance(value, Mapping):
             return {key: self.apply(item, path + (str(key),)) for key, item in value.items()}
         if isinstance(value, (list, tuple)):
@@ -249,12 +262,32 @@ class ParameterSubstitution:
         if name is not None:
             return [(name, path)]
         found: List[Tuple[str, Tuple[str, ...]]] = []
-        if isinstance(value, Mapping):
+        if SwitchValue.is_switch(value):
+            # A case's value lands where the switch stands, so its references keep the switch's path.
+            for item in SwitchValue.cases_of(value).values():
+                found.extend(cls.references_in(item, path))
+        elif isinstance(value, Mapping):
             for key, item in value.items():
                 found.extend(cls.references_in(item, path + (str(key),)))
         elif isinstance(value, (list, tuple)):
             for index, item in enumerate(value):
                 found.extend(cls.references_in(item, path + (str(index),)))
+        return found
+
+    @classmethod
+    def switches_in(cls, value: Any, path: Tuple[str, ...] = ()) -> List[Tuple[Mapping[str, Any], Tuple[str, ...]]]:
+        """Every ``{$switch: …}`` of a tree, with its key path, nested ones included."""
+        found: List[Tuple[Mapping[str, Any], Tuple[str, ...]]] = []
+        if SwitchValue.is_switch(value):
+            found.append((value, path))
+            for case, item in SwitchValue.cases_of(value).items():
+                found.extend(cls.switches_in(item, path + (str(case),)))
+        elif isinstance(value, Mapping):
+            for key, item in value.items():
+                found.extend(cls.switches_in(item, path + (str(key),)))
+        elif isinstance(value, (list, tuple)):
+            for index, item in enumerate(value):
+                found.extend(cls.switches_in(item, path + (str(index),)))
         return found
 
     @classmethod

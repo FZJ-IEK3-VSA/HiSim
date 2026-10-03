@@ -111,8 +111,9 @@ class DescriptionRenderer(Report):
         cls._heading("fields", stream)
         for field in description.fields:
             marker = "  [sizable]" if field.sizable else ""
+            unit = f"  [unit {field.unit}]" if field.unit else ""
             name = f"{field.name} ({cls.type_of(field)})".ljust(cls.FIELD_WIDTH)
-            cls._item(f"{name} = {cls.value_of(field.default)}{marker}", stream)
+            cls._item(f"{name} = {cls.value_of(field.default)}{marker}{unit}", stream)
 
     @classmethod
     def value_of(cls, value: Any) -> str:

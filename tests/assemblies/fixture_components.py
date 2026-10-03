@@ -12,21 +12,46 @@ The physics is a toy: a weather series, an occupancy drawing hot water and elect
 producing from the temperature, a tank losing heat and filled by a heater a thermostat switches,
 and an energy manager whose modifier raises the thermostat's set point. Every value converges in a
 few iterations, so a one-day run is fast.
+
+For the circuit, carrier and fact ports (hisim-lt0b.2) a gas boiler charges a cylinder over a
+``dhw`` circuit — the boiler owns ``MassFlowDhw`` and ``SupplyTemperatureDhw``, the cylinder owns
+``ReturnTemperatureDhw``, each reading the other's by its default connections — and burns natural
+gas that a gas meter observes through the default feed its class declares; the boiler declares its
+energy ports, fuel in, heat out and flue loss, so the energy-balance check closes its balance every
+step. A battery sizes its capacity from the PV arrays' peak power, the fact the array contributes.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, ClassVar, Dict, List, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
 from hisim.component import Component, ComponentConnection, ComponentOutput, SingleTimeStepValues
-from hisim.component_interface import ClassInterface, DeclaredPort
-from hisim.config import ComponentID, ConfigBase, DisplayConfig, preset
+from hisim.component_interface import ClassInterface, DeclaredFeed, DeclaredPort
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Sizable,
+    Size,
+    concrete,
+    preset,
+    sized_field,
+)
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
+from hisim.dynamic_component import (
+    DynamicComponent,
+    DynamicComponentConnection,
+    DynamicConnectionInput,
+    DynamicConnectionOutput,
+)
 from hisim.economics.facts import CostRelevance
+from hisim.energy_port import EnergyPort
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 
@@ -44,6 +69,12 @@ class FixtureComponent(Component):
 
     #: Inputs that may stay unconnected.
     OPTIONAL_INPUTS: tuple = ()
+
+    #: Output name to the energy port it is added with.
+    ENERGY_PORTS: Dict[str, EnergyPort] = {}
+
+    #: KPI name to ``(output, factor)``: the KPI is the output's sum over the run times the factor.
+    SUM_KPIS: Dict[str, tuple] = {}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: Any) -> None:
         """Builds the ports and the default connections the class interface declares."""
@@ -63,7 +94,12 @@ class FixtureComponent(Component):
         }
         self.ports_out: Dict[str, ComponentOutput] = {
             port.name: self.add_output(
-                self.component_name, port.name, port.load_type, port.unit, output_description=port.name
+                self.component_name,
+                port.name,
+                port.load_type,
+                port.unit,
+                energy_port=self.ENERGY_PORTS.get(port.name),
+                output_description=port.name,
             )
             for port in interface.outputs
         }
@@ -100,8 +136,22 @@ class FixtureComponent(Component):
         return None
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> List[KpiEntry]:
-        """No KPIs unless the fixture reports one."""
-        return []
+        """The sums :attr:`SUM_KPIS` declares, each over the run."""
+        entries: List[KpiEntry] = []
+        for name, (output, factor) in self.SUM_KPIS.items():
+            column = next(
+                (
+                    item.get_pretty_name()
+                    for item in all_outputs
+                    if item.component_name == self.component_name and item.field_name == output
+                ),
+                None,
+            )
+            total = 0.0
+            if column is not None and column in postprocessing_results:
+                total = float(postprocessing_results[column].sum()) * factor
+            entries.append(KpiEntry(name=name, unit="kWh", value=total, tag=KpiTagEnumClass.GENERAL))
+        return entries
 
 
 # ------------------------------------------------------------------------------------------ weather
@@ -197,6 +247,14 @@ class FakePVSystemConfig(ConfigBase):
     tilt: float = field(default=30.0, metadata={UNIT: lt.Units.DEGREES})
     #: A field without a declared unit, for the refusal of a fed field without one.
     shading_factor: float = 1.0
+
+    #: The array's peak power, which a battery beside it is sized from.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=("pv_peak_power_in_watt",),
+            compute=lambda config, ctx: {"pv_peak_power_in_watt": config.power_in_watt},
+        ),
+    )
 
     @preset
     @classmethod
@@ -485,3 +543,401 @@ class UndeclaredDevice(Component):
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Nothing."""
+
+
+# --------------------------------------------------------------------------------- the dhw circuit
+
+#: The ``dhw`` circuit's three outputs (``hisim/energy_system/imports_model.py``, ``CircuitNaming``).
+MASS_FLOW_DHW = "MassFlowDhw"
+SUPPLY_TEMPERATURE_DHW = "SupplyTemperatureDhw"
+RETURN_TEMPERATURE_DHW = "ReturnTemperatureDhw"
+
+
+@dataclass_json
+@dataclass
+class FakeBoilerConfig(ConfigBase):
+    """A gas boiler charging a cylinder over the dhw circuit."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeBoiler"
+
+    component_id: ComponentID
+    power_in_watt: float = field(default=3000.0, metadata={UNIT: lt.Units.WATT})
+    efficiency: float = field(default=0.9, metadata={UNIT: lt.Units.ANY})
+
+    @preset
+    @classmethod
+    def preset_condensing(cls, name: str) -> "FakeBoilerConfig":
+        """A 3 kW condensing boiler."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeBoiler(FixtureComponent):
+    """Owns the dhw circuit's mass flow and supply leg, reads its return leg, and burns natural gas.
+
+    Every step it heats at a schedule's power; the gas it burns is that heat over its efficiency,
+    and the rest leaves as flue loss, so its energy ports — gas in, heat out, flue loss — balance.
+    """
+
+    FUEL_KPI = "Boiler fuel"
+
+    CLASS_INTERFACE = ClassInterface(
+        inputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
+        outputs=(
+            DeclaredPort(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
+            DeclaredPort(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            DeclaredPort(
+                "ThermalPowerDhw", lt.LoadTypes.HEATING, lt.Units.WATT, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT
+            ),
+            DeclaredPort("FuelUse", lt.LoadTypes.GAS, lt.Units.WATT_HOUR, lt.EnergyBalanceCarrier.NATURAL_GAS),
+            DeclaredPort("FlueLoss", lt.LoadTypes.GAS, lt.Units.WATT, lt.EnergyBalanceCarrier.NATURAL_GAS),
+        ),
+        default_connection_sources=("FakeCylinder",),
+        kpis=(FUEL_KPI,),
+    )
+    DEFAULTS = {"FakeCylinder": {RETURN_TEMPERATURE_DHW: RETURN_TEMPERATURE_DHW}}
+    ENERGY_PORTS = {
+        "FuelUse": EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
+        "ThermalPowerDhw": EnergyPort(
+            lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=MASS_FLOW_DHW
+        ),
+        "FlueLoss": EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.NATURAL_GAS),
+    }
+    SUM_KPIS = {FUEL_KPI: ("FuelUse", 1e-3)}
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeBoilerConfig) -> None:
+        """Builds the boiler."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Heats one step in two at full power, supplying ten kelvin above the return leg."""
+        heat = self.config.power_in_watt if timestep % 2 == 0 else 0.0
+        fuel_power = heat / self.config.efficiency
+        seconds = self.my_simulation_parameters.seconds_per_timestep
+        self.set(stsv, MASS_FLOW_DHW, heat / (4180.0 * 10.0))
+        self.set(stsv, SUPPLY_TEMPERATURE_DHW, self.value(stsv, RETURN_TEMPERATURE_DHW) + 10.0)
+        self.set(stsv, "ThermalPowerDhw", heat)
+        self.set(stsv, "FuelUse", fuel_power * seconds / 3600.0)
+        self.set(stsv, "FlueLoss", fuel_power - heat)
+
+
+@dataclass_json
+@dataclass
+class FakeCylinderConfig(ConfigBase):
+    """A hot-water cylinder charged over the dhw circuit."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeCylinder"
+
+    component_id: ComponentID
+    volume_in_liter: float = field(default=200.0, metadata={UNIT: lt.Units.LITER})
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "FakeCylinderConfig":
+        """A 200 l cylinder."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeCylinder(FixtureComponent):
+    """Owns the dhw circuit's return leg and reads the boiler's mass flow and supply leg."""
+
+    TEMPERATURE_KPI = "Cylinder heat received"
+
+    CLASS_INTERFACE = ClassInterface(
+        inputs=(
+            DeclaredPort("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP),
+            DeclaredPort(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
+            DeclaredPort(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        ),
+        outputs=(
+            DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            DeclaredPort("HeatReceived", lt.LoadTypes.HEATING, lt.Units.WATT),
+        ),
+        default_connection_sources=("FakeOccupancy", "FakeBoiler"),
+        kpis=(TEMPERATURE_KPI,),
+    )
+    DEFAULTS = {
+        "FakeOccupancy": {"WaterDemand": "WaterDemand"},
+        "FakeBoiler": {MASS_FLOW_DHW: MASS_FLOW_DHW, SUPPLY_TEMPERATURE_DHW: SUPPLY_TEMPERATURE_DHW},
+    }
+    SUM_KPIS = {TEMPERATURE_KPI: ("HeatReceived", 0.25e-3)}
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeCylinderConfig) -> None:
+        """Builds the cylinder."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Returns water the colder the more is drawn, and receives the circuit's heat."""
+        returned = 40.0 - self.value(stsv, "WaterDemand") / 10.0 - self.config.volume_in_liter / 1000.0
+        self.set(stsv, RETURN_TEMPERATURE_DHW, returned)
+        received = 4180.0 * self.value(stsv, MASS_FLOW_DHW) * (self.value(stsv, SUPPLY_TEMPERATURE_DHW) - returned)
+        self.set(stsv, "HeatReceived", received)
+
+
+# ----------------------------------------------------------------------------------------- gas meter
+
+
+@dataclass_json
+@dataclass
+class FakeGasMeterConfig(ConfigBase):
+    """A gas meter."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeGasMeter"
+
+    component_id: ComponentID
+    #: A calibration factor of the reading; dimensionless.
+    calibration: float = field(default=1.0, metadata={UNIT: lt.Units.ANY})
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "FakeGasMeterConfig":
+        """A calibrated meter."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeGasMeter(DynamicComponent):
+    """Sums the gas its consumers burn, as the real gas meter does, on one declared channel."""
+
+    cost_relevance = CostRelevance.FREE_OF_COST
+
+    CONSUMPTION_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+    CONSUMPTION_KPI: ClassVar[str] = "Gas consumption"
+
+    CHANNELS: ClassVar[Tuple[DynamicConnectionChannel, ...]] = (
+        DynamicConnectionChannel(
+            key=CONSUMPTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
+
+    CLASS_INTERFACE = ClassInterface(
+        outputs=(DeclaredPort("GasConsumption", lt.LoadTypes.GAS, lt.Units.WATT_HOUR),),
+        kpis=(CONSUMPTION_KPI,),
+        default_feeds=(DeclaredFeed("FakeBoiler", "FuelUse", ("GAS_CONSUMPTION_UNCONTROLLED",), 999),),
+    )
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeGasMeterConfig) -> None:
+        """Builds the meter and its one declared default feed."""
+        self.my_component_inputs: List[DynamicConnectionInput] = []
+        self.my_component_outputs: List[DynamicConnectionOutput] = []
+        self.config = config
+        super().__init__(
+            my_component_inputs=self.my_component_inputs,
+            my_component_outputs=self.my_component_outputs,
+            name=config.component_id.key,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=DisplayConfig(),
+        )
+        self.consumption_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            "GasConsumption",
+            lt.LoadTypes.GAS,
+            lt.Units.WATT_HOUR,
+            output_description="The gas every observed consumer burned.",
+        )
+        self.add_dynamic_default_connections(
+            [
+                DynamicComponentConnection(
+                    source_component_class=FakeBoiler,
+                    source_class_name=FakeBoiler.get_classname(),
+                    source_component_field_name="FuelUse",
+                    source_load_type=lt.LoadTypes.GAS,
+                    source_unit=lt.Units.WATT_HOUR,
+                    source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+                    source_weight=999,
+                )
+            ]
+        )
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """The calibrated sum of the consumption channel."""
+        inputs = self.get_channel_inputs(self.CONSUMPTION_CHANNEL)
+        total = sum(stsv.get_input_value(component_input=item) for item in inputs)
+        stsv.set_output_value(self.consumption_channel, total * self.config.calibration)
+
+    def i_prepare_simulation(self) -> None:
+        """Nothing to prepare."""
+
+    def i_save_state(self) -> None:
+        """Stateless."""
+
+    def i_restore_state(self) -> None:
+        """Stateless."""
+
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Nothing to check."""
+
+    def get_cost_facts(self) -> None:
+        """Free of cost."""
+        return None
+
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> List[KpiEntry]:
+        """The gas the meter read, in kWh."""
+        column = next(
+            (
+                item.get_pretty_name()
+                for item in all_outputs
+                if item.component_name == self.component_name and item.field_name == "GasConsumption"
+            ),
+            None,
+        )
+        total = float(postprocessing_results[column].sum()) * 1e-3 if column in postprocessing_results else 0.0
+        return [KpiEntry(name=self.CONSUMPTION_KPI, unit="kWh", value=total, tag=KpiTagEnumClass.GAS_METER)]
+
+
+# ------------------------------------------------------------------------------------------ battery
+
+
+@dataclass_json
+@dataclass
+class FakeBatteryConfig(ConfigBase):
+    """A battery sized from the PV peak power beside it, with its unit on the sized field."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeBattery"
+
+    component_id: ComponentID
+    #: One kWh per kWp of the array it is bound to, unless pinned.
+    capacity_in_kwh: Sizable[float] = sized_field(
+        rule=(Size.PV_PEAK_POWER_IN_WATT * 1e-3).rounded(2), unit=lt.Units.KWH
+    )
+
+    @preset
+    @classmethod
+    def preset_sized_to_pv(cls, name: str) -> "FakeBatteryConfig":
+        """Capacity AUTO."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeBattery(FixtureComponent):
+    """Publishes its capacity; the toy has no state."""
+
+    CAPACITY_KPI = "Battery capacity"
+
+    CLASS_INTERFACE = ClassInterface(
+        outputs=(DeclaredPort("Capacity", lt.LoadTypes.ANY, lt.Units.KWH),),
+        kpis=(CAPACITY_KPI,),
+    )
+    SUM_KPIS = {CAPACITY_KPI: ("Capacity", 1.0 / 96.0)}
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeBatteryConfig) -> None:
+        """Builds the battery."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """The capacity, every step."""
+        self.set(stsv, "Capacity", concrete(self.config.capacity_in_kwh))
+
+
+# -------------------------------------------------------------------------------- a solar circuit
+
+
+@dataclass_json
+@dataclass
+class FakeCollectorConfig(ConfigBase):
+    """A solar collector, one end of a ``solar`` circuit: an end of another medium than ``dhw``."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeCollector"
+
+    component_id: ComponentID
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "FakeCollectorConfig":
+        """A collector."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeCollector(FixtureComponent):
+    """Owns the ``solar`` circuit's mass flow and supply leg."""
+
+    CLASS_INTERFACE = ClassInterface(
+        inputs=(DeclaredPort("ReturnTemperatureSolar", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
+        outputs=(
+            DeclaredPort("MassFlowSolar", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
+            DeclaredPort("SupplyTemperatureSolar", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        ),
+    )
+    OPTIONAL_INPUTS = ("ReturnTemperatureSolar",)
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeCollectorConfig) -> None:
+        """Builds the collector."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """No sun in the fixture."""
+        self.set(stsv, "MassFlowSolar", 0.0)
+        self.set(stsv, "SupplyTemperatureSolar", self.value(stsv, "ReturnTemperatureSolar"))
+
+
+# ------------------------------------------------------------------ dhw ends that do not fit a boiler
+
+
+@dataclass_json
+@dataclass
+class FakeDhwSinkConfig(ConfigBase):
+    """A dhw end that reads the boiler's outputs but declares no default connections from it."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeDhwSink"
+
+    component_id: ComponentID
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "FakeDhwSinkConfig":
+        """A sink."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeDhwSink(FixtureComponent):
+    """Reads ``MassFlowDhw`` and ``SupplyTemperatureDhw``, owns ``ReturnTemperatureDhw``, declares no defaults."""
+
+    CLASS_INTERFACE = ClassInterface(
+        inputs=(
+            DeclaredPort(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
+            DeclaredPort(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        ),
+        outputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
+    )
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeDhwSinkConfig) -> None:
+        """Builds the sink."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """A constant return leg."""
+        self.set(stsv, RETURN_TEMPERATURE_DHW, 40.0)
+
+
+@dataclass_json
+@dataclass
+class FakeDhwReturnConfig(ConfigBase):
+    """A dhw end that only owns the return leg and reads nothing."""
+
+    MAIN_CLASS = "tests.assemblies.fixture_components.FakeDhwReturn"
+
+    component_id: ComponentID
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "FakeDhwReturnConfig":
+        """A return leg."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class FakeDhwReturn(FixtureComponent):
+    """Owns ``ReturnTemperatureDhw`` and reads none of the boiler's outputs."""
+
+    CLASS_INTERFACE = ClassInterface(
+        outputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
+    )
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeDhwReturnConfig) -> None:
+        """Builds the end."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """A constant return leg."""
+        self.set(stsv, RETURN_TEMPERATURE_DHW, 40.0)

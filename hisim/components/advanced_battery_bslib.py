@@ -91,11 +91,11 @@ class BatteryConfig(ConfigBase):
     lifetime_in_cycles: float = 5e3
     #: charging and discharging power in Watt. Sizable: left ``AUTO`` it is computed by
     #: :data:`INVERTER_POWER_LAW` from the PV peak power the array contributes.
-    custom_pv_inverter_power_generic_in_watt: Sizable[float] = sized_field(rule=INVERTER_POWER_LAW)
+    custom_pv_inverter_power_generic_in_watt: Sizable[float] = sized_field(rule=INVERTER_POWER_LAW, unit=Units.WATT)
     #: battery capacity in kWh. Sizable: left ``AUTO`` it is computed by :data:`CAPACITY_LAW`
     #: from the same fact. Marked as the capacity field for the cost engine.
     custom_battery_capacity_generic_in_kilowatt_hour: Sizable[float] = sized_field(
-        rule=CAPACITY_LAW, metadata={"capacity": True}
+        rule=CAPACITY_LAW, unit=Units.KWH, metadata={"capacity": True}
     )
 
     @preset

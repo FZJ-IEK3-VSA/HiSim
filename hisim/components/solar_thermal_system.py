@@ -180,6 +180,7 @@ class SolarThermalSystemConfig(ConfigBase):
     area_m2: Sizable[float] = sized_field(
         rule=Size.NUMBER_OF_APARTMENTS * COLLECTOR_AREA_IN_M2_PER_APARTMENT,
         value_type=float,
+        unit=loadtypes.Units.SQUARE_METER,
         note=f"{COLLECTOR_AREA_IN_M2_PER_APARTMENT} m2 of collector per apartment",
     )
 

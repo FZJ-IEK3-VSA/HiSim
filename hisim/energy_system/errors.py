@@ -60,9 +60,12 @@ class EnergySystemErrorId(enum.Enum):
     The ``EF-7x`` band is the assemblies' (``assemblies_spec.md``): ``EF-70`` … ``EF-75`` for reading,
     resolving and library-checking an assembly file, ``EF-76`` … ``EF-79`` for an import's
     parameters and their units, ``EF-7A`` … ``EF-7J`` for the binding of ports (§3.3), ``EF-7K`` for
-    the evaluation order, ``EF-7L`` for a construct a later step of the assemblies work lowers, and
-    ``EF-7M`` for a verb naming a port the assembly does not have. The letter ``I`` is skipped, as
-    it reads like a one.
+    the evaluation order, ``EF-7L`` for a construct a later step of the assemblies work lowers,
+    ``EF-7M`` for a verb naming a port the assembly does not have, ``EF-7N`` for the two ends of a
+    hydronic circuit that do not fit together, ``EF-7P`` for a carrier need without exactly one
+    provider (and a provider without a consumer), ``EF-7Q`` for a consuming output whose energy
+    carrier is not the need's, and ``EF-7R`` for a fact port bound to a component that does not
+    provide the fact. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -158,6 +161,10 @@ class EnergySystemErrorId(enum.Enum):
     ORDER_INVALID = "EF-7K"
     NOT_LOWERED_IN_THIS_STEP = "EF-7L"
     UNKNOWN_PORT = "EF-7M"
+    CIRCUIT_ENDS_DO_NOT_FIT = "EF-7N"
+    CARRIER_PROVIDER = "EF-7P"
+    CARRIER_MISMATCH = "EF-7Q"
+    FACT_NOT_PROVIDED = "EF-7R"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
     RECORDED_NAME_INVALID = "EF-R1"

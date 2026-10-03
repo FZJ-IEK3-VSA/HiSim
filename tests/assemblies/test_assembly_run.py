@@ -80,6 +80,8 @@ def test_the_kpis_of_two_instances_carry_their_import_and_instance(house_run: Pa
         "pv/array",
     )
     assert (west["import"], west["instance"], west["name"]) == ("pv", "west", "pv-west-PVSystem")
+    assert east["display_name"] == "PV array, east, azimuth 90"
+    assert west["display_name"] == "PV array, west, azimuth 270"
 
     finder = KpiFinder(document)
     addresses = finder.addresses(import_key="pv")
@@ -90,6 +92,68 @@ def test_the_kpis_of_two_instances_carry_their_import_and_instance(house_run: Pa
     assert len(addresses) == 2
     west_only = finder.addresses(import_key="pv", instance="west")
     assert [address.source.instance for address in west_only if address.source is not None] == ["west"]
+
+
+@pytest.fixture(name="boiler_run", scope="module")
+def fixture_boiler_run(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Runs the boiler house — a dhw circuit, a natural-gas carrier, a fact port — once for the module."""
+    result = tmp_path_factory.mktemp("boiler_run")
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Fixtures.LIBRARY))
+    try:
+        code = main(
+            [
+                "energy-system",
+                "run",
+                str(Fixtures.SYSTEMS / "boiler_house.energy_system.yaml"),
+                str(Fixtures.ROOT / "one_day_balance.simulation.yaml"),
+                "--result-dir",
+                str(result),
+            ]
+        )
+    finally:
+        monkeypatch.undo()
+    assert code == 0
+    return result
+
+
+@pytest.mark.base
+def test_a_circuit_and_a_carrier_run_one_day_with_the_energy_balance_closed(boiler_run: Path) -> None:
+    """The boiler's ports balance; the meter reads what the boiler burns; the battery is sized to one array."""
+    balance = json.loads((boiler_run / "balance_report.json").read_text(encoding="utf-8"))
+    assert balance["verdict"] == "closes"
+    (boiler,) = [entry for entry in balance["components"] if entry["component"] == "boiler-Boiler"]
+    assert boiler["verdict"] == "closes" and boiler["throughput_kwh"] > 0
+
+    kpis = json.loads((boiler_run / "all_kpis.json").read_text(encoding="utf-8"))["BUI1"]
+    metered = kpis["Gas Meter"]["Gas consumption (gas-Meter)"]
+    burned = kpis["General"]["Boiler fuel (boiler-Boiler)"]
+    assert metered["value"] == pytest.approx(burned["value"]) and burned["value"] > 0
+    assert burned["source"]["display_name"] == "Gas boiler, 4000 W"
+    assert kpis["General"]["Battery capacity (battery-Battery)"]["value"] == pytest.approx(5.0)
+
+    imports = realized(boiler_run)["metadata"]["imports"]
+    assert [circuit["circuit"] for circuit in imports["circuits"]] == ["dhw"]
+    assert imports["carriers"][0]["consumers"][0]["outputs"] == ["boiler-Boiler.FuelUse"]
+    assert imports["addresses"]["boiler-Boiler"]["display_name"] == "Gas boiler, 4000 W"
+
+
+@pytest.mark.base
+def test_the_boiler_houses_realized_record_re_runs_without_any_assembly(boiler_run: Path, tmp_path: Path) -> None:
+    """The lowered feed, circuit wires and sizing line are plain items of the record."""
+    code = main(
+        [
+            "energy-system",
+            "run",
+            str(boiler_run / "realized.energy_system.yaml"),
+            str(Fixtures.ROOT / "one_day_balance.simulation.yaml"),
+            "--rerun",
+            "--result-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 0
 
 
 @pytest.mark.base
@@ -153,3 +217,23 @@ def test_describe_reads_an_assembly_file_by_its_path() -> None:
     assert code == 0
     assert "bounds    PVSystem.ElectricityOutput [WATT]: 0 … 20000" in out.getvalue()
     assert "at_most_one_of: [power_in_watt, share_of_roof]" in out.getvalue()
+
+
+@pytest.mark.base
+def test_describe_prints_circuit_carrier_and_fact_ports(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A provision with its meter, a carrier need with its outputs, a circuit end with its outputs, a fact need."""
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Fixtures.LIBRARY))
+    out = io.StringIO()
+    with redirect_stdout(out):
+        for assembly in ("supply/gas_connection", "heating/gas_boiler", "storage/battery", "pv/array"):
+            assert main(["energy-system", "describe", assembly]) == 0
+    text = " ".join(out.getvalue().split())
+
+    for expected in (
+        "connection provides carrier natural_gas, metered by Meter; provided",
+        "fuel needs carrier natural_gas for Boiler.FuelUse; required",
+        "dhw circuit dhw at Boiler (MassFlowDhw, SupplyTemperatureDhw, ReturnTemperatureDhw); optional",
+        "pv_power needs fact pv_peak_power_in_watt into Battery; required",
+        "peak_power provides fact pv_peak_power_in_watt from PVSystem; provided",
+    ):
+        assert expected in text, expected

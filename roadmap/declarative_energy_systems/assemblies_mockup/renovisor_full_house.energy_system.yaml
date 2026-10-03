@@ -13,10 +13,11 @@
 # interface; `preset` is a named parameter set of the assembly; `installation_year` and `quote` are reserved
 # per-instance fields read by the economics (D18, D22); `bind:` names a port's partner where the default rule would be
 # ambiguous or the port is optional (D8), `none` declines an optional port. Three relations only (spec §4.3): a LINK
-# (`bind:`: a carrier need to its provider, a flow to the bus, the two ends of a circuit, a device's zone_heat to its
-# Building input), an OBSERVATION (`observes:`, read-only, invisible to the energy balance) and an ACTUATION (a
-# controller into one L1 set-point modifier, `ems_modifier`, or into the battery's LoadingPowerInput; D21). `AUTO`
-# leaves a sized parameter to the class law against the expanded system.
+# (`bind:`: a fuel need to its provider, the two ends of a circuit, a device's zone_heat to its Building input), an
+# OBSERVATION (`observes:`, read-only; each meter and the EMS write their own) and an ACTUATION (a controller into one
+# L1 set-point modifier, `ems_modifier`, or into the battery's LoadingPowerInput; D21). Electricity has no link: an
+# electricity need is only the check that the one grid connection exists, never bound, and its flows are observed.
+# `AUTO` leaves a sized parameter to the class law against the expanded system.
 
 schema_version: 4                                   # the assemblies extension of the v3 format (spec §2)
 name: renovisor_calculation_<job id>
@@ -146,7 +147,7 @@ imports:
     bind:
       sh: HeatDistribution.sh                       # hydronic_circuit, heating_water: buffer <-> HDS
       flow_temperature: HeatDistributionController.flow_temperature
-      electricity: grid                             # energy_carrier_supply (a boiler would bind `fuel: gas`)
+                                                    # electricity: no bind, the one grid connection (a boiler: `fuel: gas`)
       ems_modifier: control                         # the EMS raises the L1 set points on surplus (D21); makes both
                                                     # electricity ports controlled feeds (weights 2 and 3)
 
@@ -173,7 +174,7 @@ imports:
       tank_and_pipe_insulated: true                 # R: tank_and_pipe_insulated; M: hot_water_tank_and_pipe_insulation
     bind:
       hot_water_demand: Occupancy.hot_water_demand
-      electricity: grid                             # inactive when energy_carrier is a fuel; then `fuel: gas`
+                                                    # electricity: no bind; inactive for a fuel carrier, then `fuel: gas`
       ems_modifier: control                         # the EMS raises the immersion thermostat on PV surplus
                                                     # († EMS has no ELECTRIC_HEATING_DHW modifier yet, gap G5)
 
@@ -189,7 +190,6 @@ imports:
     bind:
       dhw_coil: dhw.solar_coil                      # optional PROVIDED port on the DHW tank (D20); combi has none
       sh_coil: heating.solar_coil                   # optional provided port on the heating buffer (D20)
-      pump_electricity: grid
       ems_modifier: none                            # SOLAR_THERMAL_SYSTEM could be EMS-ranked (weight 4); declined
 
   # ---- ventilation: R: ventilation.type_of_system / M: ventilation_system (†: natural and trickle vents are site
@@ -198,7 +198,7 @@ imports:
     assembly: ventilation/mechanical_with_heat_recovery   # or mechanical_extract, demand_controlled_extract
     installation_year: 2024
     parameters: {heat_recovery_efficiency_in_percent: 85}
-    bind: {air_exchange: Building.ventilation, zone: Building.zone, electricity: grid}
+    bind: {air_exchange: Building.ventilation, zone: Building.zone}
 
   # ---- air conditioning: R: house.air_conditioning / M: air_conditioners. One unit (the request allows one, D19);
   #      SimpleAirConditioner exists, its Building input (†) does not.
@@ -206,7 +206,7 @@ imports:
     assembly: cooling/split_unit
     installation_year: 2021
     parameters: {power_in_watt: 3500}               # R: power_in_watt
-    bind: {room_cooling: Building.cooling, zone: Building.zone, electricity: grid}   # not controllable (no L1 modifier)
+    bind: {room_cooling: Building.cooling, zone: Building.zone}   # not controllable (no L1 modifier)
 
   # ---- photovoltaics: R: house.pv_systems[] (#83, list with ids) / M: photovoltaic_system (replaces | adds)
   pv:
@@ -221,7 +221,6 @@ imports:
         quote: {amount_in_euro: {min: 7500, max: 9600}, per: unit, source: "installer quote 2026-03"}  # M: cost (D22)
         parameters: {azimuth_in_degree: 90, tilt_in_degree: 35, share_of_roof_area: 0.30,
                      shading_losses_in_percent: 0}  # at_most_one_of: [power_in_watt, share_of_roof_area]
-    bind: {production: grid}                        # link: electricity_flow production -> the bus (held by the EMS)
 
   # ---- batteries: R: house.batteries[] / M: battery_system (replaces | adds)
   battery:
@@ -229,8 +228,8 @@ imports:
     instances:
       main: {installation_year: 2026,
              parameters: {capacity_in_kwh: AUTO, power_in_watt: AUTO, days_to_cover: 1}}   # R: capacity | days_to_cover
-    bind: {electricity: grid}                       # link to the bus; its controllable side is REQUIRED and binds the
-                                                    # one controller (§4.4): LoadingPowerInput, weight 6
+    # electricity: observed by the EMS; its controllable side is REQUIRED and binds the one controller (§4.4):
+    # LoadingPowerInput, weight 6
 
   # ---- electric vehicles: R: house.electric_vehicles (number 1..2) / M: electric_vehicle (†: 2 cars, G12)
   ev:
@@ -238,13 +237,13 @@ imports:
     instances:
       car_1: {installation_year: 2023, parameters: {commuting_distance_in_km: 20, charging_power_in_watt: 11000}}
       car_2: {installation_year: 2026, parameters: {commuting_distance_in_km: 10, charging_power_in_watt: 3700}}
-    bind: {usage: Occupancy.car_usage, electricity: grid, ems_modifier: control}   # weights 5 and 6 -> battery 7
+    bind: {usage: Occupancy.car_usage, ems_modifier: control}   # weights 5 and 6 -> battery 7
 
   # ---- control: the L2 EMS. Present when anything is controllable. Smart HEATING control is not here: it is the
   #      heating import's `control:` parameter (its L1, D21); there is no thermostat import.
   control:
     assembly: control/ems_self_consumption          # R: occupancy.pv_self_consumption_optimised selects the policy
-    observes: [{connector: electricity_flow}]       # it holds the bus while it exists (spec §4.3)
+    observes: [{connector: electricity_flow, flow: [production, consumption, storage]}]   # the flows; publishes `net`
     parameters:
       priorities:                                   # what it actuates, in order (D11); default shown
         - {connector: electricity_flow, component_type: RESIDENTS}
@@ -255,7 +254,9 @@ imports:
         - {connector: electricity_flow, component_type: BATTERY}
 
   # ---- supplies: one provider per carrier the house draws (D6: missing provider fails; the translator adds it)
-  grid:  {assembly: supply/electricity_grid}        # the bus (yielded to the EMS here) and its meter (observes grid_net)
+  grid:                                             # the grid connection and its meter; with an EMS the meter observes
+    assembly: supply/electricity_grid               # the EMS's net only (observing the flows too: double count, §4.3)
+    observes: [{connector: electricity_flow, flow: net}]
   gas:   {assembly: supply/gas_connection}          # present because the cooker draws gas (a boiler house too)
   logs:  {assembly: supply/delivered_fuel, parameters: {carrier: wood_logs}}   # pellets, wood chips, oil, HVO (†), LPG (†)
   # heat_network: {assembly: supply/district_heating_connection}   # when heating or dhw is district heating

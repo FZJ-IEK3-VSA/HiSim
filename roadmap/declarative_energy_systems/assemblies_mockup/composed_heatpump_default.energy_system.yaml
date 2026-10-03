@@ -80,7 +80,8 @@ imports:
   heating:
     assembly: heating/air_source_heat_pump          # parameter defaults = the twin (preset de_twin)
     bind: {ems_modifier: control}                   # optional port with a candidate: intent required (D8 i);
-                                                    # sh, flow_temperature, weather, electricity bind their one partner
+                                                    # sh, flow_temperature, weather bind their one partner;
+                                                    # electricity: only the check that one grid connection exists
   dhw:
     assembly: dhw/indirect_cylinder
     bind: {circuit: heating.dhw}
@@ -91,6 +92,10 @@ imports:
     assembly: storage/battery
     instances: {battery: {}}
   control:
-    assembly: control/ems_self_consumption
+    assembly: control/ems_self_consumption          # observes the flows (its default selection), publishes `net`
   grid:
     assembly: supply/electricity_grid
+    observes: [{connector: electricity_flow, flow: net}]   # the EMS's net only: the twin's ems_with_battery meter.
+                                                    # Without this line the default (every electricity_flow) would
+                                                    # also match the flows `net` covers: a load error (double count).
+                                                    # metered_directly: drop `control` and this line (spec §4.3).

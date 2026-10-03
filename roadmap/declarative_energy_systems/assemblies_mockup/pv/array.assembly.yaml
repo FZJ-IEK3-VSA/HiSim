@@ -52,5 +52,5 @@ interface:
     weather_id:  {connector: sizing_fact, fact: weather_identity, into: [PVSystem]}
   provides:
     production:  {connector: electricity_flow, output: PVSystem.ElectricityOutput, flow: production, component_type: PV}
-                 # a link to the electricity bus (spec §4.3); the bus holder's feed is ELECTRICITY_PRODUCTION at 999
+                 # observed, never linked (spec §4.3): each observer's feed is ELECTRICITY_PRODUCTION at 999
     peak_power:  {connector: sizing_fact, fact: pv_peak_power_in_watt, export: true}   # config.py:181-186; read by batteries

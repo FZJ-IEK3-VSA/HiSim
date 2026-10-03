@@ -2,8 +2,10 @@
 # The L2 controller (D11, D21). It observes electricity flows and actuates ONLY L1 set-point modifiers and the
 # battery's LoadingPowerInput (and an EV's L1 charge target). It owns the priority list; no device declares a weight.
 #
-# When this import exists it HOLDS THE ELECTRICITY BUS (spec §4.3): every electricity link of the house becomes one of
-# its feeds, and the grid's meter observes its `grid_net` instead of the flows themselves (twin :100-146).
+# It OBSERVES the electricity flows (its own `observes:` selection, spec §4.3) and publishes their sum as `grid_net`,
+# an electricity_flow port of flow `net` that declares which flows it covers. The grid's meter observes that port only
+# when the `grid` import says so (`observes: [{connector: electricity_flow, flow: net}]`); nothing changes implicitly.
+# A meter observing `grid_net` and a covered flow is a load error (double count). Twin :100-146.
 
 schema_version: 4
 kind: assembly
@@ -41,13 +43,13 @@ components:
       space_heating_water_storage_temperature_offset_value: {$param: sh_storage_offset_in_kelvin}
       domestic_hot_water_storage_temperature_offset_value: {$param: dhw_storage_offset_in_kelvin}
     inputs:
-      - {$bus: feeds}                                      # every linked electricity flow, sorted by feed resolution
+      - {$observes: flows}                                 # every observed flow, sorted by feed resolution
 
 interface:
-  holds:
-    bus: {connector: electricity_bus, holder: EMS}         # takes the bus from the grid's meter (spec §4.3)
   observes:
-    flows: {selectors: [{connector: electricity_flow}], into: [EMS]}
+    flows:
+      into: [EMS]
+      default: [{connector: electricity_flow, flow: [production, consumption, storage]}]   # never its own `net`
   actuates:
     priorities: {$param: priorities}                       # controllable electricity ports, weights derived
     modifiers:                                             # the L1 targets of a bound `ems_modifier` or `controllable`
@@ -59,4 +61,5 @@ interface:
          from: EMS.BuildingIndoorTemperatureModifier}      # into Building AND HeatDistributionController (site)
       # battery_power_target / ev_charging_target come out of the feed's dispatch output, not a fixed output
   provides:
-    grid_net: {connector: electricity_flow, output: EMS.TotalElectricityToOrFromGrid, flow: net}   # the meter reads it
+    grid_net: {connector: electricity_flow, output: EMS.TotalElectricityToOrFromGrid, flow: net,
+               covers: flows}                              # the flows this net already sums: the double-count check

@@ -1,16 +1,16 @@
 # Mockup (design, not loadable): energy_systems/assemblies/supply/electricity_grid.assembly.yaml
-# The grid connection: the electricity BUS (the link end of every electricity flow, spec §4.3) and the METER that
-# observes it. Today's ElectricityMeter conflates both: it sums its production and consumption channels
-# (electricity_meter.py:504, :520) and books the difference as grid exchange.
+# The grid connection (the provider of the electricity carrier, and the economics' connection subject) plus the
+# ElectricityMeter, an OBSERVER whose selection the importing file writes (spec §4.3, §5.1). Electricity has no link:
+# an electricity need only checks that exactly one grid connection exists; no wire goes to it (spec §3.2).
 #
-# Bus placement (spec §4.3), the one rule that makes both twin shapes come out of one file:
-#  - no controller import holds the bus -> the meter holds it: every linked flow is a meter feed
-#    (twin option `metered_directly`, :147-171);
-#  - a controller import holds it (control/ems_self_consumption `holds: bus`) -> every linked flow is a feed of the
-#    EMS, and the meter observes only the controller's `grid_net` (twin option `ems_with_battery`, :102-109).
-# Dry-run gap G4: this makes the meter's wiring depend on the presence of another import, which D8's principle
-# ("adding one import never silently changes another") forbids unless the rule is written down as the exception or
-# the grid import states it (`bind: {bus: control}`).
+# The meter sums what it observes on its production and consumption channels (electricity_meter.py:504, :520) and
+# books the difference as grid exchange. The two twin shapes are two selections, written on the importing `grid` line:
+#  - no EMS: `observes: [{connector: electricity_flow}]` (the default) -> every flow is a meter feed
+#    (twin option `metered_directly`, :145-171);
+#  - with an EMS: `observes: [{connector: electricity_flow, flow: net}]` -> the meter's one input is the EMS's `net`
+#    port (twin option `ems_with_battery`, :105-109).
+# Adding a `control` import changes nothing here. Left at the default, the meter would observe the EMS's `net` port AND
+# the flows that net covers: a load error (double count), so the author edits the `grid` line.
 
 schema_version: 4
 kind: assembly
@@ -26,20 +26,16 @@ components:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:
-      - {$bus: feeds_or_net}                               # all linked flows, or the holder's grid_net
+      - {$observes: reading}                               # the feeds the importer's `observes:` selects
 
 interface:
   provides:
-    bus:
-      connector: electricity_bus
-      holder: ElectricityMeter
-      yields_to: controller                                # a `holds: bus` import takes it over
-      carrier: electricity                                 # the provider of every electricity energy_carrier_supply need
     connection:
       connector: energy_carrier_supply
-      carrier: ELECTRICITY
+      carrier: ELECTRICITY                                 # the one electricity provider; an existence check, no wire
   observes:
     reading:
       into: [ElectricityMeter]
-      selectors: [{connector: electricity_flow, flow: net}]   # active only when a controller holds the bus
-      feed: {tags: [ELECTRICITY_PRODUCTION], weight: 999}     # the twin's line :106-109, verbatim
+      default: [{connector: electricity_flow}]             # replaced by the importing file's `observes:`
+      # tags and weight from the meter's connector declaration: production -> ELECTRICITY_PRODUCTION 999,
+      # consumption -> ELECTRICITY_CONSUMPTION_UNCONTROLLED 999, net -> the production channel at 999 (twin :106-109)

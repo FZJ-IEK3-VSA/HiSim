@@ -103,7 +103,7 @@ components:
   control__EMS:
     class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     preset: optimize_own_consumption
-    inputs:                                         # the bus: every linked electricity flow (spec §4.3)
+    inputs:                                         # control.flows: every flow its `observes:` selects (spec §4.3)
       - from: battery__battery__Battery.AcBatteryPowerUsed
         component_type: BATTERY
         tags:
@@ -138,7 +138,7 @@ components:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:
-      - from: control__EMS.TotalElectricityToOrFromGrid   # grid.reading observes control.grid_net
+      - from: control__EMS.TotalElectricityToOrFromGrid   # the one match of grid's `observes:` (flow net)
         tags:
           - ELECTRICITY_PRODUCTION
         weight: 999
@@ -151,9 +151,9 @@ components:
 #              members: {ControllerSH: heating__ControllerSH, HeatPump: heating__HeatPump,
 #                        ControllerDHW: heating__ControllerDHW, Buffer: heating__Buffer},
 #              ports: {weather: Weather (default), flow_temperature: HeatDistributionController.flow_temperature
-#                      (default), sh: HeatDistributionSystem.sh (default), electricity: grid.connection (default),
-#                      dhw: dhw.circuit (bound by dhw), electricity_sh: bus control__EMS, weight 2,
-#                      electricity_dhw: bus control__EMS, weight 3, ems_modifier: control (written),
+#                      (default), sh: HeatDistributionSystem.sh (default), electricity: grid.connection (exists),
+#                      dhw: dhw.circuit (bound by dhw), electricity_sh: observed by control__EMS, weight 2,
+#                      electricity_dhw: observed by control__EMS, weight 3, ems_modifier: control (written),
 #                      solar_coil: unbound (optional, no candidate), heat_load: Building, design_temperature: Weather,
 #                      room_setpoint: Building, emitter_type: HeatDistributionController,
 #                      heating_threshold: HeatDistributionController}}
@@ -164,12 +164,14 @@ components:
 #   pv:       {assembly: pv/array, instances: {pv_system: {parameters: <all defaults>,
 #              members: {PVSystem: pv__pv_system__PVSystem},
 #              ports: {weather: Weather, roof_area: Building, weather_id: Weather,
-#                      production: bus control__EMS, 999}}}}
+#                      production: observed by control__EMS, 999}}}}
 #   battery:  {assembly: storage/battery, instances: {battery: {members: {Battery: battery__battery__Battery},
-#              ports: {pv_peak_power: [pv__pv_system__PVSystem] (no line written), electricity: bus control__EMS,
-#                      controller control__EMS, weight 6}}}}
-#   control:  {assembly: control/ems_self_consumption, members: {EMS: control__EMS}, holds: bus,
+#              ports: {pv_peak_power: [pv__pv_system__PVSystem] (no line written),
+#                      electricity: observed by control__EMS, controller control__EMS, weight 6}}}}
+#   control:  {assembly: control/ems_self_consumption, members: {EMS: control__EMS},
+#              observes: {flows: [default] -> 5 feeds}, provides: {grid_net: net, covers: flows},
 #              weights: {UTSPConnector.electricity_use: 1, heating.electricity_sh: 2, heating.electricity_dhw: 3,
 #                        battery.battery.electricity: 6}}
 #   grid:     {assembly: supply/electricity_grid, members: {ElectricityMeter: grid__ElectricityMeter},
-#              bus: yielded to control, reading: control.grid_net}
+#              observes: {reading: [{connector: electricity_flow, flow: net}] -> control.grid_net},
+#              double_count_check: passed (grid_net only, none of the flows it covers)}

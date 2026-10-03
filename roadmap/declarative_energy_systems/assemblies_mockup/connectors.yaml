@@ -14,33 +14,40 @@
 connector_types:
 
   energy_carrier_supply:
-    description: A consumer's draw of one carrier from that carrier's provider (the link of spec §4.3).
+    description: >-
+      A consumer's draw of one carrier from that carrier's provider. For a fuel the link of spec §4.3; electricity has
+      no link, so for it the type is only the existence check below.
     quantities:
       drawn_power: {unit: WATT, writer: consumer}
     attributes:
       carrier: lt.EnergyBalanceCarrier member (ELECTRICITY, NATURAL_GAS, HEATING_OIL, PELLETS, WOOD_CHIPS, HYDROGEN, DISTRICT_HEAT); no LPG, no wood logs yet (spec §5.1)
     cardinality: exactly one provider per need (spec §3.3)
     lowered_to: >-
-      electricity: an electricity_flow feed of the bus holder (below); a fuel: a feed of the provider's meter
-      (GasMeter / FuelMeter default feeds, e.g. GenericBoiler.EnergyDemandSh, gas_meter.py default connections).
+      electricity: nothing but the check that exactly one electricity provider (the grid connection) exists, no wire
+      and no bind (the consumer's power is observed through its electricity_flow ports); a fuel: a feed of the
+      provider's meter, whose `observes:` selects it (GasMeter / FuelMeter default feeds, e.g.
+      GenericBoiler.EnergyDemandSh, gas_meter.py default connections).
 
   electricity_flow:
-    description: An electricity output published for the bus and for observers.
+    description: An electricity output published for observers (meters, the EMS); never a link end.
     quantities:
       power: {unit: WATT, load_type: ELECTRICITY, writer: device}
     attributes:
-      flow: production | consumption | storage | net        # net: a bus holder's grid balance (gap G6)
+      flow: production | consumption | storage | net        # net: an EMS's grid balance (TotalElectricityToOrFromGrid)
+      covers: for flow net only, the observer port whose flows the net already sums (the double-count check)
       component_type: lt.ComponentType member (PV, HEAT_PUMP_BUILDING, HEAT_PUMP_DHW, RESIDENTS, BATTERY, CAR_BATTERY, ...)
       controllable: >-
         absent (never controlled); {target_input: <Member.Input>} for a device without L1 (the battery's
         LoadingPowerInput; the EV's L1 ElectricityTargetFromEMS); {via: <control_signal port>} for a device whose L1
         modifier the EMS actuates (heat pump, immersion heater, spec §4.4, D21)
     lowered_to: >-
-      one feed of the bus holder. Tags: production -> ELECTRICITY_PRODUCTION, weight 999; consumption bound to the
-      controller -> ELECTRICITY_CONSUMPTION_EMS_CONTROLLED, weight from the priority list; consumption otherwise ->
+      observer feeds: one dynamic input of every component whose `observes:` matches it, never a link. Tags:
+      production -> ELECTRICITY_PRODUCTION, weight 999; consumption controlled by the EMS ->
+      ELECTRICITY_CONSUMPTION_EMS_CONTROLLED, weight from the priority list; consumption otherwise ->
       ELECTRICITY_CONSUMPTION_UNCONTROLLED, 999; storage -> component_type BATTERY + EMS_CONTROLLED; net -> the meter's
-      production channel at 999 (the twin's ems_with_battery meter line). `dispatch:` {target_input: X} for a
-      target_input port, {} for a `via:` port and for a controlled port with neither (residents).
+      production channel at 999 (the twin's ems_with_battery meter line). A meter observing a net port and a flow it
+      covers is a load error (double count). `dispatch:` {target_input: X} for a target_input port, {} for a `via:`
+      port and for a controlled port with neither (residents).
     implements:
       MoreAdvancedHeatPumpHPLib: {power: [ElectricalInputPowerSH, ElectricalInputPowerDHW]}   # two ports, two types
       PVSystem: {power: ElectricityOutput}
@@ -49,15 +56,6 @@ connector_types:
       L1Controller: {power: BatteryChargingPowerToEMS}            # controller_l1_generic_ev_charge
       L2GenericEnergyManagementSystem: {power: TotalElectricityToOrFromGrid}   # flow net
       SimpleAirConditioner: {power: ElectricalPowerConsumption}
-
-  electricity_bus:
-    description: >-
-      The link end of every electricity flow (spec §4.3). Held by the grid's meter, or by the controller when a
-      controller import exists; the holder aggregates the feeds; the meter then observes the holder's net flow.
-    quantities: {}
-    attributes:
-      holder: Member that aggregates the feeds
-    lowered_to: the feeds of the holder (above)
 
   hot_water_demand:
     description: Hot water the occupants draw from a DHW supplier.

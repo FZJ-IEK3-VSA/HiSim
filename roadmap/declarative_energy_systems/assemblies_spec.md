@@ -40,7 +40,7 @@ without a battery cannot be expressed at all (`hisim/renovisor/not_implemented_y
 
 ### 1.3 Where the rigidity really sits
 
-The aggregators are already dynamic. The electricity meter sums every input on its production channel
+The meter and the EMS are already dynamic components. The electricity meter sums every input on its production channel
 (`hisim/components/electricity_meter.py:504`, `:520`); the EMS ranks every controlled input by its source weight and
 pairs each with a dispatch output found by component type and the same weight
 (`hisim/components/controller_l2_energy_management_system.py:595-645`, the pairing `:617-625`, the dispatch `:790-821`).
@@ -50,7 +50,7 @@ batteries need two weights. Feed resolution is deterministic: feeds are sorted b
 
 The rigidity is in the files. A recorded twin writes every feed explicitly with its output, tags and weight
 (`energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml:96-171`), and the format has no way to say
-"every output tagged PV": a bare name expands only the aggregator's declared defaults for one named source
+"every output tagged PV": a bare name expands only the dynamic component's declared defaults for one named source
 (`feed_resolution.py:168-183`). Adding an array means editing the meter and EMS entries of both variant options, which
 R4 forbids the translator to do. Sizing has the same shape: a bare fact binds only when exactly one component provides
 it (`hisim/config/engine.py:13-25`, `:329-335`); the battery's laws read `pv_peak_power_in_watt`
@@ -112,8 +112,8 @@ import (and instance) it:
 1. resolves the assembly (§9.3), applies the preset, checks the parameters (types, units, values, constraints);
 2. evaluates every port's `required_when`/`active_when` and selects the internal variants;
 3. substitutes the parameters and gives every member its structured address (§2.4), rewriting internal references;
-4. binds every active port (§3.3) and lowers it to existing items — bare-name default inputs, explicit wires, aggregator
-   feeds, `sizing_sources` lines, config values (§3.2) — and resolves the selectors (§4);
+4. binds every active port (§3.3) and lowers it to existing items — bare-name default inputs, explicit wires, dynamic
+   input feeds, `sizing_sources` lines, config values (§3.2) — and resolves the selectors (§4);
 5. attaches a source map entry to everything it produced (§9.2) and writes an **import record** (data, like
    `ExpansionRecord`, `groups.py:133-151`): assembly path and content hash, preset, parameters as given and as
    defaulted, internal variants, the members' addresses, every port's state and partner, every derived weight.
@@ -255,8 +255,8 @@ They are declared in one place, proposed as `hisim/connectors.py`, which imports
 
 | Connector type | Quantities (unit, direction) | Port attributes | Lowered to |
 |---|---|---|---|
-| `energy_carrier_supply` | the carrier drawn (W or kWh per step), consumer → provider | `carrier` (`lt.EnergyBalanceCarrier`, `hisim/loadtypes.py:278-285`) | the provider's selector picks the output up (§5) |
-| `electricity_flow` | power (W) | `flow` production / consumption / storage; `controllable` (§4.4); `component_type` | a link to the bus, observer feeds (§4.3) |
+| `energy_carrier_supply` | the carrier drawn (W or kWh per step), consumer → provider | `carrier` (`lt.EnergyBalanceCarrier`, `hisim/loadtypes.py:278-285`) | a fuel: the link, the provider's meter observing the output (§5.1); electricity: only the check that exactly one electricity provider (grid connection) exists, no wire and no `bind:` |
+| `electricity_flow` | power (W) | `flow` production / consumption / storage / net; `controllable` (§4.4); `component_type`; for `net`, `covers` | observer feeds: dynamic inputs of whoever observes it (§4.3); never a link |
 | `hot_water_demand` | drawn volume per time step (`WaterConsumption`, l, `WARM_WATER`), demand → supplier | — | default-connection inputs or explicit wires |
 | `hydronic_circuit` | `MassFlow<c>` (kg/s, pump owner), `SupplyTemperature<c>`, `ReturnTemperature<c>` (°C, each leg's owner per hydronic spec §3.1) | `medium` heating_water / dhw / brine / solar_fluid; `end` (which legs this end owns) | explicit wires of the three outputs (§11.1) |
 | `control_signal` | one named signal with its unit | `signal`, `unit` | one explicit wire, one actuator per target (§4.3) |
@@ -285,8 +285,8 @@ the import (§9.2), naming the instance, the port and every candidate, with a pa
 - an optional port with candidates and neither `bind:` nor `none` (§3.1);
 - `bind:` on an inactive port, `none` on a required one, an inner port neither bound nor re-exported;
 - a `bind:` naming a partner whose connector is incompatible (type, medium, carrier, direction or unit);
-- an `energy_carrier_supply` need without exactly one provider link: unlinked fails, two providers fail (§4.3);
-  observers are never counted, so an output read by many is legal; a target input actuated twice;
+- a carrier need without exactly one provider of its carrier (§3.2); a target input actuated twice; a meter observing
+  a `net` port and a flow it covers (§4.3); observers are otherwise never counted, so an output read by many is legal;
 - a contract check, run once per assembly in tests and again after expansion: every port names a member whose class
   declares that connector type; every quantity maps to an input or output that exists with the declared unit and load
   type; every provided fact is in the member class's `SIZING_CONTRIBUTIONS`.
@@ -296,38 +296,34 @@ the import (§9.2), naming the instance, the port and every candidate, with a pa
 PRs #870/#871 give every energy-carrying output an `EnergyPort` with a role (`lt.EnergyRole`, `hisim/loadtypes.py:245`)
 and a carrier, and find the peer from the wiring (`energy_port.py:11-19`). A connector already says both: an
 `electricity_flow` port of flow consumption or storage is an `IN` port of carrier electricity on the device (negative
-while a storage discharges), production an `OUT`; an `energy_carrier_supply` port is the consumer's fuel `IN` whose peer
-is the provider's connection point (the bus, §4.3), never an observer; a `hydronic_circuit` carries `m c ΔT` as heat of
-the use its medium names (hydronic spec §3.5). The contract check also compares each connector quantity with the
-`EnergyPort` the class declares on that output, a class that declares none can be given one from its connector, and the
-peer is the bound partner the binding just wired.
+while a storage discharges), production an `OUT`; electricity has no link, so its peer stays whoever observes the
+output, by today's rule (`hisim/postprocessing/energy_balance/ports.py:206-226`); a fuel `energy_carrier_supply` port is
+the consumer's `IN` whose peer is the provider's meter observing it (§5.1); a `hydronic_circuit` carries `m c ΔT` as
+heat of the use its medium names (hydronic spec §3.5). The contract check also compares each connector quantity with the `EnergyPort` the
+class declares on that output, and a class that declares none can be given one from its connector.
 
 ## 4. Selectors: observe and actuate
 
 ### 4.1 Syntax
 
 `observes:` is a list of connector-typed selectors, allowed on any component entry, any import and any assembly
-interface; it replaces the former `select:` item of an aggregator's `inputs` (bare name, explicit wire and feed stay,
-`model.py:106-211`):
+interface; it replaces the former `select:` item of a dynamic component's `inputs` (bare name, explicit wire and feed
+stay, `model.py:106-211`):
 
 ```yaml
-components:                                       # supply/electricity_grid, its meter member
-  Meter:
-    class: hisim.components.electricity_meter.ElectricityMeter
-    observes:
-      - {connector: electricity_flow, flow: production}                      # every array, every CHP
-      - {connector: electricity_flow, flow: consumption, controllable: false}
-imports:                                          # a system file: a second meter is one more observer
+interface:                                        # supply/electricity_grid: the meter's observer port
+  observes: {reading: {into: [ElectricityMeter], default: [{connector: electricity_flow}]}}
+imports:                                          # a system file writes each observer's selection
   hp_tariff_meter: {assembly: supply/meter,
                     observes: [{connector: electricity_flow, component_type: [HEAT_PUMP_BUILDING, HEAT_PUMP_DHW]}]}
 ```
 
 A selector matches published ports by connector type and attributes (flow, carrier, component type, controllability,
 signal); a list observes the union of its matches. The feed's tags and weight (`ELECTRICITY_PRODUCTION` at 999 for the
-meter's production channel) come from the observer class's connector declaration (§3.2), so no file authors a tag; a
-selector may override them with `feed:`. An import's `observes:` fills the observer port its assembly declares
-(`interface: {observes: {reading: {into: [Meter]}}}`); a controller adds `actuates:` (§4.3), for the EMS its priority
-list (§4.4).
+meter's production channel, where a `net` port lands too) come from the observer class's connector declaration (§3.2),
+so no file authors a tag; a selector may override them with `feed:`. An observer never matches its own ports. An
+import's `observes:` fills the observer port its assembly declares, replacing its `default`; a controller adds
+`actuates:` (§4.3), for the EMS its priority list (§4.4).
 
 ### 4.2 Semantics
 
@@ -340,7 +336,7 @@ list (§4.4).
   channel matching (`hisim/energy_system/channel_matching.py:3-15`) runs unchanged. **Order:** import, instance, port
   order as written, then feed resolution's sort (`feed_resolution.py:10-14`); never a dict, file system or hash order.
 - **Coexistence.** Explicit feeds stay legal; a port both selected and fed explicitly to one observer is refused, as
-  today's `DUPLICATE_FEED` refuses one output read twice by one aggregator
+  today's `DUPLICATE_FEED` refuses one output read twice by one dynamic component
   (`hisim/energy_system/aggregator_ports.py:39-67`), and so is a `required: true` selector matching nothing. The twins
   keep their explicit feeds (§8); the gate of §13 proves a composed file's expansion writes exactly the twin's feeds.
 
@@ -349,14 +345,13 @@ list (§4.4).
 Decided (owner, 2026-10-03, D13): meters and controllers are the same kind of thing with respect to a flow — they read
 it — and a controller additionally acts on it. Ports stand in exactly three relations:
 
-1. **Link** — the physical counterpart of a flow, with exactly two ends: a consumer's `energy_carrier_supply` need and
-   its provider's connection point, a producing or storing `electricity_flow` port and the electricity bus, or the two
-   ends of a `hydronic_circuit` (§11.1). Links are what `bind:` decides (§3.3) and what the energy balance pairs (§3.4).
-2. **Observe** — a read-only tap on a published output, selected as in §4.1, by any number of observers. An observer is
-   invisible to the energy balance and never a link end: meters, a controller reading production, consumption or a tank
-   temperature, forecasters and loggers observe. Observing lowers to ordinary input wiring (§4.2), because HiSim's meter
-   and EMS are time-loop components, not post-processing; the lowering only stops counting the wire as consumption — the
-   expanded file marks it as an observation, and the peer search (`hisim/energy_port.py:11-19`) skips it.
+1. **Link** — two ends of one physical flow: a consumer's fuel `energy_carrier_supply` need and its provider, or the
+   two ends of a `hydronic_circuit` (§11.1); what `bind:` decides (§3.3). **Electricity has no link** (owner,
+   2026-10-03): its flows are only observed.
+2. **Observe** — a read-only tap on a published output, selected as in §4.1, by any number of observers: meters, a
+   controller reading production, consumption or a tank temperature, forecasters, loggers. It lowers to the observer's
+   dynamic inputs (§4.2), since HiSim's meter and EMS are time-loop components; the balance's peers come from that
+   wiring as today (§3.4).
 3. **Actuate** — a `control_signal` into one target input. Decided (owner, 2026-10-03, D21): HiSim's three control
    layers are the architecture. L1 controllers own the loops on physical variables, hardcoded in their device's
    assembly (§2.5); the L2 EMS observes electricity flows and actuates **only** L1 set-point modifiers (the heat
@@ -365,23 +360,30 @@ it — and a controller additionally acts on it. Ports stand in exactly three re
    `HeatDistributionController`, `building.py:332`, `heat_distribution_system.py:1045`) and the battery's
    `LoadingPowerInput` (`advanced_battery_bslib.py:195`; it has no L1). Each target input is actuated exactly once.
 
-**The bus and its meter.** A grid connection is physically a bus — the link end of every electricity flow of the house,
-where the net exchange is defined — plus a meter that observes it. `supply/electricity_grid` keeps the two roles apart:
-`bus` is the link partner of every electricity `energy_carrier_supply` need and every producing or storing
-`electricity_flow` port (a consumer's `electricity_flow` port publishes, for observers, the output its need links), and
-`meter` observes the bus. The `ElectricityMeter` conflates them today: it resolves its production and consumption
-channels (`hisim/components/electricity_meter.py:504`), sums them (`:520`) and books the difference as grid exchange.
-The lowering therefore places the bus: without a controller on the `ElectricityMeter` (today's `metered_directly`,
-`household_heatpump_building_sizer.grouped.energy_system.yaml:145-171`), with an EMS on the EMS, whose
-`TotalElectricityToOrFromGrid` the meter then reads (today's `ems_with_battery`, the same twin's `:105-109`). The file
-says the same in both cases, and both twins come out byte for byte. A second meter, `hp_tariff_meter` observing the
-heat-pump flows (§4.1), is nothing special: one more observer. The gas, oil and LPG connections have the same two roles,
-held by one meter component each.
+**Meter and EMS are observers with their own selections.** HiSim deliberately has no bus and no aggregator role: the
+pattern is a dynamic component whose inputs are added as its selectors match. The `ElectricityMeter` observes one set
+of `electricity_flow` ports and the EMS another, each in its own `observes:`; the sets may coincide or not. The meter
+sums its production and consumption channels (`hisim/components/electricity_meter.py:504`, `:520`) and books the
+difference as grid exchange. The two twin shapes are two selections of the meter, written on the `grid` import:
+
+```yaml
+grid: {assembly: supply/electricity_grid, observes: [{connector: electricity_flow}]}             # no EMS: the flows
+grid: {assembly: supply/electricity_grid, observes: [{connector: electricity_flow, flow: net}]}  # EMS: its net
+```
+
+Without an EMS the meter computes the exchange from the flows (twin `metered_directly`, `:145-171` of
+`household_heatpump_building_sizer.grouped.energy_system.yaml`); with one, `control/ems_self_consumption` observes the
+flows and publishes `TotalElectricityToOrFromGrid` as an `electricity_flow` of `flow: net` that `covers:` them, and
+the meter reads it (`ems_with_battery`, `:105-109`). Adding a `control` import changes the `grid` import only if its
+author edits `observes:`. The one authoring check: a meter observing a `net` port and a flow that net covers is a load
+error (double count) — raised by the default selection (every `electricity_flow`, `net` included) when a `control`
+import is added and the grid line left alone. The only "exactly once" rule is actuation (D21). A second meter
+(`hp_tariff_meter`, §4.1) is one more observer; a fuel meter observes the fuel outputs alike (§5.1).
 
 **Billing leaves the format.** No meter is "the billing one": a tariff in the economics file (D22) names the observer
 whose reading it prices, `tariff: {observer: grid.meter, …}`, and that no kWh is priced under two tariffs is an
 economics check against the observers' selections (a heat-pump tariff prices `hp_tariff_meter`, the household tariff
-`grid.meter` net of it). The format checks only the link rule of §3.3.
+`grid.meter` net of it). The format checks only the link rule of §3.3 and the double count above.
 
 ### 4.4 Control: devices declare, the controller decides
 
@@ -396,7 +398,7 @@ electricity ports it covers), never a device input: binding `ems_modifier: contr
 bound together or not at all; for these devices the actuated target is that modifier. An EV's charge controller is an
 L1 as well (`ElectricityTargetFromEMS`, the car twin). A **controller assembly** owns the policy:
 `control/ems_self_consumption` first, later `control/ems_tariff` and `control/ems_peak_shaving`, each with the EMS as
-member, observing `[{connector: electricity_flow}]` (§4.3), and a `priorities` parameter, the ordered list of
+member, observing the flows and publishing their `net` (§4.3), and a `priorities` parameter, the ordered list of
 connector-typed selectors it actuates:
 
 ```yaml
@@ -425,16 +427,16 @@ EMS without a battery is a `control` import with no `battery` import, which the 
 
 ### 5.1 Supply assemblies
 
-A **provider** of a carrier is a supply assembly whose connection point is the link end of that carrier's
-`energy_carrier_supply` needs (for electricity the bus, §4.3) and whose meter observes it: `supply/electricity_grid`
-(`ElectricityMeter`), `supply/gas_connection` (`GasMeter`), `supply/lpg_tank`, `supply/oil_tank` (`FuelMeter`),
-`supply/district_heating_substation`. A consumer's carrier port binds to the unique provider of that carrier — the
-component the energy-balance fuel port finds as its peer, because today the meter, holding both roles, reads the
-consumer's fuel output (`hisim/components/generic_boiler.py:450`, `:501`; `energy_port.py:12-17`). A supply assembly
-provides the connection point and its meter only; control is a `control` import (§4.4). The meter's carrier is pinned
-from the provider, not copied from "the generator beside it" through the `energy_carrier` fact
-(`hisim/components/gas_meter.py:63-68`, `:82`), which a second burner makes ambiguous; every bound consumer's carrier is
-checked against the provider's at load time.
+A **provider** of a carrier is a supply assembly: the connection (the carrier's provider, the economics' connection
+subject, §5.2) plus a meter whose `observes:` the importing file writes. `supply/electricity_grid` is the grid
+connection and the `ElectricityMeter`, by default observing every `electricity_flow` (§4.3); an electricity need only
+checks that exactly one exists (§3.2). `supply/gas_connection` (`GasMeter`), `supply/lpg_tank`, `supply/oil_tank`
+(`FuelMeter`) and `supply/district_heating_substation` keep their meter observing, by default, every
+`energy_carrier_supply` port of their carrier: that observation is the fuel link, and the meter the fuel port's balance
+peer as today (`hisim/components/generic_boiler.py:450`, `:501`; `energy_port.py:12-17`). Control is a `control` import
+(§4.4). The meter's carrier is pinned from the provider, not copied from "the generator beside it" through the
+`energy_carrier` fact (`hisim/components/gas_meter.py:63-68`, `:82`), which a second burner makes ambiguous; every
+bound consumer's carrier is checked against the provider's at load time.
 
 LPG is not a carrier yet: `LoadTypes` has `GAS` and `OIL` (`hisim/loadtypes.py:122`, `:129`), the balance carriers have
 no LPG (`loadtypes.py:278-285`, `energy_port.py:101-113`), and LPG houses run the gas twin (`translate.py:513`), which
@@ -568,7 +570,7 @@ line, config value: the import path, the instance, the member, and the assembly 
 keeps YAML line numbers for this). The entries live in a side table keyed by structured address and item, not in the
 expanded file, so the byte-identity gate of §13 is unaffected; the realized record's metadata carries them. Every
 downstream error prints the entry of what it names — class validation, sizing (ambiguous or missing fact), wiring and
-aggregator checks, the energy-balance report, economics (a subject without a catalogue entry) — in the shape
+feed checks, the energy-balance report, economics (a subject without a catalogue entry) — in the shape
 "`dhw__generator__HeatPump` (import dhw → generator, `dhw/heat_pump_water_heater.assembly.yaml:6` →
 `generator/dhw_heat_pump.assembly.yaml:9`): …".
 
@@ -663,8 +665,9 @@ written once, against pure circuits, after C and D (or their joint PR) are on ma
 
 ### 11.2 Energy balance (hisim-9uoo, #870/#871)
 
-Members keep their classes' `EnergyPort`s, checked and supplied by connectors (§3.4); a provider's connection point is
-the fuel ports' peer (`energy_port.py:12-17`), an observer never is (§4.3). The check allows a one-sided booking toward
+Members keep their classes' `EnergyPort`s, checked and supplied by connectors (§3.4); a fuel port's peer is the
+provider's meter observing it (`energy_port.py:12-17`); electricity has no link, so its peer is whoever observes the
+output, by today's rule, unchanged (§3.4, §4.3). The check allows a one-sided booking toward
 a component without ports (`energy_port.py:21-25`), so the format, not the balance, refuses a missing provider (§5.2).
 
 ## 12. Worked examples
@@ -683,7 +686,7 @@ Each example is the `imports` block the translator adds to the site file (§10.1
 imports:
   heating: {assembly: heating/air_source_heat_pump, bind: {ems_modifier: control}}
   dhw:     {assembly: dhw/indirect_cylinder, bind: {circuit: heating.dhw}}
-  supply:  {assembly: supply/electricity_grid}
+  supply:  {assembly: supply/electricity_grid, observes: [{connector: electricity_flow, flow: net}]}
   control: {assembly: control/ems_self_consumption}
   pv:
     assembly: pv/array
@@ -697,8 +700,8 @@ imports:
 
 It expands to `pv__east__PVSystem` … `pv__flat__PVSystem`, `battery__garage__Battery` (weight 6; sized to all four
 arrays), `battery__cellar__Battery` (7), `heating__HeatPump` (2 and 3) and `control__EMS` with one production feed per
-array and the controlled feeds in priority order; the bus is lowered onto the EMS and `supply__ElectricityMeter`, the
-grid's meter, observes its net output, as in the twin (§4.3). Two arrays of equal tilt and azimuth share one cached
+array and the controlled feeds in priority order; `supply__ElectricityMeter` has one input, the EMS's `net` port its
+`observes:` line selects, as in the twin (§4.3). Two arrays of equal tilt and azimuth share one cached
 series, since the cache key holds neither power nor name (`hisim/components/generic_pv_system/pv_system.py:516-547`).
 
 (b) A gas-heated Irish house (`IE.N.SFH…` archetype) with an electric immersion storage water heater:
@@ -711,10 +714,11 @@ imports:
   dhw:     {assembly: dhw/storage_water_heater, preset: ie_immersion_120l}
 ```
 
-`dhw.fuel` is inactive, so the gas connection is never offered to the heater although it exists; `dhw.electricity` binds
-to `supply`; `ems_modifier` has no controller to bind, so the heater runs on its L1 thermostat alone, recorded. The
-boiler's `dhw` circuit is declined, which sets its controller to run without hot water. Adding a `control` import later
-makes this file fail until `dhw` says `bind: {ems_modifier: control}` or `none` (§3.1).
+`dhw.fuel` is inactive, so the gas connection is never offered to the heater although it exists; `dhw.electricity` is
+met by the one grid connection, `supply`, whose meter observes every flow; `ems_modifier` has no controller to bind,
+so the heater runs on its L1 thermostat alone, recorded. The boiler's `dhw` circuit is declined, which sets its
+controller to run without hot water. Adding a `control` import later makes this file fail until `dhw` says
+`bind: {ems_modifier: control}` or `none` (§3.1) and `supply` observes `flow: net` (the double count, §4.3).
 
 (c) After a `hot_water_system` measure to a heat-pump water heater only the `dhw` line changes, to `{assembly:
 dhw/heat_pump_water_heater, parameters: {volume_in_liter: 200}}`. The economics retire every member of the old import
@@ -732,7 +736,7 @@ natural_gas) is required and no provider of natural_gas exists", with the import
    constraints; the connector registry and first class declarations; `ComponentID.path`; source maps; the data,
    `control_signal` and `sizing_fact` ports, import record, load-time checks; `describe`. Fixtures only.
 2. **Observe and actuate, published ports, controller lowering.** `observes:`/`actuates:` items, `electricity_flow`
-   and `energy_carrier_supply` ports, the link rule, the bus placement (§4.3), the priority list and its weights.
+   and `energy_carrier_supply` ports, the link rule, the `net` port and the double-count check (§4.3), the priorities.
 3. **Sizing.** `Many` with `Sum`; the battery laws over all arrays; fact exports (§6). One array stays byte-identical.
 4. **First assemblies.** The site, one heating assembly (`heating/air_source_heat_pump`), `pv/array`, `storage/battery`,
    `control/ems_self_consumption`, `supply/electricity_grid`. Gate: site plus these imports expands to the heat-pump
@@ -783,7 +787,8 @@ All by the owner on 2026-10-03.
 - **D11 — Dispatch:** the controller assembly owns the priority list and derives the weights (§4.4).
 - **D12 — Site versus heating assembly:** (b): the buffer vessel lives in each heating assembly; the site keeps the HDS
   and its controller and exposes one `sh` circuit; `distribution/<type>` waits for a request that changes the HDS.
-- **D13 — Metering:** no metering architecture: meters are observers; billing is the economics file's; see §4.3.
+- **D13 — Metering:** no metering architecture: meters are observers; billing is the economics file's (§4.3).
+  Electricity has no link end: meter and EMS each observe their own selection (owner, 2026-10-03).
 - **D17 — Base files:** one site file and `heating/<generator>` assemblies instead of ten skeletons (§10.1).
 - **D18 — Installation year and quote:** reserved import-level fields next to `assembly:`, read by the economics through
   the import record and never by a component; not a parameter every assembly redeclares, not outside the file.

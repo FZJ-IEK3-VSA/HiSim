@@ -7,21 +7,23 @@ verbatim from the former single-module ``building.py``.
 
 import math
 from functools import lru_cache
+from typing import ClassVar
 
 import pvlib
 
 from hisim import log
 
-#: Solar reflectivity of the ground in front of a window, which decides the ground-reflected share of the
-#: irradiance on its plane. The default of EN ISO 52010-1:2017, and the value the PV system computes with
-#: (``hisim.components.generic_pv_system.calculation.ALBEDO``); stated here because pvlib would otherwise
-#: fall back to its own default of 0.25.
-ALBEDO: float = 0.2
-
 
 # =====================================================================================================================================
 class Window:
     """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
+
+    #: Solar reflectivity of the ground in front of the window, which decides the ground-reflected share of
+    #: the irradiance on its plane. The default of EN ISO 52010-1:2017, and the value the PV system computes
+    #: with (``hisim.components.generic_pv_system.calculation.ALBEDO``, kept equal by
+    #: ``tests/test_building_window.py``); stated here because pvlib would otherwise fall back to its own
+    #: default of 0.25.
+    ALBEDO: ClassVar[float] = 0.2
 
     def __init__(
         self,
@@ -155,7 +157,7 @@ class Window:
             global_horizontal_irradiance,
             direct_horizontal_irradiance,
             direct_normal_irradiance_extra,
-            albedo=ALBEDO,
+            albedo=self.ALBEDO,
         )
 
         if math.isnan(poa_irrad["poa_global"]):

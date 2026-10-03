@@ -10,9 +10,13 @@ window model multiplies the irradiance on its plane by the TABULA reduction fact
 import pytest
 
 from hisim.components.building.window import Window
+from hisim.components.generic_pv_system import calculation as pv_calculation
 
-#: Solar reflectivity of the ground (EN ISO 52010-1:2017 default; the value the PV system uses as well).
-GROUND_ALBEDO: float = 0.2
+
+@pytest.mark.base
+def test_the_window_and_the_pv_system_assume_the_same_ground_albedo() -> None:
+    """One ground in front of the house: the window's reflected share and the PV system's agree on it."""
+    assert Window.ALBEDO == pv_calculation.ALBEDO
 
 
 @pytest.mark.base
@@ -43,5 +47,5 @@ def test_a_north_window_with_the_sun_in_the_south_receives_the_diffuse_light() -
         reduction_factor_with_area=north_window.reduction_factor_with_area,
     )
 
-    diffuse_on_the_wall = (dhi + GROUND_ALBEDO * ghi) / 2
+    diffuse_on_the_wall = (dhi + Window.ALBEDO * ghi) / 2
     assert gain == pytest.approx(diffuse_on_the_wall * north_window.reduction_factor_with_area, rel=1e-9)

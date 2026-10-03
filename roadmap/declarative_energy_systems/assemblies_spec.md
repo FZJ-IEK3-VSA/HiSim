@@ -850,6 +850,8 @@ All by the owner on 2026-10-03.
 
 ### 14.2 Open
 
+**G8 — A heating assembly without a buffer (decided, owner, 2026-10-03: deferred to hydronic stage D).** Stage D makes the HDS's `position_hot_water_storage_in_system` derivable from the circuit binding (pump ownership on the circuit, the field sized from an exported fact) instead of set by an import; until then the heating assemblies are written with the buffer, the twins' shape. An import never patches a site field.
+
 **D14 — Connector registry location.** (a) `hisim/connectors.py`, importing only `hisim.loadtypes`, typed and importable
 by component classes. (b) `connectors.yaml` read by the loader, with the class declarations as strings. Recommendation:
 **(a)**; `hisim energy-system schema` exports it for the frontend and the docs.
@@ -858,11 +860,11 @@ by component classes. (b) `connectors.yaml` read by the loader, with the class d
 `result.json` and the KPI JSON, with the `__` string only as the column name. Recommendation: **(b)** in `result.json`
 and `KpiAddress`, (a) for columns and names; to be settled on renovisorissues before step 4 of §13.
 
-**D16 — Unit check source.** (a) Field-name suffix only. (b) Declared unit on the field only. (c) Declared unit where
+**D16 — Unit check source (decided, owner, 2026-10-03: (b)).** Every config field an assembly parameter feeds declares its unit (`sized_field`/config `unit=`), and the check compares the parameter's unit with it; a fed field without a declared unit is refused. The name suffix is documentation, not the source. This is a sweep over the fields the assemblies feed, done before step 1 loads anything (gap G10). Options as discussed: (a) Field-name suffix only. (b) Declared unit on the field only. (c) Declared unit where
 present, suffix otherwise, neither an error (§2.6). Recommendation: **(c)**; declared units grow with the fields that
 assemblies feed.
 
-**D20 — Optional ports on the providing side.** A DHW tank or a heating buffer may carry a solar coil; a combi boiler
+**D20 — Optional ports on the providing side (decided, owner, 2026-10-03: (a)).** A DHW tank or a heating buffer may carry a solar coil; a combi boiler
 has none. (a) A `provides` port may be optional: unbound it is unused, bound it is checked like any circuit, and a
 `bind:` to an import without it is a load error naming both assemblies. (b) Every DHW assembly provides a solar coil.
 Recommendation: **(a)**; `dhw/solar_preheat_combi` later, where the market has it.

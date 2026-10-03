@@ -10,7 +10,9 @@
 # Conventions: a site value is ordinary component config, as today. An import's `parameters` are the assembly's
 # interface; `preset` is a named parameter set of the assembly; `installation_year` and `quote` are reserved
 # per-instance fields read by the economics (D18, D22); `bind:` names a port partner where the default rule would be ambiguous, `none`
-# declines an optional port. `AUTO` leaves a sized parameter to the class law against the expanded system.
+# declines an optional port. `observes:` is a read-only tap (meters, controllers; never a link, invisible to the energy
+# balance), `actuates:` a controller's signal into one target input (spec §4.3). `AUTO` leaves a sized parameter to the
+# class law against the expanded system.
 
 schema_version: 4                                   # the assemblies extension of the v3 format (spec §2)
 name: renovisor_calculation_<job id>
@@ -139,7 +141,7 @@ imports:
     bind:
       hot_water_demand: Occupancy.hot_water_demand
       electricity: grid                             # inactive when energy_carrier is a fuel; then `fuel: gas`
-      ems: control                                  # optional: immersion heater charges on PV surplus
+      heater_electricity: control                   # optional: the EMS actuates the immersion heater on PV surplus
       # an indirect cylinder binds `charge: heating.dhw` instead (the generator's dhw hydronic_circuit)
 
   # ---- solar thermal: R: house.solar_thermal_system / M: solar_thermal_system (problem B: two circuits into two imports)
@@ -185,7 +187,8 @@ imports:
         quote: {amount_in_euro: {min: 7500, max: 9600}, per: unit, source: "installer quote 2026-03"}  # M: cost (D22)
         parameters: {azimuth_in_degree: 90, tilt_in_degree: 35, size_in_percent_of_roof_area: 30,
                      shading_losses_in_percent: 0}  # exactly_one_of: [power_in_watt, size_in_percent_of_roof_area]
-    bind: {production: grid}                        # electricity_flow production -> the grid's meter (and the EMS via control)
+    bind: {production: grid}                        # link: electricity_flow production -> the grid's bus; the grid's
+                                                    # meter and the EMS observe it (spec §4.3)
 
   # ---- batteries: R: house.batteries[] / M: battery_system (replaces | adds)
   battery:
@@ -206,29 +209,34 @@ imports:
   # ---- control: two controllers of two domains (problem D)
   control:                                          # electricity: EMS. Present when anything is controllable.
     assembly: control/ems_self_consumption          # R: occupancy.pv_self_consumption_optimised selects the policy
+    observes: [{connector: electricity_flow}]       # reads production and consumption; the bus stays the grid's,
+                                                    # the lowering places its sum on the EMS (spec §4.3)
     parameters:
-      priorities:                                   # the controller owns the order (D11); default shown
+      priorities:                                   # what it actuates, in order (D11); default shown
         - {connector: electricity_flow, component_type: RESIDENTS}
         - {connector: electricity_flow, component_type: [HEAT_PUMP_BUILDING, ELECTRIC_HEATING_SH]}
         - {connector: electricity_flow, component_type: [HEAT_PUMP_DHW, ELECTRIC_HEATING_DHW]}
         - {connector: electricity_flow, component_type: BATTERY}
         - {connector: electricity_flow, component_type: ELECTRIC_VEHICLE}
         - {connector: electricity_flow, component_type: AIR_CONDITIONER}
-    bind: {net: grid}
   thermostats:                                      # heating set points. R: temperature_control.type_of_system /
     assembly: control/smart_heating_control         # M: temperature_control_system (†; or control/traditional_thermostats)
     installation_year: 2026
-    bind: {set_points: HeatDistributionController.SetPoint}
+    observes: [{connector: building_thermal, signal: indoor_air_temperature}]   # the building temperature
+    actuates: {set_points: HeatDistributionController.SetPoint}                # exactly one heating controller (D21)
 
   # ---- supplies: one provider per carrier the house draws (D6: missing provider fails; the translator adds it)
-  grid:  {assembly: supply/electricity_grid, parameters: {metering: billing}}
+  grid:  {assembly: supply/electricity_grid}        # the bus (link end of every electricity flow) and its meter
   gas:   {assembly: supply/gas_connection}          # present because the cooker draws gas (a boiler house too)
   logs:  {assembly: supply/delivered_fuel, parameters: {carrier: wood_logs}}   # pellets, wood chips, oil, HVO (†), LPG (†)
   # heat_network: {assembly: supply/district_heating_connection}   # when heating or dhw is district heating
-  # sub_meter_hp: {assembly: supply/sub_meter, parameters: {metering: sub, selects: heating.electricity_use}}  # D13
+  # a second meter is one more observer, priced by a tariff in the economics file (D13, D22):
+  # hp_tariff_meter: {assembly: supply/meter,
+  #                   observes: [{connector: electricity_flow, component_type: [HEAT_PUMP_BUILDING, HEAT_PUMP_DHW]}]}
 
 # ---- what lives in the economics file beside this one (D22): statements about the calculation, not about the house:
 #   R: location.country (also the presets' country here), R: applicant.* (role, means-tested benefit, first-time buyer,
 #   managed full retrofit, income, household size, main residence), plan start and price-basis year, subsidy catalogue,
-#   tariff. M: measures[].cost stays IN this file as `quote:` on the instance or element the plan buys (see pv.roof_east
-#   and Building.facade): a quote is a statement about this file and would drift anywhere else.
+#   tariffs, each naming the observer whose reading it prices (`tariff: {observer: grid.meter, ...}`; no kWh priced
+#   under two tariffs). M: measures[].cost stays IN this file as `quote:` on the instance or element the plan buys (see
+#   pv.roof_east and Building.facade): a quote is a statement about this file and would drift anywhere else.

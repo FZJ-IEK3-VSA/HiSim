@@ -35,16 +35,14 @@ components:
     order: 3
     class: hisim.components.weather.Weather
     constructor:                                    # R: location.country + location.postcode -> station († IE data)
-      name: for_location
-      arguments: {location: DUBLIN, heating_reference_temperature_in_celsius: -3.0}   # † no Irish station in LocationEnum
+      for_location: {location: DUBLIN, heating_reference_temperature_in_celsius: -3.0}   # † no Irish station in LocationEnum
     # no ports: imports read it through their default connections from Weather and its sizing contributions
 
   Building:
     order: 1
     class: hisim.components.building.building.Building
     constructor:                                    # R: house.building.tabula_building_code | derived from
-      name: for_tabula_code                         #    building_type + construction_year + retrofit_status (+ country)
-      arguments:
+      for_tabula_code:                              #    building_type + construction_year + retrofit_status (+ country)
         building_code: IE.N.SFH.04.Gen.ReEx.001.001
         absolute_conditioned_floor_area_in_m2: 140  # R: absolute_conditioned_floor_area_in_m2
     config:

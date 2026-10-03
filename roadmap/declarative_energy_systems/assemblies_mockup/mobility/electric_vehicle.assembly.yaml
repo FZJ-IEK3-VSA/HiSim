@@ -35,8 +35,7 @@ components:
   Car:
     class: hisim.components.generic_car.Car
     constructor:
-      name: for_household
-      arguments:
+      for_household:
         household_name: {$fact: occupancy_household_name}  # † from the occupancy, today written by the setup
         car_name: {$param: car_name}
         source_weight: {$derived: instance_index}          # 1, 2, ... (G12)

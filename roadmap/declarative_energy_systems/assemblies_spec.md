@@ -766,11 +766,11 @@ All by the owner on 2026-10-03.
 
 ### 14.2 Open
 
-**D2 — Selector scope.** (a) Runtime output tags after construction (descriptive tags, nothing in the expanded file);
+**D2 — Selector scope (decided, owner, 2026-10-03: (c)).** (a) Runtime output tags after construction (descriptive tags, nothing in the expanded file);
 (b) published ports of imports only (forces the site into assemblies); (c) imports and site entries with a `provides`
 block. Recommendation: **(c)**, statically.
 
-**D12 — Site versus heating assembly.** Where the space-heating buffer vessel and the HDS controller live. (a) In the
+**D12 — Site versus heating assembly (decided, owner, 2026-10-03: (b)).** Where the space-heating buffer vessel and the HDS controller live. (a) In the
 site, though a heat pump wants a buffer sized to it and a boiler often none. (b) In each heating assembly, tested with
 its generator; the site keeps the HDS and its controller and exposes one `sh` circuit. (c) A `distribution/<type>`
 assembly (buffer, HDS, HDS controller): most composable, one more import and matrix axis. Recommendation: **(b)** now —

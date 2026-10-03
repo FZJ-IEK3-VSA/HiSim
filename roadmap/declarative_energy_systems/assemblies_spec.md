@@ -616,8 +616,11 @@ library test can refuse an assembly without one and `describe` prints it).
 
 **Samples.** The harness derives the parameter samples from the declarations: every preset, every `range` boundary
 (`min` and `max` of each numeric parameter, the others at their defaults), every `values` entry, every internal variant,
-and a seeded random sample of the parameter box that satisfies the constraints (§2.6). Sample size and seed are the
-harness's, not the assembly's.
+and a seeded **Latin hypercube sample** of the parameter box (owner, 2026-10-03: `scipy.stats.qmc.LatinHypercube`,
+scrambled, fixed seed): every numeric parameter is a dimension over its `range`, every `values` parameter and every
+internal variant a stratified discrete dimension, and a constraint with alternatives (`exactly_one_of`) splits the box
+into one hypercube per branch, so no sample is thrown away for violating a constraint. Sample size and seed are the
+harness's, not the assembly's; the size is recorded with the run.
 
 **Isolation run.** For each sample the harness builds a minimal system: the assembly, plus for each required port a
 stub partner of the declared class drawn from a small set of test partners (a one-day occupancy, a constant weather, a
@@ -651,7 +654,7 @@ tests:
   error at load time.
 
 **Tiers (D24).** The PR gate runs the contract test and the deterministic samples (presets, boundaries, values,
-variants) with every declaration, a few one-day runs per assembly, sharded like the week goldens. The seeded random
+variants) with every declaration, a few one-day runs per assembly, sharded like the week goldens. The Latin hypercube
 sample of the box runs nightly beside the full-year goldens (`golden-year.yml`), and a failure opens a bead, as a
 golden drift does. The example system of every assembly is a golden pair, so its default result is also pinned exactly.
 The harness exists from step 1 on fixture assemblies with fake components (§13); it meets real components in step 4.
@@ -905,7 +908,8 @@ All by the owner on 2026-10-03.
 - **D24 — Tested fragments (owner, 2026-10-03):** every assembly carries its test contract in its own file: `range`
   on every numeric parameter, `tests.bounds` on every energy-carrying or temperature output, at least one
   `tests.monotone`, optional `tests.expect` per preset; a generic harness samples presets, boundaries, values and
-  variants on every PR and a seeded random sample of the parameter box nightly; an assembly without the contract is
+  variants on every PR and a seeded Latin hypercube sample of the parameter box nightly (one hypercube per constraint
+  branch, discrete parameters and variants stratified); an assembly without the contract is
   refused by the library test (§9.4). Rejected: a sibling test file (drifts) and hand-written Python tests per assembly
   (no generic harness, no `describe`).
 

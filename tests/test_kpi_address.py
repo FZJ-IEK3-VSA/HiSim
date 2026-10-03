@@ -21,7 +21,7 @@ from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress, KpiFind
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
-from scripts.golden_kpis import flatten
+from scripts.golden_kpis import golden_leaves
 
 
 class _ReportingComponent(Component):
@@ -306,18 +306,32 @@ def test_an_entry_whose_two_source_fields_disagree_cannot_be_read() -> None:
 
 
 @pytest.mark.base
-def test_the_golden_flat_form_ignores_the_source_object() -> None:
-    """Catches the new ``source`` object inside an entry adding leaves to the golden references.
+def test_the_golden_leaf_form_carries_the_address_fields_without_the_presentation() -> None:
+    """Catches the golden references losing the source's identity, or churning on its presentation.
 
-    ``scripts/golden_kpis.py::flatten`` treats a dict with a non-dict ``value`` as one leaf, so the
-    flat form of an entry is its ``building.tag.key`` and its value, whatever else it carries.
+    ``scripts/golden_kpis.py::golden_leaves`` keys every leaf by its dotted address and stores the
+    value, the unit and the address fields; of the source only the five identity fields, never
+    ``display_name`` or ``label``.
     """
-    flat = flatten(_composed_collection())
+    leaves = golden_leaves(_composed_collection())
 
-    assert flat["BUI1.PV.Electricity production (pv-east-PVSystem)"] == 3120.5
-    assert flat["BUI1.General.Self-consumption rate"] == 41.2
-    assert len(flat) == 5
-    assert set(flat) == {address.dotted for address in KpiFinder(_composed_collection()).addresses()}
+    assert set(leaves) == {address.dotted for address in KpiFinder(_composed_collection()).addresses()}
+    assert leaves["BUI1.PV.Electricity production (pv-east-PVSystem)"] == {
+        "value": 3120.5,
+        "unit": "kWh",
+        "building": "BUI1",
+        "tag": "PV",
+        "name": "Electricity production",
+        "source": {
+            "import": "pv",
+            "instance": "east",
+            "member": "PVSystem",
+            "assembly": "pv/array",
+            "name": "pv-east-PVSystem",
+        },
+    }
+    assert leaves["BUI1.General.Self-consumption rate"]["source"] is None
+    assert leaves["BUI1.General.Self-consumption rate"]["unit"] == "%"
 
 
 @pytest.mark.base

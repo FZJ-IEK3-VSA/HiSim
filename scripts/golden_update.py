@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
 """Regenerate ("bless") golden KPI references for HiSim.
 
-Runs the configured ``(setup, parameter_set)`` pairs through HiSim, flattens each
-run's ``all_kpis.json``, and writes one committed golden file per pair to
+Runs the configured ``(setup, parameter_set)`` pairs through HiSim, turns each
+run's ``all_kpis.json`` into golden leaves (:func:`scripts.golden_kpis.golden_leaves`:
+one leaf per KPI, keyed by its dotted address, carrying value, unit and the address
+fields), and writes one committed golden file per pair to
 ``golden_references/<setup_id>__<param_id>.json`` plus an informational
 ``manifest.json``.
 
 Every golden file always carries the full KPI mapping; what the bless limits is
 the *diff*. The bless is *sticky*: where a golden already exists, every key whose
-fresh value the gate itself would accept (:func:`scripts.golden_kpis.compare` at
-the very tolerances ``golden_check.py`` applies) keeps its stored value, so only
-keys that genuinely moved or appeared reach the diff, and a file whose values come
-out identical is not rewritten at all. Nothing ever disappears: a key the fresh run
+fresh leaf the gate itself would accept (:func:`scripts.golden_kpis.compare` at
+the very tolerances ``golden_check.py`` applies: the value within tolerance, the
+unit and the address fields equal) keeps its stored leaf, so only keys that
+genuinely moved or appeared reach the diff — a changed unit always does — and a
+file whose leaves come out identical is not rewritten at all. Nothing ever disappears: a key the fresh run
 no longer produces stays in the file (the gate then keeps failing with "missing
 KPI" until someone retires it deliberately) and is named in the pair's summary.
 
 Pass ``--force-rewrite`` to dump the fresh mapping verbatim instead, ignoring
 whatever is on disk — the way to clear accumulated noise, to drop a retired KPI,
-and to repair a golden that has become unreadable.
+and to repair a golden that has become unreadable or is in a form this script no
+longer reads (the old flat ``dotted key -> value`` form is refused, never merged onto).
 
 Blessing is deliberate and, per spec, driven by the ``golden-update.yml`` CI job
 so the reference environment matches the check environment. It may be run locally
@@ -40,7 +44,14 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 try:  # run as a script from scripts/ ...
-    from golden_kpis import ABS_TOL, REL_TOL, compare  # type: ignore[import-not-found]
+    from golden_kpis import (  # type: ignore[import-not-found]
+        ABS_TOL,
+        REL_TOL,
+        UNIT,
+        GoldenFormatError,
+        compare,
+        load_golden,
+    )
     from runner import (  # type: ignore[import-not-found]
         GoldenConfig,
         RunResult,
@@ -51,7 +62,7 @@ try:  # run as a script from scripts/ ...
         run_all,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_update (tests)
-    from scripts.golden_kpis import ABS_TOL, REL_TOL, compare
+    from scripts.golden_kpis import ABS_TOL, REL_TOL, UNIT, GoldenFormatError, compare, load_golden
     from scripts.runner import (
         GoldenConfig,
         RunResult,
@@ -74,17 +85,14 @@ RunFn = Callable[[GoldenConfig, Path, Path, str], list[RunResult]]
 #: keys are named regardless — they are the ones nobody would otherwise notice.
 MAX_NAMED_KEYS = 10
 
-#: The value types a flattened KPI mapping may hold (see ``scripts.golden_kpis.flatten``:
-#: numbers become ``float``, other leaves — strings, ``None`` — are kept as they are).
-_SCALAR_TYPES = (str, int, float, bool, type(None))
-
 
 class UnusableGoldenError(RuntimeError):
     """The golden file for a pair exists but cannot be merged onto.
 
-    Raised for a file that will not parse, that does not hold a JSON object, or
-    whose values are not the flat scalars a golden consists of. Merging onto such
-    a file would quietly produce nonsense, so the pair fails like a failed run;
+    Raised for a file that will not parse, or that is not an object of golden leaves
+    whose keys agree with their fields (:func:`scripts.golden_kpis.read_golden`) —
+    the old flat ``dotted key -> value`` form included. Merging onto such a file
+    would quietly produce nonsense, so the pair fails like a failed run;
     ``--force-rewrite`` bypasses the load and is the sanctioned repair path.
     """
 
@@ -96,13 +104,17 @@ def golden_filename(setup_id: str, parameter_set_id: str) -> str:
 
 @dataclass(frozen=True)
 class MergeRecord:
-    """What merging a fresh KPI mapping onto a stored golden did, key by key."""
+    """What merging a fresh KPI mapping onto a stored golden did, key by key.
+
+    ``unit_changed`` names the moved keys whose unit changed (each is in ``moved`` too).
+    """
 
     merged: dict[str, Any]
     moved: tuple[str, ...]
     new: tuple[str, ...]
     absent: tuple[str, ...]
     kept: int
+    unit_changed: tuple[str, ...] = ()
 
     @property
     def changed(self) -> bool:
@@ -132,43 +144,38 @@ def _load_existing_golden(path: Path) -> Optional[dict[str, Any]]:
 
     Raises:
         UnusableGoldenError: the file exists but cannot be merged onto (unreadable,
-            not a JSON object, or holding anything but flat scalar values).
+            or not the golden leaf form; the message says how to re-bless).
     """
     if not path.is_file():
         return None
     try:
-        stored = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
-        raise UnusableGoldenError(f"{path}: cannot be read as JSON ({exc})") from exc
-    if not isinstance(stored, dict):
-        raise UnusableGoldenError(
-            f"{path}: holds a JSON {type(stored).__name__}, not an object mapping KPI keys to values"
-        )
-    for key, value in stored.items():
-        if not isinstance(value, _SCALAR_TYPES):
-            raise UnusableGoldenError(
-                f"{path}: KPI '{key}' holds a {type(value).__name__}, not a scalar — a golden is the "
-                "flat mapping scripts.golden_kpis.flatten produces, one value per dotted key"
-            )
+        stored: dict[str, Any] = load_golden(path)
+    except GoldenFormatError as exc:
+        raise UnusableGoldenError(str(exc)) from exc
     return stored
 
 
-def _within_tolerance(key: str, old_value: Any, new_value: Any) -> bool:
-    """Whether the gate would accept ``new_value`` where the golden holds ``old_value``.
+def _deviation_kinds(key: str, old_leaf: Any, new_leaf: Any) -> set[str]:
+    """The kinds of deviation the gate would report for ``new_leaf`` where the golden holds ``old_leaf``.
 
-    The keep threshold is the gate's own default tolerance — ``REL_TOL``/``ABS_TOL``
-    of :mod:`scripts.golden_kpis`, the tolerances the CI gates run at — asked of
-    :func:`scripts.golden_kpis.compare` itself, one key at a time, so a value kept
-    by a bless and a value passed by the gate can never drift apart.
+    The keep threshold is the gate's own: ``REL_TOL``/``ABS_TOL`` of
+    :mod:`scripts.golden_kpis`, the tolerances the CI gates run at, and the unit and
+    address fields compared exactly — asked of :func:`scripts.golden_kpis.compare`
+    itself, one key at a time, so a leaf kept by a bless and a leaf passed by the
+    gate can never drift apart. An empty set means the gate accepts the fresh leaf.
     """
-    return not compare("bless", {key: new_value}, {key: old_value}, rel_tol=REL_TOL, abs_tol=ABS_TOL)
+    return {
+        deviation.kind
+        for deviation in compare("bless", {key: new_leaf}, {key: old_leaf}, rel_tol=REL_TOL, abs_tol=ABS_TOL)
+    }
 
 
 def merge_into_golden(old: dict[str, Any], new: dict[str, Any]) -> MergeRecord:
     """Merge a fresh KPI mapping onto an existing golden, and record what happened.
 
-    Every key the gate would have accepted unchanged keeps its stored value; keys
-    that deviate beyond tolerance or are new take the fresh value; keys the fresh
+    Every key the gate would have accepted unchanged keeps its stored leaf; keys
+    whose value deviates beyond tolerance, whose unit or address fields changed, or
+    that are new take the fresh leaf; keys the fresh
     run no longer produces are **kept** with their stored value, so nothing is ever
     silently removed from a golden — the gate goes on reporting them as missing
     until someone retires them deliberately with ``--force-rewrite``.
@@ -183,22 +190,34 @@ def merge_into_golden(old: dict[str, Any], new: dict[str, Any]) -> MergeRecord:
     """
     merged: dict[str, Any] = {}
     moved: list[str] = []
+    unit_changed: list[str] = []
     fresh: list[str] = []
     kept = 0
-    for key, new_value in new.items():
+    for key, new_leaf in new.items():
         if key not in old:
-            merged[key] = new_value
+            merged[key] = new_leaf
             fresh.append(key)
-        elif _within_tolerance(key, old[key], new_value):
+            continue
+        kinds = _deviation_kinds(key, old[key], new_leaf)
+        if not kinds:
             merged[key] = old[key]
             kept += 1
-        else:
-            merged[key] = new_value
-            moved.append(key)
+            continue
+        merged[key] = new_leaf
+        moved.append(key)
+        if UNIT in kinds:
+            unit_changed.append(key)
     absent = [key for key in old if key not in new]
     for key in absent:
         merged[key] = old[key]
-    return MergeRecord(merged=merged, moved=tuple(moved), new=tuple(fresh), absent=tuple(absent), kept=kept)
+    return MergeRecord(
+        merged=merged,
+        moved=tuple(moved),
+        new=tuple(fresh),
+        absent=tuple(absent),
+        kept=kept,
+        unit_changed=tuple(unit_changed),
+    )
 
 
 def summarize_record(record: MergeRecord) -> str:
@@ -207,7 +226,7 @@ def summarize_record(record: MergeRecord) -> str:
     ``"unchanged"`` when no value moved, appeared or went absent; otherwise the
     counts — ``"N moved, M new, K absent (kept), J within tolerance kept"`` — naming
     the moved and new keys while there are at most :data:`MAX_NAMED_KEYS` of them,
-    and always naming the absent ones.
+    and always naming the absent ones and the moved keys whose unit changed.
     """
     if not record.changed and not record.absent:
         return "unchanged"
@@ -223,24 +242,27 @@ def summarize_record(record: MergeRecord) -> str:
             parts.append("new: " + ", ".join(record.new))
     if record.absent:
         parts.append("absent: " + ", ".join(record.absent))
+    if record.unit_changed:
+        parts.append("unit changed: " + ", ".join(record.unit_changed))
     if not parts:
         return summary
     return summary + " — " + "; ".join(parts)
 
 
 def write_golden(golden_dir: Path, result: RunResult, force_rewrite: bool = False) -> BlessOutcome:
-    """Write one pair's flattened KPIs to its golden file (sorted, indented).
+    """Write one pair's golden leaves to its golden file (sorted, indented).
 
-    Values the gate would have accepted are carried over from the golden already on
-    disk (see :func:`merge_into_golden`), and a file whose values do not change is
+    Leaves the gate would have accepted are carried over from the golden already on
+    disk (see :func:`merge_into_golden`), and a file whose leaves do not change is
     left untouched — value-level, so a hand-formatted golden that says the same
     thing keeps its formatting and its mtime and a bless that found nothing leaves
-    no diff behind.
+    no diff behind. With ``force_rewrite`` the file on disk is never read, so a golden
+    in a form this script refuses (the old flat form) is replaced without a look.
 
     Args:
         golden_dir: directory holding the committed goldens.
         result: one pair's successful run.
-        force_rewrite: dump the fresh mapping verbatim, ignoring the stored values.
+        force_rewrite: dump the fresh leaves verbatim, ignoring (and never reading) the stored file.
 
     Returns:
         BlessOutcome: the file's path, whether it was rewritten, and the merge record.
@@ -321,7 +343,7 @@ def main(
             outcome = write_golden(golden_dir, result, force_rewrite=force_rewrite)
         except UnusableGoldenError as exc:
             print(f"  {name}: unusable golden — {exc}")
-            failures.append(f"  ERROR {name}: unusable golden — {exc} (bless it with --force-rewrite to repair)")
+            failures.append(f"  ERROR {name}: unusable golden — {exc}")
             continue
         if outcome.rewritten:
             rewritten += 1
@@ -371,7 +393,7 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help=(
             "Write every fresh value verbatim instead of keeping stored values the gate accepts. "
             "Ignores the stored file entirely, so this is also how a retired KPI is removed and how "
-            "a golden that has become unreadable is repaired."
+            "a golden that has become unreadable, or is in the old flat form, is replaced."
         ),
     )
     parsed = parser.parse_args(argv)

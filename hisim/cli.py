@@ -16,6 +16,9 @@ reads, and which provider each read resolved to — without running a single tim
 record`` goes the other way and writes a Python setup out as such a file, which is how the setups
 this repository already has become declarative twins without anybody retyping them. And ``hisim
 energy-system run`` runs a file, which is the same thing ``hisim_main.py`` does when handed one.
+``hisim energy-system test-assemblies`` runs the test contract every assembly of a library carries
+(``assemblies_spec.md`` §9.4): each assembly in isolation over its presets, boundaries, values and
+variants, and nightly over a Latin hypercube sample of its parameter box.
 A second noun reads what a run wrote: ``hisim kpis list`` prints the address, value and unit of
 every KPI of one ``all_kpis.json``, filtered by building, tag, name, source, import or instance.
 
@@ -44,6 +47,9 @@ from hisim.cli_render import DescriptionRenderer, FactsRenderer, KpiAddressRende
 from hisim.energy_system.assemblies.describe import AssemblyDescription
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder
+from hisim.energy_system.assemblies.testing.command import test_assemblies
+from hisim.energy_system.assemblies.testing.errors import AssemblyHarnessError, HarnessUsageError
+from hisim.energy_system.assemblies.testing.report import AssemblyTestFailure
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.executor import SimulationParametersReader
@@ -100,7 +106,7 @@ class ClassLookup:
 
 
 class EnergySystemCommands:
-    """The six verbs of the ``energy-system`` noun, one method each.
+    """The seven verbs of the ``energy-system`` noun, one method each.
 
     Each method takes the parsed arguments and the two streams, does one thing and returns an
     exit code. Keeping them free of argument parsing is what lets a test drive them the way a
@@ -208,6 +214,38 @@ class EnergySystemCommands:
         )
         directory = built.simulator.get_simulation_parameters().result_directory
         print(f"Results of '{built.model.name}' are in {directory}.", file=out)
+        return ExitCodes.OK
+
+    @classmethod
+    def test_assemblies(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
+        """Runs the test contract of every assembly of a library (``assemblies_spec.md`` §9.4).
+
+        The summary goes to the standard output; a failed check, listed with every other one, to
+        the standard error stream with exit code 1, once the report is written. A harness that
+        cannot run as asked (an unknown tier, ``--samples`` with the pr tier, an empty library or
+        shard) exits 2; one that cannot run at all (a test-partner registry that does not read, a
+        port no partner serves) exits 1.
+        """
+        try:
+            test_assemblies(
+                tier=arguments.tier,
+                libraries=arguments.library,
+                samples=arguments.samples,
+                seed=arguments.seed,
+                steps=arguments.steps,
+                out=arguments.out,
+                shard=arguments.shard,
+                stream=out,
+            )
+        except AssemblyTestFailure as failure:
+            print(str(failure), file=error_stream)
+            return ExitCodes.FILE_REJECTED
+        except HarnessUsageError as error:
+            print(str(error), file=error_stream)
+            return ExitCodes.USAGE
+        except AssemblyHarnessError as error:
+            print(f"{type(error).__name__}: {error}", file=error_stream)
+            return ExitCodes.FILE_REJECTED
         return ExitCodes.OK
 
 
@@ -350,6 +388,21 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--rerun", action="store_true",
                      help="the file is a generated run record and is expected to reproduce it")
 
+    harness = verbs.add_parser(
+        "test-assemblies", help="run the test contract of every assembly of a library (assemblies_spec.md §9.4)"
+    )
+    harness.add_argument("--tier", choices=("pr", "nightly"), default="pr",
+                         help="pr: presets, boundaries, values and variants; nightly: also the Latin hypercube")
+    harness.add_argument("--library", action="append", default=None, metavar="DIR",
+                         help="a library directory (repeatable, in search order); the machine's search path if none")
+    harness.add_argument("--samples", type=int, default=None,
+                         help="the nightly hypercube's samples per constraint branch (default 16)")
+    harness.add_argument("--seed", type=int, default=None, help="the nightly hypercube's seed (default 20261003)")
+    harness.add_argument("--steps", type=int, default=4, help="the values a monotone sweep moves through")
+    harness.add_argument("--out", default=None,
+                         help="where the runs and the report go; a fresh temporary directory if omitted")
+    harness.add_argument("--shard", default="1/1", help="i/n: every n-th assembly of the sorted library from the i-th")
+
     kpis = nouns.add_parser("kpis", help="read a run's all_kpis.json by address")
     kpi_verbs = kpis.add_subparsers(dest="verb")
     kpi_list = kpi_verbs.add_parser(
@@ -399,6 +452,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "record": EnergySystemCommands.record,
             "schema": EnergySystemCommands.schema,
             "run": EnergySystemCommands.run,
+            "test-assemblies": EnergySystemCommands.test_assemblies,
         },
         "kpis": {"list": KpiCommands.list},
     }

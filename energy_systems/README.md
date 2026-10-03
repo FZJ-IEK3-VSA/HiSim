@@ -264,9 +264,9 @@ a grouped file or a twin changes rather than edited by hand.
 Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_systems/assemblies_spec.md`,
 on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
 which a file imports instead of writing their components out. This is step 1 of that spec (beads
-hisim-lt0b.1 and hisim-lt0b.2): the format, the loader, the expansion and the checks, proven on
-fixtures under `tests/assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does
-not exist.
+hisim-lt0b.1, hisim-lt0b.2 and hisim-lt0b.8): the format, the loader, the expansion, the checks and
+the test harness, proven on fixtures under `tests/assemblies/`. No real assembly ships yet, so
+`energy_systems/assemblies/` does not exist.
 
 ```yaml
 schema_version: 4
@@ -374,6 +374,56 @@ test contract; `describe` of a component class shows the unit every field declar
 energy-system schema` writes `hisim/assembly_v4.schema.json` beside the energy-system schema (whose
 config fields carry their declared unit as `x-unit`); it states the library contract, so validating a
 draft lists what it still owes.
+
+**Testing an assembly.** Every assembly carries its test contract in its own file (§9.4, D24): a
+`range` on every numeric parameter — the box it is tested over — and under `tests:` a `bounds`
+entry for every energy-carrying or temperature output of every member (`{output: Tank.HeatLoss,
+unit: WATT, min: 0, max: 200}`; a KPI is bounded as `{kpi: PV production, member: PVSystem, min:
+0}`), at least one `monotone` entry (`{parameter: volume_in_liter, kpi: Standby heat losses, member:
+Tank, direction: increasing}`, or `decreasing`, `constant`), and optionally `expect` bands per preset.
+The library check refuses an assembly without them, or with a declaration naming a member, output,
+KPI, parameter or preset that does not exist. The generic harness,
+`hisim/energy_system/assemblies/testing/`, executes the contract; nothing is written per assembly in
+Python.
+
+- *Samples.* The defaults, every preset, the `min` and `max` of every range (the others at their
+  defaults), every allowed value of an enum or a boolean, and every option of every internal variant.
+  The nightly tier adds a seeded Latin hypercube sample of the box (`scipy.stats.qmc.LatinHypercube`,
+  scrambled): every number a dimension over its range, every enum, boolean and variant selector a
+  stratified discrete dimension. A constraint splits the box into branches — `exactly_one_of: [a, b]`
+  into "a stated" and "b stated", `at_most_one_of` adds "neither", `requires` drops its infeasible
+  corner — and every branch draws its own hypercube, so no sample is thrown away. A boundary that
+  states an alternative moves the sample into that branch. Size and seed are the harness's, and the
+  report records them.
+- *Isolation run.* Each sample runs one simulated day (15 min steps) in a minimal system: the assembly
+  as the import `subject`, plus a test partner for every port whose binding changes what it computes
+  — a need's partner class, a circuit's other end, a carrier's provider (or, for a carrier it
+  provides, a consumer), a fact's provider. The partners come from the `test_partners.yaml` of the
+  library directory, site entries written as a file writes them; a port without one is refused,
+  naming the class. Every run is checked for an exception, a NaN or infinity, an open energy balance
+  (`EnergyBalanceError`), and every `bounds` entry (each timestep of the output's column; a KPI through
+  the KPI finder by name, import and member). `expect` is checked on its preset's run; `monotone` moves
+  its parameter across its range in 4 steps from every sample, everything else fixed, and the KPI must
+  move that way within the golden gate's tolerance. Every failure is collected, the JSON report and a
+  one-screen summary written, and the run then fails listing all of them.
+- *Tiers.* The PR tier — the contract test and the deterministic samples — runs as
+  `tests/assemblies/test_harness_pr_tier.py` on the fixture library. The nightly tier, with the
+  hypercube, runs beside the full-year goldens (job `assemblies-nightly` in `golden-year.yml`) and
+  uploads its report.
+
+```bash
+python -m hisim.cli energy-system test-assemblies [--tier pr|nightly] [--library DIR]... \
+    [--samples N] [--seed S] [--steps K] [--out DIR] [--shard i/n]
+```
+
+`--library` names the library directories (the search path when none is given), `--shard i/n` takes
+every n-th assembly of the sorted library from the i-th, and `--out` receives the runs, one directory
+per sample with its `isolation.energy_system.yaml`, plus `assembly_test_report.json` and
+`assembly_test_summary.txt` (a fresh temporary directory when omitted). `--samples` and `--seed` set
+the nightly hypercube (16 per branch, seed 20261003) and are refused with `--tier pr`. Exit 0 when
+every check held, 1 when one failed, 2 for a command the harness cannot run as asked.
+`tests/assemblies/fixtures/wrong/` holds an assembly whose contract is deliberately wrong, which
+the harness must fail by name.
 
 **Errors.** The `EF-7x` band of `hisim/energy_system/errors.py`: `EF-70` … `EF-75` reading, resolving
 and library-checking an assembly; `EF-76`/`EF-77` parameters and constraints; `EF-78`/`EF-79` a unit

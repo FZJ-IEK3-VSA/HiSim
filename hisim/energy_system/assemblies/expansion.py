@@ -330,6 +330,33 @@ class Instance:
     record: InstanceRecord
 
 
+@dataclass(frozen=True)
+class OfferedPort:
+    """One port an import offers its importer, before any binding (:meth:`ImportExpander.offered_ports`).
+
+    Attributes:
+        name: The port's name at the import.
+        kind: Its kind; a re-export carries the kind of the inner port it stands for.
+        state: ``required``, ``optional`` or ``inactive`` for the import's parameters.
+        is_provision: Whether it offers something (a provided output, fact or carrier).
+        partner: A need's partner classes, by class name.
+        circuit: A circuit end's circuit.
+        end_classes: The class names of a circuit end's members.
+        carrier: A carrier port's carrier, resolved.
+        fact: A fact port's fact, resolved.
+    """
+
+    name: str
+    kind: PortKind
+    state: str
+    is_provision: bool
+    partner: Tuple[str, ...] = ()
+    circuit: Optional[str] = None
+    end_classes: Tuple[str, ...] = ()
+    carrier: Optional[str] = None
+    fact: Optional[str] = None
+
+
 @dataclass
 class Candidate:
     """One partner a circuit end, a fuel need or a fact need may bind to.
@@ -486,6 +513,58 @@ class ImportExpander:
                 remedy="They are parsed and recorded, never ignored; the steps named deliver them.",
             )
         return self._assemble(site_units, all_units), self.record
+
+    def offered_ports(self, key: str) -> Dict[str, "OfferedPort"]:
+        """The ports one top-level import offers its importer, resolved for its parameters, unbound.
+
+        The importer's view the binding at the top level starts from: every port of the import's
+        assembly with its requirement state for the import's parameters, a re-export resolved to
+        the inner port it stands for, a carrier and a fact resolved through ``{$param: …}`` and
+        ``{$switch: …}``, and a circuit end with the classes of its members. Nothing is bound and
+        nothing is assembled; the isolation harness (``assemblies_spec.md`` §9.4) chooses the test
+        partners from it.
+
+        Args:
+            key: The import's key; the import must have no instances.
+
+        Returns:
+            Port name to the port as offered, in the assembly's written order.
+
+        Raises:
+            EnergySystemAssemblyError: For any condition of the ``EF-7x`` band the expansion of the
+                import itself raises, and ``EF-7L`` for a construct this step does not lower.
+            KeyError: When the file has no import of that key.
+            ValueError: When the import has instances, which offer one set of ports each.
+        """
+        entry = self.model.imports[key]
+        results = self._expand_top_import(key, entry)
+        if len(results) != 1 or results[0][0] is not None:
+            raise ValueError(f"the import '{key}' has instances; its ports are offered once per instance.")
+        if self.record.not_lowered:
+            raise self.error(
+                EnergySystemErrorId.NOT_LOWERED_IN_THIS_STEP,
+                f"imports.{key}",
+                "the import uses constructs this step of the assemblies work does not lower: "
+                + "; ".join(item.text() for item in self.record.not_lowered)
+                + ".",
+            )
+        offered: Dict[str, OfferedPort] = {}
+        for name, handle in results[0][1].handles.items():
+            port = handle.port
+            offered[name] = OfferedPort(
+                name=name,
+                kind=port.kind,
+                state=handle.state,
+                is_provision=port.is_provision,
+                partner=tuple(port.partner),
+                circuit=handle.end.circuit if handle.end is not None else None,
+                end_classes=tuple(ClassFacts.short_name(unit.class_path) for unit in handle.end.units)
+                if handle.end is not None
+                else (),
+                carrier=handle.carrier,
+                fact=handle.fact,
+            )
+        return offered
 
     def _check_top_names(self) -> None:
         """Refuses an import key that is also a site component's name: a verb could mean either."""

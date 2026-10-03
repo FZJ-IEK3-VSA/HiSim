@@ -1,0 +1,68 @@
+# Mockup (design, not loadable): energy_systems/assemblies/mobility/electric_vehicle.assembly.yaml
+# One electric car with its battery and its L1 charge controller, exactly the three components of the car twin
+# (energy_systems/household_heatpump_car_building_sizer.grouped.energy_system.yaml:96-132). The EMS actuates the L1's
+# ElectricityTargetFromEMS through the feed's dispatch (twin: weight 5, `dispatch: {target_input:
+# ElectricityTargetFromEMS}`), never the car battery (D21).
+#
+# Two cross-boundary facts the format does not carry yet (dry-run gap G12):
+#  - the car's driving profile is not wired: UtspLpgConnector publishes every car of its LPG household into the
+#    SimRepository and the Car finds its own by car_name. The request's commuting distance and charging power are
+#    therefore OCCUPANCY settings (the LPG travel route set "for 10km Commuting Distance", the charging station "at
+#    Home with 11 kW"), i.e. a parameter of this import changes the site's Occupancy config;
+#  - CarConfig.source_weight is "what a charging station and a car battery bind to, so several cars in one system must
+#    not share it" (generic_car.py:122-124): an instance-dependent value the expansion must derive (1, 2, ...) and
+#    record, like the EMS weights.
+
+schema_version: 4
+kind: assembly
+name: mobility/electric_vehicle
+description: An electric car charged at home by an L1 charge controller.
+
+parameters:
+  car_name:
+    {type: string, description: "Normalised LPG car name (e.g. Car_2_22kW_Charging_Power_avg_Speed_30_kmh); chosen by the translator from commuting distance and charging power."}
+  charging_power_in_watt:
+    {type: float, unit: WATT, default: 11000, description: "Home charging station power; selects the LPG charging station set (occupancy side, G12)."}
+  commuting_distance_in_km:
+    {type: float, default: 10, description: "Selects the LPG travel route set (occupancy side, G12)."}
+  battery_set_soc:
+    {type: float, default: 0.4, description: Target state of charge the L1 charges to on its own (car twin value).}
+
+presets:
+  car_twin: {car_name: Car_2_22kW_Charging_Power_avg_Speed_30_kmh}
+
+components:
+  Car:
+    class: hisim.components.generic_car.Car
+    constructor: for_household
+    arguments:
+      household_name: {$fact: occupancy_household_name}    # † from the occupancy, today written by the setup
+      car_name: {$param: car_name}
+      source_weight: {$derived: instance_index}            # 1, 2, ... (G12)
+    # occupancy_identity stays AUTO: Size.OCCUPANCY_IDENTITY from the site's UtspLpgConnector
+  CarBattery:
+    class: hisim.components.advanced_ev_battery_bslib.CarBattery
+    preset: standard
+    inputs: [ChargeController]                             # TargetPowerToOrFromBattery <- ElectricityTargetToOrFromCarBattery
+  ChargeController:
+    class: hisim.components.controller_l1_generic_ev_charge.L1Controller
+    config:
+      charging_station_set: {$fact: occupancy_charging_station}   # † JsonReference of the LPG charging station
+      lower_threshold_charging_power_in_watt: 1100.0
+      source_weight: {$derived: instance_index}
+      battery_set_soc: {$param: battery_set_soc}
+    inputs: [CarBattery, Car]                              # StateOfCharge, AcBatteryChargingPower; ElectricityNeededByCar, CarLocation
+
+interface:
+  needs:
+    usage:       {into: [Car], partner: UtspLpgConnector, wires: {}}
+                 # no wire: the occupancy publishes each car's profile into the SimRepository and the Car reads its own
+                 # by car_name; the binding only checks that car_name exists in the occupancy's household (G12)
+    electricity: {carrier: ELECTRICITY, outputs: [charging]}
+    occupancy:   {fact: occupancy_identity, into: [Car]}
+  provides:
+    charging:
+      output: ChargeController.BatteryChargingPowerToEMS   # controller_l1_generic_ev_charge.py:269; tagged CAR_BATTERY
+      controllable: {target_input: ElectricityTargetFromEMS, optional: true}
+      # the L1's input the EMS writes (D21), lowered into the feed's dispatch.target_input, as in the car twin;
+      # optional: without a controller the L1 charges to battery_set_soc on its own

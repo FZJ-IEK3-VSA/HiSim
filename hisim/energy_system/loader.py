@@ -18,13 +18,15 @@ a component class, so nothing is decided yet about presets, fields or ports.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Mapping, Tuple, Union
+from typing import Any, ClassVar, Dict, FrozenSet, Mapping, Tuple, Union
 
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.entries import EntryReader
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
-from hisim.energy_system.model import EnergySystemFile, Group, Variant, VariantOption
+from hisim.energy_system.imports_reader import ImportsReader
+from hisim.energy_system.address_table import AddressTable
+from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
 from hisim.energy_system.validation import validate_structure
 
@@ -79,7 +81,34 @@ class EnergySystemReader:
             EnergySystemFormatError: ``EF-01`` for a missing or unsupported schema version,
                 ``EF-03`` for an unknown top-level key or a document with no components.
         """
-        cls._check_schema_version(document, origin)
+        version = cls._check_schema_version(document, origin)
+        with NameRules.admitting_expanded_names(cls.expanded_names_of(document)):
+            return cls._build(document, origin, version)
+
+    @classmethod
+    def expanded_names_of(cls, document: Mapping[str, Any]) -> FrozenSet[str]:
+        """The expanded component names a generated record states in its metadata.
+
+        A realized record of a file that imported assemblies names its members by their
+        serialized addresses (``pv-east-PVSystem``), and its metadata carries the import record
+        with every member's address. Those names, and only those, are admitted while the record is
+        read, so that re-running it needs no assembly while an authored file with a hyphen in a
+        name is still refused (``assemblies_spec.md`` §2.4).
+
+        Args:
+            document: The top-level mapping.
+
+        Returns:
+            The admitted names; empty for every authored file.
+        """
+        metadata = document.get("metadata")
+        if not isinstance(metadata, Mapping):
+            return frozenset()
+        return frozenset(AddressTable.from_metadata(metadata))
+
+    @classmethod
+    def _build(cls, document: Mapping[str, Any], origin: str, version: int) -> EnergySystemFile:
+        """Builds the model once the version is known and the expanded names are admitted."""
         unknown = [key for key in document if key not in EnergySystemFile.TOP_LEVEL_KEYS]
         if unknown:
             raise EnergySystemFormatError(
@@ -98,39 +127,62 @@ class EnergySystemReader:
                 alternatives=cls.COMPONENT_BLOCKS,
                 alternatives_label="blocks that hold components",
             )
+        assemblies = version == EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION
+        if "imports" in document and not assemblies:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.SCHEMA_VERSION,
+                f"{origin}.imports",
+                f"the document imports assemblies but declares schema_version {version}.",
+                alternatives=[str(EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION)],
+                alternatives_label="schema versions that import",
+            )
         metadata = RawDocument.mapping(document["metadata"], f"{origin}.metadata") if "metadata" in document else None
         return EnergySystemFile(
-            schema_version=EnergySystemFile.SUPPORTED_SCHEMA_VERSION,
+            schema_version=version,
             name=RawDocument.string(document.get("name"), f"{origin}.name", required=True) or "",
             description=RawDocument.string(document.get("description"), f"{origin}.description", required=False),
-            components=EntryReader.components(document.get("components"), f"{origin}.components"),
+            components=EntryReader.components(
+                document.get("components"),
+                f"{origin}.components",
+                extensions=ComponentEntry.V4_ENTRY_KEYS if assemblies else (),
+                placeholders=assemblies,
+            ),
+            imports=ImportsReader.imports(document.get("imports"), f"{origin}.imports"),
             groups=cls._build_groups(document.get("groups"), f"{origin}.groups"),
             variants=cls._build_variants(document.get("variants"), f"{origin}.variants"),
             metadata=metadata,
+            addresses=AddressTable.from_metadata(metadata) if metadata is not None else {},
         )
 
     @classmethod
-    def _check_schema_version(cls, document: Mapping[str, Any], origin: str) -> None:
-        """Rejects a document that does not declare exactly the supported schema version.
+    def _check_schema_version(cls, document: Mapping[str, Any], origin: str) -> int:
+        """Rejects a document that does not declare one of the supported schema versions.
 
         The version is mandatory and checked before any other key: a file written against
         another version of the format cannot be interpreted safely, and the author needs to
         be told that rather than shown a list of key problems.
 
+        Version 3 is the flat format every committed file is written in; version 4 adds the
+        imports of assemblies (``assemblies_spec.md`` §2).
+
+        Returns:
+            The declared version.
+
         Raises:
             EnergySystemFormatError: ``EF-01`` if the key is missing or holds any other
-                value, naming the version that is supported.
+                value, naming the versions that are supported.
         """
         version = document.get("schema_version")
-        if version != EnergySystemFile.SUPPORTED_SCHEMA_VERSION:
+        if isinstance(version, bool) or version not in EnergySystemFile.SUPPORTED_SCHEMA_VERSIONS:
             written = "no schema_version" if "schema_version" not in document else f"schema_version {version!r}"
             raise EnergySystemFormatError(
                 EnergySystemErrorId.SCHEMA_VERSION,
                 f"{origin}.schema_version",
                 f"the document declares {written}.",
-                alternatives=[str(EnergySystemFile.SUPPORTED_SCHEMA_VERSION)],
+                alternatives=[str(supported) for supported in EnergySystemFile.SUPPORTED_SCHEMA_VERSIONS],
                 alternatives_label="schema versions",
             )
+        return int(version)
 
     @classmethod
     def _build_groups(cls, raw: Any, location: str) -> Dict[str, Group]:

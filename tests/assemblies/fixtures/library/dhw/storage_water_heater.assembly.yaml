@@ -1,0 +1,58 @@
+# Fixture: nested (depth 2). Its own heater and thermostat around an imported tank: the tank's
+# heat need is bound by a verb on the inner import, the tank's temperature reaches the thermostat
+# through an internal port, and the residents bind the tank from outside through a re-export.
+schema_version: 4
+kind: assembly
+name: dhw/storage_water_heater
+description: A fake storage water heater built around an imported tank.
+
+parameters:
+  volume_in_liter:
+    {type: float, unit: LITER, default: 150, range: {min: 50, max: 500}, description: Usable tank volume.}
+  heater_power_in_watt:
+    {type: float, unit: WATT, default: 2000, range: {min: 500, max: 6000}, description: Heater rating.}
+
+presets:
+  standard: {}
+  large: {volume_in_liter: 300, heater_power_in_watt: 3000}
+
+imports:
+  tank:
+    order: 3
+    assembly: storage/hot_water_tank
+    parameters: {volume_in_liter: {$param: volume_in_liter}}
+    bind: {heat: Heater}
+
+components:
+  Controller:
+    order: 1
+    class: tests.assemblies.fixture_components.FakeController
+    preset: standard
+    inputs:
+      - {$port: tank_temperature}
+      - {$port: ems_modifier}
+  Heater:
+    order: 2
+    class: tests.assemblies.fixture_components.FakeHeater
+    preset: standard
+    config:
+      power_in_watt: {$param: heater_power_in_watt}
+    inputs:
+      - Controller
+
+interface:
+  needs:
+    hot_water_demand: {from: tank.hot_water_demand}
+    ems_modifier: {into: [Controller], partner: FakeEms, optional: true}
+  provides:
+    electricity: {output: Heater.ElectricityInput}
+    temperature: {from: tank.temperature}
+  internal:
+    tank_temperature: {bind: [tank.temperature, Controller]}
+
+tests:
+  bounds:
+    - {output: Heater.ThermalPower, unit: WATT, min: 0, max: 6000}
+    - {output: Heater.ElectricityInput, unit: WATT, min: 0, max: 6000}
+  monotone:
+    - {parameter: heater_power_in_watt, kpi: Heater energy, member: Heater, direction: increasing}

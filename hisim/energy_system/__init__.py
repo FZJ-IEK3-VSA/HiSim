@@ -76,6 +76,15 @@ The stages that need the component classes live in their own modules and are del
       and the same system built by Python are the same system.
     - :mod:`hisim.energy_system.recording` — the only part of this package that runs the other way:
       it observes a system a Python ``setup_function`` built and writes the file describing it.
+    - :mod:`hisim.energy_system.imports_model` and :mod:`hisim.energy_system.imports_reader` — the
+      blocks schema version 4 adds (imports, instances, the binding verbs, ports, the ``{$port: …}``
+      placeholder), shared by the energy-system file and the assembly file; with
+      :mod:`hisim.energy_system.source_lines` (the line index the source maps cite) and
+      :mod:`hisim.energy_system.address_table` (the members' addresses a record carries) they are
+      read with the file and import nothing beyond :mod:`hisim.config`.
+    - :mod:`hisim.energy_system.assemblies` — the assemblies of ``assemblies_spec.md``: the assembly
+      file, the library search path, the library check, and the expansion of imports that runs in
+      front of the group expansion, with its import record and source maps.
 
 Two further modules sit outside both groups. :mod:`hisim.energy_system.channels` holds the
 declaration of an aggregator's accepted flows and :mod:`hisim.energy_system.resolution` the

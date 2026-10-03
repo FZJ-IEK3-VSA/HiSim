@@ -259,6 +259,75 @@ that this is all the page can say about it yet. The page is generated and commit
 themselves: a test re-renders it and compares it byte for byte, so it is re-run whenever a decision,
 a grouped file or a twin changes rather than edited by hand.
 
+## Assemblies: composing a system from tested fragments
+
+Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_systems/assemblies_spec.md`,
+on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
+which a file imports instead of writing their components out. This is step 1a of that spec (bead
+hisim-lt0b.1): the format, the loader, the expansion and the checks, proven on fixtures under
+`tests/assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does not exist.
+
+```yaml
+schema_version: 4
+components:                       # the site, as today, plus order:, ports: and the verbs
+  Weather: {order: 1, class: ..., preset: ...}
+imports:
+  pv:  {order: 2, assembly: pv/array, instances: {east: {azimuth_in_degree: 90}, west: {azimuth_in_degree: 270}}}
+  dhw: {order: 3, assembly: dhw/storage_water_heater, preset: large, optional-bind: {ems_modifier: Ems}}
+```
+
+An assembly file (`kind: assembly`) holds **members** — ordinary component entries whose names are
+local to it, with an optional relative `order:` and an English `display:` template — **parameters**
+with `type`, `unit` (a member name of `lt.Units`), `description`, `default`, `values` and, for a
+number, `range`; **constraints** (`exactly_one_of`, `at_most_one_of`, `requires`); **presets**;
+**inner imports** (nesting up to four deep); **internal variants** selected by a parameter, whose
+`when:` lists partition its values; an **interface** of ports; and its **test contract**, `tests:`
+with `bounds`, `monotone` and `expect` (§9.4). A value an assembly parameter supplies is written
+`{$param: <name>}` anywhere a value goes; a numeric parameter may only feed a config field that
+declares its unit — `sized_field(..., unit=lt.Units.WATT)` or `field(metadata={"unit": lt.Units.WATT})`
+— and the units must agree; a mismatch is a load error, never a conversion.
+
+**Expansion.** `hisim energy-system run` expands every import into ordinary components before
+anything else happens, innermost first, and everything downstream sees a flat version-3 file. A
+member is named by its structured address (`ComponentID.path`), serialized with `-`:
+`pv-east-PVSystem`, `dhw-tank-Tank`. Only the expansion produces such names; an authored name with a
+hyphen is refused. A file without imports comes back byte for byte. The evaluation sequence follows
+the `order:` paths (`6 < 6.1 < 6.3.1 < 7`); without `order:` it is the site's components in written
+order, then the imports.
+
+**Ports.** A need `{into: [Member], partner: Class}` lowers to the member's default connections
+from the bound partner's class — a bare name where the member's `{$port: <port>}` placeholder
+stands — or to the explicit `wires:` it names. It binds to the one component in scope of its partner
+class; anything else is decided by a verb, alike on site entries and on imports: `bind: {port:
+partner}` (the partner must exist), `optional-bind: {port: partner}` (binds if it exists, else stays
+unbound, and the record says so) and `none: [port]` (declines an optional port). `required_when` and
+`active_when` make a port depend on the parameters. Inside an assembly an inner import's port is
+bound by a verb on the inner import, by an `internal:` entry, or re-exported with `from:
+<inner>.<port>`. The default connections are checked at load time against the member class's
+`CLASS_INTERFACE` (`hisim/component_interface.py`): its inputs and outputs with load types and units,
+the classes it declares default connections from, and its KPIs. Every refusal names the import, the
+instance, the port and every candidate, prints the source map of the import, and ends in a
+paste-ready `bind:` line.
+
+Circuit ports, carrier needs and fact ports (hisim-lt0b.2), observer and actuator selectors and
+controllable outputs (hisim-lt0b.3) are read and recorded, and a file that uses one is refused
+(`EF-7L`) until its step lands.
+
+**Finding assemblies.** An `assembly:` path resolves under `energy_systems/assemblies/`, then under
+every directory `HISIM_ASSEMBLY_PATH` names (`os.pathsep`-separated); a path found twice is refused.
+The realized record's metadata carries the **import record** — per import and instance the assembly
+path and the sha256 of its file, the preset, the parameters as given and as resolved, the variants,
+the members' addresses, display names and order paths, every port's state and partner, the binding
+decisions and the evaluation sequence — and the **source map** of every produced item, which every
+downstream error naming a produced component prints. A realized record re-runs without any assembly.
+
+**Inspecting.** `hisim energy-system describe <family>/<name>` (or a path to a `*.assembly.yaml`)
+prints an assembly's interface with partner classes and requirement states, its parameters with
+units, ranges, defaults and values, its constraints, presets, members, variants, inner imports and
+test contract. `hisim energy-system schema` writes `hisim/assembly_v4.schema.json` beside the
+energy-system schema; it states the library contract, so validating a draft lists what it still
+owes. The error codes are the `EF-7x` band of `hisim/energy_system/errors.py`.
+
 ## Simulation-parameters files are shared, never duplicated
 
 A recording does not write a parameters file of its own. It compares the parameters the setup

@@ -24,6 +24,7 @@ from hisim.components import (
 from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim import log
 
 
@@ -249,16 +250,20 @@ def test_house(
     ) as file:
         jsondata = json.load(file)
 
-    jsondata = jsondata["BUI1"]
+    finder = KpiFinder(jsondata)
 
-    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"]["Total gas demand from grid"].get("value")
-    gas_consumption_of_boiler_in_kilowatt_hour = jsondata["Gas Boiler"][
-        f"Total {my_gas_heater.energy_carrier.value} consumption (energy)"
-    ].get("value")
+    gas_consumption_in_kilowatt_hour = finder.value(building="BUI1", tag="Gas Meter", name="Total gas demand from grid")
+    gas_consumption_of_boiler_in_kilowatt_hour = finder.value(
+        building="BUI1", tag="Gas Boiler", name=f"Total {my_gas_heater.energy_carrier.value} consumption (energy)"
+    )
 
-    opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")
+    opex_costs_for_gas_in_euro = finder.value(
+        building="BUI1", tag="Gas Meter", name="Opex costs of gas consumption from grid"
+    )
 
-    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
+    co2_footprint_due_to_gas_use_in_kg = finder.value(
+        building="BUI1", tag="Gas Meter", name="CO2 footprint of gas consumption from grid"
+    )
 
     # The carrier is a sizable field now, so the log lines read it through ``concrete``.
     gas_carrier = concrete(my_gas_meter_config.gas_loadtype)

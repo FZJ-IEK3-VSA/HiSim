@@ -116,6 +116,7 @@ from hisim.economics.tariffs import TariffContract
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 
 
 @dataclass
@@ -289,6 +290,14 @@ class EvaluationInputs:
     heated_floor_area_in_m2: Optional[float] = None
     living_area_in_m2: Optional[float] = None
     current_cold_rent_in_euro_per_m2_month: Optional[float] = None
+    #: Subject -> the KPI source (``roadmap/kpi_address_spec.md``) of every component the run
+    #: simulated, keyed by its component name, which is the subject its cost facts carry. It is
+    #: what tells a cost subject that is a HiSim component (a ``by_subject`` row's ``source``)
+    #: from one that is not (an envelope measure, a carrier, a synthetic subject), which nothing
+    #: else in this record says. Empty for inputs built by hand with no component behind them;
+    #: ``None`` only on a file written before the field existed, which a reader that needs the
+    #: sources refuses rather than calling every subject a non-component.
+    component_sources: Optional[Dict[str, KpiSource]] = field(default_factory=dict)
 
     def annual_heat_demand(self) -> Optional[float]:
         """The kWh a year the levelized cost of heat divides by, or None when nothing states it.

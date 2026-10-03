@@ -12,7 +12,7 @@ Each test states the failure mode it catches.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 import pytest
@@ -25,7 +25,8 @@ from hisim.loadtypes import ComponentType, LoadTypes, Units
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import opex_calculation
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -84,69 +85,114 @@ def test_production_without_consumption_reports_zero_self_sufficiency() -> None:
     assert "Self-consumption rate of electricity" in collected
 
 
+def _source(component_name: str) -> KpiSource:
+    """The source a plain component of that name stamps on its KPI entries."""
+    return KpiSource.for_component(ComponentID(component_name), DisplayConfig())
+
+
+def _component_entry(
+    name: str, value: float, component_name: str, unit: str = "kWh", tag: Optional[KpiTagEnumClass] = None
+) -> KpiEntry:
+    """A component KPI entry as ``Component.component_kpi_entries`` returns it: with its source.
+
+    Args:
+        name: The KPI's name.
+        value: Its value.
+        component_name: The plain name of the component reporting it.
+        unit: Its unit.
+        tag: Its tag.
+    """
+    return KpiEntry(
+        name=name,
+        unit=unit,
+        value=value,
+        tag=tag,
+        source=_source(component_name),
+        name_of_source_component=component_name,
+    )
+
+
+def _keyed(entries: List[KpiEntry]) -> Dict[str, Dict]:
+    """The entries as one building's collection holds them, keyed by their address."""
+    return {KpiAddress.key_for(entry.name, entry.source): entry.to_dict() for entry in entries}
+
+
 @pytest.mark.base
 def test_two_components_of_one_class_keep_both_their_kpi_entries() -> None:
     """Catches a second same-class instance silently overwriting the first one's KPIs.
 
-    The collection is keyed by KPI name, and two components of one class report the same names —
-    the two CHPs of the `dynamic_components` setup both report "Electrical energy produced" — so
-    keying by name alone made one of the two CHPs vanish from the report, the webtool JSON and
-    the golden comparison without anything failing. Where names collide, each entry keys as
-    "<name> (<source component>)"; a name only one component emits stays unqualified, so a
-    single-CHP setup renames nothing.
+    Two components of one class report the same names -- the two CHPs of the `dynamic_components`
+    setup both report "Electrical energy produced" -- and keying by name alone made one of the
+    two CHPs vanish from the report, the webtool JSON and the golden comparison without anything
+    failing. Every component entry keys as "<name> (<source.name>)".
     """
     entries = [
-        KpiEntry(name="Electrical energy produced", unit="kWh", value=10.0, name_of_source_component="CHP1"),
-        KpiEntry(name="Electrical energy produced", unit="kWh", value=90.0, name_of_source_component="CHP2"),
-        KpiEntry(
-            name="Total electricity consumption", unit="kWh", value=3.0, name_of_source_component="ElectricityMeter"
-        ),
+        _component_entry("Electrical energy produced", 10.0, "CHP1"),
+        _component_entry("Electrical energy produced", 90.0, "CHP2"),
     ]
 
     keyed = KpiPreparation.keyed_component_entries(entries)
 
     assert keyed["Electrical energy produced (CHP1)"]["value"] == 10.0
     assert keyed["Electrical energy produced (CHP2)"]["value"] == 90.0
-    assert keyed["Total electricity consumption"]["value"] == 3.0
+    assert keyed["Electrical energy produced (CHP2)"]["source"]["name"] == "CHP2"
     assert "Electrical energy produced" not in keyed
+
+
+@pytest.mark.base
+def test_a_single_component_is_qualified_too_so_no_neighbour_renames_its_keys() -> None:
+    """Catches a key that depends on who else lives in the building (``kpi_address_spec.md``).
+
+    The key used to be the bare name while one component emitted it and became qualified as soon
+    as a second one did, so adding a second car renamed the first car's "Distance driven" for
+    every consumer. The key is now a property of the KPI: a lone component is qualified too, and
+    adding a neighbour adds a key and renames none.
+    """
+    alone = KpiPreparation.keyed_component_entries([_component_entry("Distance driven", 42.0, "Car1", unit="km")])
+    with_a_neighbour = KpiPreparation.keyed_component_entries(
+        [
+            _component_entry("Distance driven", 42.0, "Car1", unit="km"),
+            _component_entry("Distance driven", 7.0, "Car2", unit="km"),
+        ]
+    )
+
+    assert list(alone) == ["Distance driven (Car1)"]
+    assert set(with_a_neighbour) - set(alone) == {"Distance driven (Car2)"}
+    assert with_a_neighbour["Distance driven (Car1)"] == alone["Distance driven (Car1)"]
+
+
+@pytest.mark.base
+def test_a_derived_kpi_keeps_its_bare_name_and_carries_no_source() -> None:
+    """Catches a derived KPI (no component behind it) being qualified or given a source.
+
+    Derived KPIs -- the General tag, the meter-derived cost totals -- are singletons per building
+    and keep their bare name; their entry says ``"source": null``.
+    """
+    derived = KpiEntry(name="Total electricity consumption", unit="kWh", value=3.0, tag=KpiTagEnumClass.GENERAL)
+
+    assert KpiAddress.key_for(derived.name, derived.source) == "Total electricity consumption"
+    assert derived.to_dict()["source"] is None
+    assert derived.to_dict()["nameOfSourceComponent"] is None
 
 
 @pytest.mark.base
 def test_two_components_of_different_classes_keep_both_their_kpi_entries() -> None:
     """Catches a shared KPI name across component classes dropping one of the two components.
 
-    The keying looks at names and sources only, never at classes, so a name two *different*
-    classes emit collides exactly like a name two instances of one class emit: a gas boiler and
-    a solar thermal system both report "Total thermal energy delivered", and keying by name alone
-    left only whichever ran last. Both sides have to survive, qualified, while each class's own
-    unshared names stay unqualified.
+    The keying looks at names and sources only, never at classes: a gas boiler and a solar
+    thermal system both report "Total thermal energy delivered", and both keep their entry.
     """
     entries = [
-        KpiEntry(
-            name="Total thermal energy delivered",
-            unit="kWh",
-            value=635.5,
-            name_of_source_component="CondensingGasBoiler",
-        ),
-        KpiEntry(
-            name="Total thermal energy delivered",
-            unit="kWh",
-            value=0.0,
-            name_of_source_component="SolarThermalSystem",
-        ),
-        KpiEntry(
-            name="Thermal energy delivered for space heating",
-            unit="kWh",
-            value=542.0,
-            name_of_source_component="CondensingGasBoiler",
-        ),
+        _component_entry("Total thermal energy delivered", 635.5, "CondensingGasBoiler"),
+        _component_entry("Total thermal energy delivered", 0.0, "SolarThermalSystem"),
+        _component_entry("Thermal energy delivered for space heating", 542.0, "CondensingGasBoiler"),
     ]
 
     keyed = KpiPreparation.keyed_component_entries(entries)
 
     assert keyed["Total thermal energy delivered (CondensingGasBoiler)"]["value"] == 635.5
     assert keyed["Total thermal energy delivered (SolarThermalSystem)"]["value"] == 0.0
-    assert keyed["Thermal energy delivered for space heating"]["value"] == 542.0
+    assert keyed["Thermal energy delivered for space heating (CondensingGasBoiler)"]["value"] == 542.0
     assert "Total thermal energy delivered" not in keyed
 
 
@@ -155,35 +201,22 @@ def test_a_qualified_fuel_meter_entry_is_still_read_into_the_general_costs() -> 
     """Catches qualification zeroing the general fuel costs and emissions KPIs.
 
     The general cost and emission KPIs read the meters' entries out of the collection, and doing
-    that by collection key broke the moment a second component of the building shared a meter's
-    KPI name and the meter's own key became qualified: the lookup missed, the fuel costs silently
-    became 0, and the building reported no heating fuel at all. The lookup matches the entry's
-    own name, so a qualified key must still be found.
+    that by collection key would miss every meter, since a component KPI's key carries its
+    source: the fuel costs would silently become 0. The lookup matches the entry's own name.
     """
     building = "BUI1"
     preparation = _bare_preparation(building)
     preparation.kpi_collection_dict_unsorted[building] = {
-        "OPEX - Energy costs (FuelMeter)": KpiEntry(
-            name="OPEX - Energy costs",
-            unit="EUR",
-            value=50.14,
-            tag=KpiTagEnumClass.FUEL_METER,
-            name_of_source_component="FuelMeter",
-        ).to_dict(),
-        "OPEX - CO2 Footprint (FuelMeter)": KpiEntry(
-            name="OPEX - CO2 Footprint",
-            unit="kg",
-            value=169.63,
-            tag=KpiTagEnumClass.FUEL_METER,
-            name_of_source_component="FuelMeter",
-        ).to_dict(),
-        "Total energy consumption (FuelMeter)": KpiEntry(
-            name="Total energy consumption",
-            unit="kWh",
-            value=605.83,
-            tag=KpiTagEnumClass.FUEL_METER,
-            name_of_source_component="FuelMeter",
-        ).to_dict(),
+        **_keyed(
+            [
+                _component_entry(name, value, "FuelMeter", unit=unit, tag=KpiTagEnumClass.FUEL_METER)
+                for name, unit, value in (
+                    ("OPEX - Energy costs", "EUR", 50.14),
+                    ("OPEX - CO2 Footprint", "kg", 169.63),
+                    ("Total energy consumption", "kWh", 605.83),
+                )
+            ]
+        ),
         "Self-sufficiency rate according to solar htw berlin": KpiEntry(
             name="Self-sufficiency rate according to solar htw berlin", unit="%", value=50.0
         ).to_dict(),
@@ -203,28 +236,27 @@ def test_a_qualified_fuel_meter_entry_is_still_read_into_the_general_costs() -> 
 def test_two_fuel_meters_of_one_building_both_reach_the_general_costs() -> None:
     """Catches a building's second meter being dropped from the general cost and emission KPIs.
 
-    A building can run two meters of one tag — an oil and a pellet meter heating it together —
-    and since each of them now keeps its own entry under a source-qualified key, both entries
-    reach the cost reader. Assigning each value made the last meter read stand for all of them,
-    so half the building's heating fuel bill and emissions silently disappeared. The general KPIs
-    are the sum over the meters, not the value of whichever one happened to come last.
+    A building can run two meters of one tag -- an oil and a pellet meter heating it together --
+    and each keeps its own entry under its source-qualified key, so both reach the cost reader.
+    Assigning each value made the last meter read stand for all of them; the general KPIs are
+    the sum over the meters.
     """
     building = "BUI1"
     preparation = _bare_preparation(building)
-    meter_entries = {
-        f"{name} ({source})": KpiEntry(
-            name=name, unit=unit, value=value, tag=KpiTagEnumClass.FUEL_METER, name_of_source_component=source
-        ).to_dict()
-        for source, costs_in_euro, co2_in_kg, energy_in_kwh in (
-            ("OilMeter", 50.14, 169.63, 605.83),
-            ("PelletMeter", 20.0, 30.0, 100.0),
-        )
-        for name, unit, value in (
-            ("OPEX - Energy costs", "EUR", costs_in_euro),
-            ("OPEX - CO2 Footprint", "kg", co2_in_kg),
-            ("Total energy consumption", "kWh", energy_in_kwh),
-        )
-    }
+    meter_entries = _keyed(
+        [
+            _component_entry(name, value, source, unit=unit, tag=KpiTagEnumClass.FUEL_METER)
+            for source, costs_in_euro, co2_in_kg, energy_in_kwh in (
+                ("OilMeter", 50.14, 169.63, 605.83),
+                ("PelletMeter", 20.0, 30.0, 100.0),
+            )
+            for name, unit, value in (
+                ("OPEX - Energy costs", "EUR", costs_in_euro),
+                ("OPEX - CO2 Footprint", "kg", co2_in_kg),
+                ("Total energy consumption", "kWh", energy_in_kwh),
+            )
+        ]
+    )
     preparation.kpi_collection_dict_unsorted[building] = {
         **meter_entries,
         "Self-sufficiency rate according to solar htw berlin": KpiEntry(
@@ -243,34 +275,66 @@ def test_two_fuel_meters_of_one_building_both_reach_the_general_costs() -> None:
 
 
 @pytest.mark.base
-def test_a_colliding_kpi_entry_without_a_source_component_is_refused() -> None:
-    """Catches the disambiguation silently producing an anonymous key.
+def test_a_component_kpi_entry_without_a_source_is_refused() -> None:
+    """Catches the keying silently producing an anonymous or bare key for a component KPI.
 
-    When names collide, the source component is the only thing left to tell the entries apart
-    by; an entry without one would either overwrite its sibling again or key as "<name> (None)",
-    both of which hide the defect the keying exists to surface. Refusing names the KPI so the
+    Every component entry is keyed by its source; an entry without one would key as its bare
+    name, which is the shape of a derived KPI, and hide the defect. Refusing names the KPI so the
     component author knows what to fix.
     """
+    entries = [KpiEntry(name="Electrical energy produced", unit="kWh", value=90.0)]
+
+    with pytest.raises(ValueError, match="'Electrical energy produced' carries no source"):
+        KpiPreparation.keyed_component_entries(entries)
+
+
+@pytest.mark.base
+def test_an_entry_whose_two_source_fields_disagree_is_refused() -> None:
+    """Catches the deprecated ``name_of_source_component`` drifting from ``source.name``.
+
+    Both are written for one release, and a reader of either must read the same component.
+    """
+    entry = _component_entry("Electrical energy produced", 10.0, "CHP1")
+    entry.name_of_source_component = "CHP2"
+
+    with pytest.raises(ValueError, match="must equal source.name"):
+        KpiPreparation.keyed_component_entries([entry])
+
+
+@pytest.mark.base
+def test_one_source_name_with_two_addresses_is_refused() -> None:
+    """Catches two entries naming one component by its name but with different addresses.
+
+    A component has exactly one source; an entry reported on its behalf that built the source
+    differently (another display name, say) would make one component two in every reader that
+    filters on the source.
+    """
     entries = [
-        KpiEntry(name="Electrical energy produced", unit="kWh", value=10.0, name_of_source_component="CHP1"),
-        KpiEntry(name="Electrical energy produced", unit="kWh", value=90.0, name_of_source_component=None),
+        _component_entry("Electrical energy produced", 10.0, "CHP1"),
+        KpiEntry(
+            name="Thermal energy produced",
+            unit="kWh",
+            value=5.0,
+            source=KpiSource.for_component(ComponentID("CHP1"), DisplayConfig.show("Combined heat and power")),
+            name_of_source_component="CHP1",
+        ),
     ]
 
-    with pytest.raises(ValueError, match="name_of_source_component"):
+    with pytest.raises(ValueError, match="different addresses"):
         KpiPreparation.keyed_component_entries(entries)
 
 
 @pytest.mark.base
 def test_one_component_emitting_the_same_kpi_name_twice_is_refused() -> None:
-    """Catches the one collision the source component cannot resolve.
+    """Catches the one collision the source cannot resolve.
 
-    Two entries of one component with one name key identically even after qualification, so a
-    consumer would still silently read only the last one. That is a defect in the component's
-    KPI method, and it has to fail loudly there rather than pass as a plausible-looking value.
+    Two entries of one component with one name key identically, so a consumer would silently
+    read only the last one. That is a defect in the component's KPI method, and it has to fail
+    loudly there rather than pass as a plausible-looking value.
     """
     entries = [
-        KpiEntry(name="Electrical energy produced", unit="kWh", value=10.0, name_of_source_component="CHP1"),
-        KpiEntry(name="Electrical energy produced", unit="kWh", value=90.0, name_of_source_component="CHP1"),
+        _component_entry("Electrical energy produced", 10.0, "CHP1"),
+        _component_entry("Electrical energy produced", 90.0, "CHP1"),
     ]
 
     with pytest.raises(ValueError, match="same KPI name twice"):
@@ -281,7 +345,7 @@ class _CarReportingOneKpi(Component):
     """A minimal component whose KPI method reports one entry and names no source component.
 
     It stands for the forty-odd components that build their KPI entries by hand: none of them
-    fills in ``name_of_source_component``, so a component like this one is what the base class's
+    fills in its ``source``, so a component like this one is what the base class's
     stamping has to work on. Two instances of it are two cars of one household.
     """
 
@@ -330,8 +394,18 @@ def test_two_instances_of_one_component_class_survive_the_whole_collection() -> 
 
     collected = preparation.kpi_collection_dict_unsorted["BUI1"]
     assert set(collected) == {"Distance driven (Car1)", "Distance driven (Car2)"}
-    assert collected["Distance driven (Car1)"]["nameOfSourceComponent"] == "Car1"
-    assert collected["Distance driven (Car2)"]["nameOfSourceComponent"] == "Car2"
+    for car in ("Car1", "Car2"):
+        entry = collected[KpiAddress.key_for("Distance driven", _source(car))]
+        assert entry["nameOfSourceComponent"] == car
+        assert entry["source"] == {
+            "import": None,
+            "instance": None,
+            "member": car,
+            "assembly": None,
+            "name": car,
+            "display_name": car,
+            "label": None,
+        }
 
 
 @dataclass_json

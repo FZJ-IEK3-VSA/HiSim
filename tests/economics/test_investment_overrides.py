@@ -997,7 +997,7 @@ class TestTheCommand:
         """The generator of stage 2 at the quote, the quote in the block."""
         assert _run_with(workspace, [_quote(2, "heating_system")]) == 0
         document = json.loads((workspace / "economics_result.json").read_text(encoding="utf-8"))
-        assert document["schema_version"] == 7
+        assert document["schema_version"] == 8
         assert document["parameters"][ParameterKeys.INVESTMENT_OVERRIDES] == [_quote(2, "heating_system")]
         row = _rows(document)[SyntheticPlan.HEAT_PUMP_SUBJECT]
         assert (row["investment_origin"], row["investment_source"]) == ("reader_quote", SOURCE)

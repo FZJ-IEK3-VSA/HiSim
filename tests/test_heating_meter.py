@@ -23,6 +23,7 @@ from hisim.components import (
 from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -283,26 +284,15 @@ def test_house(
     ) as file:
         jsondata = json.load(file)
 
-    jsondata = jsondata["BUI1"]
+    finder = KpiFinder(jsondata)
 
-    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heat consumption from grid"].get("value")  # pylint: disable=unused-variable
+    heat_consumption_in_kilowatt_hour = finder.value(  # pylint: disable=unused-variable
+        building="BUI1", tag="Heating Meter", name="Total heat consumption from grid"
+    )
 
-    heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][  # pylint: disable=unused-variable
-        "Thermal output energy of heat distribution system"
-    ].get("value")
-
-    # The residents' domestic-hot-water thermal consumption is published under the
-    # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
-    # the tapped warm water, in kWh). It is read here so a regression that drops or breaks this
-    # KPI is caught. Note: in this system setup the domestic-hot-water circuit is served by a
-    # dedicated heat pump and storage and is NOT wired into the HeatingMeter (its
-    # SimpleDHWStorage connection is disabled in heating_meter.py). The HeatingMeter therefore
-    # only measures the space-heating circuit, so its "Total heat consumption from grid" must
-    # match the heat distribution system output and must NOT include the domestic-hot-water
-    # energy below.
-    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
-        "Residents' total warm water energy consumption"
-    ].get("value")
+    heat_consumption_for_space_heating_in_kilowatt_hour = finder.value(  # pylint: disable=unused-variable
+        building="BUI1", tag="Heat Distribution System", name="Thermal output energy of heat distribution system"
+    )
 
     # The residents' domestic-hot-water thermal consumption is published under the
     # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
@@ -313,9 +303,9 @@ def test_house(
     # only measures the space-heating circuit, so its "Total heat consumption from grid" must
     # match the heat distribution system output and must NOT include the domestic-hot-water
     # energy below.
-    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
-        "Residents' total warm water energy consumption"
-    ].get("value")
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = finder.value(
+        building="BUI1", tag="Residents", name="Residents' total warm water energy consumption"
+    )
 
     # The residents' domestic-hot-water thermal consumption is published under the
     # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
@@ -326,15 +316,30 @@ def test_house(
     # only measures the space-heating circuit, so its "Total heat consumption from grid" must
     # match the heat distribution system output and must NOT include the domestic-hot-water
     # energy below.
-    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
-        "Residents' total warm water energy consumption"
-    ].get("value")
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = finder.value(
+        building="BUI1", tag="Residents", name="Residents' total warm water energy consumption"
+    )
 
-    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")  # pylint: disable=unused-variable
+    # The residents' domestic-hot-water thermal consumption is published under the
+    # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
+    # the tapped warm water, in kWh). It is read here so a regression that drops or breaks this
+    # KPI is caught. Note: in this system setup the domestic-hot-water circuit is served by a
+    # dedicated heat pump and storage and is NOT wired into the HeatingMeter (its
+    # SimpleDHWStorage connection is disabled in heating_meter.py). The HeatingMeter therefore
+    # only measures the space-heating circuit, so its "Total heat consumption from grid" must
+    # match the heat distribution system output and must NOT include the domestic-hot-water
+    # energy below.
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = finder.value(
+        building="BUI1", tag="Residents", name="Residents' total warm water energy consumption"
+    )
 
-    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][  # pylint: disable=unused-variable
-        "CO2 footprint of heat consumption from grid"
-    ].get("value")
+    opex_costs_for_heat_in_euro = finder.value(  # pylint: disable=unused-variable
+        building="BUI1", tag="Heating Meter", name="Opex costs of heat consumption from grid"
+    )
+
+    co2_footprint_due_to_heat_use_in_kg = finder.value(  # pylint: disable=unused-variable
+        building="BUI1", tag="Heating Meter", name="CO2 footprint of heat consumption from grid"
+    )
 
     # The HeatingMeter measures only the space-heating circuit (see comment above), so its
     # total heat consumption has to match the thermal energy delivered by the heat distribution

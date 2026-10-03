@@ -18,6 +18,7 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple
 
+from hisim.config import ComponentID, DisplayConfig
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts
@@ -29,6 +30,7 @@ from hisim.economics.facts import (
 )
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.staged import Stage
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 from hisim.economics.subsidies import (
     Benefit,
     BenefitKind,
@@ -107,6 +109,15 @@ class SyntheticPlan:
 
     #: Subject name of the envelope measure.
     ENVELOPE_SUBJECT = "facade_insulation"
+
+    #: The subjects that are HiSim components, as a simulation records them
+    #: (``EvaluationInputs.component_sources``); the envelope measure is none.
+    COMPONENT_SUBJECTS = (BOILER_SUBJECT, HEAT_PUMP_SUBJECT)
+
+    @staticmethod
+    def component_source(subject: str) -> KpiSource:
+        """The KPI source a simulated component of that name records."""
+        return KpiSource.for_component(ComponentID(subject), DisplayConfig())
 
     #: Id of the one scheme of :func:`always_eligible_catalog`.
     GRANT_SCHEME = "SYNTHETIC_GRANT"
@@ -427,6 +438,11 @@ def state_inputs(
         ],
         existing_assets=register if register is not None else inventory_register(),
         annual_heat_demand_in_kwh=11000.0,
+        component_sources={
+            subject: SyntheticPlan.component_source(subject)
+            for subject, _, _, _ in subjects
+            if subject in SyntheticPlan.COMPONENT_SUBJECTS
+        },
     )
 
 

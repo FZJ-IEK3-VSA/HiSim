@@ -8,7 +8,8 @@ whether the setup:
   * runs offline (no UTSP credentials / network),
   * produces ``all_kpis.json`` (i.e. KPI computation is implemented for all of
     its components), and
-  * is deterministic (identical flattened KPIs across the two runs).
+  * is deterministic (identical golden KPI leaves across the two runs: every value, unit and
+    address field equal, ``scripts.golden_kpis.golden_leaves``).
 
 This does **not** pick setups — the authoritative list is the one you maintain in
 ``golden_config.json`` (``--scan-all`` additionally probes every

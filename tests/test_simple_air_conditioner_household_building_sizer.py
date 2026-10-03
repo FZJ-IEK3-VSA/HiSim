@@ -36,6 +36,7 @@ from hisim.components.simple_air_conditioner import (
 from hisim import hisim_main
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulationparameters import SimulationParameters
 from tests.functions_for_testing import add_global_index_of_components, get_number_of_outputs
 
@@ -326,22 +327,12 @@ def test_the_setup_completes_a_kpi_run_with_its_undefined_ratios_empty() -> None
     kpi_path = result_path / "all_kpis.json"
     assert kpi_path.is_file(), f"all_kpis.json not found in {result_directory}"
 
-    values_by_name: dict = {}
-
-    def collect(node: object) -> None:
-        if not isinstance(node, dict):
-            return
-        for key, value in node.items():
-            if isinstance(value, dict) and "value" in value and "unit" in value:
-                values_by_name[key] = value["value"]
-            else:
-                collect(value)
-
-    collect(json.loads(kpi_path.read_text(encoding="utf-8")))
+    # Every KPI is looked up by its name alone, across building objects and tags; the finder fails
+    # by name when the KPI is missing or more than one entry carries it.
+    finder = KpiFinder(json.loads(kpi_path.read_text(encoding="utf-8")))
 
     for name in UndefinedForThisHousehold.NAMES:
-        assert name in values_by_name, f"KPI '{name}' is missing from {kpi_path}"
-        assert values_by_name[name] is None, (
-            f"KPI '{name}' carries {values_by_name[name]!r}, but this household consumes no "
+        assert finder.value(name=name) is None, (
+            f"KPI '{name}' carries {finder.value(name=name)!r}, but this household consumes no "
             "electricity at all, so a proportion of its consumption is undefined rather than zero."
         )

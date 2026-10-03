@@ -26,7 +26,7 @@ from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowF
 from hisim.energy_port import EnergyPort
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
 
 # Package
 
@@ -56,6 +56,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         source_component_class: Optional[str] = None,
         *,
         component_id: cfg.ComponentID,
+        display_config: Optional[cfg.DisplayConfig] = None,
     ):
         """Defines a component output.
 
@@ -77,6 +78,13 @@ class ComponentOutput:  # noqa: too-few-public-methods
         An output that carries energy states its role and carrier in the component's energy
         balance with ``energy_port`` (:mod:`hisim.energy_port`); the balance check and the
         Sankeys read nothing else.
+
+        ``display_config`` is the owning component's display configuration, set by
+        :meth:`Component.add_output` and the dynamic components' output builders. With
+        ``component_id`` it is what lets a component that reports a KPI on behalf of the
+        component feeding one of its inputs (the energy management system) name that component's
+        :class:`~hisim.postprocessing.kpi_computation.kpi_structure.KpiSource` exactly as the
+        component names it itself. ``None`` only on an output built by hand, outside a component.
 
         Raises:
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
@@ -101,6 +109,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.output_description: Optional[str] = output_description
         self.source_component_class: Optional[str] = source_component_class
         self.component_id: cfg.ComponentID = component_id
+        self.display_config: Optional[cfg.DisplayConfig] = display_config
 
     @property
     def building_label(self) -> str:
@@ -400,6 +409,7 @@ class Component:
             energy_port,
             output_description,
             component_id=self.config.component_id,
+            display_config=self.my_display_config,
         )
         self.outputs.append(outp)
         return outp
@@ -641,23 +651,49 @@ class Component:
         hand, so leaving the field to them means every one of them is one forgotten argument away
         from a KPI that silently overwrites its sibling. Stamping it here, on the instance that
         knows its own name, makes the field a property of the collection rather than of each
-        component's discipline. An entry that already names a source keeps it, so a component that
-        reports on behalf of another one is not relabelled.
+        component's discipline. An entry that already carries a source keeps it, so a component that
+        reports on behalf of another one (the energy management system) is not relabelled.
+
+        The source is the structured address :meth:`kpi_source` builds (``kpi_address_spec.md``);
+        the deprecated ``name_of_source_component`` is kept for one release as the same string as
+        ``source.name``.
 
         Args:
             all_outputs: Every output of the simulation, as the KPI methods expect them.
             postprocessing_results: The result time series, column-aligned with ``all_outputs``.
 
         Returns:
-            List[KpiEntry]: the component's entries, with ``name_of_source_component`` filled in.
+            List[KpiEntry]: the component's entries, each with ``source`` and
+            ``name_of_source_component`` filled in.
+
+        Raises:
+            ValueError: If an entry names a source component by the deprecated field alone, or by
+                both fields with different names: the field is filled from ``source`` and no
+                longer written by components, so such an entry is a defect.
         """
         kpi_entries = self.get_component_kpi_entries(
             all_outputs=all_outputs, postprocessing_results=postprocessing_results
         )
+        own_source = self.kpi_source()
         for kpi_entry in kpi_entries:
-            if kpi_entry.name_of_source_component is None:
-                kpi_entry.name_of_source_component = self.component_name
+            if kpi_entry.source is None:
+                if kpi_entry.name_of_source_component not in (None, own_source.name):
+                    raise ValueError(
+                        f"{self.component_name} reports the KPI '{kpi_entry.name}' for "
+                        f"'{kpi_entry.name_of_source_component}' by name only. An entry reported on "
+                        "behalf of another component carries that component's KpiSource."
+                    )
+                kpi_entry.source = own_source
+            kpi_entry.require_consistent_source(where=self.component_name)
         return kpi_entries
+
+    def kpi_source(self) -> KpiSource:
+        """The structured address this component's KPI entries carry as their ``source``.
+
+        Returns:
+            :meth:`KpiSource.for_component` of this component's identity and display config.
+        """
+        return KpiSource.for_component(self.component_id, self.my_display_config)
 
     def capital_cost_data(
         self, simulation_parameters: Optional[SimulationParameters] = None

@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
 """The declared translation between the golden references' old and new names.
 
-A golden reference is a flat ``{"BUI1.<component>.<kpi>": number}`` map, one file per
-``(setup, parameter_set)`` pair, and both halves of a key have been renamed in the past: a
-whole file when a setup was renamed, an individual key when the KPI collection changed how
-it spells a component. A history walker that reads every commit literally sees such a
+A golden reference was, until the goldens carried KPI addresses, a flat
+``{"BUI1.<component>.<kpi>": number}`` map, one file per ``(setup, parameter_set)`` pair,
+and both halves of a key have been renamed in that time: a whole file when a setup was
+renamed, an individual key when the KPI collection changed how it spells a component. A
+history walker that reads every commit literally sees such a
 rename as one series ending and another beginning — two half-length panels where there is
 one KPI. This module is the table that stitches them back together, and
 ``scripts/golden_history.py`` is its only consumer.
+
+The KPI table speaks the **flat form** only. Today's goldens are leaves that carry the KPI's
+address (``scripts/golden_kpis.py``); the walker identifies a leaf series by those fields, so
+a later change of a key's spelling needs no entry here, and it continues a flat series into a
+leaf series by itself where the flat key is the leaf's dotted key or its bare
+``building.tag.name`` (``scripts/golden_history.py``, "Series identity"). That stitching is
+what carries the fleet-wide suffix rename of the stable KPI addresses (PR #882, every
+component KPI keyed ``"<name> (<source.name>)"``) across, so it has no entry here. An entry
+here is still needed where a flat key's bare form is ambiguous: the two CHPs below.
 
 Every entry is a **claim someone made**: that this old name and this new name are two
 spellings of one measurement, renamed by this commit. The claims here were derived
@@ -19,15 +29,16 @@ golden, every new name in the golden files as they stand today.
 
 Why the KPI table is keyed per pair and not fleet-wide
 ------------------------------------------------------
-The one real renaming so far (#653, "Two components of one name stay two components")
+The one renaming this table records (#653, "Two components of one name stay two components")
 appended the component's class name to every KPI of a component whose *name* collided with
 another component's in the same setup: ``BUI1.Fuel Meter.OPEX - CO2 Footprint`` became
 ``BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)``. The suffix arrived only where a
 collision actually existed, so the very same KPI name is renamed in one pair and untouched
 in another: ``household_oil_building_sizer__full_year_60s`` carries
 ``BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)`` and a plain, still-unsuffixed
-``BUI1.Fuel Meter.OPEX - Energy costs`` side by side to this day. A fleet-wide rule for that
-name would therefore merge two different series in the pairs that never renamed it. The
+``BUI1.Fuel Meter.OPEX - Energy costs`` side by side until the stable KPI addresses (#882)
+suffixed every component KPI. A fleet-wide rule for that name would therefore have merged two
+different series in the pairs that never renamed it. The
 ``"*"`` key below is supported for a rename that really is fleet-wide, and is empty today.
 
 How to add a rename
@@ -97,26 +108,21 @@ class PairRename:
     note: str = ""
 
 
-def _suffixed(component_class: str, commit: str, pr: int, *kpi_names: str) -> Tuple[KpiRename, ...]:
-    """Build the ``old -> old + " (<class>)"`` claims of one component-name collision.
+def _renamed(commit: str, pr: int, *pairs: Tuple[str, str]) -> Tuple[KpiRename, ...]:
+    """Build the claims of one commit's renames, each written out as its ``(old, new)`` pair.
 
-    Only the mechanical half of the entry is computed; which keys were renamed, in which
-    pair, and to which class name stays written out at the call site, because that is the
-    part a reviewer has to check.
+    Both keys are spelled out at the call site, exactly as the golden files carried them, so a
+    reviewer reads the claim itself and nothing is assembled from parts of a key.
 
     Args:
-        component_class: The class name the rename appended, e.g. ``"FuelMeter"``.
         commit: The full sha of the commit that renamed the keys.
         pr: The pull request that carried that commit.
-        *kpi_names: The keys as they were spelled before the rename.
+        *pairs: ``(old key, new key)``, one per renamed KPI.
 
     Returns:
-        One :class:`KpiRename` per name, in the order given.
+        One :class:`KpiRename` per pair, in the order given.
     """
-    return tuple(
-        KpiRename(old=name, new=f"{name} ({component_class})", commit=commit, pr=pr)
-        for name in kpi_names
-    )
+    return tuple(KpiRename(old=old, new=new, commit=commit, pr=pr) for old, new in pairs)
 
 
 #: Golden filename stems that were renamed, old stem -> the claim. Empty: no golden file has
@@ -149,119 +155,150 @@ KPI_RENAMES: Mapping[str, Tuple[KpiRename, ...]] = {
         # honest successor; it is continued into the first machine's, and CHP2's keys start
         # as new series in #653. Both CHPs sit at 0.0 over the whole recorded history, so the
         # choice moves no line on any panel; it is written down because it is a choice.
-        *_suffixed(
-            "CHP1",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.CHP.Electrical energy produced",
-            "BUI1.CHP.Fuel consumed",
-            "BUI1.CHP.Number of activation cycles",
-            "BUI1.CHP.Thermal energy produced",
+            ("BUI1.CHP.Electrical energy produced", "BUI1.CHP.Electrical energy produced (CHP1)"),
+            ("BUI1.CHP.Fuel consumed", "BUI1.CHP.Fuel consumed (CHP1)"),
+            ("BUI1.CHP.Number of activation cycles", "BUI1.CHP.Number of activation cycles (CHP1)"),
+            ("BUI1.CHP.Thermal energy produced", "BUI1.CHP.Thermal energy produced (CHP1)"),
         ),
     ),
     # The district-heating pairs gained a District Heating component of their own in #653;
     # what the fuel meter measures kept its value and only took the suffix.
     "household_district_heating_building_sizer__full_year_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Energy costs",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
-            "BUI1.Fuel Meter.Total energy consumption",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Energy costs", "BUI1.Fuel Meter.OPEX - Energy costs (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
+            ("BUI1.Fuel Meter.Total energy consumption", "BUI1.Fuel Meter.Total energy consumption (FuelMeter)"),
         ),
     ),
     "household_district_heating_building_sizer__one_week_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Energy costs",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
-            "BUI1.Fuel Meter.Total energy consumption",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Energy costs", "BUI1.Fuel Meter.OPEX - Energy costs (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
+            ("BUI1.Fuel Meter.Total energy consumption", "BUI1.Fuel Meter.Total energy consumption (FuelMeter)"),
         ),
     ),
     # In the two solar-thermal-plus-gas pairs the collector's KPIs had been covering the gas
     # boiler's as well; the collector kept its numbers under the suffixed name and the boiler
     # appeared beside it.
     "household_gas_solar_thermal__one_week_60s": (
-        *_suffixed(
-            "SolarThermalSystem",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Solar Thermal.CAPEX - CO2 Footprint",
-            "BUI1.Solar Thermal.CAPEX - Investment cost",
-            "BUI1.Solar Thermal.OPEX - CO2 Footprint",
-            "BUI1.Solar Thermal.OPEX - Fuel costs",
-            "BUI1.Solar Thermal.OPEX - Maintenance costs",
-            "BUI1.Solar Thermal.Thermal energy delivered for domestic hot water",
-            "BUI1.Solar Thermal.Total CO2 Footprint (CAPEX for simulated period + OPEX)",
-            "BUI1.Solar Thermal.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance)",
-            "BUI1.Solar Thermal.Total thermal energy delivered",
+            (
+                "BUI1.Solar Thermal.CAPEX - CO2 Footprint",
+                "BUI1.Solar Thermal.CAPEX - CO2 Footprint (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.CAPEX - Investment cost",
+                "BUI1.Solar Thermal.CAPEX - Investment cost (SolarThermalSystem)",
+            ),
+            ("BUI1.Solar Thermal.OPEX - CO2 Footprint", "BUI1.Solar Thermal.OPEX - CO2 Footprint (SolarThermalSystem)"),
+            ("BUI1.Solar Thermal.OPEX - Fuel costs", "BUI1.Solar Thermal.OPEX - Fuel costs (SolarThermalSystem)"),
+            (
+                "BUI1.Solar Thermal.OPEX - Maintenance costs",
+                "BUI1.Solar Thermal.OPEX - Maintenance costs (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.Thermal energy delivered for domestic hot water",
+                "BUI1.Solar Thermal.Thermal energy delivered for domestic hot water (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.Total CO2 Footprint (CAPEX for simulated period + OPEX)",
+                "BUI1.Solar Thermal.Total CO2 Footprint (CAPEX for simulated period + OPEX) (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance)",
+                "BUI1.Solar Thermal.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance) (SolarThermalSystem)",  # noqa: E501  # pylint: disable=line-too-long
+            ),
+            (
+                "BUI1.Solar Thermal.Total thermal energy delivered",
+                "BUI1.Solar Thermal.Total thermal energy delivered (SolarThermalSystem)",
+            ),
         ),
     ),
     "household_gas_solar_thermal_building_sizer__one_week_60s": (
-        *_suffixed(
-            "SolarThermalSystem",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Solar Thermal.CAPEX - CO2 Footprint",
-            "BUI1.Solar Thermal.CAPEX - Investment cost",
-            "BUI1.Solar Thermal.OPEX - CO2 Footprint",
-            "BUI1.Solar Thermal.OPEX - Fuel costs",
-            "BUI1.Solar Thermal.OPEX - Maintenance costs",
-            "BUI1.Solar Thermal.Thermal energy delivered for domestic hot water",
-            "BUI1.Solar Thermal.Total CO2 Footprint (CAPEX for simulated period + OPEX)",
-            "BUI1.Solar Thermal.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance)",
-            "BUI1.Solar Thermal.Total thermal energy delivered",
+            (
+                "BUI1.Solar Thermal.CAPEX - CO2 Footprint",
+                "BUI1.Solar Thermal.CAPEX - CO2 Footprint (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.CAPEX - Investment cost",
+                "BUI1.Solar Thermal.CAPEX - Investment cost (SolarThermalSystem)",
+            ),
+            ("BUI1.Solar Thermal.OPEX - CO2 Footprint", "BUI1.Solar Thermal.OPEX - CO2 Footprint (SolarThermalSystem)"),
+            ("BUI1.Solar Thermal.OPEX - Fuel costs", "BUI1.Solar Thermal.OPEX - Fuel costs (SolarThermalSystem)"),
+            (
+                "BUI1.Solar Thermal.OPEX - Maintenance costs",
+                "BUI1.Solar Thermal.OPEX - Maintenance costs (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.Thermal energy delivered for domestic hot water",
+                "BUI1.Solar Thermal.Thermal energy delivered for domestic hot water (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.Total CO2 Footprint (CAPEX for simulated period + OPEX)",
+                "BUI1.Solar Thermal.Total CO2 Footprint (CAPEX for simulated period + OPEX) (SolarThermalSystem)",
+            ),
+            (
+                "BUI1.Solar Thermal.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance)",
+                "BUI1.Solar Thermal.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance) (SolarThermalSystem)",  # noqa: E501  # pylint: disable=line-too-long
+            ),
+            (
+                "BUI1.Solar Thermal.Total thermal energy delivered",
+                "BUI1.Solar Thermal.Total thermal energy delivered (SolarThermalSystem)",
+            ),
         ),
     ),
     # The four fuel-boiler pairs: only the two KPIs the boiler also reports were ambiguous,
     # so only those two took the suffix. The meter's other keys are unsuffixed to this day,
     # which is why none of this can be stated fleet-wide.
     "household_oil_building_sizer__full_year_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
         ),
     ),
     "household_oil_building_sizer__one_week_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
         ),
     ),
     "household_pellets_building_sizer__full_year_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
         ),
     ),
     "household_pellets_building_sizer__one_week_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
         ),
     ),
     "household_wood_chips_building_sizer__full_year_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
         ),
     ),
     "household_wood_chips_building_sizer__one_week_60s": (
-        *_suffixed(
-            "FuelMeter",
+        *_renamed(
             _COMPONENT_SPLIT, _COMPONENT_SPLIT_PR,
-            "BUI1.Fuel Meter.OPEX - CO2 Footprint",
-            "BUI1.Fuel Meter.OPEX - Maintenance costs",
+            ("BUI1.Fuel Meter.OPEX - CO2 Footprint", "BUI1.Fuel Meter.OPEX - CO2 Footprint (FuelMeter)"),
+            ("BUI1.Fuel Meter.OPEX - Maintenance costs", "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)"),
         ),
     ),
 }

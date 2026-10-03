@@ -496,8 +496,8 @@ class TestTheDocumentShape:
         commit = document["engine"]["hisim_commit"]
         assert commit is None or isinstance(commit, str) and commit.strip() == commit
 
-    def test_the_document_states_schema_version_seven(self, document):
-        """Version 7: every row's ``replaces_subjects`` and the reference's renewed fabric (#59).
+    def test_the_document_states_schema_version_eight(self, document):
+        """Version 8: every ``by_subject`` row's required ``source`` (``kpi_address_spec.md``).
 
         A literal for the same reason as the economics version above. Version 2 (2026-09-24) is
         the format with hisim-cyc.5's awarded-row rules and hisim-cyc.6's required monthly keys;
@@ -513,17 +513,65 @@ class TestTheDocumentShape:
         ``investment_origin`` and ``investment_source`` on every ``by_subject`` row and
         ``max_amount_in_euro`` on every ``subsidies[]`` row; version 7 (2026-09-27, renovisorissues
         #59, hisim-ryw1) requires ``replaces_subjects`` on every ``by_subject`` row, and its
-        reference renews the building fabric, so its reference totals are not a version 6's. A
+        reference renews the building fabric, so its reference totals are not a version 6's;
+        version 8 (2026-10-03, hisim-b3b.1) requires ``source`` on every ``by_subject`` row. A
         document of that shape stating an older version would tell a consumer it could skip what
         the later versions require.
         """
         import jsonschema
 
-        assert document["schema_version"] == 7
+        assert document["schema_version"] == 8
         StagedDocument.validate(document)
-        for older in (1, 2, 3, 4, 5, 6):
+        for older in (1, 2, 3, 4, 5, 6, 7):
             with pytest.raises(jsonschema.ValidationError):
                 StagedDocument.validate({**document, "schema_version": older})
+
+    def test_a_row_without_its_source_is_refused(self, document):
+        """Catches a version-8 document whose rows dropped the field a frontend joins KPIs on."""
+        import jsonschema
+
+        row = dict(document["plan"]["by_subject"][0])
+        del row["source"]
+        broken = {**document, "plan": {**document["plan"], "by_subject": [row]}}
+        with pytest.raises(jsonschema.ValidationError, match="'source' is a required property"):
+            StagedDocument.validate(broken)
+
+
+class TestTheSourceOfARow:
+    """A row's ``source`` is its component's KPI source, ``null`` for every other subject (version 8)."""
+
+    def test_a_component_row_carries_its_components_kpi_source(self, document):
+        """Catches the cost row of a HiSim component not joining its KPIs on the same field set."""
+        for evaluation in ("reference", "plan"):
+            rows = {row["subject"]: row for row in document[evaluation]["by_subject"]}
+            boiler = rows[SyntheticPlan.BOILER_SUBJECT]
+            assert boiler["source"] == SyntheticPlan.component_source(SyntheticPlan.BOILER_SUBJECT).to_dict()
+            assert boiler["source"]["name"] == boiler["subject"]
+            assert boiler["source"]["import"] is None and boiler["source"]["instance"] is None
+        heat_pump = {row["subject"]: row for row in document["plan"]["by_subject"]}[SyntheticPlan.HEAT_PUMP_SUBJECT]
+        assert heat_pump["source"]["member"] == SyntheticPlan.HEAT_PUMP_SUBJECT
+
+    def test_every_other_row_states_null(self, document):
+        """Catches an envelope measure, a carrier or a synthetic subject being taken for a component."""
+        components = set(SyntheticPlan.COMPONENT_SUBJECTS)
+        others = [row for row in document["plan"]["by_subject"] if row["subject"] not in components]
+        assert {row["subject"] for row in others} >= {SyntheticPlan.ENVELOPE_SUBJECT}
+        assert any(row["kind"] == "carrier" for row in others)
+        assert all(row["source"] is None for row in others)
+
+    def test_a_stage_whose_inputs_predate_the_sources_is_refused(self, parameters, database):
+        """Catches a document calling every subject a non-component because its file is too old.
+
+        An ``economic_inputs.json`` written before ``component_sources`` existed reads back as
+        ``None``, not as "no components"; the document cannot state any row's source from it.
+        """
+        perspective = brownfield_perspective()
+        old_stage = baseline_stage()
+        old_stage = replace(old_stage, inputs=replace(old_stage.inputs, component_sources=None))
+        result = StagedEvaluator(database).evaluate([old_stage, heat_pump_stage(4)], parameters, perspective)
+
+        with pytest.raises(ValueError, match="Stage 0 was read from an economic_inputs.json written before"):
+            StagedDocument(result, parameters, perspective)
 
 
 class TestTheParametersBlock:

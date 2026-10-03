@@ -111,7 +111,9 @@ import (and instance) it:
 
 1. resolves the assembly (§9.3), applies the preset, checks the parameters (types, units, values, constraints);
 2. evaluates every port's `required_when`/`active_when` and selects the internal variants;
-3. substitutes the parameters and gives every member its structured address (§2.4), rewriting internal references;
+3. substitutes the parameters — `{$param: <name>}`, and `{$switch: <selector>, <case>: <value>, …}`, the value of the
+   case a parameter or an internal variant selects, its cases covering the selector's values exactly once — and gives
+   every member its structured address (§2.4), rewriting internal references;
 4. binds every active port (§3.3) and lowers it to existing items — bare-name default inputs, explicit wires, dynamic
    input feeds, `sizing_sources` lines, config values (§3.2) — and resolves the selectors (§4);
 5. attaches a source map entry to everything it produced (§9.2) and writes an **import record** (data, like
@@ -161,7 +163,8 @@ address's **serialization**: `<import>[-<instance>]-…-<Member>`, e.g. `pv-east
   serialized form is a contract with the RenoVisor frontend, settled with them on renovisorissues (§14, D15).
 - **Display names and labels.** Beside the address, the KPI JSON and `result.json` carry `display_name`, an English
   default built from assembly metadata — the assembly's `name:` and an optional per-member `display:` template over its
-  parameters (`display: "PV array, {orientation}"`); site components use their `DisplayConfig` — and `label`, the
+  parameters (`display: "PV array, {orientation}"`), rendered at expansion into `ComponentID.display_name`; site
+  components use their `DisplayConfig` — and `label`, the
   request's own name for the system, verbatim and optional, which wins over `display_name`. HiSim ships no
   translations: the frontend translates by the stable fields (assembly, member). See `roadmap/kpi_address_spec.md`.
 
@@ -213,8 +216,9 @@ parameter of the heating assembly, `control: smart | traditional` (a preset or i
 
 ### 2.6 Parameters: units, documentation, constraints
 
-A parameter declares `type`, optional `default` (`AUTO` allowed for a sized field), optional `values`, and now `unit`,
-`description` and, for a numeric parameter, `range: {min, max}` (decided, owner, 2026-10-03, D24: the range is the
+A parameter declares `type`, a `default` (`AUTO` allowed for a sized field, `none` for no value; the library test
+requires one, §9.4), optional `values`, and now `unit`, `description` and, for a numeric parameter, `range: {min, max}`
+(decided, owner, 2026-10-03, D24: the range is the
 parameter box the assembly is tested over, §9.4; a numeric parameter without one fails the library's tests). A unit is a member name of `lt.Units` (`hisim/loadtypes.py:140`; `WATT`, `LITER`, `CELSIUS`,
 `KG_PER_SEC` at `:149`, `:174`, `:188`, `:185`), the vocabulary every I/O declaration uses; the typed quantities of
 `hisim/units.py` (`Watt` `:217`, `Liter` `:280`, `Celsius` `:322`) are code-level and map one to one where both exist. A
@@ -225,7 +229,9 @@ field collides). Fields encode their unit in the name today — in `hisim/compon
 76, 45 and 14 times — but the suffix is documentation, not the source (D16, decided (b)): every config field an
 assembly parameter feeds declares its unit, `sized_field(..., unit=lt.Units.LITER)` (`sized_field` has no unit argument
 yet, `hisim/config/sizing.py:194-198`) or `field(metadata={"unit": …})`, and a fed field without a declared unit is
-refused. A mismatch is a load error, never a conversion. Declaring the units on the fields the first assemblies feed
+refused. A mismatch is a load error, never a conversion. Only a numeric parameter carries a unit (and a `range`), and a
+numeric parameter that feeds a nested value or a constructor argument, neither of which declares a unit, is refused.
+Declaring the units on the fields the first assemblies feed
 (PV azimuth and tilt, the battery's capacity, the EMS offsets, the collector area, the air conditioner's power) is the
 sweep of §13 step 1 (gap G10).
 
@@ -268,7 +274,7 @@ Rejected (2026-10-02): choosing the carrier by optional connections alone; a mis
 silently, fuel burned and drawn from no provider (the balance accepts a booking toward "nobody the wiring names",
 `hisim/energy_port.py:21-25`). `required_when` is structured, not an expression: a mapping from parameter to the list of
 values for which the port is required, all keys conjunctive (`required_when: {energy_carrier: [natural_gas, lpg,
-oil]}`). `active_when`, same shape, makes an optional or a provided port inactive outside its values.
+heating_oil]}`). `active_when`, same shape, makes an optional or a provided port inactive outside its values.
 
 ### 3.2 What a port lowers to
 
@@ -290,13 +296,19 @@ exposes and lowers to declarations HiSim already has:
   is fixed by adding the default connection to the class (the heat pump's two weather wires, dry run §5).
 - **A provided output**, `{output: PVSystem.ElectricityOutput}`, names what a partner or the controller binds to
   (`controllable:`, §4.4); observers need no port, they select by tag (§4.1). Unbound, it is unused (D20).
-- **A circuit**, `{circuit: dhw, member: Tank}`, is one end of one hydronic circuit and lowers to the members' default
+- **A circuit**, `{circuit: dhw, member: Tank}` (or `member: [Collector, Controller]`, each member reading or owning
+  one of the circuit's outputs), is one end of one hydronic circuit and lowers to the members' default
   connections for the circuit's three outputs `MassFlowDhw`, `SupplyTemperatureDhw`, `ReturnTemperatureDhw` (§11.1).
   The circuit name is the medium: a brine circuit's outputs are not what a DHW tank declares connections for.
 - **A carrier need**, `{carrier: natural_gas, outputs: [heater_fuel]}`, lowers to the provider's meter observing the
-  named outputs (§5.1); for electricity, to the check that exactly one grid connection exists, and no wire.
+  named outputs (§5.1); for electricity, to the check that exactly one grid connection exists, and no wire. A carrier
+  is an `lt.EnergyBalanceCarrier` value (`natural_gas`, `electricity`, `heating_oil`, `pellets`, …), the spelling an
+  energy port serializes. The provider writes `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`, and
+  the consumers' feeds land at the meter's `{$port: connection}` placeholder; an electricity provision names no
+  `meter:` (electricity has no link; its meter observes, §4.3).
 - **A sizing fact**, `{fact: pv_peak_power_in_watt, many: true, into: [Battery]}`, lowers to a `sizing_sources` line,
-  scalar or list (§6); a provided fact must be in the member class's `SIZING_CONTRIBUTIONS`.
+  scalar or list (§6); a provided fact, `{fact: pv_peak_power_in_watt, member: PVSystem}`, names the member providing
+  it and must be in that member class's `SIZING_CONTRIBUTIONS`.
 
 Every wire the lowering writes passes the existing load-type and unit check: the energy-system wiring refuses a wire
 whose ends disagree (`_check_port_types_agree`, `EF-30`, `hisim/energy_system/wiring_checks.py:197-226`) and the
@@ -464,10 +476,12 @@ A **provider** of a carrier is a supply assembly: the connection (the carrier's 
 subject, §5.2) plus a meter whose `observes:` the importing file writes. `supply/electricity_grid` is the grid
 connection and the `ElectricityMeter`, by default observing every electricity output its class declares (§4.3); an
 electricity need only checks that exactly one exists (§3.2). `supply/gas_connection` (`GasMeter`), `supply/lpg_tank`,
-`supply/oil_tank` (`FuelMeter`) and `supply/district_heating_substation` keep their meter observing, by default, every
-fuel output of their carrier its class declares default feeds from (the `GenericBoiler`'s `EnergyDemandSh` and
-`EnergyDemandDhw` for the gas meter), whose `EnergyPort` names the carrier: that observation is the fuel link, and the
-meter the fuel port's balance peer as today (`hisim/components/generic_boiler.py:450`, `:501`; `energy_port.py:12-17`).
+`supply/oil_tank` (`FuelMeter`) and `supply/district_heating_substation` name their meter on the provision,
+`provides: {connection: {carrier: natural_gas, meter: GasMeter}}`, and every bound consumer's fuel output lands at the
+meter's `{$port: connection}` placeholder as the feed its class declares for that output (the `GenericBoiler`'s
+`EnergyDemandSh` and `EnergyDemandDhw` for the gas meter), whose `EnergyPort` names the carrier: that feed is the fuel
+link, and the meter the fuel port's balance peer as today (`hisim/components/generic_boiler.py:450`, `:501`;
+`energy_port.py:12-17`).
 Control is a `control` import (§4.4). The meter's carrier is pinned from the provider, not copied from "the generator
 beside it" through the `energy_carrier` fact (`hisim/components/gas_meter.py:63-68`, `:82`), which a second burner makes
 ambiguous; every bound consumer's carrier is checked against the provider's at load time.
@@ -495,7 +509,8 @@ pattern 2 († does not exist yet: the immersion heater is hisim-epc.21):
 ```yaml
 # energy_systems/assemblies/dhw/storage_water_heater.assembly.yaml  (schema_version 3, kind: assembly)
 parameters:
-  energy_carrier: {type: enum, values: [electricity, natural_gas, lpg, oil], description: What heats the tank.}
+  energy_carrier: {type: enum, values: [electricity, natural_gas, lpg, heating_oil], default: electricity,
+                   description: What heats the tank.}                # lpg †: no lt.EnergyBalanceCarrier member yet
   volume_in_liter: {type: float, unit: LITER, default: AUTO, description: Usable tank volume.}  # AUTO: class law
 presets:
   ie_immersion_120l: {energy_carrier: electricity, volume_in_liter: 120}
@@ -511,7 +526,7 @@ variants:
         components:
           Heater: {class: hisim.components.immersion_heater.ImmersionHeater, preset: standard}   # †
       burner:
-        when: [natural_gas, lpg, oil]
+        when: [natural_gas, lpg, heating_oil]
         components:
           Heater: {class: hisim.components.generic_boiler.GenericBoiler, preset: condensing_gas,
                    config: {energy_carrier: {$param: energy_carrier}}}   # carrier name -> LoadTypes in the loader
@@ -520,13 +535,13 @@ interface:
     hot_water_demand: {into: [Tank], partner: [UtspLpgConnector]}   # Tank's default connections from the occupancy
     electricity: {carrier: electricity, outputs: [heater_electricity], required_when: {energy_carrier: [electricity]}}
     fuel: {carrier: {$param: energy_carrier}, outputs: [heater_fuel],
-           required_when: {energy_carrier: [natural_gas, lpg, oil]}}
+           required_when: {energy_carrier: [natural_gas, lpg, heating_oil]}}
     ems_modifier: {into: [HeaterController], partner: L2GenericEnergyManagementSystem,                      # † L1
                    optional: true, active_when: {energy_carrier: [electricity]}}
   provides:
     heater_electricity: {output: Heater.ElectricityInput, controllable: {via: ems_modifier},                # †
                          active_when: {energy_carrier: [electricity]}}
-    heater_fuel: {output: Heater.EnergyDemandDhw, active_when: {energy_carrier: [natural_gas, lpg, oil]}}
+    heater_fuel: {output: Heater.EnergyDemandDhw, active_when: {energy_carrier: [natural_gas, lpg, heating_oil]}}
 ```
 
 The heater's L1 thermostat (`HeaterController` †, in the full file) is always there; `heater_electricity` is
@@ -610,21 +625,25 @@ feed checks, the energy-balance report, economics (a subject without a catalogue
 ### 9.4 Testing an assembly
 
 "Tested fragments" means more than one run at the defaults (owner, 2026-10-03). Every assembly carries its **test
-contract in its own file**, structured data the generic harness in `tests/assemblies/` executes; nothing is written per
-assembly in Python (decided, D24: contract in the assembly file, not a sibling file or hand-written tests, so the
+contract in its own file**, structured data the generic harness in `hisim/energy_system/assemblies/testing/` executes,
+run by `hisim energy-system test-assemblies`; nothing is written per assembly in Python (decided, D24: contract in the
+assembly file, not a sibling file or hand-written tests, so the
 library test can refuse an assembly without one and `describe` prints it).
 
 **Samples.** The harness derives the parameter samples from the declarations: every preset, every `range` boundary
-(`min` and `max` of each numeric parameter, the others at their defaults), every `values` entry, every internal variant,
+(`min` and `max` of each numeric parameter, the others at their defaults, so every parameter declares a default),
+every `values` entry, every internal variant,
 and a seeded **Latin hypercube sample** of the parameter box (owner, 2026-10-03: `scipy.stats.qmc.LatinHypercube`,
 scrambled, fixed seed): every numeric parameter is a dimension over its `range`, every `values` parameter and every
 internal variant a stratified discrete dimension, and a constraint with alternatives (`exactly_one_of`) splits the box
 into one hypercube per branch, so no sample is thrown away for violating a constraint. Sample size and seed are the
 harness's, not the assembly's; the size is recorded with the run.
 
-**Isolation run.** For each sample the harness builds a minimal system: the assembly, plus for each required port a
-stub partner of the declared class drawn from a small set of test partners (a one-day occupancy, a constant weather, a
-grid connection), one simulated day, the energy-balance check and `i_doublecheck` on. The run fails on an exception,
+**Isolation run.** For each sample the harness builds a minimal system: the assembly, plus for each port a test
+partner, optional ports included, and for a carrier the assembly provides a consumer partner; one simulated day at
+900 s per step (an assembly declares no resolution), the energy-balance check and `i_doublecheck` on. The test
+partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
+consumer or fact, each naming the partners it requires. The run fails on an exception,
 a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below.
 
 **Declarations** (`tests:` in the assembly file; structured, no expressions):
@@ -648,15 +667,18 @@ tests:
   that catches wrong-sign physics.
 - `expect` pins a preset's results to a band, like the goldens do exactly; a band is wider than a golden and states the
   modeller's plausibility judgement.
-- **Required (D24):** every numeric parameter has a `range`; every energy-carrying or temperature output of a member has
-  a `bounds` entry; at least one `monotone` entry. The library test refuses an assembly missing any of them, as it
+- **Required (D24):** every parameter has a `default`; every numeric parameter has a `range`; every energy-carrying or
+  temperature output of a member has a `bounds` entry; at least one `monotone` entry when the assembly has a numeric
+  parameter (an assembly without one, such as a bare supply connection, has nothing to sweep). The library test refuses an
+  assembly missing any of them, as it
   refuses one without descriptions. A declaration that names a missing member, output, KPI or parameter is a contract
   error at load time.
 
 **Tiers (D24).** The PR gate runs the contract test and the deterministic samples (presets, boundaries, values,
 variants) with every declaration, a few one-day runs per assembly, sharded like the week goldens. The Latin hypercube
-sample of the box runs nightly beside the full-year goldens (`golden-year.yml`), and a failure opens a bead, as a
-golden drift does. The example system of every assembly is a golden pair, so its default result is also pinned exactly.
+sample of the box runs as the job `assemblies-nightly` of `golden-year.yml`, beside the full-year goldens and for now
+behind the same gate, once per PR commit; a schedule comes with the real library. A failure opens a bead, as a golden
+drift does. The example system of every assembly is a golden pair, so its default result is also pinned exactly.
 The harness exists from step 1 on fixture assemblies with fake components (§13); it meets real components in step 4.
 
 ## 10. The RenoVisor on assemblies
@@ -846,7 +868,8 @@ All by the owner on 2026-10-03.
   from a twin plus an assignment of each component to a member; it is not a maintained layer.
 - **D4 — Versioning:** content hashes now; pinned versions (`pv/array@2`) when a library outside the repository exists.
 - **D5 — Identity:** a structured address in `ComponentID` (`path` plus member), `-` joining only its serialization,
-  display-only and never parsed back (§2.4).
+  display-only and never parsed back (§2.4); `ComponentID.display_name` carries the member's rendered `display:`
+  template.
 - **D6 — Provider handling:** (a): a missing provider is a load-time error naming import, port and carrier; the
   translator adds the provider explicitly, reports it and costs the connection (fee, standing charge, exit fee when a
   stage leaves it idle); an idle provider is refused (§5.2).
@@ -905,12 +928,15 @@ All by the owner on 2026-10-03.
 - Also: units, descriptions, constraints and the variant partition check (§2.6); presets (§2.7); source maps (§9.2);
   `describe`, index, examples, isolation tests and the resolver's search path (§9.3).
 
-- **D24 — Tested fragments (owner, 2026-10-03):** every assembly carries its test contract in its own file: `range`
-  on every numeric parameter, `tests.bounds` on every energy-carrying or temperature output, at least one
-  `tests.monotone`, optional `tests.expect` per preset; a generic harness samples presets, boundaries, values and
-  variants on every PR and a seeded Latin hypercube sample of the parameter box nightly (one hypercube per constraint
-  branch, discrete parameters and variants stratified); an assembly without the contract is
-  refused by the library test (§9.4). Rejected: a sibling test file (drifts) and hand-written Python tests per assembly
+- **D24 — Tested fragments (owner, 2026-10-03):** every assembly carries its test contract in its own file: a
+  `default` on every parameter, `range` on every numeric parameter, `tests.bounds` on every energy-carrying or
+  temperature output, at least one `tests.monotone` when the assembly has a numeric parameter, optional `tests.expect` per preset; a generic harness
+  (`hisim/energy_system/assemblies/testing/`, `hisim energy-system test-assemblies`) runs each sample for one day at
+  900 s beside test partners read from each library's `test_partners.yaml`, and samples presets, boundaries, values
+  and variants on every PR and a seeded Latin hypercube sample of the parameter box in the nightly tier, the job
+  `assemblies-nightly` of `golden-year.yml` (one hypercube per constraint branch, discrete parameters and variants
+  stratified); an assembly without the contract is refused by the library test (§9.4). Rejected: a sibling test file
+  (drifts) and hand-written Python tests per assembly
   (no generic harness, no `describe`).
 
 ### 14.2 Open

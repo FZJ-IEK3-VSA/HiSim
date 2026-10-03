@@ -48,7 +48,7 @@ Internal variants: `heating.dhw_side` = `with_dhw` (`serves_dhw: true`), `heatin
 |---|---|---|
 | `heating.sh` | required, active | `active_when: {with_buffer: [true]}` |
 | `heating.dhw` (provided circuit) | required, active | `serves_dhw: true` |
-| `heating.electricity_dhw`, `heating.ems_modifier` into `ControllerDHW` | active | `serves_dhw: true` |
+| `heating.electricity_dhw`, `heating.dhw_temperature`, `heating.ems_modifier` into `ControllerDHW` | active | `serves_dhw: true` |
 | `heating.solar_coil`, `dhw.solar_coil` | optional, **unbound** | no candidate (no solar import); no fallback to apply |
 | `heating.ems_modifier` | optional, **bound** `control` | `optional-bind:`, partner `control-EMS` exists (D8 i) |
 | `Building.temperature_modifier`, `HeatDistributionController.temperature_modifier` | optional, **bound** `control` | `optional-bind:` on the site entry, partner exists — **G13 resolved** |
@@ -98,7 +98,8 @@ default connections from the partner's class as a bare name, or the explicit wir
 | `heating.electricity` | existence check | `grid.connection` | exists | nothing: electricity has no link; the two electricity outputs it names are observed (below) |
 | `heating.electricity_sh`, `.electricity_dhw` | observed + controlled | `control.flows` | via `ems_modifier` | two EMS feeds, `dispatch: {}` |
 | `heating.ems_modifier` | actuate | `control` | `optional-bind:` | bare `control-EMS` in `heating-ControllerSH` (`SimpleHotWaterStorageTemperatureModifier`) and in `heating-ControllerDHW` (`DHWStorageTemperatureModifier`) |
-| `heating.dhw` ↔ `dhw.circuit` | link (circuit) | each other | written (`dhw`) | bare `heating-HeatPump` in `dhw-DHWStorage` (supply + mass flow, the heat pump's); bare `dhw-DHWStorage` in `heating-HeatPump` and in `heating-ControllerDHW` (return leg = cylinder temperature, read by the generator and by its L1) |
+| `heating.dhw` ↔ `dhw.circuit` | link (circuit) | each other | written (`dhw`) | bare `heating-HeatPump` in `dhw-DHWStorage` (supply + mass flow, the heat pump's); bare `dhw-DHWStorage` in `heating-HeatPump` (return leg = cylinder temperature). The circuit's ends are `HeatPump` and `DHWStorage` only: `ControllerDHW` reads none of its three outputs |
+| `heating.dhw_temperature` (→ `ControllerDHW`) | link (data) | `dhw-DHWStorage` (class `SimpleDHWStorage`) | default | bare `dhw-DHWStorage` in `heating-ControllerDHW` (`WaterTemperatureInputFromDHWStorage`, its default connections from `SimpleDHWStorage`, as the twin's bare `DHWStorage`) |
 | `heating.heat_load`, `.design_temperature`, `.room_setpoint`, `.emitter_type`, `.heating_threshold` | sizing | `Building`, `Weather`, `Building`, `HeatDistributionController` ×2 | default | nothing: the bare-fact rule binds the same single providers — **G7** |
 | `dhw.hot_water_demand` | link (data) | `UTSPConnector` | default | bare `UTSPConnector` in `dhw-DHWStorage` |
 | `dhw.apartments` | sizing | `Building` | default | nothing |
@@ -126,15 +127,16 @@ assembly member or a site entry alike (G3).
 |---|---|---|---|
 | site HDS ↔ heating buffer (`sh`, crosses site–heating) | HDS: `WaterMassFlowHDS` → buffer `WaterMassFlowRateFromHeatDistributionSystem` | buffer: `WaterTemperatureToHeatDistribution` → HDS `WaterTemperatureInput` | HDS: `WaterTemperatureOutput` → buffer `WaterTemperatureFromHeatDistribution` |
 | heat pump ↔ buffer (internal to heating) | heat pump: `MassFlowOutputSH` | heat pump: `TemperatureOutputSH` | buffer: `WaterTemperatureToHeatGenerator` → heat pump `TemperatureInputSecondarySH` and `ControllerSH.WaterTemperatureInput` |
-| heat pump ↔ cylinder (`dhw`, crosses heating–dhw) | heat pump: `MassFlowOutputDHW` | heat pump: `TemperatureOutputDHW` | cylinder: `WaterTemperatureToHeatGenerator` → heat pump `TemperatureInputSecondaryDHW` and `ControllerDHW.WaterTemperatureInputFromDHWStorage` |
+| heat pump ↔ cylinder (`dhw`, crosses heating–dhw) | heat pump: `MassFlowOutputDHW` | heat pump: `TemperatureOutputDHW` | cylinder: `WaterTemperatureToHeatGenerator` → heat pump `TemperatureInputSecondaryDHW`; `ControllerDHW.WaterTemperatureInputFromDHWStorage` reads the cylinder through the need `dhw_temperature`, not the circuit |
 
 So the `sh` port of the heating assembly owns the supply leg only and its partner owns pump and return
 (`heat_distribution_system.py:206-281`, `simple_water_storage.py:643-711`); the `dhw` port owns pump and supply, the
 cylinder the return. This holds for `PARALLEL` only: with no buffer the HDS grows `WaterMassFlowInput`
 (`heat_distribution_system.py:230-243`) and the pump moves to the generator — **G8**. The return leg of `dhw` is the
 measured variable of the generator's L1 controller: an L1 loop of the heating assembly closes over a value of another
-import. That is legal (it travels through the circuit port), but the heating assembly's isolation test must stub the
-cylinder temperature, not only a heat sink.
+import. That is legal (it travels through the need `dhw_temperature`, partner class `SimpleDHWStorage`, not through the
+circuit, whose three outputs the L1 does not read), but the heating assembly's isolation test must stub the cylinder
+temperature, not only a heat sink.
 
 ## 6. Step 4 — selectors: every feed, with tags and derived weight
 

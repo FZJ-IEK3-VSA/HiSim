@@ -272,7 +272,8 @@ imports:
     observes: [{output: TotalElectricityToOrFromGrid}]
   gas:   {order: 15, assembly: supply/gas_connection}        # present because the cooker draws gas (a boiler house too)
   logs:  {order: 16, assembly: supply/delivered_fuel, parameters: {carrier: wood_logs}}
-                                                    # also pellets, wood chips, oil, HVO (†), LPG (†)
+                                                    # † wood_logs: no lt.EnergyBalanceCarrier member yet; also
+                                                    # heating_oil, pellets, wood_chips, hvo (†), lpg (†)
   # heat_network: {assembly: supply/district_heating_connection}   # when heating or dhw is district heating
   # a second meter is one more observer, priced by a tariff in the economics file (D13, D22):
   # hp_tariff_meter: {assembly: supply/meter,

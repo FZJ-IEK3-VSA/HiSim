@@ -1,6 +1,8 @@
 # Mockup (design, not loadable): energy_systems/assemblies/dhw/storage_water_heater.assembly.yaml
 # Spec §5.3, pattern 2 (parameter-selected internal variants). Request type `storage_water_heater`.
 # † ImmersionHeater and its L1 thermostat do not exist (hisim-epc.21); LPG is not a carrier yet (spec §5.1).
+# Carrier values are lt.EnergyBalanceCarrier values; † `lpg` has no member (LPG) yet, so an lpg import is refused at its
+# fuel port until the enum is extended in the step that brings the component.
 #
 # Control (D21): the heater's L1 thermostat is hardcoded in both options; the EMS may only raise its set point through
 # `ems_modifier`. Gap G5 of the dry-run: the EMS has no DHW modifier for an ELECTRIC_HEATING_DHW consumer today — it
@@ -14,13 +16,19 @@ description: A directly heated storage water heater, electric (immersion) or fue
 
 parameters:
   energy_carrier:
-    {type: enum, values: [electricity, natural_gas, lpg, oil], description: What heats the tank.}
+    {type: enum, values: [electricity, natural_gas, lpg, heating_oil], default: electricity,
+     description: "What heats the tank, an lt.EnergyBalanceCarrier value; lpg is †."}
+     # † default electricity is a placeholder: the importer always states the carrier (the request leaf energy_carrier)
   volume_in_liter:
-    {type: float, unit: LITER, default: AUTO, description: Usable tank volume; AUTO is the class law per apartment.}
+    {type: float, unit: LITER, default: AUTO, range: {min: 30, max: 500},
+     description: Usable tank volume; AUTO is the class law per apartment.}
+     # range: an under-sink 30 l unit up to a 500 l floor-standing one
   tank_and_pipe_insulated:
     {type: bool, default: true, description: "Insulation of tank and pipes († no field yet)."}
   heater_power_in_watt:
-    {type: float, unit: WATT, default: 3000, description: "Immersion rating or burner input († field of ImmersionHeater)."}
+    {type: float, unit: WATT, default: 3000, range: {min: 1000, max: 10000},
+     description: "Immersion rating or burner input († field of ImmersionHeater)."}
+     # range: a 1 kW immersion element up to a 10 kW gas storage heater burner
 
 presets:
   ie_immersion_120l: {energy_carrier: electricity, volume_in_liter: 120}
@@ -54,7 +62,7 @@ variants:
             config: {rated_power_in_watt: {$param: heater_power_in_watt}}
             inputs: [HeaterController, Tank]
       burner:
-        when: [natural_gas, lpg, oil]
+        when: [natural_gas, lpg, heating_oil]
         components:
           Heater:
             # GenericBoiler can run a DHW-only boiler today (generic_boiler.py:198, energy_carrier), and its
@@ -70,13 +78,49 @@ interface:
     hot_water_demand: {into: [Tank], partner: [UtspLpgConnector]}
     electricity: {carrier: electricity, outputs: [heater_electricity], required_when: {energy_carrier: [electricity]}}
     fuel:        {carrier: {$param: energy_carrier}, outputs: [heater_fuel],
-                  required_when: {energy_carrier: [natural_gas, lpg, oil]}}
+                  required_when: {energy_carrier: [natural_gas, lpg, heating_oil]}}
     apartments:  {fact: number_of_apartments, into: [Tank]}
     ems_modifier: {into: [HeaterController], partner: L2GenericEnergyManagementSystem,                    # † L1 input
                    optional: true, active_when: {energy_carrier: [electricity]}}
   provides:
     heater_electricity: {output: Heater.ElectricityInput, controllable: {via: ems_modifier},              # † tagged
                          active_when: {energy_carrier: [electricity]}}                       # ELECTRIC_HEATING_DHW
-    heater_fuel:        {output: Heater.EnergyDemandDhw, active_when: {energy_carrier: [natural_gas, lpg, oil]}}
+    heater_fuel:        {output: Heater.EnergyDemandDhw, active_when: {energy_carrier: [natural_gas, lpg, heating_oil]}}
                         # its EnergyPort carries the carrier (EnergyPort.carrier_of_fuel); the provider's meter observes it
     solar_coil:         {circuit: solar_dhw, member: Tank, optional: true}                               # D20 (a)
+
+tests:
+  # One day at 900 s beside the occupancy partner and the provider of the carrier. The heater is at most 10 kW (the
+  # box), so per-step energies are at most 10 kW x 0.25 h; the tank's draws follow the occupancy's tapping.
+  # Both options name their heater `Heater`; the immersion heater's outputs beyond ElectricityInput, and every output
+  # of HeaterController, are unknown until those classes exist (†).
+  bounds:
+    - {output: Tank.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}            # liquid water
+    - {output: Tank.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}   # liquid water
+    - {output: Tank.WaterTemperatureFromHeatGenerator, unit: CELSIUS, min: 0, max: 100}          # liquid water
+    - {output: Tank.WaterTemperatureFromSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100} # liquid water
+    - {output: Tank.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}              # liquid water
+    - {output: Tank.StandbyTemperatureLoss, unit: CELSIUS, min: 0, max: 10}            # a temperature drop per step: well below 1 K
+    - {output: Tank.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 75000}       # 500 l at 100 °C over 0 °C is 58 kWh
+    - {output: Tank.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -5000, max: 5000}       # per step: 10 kW x 0.25 h, with margin
+    - {output: Tank.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}   # zero without solar_coil
+    - {output: Tank.ThermalEnergyConsumptionDHW, unit: WATT_HOUR, min: 0, max: 15000}  # per step: a 60 kW draw x 0.25 h
+    - {output: Tank.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -20000, max: 20000}   # per step: in minus out
+    - {output: Tank.StandbyHeatLoss, unit: WATT, min: 0, max: 300}                     # a 500 l tank loses about 100 W
+    - {output: Tank.ThermalPowerConsumptionDHW, unit: WATT, min: 0, max: 60000}        # step-average tapping, below a shower peak
+    - {output: Tank.ThermalPowerFromHeatGenerator, unit: WATT, min: -20000, max: 20000}   # 2x the largest heater
+    - {output: Tank.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}   # zero without solar_coil
+    - {output: Heater.ElectricityInput, unit: WATT, min: 0, max: 12000}                # † immersion: its rating, at most 10 kW
+    - {output: Heater.TotalFuelConsumption, unit: WATT, min: 0, max: 15000}            # burner: input at most 10 kW / 0.7 efficiency
+    - {output: Heater.EnergyDemandSh, unit: WATT_HOUR, min: 0, max: 4000}              # burner, DHW only: zero; per-step band as below
+    - {output: Heater.ThermalOutputPowerSh, unit: WATT, min: 0, max: 12000}            # burner, DHW only: zero
+    - {output: Heater.ThermalOutputEnergySh, unit: WATT_HOUR, min: 0, max: 3000}       # burner, DHW only: zero
+    - {output: Heater.WaterOutputTemperatureSh, unit: CELSIUS, min: 0, max: 100}       # liquid water
+    - {output: Heater.WaterOutputTemperatureDhw, unit: CELSIUS, min: 0, max: 100}      # liquid water
+    - {output: Heater.EnergyDemandDhw, unit: WATT_HOUR, min: 0, max: 4000}             # per step: 15 kW fuel x 0.25 h, with margin
+    - {output: Heater.ThermalOutputPowerDhw, unit: WATT, min: 0, max: 12000}           # the box's 10 kW, with margin
+    - {output: Heater.ThermalOutputEnergyDhw, unit: WATT_HOUR, min: 0, max: 3000}      # per step: 12 kW x 0.25 h
+    - {output: Heater.CombustionHeatLoss, unit: WATT, min: 0, max: 5000}               # flue loss, a third of the input at most
+  monotone:
+    - {parameter: volume_in_liter, kpi: Standby heat loss of DHW storage, member: Tank, direction: increasing}
+      # a larger tank has more surface

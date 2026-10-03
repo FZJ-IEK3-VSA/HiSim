@@ -24,15 +24,23 @@ description: Air-to-water heat pump (hplib) with a parallel space-heating buffer
 
 parameters:
   thermal_power_in_watt:
-    {type: float, unit: WATT, default: AUTO, description: Rated thermal output; AUTO is the building's heating load.}
-  scop_en14825_w35:
-    {type: float, default: none, description: Datasheet SCOP at W35 (EN 14825); none leaves hplib's generic fit.}
-  scop_en14825_w55:
-    {type: float, default: none, description: Datasheet SCOP at W55 (EN 14825); none leaves hplib's generic fit.}
+    {type: float, unit: WATT, default: AUTO, range: {min: 2000, max: 20000},
+     description: Rated thermal output; AUTO is the building's heating load.}
+     # range: residential air-to-water heat pumps, a small flat (2 kW) to a large old detached house (20 kW)
+  scop_en14825_w35:                                         # † unit ANY: the field declares ANY; a dimensionless unit is to be declared
+    {type: float, unit: ANY, default: none, range: {min: 2.5, max: 6.0},
+     description: Datasheet SCOP at W35 (EN 14825); none leaves hplib's generic fit.}
+     # range: EN 14825 average-climate W35 SCOPs of air-to-water units on the market, about 3 to 5.5, with margin
+  scop_en14825_w55:                                         # † unit ANY, as scop_en14825_w35
+    {type: float, unit: ANY, default: none, range: {min: 2.0, max: 4.5},
+     description: Datasheet SCOP at W55 (EN 14825); none leaves hplib's generic fit.}
+     # range: W55 SCOPs, about 2.5 to 4, with margin; the box does not tie it below the W35 value
   with_buffer:
     {type: bool, default: true, description: Parallel space-heating buffer between generator and HDS.}
   buffer_volume_in_liter:
-    {type: float, unit: LITER, default: AUTO, description: Buffer volume; AUTO is 50 l per kW of the heat pump.}
+    {type: float, unit: LITER, default: AUTO, range: {min: 50, max: 1000},
+     description: Buffer volume; AUTO is 50 l per kW of the heat pump.}
+     # range: 50 l/kW over the thermal power range (100 to 1000 l), down to a 50 l separator
   serves_dhw:
     {type: bool, default: true, description: Whether the heat pump also charges a DHW cylinder through `dhw`.}
   control:
@@ -89,7 +97,7 @@ variants:
             preset: standard
             inputs:
               - {$port: ems_modifier}                                          # DHWStorageTemperatureModifier :3230
-              - {$port: dhw}                                                   # WaterTemperatureInputFromDHWStorage
+              - {$port: dhw_temperature}                                       # WaterTemperatureInputFromDHWStorage
       without_dhw:
         when: [false]
         components: {}
@@ -123,16 +131,21 @@ interface:
     flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (gap G1)
     sh:               {circuit: sh, member: Buffer, active_when: {with_buffer: [true]}}
                       # the naming convention gives the site's HDS pump and return leg, the buffer the supply leg
-    electricity:      {carrier: ELECTRICITY, outputs: [electricity_sh, electricity_dhw]}
+    electricity:      {carrier: electricity, outputs: [electricity_sh, electricity_dhw]}
     ems_modifier:     {into: [ControllerSH, ControllerDHW], partner: L2GenericEnergyManagementSystem, optional: true}
                       # the L1 set-point modifiers (D21); optional-bind: control; unbound = thermostat only
+    dhw_temperature:  {into: [ControllerDHW], partner: SimpleDHWStorage, required_when: {serves_dhw: [true]},
+                       active_when: {serves_dhw: [true]}}
+                      # the DHW L1's measured variable, the cylinder temperature: a need, lowered to ControllerDHW's
+                      # default connections from SimpleDHWStorage (the twin's bare `DHWStorage`, :55-60). ControllerDHW
+                      # reads none of the dhw circuit's three outputs, so it is no end of the circuit.
     heat_load:        {fact: heating_load_in_watt, into: [HeatPump]}
     design_temperature: {fact: heating_reference_temperature_in_celsius, into: [HeatPump]}
     room_setpoint:    {fact: set_heating_temperature_in_celsius, into: [ControllerSH]}
     emitter_type:     {fact: heat_distribution_system_type, into: [ControllerSH]}
     heating_threshold: {fact: set_heating_threshold_outside_temperature_in_celsius, into: [ControllerSH]}
   provides:
-    dhw:              {circuit: dhw, member: [HeatPump, ControllerDHW], required_when: {serves_dhw: [true]},
+    dhw:              {circuit: dhw, member: HeatPump, required_when: {serves_dhw: [true]},
                        active_when: {serves_dhw: [true]}}           # an active dhw circuit must be bound by one importer
     electricity_sh:   {output: HeatPump.ElectricalInputPowerSH, controllable: {via: ems_modifier}}   # HEAT_PUMP_BUILDING
     electricity_dhw:  {output: HeatPump.ElectricalInputPowerDHW, controllable: {via: ems_modifier},  # HEAT_PUMP_DHW
@@ -140,9 +153,67 @@ interface:
     # The tags are the observers' own declarations. HeatPump.ElectricalInputPowerForCooling and .ElectricalInputPowerBrinePump
     # also carry electricity EnergyPorts (:971-994) and are fed to no meter and no EMS in the twin: zero for an
     # air-source machine that never cools. A ground-source assembly provides the brine pump as a third output.
-    thermal_power:    {fact: maximal_thermal_power_in_watt, export: false}   # read by Buffer only
+    thermal_power:    {fact: maximal_thermal_power_in_watt, member: HeatPump}
+                      # read by Buffer (its volume law); whether a reader outside this assembly sees it is the export
+                      # rule of spec §6, decided in §13 step 3
     solar_coil:       {circuit: solar_sh, member: Buffer, optional: true, active_when: {with_buffer: [true]}}
                        # SimpleHotWaterStorage.WaterTemperature/MassFlowRateFromSecondaryHeatGenerator (D20 a)
-  internal:                                                  # receiver's default connections from the sender's class
-    sh_generator_circuit: {bind: [HeatPump, Buffer]}         # the bare names above
-    on_off: {bind: [ControllerSH, HeatPump]}                 # State_SH -> OnOffSwitchSH
+  # Member to member is a bare name in the receiver's inputs (HeatPump in Buffer, Buffer and ControllerSH in HeatPump,
+  # as the twin writes them); an `internal:` entry binds a member to an inner import's port only.
+
+tests:
+  # One day at 900 s. Powers are bounded by the largest machine of the box (20 kW rated; hplib's output at a mild
+  # ambient exceeds the rating, so 2x), per-step energies by power x 0.25 h, the day's cumulative ones by power x 24 h.
+  # Water temperatures stay between freezing and boiling, flow temperatures below hplib's 75 °C limit plus margin.
+  # ControllerSH and ControllerDHW have no energy-carrying or temperature output (State_SH, StateDHW, ... are ANY).
+  # The DHW outputs exist only with serves_dhw: true (with_domestic_hot_water_preparation).
+  bounds:
+    - {output: HeatPump.ThermalOutputPowerSH, unit: WATT, min: 0, max: 40000}                 # heating only: 2x the largest rating
+    - {output: HeatPump.ElectricalInputPowerSH, unit: WATT, min: 0, max: 20000}               # 40 kW at a COP >= 2
+    - {output: HeatPump.ElectricalInputPowerForCooling, unit: WATT, min: 0, max: 20000}       # zero for this heating-only machine
+    - {output: HeatPump.ElectricalInputPowerBrinePump, unit: WATT, min: 0, max: 1000}         # zero for an air source
+    - {output: HeatPump.TemperatureInputSH, unit: CELSIUS, min: 0, max: 90}                   # return from the buffer
+    - {output: HeatPump.TemperatureOutputSH, unit: CELSIUS, min: 0, max: 90}                  # flow, below hplib's limit + margin
+    - {output: HeatPump.ThermalPowerInputFromEnvironment, unit: WATT, min: 0, max: 40000}     # ambient heat, below the output
+    - {output: HeatPump.ThermalPowerDeliveredForSpaceHeating, unit: WATT, min: 0, max: 40000} # as ThermalOutputPowerSH
+    - {output: HeatPump.ThermalPowerDrawnForCooling, unit: WATT, min: -40000, max: 40000}     # zero here; sign unchecked
+    - {output: HeatPump.ThermalEnergySH, unit: WATT_HOUR, min: 0, max: 10000}                 # per step: 40 kW x 0.25 h
+    - {output: HeatPump.ElectricalEnergySH, unit: WATT_HOUR, min: 0, max: 5000}               # per step: 20 kW x 0.25 h
+    - {output: HeatPump.CumulativeThermalEnergySH, unit: WATT_HOUR, min: 0, max: 1000000}     # one day: 40 kW x 24 h
+    - {output: HeatPump.CumulativeElectricalEnergySH, unit: WATT_HOUR, min: 0, max: 500000}   # one day: 20 kW x 24 h
+    - {output: HeatPump.ElectricalInputPowerTotalHeatpump, unit: WATT, min: 0, max: 25000}    # SH and DHW never at once; margin
+    - {output: HeatPump.ThermalOutputPowerTotalHeatpump, unit: WATT, min: 0, max: 40000}      # as ThermalOutputPowerSH
+    - {output: HeatPump.ThermalEnergyTotal, unit: WATT_HOUR, min: 0, max: 10000}              # per step
+    - {output: HeatPump.ElectricalEnergyTotal, unit: WATT_HOUR, min: 0, max: 6250}            # per step: 25 kW x 0.25 h
+    - {output: HeatPump.CumulativeThermalEnergyTotal, unit: WATT_HOUR, min: 0, max: 1000000}  # one day
+    - {output: HeatPump.CumulativeElectricalEnergyTotal, unit: WATT_HOUR, min: 0, max: 600000}   # one day: 25 kW x 24 h
+    - {output: HeatPump.DeltaTHeatpumpSecondarySide, unit: KELVIN, min: -10, max: 40}         # flow minus return; hydronic spreads are 3-15 K
+    - {output: HeatPump.ThermalOutputPowerDHW, unit: WATT, min: 0, max: 40000}                # as SH
+    - {output: HeatPump.ElectricalInputPowerDHW, unit: WATT, min: 0, max: 20000}              # as SH
+    - {output: HeatPump.TemperatureInputDHW, unit: CELSIUS, min: 0, max: 90}                  # cylinder return
+    - {output: HeatPump.TemperatureOutputDHW, unit: CELSIUS, min: 0, max: 95}                 # DHW charging flow, above the SH flow
+    - {output: HeatPump.ThermalEnergyDHW, unit: WATT_HOUR, min: 0, max: 10000}                # per step
+    - {output: HeatPump.ElectricalEnergyDHW, unit: WATT_HOUR, min: 0, max: 5000}              # per step
+    - {output: HeatPump.CumulativeThermalEnergyDHW, unit: WATT_HOUR, min: 0, max: 1000000}    # one day
+    - {output: HeatPump.CumulativeElectricalEnergyDHW, unit: WATT_HOUR, min: 0, max: 500000}  # one day
+    - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}    # liquid water
+    - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}       # liquid water
+    - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}   # liquid water
+    - {output: Buffer.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}         # liquid water
+    - {output: Buffer.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 150000}           # 1000 l at 100 °C over 0 °C is 116 kWh
+    - {output: Buffer.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}    # per step, either direction
+    - {output: Buffer.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}   # zero without solar_coil
+    - {output: Buffer.ThermalEnergyFromHeatDistribution, unit: WATT_HOUR, min: -10000, max: 10000}   # per step, either direction
+    - {output: Buffer.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -20000, max: 20000}   # per step: in minus out
+    - {output: Buffer.StandbyHeatLoss, unit: WATT, min: 0, max: 500}                          # a 1000 l tank loses about 100-200 W
+    - {output: Buffer.ThermalPowerConsumptionHeatDistribution, unit: WATT, min: -40000, max: 40000}   # the house's draw; sign unchecked
+    - {output: Buffer.ThermalPowerFromHeatGenerator, unit: WATT, min: -40000, max: 40000}     # either direction, the HP's rating
+    - {output: Buffer.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}   # zero without solar_coil
+  monotone:
+    - {parameter: scop_en14825_w35, kpi: Total electrical input energy of SH heat pump, member: HeatPump,
+       direction: decreasing}                                # a better datasheet SCOP draws less electricity for the same heat
+    - {parameter: buffer_volume_in_liter, kpi: Standby heat loss of Hot water storage, member: Buffer,
+       direction: increasing}                                # a larger vessel has more surface
+  expect:
+    - {preset: ie_typical, kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 1.5, max: 7}
+      # one test day, not a season: any plausible daily COP of an air-to-water unit (spec §9.4's bound, not its band)

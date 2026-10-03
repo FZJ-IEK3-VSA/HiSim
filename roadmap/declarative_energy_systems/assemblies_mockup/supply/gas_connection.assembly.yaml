@@ -1,9 +1,10 @@
 # Mockup (design, not loadable): energy_systems/assemblies/supply/gas_connection.assembly.yaml
-# The natural-gas connection and its meter (spec §5.1). The meter OBSERVES the fuel outputs of the bound consumers (its
-# `observes:`, default every output GasMeter declares default feeds from, of carrier NATURAL_GAS by its EnergyPort);
-# that observation is the fuel link, and
-# the meter is the fuel port's energy-balance peer, as today GasMeter reads the burner's fuel output
-# (generic_boiler.py:450, :501; gas_meter.py default feeds from GenericBoiler.EnergyDemandSh and .EnergyDemandDhw).
+# The natural-gas connection and its meter (spec §5.1). The provision names its carrier and its meter,
+# `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`; every bound consumer's fuel need lowers to the
+# aggregator feeds GasMeter's class declares for the consuming outputs (default feeds from GenericBoiler.EnergyDemandSh
+# and .EnergyDemandDhw, whose EnergyPort names natural_gas), and they land where the meter's `{$port: connection}`
+# placeholder stands. That feed is the fuel link, and the meter the fuel port's energy-balance peer, as today GasMeter
+# reads the burner's fuel output (generic_boiler.py:450, :501).
 # Its carrier is pinned here, from the provider, instead of copied from "the generator beside it"
 # through the energy_carrier fact (gas_meter.py:63-68), which a gas cooker beside a gas boiler makes ambiguous.
 
@@ -12,7 +13,8 @@ kind: assembly
 name: supply/gas_connection
 description: Natural-gas grid connection with its meter.
 
-parameters: {}
+parameters:
+
 presets:
   de_twin: {}
 
@@ -23,12 +25,20 @@ components:
     config:
       gas_loadtype: GAS                                    # pinned, not sized from the energy_carrier fact
     inputs:
-      - {$observes: reading}                               # one feed per bound consumer (EnergyDemandSh, EnergyDemandDhw, †cooker)
+      - {$port: connection}                                # one feed per bound consumer (EnergyDemandSh, EnergyDemandDhw, †cooker)
 
 interface:
   provides:
-    connection: {carrier: NATURAL_GAS}                     # lt.EnergyBalanceCarrier; every bound consumer is checked against it
-  observes:
-    reading:
-      into: [GasMeter]
-      default: declared                                    # the fuel outputs GasMeter declares; the importer may narrow it
+    connection: {carrier: natural_gas, meter: GasMeter}    # lt.EnergyBalanceCarrier value; every bound consumer is checked against it
+
+tests:
+  # One day at 900 s beside the consumer partner of natural_gas (a boiler of at most about 40 kW): per-step energies are
+  # at most 40 kW x 0.25 h = 10 kWh, the day's cumulative at most 40 kW x 24 h = 960 kWh; the bands keep a margin.
+  bounds:
+    - {output: GasMeter.GasAvailable, unit: WATT, min: -100000, max: 100000}            # sign convention unchecked: symmetric, 2.5x the partner's rating
+    - {output: GasMeter.GasFromGrid, unit: WATT_HOUR, min: 0, max: 15000}               # per step: <= 40 kW x 0.25 h, with margin
+    - {output: GasMeter.GasConsumption, unit: WATT_HOUR, min: 0, max: 15000}            # per step, as GasFromGrid
+    - {output: GasMeter.GasProduction, unit: WATT_HOUR, min: -15000, max: 15000}        # zero for a consumer-only house; sign unchecked
+    - {output: GasMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1500000}  # one day: <= 40 kW x 24 h, with margin
+    - {output: GasMeter.CumulativeProduction, unit: WATT_HOUR, min: -1500000, max: 1500000}   # zero for a consumer-only house
+  monotone: []                                             # no numeric parameter: nothing to sweep

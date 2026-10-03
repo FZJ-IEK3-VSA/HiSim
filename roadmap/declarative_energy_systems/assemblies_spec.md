@@ -631,8 +631,14 @@ its economics retire the old import's members as replaced subjects and buy the n
   (`battery`). `replaces: <id>` replaces the named system; on the list shape a measure without `replaces` adds an
   instance under its `system_id`. New problems `measure.replaces_unknown`, `measure.replaces_twice`,
   `measure.system_id_duplicate`; `MEASURE_DUPLICATE` (`hisim/renovisor/request.py:74`) is lifted for these.
-- **Roof.** Shares sum to at most 100 %; an added share-sized array is capped and reported, a stated power never
-  (`exactly_one_of: [power_in_watt, size_in_percent_of_roof_area]`); no orientation means south, reported.
+- **Mounting surface, not roof** (owner, 2026-10-03: facade PV is coming, so the roof cannot be a hard limit). An array
+  states what it is mounted on, `mounted_on: roof | facade` (later a named roof face or facade once the contract has
+  `house.building.roof.faces[]`). `size_in_percent` is a share of *that* surface's area, which the Building knows for both
+  (`roof.area_in_m2`, `facade.area_in_m2`), and `pv/array`'s `sizing_fact` port names the surface's area fact by
+  `mounted_on`. The fill check is per surface: the share-sized arrays on one surface may not exceed 100 % of it, an added
+  one beyond that is capped (approximated) and reported; roof and facade do not compete; a stated power
+  (`exactly_one_of: [power_in_watt, size_in_percent]`) and an existing array are never capped. No orientation means south
+  with the roof shape's tilt for a roof array, the facade's azimuth at 90° for a facade array, both reported.
 - **Economics.** Every instance is its own subject bound to its own register entry (`ExistingAsset.subject`,
   `own_register_entry`, `hisim/economics/facts.py:294`, `:561`; salvaged from PR #872): kept, replaced or added; the EMS
   is costed with the `control` import. The Irish grant `IE_SEAI_SOLAR_PV` (TIERED_PER_UNIT on kWp, cap 1800 €) is per

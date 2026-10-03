@@ -213,8 +213,9 @@ parameter of the heating assembly, `control: smart | traditional` (a preset or i
 
 ### 2.6 Parameters: units, documentation, constraints
 
-A parameter declares `type`, optional `default` (`AUTO` allowed for a sized field), optional `values`, and now `unit`
-and `description`. A unit is a member name of `lt.Units` (`hisim/loadtypes.py:140`; `WATT`, `LITER`, `CELSIUS`,
+A parameter declares `type`, optional `default` (`AUTO` allowed for a sized field), optional `values`, and now `unit`,
+`description` and, for a numeric parameter, `range: {min, max}` (decided, owner, 2026-10-03, D24: the range is the
+parameter box the assembly is tested over, §9.4; a numeric parameter without one fails the library's tests). A unit is a member name of `lt.Units` (`hisim/loadtypes.py:140`; `WATT`, `LITER`, `CELSIUS`,
 `KG_PER_SEC` at `:149`, `:174`, `:188`, `:185`), the vocabulary every I/O declaration uses; the typed quantities of
 `hisim/units.py` (`Watt` `:217`, `Liter` `:280`, `Celsius` `:322`) are code-level and map one to one where both exist. A
 parameter without a description fails the library's tests. The loader checks a stated unit against every config field
@@ -602,9 +603,58 @@ feed checks, the energy-balance report, economics (a subject without a catalogue
 - **Describe.** `hisim energy-system describe` (`hisim/cli.py:105`, `:209`, today a class path) also takes an assembly
   path and prints the interface (ports, partner classes, requirement states), the parameters with units,
   descriptions and constraints, the presets and the inner imports.
-- **Index, examples, isolation tests.** A library index and each assembly's interface documentation are generated and
-  checked for freshness (§8). Each assembly has one example (a minimal system file importing it) and one isolation test
-  that stubs each required port with a partner of its class and runs one day with the energy-balance check.
+- **Index, examples, tests.** A library index and each assembly's interface documentation are generated and checked
+  for freshness (§8). Each assembly has one example (a minimal system file importing it, which also joins the golden
+  configuration so its default result is a golden leaf set) and the test contract of §9.4.
+
+### 9.4 Testing an assembly
+
+"Tested fragments" means more than one run at the defaults (owner, 2026-10-03). Every assembly carries its **test
+contract in its own file**, structured data the generic harness in `tests/assemblies/` executes; nothing is written per
+assembly in Python (decided, D24: contract in the assembly file, not a sibling file or hand-written tests, so the
+library test can refuse an assembly without one and `describe` prints it).
+
+**Samples.** The harness derives the parameter samples from the declarations: every preset, every `range` boundary
+(`min` and `max` of each numeric parameter, the others at their defaults), every `values` entry, every internal variant,
+and a seeded random sample of the parameter box that satisfies the constraints (§2.6). Sample size and seed are the
+harness's, not the assembly's.
+
+**Isolation run.** For each sample the harness builds a minimal system: the assembly, plus for each required port a
+stub partner of the declared class drawn from a small set of test partners (a one-day occupancy, a constant weather, a
+grid connection), one simulated day, the energy-balance check and `i_doublecheck` on. The run fails on an exception,
+a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below.
+
+**Declarations** (`tests:` in the assembly file; structured, no expressions):
+
+```yaml
+tests:
+  bounds:                                   # over every sample; an output or a KPI stays in a physical band
+    - {output: Tank.TemperatureMean, unit: CELSIUS, min: 5, max: 95}
+    - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 1.5, max: 7}
+  monotone:                                 # one parameter rises, all else at the sample; the KPI moves one way
+    - {parameter: volume_in_liter, kpi: Standby heat losses, member: Tank, direction: increasing}
+    - {parameter: scop_en14825_w35, kpi: Electricity consumption, member: HeatPump, direction: decreasing}
+  expect:                                   # a preset's result on the test weather lies in a band
+    - {preset: ie_typical, kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 3.3, max: 4.6}
+```
+
+- `bounds` names an output (`member.OutputName`, unit declared and checked) or a KPI (name and member, resolved by the
+  finder of `roadmap/kpi_address_spec.md`, never by key string); it holds for every sample.
+- `monotone` is evaluated on every sample as a base point, moving one parameter across its range in a few steps;
+  `direction` is `increasing`, `decreasing` or `constant`, within the gate's numeric tolerance. It is the cheap test
+  that catches wrong-sign physics.
+- `expect` pins a preset's results to a band, like the goldens do exactly; a band is wider than a golden and states the
+  modeller's plausibility judgement.
+- **Required (D24):** every numeric parameter has a `range`; every energy-carrying or temperature output of a member has
+  a `bounds` entry; at least one `monotone` entry. The library test refuses an assembly missing any of them, as it
+  refuses one without descriptions. A declaration that names a missing member, output, KPI or parameter is a contract
+  error at load time.
+
+**Tiers (D24).** The PR gate runs the contract test and the deterministic samples (presets, boundaries, values,
+variants) with every declaration, a few one-day runs per assembly, sharded like the week goldens. The seeded random
+sample of the box runs nightly beside the full-year goldens (`golden-year.yml`), and a failure opens a bead, as a
+golden drift does. The example system of every assembly is a golden pair, so its default result is also pinned exactly.
+The harness exists from step 1 on fixture assemblies with fake components (§13); it meets real components in step 4.
 
 ## 10. The RenoVisor on assemblies
 
@@ -755,15 +805,16 @@ natural_gas) is required and no provider of natural_gas exists", with the import
 
 1. **Format, no behaviour change.** Assembly loader and schema; nested `imports`, presets, parameters with units and
    constraints; the port lowering to default connections and the missing class declarations it finds;
-   `ComponentID.path`; source maps; partner, circuit and fact ports, import record, load-time checks; `describe`.
-   Fixtures only.
+   `ComponentID.path`; source maps; partner, circuit and fact ports, import record, load-time checks; `describe`;
+   the test contract (`range`, `tests:`), its contract checks and the harness of §9.4 on fixture assemblies with fake
+   components. Fixtures only.
 2. **Observe and actuate, tag selectors, controller lowering.** `observes:`/`actuates:` items, carrier needs, the link
    rule, the grid-balance selection and the double-count check (§4.3), the priorities.
 3. **Sizing.** `Many` with `Sum`; the battery laws over all arrays; fact exports (§6). One array stays byte-identical.
 4. **First assemblies.** The site, one heating assembly (`heating/air_source_heat_pump`), `pv/array`, `storage/battery`,
    `control/ems_self_consumption`, `supply/electricity_grid`. Gate: site plus these imports expands to the heat-pump
-   twin byte for byte under the rename map, and a one-day run gives identical result columns. Waits for hydronic stages
-   C and D (§11.1).
+   twin byte for byte under the rename map, and a one-day run gives identical result columns; each carries its test
+   contract (§9.4) and the harness runs them in the PR gate. Waits for hydronic stages C and D (§11.1).
 5. **One heating assembly per PR,** each with the equality gate against that generator's twin: condensing gas, oil,
    pellets, wood chips, hydrogen, ground source, district heating, electric heating, then solar thermal, with
    `supply/gas_connection`, `supply/oil_tank`, `dhw/indirect_cylinder`. The RenoVisor switches each generator to the
@@ -850,6 +901,13 @@ All by the owner on 2026-10-03.
   the heating assemblies are written with the buffer. An import never patches a site field.
 - Also: units, descriptions, constraints and the variant partition check (§2.6); presets (§2.7); source maps (§9.2);
   `describe`, index, examples, isolation tests and the resolver's search path (§9.3).
+
+- **D24 — Tested fragments (owner, 2026-10-03):** every assembly carries its test contract in its own file: `range`
+  on every numeric parameter, `tests.bounds` on every energy-carrying or temperature output, at least one
+  `tests.monotone`, optional `tests.expect` per preset; a generic harness samples presets, boundaries, values and
+  variants on every PR and a seeded random sample of the parameter box nightly; an assembly without the contract is
+  refused by the library test (§9.4). Rejected: a sibling test file (drifts) and hand-written Python tests per assembly
+  (no generic harness, no `describe`).
 
 ### 14.2 Open
 

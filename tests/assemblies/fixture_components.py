@@ -24,7 +24,7 @@ step. A battery sizes its capacity from the PV arrays' peak power, the fact the 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -237,22 +237,38 @@ class FakeOccupancy(FixtureComponent):
 @dataclass_json
 @dataclass
 class FakePVSystemConfig(ConfigBase):
-    """A PV array: its peak power and its orientation, each with its unit."""
+    """A PV array: its peak power — or the share of the roof it covers instead — and its orientation."""
 
     MAIN_CLASS = "tests.assemblies.fixture_components.FakePVSystem"
 
+    #: The peak power of the whole roof, which a share of it is taken of.
+    ROOF_PEAK_POWER_IN_WATT: ClassVar[float] = 20000.0
+
     component_id: ComponentID
-    power_in_watt: float = field(default=5000.0, metadata={UNIT: lt.Units.WATT})
+    power_in_watt: Optional[float] = field(default=5000.0, metadata={UNIT: lt.Units.WATT})
+    #: The share of the roof the array covers, the alternative to its peak power; dimensionless.
+    share_of_roof: Optional[float] = field(default=None, metadata={UNIT: lt.Units.ANY})
     azimuth: float = field(default=180.0, metadata={UNIT: lt.Units.DEGREES})
     tilt: float = field(default=30.0, metadata={UNIT: lt.Units.DEGREES})
     #: A field without a declared unit, for the refusal of a fed field without one.
     shading_factor: float = 1.0
 
+    def peak_power_in_watt(self) -> float:
+        """The peak power: the one given, or the share of the roof's; exactly one of the two is set."""
+        if (self.power_in_watt is None) == (self.share_of_roof is None):
+            raise ValueError(
+                f"{self.component_id.name} sets power_in_watt={self.power_in_watt!r} and "
+                f"share_of_roof={self.share_of_roof!r}; exactly one of the two is given."
+            )
+        if self.power_in_watt is not None:
+            return self.power_in_watt
+        return float(self.share_of_roof or 0.0) * self.ROOF_PEAK_POWER_IN_WATT
+
     #: The array's peak power, which a battery beside it is sized from.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
             facts=("pv_peak_power_in_watt",),
-            compute=lambda config, ctx: {"pv_peak_power_in_watt": config.power_in_watt},
+            compute=lambda config, ctx: {"pv_peak_power_in_watt": config.peak_power_in_watt()},
         ),
     )
 
@@ -284,7 +300,8 @@ class FakePVSystem(FixtureComponent):
         """Production proportional to power, orientation and temperature."""
         orientation = 1.0 - abs(self.config.azimuth - 180.0) / 360.0
         temperature = self.value(stsv, "TemperatureOutside")
-        self.set(stsv, "ElectricityOutput", self.config.power_in_watt * orientation * max(temperature, 0.0) / 50.0)
+        peak = self.config.peak_power_in_watt()
+        self.set(stsv, "ElectricityOutput", peak * orientation * max(temperature, 0.0) / 50.0)
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> List[KpiEntry]:
         """The energy the array produced, in kWh."""
@@ -344,6 +361,8 @@ class FakeTank(FixtureComponent):
         "FakeOccupancy": {"WaterDemand": "WaterDemand"},
         "FakeHeater": {"ThermalPower": "ThermalPower"},
     }
+    #: The standby loss over the run in kWh (a power in W summed over 15-minute steps).
+    SUM_KPIS = {STANDBY_KPI: ("HeatLoss", 0.25e-3)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeTankConfig) -> None:
         """Builds the tank."""
@@ -393,6 +412,8 @@ class FakeHeater(FixtureComponent):
     )
     DEFAULTS = {"FakeController": {"Signal": "Signal"}}
     OPTIONAL_INPUTS = ("Signal",)
+    #: The electricity the heater drew over the run in kWh (a power in W summed over 15-minute steps).
+    SUM_KPIS = {ENERGY_KPI: ("ElectricityInput", 0.25e-3)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeHeaterConfig) -> None:
         """Builds the heater."""

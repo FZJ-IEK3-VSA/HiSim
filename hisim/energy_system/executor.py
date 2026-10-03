@@ -449,6 +449,7 @@ def build_energy_system(
     path_resolver: Optional[PathResolver] = None,
     rerun: bool = False,
     simulation_parameters_path: Any = "",
+    assembly_resolver: Optional[AssemblyResolver] = None,
 ) -> BuiltEnergySystem:
     """Loads an energy-system file and builds everything it describes, without running it.
 
@@ -467,6 +468,9 @@ def build_energy_system(
         simulation_parameters_path: Path of the parameters file, when the caller read them from
             one; a run record names it so that the pair which reproduces the run is written
             down, and nothing else uses it.
+        assembly_resolver: Finds the assemblies the file imports; this machine's search path
+            (``energy_systems/assemblies/``, then ``HISIM_ASSEMBLY_PATH``) when omitted. The
+            assembly test harness hands in the library it tests.
 
     Returns:
         The built system, its simulator registered and wired.
@@ -489,6 +493,7 @@ def build_energy_system(
         source_energy_system=str(path),
         source_simulation_parameters=str(simulation_parameters_path or ""),
         rerun=rerun,
+        assembly_resolver=assembly_resolver,
         source_lines=source_lines,
     )
     return executor.build()

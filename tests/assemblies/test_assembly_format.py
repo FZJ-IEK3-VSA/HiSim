@@ -189,7 +189,7 @@ def test_the_fixture_assembly_reads_every_block() -> None:
     assert pv.parameters["share_of_roof"].default is None
     assert pv.parameters["azimuth_in_degree"].range == (0.0, 360.0)
     assert pv.tests is not None and pv.tests.monotone[0].direction == MonotoneDirection.INCREASING
-    assert [constraint.text() for constraint in pv.constraints] == ["at_most_one_of: [power_in_watt, share_of_roof]"]
+    assert [constraint.text() for constraint in pv.constraints] == ["exactly_one_of: [power_in_watt, share_of_roof]"]
 
 
 @pytest.mark.base

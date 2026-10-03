@@ -228,7 +228,10 @@ imports:
         ("{azimuth_in_degree: north}", "'north' is not a number"),
         ("{azimuth_in_degree: 400}", "outside the range \\[0.0, 360.0\\]"),
         ("{facing: up}", "'up' is not one of the allowed values"),
-        ("{power_in_watt: 3000, share_of_roof: 0.5}", "EF-77 .*at most one of power_in_watt, share_of_roof"),
+        (
+            "{power_in_watt: 3000, share_of_roof: 0.5}",
+            "EF-77 .*exactly one of power_in_watt, share_of_roof is stated, but 2 are",
+        ),
     ],
 )
 def test_a_parameter_that_does_not_fit_is_refused(parameters: str, message: str) -> None:

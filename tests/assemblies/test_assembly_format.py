@@ -1,18 +1,20 @@
 """Reading assembly files and checking them against their schema (``assemblies_spec.md`` §2, §9.4).
 
 The mockup of the spec (``tests/assemblies/mockup``, a snapshot of
-``roadmap/declarative_energy_systems/assemblies_mockup`` at docs/assemblies 087b3ce8, PR #881) is the
+``roadmap/declarative_energy_systems/assemblies_mockup`` at docs/assemblies df91d5f0, PR #881) is the
 shape the format must accept. It predates the test contract of §9.4, so validated against the
 assembly schema its assemblies report the missing ``tests`` block and the missing ``range`` of each
-numeric parameter — the listing pinned here — and nothing else, except three defects of the mockup
-itself, pinned as such: an unquoted comma inside a flow mapping in
-``control/ems_self_consumption`` (YAML reads half a description as a key), and the
-``constructor: <name>`` plus ``arguments:`` spelling in ``mobility/electric_vehicle`` and in the
-composed RenoVisor house, which the format writes ``constructor: {<name>: {<arguments>}}``.
+numeric parameter — the listing pinned here — and nothing else, except one defect of the mockup
+itself, pinned as such. Of the three defects the snapshot of 087b3ce8 carried, the unquoted comma in
+a flow mapping of ``control/ems_self_consumption`` is fixed; the constructor calls of
+``mobility/electric_vehicle`` and of the composed RenoVisor house are now written
+``constructor: {name: <name>, arguments: {...}}``, which is still not the format's spelling —
+``constructor: {<name>: {<arguments>}}`` (``hisim/energy_system/entries.py``, the emitter writes the
+same) — so both files keep that one defect.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, List, Set, Tuple
 
 import jsonschema
 import pytest
@@ -30,24 +32,22 @@ from tests.assemblies.helpers import Fixtures
 
 
 class MockupDefects:
-    """The problems of the mockup that are not about the test contract, by file."""
+    """The one problem of the mockup that is not about the test contract: the constructor spelling."""
 
-    #: The spelling ``constructor: <name>`` with a sibling ``arguments:`` block.
-    CONSTRUCTOR_SPELLING: Tuple[str, ...] = ("'arguments'", "is not of type 'object'")
-
-    #: The half description YAML reads as a key.
-    FLOW_MAPPING_COMMA: str = "'controller_l2_energy_management_system.py:54).' was unexpected"
-
-    BY_FILE: Dict[str, Tuple[str, ...]] = {
-        "control/ems_self_consumption.assembly.yaml": (FLOW_MAPPING_COMMA,),
-        "mobility/electric_vehicle.assembly.yaml": CONSTRUCTOR_SPELLING,
-        "renovisor_full_house.energy_system.yaml": CONSTRUCTOR_SPELLING,
-    }
+    #: The files writing ``constructor: {name: …, arguments: …}``.
+    CONSTRUCTOR_SPELLING: Tuple[str, ...] = (
+        "mobility/electric_vehicle.assembly.yaml",
+        "renovisor_full_house.energy_system.yaml",
+    )
 
     @classmethod
-    def is_defect(cls, name: str, message: str) -> bool:
-        """Whether a problem is one of the pinned defects of that file."""
-        return any(marker in message for marker in cls.BY_FILE.get(name, ()))
+    def is_defect(cls, name: str, where: str, message: str) -> bool:
+        """Whether a schema problem is the pinned constructor spelling of that file."""
+        return (
+            name in cls.CONSTRUCTOR_SPELLING
+            and where.endswith("/constructor")
+            and message.endswith("has too many properties")
+        )
 
 
 def mockup_assemblies() -> List[Path]:
@@ -89,8 +89,7 @@ def test_the_mockup_has_fifteen_assemblies_and_three_energy_systems() -> None:
 def test_the_mockup_assemblies_owe_only_their_test_contract(assembly_validator: Any) -> None:
     """Validated against the assembly schema, the mockup lists the test contract it predates, and nothing else.
 
-    Every assembly misses ``tests``; every numeric parameter misses its ``range``. The pinned
-    defects of the mockup are the only other problems.
+    Every assembly misses ``tests``; every numeric parameter misses its ``range``.
     """
     contract: Set[Tuple[str, str]] = set()
     other: List[Tuple[str, str, str]] = []
@@ -104,7 +103,7 @@ def test_the_mockup_assemblies_owe_only_their_test_contract(assembly_validator: 
                 declared = document["parameters"][where.split("/")[1]]
                 assert ParameterType(declared["type"]).is_numeric
                 contract.add((name, where))
-            elif not MockupDefects.is_defect(name, message):
+            elif not MockupDefects.is_defect(name, where, message):
                 other.append((name, where, message))
 
     assert not other, other
@@ -122,7 +121,9 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
     for name in ("composed_heatpump_default.energy_system.yaml", "renovisor_full_house.energy_system.yaml"):
         document = yaml.safe_load((Fixtures.MOCKUP / name).read_text(encoding="utf-8"))
         found = [
-            message for _where, message in problems(structural, document) if not MockupDefects.is_defect(name, message)
+            (where, message)
+            for where, message in problems(structural, document)
+            if not MockupDefects.is_defect(name, where, message)
         ]
         assert found == [], name
     heat_pump = yaml.safe_load(
@@ -149,11 +150,11 @@ def test_the_heat_pump_composed_file_reads_into_the_model() -> None:
 
 @pytest.mark.base
 @pytest.mark.parametrize("path", mockup_assemblies(), ids=lambda path: path.relative_to(Fixtures.MOCKUP).as_posix())
-def test_every_mockup_assembly_reads_except_its_pinned_defects(path: Path) -> None:
+def test_every_mockup_assembly_reads_except_its_pinned_defect(path: Path) -> None:
     """The reader takes the mockup's every construct: ports of all kinds, variants, placeholders, ``$`` values."""
     name = path.relative_to(Fixtures.MOCKUP).as_posix()
-    if name in MockupDefects.BY_FILE:
-        with pytest.raises(EnergySystemFormatError):
+    if name in MockupDefects.CONSTRUCTOR_SPELLING:
+        with pytest.raises(EnergySystemFormatError, match="names exactly one constructor"):
             AssemblyReader.read(path)
         return
     model, lines = AssemblyReader.read(path)

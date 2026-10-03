@@ -257,9 +257,10 @@ a grouped file or a twin changes rather than edited by hand.
 
 Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_systems/assemblies_spec.md`,
 on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
-which a file imports instead of writing their components out. This is step 1a of that spec (bead
-hisim-lt0b.1): the format, the loader, the expansion and the checks, proven on fixtures under
-`tests/assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does not exist.
+which a file imports instead of writing their components out. This is step 1 of that spec (beads
+hisim-lt0b.1 and hisim-lt0b.2): the format, the loader, the expansion and the checks, proven on
+fixtures under `tests/assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does
+not exist.
 
 ```yaml
 schema_version: 4
@@ -303,9 +304,54 @@ the classes it declares default connections from, and its KPIs. Every refusal na
 instance, the port and every candidate, prints the source map of the import, and ends in a
 paste-ready `bind:` line.
 
-Circuit ports, carrier needs and fact ports (hisim-lt0b.2), observer and actuator selectors and
-controllable outputs (hisim-lt0b.3) are read and recorded, and a file that uses one is refused
-(`EF-7L`) until its step lands.
+**Circuits.** `{circuit: dhw, member: Cylinder}` (or `member: [A, B]`) is one end of one hydronic
+circuit; the name is the medium (`dhw`, `sh`, `brine`, `solar_dhw`). A required end binds the one
+other end of the same circuit in scope — another import's circuit port or a site entry's
+(`ports: {sh: {circuit: sh}}` on the entry itself) — and `bind: {circuit: heating.dhw}` decides
+several; an end of another circuit is refused (`EF-7N`). The binding lowers by the hydronic naming
+convention: each of `MassFlow<C>`, `SupplyTemperature<C>` and `ReturnTemperature<C>` (`<C>` the name
+in camel case, `Dhw`, `SolarDhw`) must be an output of exactly one member of the two ends and an
+input of a member of the other end, whose class declares default connections from the owner's
+class; each reader gets the owner's bare name where its `{$port: <port>}` placeholder stands. A
+circuit port under `provides:` is optional (D20). The record lists every circuit with both ends and
+the outputs each owns.
+
+**Carriers.** A supply assembly provides a carrier, `provides: {connection: {carrier: natural_gas,
+meter: Meter}}`, the meter carrying a `{$port: connection}` placeholder; a site entry provides one
+with `ports: {gas: {carrier: natural_gas}}` and is its own meter. A carrier is written as an
+`lt.EnergyBalanceCarrier` value (`natural_gas`, `heating_oil`, `electricity`, …), or a
+`{$param: …}`/`{$switch: …}` resolving to one. A need, `{carrier: natural_gas, outputs:
+[Boiler.FuelUse]}` (an output may also be named by a provided port of the assembly), binds the one
+provider of its carrier in scope, `bind:` decides several, and no provider is refused with the
+import that would add it ("add the import of `supply/gas_connection`"; the format never adds one,
+§5.2). For a fuel the provider's meter observes the consuming outputs: each lowers to an aggregator
+feed with the tags and weight the meter's class declares for that output of the consumer's class
+(`ClassInterface.default_feeds`), the items a recorded twin writes. Electricity has no link: a need
+writes nothing, takes no verb, and checks that exactly one electricity provider exists. A fuel
+provider no need is bound to is refused. A consuming output's energy carrier must be the need's —
+checked at load time where the class declares it (`DeclaredPort.carrier`), and once the components
+are built against the output's `EnergyPort` otherwise.
+
+**Facts.** A fact need, `{fact: pv_peak_power_in_watt, into: [Battery]}`, lowers to a
+`sizing_sources` line on each member naming the provider: a site entry or member whose class
+contributes the fact, or an import's provided fact, `provides: {peak_power: {fact:
+pv_peak_power_in_watt, member: PVSystem}}`, which must be in the member class's
+`SIZING_CONTRIBUTIONS`. Two providers and no `bind:` is the sizing engine's ambiguity (`EF-4B`),
+raised at load time with the candidates and a paste-ready line. `many: true` and fact exports are
+step 3's (hisim-lt0b.4).
+
+**Values.** Besides `{$param: <name>}`, a value may be `{$switch: <selector>, <case>: <value>, …}`:
+the case the selector chooses, where the selector is a parameter (cases: its values) or an internal
+variant (cases: its options), and the cases must cover every value exactly once. `{$fact: …}` stays
+refused (`EF-7L`): the sizing engine reads a fact only through a law its class declares on the field.
+
+**Display names.** A member's `display:` template, rendered over the resolved parameters
+(`"PV array, {facing}, azimuth {azimuth_in_degree}"`), becomes its `ComponentID.display_name` and the
+`display_name` of every KPI it reports; without a template the component's `DisplayConfig.pretty_name`
+and then its member name are used.
+
+Observer and actuator selectors (`observes:`, `actuates:`) and controllable outputs (hisim-lt0b.3)
+are read and recorded, and a file that uses one is refused (`EF-7L`) until its step lands.
 
 **Finding assemblies.** An `assembly:` path resolves under `energy_systems/assemblies/`, then under
 every directory `HISIM_ASSEMBLY_PATH` names (`os.pathsep`-separated); a path found twice is refused.
@@ -318,9 +364,24 @@ downstream error naming a produced component prints. A realized record re-runs w
 **Inspecting.** `hisim energy-system describe <family>/<name>` (or a path to a `*.assembly.yaml`)
 prints an assembly's interface with partner classes and requirement states, its parameters with
 units, ranges, defaults and values, its constraints, presets, members, variants, inner imports and
-test contract. `hisim energy-system schema` writes `hisim/assembly_v4.schema.json` beside the
-energy-system schema; it states the library contract, so validating a draft lists what it still
-owes. The error codes are the `EF-7x` band of `hisim/energy_system/errors.py`.
+test contract; `describe` of a component class shows the unit every field declares. `hisim
+energy-system schema` writes `hisim/assembly_v4.schema.json` beside the energy-system schema (whose
+config fields carry their declared unit as `x-unit`); it states the library contract, so validating a
+draft lists what it still owes.
+
+**Errors.** The `EF-7x` band of `hisim/energy_system/errors.py`: `EF-70` … `EF-75` reading, resolving
+and library-checking an assembly; `EF-76`/`EF-77` parameters and constraints; `EF-78`/`EF-79` a unit
+mismatch and a fed field without a unit; `EF-7A` a required port without a partner, `EF-7B` several
+candidates and no verb, `EF-7C` a required port declined, `EF-7D` a bound partner absent, `EF-7E` an
+optional port with a candidate and no verb, `EF-7F` a verb on an inactive port, `EF-7G` an inner port
+neither bound nor re-exported, `EF-7H` a partner the member's class declares no default connections
+(or, for a meter, no default feed) from, `EF-7J` the contract check, `EF-7K` the evaluation order,
+`EF-7L` a construct a later step lowers, `EF-7M` a verb naming no port; `EF-7N` two circuit ends
+that do not fit (another medium, an output owned twice or by neither end, read by no member of the
+other end); `EF-7P` a carrier need without exactly one provider, a verb on an electricity need, and
+a fuel provider no need is bound to; `EF-7Q` a carrier that is not the need's (a provider's, or a
+consuming output's energy carrier); `EF-7R` a fact port bound to, or finding, no provider of its
+fact. A scalar fact with two providers is the sizing engine's `EF-4B`.
 
 ## Simulation-parameters files are shared, never duplicated
 

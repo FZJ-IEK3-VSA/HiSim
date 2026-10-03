@@ -41,6 +41,8 @@ class AddressTable:
         }
         if identity.assembly is not None:
             document["assembly"] = identity.assembly
+        if identity.display_name is not None:
+            document["display_name"] = identity.display_name
         return document
 
     @classmethod
@@ -74,7 +76,12 @@ class AddressTable:
                 AddressStep(import_key=str(step["import"]), instance=step.get("instance"))
                 for step in entry.get("path", [])
             ]
-            identity = ComponentID(name=str(entry["member"]), path=tuple(steps), assembly=entry.get("assembly"))
+            identity = ComponentID(
+                name=str(entry["member"]),
+                path=tuple(steps),
+                assembly=entry.get("assembly"),
+                display_name=entry.get("display_name"),
+            )
             if identity.address != name:
                 raise ValueError(
                     f"The record's address table lists '{name}' with an address that serializes to "

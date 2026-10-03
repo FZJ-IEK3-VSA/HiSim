@@ -23,9 +23,11 @@ from hisim.energy_system.imports_model import (
     ImportEntry,
     InstanceEntry,
     ObservesPlaceholder,
+    ParameterReference,
     Port,
     PortKind,
     PortPlaceholder,
+    SwitchValue,
 )
 from hisim.energy_system.names import NameRules
 
@@ -40,8 +42,8 @@ class ImportsReader:
     KIND_KEYS: ClassVar[Mapping[PortKind, Tuple[str, ...]]] = {
         PortKind.REEXPORT: ("from",),
         PortKind.CIRCUIT: ("circuit", "member"),
-        PortKind.CARRIER: ("carrier", "outputs"),
-        PortKind.FACT: ("fact", "into", "many", "export"),
+        PortKind.CARRIER: ("carrier", "outputs", "meter"),
+        PortKind.FACT: ("fact", "into", "member", "many", "export"),
         PortKind.NEED: ("into", "partner", "wires"),
         PortKind.PROVIDED: ("output", "controllable"),
         PortKind.INTERNAL: ("bind",),
@@ -64,7 +66,7 @@ class ImportsReader:
         "needs": (PortKind.REEXPORT, PortKind.CIRCUIT, PortKind.CARRIER, PortKind.FACT, PortKind.NEED),
         "provides": (PortKind.REEXPORT, PortKind.CIRCUIT, PortKind.CARRIER, PortKind.FACT, PortKind.PROVIDED),
         "internal": (PortKind.INTERNAL,),
-        "ports": (PortKind.CIRCUIT, PortKind.NEED),
+        "ports": (PortKind.CIRCUIT, PortKind.CARRIER, PortKind.NEED),
     }
 
     @classmethod
@@ -203,9 +205,117 @@ class ImportsReader:
             if not isinstance(ends, list) or len(ends) != 2:
                 raise RawDocument.malformed(f"{location}.bind", ends, "a list of two ends, [sender, receiver]")
             common["ends"] = cls.references(ends, f"{location}.bind")
-        elif kind == PortKind.FACT and "into" in block:
-            common["into"] = cls.names(block.get("into"), f"{location}.into", "member")
+        elif kind == PortKind.CIRCUIT:
+            common.update(cls._circuit(name, block, location, site_entry))
+        elif kind == PortKind.CARRIER:
+            common.update(cls._carrier(name, block, location, section, site_entry))
+        elif kind == PortKind.FACT:
+            common.update(cls._fact(name, block, location, section))
         return Port(**common)
+
+    @classmethod
+    def _value_or_placeholder(cls, value: Any, location: str, role: str) -> Any:
+        """Reads a name that may be written ``{$param: …}`` or ``{$switch: …}`` instead."""
+        if isinstance(value, Mapping):
+            if ParameterReference.name_of(value) is None and not SwitchValue.is_switch(value):
+                raise RawDocument.malformed(location, value, f"a {role} name, {{$param: …}} or {{$switch: …}}")
+            return dict(value)
+        return NameRules.check_identifier(value, location, role)
+
+    @classmethod
+    def _circuit(cls, name: str, block: Mapping[str, Any], location: str, site_entry: Optional[str]) -> Dict[str, Any]:
+        """Reads a circuit end: ``{circuit: <medium>, member: <Member> | [<Member>, …]}`` (§3.2, §11.1)."""
+        circuit = NameRules.check_identifier(block.get("circuit"), f"{location}.circuit", "circuit")
+        if site_entry is not None:
+            if "member" in block:
+                raise cls.shape_error(
+                    f"{location}.member",
+                    f"a site entry's circuit port '{name}' is an end of the entry itself; it names no 'member'.",
+                )
+            return {"circuit": circuit, "members": (site_entry,)}
+        if "member" not in block:
+            raise cls.shape_error(location, f"the circuit port '{name}' names the 'member' (or members) at its end.")
+        return {"circuit": circuit, "members": cls.names(block.get("member"), f"{location}.member", "member")}
+
+    @classmethod
+    def _carrier(
+        cls, name: str, block: Mapping[str, Any], location: str, section: str, site_entry: Optional[str]
+    ) -> Dict[str, Any]:
+        """Reads a carrier need (``outputs:``) or a carrier provision (``meter:``) (§3.2, §5.1)."""
+        carrier = cls._value_or_placeholder(block.get("carrier"), f"{location}.carrier", "carrier")
+        needs = "outputs" in block
+        if section == "needs" and not needs:
+            raise cls.shape_error(
+                location, f"the carrier need '{name}' names the consuming 'outputs' the provider's meter observes."
+            )
+        if section == "provides" and needs:
+            raise cls.shape_error(
+                f"{location}.outputs",
+                f"the carrier provision '{name}' provides the carrier; 'outputs' belong to a carrier need.",
+            )
+        if needs:
+            if "meter" in block:
+                raise cls.shape_error(
+                    f"{location}.meter",
+                    f"the carrier need '{name}' names no 'meter'; its provider's meter observes it.",
+                )
+            outputs = block.get("outputs")
+            if not isinstance(outputs, list) or not outputs:
+                raise RawDocument.malformed(f"{location}.outputs", outputs, "a non-empty list of outputs")
+            for item in outputs:
+                if site_entry is not None:
+                    NameRules.check_identifier(item, f"{location}.outputs", "output")
+                else:
+                    NameRules.split_reference(item, f"{location}.outputs", require_member=False)
+            return {"carrier": carrier, "outputs": tuple(outputs)}
+        if site_entry is not None:
+            if "meter" in block:
+                raise cls.shape_error(
+                    f"{location}.meter",
+                    f"a site entry's carrier provision '{name}' is metered by the entry itself; it names no 'meter'.",
+                )
+            return {"carrier": carrier, "meter": site_entry}
+        meter = block.get("meter")
+        return {
+            "carrier": carrier,
+            "meter": NameRules.check_identifier(meter, f"{location}.meter", "member") if meter is not None else None,
+        }
+
+    @classmethod
+    def _fact(cls, name: str, block: Mapping[str, Any], location: str, section: str) -> Dict[str, Any]:
+        """Reads a fact need (``into:``) or a provided fact (``member:``) (§3.2, §6)."""
+        fact = cls._value_or_placeholder(block.get("fact"), f"{location}.fact", "fact")
+        many = block.get("many", False)
+        if not isinstance(many, bool):
+            raise RawDocument.malformed(f"{location}.many", many, "true or false")
+        if section == "provides":
+            for key in ("into", "many"):
+                if key in block:
+                    raise cls.shape_error(
+                        f"{location}.{key}",
+                        f"the provided fact '{name}' names the 'member' providing it; '{key}' belongs to a fact need.",
+                    )
+            export = block.get("export")
+            if export is not None and not isinstance(export, bool):
+                raise RawDocument.malformed(f"{location}.export", export, "true or false")
+            if "member" not in block:
+                if export is None:
+                    raise cls.shape_error(
+                        location,
+                        f"the provided fact '{name}' names the 'member' that provides it (or is a fact export, "
+                        "'export:', §6).",
+                    )
+                return {"fact": fact}
+            member = NameRules.check_identifier(block.get("member"), f"{location}.member", "member")
+            return {"fact": fact, "members": (member,)}
+        if "member" in block or "export" in block:
+            key = "member" if "member" in block else "export"
+            raise cls.shape_error(
+                f"{location}.{key}", f"the fact need '{name}' names the members it lowers into ('into'), no '{key}'."
+            )
+        if "into" not in block:
+            raise cls.shape_error(location, f"the fact need '{name}' names the members it lowers into ('into').")
+        return {"fact": fact, "into": cls.names(block.get("into"), f"{location}.into", "member"), "many": many}
 
     @classmethod
     def ports(cls, raw: Any, location: str, section: str, site_entry: Optional[str] = None) -> Dict[str, Port]:

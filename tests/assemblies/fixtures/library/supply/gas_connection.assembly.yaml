@@ -1,0 +1,33 @@
+# Fixture: a supply assembly. The natural-gas connection and its meter; the meter observes every bound
+# consumer's fuel output through the default feed its class declares (spec §5.1).
+schema_version: 4
+kind: assembly
+name: supply/gas_connection
+description: A fake natural-gas connection with its meter.
+
+parameters:
+  calibration:
+    {type: float, unit: ANY, default: 1.0, range: {min: 0.5, max: 2.0}, description: Calibration factor of the reading.}
+
+presets:
+  standard: {}
+
+components:
+  Meter:
+    class: tests.assemblies.fixture_components.FakeGasMeter
+    preset: standard
+    display: "Gas meter"
+    config:
+      calibration: {$param: calibration}
+    inputs:
+      - {$port: connection}
+
+interface:
+  provides:
+    connection: {carrier: natural_gas, meter: Meter}
+
+tests:
+  bounds:
+    - {output: Meter.GasConsumption, unit: WATT_HOUR, min: 0, max: 10000}
+  monotone:
+    - {parameter: calibration, kpi: Gas consumption, member: Meter, direction: increasing}

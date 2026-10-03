@@ -418,6 +418,7 @@ class Component:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
         self._check_declared(field_name, load_type, unit, "output")
+        self._check_declared_carrier(field_name, energy_port)
         outp = ComponentOutput(
             object_name,
             field_name,
@@ -453,6 +454,27 @@ class Component:
             raise ClassInterfaceViolation(
                 f"{self.get_full_classname()} adds the {kind} '{field_name}' ({load_type}, {unit}), which its "
                 f"CLASS_INTERFACE declares as {declared!r}."
+            )
+
+    def _check_declared_carrier(self, field_name: str, energy_port: Optional[EnergyPort]) -> None:
+        """Refuses an output whose energy port carries another carrier than the class interface declares.
+
+        Args:
+            field_name: The output's name.
+            energy_port: The energy port it is added with, or ``None``.
+
+        Raises:
+            ClassInterfaceViolation: If the class interface declares a carrier for the output and the
+                output is added without an energy port or with one of another carrier.
+        """
+        interface = type(self).CLASS_INTERFACE
+        declared = interface.output(field_name) if interface is not None else None
+        if declared is None or declared.carrier is None:
+            return
+        if energy_port is None or energy_port.carrier != declared.carrier:
+            raise ClassInterfaceViolation(
+                f"{self.get_full_classname()} adds the output '{field_name}' with the energy port {energy_port!r}, "
+                f"but its CLASS_INTERFACE declares the carrier {declared.carrier.value}."
             )
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:

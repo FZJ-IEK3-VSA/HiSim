@@ -112,8 +112,15 @@ class AssemblyFormatDefinitions:
                     "from": {"$ref": "#/$defs/reference"},
                     "circuit": {"$ref": "#/$defs/name"},
                     "member": cls.names(),
-                    "carrier": {"type": ["string", "object"]},
-                    "outputs": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+                    "carrier": {
+                        "type": ["string", "object"],
+                        "description": (
+                            "An lt.EnergyBalanceCarrier value (natural_gas, electricity, heating_oil, ...) or a "
+                            "{$param: ...}/{$switch: ...} resolving to one (assemblies_spec.md §5)."
+                        ),
+                    },
+                    "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+                    "meter": {"$ref": "#/$defs/name"},
                     "fact": {"type": ["string", "object"]},
                     "many": {"type": "boolean"},
                     "export": {"type": "boolean"},

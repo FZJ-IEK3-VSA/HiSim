@@ -227,6 +227,112 @@ class InstanceRecord:
 
 
 @dataclass(frozen=True)
+class CircuitEndRecord:
+    """One end of a bound hydronic circuit, as the record states it.
+
+    Attributes:
+        owner: The import path (``heating``, ``dhw → cylinder``) or the site component holding it.
+        port: The circuit port's name.
+        members: The expanded components at this end.
+        owns: The circuit outputs this end owns (``MassFlowDhw``, ``SupplyTemperatureDhw``).
+    """
+
+    owner: str
+    port: str
+    members: Tuple[str, ...]
+    owns: Tuple[str, ...]
+
+    def to_document(self) -> Dict[str, Any]:
+        """The end as plain data."""
+        return {"owner": self.owner, "port": self.port, "members": list(self.members), "owns": list(self.owns)}
+
+
+@dataclass(frozen=True)
+class CircuitRecord:
+    """One bound hydronic circuit (``assemblies_spec.md`` §3.2, §11.1): its medium, both ends, the wiring.
+
+    Attributes:
+        circuit: The circuit's name, its medium (``dhw``).
+        ends: The two ends, the one whose port decided the binding first.
+        verb: The verb that bound it, ``default`` for the default rule.
+        lowered_to: The items the binding wrote, as ``<component>.inputs: <item>``.
+    """
+
+    circuit: str
+    ends: Tuple[CircuitEndRecord, CircuitEndRecord]
+    verb: str
+    lowered_to: Tuple[str, ...]
+
+    def to_document(self) -> Dict[str, Any]:
+        """The circuit as plain data."""
+        return {
+            "circuit": self.circuit,
+            "ends": [end.to_document() for end in self.ends],
+            "verb": self.verb,
+            "lowered_to": list(self.lowered_to),
+        }
+
+
+@dataclass(frozen=True)
+class CarrierConsumer:
+    """One carrier need bound to a provider: whose outputs the provider's meter observes.
+
+    Attributes:
+        owner: The import path or site component holding the need.
+        port: The need's name.
+        outputs: The consuming outputs, ``<component>.<output>``.
+        verb: The verb that bound it, ``default`` for the default rule.
+        lowered_to: The feeds written into the meter (none for electricity).
+    """
+
+    owner: str
+    port: str
+    outputs: Tuple[str, ...]
+    verb: str
+    lowered_to: Tuple[str, ...]
+
+    def to_document(self) -> Dict[str, Any]:
+        """The consumer as plain data."""
+        return {
+            "owner": self.owner,
+            "port": self.port,
+            "outputs": list(self.outputs),
+            "verb": self.verb,
+            "lowered_to": list(self.lowered_to),
+        }
+
+
+@dataclass
+class CarrierRecord:
+    """One provider of a carrier and every need bound to it (``assemblies_spec.md`` §5.1).
+
+    Attributes:
+        carrier: The carrier, an ``lt.EnergyBalanceCarrier`` value.
+        provider: The import path or site component providing it.
+        port: The providing port.
+        meter: The expanded meter that observes the consumers; ``None`` for electricity, which has
+            no link and whose need is only the check that this one provider exists.
+        consumers: Every need bound to the provider, in binding order.
+    """
+
+    carrier: str
+    provider: str
+    port: str
+    meter: Optional[str]
+    consumers: List[CarrierConsumer] = field(default_factory=list)
+
+    def to_document(self) -> Dict[str, Any]:
+        """The provider as plain data."""
+        return {
+            "carrier": self.carrier,
+            "provider": self.provider,
+            "port": self.port,
+            "meter": self.meter,
+            "consumers": [consumer.to_document() for consumer in self.consumers],
+        }
+
+
+@dataclass(frozen=True)
 class NotLowered:
     """A construct the expansion met that a later step of the assemblies work lowers.
 
@@ -240,7 +346,7 @@ class NotLowered:
 
     def text(self) -> str:
         """The construct as a message lists it."""
-        return f"{self.where} — not lowered in step 1a, delivered by {self.step}"
+        return f"{self.where} — not lowered yet, delivered by {self.step}"
 
 
 @dataclass
@@ -250,7 +356,8 @@ class ImportRecord:
     ``instances`` lists every import and instance at every depth, each after the imports nested in
     it (the expansion works innermost first); ``decisions`` lists every port binding in the order
     it was made, an inner assembly's before its importer's; ``sequence`` is the final evaluation
-    sequence with each component's order path.
+    sequence with each component's order path; ``circuits`` lists every bound hydronic circuit
+    with both its ends, and ``carriers`` every provider of a carrier with the needs bound to it.
 
     An expansion that imported nothing produces an empty record, which keeps every consumer free
     of a case distinction, as :class:`~hisim.energy_system.groups.ExpansionRecord` does.
@@ -263,6 +370,16 @@ class ImportRecord:
     not_lowered: List[NotLowered] = field(default_factory=list)
     source_map: SourceMap = field(default_factory=SourceMap)
     decisions: List[str] = field(default_factory=list)
+    circuits: List[CircuitRecord] = field(default_factory=list)
+    carriers: List[CarrierRecord] = field(default_factory=list)
+
+    def carrier(self, carrier: str) -> List[CarrierRecord]:
+        """The providers of one carrier."""
+        return [record for record in self.carriers if record.carrier == carrier]
+
+    def circuit(self, circuit: str) -> List[CircuitRecord]:
+        """The bound circuits of one medium."""
+        return [record for record in self.circuits if record.circuit == circuit]
 
     @property
     def is_empty(self) -> bool:
@@ -291,6 +408,8 @@ class ImportRecord:
             ],
             "not_lowered": [item.text() for item in self.not_lowered],
             "bindings": list(self.decisions),
+            "circuits": [record.to_document() for record in self.circuits],
+            "carriers": [record.to_document() for record in self.carriers],
         }
 
     def describe(self) -> Tuple[str, ...]:
@@ -305,6 +424,19 @@ class ImportRecord:
                 lines.append(
                     f"  port {port.port} ({port.kind}): {port.state}{', ' + port.partner if port.partner else ''}."
                 )
+        for circuit in self.circuits:
+            first, second = circuit.ends
+            lines.append(
+                f"circuit {circuit.circuit}: {first.owner}.{first.port} ({', '.join(first.owns) or 'owns nothing'})"
+                f" <-> {second.owner}.{second.port} ({', '.join(second.owns) or 'owns nothing'})."
+            )
+        for carrier in self.carriers:
+            consumers = ", ".join(f"{consumer.owner}.{consumer.port}" for consumer in carrier.consumers)
+            lines.append(
+                f"carrier {carrier.carrier}: {carrier.provider}.{carrier.port}"
+                + (f" (meter {carrier.meter})" if carrier.meter else " (no link)")
+                + f", consumers {consumers or 'none'}."
+            )
         if self.sequence:
             lines.append("sequence: " + ", ".join(f"{name} {'.'.join(map(str, path))}" for name, path in self.sequence))
         return tuple(lines)

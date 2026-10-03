@@ -6,7 +6,7 @@ sends activation/deactivation siganls to components.
 The component with the lowest source weight is activated first.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from typing import Any, List, Tuple, Optional, cast
 from collections import OrderedDict
@@ -17,7 +17,7 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset, unit_metadata
 from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiSource, KpiTagEnumClass
@@ -43,12 +43,17 @@ class EMSConfig(ConfigBase):
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     limit_to_shave: float = 0
     # increase building set temperatures for heating when PV surplus is available.
-    # Must be smaller than difference of set_heating_temperature and set_cooling_temperature
-    building_indoor_temperature_offset_value: float = 2
+    # Must be smaller than difference of set_heating_temperature and set_cooling_temperature.
+    # The three offsets are declared in °C, the unit of the modifier outputs they become.
+    building_indoor_temperature_offset_value: float = field(default=2, metadata=unit_metadata(lt.Units.CELSIUS))
     # increase in dhw buffer set temperatures when PV surplus is available for heating
-    domestic_hot_water_storage_temperature_offset_value: float = 10
+    domestic_hot_water_storage_temperature_offset_value: float = field(
+        default=10, metadata=unit_metadata(lt.Units.CELSIUS)
+    )
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
-    space_heating_water_storage_temperature_offset_value: float = 10
+    space_heating_water_storage_temperature_offset_value: float = field(
+        default=10, metadata=unit_metadata(lt.Units.CELSIUS)
+    )
     #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
     #: postprocessing look the device up in the cost database instead.
     device_co2_footprint_in_kg: Optional[float] = None

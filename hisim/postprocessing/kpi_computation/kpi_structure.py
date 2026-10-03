@@ -85,8 +85,10 @@ class KpiSource:
         assembly: Library path of the innermost owning assembly; informative, not identity.
         name: The runtime name, the serialized address (``Component.component_name``, which is
             ``ComponentID.key``): the string the KPI key is qualified with.
-        display_name: The English default label: the component's ``DisplayConfig.pretty_name``,
-            else its member name. Never an identifier.
+        display_name: The English default label: for an assembly member the display name its
+            assembly renders (``ComponentID.display_name``, from the member's ``display:``
+            template), else the component's ``DisplayConfig.pretty_name``, else its member name.
+            Never an identifier.
         label: The request's own name for the system, passed through verbatim; ``None`` today.
     """
 
@@ -118,7 +120,8 @@ class KpiSource:
         Args:
             component_id: The component's structured identity.
             display_config: How the component is presented; its ``pretty_name`` becomes the
-                ``display_name`` when set.
+                ``display_name`` when set and the identity carries no rendered display name of
+                its own (``assemblies_spec.md`` §2.4).
 
         Returns:
             The component's source.
@@ -131,7 +134,7 @@ class KpiSource:
             member=component_id.name,
             assembly=component_id.assembly,
             name=component_id.key,
-            display_name=pretty_name if pretty_name else component_id.name,
+            display_name=component_id.display_name or pretty_name or component_id.name,
             label=None,
         )
 

@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim import loadtypes as lt
 from hisim.component_interface import ClassInterface
+from hisim.config.contributions import declared_facts_of
 from hisim.config.sizing import declared_field_unit
 from hisim.energy_system.assemblies.model import (
     AssemblyFile,
@@ -38,9 +39,17 @@ from hisim.energy_system.assemblies.model import (
 )
 from hisim.energy_system.assemblies.parameters import ParameterChecks, ParameterSubstitution
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
+from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemError, EnergySystemErrorId
-from hisim.energy_system.imports_model import PortKind, PortPlaceholder
+from hisim.energy_system.imports_model import (
+    Carriers,
+    CircuitNaming,
+    Port,
+    PortKind,
+    PortPlaceholder,
+    SwitchValue,
+)
 
 
 class CheckStrength(enum.Enum):
@@ -95,6 +104,7 @@ class LibraryChecker:
         self._check_members()
         self._check_imports()
         self._check_ports()
+        self._check_switches()
         self._check_order()
         if self.library:
             self._check_tests()
@@ -464,6 +474,12 @@ class LibraryChecker:
                             path + ("output",),
                             f"the port '{name}' provides '{port.output}', which is no output of '{template.name}'.",
                         )
+            elif port.kind == PortKind.CIRCUIT:
+                self._check_circuit_port(path, name, port, members, placeholders)
+            elif port.kind == PortKind.CARRIER:
+                self._check_carrier_port(path, name, port, members, placeholders)
+            elif port.kind == PortKind.FACT:
+                self._check_fact_port(path, name, port, members)
             elif port.kind == PortKind.REEXPORT:
                 inner = (port.reexports or ".").split(".", 1)[0]
                 if inner not in self.model.imports:
@@ -508,12 +524,235 @@ class LibraryChecker:
                         holder.source_path + ("inputs", placed.position),
                         f"'{holder.name}' carries a placeholder for '{placeholder.port}', which is no port.",
                     )
-                elif target.kind == PortKind.NEED and holder.name not in target.into:
+                elif not self._lands_in(target, holder.name):
                     self.add(
                         holder.source_path + ("inputs", placed.position),
                         f"'{holder.name}' carries a placeholder for '{placeholder.port}', which does not lower into "
-                        "it.",
+                        "it"
+                        + (
+                            " (a fact port lowers to a sizing_sources line, not to an input)"
+                            if target.kind == PortKind.FACT
+                            else ""
+                        )
+                        + (
+                            " (a carrier need lands in its provider's meter)"
+                            if target.kind == PortKind.CARRIER and not target.is_provision
+                            else ""
+                        )
+                        + ".",
                     )
+
+    @staticmethod
+    def _lands_in(port: Port, member: str) -> bool:
+        """Whether a port's lowered items may land in a member's placeholder for it."""
+        if port.kind == PortKind.NEED:
+            return member in port.into
+        if port.kind == PortKind.CIRCUIT:
+            return member in port.members
+        if port.kind == PortKind.CARRIER:
+            return port.is_provision and member == port.meter
+        return port.kind != PortKind.FACT
+
+    def _check_circuit_port(
+        self,
+        path: Tuple[Any, ...],
+        name: str,
+        port: Port,
+        members: Mapping[str, MemberTemplate],
+        placeholders: Mapping[str, Set[str]],
+    ) -> None:
+        """A circuit end names existing members, each declaring an input or an output of the circuit (§3.3)."""
+        outputs = CircuitNaming.outputs(port.circuit or "")
+        for member_name in port.members:
+            template = members.get(member_name)
+            if template is None:
+                self.add(path + ("member",), f"the circuit port '{name}' names '{member_name}', which is no member.")
+                continue
+            interface = self.interface(template)
+            if interface is None:
+                if self.library:
+                    self.add(
+                        path + ("member",),
+                        f"'{member_name}' ({template.entry.class_path}) declares no CLASS_INTERFACE, so the circuit "
+                        f"port '{name}' cannot be checked against {', '.join(outputs)}.",
+                    )
+                continue
+            reads = [output for output in outputs if interface.input(output) is not None]
+            owns = [output for output in outputs if interface.output(output) is not None]
+            if not reads and not owns:
+                self.add(
+                    path + ("member",),
+                    f"'{member_name}' declares none of the circuit {port.circuit}'s outputs {', '.join(outputs)}, "
+                    f"neither as an input nor as an output, so it is no end of the circuit '{name}'.",
+                )
+            if reads and name not in placeholders.get(member_name, set()):
+                self.add(
+                    path + ("member",),
+                    f"'{member_name}' reads {', '.join(reads)} through the circuit port '{name}' but carries no "
+                    f"'{{$port: {name}}}' placeholder.",
+                )
+
+    def _check_carrier_port(
+        self,
+        path: Tuple[Any, ...],
+        name: str,
+        port: Port,
+        members: Mapping[str, MemberTemplate],
+        placeholders: Mapping[str, Set[str]],
+    ) -> None:
+        """A carrier names a carrier; a need names existing outputs, a provision its meter (§5.1)."""
+        literal = port.carrier if isinstance(port.carrier, str) else None
+        if literal is not None and not Carriers.is_carrier(literal):
+            self.add(
+                path + ("carrier",),
+                f"the carrier port '{name}' names '{literal}', which is no carrier; a carrier is written as an "
+                f"lt.EnergyBalanceCarrier value: {', '.join(Carriers.names())}.",
+            )
+        if port.is_provision:
+            if port.meter is None:
+                if literal is not None and literal != Carriers.ELECTRICITY:
+                    self.add(
+                        path,
+                        f"the provision of '{literal}' names no 'meter'; a fuel's consumers are observed by its "
+                        "provider's meter, where their feeds land.",
+                    )
+                return
+            if literal == Carriers.ELECTRICITY:
+                self.add(
+                    path + ("meter",),
+                    "an electricity provision names no 'meter': electricity has no link, and the meter's selection "
+                    "is written as observes: (hisim-lt0b.3).",
+                )
+            if port.meter not in members:
+                self.add(path + ("meter",), f"the carrier provision '{name}' names the meter '{port.meter}', which is "
+                         "no member.")
+            elif name not in placeholders.get(port.meter, set()):
+                self.add(
+                    path + ("meter",),
+                    f"the meter '{port.meter}' of the carrier provision '{name}' carries no '{{$port: {name}}}' "
+                    "placeholder for its consumers' feeds.",
+                )
+            return
+        for item in port.outputs:
+            if "." not in item:
+                provided = self.model.ports.get(item)
+                if provided is None or provided.kind != PortKind.PROVIDED:
+                    self.add(
+                        path + ("outputs",),
+                        f"the carrier need '{name}' names '{item}', which is neither 'Member.Output' nor a provided "
+                        "output of the assembly.",
+                    )
+                continue
+            member_name, output = item.split(".", 1)
+            template = members.get(member_name)
+            if template is None:
+                self.add(path + ("outputs",), f"the carrier need '{name}' names '{item}', but '{member_name}' is no "
+                         "member.")
+                continue
+            interface = self.interface(template)
+            declared = interface.output(output) if interface is not None else None
+            if interface is not None and declared is None:
+                self.add(path + ("outputs",), f"the carrier need '{name}' names '{item}', which is no output of "
+                         f"'{member_name}'.")
+            elif declared is not None and declared.carrier is not None and literal is not None:
+                if declared.carrier.value != literal:
+                    self.add(
+                        path + ("outputs",),
+                        f"the carrier need '{name}' is of '{literal}', but '{item}' carries "
+                        f"'{declared.carrier.value}' by its class's energy port.",
+                    )
+
+    def _check_fact_port(
+        self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, MemberTemplate]
+    ) -> None:
+        """A fact need lowers into members whose classes read the fact; a provided fact is a contribution (§6)."""
+        literal = port.fact if isinstance(port.fact, str) else None
+        if port.is_provision:
+            for member_name in port.members:
+                template = members.get(member_name)
+                if template is None:
+                    self.add(path + ("member",), f"the provided fact '{name}' names '{member_name}', which is no "
+                             "member.")
+                    continue
+                config_class = self.config_class(template)
+                if config_class is not None and literal is not None and literal not in declared_facts_of(config_class):
+                    self.add(
+                        path + ("member",),
+                        f"the provided fact '{literal}' is not among the SIZING_CONTRIBUTIONS of "
+                        f"{config_class.__name__} (member '{member_name}'), which declares "
+                        f"{', '.join(declared_facts_of(config_class)) or 'none'}.",
+                    )
+            return
+        for member_name in port.into:
+            template = members.get(member_name)
+            if template is None:
+                self.add(path + ("into",), f"the fact port '{name}' lowers into '{member_name}', which is no member.")
+                continue
+            config_class = self.config_class(template)
+            if config_class is not None and literal is not None and literal not in facts_read_by(config_class):
+                self.add(
+                    path + ("into",),
+                    f"the fact port '{name}' lowers '{literal}' into '{member_name}', whose class "
+                    f"{config_class.__name__} reads no such fact (it reads "
+                    f"{', '.join(facts_read_by(config_class)) or 'none'}).",
+                )
+
+    def _check_switches(self) -> None:
+        """Every ``{$switch: …}`` names one selector and covers each of its values exactly once."""
+        trees: List[Tuple[Tuple[Any, ...], Any]] = []
+        for member in self._all_members():
+            trees.append((member.source_path + ("config",), dict(member.entry.config)))
+            if member.entry.constructor is not None:
+                trees.append((member.source_path + ("constructor",), dict(member.entry.constructor.arguments)))
+        for key, entry in self.model.imports.items():
+            trees.append((("imports", key, "parameters"), dict(entry.parameters)))
+            for instance in (entry.instances or {}).values():
+                trees.append((("imports", key, "instances", instance.name), dict(instance.parameters)))
+        for name, port in self.model.ports.items():
+            trees.append((("interface", port.section, name), {"carrier": port.carrier, "fact": port.fact}))
+        for root, tree in trees:
+            for switch, value_path in ParameterSubstitution.switches_in(tree):
+                self._check_switch(root + value_path, switch)
+
+    def _check_switch(self, path: Tuple[Any, ...], switch: Mapping[str, Any]) -> None:
+        """One switch: its selector is a parameter or a variant, and its cases partition the selector's values."""
+        selector = SwitchValue.selector_of(switch)
+        cases = list(SwitchValue.cases_of(switch))
+        is_parameter = isinstance(selector, str) and selector in self.model.parameters
+        is_variant = isinstance(selector, str) and selector in self.model.variants
+        if is_parameter == is_variant:
+            self.add(
+                path,
+                f"the switch on '{selector}' names "
+                + ("both a parameter and an internal variant" if is_parameter else "neither a parameter nor an "
+                   "internal variant")
+                + " of the assembly.",
+            )
+            return
+        if is_parameter:
+            allowed = self.model.parameters[selector].allowed_values
+            if allowed is None:
+                self.add(path, f"the switch on '{selector}' selects by a parameter without a closed set of values.")
+                return
+            expected = list(allowed)
+        else:
+            expected = list(self.model.variants[selector].options)
+        missing = [value for value in expected if value not in cases]
+        unknown = [case for case in cases if case not in expected]
+        if missing or unknown:
+            self.add(
+                path,
+                f"the switch on '{selector}' must cover {', '.join(repr(value) for value in expected)} exactly once; "
+                + "; ".join(
+                    part
+                    for part in (
+                        f"missing {', '.join(repr(value) for value in missing)}" if missing else "",
+                        f"unknown {', '.join(repr(case) for case in unknown)}" if unknown else "",
+                    )
+                    if part
+                )
+                + ".",
+            )
 
     def _check_order(self) -> None:
         """Member and inner-import ``order:`` numbers: all or none, no repeats at one level (D23)."""

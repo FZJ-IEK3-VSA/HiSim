@@ -1,0 +1,41 @@
+# Fixture: a gas boiler. It burns natural gas (a carrier need its provider's meter observes) and is one
+# end of the dhw circuit, owning the mass flow and the supply leg. Its efficiency is switched by its type.
+schema_version: 4
+kind: assembly
+name: heating/gas_boiler
+description: A fake gas boiler charging a hot-water cylinder.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: 3000, range: {min: 1000, max: 20000}, description: Rated heat output.}
+  boiler_type:
+    {type: enum, values: [condensing, standard], default: condensing, description: "Condensing or not; sets the efficiency."}
+
+presets:
+  standard: {}
+
+components:
+  Boiler:
+    class: tests.assemblies.fixture_components.FakeBoiler
+    preset: condensing
+    display: "Gas boiler, {power_in_watt} W"
+    config:
+      power_in_watt: {$param: power_in_watt}
+      efficiency: {$switch: boiler_type, condensing: 0.95, standard: 0.85}
+    inputs:
+      - {$port: dhw}
+
+interface:
+  needs:
+    fuel: {carrier: natural_gas, outputs: [Boiler.FuelUse]}
+  provides:
+    dhw: {circuit: dhw, member: Boiler}
+
+tests:
+  bounds:
+    - {output: Boiler.SupplyTemperatureDhw, unit: CELSIUS, min: 0, max: 100}
+    - {output: Boiler.ThermalPowerDhw, unit: WATT, min: 0, max: 20000}
+    - {output: Boiler.FuelUse, unit: WATT_HOUR, min: 0, max: 10000}
+    - {output: Boiler.FlueLoss, unit: WATT, min: 0, max: 5000}
+  monotone:
+    - {parameter: power_in_watt, kpi: Boiler fuel, member: Boiler, direction: increasing}

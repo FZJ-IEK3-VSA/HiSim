@@ -75,6 +75,7 @@ def test_the_record_document_carries_the_addresses_and_the_sequence() -> None:
         "path": [{"import": "pv", "instance": "east"}],
         "member": "PVSystem",
         "assembly": "pv/array",
+        "display_name": "PV array, east, azimuth 90",
     }
     assert document["sequence"][6] == {"component": "hot_water-heater-tank-Tank", "order": "4.1.3.1"}
     assert document["not_lowered"] == []

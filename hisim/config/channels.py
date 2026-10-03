@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, FrozenSet, Iterable, List, Optional, Tuple, Union
 
 from hisim import loadtypes as lt
+from hisim.config.names import NameSyntax
 
 if TYPE_CHECKING:  # pragma: no cover - annotations only, never imported at runtime
     from hisim.component import Component, ComponentOutput
@@ -336,6 +337,21 @@ class ResolvedDynamicConnection:
         return tuple(combined)
 
     @property
+    def port_source_name(self) -> str:
+        """The participant's name as it enters a derived port name.
+
+        A port name is an identifier, and an assembly member's name is its serialized address,
+        whose ``-`` separates identifiers (``boiler-Boiler``, ``assemblies_spec.md`` §2.4). The
+        separator becomes ``_`` here (``boiler_Boiler``); every other name passes unchanged, so
+        the derived ports of every file without assemblies keep their names. A derived name that
+        collides with another port is refused where the ports are created (``EF-32``).
+
+        Returns:
+            The source name with the address separator replaced.
+        """
+        return self.source_name.replace(NameSyntax.ADDRESS_SEPARATOR, "_")
+
+    @property
     def aggregator_input_name(self) -> str:
         """Name of the aggregator input this connection creates.
 
@@ -343,7 +359,7 @@ class ResolvedDynamicConnection:
             The derived name, for example ``ElectricityOutputFromBoiler``.
         """
         return self.AGGREGATOR_INPUT_TEMPLATE.format(
-            source_output=self.source_output, source_name=self.source_name
+            source_output=self.source_output, source_name=self.port_source_name
         )
 
     @property
@@ -364,10 +380,10 @@ class ResolvedDynamicConnection:
             return None
         if self.dispatch.target_input is not None:
             return self.DISPATCH_OUTPUT_TEMPLATE.format(
-                source_name=self.source_name, target_input=self.dispatch.target_input
+                source_name=self.port_source_name, target_input=self.dispatch.target_input
             )
         return self.RECORDED_DISPATCH_OUTPUT_TEMPLATE.format(
-            source_name=self.source_name, source_output=self.source_output
+            source_name=self.port_source_name, source_output=self.source_output
         )
 
     @staticmethod

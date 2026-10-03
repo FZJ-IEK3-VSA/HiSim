@@ -41,7 +41,7 @@ from hisim.energy_system.bindings import ClassBindings
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.comments import AnnotatedEmitter, write_record
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
-from hisim.energy_system.assemblies.expansion import expand_imports
+from hisim.energy_system.assemblies.expansion import check_consumer_carriers, expand_imports
 from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import (
@@ -296,6 +296,7 @@ class EnergySystemExecutor:
             wired, wiring_warnings = wire_energy_system(
                 expanded, configured, self.simulation_parameters
             )
+            check_consumer_carriers(imports, wired.components)
         except EnergySystemCatalogueError as error:
             annotated = imports.source_map.annotate(error)
             if annotated is error:

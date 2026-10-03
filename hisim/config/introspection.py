@@ -26,7 +26,7 @@ from typing import Any, ClassVar, Optional, Tuple
 from hisim.config.contributions import declared_facts_of
 from hisim.config.laws import Cardinality, SizingLaw
 from hisim.config.presets import canonical_preset, constructors_of, presets_of
-from hisim.config.sizing import auto_fields, field_notes, sizable_fields
+from hisim.config.sizing import SizedFieldMetadata, auto_fields, field_notes, sizable_fields
 
 
 class SizableFieldKind(enum.Enum):
@@ -57,13 +57,15 @@ class FieldInfo:
     modules are read without evaluating their annotations), which is what a schema exporter
     wants to show. ``default`` is the declared default value, or ``dataclasses.MISSING``
     when the field is mandatory — a distinct marker is needed because ``None`` is itself a
-    common and meaningful default in HiSim configs.
+    common and meaningful default in HiSim configs. ``unit`` is the ``lt.Units`` member name
+    the field declares (``sized_field(unit=...)`` or ``unit_metadata``), or ``None``.
     """
 
     name: str
     type_name: str
     default: Any
     sizable: bool
+    unit: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -228,6 +230,14 @@ def _field_default(field: dataclasses.Field) -> Any:
     return dataclasses.MISSING
 
 
+def _unit_name(field: dataclasses.Field) -> Optional[str]:
+    """The member name of the unit a field declares, or ``None``."""
+    unit = field.metadata.get(SizedFieldMetadata.UNIT)
+    if unit is None:
+        return None
+    return str(getattr(unit, "name", unit))
+
+
 def _describe_fields(config_class: type, sizable: Tuple[str, ...]) -> Tuple[FieldInfo, ...]:
     """Describes every dataclass field of the class, marking the sizable ones."""
     return tuple(
@@ -236,6 +246,7 @@ def _describe_fields(config_class: type, sizable: Tuple[str, ...]) -> Tuple[Fiel
             type_name=_type_name(field),
             default=_field_default(field),
             sizable=field.name in sizable,
+            unit=_unit_name(field),
         )
         for field in dataclasses.fields(config_class)
     )

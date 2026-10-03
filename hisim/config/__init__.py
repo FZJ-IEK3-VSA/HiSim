@@ -99,6 +99,7 @@ from hisim.config.sizing import (
     resolve_config,
     sizable_fields,
     sized_field,
+    unit_metadata,
 )
 from hisim.config.report import ResolutionReport
 from hisim.config.contributions import FactContribution, declared_facts_of
@@ -180,4 +181,5 @@ __all__ = [
     "resolve_config",
     "sizable_fields",
     "sized_field",
+    "unit_metadata",
 ]

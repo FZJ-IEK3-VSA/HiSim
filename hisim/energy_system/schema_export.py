@@ -38,7 +38,7 @@ import dataclasses
 import json
 import typing
 from pathlib import Path
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from hisim.config.introspection import ConfigDescription, describe_config
 from hisim.config.presets import constructors_of
@@ -434,12 +434,22 @@ class SchemaBuilder:
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                field.name: JsonTypes.of(
-                    hints.get(field.name, field.type_name), sizable=field.name in sizable
+                field.name: cls._with_unit(
+                    JsonTypes.of(hints.get(field.name, field.type_name), sizable=field.name in sizable), field.unit
                 )
                 for field in description.fields
             },
         }
+
+    #: The schema keyword a field's declared unit is stated under: an annotation, not a constraint.
+    UNIT_KEYWORD = "x-unit"
+
+    @classmethod
+    def _with_unit(cls, schema: Dict[str, Any], unit: Optional[str]) -> Dict[str, Any]:
+        """A field's schema with the ``lt.Units`` member it declares, when it declares one (D16 b)."""
+        if unit is None:
+            return schema
+        return {**schema, cls.UNIT_KEYWORD: unit}
 
     @classmethod
     def _sizing_sources(cls, config_class: type) -> Dict[str, Any]:

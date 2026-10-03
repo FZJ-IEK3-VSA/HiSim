@@ -340,7 +340,7 @@ def test_nesting_deeper_than_four_is_refused(tmp_path: Path) -> None:
 
 @pytest.mark.base
 def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -> None:
-    """Circuit, carrier and fact ports and selectors are parsed and recorded, and the file is refused."""
+    """Selectors, controllable outputs, many-reads, fact exports and ``$fact`` are recorded and refused (EF-7L)."""
     library = Library(tmp_path)
     library.add(
         "later/everything",
@@ -353,13 +353,15 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
             class: tests.assemblies.fixture_components.FakeTank
             preset: standard
             config: {volume_in_liter: {$fact: storage_volume}}
+          Battery:
+            class: tests.assemblies.fixture_components.FakeBattery
+            preset: sized_to_pv
         interface:
           needs:
-            circuit: {circuit: dhw, member: Tank}
-            fuel: {carrier: NATURAL_GAS, outputs: [loss]}
-            size: {fact: number_of_apartments, into: [Tank]}
+            pv_power: {fact: pv_peak_power_in_watt, many: true, into: [Battery]}
           provides:
             loss: {output: Tank.HeatLoss, controllable: {via: x}}
+            capacity: {fact: pv_peak_power_in_watt, export: true}
         """,
     )
 
@@ -371,12 +373,12 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
     message = str(raised.value)
     assert "EF-7L" in message
     for construct in (
-        "import x: observes — not lowered in step 1a, delivered by hisim-lt0b.3",
-        "x: port circuit (circuit) — not lowered in step 1a, delivered by hisim-lt0b.2",
-        "x: port fuel (carrier)",
-        "x: port size (fact)",
+        "import x: observes — not lowered yet, delivered by hisim-lt0b.3",
+        "x: port pv_power (fact, many: true) — not lowered yet, delivered by hisim-lt0b.4",
+        "x: port capacity (fact export) — not lowered yet, delivered by hisim-lt0b.4",
         "x: port loss (controllable)",
-        "x: member Tank config.volume_in_liter ($fact)",
+        "x: member Tank config.volume_in_liter ($fact) — not lowered yet, delivered by no step: the sizing engine "
+        "reads a fact only through a law its class declares on the field",
     ):
         assert construct in message, construct
 

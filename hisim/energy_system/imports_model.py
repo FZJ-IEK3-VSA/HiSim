@@ -25,6 +25,8 @@ from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from hisim import loadtypes as lt
+
 
 class ParameterReference:
     """The ``{$param: <name>}`` spelling of a value that an assembly parameter supplies.
@@ -37,12 +39,17 @@ class ParameterReference:
     #: The one key of a parameter reference.
     KEY: ClassVar[str] = "$param"
 
-    #: Keys of the other ``$`` spellings the mockup uses, none of which step 1a lowers, mapped to
-    #: the step that delivers each: a fact read (``$fact``), a value switched by a parameter
-    #: (``$switch``), and a value derived per instance (``$derived``, dry-run gap G12).
+    #: Keys of the other ``$`` spellings the mockup uses that the expansion does not lower, mapped
+    #: to what would deliver each. ``$fact`` — "this field's value is the named sizing fact" — has
+    #: no clean lowering: the sizing engine binds a fact only to a field whose class declares a law
+    #: reading it (``sized_field(rule=...)``), and a file cannot give a field a law; a field that
+    #: should follow a fact gets a law in its class, which a fact port then feeds. ``$derived`` is a
+    #: value derived per instance (dry-run gap G12). ``$switch`` is lowered (:class:`SwitchValue`).
     UNLOWERED_KEYS: ClassVar[Mapping[str, str]] = {
-        "$fact": "hisim-lt0b.2 (fact ports)",
-        "$switch": "hisim-lt0b.2 (fact ports)",
+        "$fact": (
+            "no step: the sizing engine reads a fact only through a law its class declares on the field "
+            "(sized_field(rule=...)); give the field a law and feed it with a fact port"
+        ),
         "$derived": "no step yet (dry-run gap G12: a value derived per instance)",
         "$observes": "hisim-lt0b.3 (observe and actuate selectors)",
     }
@@ -63,6 +70,38 @@ class ParameterReference:
                 if key in cls.UNLOWERED_KEYS:
                     return str(key)
         return None
+
+
+class SwitchValue:
+    """``{$switch: <selector>, <case>: <value>, …}``: a value chosen by a parameter or an internal variant.
+
+    The selector names a parameter of the assembly — the case keys are then its allowed values —
+    or one of its internal variants — the case keys are then the variant's option names. The
+    expansion replaces the mapping by the value of the case the instance's parameters select;
+    the library check refuses a selector that names neither (or both), and cases that do not
+    cover every allowed value exactly once, as it refuses a variant whose ``when:`` lists do
+    not partition its selector (``assemblies_spec.md`` §2.6). A case's value may itself be any
+    value, a ``{$param: …}`` included. Example, from the mockup's PV array: ``fact: {$switch:
+    mounted_on, roof: roof_area_in_m2, facade: facade_area_in_m2}``.
+    """
+
+    #: The key that marks a switch and names its selector.
+    KEY: ClassVar[str] = "$switch"
+
+    @classmethod
+    def is_switch(cls, value: Any) -> bool:
+        """Whether a value is written as a switch."""
+        return isinstance(value, Mapping) and cls.KEY in value
+
+    @classmethod
+    def selector_of(cls, value: Mapping[str, Any]) -> Any:
+        """The selector a switch names."""
+        return value[cls.KEY]
+
+    @classmethod
+    def cases_of(cls, value: Mapping[str, Any]) -> Dict[Any, Any]:
+        """The cases of a switch: case key to value."""
+        return {key: item for key, item in value.items() if key != cls.KEY}
 
 
 class BindingVerbs(BaseModel):
@@ -190,36 +229,105 @@ class PortKind(enum.Enum):
     ACTUATES = "actuates"
 
     @property
-    def lowered_in_step_1a(self) -> bool:
-        """Whether this step lowers ports of this kind."""
-        return self in (PortKind.NEED, PortKind.PROVIDED, PortKind.REEXPORT, PortKind.INTERNAL)
+    def is_lowered(self) -> bool:
+        """Whether the expansion lowers ports of this kind (observers and actuators wait for hisim-lt0b.3)."""
+        return self not in (PortKind.OBSERVER, PortKind.ACTUATES)
 
     @property
     def delivering_step(self) -> str:
-        """The bead that lowers ports of a kind this step does not."""
-        if self in (PortKind.CIRCUIT, PortKind.CARRIER, PortKind.FACT):
-            return "hisim-lt0b.2 (circuit ports, carrier needs, fact ports)"
+        """The bead that lowers ports of a kind the expansion does not lower yet."""
         return "hisim-lt0b.3 (observe and actuate selectors, controller lowering)"
+
+
+class CircuitNaming:
+    """The hydronic naming convention a circuit port lowers by (``assemblies_spec.md`` §11.1).
+
+    A circuit ``<c>`` — its medium, written in snake case (``dhw``, ``sh``, ``solar_dhw``) — is
+    carried by three outputs (``roadmap/hydronic_coupling_spec.md`` §3.1): ``MassFlow<C>``
+    (kg/s, by the pump owner), ``SupplyTemperature<C>`` and ``ReturnTemperature<C>`` (°C, each by
+    the end the water leaves), where ``<C>`` is the circuit's name in camel case (``Dhw``, ``Sh``,
+    ``SolarDhw``). Each output is owned by exactly one end and read by the other.
+    """
+
+    #: The three quantities of a circuit, in the order they are checked and listed.
+    QUANTITIES: ClassVar[Tuple[str, ...]] = ("MassFlow", "SupplyTemperature", "ReturnTemperature")
+
+    @classmethod
+    def suffix(cls, circuit: str) -> str:
+        """The circuit's name as its outputs carry it: ``solar_dhw`` → ``SolarDhw``."""
+        return "".join(part[:1].upper() + part[1:] for part in circuit.split("_") if part)
+
+    @classmethod
+    def outputs(cls, circuit: str) -> Tuple[str, ...]:
+        """The three outputs of a circuit: ``MassFlowDhw``, ``SupplyTemperatureDhw``, ``ReturnTemperatureDhw``."""
+        return tuple(f"{quantity}{cls.suffix(circuit)}" for quantity in cls.QUANTITIES)
+
+
+class Carriers:
+    """The carrier vocabulary of carrier ports (``assemblies_spec.md`` §5).
+
+    A carrier is written as the value of :class:`~hisim.loadtypes.EnergyBalanceCarrier` — the
+    spelling an energy port serializes (``natural_gas``, ``electricity``, ``heating_oil``) — so a
+    carrier need, its provider and the ``EnergyPort`` of every consuming output name one carrier
+    the same way.
+    """
+
+    #: The carrier that has no link end (§3.2, §4.3): a need only checks that its provider exists.
+    ELECTRICITY: ClassVar[str] = lt.EnergyBalanceCarrier.ELECTRICITY.value
+
+    #: The assembly that provides each carrier, for the paste-ready line of a missing provider (§5.1).
+    SUPPLY_ASSEMBLIES: ClassVar[Mapping[str, str]] = {
+        lt.EnergyBalanceCarrier.ELECTRICITY.value: "supply/electricity_grid",
+        lt.EnergyBalanceCarrier.NATURAL_GAS.value: "supply/gas_connection",
+        lt.EnergyBalanceCarrier.HEATING_OIL.value: "supply/delivered_fuel",
+        lt.EnergyBalanceCarrier.PELLETS.value: "supply/delivered_fuel",
+        lt.EnergyBalanceCarrier.WOOD_CHIPS.value: "supply/delivered_fuel",
+        lt.EnergyBalanceCarrier.DISTRICT_HEAT.value: "supply/district_heating_substation",
+    }
+
+    @classmethod
+    def names(cls) -> Tuple[str, ...]:
+        """Every carrier a port may name."""
+        return tuple(member.value for member in lt.EnergyBalanceCarrier)
+
+    @classmethod
+    def is_carrier(cls, value: Any) -> bool:
+        """Whether a value names a carrier."""
+        return isinstance(value, str) and value in cls.names()
+
+    @classmethod
+    def supply_for(cls, carrier: str) -> str:
+        """The assembly a missing provider of a carrier is added with."""
+        return cls.SUPPLY_ASSEMBLIES.get(carrier, f"a supply assembly providing {carrier}")
 
 
 class Port(BaseModel):
     """One port of an assembly's interface or of a site entry (``assemblies_spec.md`` §3).
 
-    The fields every kind shares are typed; what only an unlowered kind uses (a circuit's
-    ``member``, a carrier's ``outputs``, a fact's ``many``, a provided output's ``controllable``)
-    stays in ``raw``, which also keeps the port's whole written block for the import record.
+    The fields every kind shares are typed; what only an unlowered kind uses (a provided
+    output's ``controllable``) stays in ``raw``, which also keeps the port's whole written block
+    for the import record.
 
     Attributes:
         name: The port's key.
         section: Where it is written: ``needs``, ``provides``, ``internal``, ``observes``,
             ``actuates`` (an assembly's interface) or ``ports`` (a site entry).
         kind: What it is.
-        into: The members a need lowers into.
+        into: The members a need (or a fact need) lowers into.
         partner: The partner classes of a need, by class name.
         wires: Explicit wires ``{input: output}`` a need lowers to instead of default connections.
         output: ``Member.Output`` of a provided port.
         reexports: ``<inner import>.<port>`` of a re-exported port.
         ends: The two ends ``[sender, receiver]`` of an internal port.
+        circuit: The circuit (its medium, ``dhw``, ``sh``, ``brine``) of a circuit port (§3.2, §11.1).
+        members: The members of a circuit end, or the one member providing a fact.
+        carrier: The carrier of a carrier port, as written: an ``lt.EnergyBalanceCarrier`` value
+            (``natural_gas``) or a ``{$param: …}``/``{$switch: …}`` that resolves to one.
+        outputs: The consuming outputs of a carrier need, each ``Member.Output`` or the name of a
+            provided port of the same assembly.
+        meter: The member that meters a provided fuel carrier, and where its feeds land.
+        fact: The sizing fact of a fact port, as written (a name, or a ``{$switch: …}``).
+        many: Whether a fact need reads the fact over every provider (``many: true``, step 3).
         optional: Whether the port may stay unbound (with a verb saying so).
         required_when: Parameter to values for which the port is required; conjunctive.
         active_when: Parameter to values outside which the port is inactive; conjunctive.
@@ -237,10 +345,34 @@ class Port(BaseModel):
     output: Optional[str] = None
     reexports: Optional[str] = None
     ends: Tuple[str, ...] = ()
+    circuit: Optional[str] = None
+    members: Tuple[str, ...] = ()
+    carrier: Optional[Any] = None
+    outputs: Tuple[str, ...] = ()
+    meter: Optional[str] = None
+    fact: Optional[Any] = None
+    many: bool = False
     optional: bool = False
     required_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
     active_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
     raw: Mapping[str, Any] = Field(default_factory=dict)
+
+    @property
+    def is_provision(self) -> bool:
+        """Whether the port offers something rather than needing it.
+
+        A provided output, a fact an assembly provides (``provides:``) and a carrier a supply
+        assembly or a site entry provides (a carrier port without ``outputs``) are provisions:
+        another port binds to them, and a verb never binds them. A circuit port is neither: its two
+        ends are alike.
+        """
+        if self.kind == PortKind.PROVIDED:
+            return True
+        if self.kind == PortKind.FACT:
+            return self.section == "provides"
+        if self.kind == PortKind.CARRIER:
+            return not self.outputs
+        return False
 
     @property
     def output_member(self) -> Optional[str]:

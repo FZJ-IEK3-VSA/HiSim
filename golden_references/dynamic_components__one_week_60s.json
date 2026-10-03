@@ -36,10 +36,10 @@
   "BUI1.Emissions.Total CO2 emissions for simulated period": 5.88,
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": 0.0,
   "BUI1.Emissions.Total CO2 emissions without heatpump for simulated period": 5.88,
-  "BUI1.Energy Management System.Priority for Input_Battery1_AcBatteryPowerUsed_3": 0.0,
-  "BUI1.Energy Management System.Priority for Input_Battery2_AcBatteryPowerUsed_4": 1.0,
-  "BUI1.Energy Management System.Priority for Input_CHP1_ElectricityOutput_5": 2.0,
-  "BUI1.Energy Management System.Priority for Input_CHP2_ElectricityOutput_6": 3.0,
+  "BUI1.Energy Management System.Priority for Input_Battery1_AcBatteryPowerUsed_3 (L2EMSElectricityController)": 0.0,
+  "BUI1.Energy Management System.Priority for Input_Battery2_AcBatteryPowerUsed_4 (L2EMSElectricityController)": 1.0,
+  "BUI1.Energy Management System.Priority for Input_CHP1_ElectricityOutput_5 (L2EMSElectricityController)": 2.0,
+  "BUI1.Energy Management System.Priority for Input_CHP2_ElectricityOutput_6 (L2EMSElectricityController)": 3.0,
   "BUI1.General.Grid injection of electricity": 26.483869686545635,
   "BUI1.General.PV production": 37.0,
   "BUI1.General.Purchased energy consumption for simulated period": 0.0,
@@ -57,7 +57,7 @@
   "BUI1.General.Total electricity production": 37.0,
   "BUI1.General.Total energy self-suffiency rate": null,
   "BUI1.General.Windturbine production": 0.0,
-  "BUI1.Residents.Residents' total electricity consumption": 58.53369865986398,
-  "BUI1.Residents.Residents' total warm water consumption": 1820.0,
-  "BUI1.Residents.Residents' total warm water energy consumption": 62.88949333333334
+  "BUI1.Residents.Residents' total electricity consumption (UTSPConnector)": 58.53369865986398,
+  "BUI1.Residents.Residents' total warm water consumption (UTSPConnector)": 1820.0,
+  "BUI1.Residents.Residents' total warm water energy consumption (UTSPConnector)": 62.88949333333334
 }

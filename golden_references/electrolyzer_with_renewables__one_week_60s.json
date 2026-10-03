@@ -19,9 +19,9 @@
   "BUI1.Costs.Total costs for simulated period": 3081.5699999999997,
   "BUI1.Costs.Total costs only heatpump for simulated period": 0.0,
   "BUI1.Costs.Total costs without heatpump for simulated period": 3081.5699999999997,
-  "BUI1.Electrolyzer.Electrical energy consumed": 105097.77170666,
-  "BUI1.Electrolyzer.Hydrogen produced": 1913.7603971240626,
-  "BUI1.Electrolyzer.Operating time": 134.11666666666554,
+  "BUI1.Electrolyzer.Electrical energy consumed (Electrolyzer)": 105097.77170666,
+  "BUI1.Electrolyzer.Hydrogen produced (Electrolyzer)": 1913.7603971240626,
+  "BUI1.Electrolyzer.Operating time (Electrolyzer)": 134.11666666666554,
   "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": 0.0,
   "BUI1.Emissions.CO2 footprint for equipment per simulated period": 284.22,
   "BUI1.Emissions.CO2 footprint for equipment without heatpump per simulated period": 284.22,
@@ -48,6 +48,6 @@
   "BUI1.General.Total electricity production": 180.5,
   "BUI1.General.Total energy self-suffiency rate": null,
   "BUI1.General.Windturbine production": 0.0,
-  "BUI1.Transformer.Conversion losses": 9502.422,
-  "BUI1.Transformer.Electrical energy delivered": 180546.027
+  "BUI1.Transformer.Conversion losses (StandardTransformerAndRectifier)": 9502.422,
+  "BUI1.Transformer.Electrical energy delivered (StandardTransformerAndRectifier)": 180546.027
 }

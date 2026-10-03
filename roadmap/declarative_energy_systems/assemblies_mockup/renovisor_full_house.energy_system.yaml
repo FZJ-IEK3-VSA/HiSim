@@ -1,6 +1,8 @@
 # Mockup (design, not loadable): the composed energy-system file the RenoVisor translator would write for ONE
 # calculation request, covering every leaf of the request schema (calculation-request.schema.json at the pinned
-# commit) and every measure of measures.yaml — including features HiSim does not model yet, marked (†).
+# commit) and every measure of measures.yaml — including features HiSim does not model yet, marked (†). Every
+# assembly it imports is a file in this directory (assemblies_mockup/<family>/<name>.assembly.yaml); the connector
+# types are in connectors.yaml. The dry run of the heat-pump twin is dry_run_heatpump_twin.md.
 #
 # Reading rule: the file says what the house IS. The translator writes two of these per calculation — the house as it
 # stands (the do-nothing reference) and the house with the plan applied — and the plan's measures are exactly the diff
@@ -9,10 +11,12 @@
 #
 # Conventions: a site value is ordinary component config, as today. An import's `parameters` are the assembly's
 # interface; `preset` is a named parameter set of the assembly; `installation_year` and `quote` are reserved
-# per-instance fields read by the economics (D18, D22); `bind:` names a port partner where the default rule would be ambiguous, `none`
-# declines an optional port. `observes:` is a read-only tap (meters, controllers; never a link, invisible to the energy
-# balance), `actuates:` a controller's signal into one target input (spec §4.3). `AUTO` leaves a sized parameter to the
-# class law against the expanded system.
+# per-instance fields read by the economics (D18, D22); `bind:` names a port's partner where the default rule would be
+# ambiguous or the port is optional (D8), `none` declines an optional port. Three relations only (spec §4.3): a LINK
+# (`bind:`: a carrier need to its provider, a flow to the bus, the two ends of a circuit, a device's zone_heat to its
+# Building input), an OBSERVATION (`observes:`, read-only, invisible to the energy balance) and an ACTUATION (a
+# controller into one L1 set-point modifier, `ems_modifier`, or into the battery's LoadingPowerInput; D21). `AUTO`
+# leaves a sized parameter to the class law against the expanded system.
 
 schema_version: 4                                   # the assemblies extension of the v3 format (spec §2)
 name: renovisor_calculation_<job id>
@@ -22,9 +26,11 @@ description: Composed by hisim.renovisor.translate from calculation request <id>
 components:
   Weather:
     class: hisim.components.weather.Weather
-    preset: ie_tmy                                  # R: location.country -> preset; R: location.postcode -> station
-    config: {location: Dublin}
-    provides: {weather: {connector: weather_data}}
+    constructor: for_location                       # R: location.country + location.postcode -> station († IE data)
+    arguments: {location: DUBLIN, heating_reference_temperature_in_celsius: -3.0}   # † no Irish station in LocationEnum
+    provides:
+      weather: {connector: weather_data}
+      design_temperature: {connector: sizing_fact, fact: heating_reference_temperature_in_celsius}
 
   Building:
     class: hisim.components.building.building.Building
@@ -59,38 +65,59 @@ components:
                 installation_year: 1990}
       air_tightness: professionally_sealed          # R: ventilation.air_tightness; M: shallow_air_tightness_measures,
                                                     #    diy_sealing_of_air_leaks (†: infiltration rate from class)
-    inputs: [Weather]
+    inputs: [Weather, Occupancy, HeatDistribution]  # site-internal wiring, as the twin writes it
     provides:
-      thermal_zone: {connector: space_heat_direct, aggregates: true}      # sum of direct heat/cold gains (problem A)
-      heat_load:    {connector: sizing_fact, fact: heating_load_in_watt}  # read by the heating assembly's sizing
+      # D19: one named input per kind acting on the zone, each linked exactly once (building.py:244-331).
+      # ThermalPowerDelivered is taken by the site's HeatDistribution (inputs above); ThermalPowerCHP stays unbound.
+      secondary_heating: {connector: zone_heat, kind: secondary_heating, input: ThermalPowerSecondaryHeating}  # †
+      cooling:           {connector: zone_heat, kind: cooling, input: ThermalPowerCooling}                     # †
+      ventilation:       {connector: zone_heat, kind: ventilation, input: VentilationHeatRecovered}            # †
+      zone:              {connector: building_thermal}                      # TemperatureIndoorAir, demand
+      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
+                           input: BuildingTemperatureModifier, optional: true, bind: control}   # EMS actuates (D21)
+      heat_load:         {connector: sizing_fact, fact: heating_load_in_watt}
+      apartments:        {connector: sizing_fact, fact: number_of_apartments}
+      roof_area:         {connector: sizing_fact, fact: roof_area_in_m2}
+      room_setpoint:     {connector: sizing_fact, fact: set_heating_temperature_in_celsius}
 
   Occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
-    preset: by_residents                            # R: occupancy.number_of_residents -> household profile
+    preset: couple_both_at_work                     # R: occupancy.number_of_residents -> household († mapping)
     config:
-      number_of_residents: 3
       home_office_days_per_week: 2                  # R: home_office_days_per_week (†)
       white_appliances: new_efficient               # R: appliances.white_appliances; M: replace_white_appliances (†)
       shift_flexible_loads: true                    # R: pv_self_consumption_optimised; M: optimize_behaviour_... (†)
-    inputs: [Weather]
+      # R: electric_vehicles -> the LPG travel route set and charging station (gap G12: an ev import's parameters
+      #    are occupancy settings)
     provides:
-      electricity_use:  {connector: electricity_flow, flow: consumption, controllable: {target_input: ShiftSignal},
-                         component_type: RESIDENTS}
+      electricity_use:  {connector: electricity_flow, flow: consumption, component_type: RESIDENTS,
+                         controllable: {}, bind: control}   # dispatch {} as in the twin; site-port intent: gap G13
       hot_water_demand: {connector: hot_water_demand}
       internal_gains:   {connector: internal_gains}
-      car_usage:        {connector: car_usage}        # read by ev instances
+      car_usage:        {connector: car_usage}        # read by ev instances, through the SimRepository
+      household:        {connector: sizing_fact, fact: occupancy_identity}
 
   HeatDistribution:                                 # D12 (b): HDS and its controller stay on the site
     class: hisim.components.heat_distribution_system.HeatDistribution
-    preset: low_temperature_radiator                # R: heat_distribution.type_of_system; M: heating_installation
+    preset: building_derived                        # emitter type AUTO: the controller's heat_distribution_system_type
     inputs: [Building, HeatDistributionController]
     provides:
-      sh_return: {connector: hydronic_circuit, medium: heating_water, end: return}   # the heating import's sh port binds here
+      sh: {connector: hydronic_circuit, medium: heating_water, end: {pump: true, legs: [return]}}
+          # WaterMassFlowHDS and WaterTemperatureOutput out, WaterTemperatureInput in; the heating import binds here
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
-    config: {flow_temperature_in_celsius: 45}       # R: heating.flow_temperature_in_celsius
+    config:
+      heating_system: LOW_TEMPERATURE_RADIATOR      # R: heat_distribution.type_of_system; M: heating_installation
+      flow_temperature_in_celsius: 45               # R: heating.flow_temperature_in_celsius († no such field: the
+                                                    #    curve follows from heating_system today)
     inputs: [Weather, Building]
+    provides:
+      flow_temperature: {connector: control_signal, signal: heating_flow_temperature}   # read by the heating L1
+      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
+                           input: BuildingTemperatureModifier, optional: true, bind: control}
+      emitter_type:     {connector: sizing_fact, fact: heat_distribution_system_type}
+      heating_threshold: {connector: sizing_fact, fact: set_heating_threshold_outside_temperature_in_celsius}
 
 # ----------------------------------------------------------------------------------------------- the imports
 imports:
@@ -101,36 +128,42 @@ imports:
                                                     # condensing_oil_boiler, conventional_oil_boiler, condensing_lpg_boiler (†),
                                                     # conventional_lpg_boiler (†), hvo_boiler (†), hydrogen_boiler, pellet_boiler,
                                                     # wood_chip_boiler, log_boiler (biomass), air_source_heat_pump,
-                                                    # ground_source_heat_pump, hybrid_heat_pump (†, nested: generator/ashp +
-                                                    # generator/gas_boiler + hybrid controller), electric_heating,
-                                                    # district_heating, solid_fuel_boiler (†, refused today: hisim-vsq0.2)
+                                                    # ground_source_heat_pump, hybrid_heat_pump (†, an explicit assembly
+                                                    # importing generator/air_source_heat_pump + generator/gas_boiler, §2.5),
+                                                    # electric_heating, district_heating, solid_fuel_boiler (†, hisim-vsq0.2)
     preset: ie_typical
     installation_year: 2012                         # R: heating.installation_year (reserved field, economics)
     parameters:
       scop_en14825_w35: 4.1                         # R: heatpump_scop_en14825_w35 (heat pumps only)
       scop_en14825_w55: 3.2                         # R: heatpump_scop_en14825_w55
-      # seasonal_efficiency_in_percent: 92          # R: seasonal_efficiency_in_percent (boilers only; inactive here)
+      # seasonal_efficiency_in_percent: 92          # R: seasonal_efficiency_in_percent (boilers only; not a parameter here)
       with_buffer: true                             # D12 (b): the buffer lives in the heating assembly
       buffer_volume_in_liter: AUTO                  # sized to the generator
       thermal_power_in_watt: AUTO                   # sized from Building.heat_load (sizing_fact port)
+      serves_dhw: false                             # hot water comes from the storage water heater below
+      control: smart                                # R: temperature_control.type_of_system;
+                                                    # M: temperature_control_system (a parameter, not an import; † preset)
     bind:
-      sh: HeatDistribution.sh_return                # hydronic_circuit, medium heating_water
+      sh: HeatDistribution.sh                       # hydronic_circuit, heating_water: buffer <-> HDS
+      flow_temperature: HeatDistributionController.flow_temperature
       electricity: grid                             # energy_carrier_supply (a boiler would bind `fuel: gas`)
-      electricity_use: control                      # controllable port -> the EMS (explicit intent, D8 i)
+      ems_modifier: control                         # the EMS raises the L1 set points on surplus (D21); makes both
+                                                    # electricity ports controlled feeds (weights 2 and 3)
 
-  # ---- secondary room heating: R: heating.secondary (†). Direct heat into the thermal zone, no circuit.
+  # ---- secondary room heating: R: heating.secondary (†). One named Building input (D19), no circuit.
   stove:
     assembly: heating_secondary/wood_stove          # or open_fireplace, electric_heater
     installation_year: 2005
     parameters: {thermal_power_in_watt: 6000, operating_schedule: evenings_heating_season}
-    bind: {room_heat: Building.thermal_zone, fuel: logs}
+    bind: {room_heat: Building.secondary_heating, room_temperature: Building.zone, fuel: logs}
 
   # ---- cooking: R: heating.cooking_range (†): a gas hob's consumption on the gas supply, no heat model.
   cooker: {assembly: appliances/gas_cooker, installation_year: 2010, bind: {fuel: gas, usage: Occupancy}}
 
   # ---- hot water: the assembly chosen by R: hot_water.type_of_system (#85) / M: hot_water_system
   dhw:
-    assembly: dhw/storage_water_heater              # one of: from_space_heating_combi, from_space_heating_cylinder,
+    assembly: dhw/storage_water_heater              # one of: from_space_heating_combi, from_space_heating_cylinder
+                                                    # (dhw/indirect_cylinder, binds `circuit: heating.dhw`),
                                                     # storage_water_heater, instantaneous_water_heater (†),
                                                     # heat_pump_water_heater (†, nested), district_heating, none (no import)
     installation_year: 2015
@@ -141,10 +174,10 @@ imports:
     bind:
       hot_water_demand: Occupancy.hot_water_demand
       electricity: grid                             # inactive when energy_carrier is a fuel; then `fuel: gas`
-      heater_electricity: control                   # optional: the EMS actuates the immersion heater on PV surplus
-      # an indirect cylinder binds `charge: heating.dhw` instead (the generator's dhw hydronic_circuit)
+      ems_modifier: control                         # the EMS raises the immersion thermostat on PV surplus
+                                                    # († EMS has no ELECTRIC_HEATING_DHW modifier yet, gap G5)
 
-  # ---- solar thermal: R: house.solar_thermal_system / M: solar_thermal_system (problem B: two circuits into two imports)
+  # ---- solar thermal: R: house.solar_thermal_system / M: solar_thermal_system (two coils into two imports)
   solar_thermal:
     assembly: heating/solar_thermal
     installation_year: 2016
@@ -154,10 +187,10 @@ imports:
       area_in_m2: 6                                 # R: area_m2
       storage_volume_in_liter: 400                  # R: storage_volume_in_liter (its own buffer, or none)
     bind:
-      dhw_coil: dhw.solar_coil                      # optional PROVIDED port on the DHW tank; combi has none -> load error
-      sh_coil: heating.solar_coil                   # optional provided port on the heating buffer
+      dhw_coil: dhw.solar_coil                      # optional PROVIDED port on the DHW tank (D20); combi has none
+      sh_coil: heating.solar_coil                   # optional provided port on the heating buffer (D20)
       pump_electricity: grid
-      pump_electricity_use: none                    # not EMS-controlled
+      ems_modifier: none                            # SOLAR_THERMAL_SYSTEM could be EMS-ranked (weight 4); declined
 
   # ---- ventilation: R: ventilation.type_of_system / M: ventilation_system (†: natural and trickle vents are site
   #      config of the Building; the mechanical systems are equipment with a year and a price -> assemblies)
@@ -165,14 +198,15 @@ imports:
     assembly: ventilation/mechanical_with_heat_recovery   # or mechanical_extract, demand_controlled_extract
     installation_year: 2024
     parameters: {heat_recovery_efficiency_in_percent: 85}
-    bind: {air_exchange: Building.thermal_zone, electricity: grid, electricity_use: none}
+    bind: {air_exchange: Building.ventilation, zone: Building.zone, electricity: grid}
 
-  # ---- air conditioning: R: house.air_conditioning / M: air_conditioners (†). Direct cooling into the zone.
+  # ---- air conditioning: R: house.air_conditioning / M: air_conditioners. One unit (the request allows one, D19);
+  #      SimpleAirConditioner exists, its Building input (†) does not.
   cooling:
     assembly: cooling/split_unit
-    instances:
-      living_room: {installation_year: 2021, parameters: {power_in_watt: 3500}}      # R: power_in_watt
-    bind: {room_cooling: Building.thermal_zone, electricity: grid, electricity_use: control}
+    installation_year: 2021
+    parameters: {power_in_watt: 3500}               # R: power_in_watt
+    bind: {room_cooling: Building.cooling, zone: Building.zone, electricity: grid}   # not controllable (no L1 modifier)
 
   # ---- photovoltaics: R: house.pv_systems[] (#83, list with ids) / M: photovoltaic_system (replaces | adds)
   pv:
@@ -185,10 +219,9 @@ imports:
       roof_east:                                    # added by M: photovoltaic_system (no `replaces`)
         installation_year: 2026
         quote: {amount_in_euro: {min: 7500, max: 9600}, per: unit, source: "installer quote 2026-03"}  # M: cost (D22)
-        parameters: {azimuth_in_degree: 90, tilt_in_degree: 35, size_in_percent_of_roof_area: 30,
-                     shading_losses_in_percent: 0}  # exactly_one_of: [power_in_watt, size_in_percent_of_roof_area]
-    bind: {production: grid}                        # link: electricity_flow production -> the grid's bus; the grid's
-                                                    # meter and the EMS observe it (spec §4.3)
+        parameters: {azimuth_in_degree: 90, tilt_in_degree: 35, share_of_roof_area: 0.30,
+                     shading_losses_in_percent: 0}  # at_most_one_of: [power_in_watt, share_of_roof_area]
+    bind: {production: grid}                        # link: electricity_flow production -> the bus (held by the EMS)
 
   # ---- batteries: R: house.batteries[] / M: battery_system (replaces | adds)
   battery:
@@ -196,37 +229,33 @@ imports:
     instances:
       main: {installation_year: 2026,
              parameters: {capacity_in_kwh: AUTO, power_in_watt: AUTO, days_to_cover: 1}}   # R: capacity | days_to_cover
-    bind: {electricity: grid, charge_control: control}    # required: a battery without a controller is refused
+    bind: {electricity: grid}                       # link to the bus; its controllable side is REQUIRED and binds the
+                                                    # one controller (§4.4): LoadingPowerInput, weight 6
 
-  # ---- electric vehicles: R: house.electric_vehicles (number 1..2) / M: electric_vehicle (†: 2 cars)
+  # ---- electric vehicles: R: house.electric_vehicles (number 1..2) / M: electric_vehicle (†: 2 cars, G12)
   ev:
     assembly: mobility/electric_vehicle
     instances:
       car_1: {installation_year: 2023, parameters: {commuting_distance_in_km: 20, charging_power_in_watt: 11000}}
       car_2: {installation_year: 2026, parameters: {commuting_distance_in_km: 10, charging_power_in_watt: 3700}}
-    bind: {usage: Occupancy.car_usage, electricity: grid, charging_control: control}
+    bind: {usage: Occupancy.car_usage, electricity: grid, ems_modifier: control}   # weights 5 and 6 -> battery 7
 
-  # ---- control: two controllers of two domains (problem D)
-  control:                                          # electricity: EMS. Present when anything is controllable.
+  # ---- control: the L2 EMS. Present when anything is controllable. Smart HEATING control is not here: it is the
+  #      heating import's `control:` parameter (its L1, D21); there is no thermostat import.
+  control:
     assembly: control/ems_self_consumption          # R: occupancy.pv_self_consumption_optimised selects the policy
-    observes: [{connector: electricity_flow}]       # reads production and consumption; the bus stays the grid's,
-                                                    # the lowering places its sum on the EMS (spec §4.3)
+    observes: [{connector: electricity_flow}]       # it holds the bus while it exists (spec §4.3)
     parameters:
       priorities:                                   # what it actuates, in order (D11); default shown
         - {connector: electricity_flow, component_type: RESIDENTS}
         - {connector: electricity_flow, component_type: [HEAT_PUMP_BUILDING, ELECTRIC_HEATING_SH]}
         - {connector: electricity_flow, component_type: [HEAT_PUMP_DHW, ELECTRIC_HEATING_DHW]}
+        - {connector: electricity_flow, component_type: SOLAR_THERMAL_SYSTEM}
+        - {connector: electricity_flow, component_type: CAR_BATTERY}
         - {connector: electricity_flow, component_type: BATTERY}
-        - {connector: electricity_flow, component_type: ELECTRIC_VEHICLE}
-        - {connector: electricity_flow, component_type: AIR_CONDITIONER}
-  thermostats:                                      # heating set points. R: temperature_control.type_of_system /
-    assembly: control/smart_heating_control         # M: temperature_control_system (†; or control/traditional_thermostats)
-    installation_year: 2026
-    observes: [{connector: building_thermal, signal: indoor_air_temperature}]   # the building temperature
-    actuates: {set_points: HeatDistributionController.SetPoint}                # exactly one heating controller (D21)
 
   # ---- supplies: one provider per carrier the house draws (D6: missing provider fails; the translator adds it)
-  grid:  {assembly: supply/electricity_grid}        # the bus (link end of every electricity flow) and its meter
+  grid:  {assembly: supply/electricity_grid}        # the bus (yielded to the EMS here) and its meter (observes grid_net)
   gas:   {assembly: supply/gas_connection}          # present because the cooker draws gas (a boiler house too)
   logs:  {assembly: supply/delivered_fuel, parameters: {carrier: wood_logs}}   # pellets, wood chips, oil, HVO (†), LPG (†)
   # heat_network: {assembly: supply/district_heating_connection}   # when heating or dhw is district heating

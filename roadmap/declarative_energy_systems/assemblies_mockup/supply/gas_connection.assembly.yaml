@@ -1,0 +1,30 @@
+# Mockup (design, not loadable): energy_systems/assemblies/supply/gas_connection.assembly.yaml
+# The natural-gas connection point and its meter (spec §5.1). Today GasMeter both reads the burner's fuel output and
+# is its energy-balance peer (generic_boiler.py:450, :501; gas_meter.py default feeds from GenericBoiler.EnergyDemandSh
+# and .EnergyDemandDhw). Its carrier is pinned here, from the provider, instead of copied from "the generator beside it"
+# through the energy_carrier fact (gas_meter.py:63-68), which a gas cooker beside a gas boiler makes ambiguous.
+
+schema_version: 4
+kind: assembly
+name: supply/gas_connection
+description: Natural-gas grid connection with its meter.
+
+parameters: {}
+presets:
+  de_twin: {}
+
+components:
+  GasMeter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard
+    config:
+      gas_loadtype: GAS                                    # pinned, not sized from the energy_carrier fact
+    inputs:
+      - {$link: connection}                                # one feed per bound consumer (EnergyDemandSh, EnergyDemandDhw, †cooker)
+
+interface:
+  provides:
+    connection:
+      connector: energy_carrier_supply
+      carrier: NATURAL_GAS                                 # lt.EnergyBalanceCarrier; every bound consumer is checked against it
+      holder: GasMeter                                     # link end and observer in one component, as today

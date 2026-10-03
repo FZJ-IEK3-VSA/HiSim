@@ -1,0 +1,45 @@
+# Mockup (design, not loadable): energy_systems/assemblies/heating_secondary/wood_stove.assembly.yaml
+# † Everything here: no stove component, no wood-log carrier, no Building input for a secondary heater.
+# Request leaf heating.secondary (cardinality one). D19: the Building gains ONE named input of this kind,
+# `ThermalPowerSecondaryHeating` (†), when the component exists — as the CHP channel did (building.py:251-257); a
+# second secondary heater is refused. Siblings: heating_secondary/open_fireplace, heating_secondary/electric_heater.
+
+schema_version: 4
+kind: assembly
+name: heating_secondary/wood_stove
+description: A room stove burning logs, heating the zone directly by its own L1 thermostat or schedule.
+
+parameters:
+  thermal_power_in_watt:
+    {type: float, unit: WATT, default: 6000, description: Nominal heat output.}
+  operating_schedule:
+    {type: enum, values: [evenings_heating_season, thermostat, always_heating_season], default: evenings_heating_season,
+     description: When the occupants light it; fixed by the author of each option (no control theory in the format).}
+  efficiency_in_percent:
+    {type: float, unit: PERCENT, default: 75, description: Seasonal efficiency of the stove.}
+
+presets:
+  typical_6kw: {}
+
+components:
+  Stove:
+    class: hisim.components.wood_stove.WoodStove                    # †
+    preset: standard
+    config:
+      rated_thermal_power_in_watt: {$param: thermal_power_in_watt}
+      efficiency_in_percent: {$param: efficiency_in_percent}
+    inputs: [StoveController]
+  StoveController:                                                  # † L1: schedule or thermostat, hardcoded
+    class: hisim.components.wood_stove.WoodStoveController
+    preset: {$param: operating_schedule}
+    inputs:
+      - {$port: room_temperature}
+
+interface:
+  needs:
+    fuel:             {connector: energy_carrier_supply, carrier: wood_logs, outputs: [fuel_use]}     # † carrier
+    room_temperature: {connector: building_thermal, quantity: indoor_air_temperature, into: [StoveController]}
+  provides:
+    room_heat: {connector: zone_heat, kind: secondary_heating, output: Stove.ThermalPowerDelivered}
+               # one wire into Building.ThermalPowerSecondaryHeating (†, D19)
+    fuel_use:  {connector: energy_carrier_supply, output: Stove.FuelEnergyDemand, carrier: wood_logs}

@@ -1,0 +1,58 @@
+# Mockup (design, not loadable): energy_systems/assemblies/heating/solar_thermal.assembly.yaml
+# Collectors with their L1 pump controller (SolarThermalSystem, SolarThermalSystemController exist,
+# solar_thermal_system.py:219, :939). Today the collector is coupled to ONE SimpleDHWStorage through default connections
+# (its inlet temperature from WaterTemperatureToHeatGenerator, the controller from WaterMeanTemperatureInStorage) and
+# charges the tank's primary generator inputs; a coil into the SECONDARY inputs of a DHW tank and of a heating buffer
+# (both classes have them) is hydronic stage C/D work (spec §11.1). `supplies: dhw_and_space_heating` needs a valve
+# assembly with one circuit per branch (spec §11.1), not written here.
+
+schema_version: 4
+kind: assembly
+name: heating/solar_thermal
+description: Solar thermal collectors with their pump controller, charging a DHW tank and optionally the SH buffer.
+
+parameters:
+  supplies:
+    {type: enum, values: [dhw_only, dhw_and_space_heating], default: dhw_only, description: Which stores the loop charges.}
+  collector_type:
+    {type: enum, values: [flat_plate, evacuated_tube], default: flat_plate,
+     description: "Collector type; evacuated_tube is † (only preset_flat_plate exists)."}
+  area_in_m2:
+    {type: float, unit: SQUARE_METER, default: 6, description: Aperture area.}
+  storage_volume_in_liter:
+    {type: float, unit: LITER, default: none, description: "A dedicated solar store († not modelled; the coils charge the existing tanks)."}
+
+presets:
+  flat_plate_6m2: {}
+
+components:
+  Collector:
+    class: hisim.components.solar_thermal_system.SolarThermalSystem
+    preset: flat_plate
+    config: {area_m2: {$param: area_in_m2}}                # suffix `_m2` without `_in_`: gap G10
+    inputs:
+      - {$port: weather}
+      - Controller                                         # ControlSignal
+      - {$port: dhw_coil}                                  # TemperatureCollectorInletDegC
+  Controller:
+    class: hisim.components.solar_thermal_system.SolarThermalSystemController
+    preset: standard
+    inputs:
+      - Collector                                          # CollectorTemperature, MassFlow
+      - {$port: dhw_coil}                                  # MeanWaterTemperatureInStorage
+
+interface:
+  needs:
+    weather:     {connector: weather_data, into: [Collector]}
+    dhw_coil:    {connector: hydronic_circuit, medium: solar_fluid, end: {pump: true, legs: [supply]},
+                  into: [Collector, Controller]}
+    sh_coil:     {connector: hydronic_circuit, medium: solar_fluid, end: {pump: true, legs: [supply]},
+                  into: [Collector], required_when: {supplies: [dhw_and_space_heating]},
+                  active_when: {supplies: [dhw_and_space_heating]}}                      # † valve assembly
+    pump_electricity: {connector: energy_carrier_supply, carrier: ELECTRICITY, outputs: [pump_electricity_use]}
+  provides:
+    pump_electricity_use: {connector: electricity_flow, output: Collector.ElectricityConsumptionOutput,
+                           flow: consumption, component_type: SOLAR_THERMAL_SYSTEM, controllable: {via: ems_modifier}}
+    ems_modifier: {connector: control_signal, signal: none, optional: true}
+                  # the EMS ranks SOLAR_THERMAL_SYSTEM (weight 4, dispatch {}) but has no modifier for it: binding it
+                  # only makes the feed controlled (an EMS-side decision, D21)

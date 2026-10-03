@@ -1,0 +1,96 @@
+# Mockup (design, not loadable): the composed base file for the heat-pump generator with DEFAULTS — the site with the
+# twin's site values (D9: Aachen weather, the German single-family-home preset, couple_both_at_work) plus the imports
+# that should reproduce energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml, option
+# `ems_with_battery`. Expanded by hand in dry_run_heatpump_twin.md into expanded_heatpump_default.energy_system.yaml.
+#
+# Site component names are the twin's, so the rename map touches only imported members. `{$provides: <port>}` in a
+# site entry's `inputs` marks where a bound port's wires land (gap G3), like `{$port: ...}` inside an assembly.
+
+schema_version: 4
+name: household_heatpump_building_sizer
+description: Basic household new system setup.
+
+components:
+  Building:
+    class: hisim.components.building.building.Building
+    preset: german_single_family_home
+    config:
+      number_of_apartments: 1.0
+      enable_opening_windows: true
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+    inputs:
+      - Weather
+      - {$provides: temperature_offset}
+      - UTSPConnector
+      - HeatDistributionSystem
+    provides:
+      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
+                           input: BuildingTemperatureModifier, optional: true, bind: control}     # gap G13
+      zone:               {connector: building_thermal}
+      heat_load:          {connector: sizing_fact, fact: heating_load_in_watt}
+      apartments:         {connector: sizing_fact, fact: number_of_apartments}
+      roof_area:          {connector: sizing_fact, fact: roof_area_in_m2}
+      room_setpoint:      {connector: sizing_fact, fact: set_heating_temperature_in_celsius}
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+    config:
+      data_acquisition_mode: USE_LOCAL_LPG
+    provides:
+      electricity_use:  {connector: electricity_flow, output: ElectricalPowerConsumption, flow: consumption,
+                         component_type: RESIDENTS, controllable: {}, bind: control}                  # gap G13
+      hot_water_demand: {connector: hot_water_demand}
+      internal_gains:   {connector: internal_gains}
+  Weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      data_source: DWD_TRY
+      heating_reference_temperature_in_celsius: -7.0
+      predictive_control: false
+    provides:
+      weather:            {connector: weather_data}
+      design_temperature: {connector: sizing_fact, fact: heating_reference_temperature_in_celsius}
+      weather_id:         {connector: sizing_fact, fact: weather_identity}
+  HeatDistributionController:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: building_derived
+    inputs:
+      - {$provides: temperature_offset}
+      - Weather
+      - Building
+    provides:
+      flow_temperature:   {connector: control_signal, signal: heating_flow_temperature, output: HeatingFlowTemperature}
+      temperature_offset: {connector: control_signal, signal: building_temperature_offset,
+                           input: BuildingTemperatureModifier, optional: true, bind: control}     # gap G13
+      emitter_type:       {connector: sizing_fact, fact: heat_distribution_system_type}
+      heating_threshold:  {connector: sizing_fact, fact: set_heating_threshold_outside_temperature_in_celsius}
+  HeatDistributionSystem:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: building_derived
+    inputs:
+      - Building
+      - HeatDistributionController
+      - {$provides: sh}
+    provides:
+      sh: {connector: hydronic_circuit, medium: heating_water, end: {pump: true, legs: [return]}}
+
+imports:
+  heating:
+    assembly: heating/air_source_heat_pump          # parameter defaults = the twin (preset de_twin)
+    bind: {ems_modifier: control}                   # optional port with a candidate: intent required (D8 i);
+                                                    # sh, flow_temperature, weather, electricity bind their one partner
+  dhw:
+    assembly: dhw/indirect_cylinder
+    bind: {circuit: heating.dhw}
+  pv:
+    assembly: pv/array
+    instances: {pv_system: {}}                      # the legacy single object's id (spec §10.4)
+  battery:
+    assembly: storage/battery
+    instances: {battery: {}}
+  control:
+    assembly: control/ems_self_consumption
+  grid:
+    assembly: supply/electricity_grid

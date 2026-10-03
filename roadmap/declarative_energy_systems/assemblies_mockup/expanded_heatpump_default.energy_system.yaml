@@ -1,0 +1,175 @@
+# Mockup (design, written by hand): the flat file the expansion of composed_heatpump_default.energy_system.yaml
+# produces, step by step in dry_run_heatpump_twin.md. It is a plain v3 file — no imports, no ports — and is compared
+# there with energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml, option ems_with_battery.
+# Component order is the expansion's: site entries in file order, then each import's members in assembly order, an
+# internal variant's members after the assembly's own (as group expansion appends a variant's, groups.py:265).
+# The import record (metadata.imports) is shown at the end as a comment; it is data beside the file (spec §2.3, §9.1).
+
+schema_version: 3
+name: household_heatpump_building_sizer
+description: Basic household new system setup.
+components:
+  Building:
+    class: hisim.components.building.building.Building
+    preset: german_single_family_home
+    config:
+      number_of_apartments: 1.0
+      enable_opening_windows: true
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+    inputs:
+      - Weather
+      - control__EMS                                # Building.temperature_offset (bare: one default connection)
+      - UTSPConnector
+      - HeatDistributionSystem
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+    config:
+      data_acquisition_mode: USE_LOCAL_LPG
+  Weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      data_source: DWD_TRY
+      heating_reference_temperature_in_celsius: -7.0
+      predictive_control: false
+  HeatDistributionController:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: building_derived
+    inputs:
+      - control__EMS                                # HeatDistributionController.temperature_offset
+      - Weather
+      - Building
+  HeatDistributionSystem:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: building_derived
+    inputs:
+      - Building
+      - HeatDistributionController
+      - heating__Buffer                             # sh circuit: WaterTemperatureInput <- WaterTemperatureToHeatDistribution
+  heating__ControllerSH:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    preset: standard
+    inputs:
+      - Weather                                     # heating.weather
+      - HeatDistributionController                  # heating.flow_temperature
+      - control__EMS                                # heating.ems_modifier (sh_storage_temperature_offset)
+      - heating__Buffer
+  heating__HeatPump:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    preset: air_water
+    config:
+      with_domestic_hot_water_preparation: true     # serves_dhw; AUTO power and `none` SCOPs write nothing (G9)
+    inputs:
+      - heating__ControllerDHW
+      - heating__ControllerSH
+      - dhw__DHWStorage                             # heating.dhw <-> dhw.circuit, return leg
+      - heating__Buffer
+      - input: TemperatureAmbient                   # heating.weather: explicit, the class's weather defaults
+        from: Weather.DailyAverageOutsideTemperatures   # cover TemperatureAmbient only (G2)
+      - input: TemperatureInputPrimary
+        from: Weather.DailyAverageOutsideTemperatures
+  heating__ControllerDHW:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    preset: standard
+    inputs:
+      - control__EMS                                # heating.ems_modifier (dhw_storage_temperature_offset)
+      - dhw__DHWStorage                             # heating.dhw, return leg read by the L1
+  heating__Buffer:
+    class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+    preset: buffer
+    config:
+      sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
+    inputs:
+      - HeatDistributionSystem                      # sh circuit: return temperature and mass flow (the HDS's)
+      - heating__HeatPump
+  dhw__DHWStorage:
+    class: hisim.components.simple_water_storage.SimpleDHWStorage
+    preset: standard
+    inputs:
+      - UTSPConnector                               # dhw.hot_water_demand
+      - heating__HeatPump                           # dhw.circuit: supply leg and mass flow (the heat pump's)
+  pv__pv_system__PVSystem:
+    class: hisim.components.generic_pv_system.PVSystem
+    preset: rooftop
+    config:
+      location: AACHEN
+    inputs:
+      - Weather
+  battery__battery__Battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    preset: sized_to_pv                             # one PV provider: no sizing_sources line (G7)
+  control__EMS:
+    class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+    preset: optimize_own_consumption
+    inputs:                                         # the bus: every linked electricity flow (spec §4.3)
+      - from: battery__battery__Battery.AcBatteryPowerUsed
+        component_type: BATTERY
+        tags:
+          - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+        weight: 6
+        dispatch:
+          target_input: LoadingPowerInput
+      - from: heating__HeatPump.ElectricalInputPowerDHW
+        component_type: HEAT_PUMP_DHW
+        tags:
+          - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+        weight: 3
+        dispatch: {}
+      - from: heating__HeatPump.ElectricalInputPowerSH
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+        weight: 2
+        dispatch: {}
+      - from: pv__pv_system__PVSystem.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
+        component_type: RESIDENTS
+        tags:
+          - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+        weight: 1
+        dispatch: {}
+  grid__ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: control__EMS.TotalElectricityToOrFromGrid   # grid.reading observes control.grid_net
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+
+# metadata.imports (the import record, spec §2.3 step 5; abbreviated):
+#   heating:  {assembly: heating/air_source_heat_pump, sha256: <hash>, preset: null,
+#              parameters: {thermal_power_in_watt: AUTO, scop_en14825_w35: none, scop_en14825_w55: none,
+#                           with_buffer: true, buffer_volume_in_liter: AUTO, serves_dhw: true, control: traditional},
+#              variants: {dhw_side: with_dhw, buffer: parallel},
+#              members: {ControllerSH: heating__ControllerSH, HeatPump: heating__HeatPump,
+#                        ControllerDHW: heating__ControllerDHW, Buffer: heating__Buffer},
+#              ports: {weather: Weather (default), flow_temperature: HeatDistributionController.flow_temperature
+#                      (default), sh: HeatDistributionSystem.sh (default), electricity: grid.connection (default),
+#                      dhw: dhw.circuit (bound by dhw), electricity_sh: bus control__EMS, weight 2,
+#                      electricity_dhw: bus control__EMS, weight 3, ems_modifier: control (written),
+#                      solar_coil: unbound (optional, no candidate), heat_load: Building, design_temperature: Weather,
+#                      room_setpoint: Building, emitter_type: HeatDistributionController,
+#                      heating_threshold: HeatDistributionController}}
+#   dhw:      {assembly: dhw/indirect_cylinder, parameters: {volume_in_liter: AUTO, tank_and_pipe_insulated: true},
+#              members: {DHWStorage: dhw__DHWStorage},
+#              ports: {hot_water_demand: UTSPConnector (default), circuit: heating.dhw (written),
+#                      apartments: Building (default), solar_coil: unbound (optional, no candidate)}}
+#   pv:       {assembly: pv/array, instances: {pv_system: {parameters: <all defaults>,
+#              members: {PVSystem: pv__pv_system__PVSystem},
+#              ports: {weather: Weather, roof_area: Building, weather_id: Weather,
+#                      production: bus control__EMS, 999}}}}
+#   battery:  {assembly: storage/battery, instances: {battery: {members: {Battery: battery__battery__Battery},
+#              ports: {pv_peak_power: [pv__pv_system__PVSystem] (no line written), electricity: bus control__EMS,
+#                      controller control__EMS, weight 6}}}}
+#   control:  {assembly: control/ems_self_consumption, members: {EMS: control__EMS}, holds: bus,
+#              weights: {UTSPConnector.electricity_use: 1, heating.electricity_sh: 2, heating.electricity_dhw: 3,
+#                        battery.battery.electricity: 6}}
+#   grid:     {assembly: supply/electricity_grid, members: {ElectricityMeter: grid__ElectricityMeter},
+#              bus: yielded to control, reading: control.grid_net}

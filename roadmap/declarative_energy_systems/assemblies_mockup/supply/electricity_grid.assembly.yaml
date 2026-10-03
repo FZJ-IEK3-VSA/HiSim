@@ -1,0 +1,45 @@
+# Mockup (design, not loadable): energy_systems/assemblies/supply/electricity_grid.assembly.yaml
+# The grid connection: the electricity BUS (the link end of every electricity flow, spec §4.3) and the METER that
+# observes it. Today's ElectricityMeter conflates both: it sums its production and consumption channels
+# (electricity_meter.py:504, :520) and books the difference as grid exchange.
+#
+# Bus placement (spec §4.3), the one rule that makes both twin shapes come out of one file:
+#  - no controller import holds the bus -> the meter holds it: every linked flow is a meter feed
+#    (twin option `metered_directly`, :147-171);
+#  - a controller import holds it (control/ems_self_consumption `holds: bus`) -> every linked flow is a feed of the
+#    EMS, and the meter observes only the controller's `grid_net` (twin option `ems_with_battery`, :102-109).
+# Dry-run gap G4: this makes the meter's wiring depend on the presence of another import, which D8's principle
+# ("adding one import never silently changes another") forbids unless the rule is written down as the exception or
+# the grid import states it (`bind: {bus: control}`).
+
+schema_version: 4
+kind: assembly
+name: supply/electricity_grid
+description: Public grid connection with its bidirectional meter.
+
+parameters: {}
+presets:
+  de_twin: {}
+
+components:
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - {$bus: feeds_or_net}                               # all linked flows, or the holder's grid_net
+
+interface:
+  provides:
+    bus:
+      connector: electricity_bus
+      holder: ElectricityMeter
+      yields_to: controller                                # a `holds: bus` import takes it over
+      carrier: electricity                                 # the provider of every electricity energy_carrier_supply need
+    connection:
+      connector: energy_carrier_supply
+      carrier: ELECTRICITY
+  observes:
+    reading:
+      into: [ElectricityMeter]
+      selectors: [{connector: electricity_flow, flow: net}]   # active only when a controller holds the bus
+      feed: {tags: [ELECTRICITY_PRODUCTION], weight: 999}     # the twin's line :106-109, verbatim

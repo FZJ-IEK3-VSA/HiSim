@@ -10,9 +10,9 @@ imports nothing but :mod:`kpi_structure`.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, Union
 
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource, KpiTagEnumClass
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,8 @@ class KpiFinder:
 
     The collection is nested ``building -> tag -> key -> entry dict``: ``all_kpis.json`` as
     loaded, or ``KpiGenerator.kpi_collection_dict_sorted`` in process. Every filter is optional
-    and exact; ``source`` matches ``source.name``. The finder reads each entry's source from the
+    and exact; ``source`` matches ``source.name``, and ``tag`` takes a ``KpiTagEnumClass`` member
+    or its string value. The finder reads each entry's source from the
     entry (:meth:`KpiSource.from_entry_dict`), never from its key, and checks on construction that
     every key is the one its entry's address produces, so a collection whose keys and entries
     disagree is refused rather than half-read. A JSON written before the source existed is read
@@ -74,28 +75,62 @@ class KpiFinder:
         sorted_collection: ``building -> tag -> key -> entry``.
 
     Raises:
-        ValueError: If a level is not a mapping, an entry has no ``name``, or a key differs from
-            the key its entry's address produces.
+        ValueError: If the collection or a level of it is not a mapping, an entry has no ``name``
+            or no ``value``, or a key differs from the key its entry's address produces.
     """
 
     def __init__(self, sorted_collection: Mapping[str, Mapping[Any, Mapping[str, Mapping[str, Any]]]]) -> None:
         """Index every entry of the collection by its address."""
+        if not isinstance(sorted_collection, Mapping):
+            raise ValueError(
+                f"all_kpis.json holds a JSON {self._json_type(sorted_collection)}, not a KPI collection "
+                "(an object of building -> tag -> key -> entry)."
+            )
         self._entries: List[Tuple[KpiAddress, Mapping[str, Any]]] = []
         for building, tags in sorted_collection.items():
             if not isinstance(tags, Mapping):
                 raise ValueError(f"KPI collection: building '{building}' does not hold a mapping of tags.")
             for tag, entries in tags.items():
-                tag_name = str(getattr(tag, "value", tag))
+                tag_name = self._tag_name(tag)
                 if not isinstance(entries, Mapping):
                     raise ValueError(f"KPI collection: {building}.{tag_name} does not hold a mapping of entries.")
                 for key, entry in entries.items():
                     self._entries.append((self._address_of(building, tag_name, key, entry), entry))
 
     @staticmethod
+    def _json_type(document: Any) -> str:
+        """The JSON name of a parsed document's type, for the message refusing it."""
+        if document is None:
+            return "null"
+        if isinstance(document, bool):
+            return "boolean"
+        if isinstance(document, (int, float)):
+            return "number"
+        if isinstance(document, str):
+            return "string"
+        if isinstance(document, (list, tuple)):
+            return "list"
+        return type(document).__name__
+
+    @staticmethod
+    def _tag_name(tag: Any) -> str:
+        """A tag as the JSON writes it: a ``KpiTagEnumClass`` member's value, or the string itself.
+
+        The one normalisation for the tags the index stores and the tag a caller filters by, so
+        ``tag=KpiTagEnumClass.BATTERY`` and ``tag="Battery"`` select the same entries.
+        """
+        return str(getattr(tag, "value", tag))
+
+    @staticmethod
     def _address_of(building: str, tag: str, key: str, entry: Any) -> KpiAddress:
         """The address of one entry, refusing an entry whose key is not the one its address produces."""
         if not isinstance(entry, Mapping) or not isinstance(entry.get("name"), str):
             raise ValueError(f"KPI collection: {building}.{tag}.{key} is not a KPI entry with a name.")
+        if "value" not in entry:
+            raise ValueError(
+                f"KPI collection: {building}.{tag}.{key} has no 'value' and so is not a KPI entry; "
+                "an entry whose value is not known carries \"value\": null."
+            )
         address = KpiAddress(
             building=str(building), tag=tag, name=entry["name"], source=KpiSource.from_entry_dict(entry)
         )
@@ -114,7 +149,7 @@ class KpiFinder:
     def _matching(
         self,
         building: Optional[str] = None,
-        tag: Optional[str] = None,
+        tag: Optional[Union[str, KpiTagEnumClass]] = None,
         name: Optional[str] = None,
         source: Optional[str] = None,
         import_key: Optional[str] = None,
@@ -131,10 +166,11 @@ class KpiFinder:
             "assembly": assembly,
         }
         wanted_source_fields = {field: value for field, value in source_filters.items() if value is not None}
+        wanted_tag = None if tag is None else self._tag_name(tag)
         for address, entry in self._entries:
             if building is not None and address.building != building:
                 continue
-            if tag is not None and address.tag != tag:
+            if wanted_tag is not None and address.tag != wanted_tag:
                 continue
             if name is not None and address.name != name:
                 continue
@@ -149,7 +185,7 @@ class KpiFinder:
         self,
         *,
         building: Optional[str] = None,
-        tag: Optional[str] = None,
+        tag: Optional[Union[str, KpiTagEnumClass]] = None,
         name: Optional[str] = None,
         source: Optional[str] = None,
         import_key: Optional[str] = None,
@@ -167,7 +203,7 @@ class KpiFinder:
         self,
         *,
         building: Optional[str] = None,
-        tag: Optional[str] = None,
+        tag: Optional[Union[str, KpiTagEnumClass]] = None,
         name: Optional[str] = None,
         source: Optional[str] = None,
         import_key: Optional[str] = None,
@@ -182,7 +218,7 @@ class KpiFinder:
         self,
         *,
         building: Optional[str] = None,
-        tag: Optional[str] = None,
+        tag: Optional[Union[str, KpiTagEnumClass]] = None,
         name: Optional[str] = None,
         source: Optional[str] = None,
         import_key: Optional[str] = None,
@@ -201,7 +237,7 @@ class KpiFinder:
             return found[0]
         filters = {
             "building": building,
-            "tag": tag,
+            "tag": None if tag is None else self._tag_name(tag),
             "name": name,
             "source": source,
             "import_key": import_key,
@@ -219,7 +255,7 @@ class KpiFinder:
         self,
         *,
         building: Optional[str] = None,
-        tag: Optional[str] = None,
+        tag: Optional[Union[str, KpiTagEnumClass]] = None,
         name: Optional[str] = None,
         source: Optional[str] = None,
         import_key: Optional[str] = None,

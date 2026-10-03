@@ -684,14 +684,7 @@ class Component:
                         "behalf of another component carries that component's KpiSource."
                     )
                 kpi_entry.source = own_source
-            if kpi_entry.name_of_source_component is None:
-                kpi_entry.name_of_source_component = kpi_entry.source.name
-            if kpi_entry.name_of_source_component != kpi_entry.source.name:
-                raise ValueError(
-                    f"{self.component_name} reports the KPI '{kpi_entry.name}' with source "
-                    f"'{kpi_entry.source.name}' but name_of_source_component "
-                    f"'{kpi_entry.name_of_source_component}'; the deprecated field must equal source.name."
-                )
+            kpi_entry.require_consistent_source(where=self.component_name)
         return kpi_entries
 
     def kpi_source(self) -> KpiSource:

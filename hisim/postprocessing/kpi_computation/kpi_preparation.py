@@ -31,6 +31,10 @@ class KpiPreparation:
         #: The tag-sorted collection, ``building -> tag -> key -> entry``; set by ``KpiGenerator``
         #: once every KPI is computed, and read through :attr:`finder`.
         self.kpi_collection_dict_sorted: Optional[Dict[str, Dict[Any, Dict[str, Any]]]] = None
+        #: The finder over the sorted collection and the collection object it indexes; rebuilt by
+        #: :attr:`finder` only when ``kpi_collection_dict_sorted`` is reassigned.
+        self._finder: Optional[KpiFinder] = None
+        self._finder_collection: Optional[Dict[str, Dict[Any, Dict[str, Any]]]] = None
         # get important variables
         self.wrapped_components = self.post_processing_data_transfer.wrapped_components
         self.results = self.post_processing_data_transfer.results
@@ -42,6 +46,10 @@ class KpiPreparation:
     def finder(self) -> KpiFinder:
         """A :class:`KpiFinder` over the tag-sorted collection, the way to look a KPI up by its fields.
 
+        Built once per collection object: the index is rebuilt when ``kpi_collection_dict_sorted``
+        is assigned a new collection, not on every access. The sorted collection is complete when
+        it is assigned and is not changed in place afterwards.
+
         Raises:
             RuntimeError: If the collection has not been sorted yet: the finder reads what
                 ``all_kpis.json`` will hold, and a half-built collection is not that.
@@ -51,7 +59,10 @@ class KpiPreparation:
                 "The KPI collection is not sorted by tag yet; KpiGenerator sorts it once every KPI "
                 "is computed, and only then can it be searched."
             )
-        return KpiFinder(self.kpi_collection_dict_sorted)
+        if self._finder is None or self._finder_collection is not self.kpi_collection_dict_sorted:
+            self._finder = KpiFinder(self.kpi_collection_dict_sorted)
+            self._finder_collection = self.kpi_collection_dict_sorted
+        return self._finder
 
     def filter_results_according_to_postprocessing_flags(
         self,
@@ -697,10 +708,9 @@ class KpiPreparation:
         other_fuel_co2_in_kg: float = 0.0
         other_fuel_energy_consumption_kwh: float = 0.0
 
-        # Matched on the entry's own "name", never on the collection key: a key is qualified
-        # with the source component as soon as a second component of the building reports the
-        # same KPI name (see keyed_component_entries), and a meter's entries have to be found
-        # whether or not such a collision exists.
+        # Matched on the entry's own "name", never on the collection key: every component KPI's
+        # key is qualified with its source component (see keyed_component_entries), so a meter's
+        # entries are found by what they are, not by a key that names which meter reported them.
         # Summed rather than assigned, because a building may hold several meters of one tag --
         # an oil and a pellet fuel meter, say -- and each of them now keeps its own entry under a
         # qualified key. Assigning let whichever meter came last stand for all of them, so the
@@ -1905,7 +1915,8 @@ class KpiPreparation:
             ValueError: If an entry carries no source (entries collected through
                 :meth:`hisim.component.Component.component_kpi_entries` always do, so that is a
                 caller keying entries it built itself), if its deprecated
-                ``name_of_source_component`` differs from ``source.name``, if two entries name one
+                ``name_of_source_component`` is set and differs from ``source.name`` (an unset one
+                is filled from ``source.name``), if two entries name one
                 source name with different sources, or if two entries produce one key, which
                 means one component emitted the same KPI name twice and no consumer could have
                 read both of them.
@@ -1920,12 +1931,7 @@ class KpiPreparation:
                     "entry has to name the component it is reported for; collect entries through "
                     "Component.component_kpi_entries, which stamps it."
                 )
-            if entry.name_of_source_component != source.name:
-                raise ValueError(
-                    f"The component KPI entry '{entry.name}' names its source twice and differently: "
-                    f"source.name '{source.name}', name_of_source_component "
-                    f"'{entry.name_of_source_component}'. The deprecated field must equal source.name."
-                )
+            entry.require_consistent_source(where="Keying a building's component KPIs")
             known = sources_by_name.setdefault(source.name, source)
             if known != source:
                 raise ValueError(

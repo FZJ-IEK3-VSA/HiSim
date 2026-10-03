@@ -584,8 +584,9 @@ def _component_sources_from_json(raw: dict) -> Optional[Dict[str, KpiSource]]:
     non-component.
 
     Raises:
-        ValueError: If the field is present but not a map of subject to source object, or if a
-            source's name is not the subject it is filed under.
+        ValueError: If the field is present but not a map of subject to source object, if a source
+            lacks ``name`` or carries a key a source does not have (:meth:`KpiSource.from_json_object`),
+            or if a source's name is not the subject it is filed under.
     """
     if "component_sources" not in raw or raw["component_sources"] is None:
         return None
@@ -594,9 +595,7 @@ def _component_sources_from_json(raw: dict) -> Optional[Dict[str, KpiSource]]:
         raise ValueError(f"economic_inputs.json: component_sources is not an object: {entries!r}")
     sources: Dict[str, KpiSource] = {}
     for subject, source_raw in entries.items():
-        if not isinstance(source_raw, dict):
-            raise ValueError(f"economic_inputs.json: the source of '{subject}' is not an object: {source_raw!r}")
-        source = KpiSource.from_dict(source_raw)
+        source = KpiSource.from_json_object(source_raw, f"economic_inputs.json: component_sources['{subject}']")
         if source.name != subject:
             raise ValueError(
                 f"economic_inputs.json: component_sources files the source named '{source.name}' under "

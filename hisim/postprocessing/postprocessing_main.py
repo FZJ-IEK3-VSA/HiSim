@@ -1234,8 +1234,9 @@ class PostProcessor:
 
         Every field of the sizer JSON that is normalized per square metre divides by the
         "Conditioned floor area" KPI, which only a ``Building`` component produces. A building
-        object whose KPI collection carries no such entry therefore has no Building in the run,
-        and is skipped with one log line instead of writing a file the sizer cannot use.
+        object whose KPI collection carries no such entry, or carries it without a value, has no
+        computed Building in the run, and is skipped with one log line instead of writing a file
+        the sizer cannot use.
         """
 
         finder = KpiFinder(ppdt.kpi_collection_dict)
@@ -1250,8 +1251,15 @@ class PostProcessor:
             return finder.value(building=building_object, name=kpi_name)
 
         def building_kpis_were_computed(building_object: str) -> bool:
-            """Say whether a Building component contributed its own KPIs to this collection."""
-            return bool(finder.addresses(building=building_object, name=BUILDING_OWN_KPI_NAME))
+            """Say whether a Building component contributed its own KPIs to this collection.
+
+            True when the Building's own KPI exists and its value is not ``None``: a floor area
+            that was not computed cannot normalize anything either. Several entries of that name
+            in one building raise (:meth:`KpiFinder.value`).
+            """
+            if not finder.addresses(building=building_object, name=BUILDING_OWN_KPI_NAME):
+                return False
+            return finder.value(building=building_object, name=BUILDING_OWN_KPI_NAME) is not None
 
         kpi_dict = {}
 

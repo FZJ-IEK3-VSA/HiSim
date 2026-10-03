@@ -85,17 +85,15 @@ def test_the_source_serializes_under_the_exact_names_of_the_contract() -> None:
 
     written = entry.to_dict()
 
-    assert list(written["source"]) == [
-        "import",
-        "instance",
-        "member",
-        "assembly",
-        "name",
-        "display_name",
-        "label",
-    ]
-    assert written["source"]["import"] == "pv"
-    assert written["source"]["display_name"] == "PV array, east"
+    assert written["source"] == {
+        "import": "pv",
+        "instance": "east",
+        "member": "PVSystem",
+        "assembly": "pv/array",
+        "name": "pv-east-PVSystem",
+        "display_name": "PV array, east",
+        "label": "Garage roof panels",
+    }
     assert "nameOfSourceComponent" in written
     assert KpiEntry.from_dict(json.loads(json.dumps(written))).source == source
 
@@ -344,13 +342,53 @@ def test_the_cli_lists_one_dotted_address_per_matching_kpi(tmp_path: Path, capsy
 
     assert code == ExitCodes.OK
     assert printed == [
-        "BUI1.PV.Electricity production (pv-east-PVSystem)",
-        "BUI1.PV.Electricity production (pv-west-PVSystem)",
+        "BUI1.PV.Electricity production (pv-east-PVSystem) = 3120.5 kWh",
+        "BUI1.PV.Electricity production (pv-west-PVSystem) = 2875.0 kWh",
     ]
     assert main(["kpis", "list", str(tmp_path / "all_kpis.json"), "--tag", "General"]) == ExitCodes.OK
-    assert capsys.readouterr().out.splitlines() == ["BUI1.General.Self-consumption rate"]
+    assert capsys.readouterr().out.splitlines() == ["BUI1.General.Self-consumption rate = 41.2 %"]
     assert main(["kpis", "list", str(tmp_path), "--instance", "west", "--building", "BUI1"]) == ExitCodes.OK
-    assert capsys.readouterr().out.splitlines() == ["BUI1.PV.Electricity production (pv-west-PVSystem)"]
+    assert capsys.readouterr().out.splitlines() == ["BUI1.PV.Electricity production (pv-west-PVSystem) = 2875.0 kWh"]
+    assert main(["kpis", "list", str(tmp_path), "--source", "heating-HeatPump"]) == ExitCodes.OK
+    assert capsys.readouterr().out.splitlines() == [
+        "BUI1.Heat Pump For Space Heating.Seasonal performance factor (heating-HeatPump) = 3.4 kWh"
+    ]
+
+
+@pytest.mark.base
+def test_the_cli_writes_a_value_that_is_not_a_number_as_json_and_omits_an_empty_unit(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Catches a KPI without a computed value printing as Python's ``None``, or a dangling blank unit."""
+    collection = {
+        "BUI1": {
+            "General": {
+                "Not computed": KpiEntry(name="Not computed", unit="", value=None).to_dict(),
+                "Heating system": KpiEntry(name="Heating system", unit="-", value="Gas boiler").to_dict(),
+            }
+        }
+    }
+    (tmp_path / "all_kpis.json").write_text(json.dumps(collection), encoding="utf-8")
+
+    assert main(["kpis", "list", str(tmp_path)]) == ExitCodes.OK
+    assert capsys.readouterr().out.splitlines() == [
+        "BUI1.General.Not computed = null",
+        'BUI1.General.Heating system = "Gas boiler" -',
+    ]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "document, json_type", [([1, 2], "list"), ("text", "string"), (None, "null"), (3, "number")]
+)
+def test_the_cli_refuses_a_document_that_is_not_a_kpi_collection(
+    tmp_path: Path, capsys: pytest.CaptureFixture, document: Any, json_type: str
+) -> None:
+    """Catches ``hisim kpis list`` on a malformed ``all_kpis.json`` ending in a traceback instead of a refusal."""
+    (tmp_path / "all_kpis.json").write_text(json.dumps(document), encoding="utf-8")
+
+    assert main(["kpis", "list", str(tmp_path)]) == ExitCodes.FILE_REJECTED
+    assert f"all_kpis.json holds a JSON {json_type}, not a KPI collection" in capsys.readouterr().err
 
 
 @pytest.mark.base
@@ -360,3 +398,111 @@ def test_the_cli_refuses_a_path_without_a_kpi_collection(tmp_path: Path, capsys:
 
     assert code == ExitCodes.FILE_REJECTED
     assert "No KPI collection" in capsys.readouterr().err
+
+
+@pytest.mark.base
+def test_the_tag_filter_takes_the_tag_enum_as_well_as_its_value() -> None:
+    """Catches ``tag=KpiTagEnumClass.CAR`` silently matching nothing while ``tag="Car"`` matches."""
+    finder = KpiFinder(_collection(_stamped(ComponentID("Car1"), "Distance driven", "Battery losses")))
+
+    assert finder.addresses(tag=KpiTagEnumClass.CAR) == finder.addresses(tag="Car")
+    assert len(finder.addresses(tag=KpiTagEnumClass.CAR)) == 2
+    assert finder.value(tag=KpiTagEnumClass.CAR, name="Battery losses") == 1.0
+    assert finder.addresses(tag=KpiTagEnumClass.BATTERY) == []
+    with pytest.raises(ValueError, match="No KPI matches tag='Battery'"):
+        finder.one(tag=KpiTagEnumClass.BATTERY)
+
+
+@pytest.mark.base
+def test_an_entry_without_a_value_is_not_a_kpi_entry() -> None:
+    """Catches ``value()`` failing with a bare KeyError on an entry that has a name but no value."""
+    with pytest.raises(ValueError, match=r"BUI1\.General\.Rate has no 'value'"):
+        KpiFinder({"BUI1": {"General": {"Rate": {"name": "Rate", "unit": "%"}}}})
+
+
+@pytest.mark.base
+def test_keying_fills_an_unset_deprecated_source_name_and_refuses_a_different_one() -> None:
+    """Catches an entry with a source but no ``name_of_source_component`` being refused, or a mismatch passing."""
+    source = KpiSource.for_component(ComponentID("Car1"), DisplayConfig())
+    unset = KpiEntry(name="Distance driven", unit="km", value=1.0, tag=KpiTagEnumClass.CAR, source=source)
+
+    keyed = KpiPreparation.keyed_component_entries([unset])
+
+    assert keyed["Distance driven (Car1)"]["nameOfSourceComponent"] == "Car1"
+    different = KpiEntry(
+        name="Distance driven", unit="km", value=1.0, source=source, name_of_source_component="Car2"
+    )
+    with pytest.raises(ValueError, match="names two different sources"):
+        KpiPreparation.keyed_component_entries([different])
+
+
+@pytest.mark.base
+def test_a_component_reporting_a_mismatched_deprecated_source_name_is_refused() -> None:
+    """Catches the base class letting an entry name one component in ``source`` and another in the old field."""
+    foreign = KpiSource.for_component(ComponentID("Battery"), DisplayConfig())
+    component = _ReportingComponent(
+        ComponentID("EMS"),
+        DisplayConfig(),
+        [KpiEntry(name="On behalf", unit="-", value=2.0, source=foreign, name_of_source_component="Car")],
+    )
+
+    with pytest.raises(ValueError, match="EMS: the KPI entry 'On behalf' names two different sources"):
+        component.component_kpi_entries(all_outputs=[], postprocessing_results=pd.DataFrame())
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "raw, message",
+    [
+        ({"member": "Car1", "display_name": "Car"}, "the KPI source has no 'name'"),
+        ({"imports": "pv", "name": "Car1"}, r"the KPI source carries the unknown key\(s\) 'imports'"),
+        ({"name": "Car1", "member": 3}, "source.member is neither a string nor null"),
+        (["Car1"], "a KPI source must be a JSON object"),
+    ],
+)
+def test_a_serialized_source_is_decoded_strictly(raw: Any, message: str) -> None:
+    """Catches a misspelt source key being dropped, or a missing name failing as a bare KeyError."""
+    with pytest.raises(ValueError, match=f"the KPI entry 'Distance driven': {message}"):
+        KpiSource.from_entry_dict({"name": "Distance driven", "value": 1.0, "source": raw})
+    with pytest.raises(ValueError, match=f"somewhere: {message}"):
+        KpiSource.from_json_object(raw, "somewhere")
+
+
+@pytest.mark.base
+def test_a_serialized_source_may_leave_out_every_field_but_its_name() -> None:
+    """Catches the strict decoder demanding presentation fields a golden leaf never stores."""
+    assert KpiSource.from_json_object({"name": "Car1", "member": "Car1"}, "here") == KpiSource(
+        name="Car1", member="Car1"
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("floor_area, skipped", [(None, True), (140.0, False)])
+def test_the_building_sizer_json_is_skipped_for_a_floor_area_without_a_value(
+    floor_area: Any, skipped: bool
+) -> None:
+    """Catches the sizer JSON being written, or failing, for a Building whose floor area was not computed.
+
+    A floor area of ``None`` normalizes nothing: the building object is skipped as if it had no
+    Building. A computed one goes on to read the cost KPIs, which this collection lacks, so the
+    writer refuses it by name.
+    """
+    from types import SimpleNamespace
+
+    from hisim.postprocessing.postprocessing_main import BUILDING_OWN_KPI_NAME, PostProcessor
+    from hisim.postprocessingoptions import PostProcessingOptions
+
+    building = KpiSource.for_component(ComponentID("Building"), DisplayConfig())
+    entry = KpiEntry(
+        name=BUILDING_OWN_KPI_NAME, unit="m2", value=floor_area, tag=KpiTagEnumClass.BUILDING, source=building
+    )
+    ppdt = SimpleNamespace(
+        kpi_collection_dict=_collection([entry]),
+        post_processing_options=[PostProcessingOptions.COMPUTE_KPIS],
+    )
+
+    if skipped:
+        PostProcessor().write_kpis_to_json_for_building_sizer(ppdt, ["BUI1"])  # type: ignore[arg-type]
+    else:
+        with pytest.raises(ValueError, match="No KPI matches building='BUI1', name='Total costs for simulated period'"):
+            PostProcessor().write_kpis_to_json_for_building_sizer(ppdt, ["BUI1"])  # type: ignore[arg-type]

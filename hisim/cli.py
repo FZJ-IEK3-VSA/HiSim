@@ -16,8 +16,8 @@ reads, and which provider each read resolved to — without running a single tim
 record`` goes the other way and writes a Python setup out as such a file, which is how the setups
 this repository already has become declarative twins without anybody retyping them. And ``hisim
 energy-system run`` runs a file, which is the same thing ``hisim_main.py`` does when handed one.
-A second noun reads what a run wrote: ``hisim kpis list`` prints the address of every KPI of one
-``all_kpis.json``, filtered by building, tag, name or source.
+A second noun reads what a run wrote: ``hisim kpis list`` prints the address, value and unit of
+every KPI of one ``all_kpis.json``, filtered by building, tag, name, source, import or instance.
 
 Two conventions hold throughout. Nothing here decides anything: every command asks the same code
 the executor asks, so a command can never report something a run would contradict. And a failure
@@ -214,15 +214,16 @@ class EnergySystemCommands:
 class KpiCommands:
     """The verbs of the ``kpis`` noun: reading a run's KPI collection by address.
 
-    ``hisim kpis list`` prints the address of every KPI of one ``all_kpis.json`` that matches the
-    filters, one dotted address per line (``roadmap/kpi_address_spec.md``, "Finder"). The filters
-    are the finder's own and are exact: building, tag, KPI name, and the source's import and
-    instance keys.
+    ``hisim kpis list`` prints every KPI of one ``all_kpis.json`` that matches the filters, one
+    ``<dotted address> = <value> <unit>`` per line (``roadmap/kpi_address_spec.md``, "Finder").
+    The filters are the finder's own and are exact: ``--building``, ``--tag``, ``--name``,
+    ``--source`` (the source's runtime name, ``source.name``), ``--import`` and ``--instance``
+    (the source's import and instance keys).
     """
 
     @classmethod
     def list(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
-        """Prints the dotted address of every KPI matching the filters."""
+        """Prints the address, value and unit of every KPI matching the filters."""
         try:
             path = KpiAddressRenderer.document_path(Path(arguments.path))
         except FileNotFoundError as error:
@@ -233,14 +234,15 @@ class KpiCommands:
         except ValueError as error:  # json.JSONDecodeError is a ValueError, and so is a refused collection
             print(f"{path}: {error}", file=error_stream)
             return ExitCodes.FILE_REJECTED
-        addresses = finder.addresses(
+        entries = finder.entries(
             building=arguments.building,
             tag=arguments.tag,
             name=arguments.name,
+            source=arguments.source,
             import_key=arguments.import_key,
             instance=arguments.instance,
         )
-        KpiAddressRenderer.render(addresses, out)
+        KpiAddressRenderer.render(entries, out)
         return ExitCodes.OK
 
 
@@ -350,11 +352,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     kpis = nouns.add_parser("kpis", help="read a run's all_kpis.json by address")
     kpi_verbs = kpis.add_subparsers(dest="verb")
-    kpi_list = kpi_verbs.add_parser("list", help="print the dotted address of every matching KPI")
+    kpi_list = kpi_verbs.add_parser(
+        "list", help="print '<dotted address> = <value> <unit>' for every matching KPI"
+    )
     kpi_list.add_argument("path", metavar="PATH", help="a result directory, or its all_kpis.json")
     kpi_list.add_argument("--building", default=None, help="only this building object")
     kpi_list.add_argument("--tag", default=None, help="only this KPI tag, as written in the JSON")
     kpi_list.add_argument("--name", default=None, help="only KPIs of this name")
+    kpi_list.add_argument("--source", default=None, help="only KPIs whose source has this runtime name (source.name)")
     kpi_list.add_argument("--import", dest="import_key", default=None, help="only KPIs whose source has this import")
     kpi_list.add_argument("--instance", default=None, help="only KPIs whose source has this instance")
     return parser

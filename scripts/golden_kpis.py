@@ -189,13 +189,12 @@ def _source_of_leaf(raw: Any, where: str) -> Optional[KpiSource]:
             raise GoldenFormatError(f"{where}: source.{field_name} is not a string or null: {raw[field_name]!r}.")
     if not raw["name"]:
         raise GoldenFormatError(f"{where}: source.name is empty; {REBLESS_HINT}.")
-    return KpiSource(
-        import_key=raw["import"],
-        instance=raw["instance"],
-        member=raw["member"],
-        assembly=raw["assembly"],
-        name=raw["name"],
-    )
+    # The five identity fields are checked above; the strict decoder reads them, the two
+    # presentation fields (display_name, label) explicitly absent from a golden leaf.
+    try:
+        return KpiSource.from_json_object(raw, where)
+    except ValueError as error:
+        raise GoldenFormatError(f"{error}; {REBLESS_HINT}.") from error
 
 
 def leaf_address(key: str, leaf: Any, origin: str) -> KpiAddress:

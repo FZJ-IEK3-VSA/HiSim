@@ -178,7 +178,10 @@ refuses an inner port left in none:
 
 - **internal** — bound inside the assembly to another inner import (`bind:` on the inner import) or to a member (an
   `internal:` entry); invisible from outside;
-- **re-exported** — an outer port declared `from: <inner import>.<port>`, bound by the outer importer as its own;
+- **re-exported** — an outer port declared `from: <inner import>.<port>`, bound by the outer importer as its own; when
+  the inner import has instances the reference names one, `from: '<inner>[<instance>].<port>'` (quoted inside a flow
+  mapping), and a re-export that names no instance of a multi-instance inner import is refused (2026-10-04, from the
+  review of #886: aggregating one outer port over several instances had no defined meaning);
 - **inactive** or **declined** (`none:`), as at top level (§3.1).
 
 A member of the outer assembly never names an inner member; it reaches an inner import only through that import's ports,

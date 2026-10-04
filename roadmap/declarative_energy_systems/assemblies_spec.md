@@ -670,7 +670,11 @@ tests:
 ```
 
 - `bounds` names an output (`member.OutputName`, unit declared and checked) or a KPI (name and member, resolved by the
-  finder of `roadmap/kpi_address_spec.md`, never by key string); it holds for every sample.
+  finder of `roadmap/kpi_address_spec.md`, never by key string); it holds for every sample. A KPI entry **without**
+  `member` names a derived KPI (one the KPI preparation computes per building, `source: null`), resolved by name within
+  the isolation system's single building, where it is unambiguous (decided, owner, 2026-10-04). Device KPIs that are
+  derived today (PV production, the battery's three) move into their components before assemblies ship several
+  instances of them (§10.4, #83), so each instance reports its own and the building sum stays a derived total.
 - `monotone` is evaluated on every sample as a base point, moving one parameter across its range in a few steps;
   `direction` is `increasing`, `decreasing` or `constant`, within the gate's numeric tolerance. It is the cheap test
   that catches wrong-sign physics.

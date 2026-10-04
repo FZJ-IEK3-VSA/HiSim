@@ -11,15 +11,22 @@ constraints, variants, members, ports, order — on every assembly it imports, b
 the units of the parameters it substitutes it checks itself, with the named errors ``EF-78`` and
 ``EF-79``. The **library** check adds what the library test requires of an assembly before it may
 be shipped (D24): a description on every parameter, a ``range`` on every numeric one, a ``name``
-that is its library path, and the test contract — a ``tests.bounds`` entry for every
-energy-carrying or temperature output of every member, at least one ``tests.monotone``, and every
-name a declaration uses resolving to a member, an output, a parameter, a preset or a KPI.
+that is its library path, and the test contract — a ``tests:`` block with at least one
+``tests.monotone``, every unit an ``lt.Units`` member, and every name a declaration uses resolving
+to a member, a parameter or a preset.
 
-**Energy-carrying or temperature** is decided by the output's declaration in its member's
-:class:`~hisim.component_interface.ClassInterface`: an output carries energy when its unit is a power
-or an energy (W, kW, Wh, kWh, kWh per timestep, J, kJ), and a temperature when its load type is
-``TEMPERATURE`` or its unit is °C or K. A member whose class declares no interface cannot be checked
-and is itself a problem of the library check.
+**What needs the components is not checked here.** The check reads the assembly files and imports
+the member classes only to know that they exist and which configuration they take. A component's
+inputs, outputs, default connections and KPIs come into being in its constructor, and no class
+declares them a second time, so everything that needs them is checked where the components are
+constructed: whether a member declares default connections from a port's partner class, whether a
+wire's input and output and a provided output exist, which members own and read a circuit's
+three outputs, whether a carrier need's consuming outputs exist, carry its carrier and are fed by
+the provider's meter — the post-construction port check of every build
+(:mod:`hisim.energy_system.assemblies.port_check`); whether every energy-carrying or
+temperature output carries a ``tests.bounds`` entry, whether a bounds entry's unit is its output's
+and whether a named KPI is one its member reports — the assembly test harness's isolation run, on
+the constructed members, before any declaration is evaluated.
 """
 
 from __future__ import annotations
@@ -29,7 +36,6 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim import loadtypes as lt
-from hisim.component_interface import ClassInterface
 from hisim.config.contributions import declared_facts_of
 from hisim.config.sizing import declared_field_unit
 from hisim.energy_system.assemblies.model import (
@@ -44,7 +50,6 @@ from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemError, EnergySystemErrorId
 from hisim.energy_system.imports_model import (
     Carriers,
-    CircuitNaming,
     Port,
     PortKind,
     PortPlaceholder,
@@ -79,7 +84,6 @@ class LibraryChecker:
         self.resolver = resolver
         self.strength = strength
         self.problems: List[str] = []
-        self._interfaces: Dict[str, Optional[ClassInterface]] = {}
         self._configs: Dict[str, Optional[type]] = {}
         self._components: Dict[str, Optional[type]] = {}
 
@@ -111,14 +115,6 @@ class LibraryChecker:
         return self.problems
 
     # --------------------------------------------------------------------------------------- classes
-
-    def interface(self, member: MemberTemplate) -> Optional[ClassInterface]:
-        """The class interface of a member's class; ``None`` when the class does not import or declares none."""
-        class_path = member.entry.class_path
-        if class_path not in self._interfaces:
-            component = self._component_class(member)
-            self._interfaces[class_path] = getattr(component, "CLASS_INTERFACE", None) if component else None
-        return self._interfaces[class_path]
 
     def _component_class(self, member: MemberTemplate) -> Optional[type]:
         """The member's component class, or ``None`` after recording (once) why it does not import."""
@@ -407,7 +403,11 @@ class LibraryChecker:
                     self.add(path, f"{what} lists {parameter}={value!r}, which the parameter does not allow.")
 
     def _check_ports(self) -> None:
-        """The contract check of §3.3: every port names existing members, outputs and inputs."""
+        """The contract check of §3.3 from the file: every port names existing members and placeholders.
+
+        Whether the members' constructed components have the default connections, inputs and outputs
+        the ports lower to is the post-construction port check's (:mod:`.port_check`).
+        """
         members = {member.name: member for member in self._all_members()}
         placeholders: Dict[str, Set[str]] = {}
         for member in members.values():
@@ -432,50 +432,14 @@ class LibraryChecker:
                             f"the port '{name}' lowers into '{into}', which carries no '{{$port: {name}}}' "
                             "placeholder.",
                         )
-                    interface = self.interface(template)
-                    if interface is None:
-                        if self.library:
-                            self.add(
-                                path + ("into",),
-                                f"'{into}' ({template.entry.class_path}) declares no CLASS_INTERFACE, so the port "
-                                f"'{name}' cannot be checked against its default connections.",
-                            )
-                        continue
-                    for partner in port.partner:
-                        if port.wires is None and not interface.declares_defaults_from(partner):
-                            self.add(
-                                path + ("partner",),
-                                f"'{into}' ({template.entry.class_path.rsplit('.', 1)[-1]}) declares no default "
-                                f"connections from {partner}, the partner of '{name}'.",
-                            )
-                    for wired in port.wires or {}:
-                        if interface.input(wired) is None:
-                            self.add(
-                                path + ("wires",),
-                                f"the port '{name}' wires '{wired}', which is no input of '{into}'.",
-                            )
             elif port.kind == PortKind.PROVIDED:
-                template = members.get(port.output_member or "")
-                if template is None:
+                if members.get(port.output_member or "") is None:
                     self.add(
                         path + ("output",),
                         f"the port '{name}' provides '{port.output}', but '{port.output_member}' is no member.",
                     )
-                else:
-                    interface = self.interface(template)
-                    if interface is None:
-                        if self.library:
-                            self.add(
-                                path + ("output",),
-                                f"'{template.name}' declares no CLASS_INTERFACE, so '{port.output}' cannot be checked.",
-                            )
-                    elif interface.output(port.output_name or "") is None:
-                        self.add(
-                            path + ("output",),
-                            f"the port '{name}' provides '{port.output}', which is no output of '{template.name}'.",
-                        )
             elif port.kind == PortKind.CIRCUIT:
-                self._check_circuit_port(path, name, port, members, placeholders)
+                self._check_circuit_port(path, name, port, members)
             elif port.kind == PortKind.CARRIER:
                 self._check_carrier_port(path, name, port, members, placeholders)
             elif port.kind == PortKind.FACT:
@@ -554,43 +518,16 @@ class LibraryChecker:
         return port.kind != PortKind.FACT
 
     def _check_circuit_port(
-        self,
-        path: Tuple[Any, ...],
-        name: str,
-        port: Port,
-        members: Mapping[str, MemberTemplate],
-        placeholders: Mapping[str, Set[str]],
+        self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, MemberTemplate]
     ) -> None:
-        """A circuit end names existing members, each declaring an input or an output of the circuit (§3.3)."""
-        outputs = CircuitNaming.outputs(port.circuit or "")
+        """A circuit end names existing members (§3.3).
+
+        Which member owns and which reads the circuit's three outputs the constructed members say; the
+        post-construction port check (:mod:`.port_check`) verifies it on every build.
+        """
         for member_name in port.members:
-            template = members.get(member_name)
-            if template is None:
+            if member_name not in members:
                 self.add(path + ("member",), f"the circuit port '{name}' names '{member_name}', which is no member.")
-                continue
-            interface = self.interface(template)
-            if interface is None:
-                if self.library:
-                    self.add(
-                        path + ("member",),
-                        f"'{member_name}' ({template.entry.class_path}) declares no CLASS_INTERFACE, so the circuit "
-                        f"port '{name}' cannot be checked against {', '.join(outputs)}.",
-                    )
-                continue
-            reads = [output for output in outputs if interface.input(output) is not None]
-            owns = [output for output in outputs if interface.output(output) is not None]
-            if not reads and not owns:
-                self.add(
-                    path + ("member",),
-                    f"'{member_name}' declares none of the circuit {port.circuit}'s outputs {', '.join(outputs)}, "
-                    f"neither as an input nor as an output, so it is no end of the circuit '{name}'.",
-                )
-            if reads and name not in placeholders.get(member_name, set()):
-                self.add(
-                    path + ("member",),
-                    f"'{member_name}' reads {', '.join(reads)} through the circuit port '{name}' but carries no "
-                    f"'{{$port: {name}}}' placeholder.",
-                )
 
     def _check_carrier_port(
         self,
@@ -600,7 +537,11 @@ class LibraryChecker:
         members: Mapping[str, MemberTemplate],
         placeholders: Mapping[str, Set[str]],
     ) -> None:
-        """A carrier names a carrier; a need names existing outputs, a provision its meter (§5.1)."""
+        """A carrier names a carrier; a need names outputs of existing members, a provision its meter (§5.1).
+
+        Whether a named output exists and carries the need's carrier, the constructed member says; the
+        post-construction port check verifies it.
+        """
         literal = port.carrier if isinstance(port.carrier, str) else None
         if literal is not None and not Carriers.is_carrier(literal):
             self.add(
@@ -643,24 +584,10 @@ class LibraryChecker:
                         "output of the assembly.",
                     )
                 continue
-            member_name, output = item.split(".", 1)
-            template = members.get(member_name)
-            if template is None:
+            member_name = item.split(".", 1)[0]
+            if member_name not in members:
                 self.add(path + ("outputs",), f"the carrier need '{name}' names '{item}', but '{member_name}' is no "
                          "member.")
-                continue
-            interface = self.interface(template)
-            declared = interface.output(output) if interface is not None else None
-            if interface is not None and declared is None:
-                self.add(path + ("outputs",), f"the carrier need '{name}' names '{item}', which is no output of "
-                         f"'{member_name}'.")
-            elif declared is not None and declared.carrier is not None and literal is not None:
-                if declared.carrier.value != literal:
-                    self.add(
-                        path + ("outputs",),
-                        f"the carrier need '{name}' is of '{literal}', but '{item}' carries "
-                        f"'{declared.carrier.value}' by its class's energy port.",
-                    )
 
     def _check_fact_port(
         self, path: Tuple[Any, ...], name: str, port: Port, members: Mapping[str, MemberTemplate]
@@ -776,53 +703,27 @@ class LibraryChecker:
                     self.add(("components",), f"{label} and {other_label} both declare order: {order}.")
 
     def _check_tests(self) -> None:
-        """The test contract (§9.4, D24): bounds on every energy or temperature output, a monotone, resolvable names."""
+        """The test contract (§9.4, D24) from the file: a monotone, units of ``lt.Units``, resolvable names.
+
+        Which outputs carry energy or a temperature and so need a bounds entry, the unit of a bounded
+        output and the KPIs a member reports, the constructed members say; the assembly test
+        harness checks them in its isolation run.
+        """
         tests = self.model.tests
         if tests is None:
             self.add(("kind",), "the assembly carries no test contract ('tests:' with bounds and monotone, §9.4).")
             return
         members = {member.name: member for member in self._all_members()}
-        bounded: Set[Tuple[str, str]] = set()
         for index, bounds in enumerate(tests.bounds):
             path = ("tests", "bounds", index)
             if bounds.unit is not None and bounds.unit not in lt.Units.__members__:
                 self.add(path, f"the unit '{bounds.unit}' is no member of lt.Units.")
             if bounds.output is not None:
-                member_name, output = bounds.output.split(".", 1)
-                template = members.get(member_name)
-                if template is None:
+                member_name = bounds.output.split(".", 1)[0]
+                if member_name not in members:
                     self.add(path, f"the bounds entry names '{bounds.output}', but '{member_name}' is no member.")
-                    continue
-                interface = self.interface(template)
-                declared = interface.output(output) if interface is not None else None
-                if interface is not None and declared is None:
-                    self.add(path, f"the bounds entry names '{bounds.output}', which is no output of '{member_name}'.")
-                elif declared is not None and bounds.unit != declared.unit.name:
-                    self.add(
-                        path,
-                        f"the bounds entry states {bounds.unit} for '{bounds.output}', whose unit is "
-                        f"{declared.unit.name}.",
-                    )
-                bounded.add((member_name, output))
             else:
-                self._check_kpi(path, members, bounds.member or "", bounds.kpi or "")
-        for template in members.values():
-            interface = self.interface(template)
-            if interface is None:
-                self.add(
-                    template.source_path,
-                    f"'{template.name}' ({template.entry.class_path}) declares no CLASS_INTERFACE, so the outputs its "
-                    "test contract must bound are unknown.",
-                )
-                continue
-            for declared_output in interface.outputs:
-                key = (template.name, declared_output.name)
-                if ClassInterface.carries_energy_or_temperature(declared_output) and key not in bounded:
-                    self.add(
-                        ("tests", "bounds"),
-                        f"the {declared_output.unit.name} output '{template.name}.{declared_output.name}' has no "
-                        "bounds entry.",
-                    )
+                self._check_kpi_member(path, members, bounds.member or "")
         if not tests.monotone:
             self.add(("tests",), "the test contract has no monotone entry; at least one is required.")
         for index, monotone in enumerate(tests.monotone):
@@ -832,24 +733,19 @@ class LibraryChecker:
                 self.add(path, f"the monotone entry moves '{monotone.parameter}', which is no parameter.")
             elif not declaration.type.is_numeric:
                 self.add(path, f"the monotone entry moves '{monotone.parameter}', which is no number.")
-            self._check_kpi(path, members, monotone.member, monotone.kpi)
+            self._check_kpi_member(path, members, monotone.member)
         for index, expect in enumerate(tests.expect):
             path = ("tests", "expect", index)
             if expect.preset not in self.model.presets:
                 self.add(
                     path, f"the expect entry names the preset '{expect.preset}', which the assembly does not offer."
                 )
-            self._check_kpi(path, members, expect.member, expect.kpi)
+            self._check_kpi_member(path, members, expect.member)
 
-    def _check_kpi(self, path: Tuple[Any, ...], members: Mapping[str, MemberTemplate], member: str, kpi: str) -> None:
-        """A test declaration's KPI names a KPI its member's class declares."""
-        template = members.get(member)
-        if template is None:
+    def _check_kpi_member(self, path: Tuple[Any, ...], members: Mapping[str, MemberTemplate], member: str) -> None:
+        """A test declaration's KPI names an existing member; the KPI itself the harness checks on its instance."""
+        if member not in members:
             self.add(path, f"the entry names the member '{member}', which does not exist.")
-            return
-        interface = self.interface(template)
-        if interface is not None and kpi not in interface.kpis:
-            self.add(path, f"'{member}' reports no KPI '{kpi}'.")
 
 
 def check_assembly(

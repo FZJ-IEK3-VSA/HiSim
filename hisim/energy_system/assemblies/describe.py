@@ -5,7 +5,10 @@ partner classes each binds to and in which requirement state; which parameters i
 their units, descriptions, ranges, defaults and allowed values; the constraints across them; the
 presets; the members, internal variants and inner imports; and the test contract it carries.
 Nothing is decided here: the page is the assembly file read through the same reader the expansion
-uses.
+uses, and nothing is constructed. The page therefore states the interface as the file declares it
+and claims nothing about the member classes' default connections, inputs or outputs: those exist
+only on constructed components, and a build verifies them (the post-construction port check,
+:mod:`hisim.energy_system.assemblies.port_check`), which the page says in one line.
 """
 
 from __future__ import annotations
@@ -24,6 +27,13 @@ class AssemblyDescription:
 
     #: Width of the first column; a longer name is followed by two spaces instead.
     NAME_WIDTH = 24
+
+    #: The line under the ports saying what the page does not know.
+    VERIFIED_AT_BUILD = (
+        "as declared in the file; the members' default connections from the partner classes, the wired "
+        "inputs and outputs, the provided outputs, the circuits' owners and readers, the meters' default "
+        "feeds and the consumed carriers are verified on the constructed components when a system is built"
+    )
 
     @classmethod
     def _pad(cls, name: str, width: int = NAME_WIDTH) -> str:
@@ -138,6 +148,8 @@ class AssemblyDescription:
             cls._line(f"{section}:", out)
             for port in ports:
                 cls._line(f"  {cls._pad(port.name, cls.NAME_WIDTH - 2)}{cls._port_text(port)}", out)
+        if model.ports:
+            cls._line(f"({cls.VERIFIED_AT_BUILD})", out)
 
     @classmethod
     def _port_text(cls, port: Port) -> str:

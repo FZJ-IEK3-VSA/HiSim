@@ -6,7 +6,6 @@ import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
-from hisim.component_interface import ClassInterfaceViolation
 from hisim.config import ConfigBase, DisplayConfig
 from hisim.config.channels import (
     ChannelDeclarationError,
@@ -794,20 +793,13 @@ class DynamicComponent(Component):
             )
 
     def add_dynamic_default_connections(self, connections: List[DynamicComponentConnection]) -> None:
-        """Adds a dynamic default connection list definition.
-
-        Raises:
-            ValueError: If the connections come from more than one source class.
-            ClassInterfaceViolation: If the class declares a ``CLASS_INTERFACE`` and one of the
-                connections is not among its declared default feeds with the same tags and weight.
-        """
+        """Adds a dynamic default connection list definition."""
 
         source_component_name = connections[0].source_class_name
 
         for connection in connections:
             if connection.source_class_name != source_component_name:
                 raise ValueError("Trying to add dynamic connections to different components in one go.")
-            self._check_declared_feed(connection)
         self.dynamic_default_connections[source_component_name] = connections
         log.trace(
             "added dynamic default connections for connections from : "
@@ -815,20 +807,6 @@ class DynamicComponent(Component):
             + "\n"
             + str(self.dynamic_default_connections)
         )
-
-    def _check_declared_feed(self, connection: DynamicComponentConnection) -> None:
-        """Refuses a dynamic default connection the class interface does not declare (as a default feed)."""
-        interface = type(self).CLASS_INTERFACE
-        if interface is None:
-            return
-        declared = interface.feed(connection.source_class_name, connection.source_component_field_name)
-        tags = tuple(tag.name for tag in connection.source_tags)
-        if declared is None or tuple(declared.tags) != tags or declared.weight != connection.source_weight:
-            raise ClassInterfaceViolation(
-                f"{self.get_full_classname()} adds a dynamic default connection from "
-                f"{connection.source_class_name}.{connection.source_component_field_name} (tags {list(tags)}, "
-                f"weight {connection.source_weight}), which its CLASS_INTERFACE declares as {declared!r}."
-            )
 
     def get_dynamic_default_connections(self, source_component: Component) -> List[DynamicComponentConnection]:
         """Gets the dynamic default connections for this component."""

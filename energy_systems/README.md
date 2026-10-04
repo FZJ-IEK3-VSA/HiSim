@@ -307,13 +307,15 @@ bound by a verb on the inner import, by an `internal:` entry, or re-exported wit
 <inner>.<port>`. Binding a component needs no declaration beyond what its class already does in
 its constructor: the expansion decides from the files alone (every entry states its class) which
 component is a candidate and refuses what they decide — no partner, several and no verb, `none:` on a
-required port, an absent `bind:` partner, a verb on an inactive port. Whether the member really
-declares default connections from the partner's class, and whether a wired input or output or a
-provided output exists, is checked when the system is built: after every component is constructed
-and before anything is connected (`EF-7H`, `EF-7J`, `hisim/energy_system/assemblies/port_check.py`),
-from the port-provenance table the import record keeps. Every refusal names the import, the
-instance, the port and every candidate, prints the source map of the import, and ends in a
-paste-ready `bind:` line.
+required port, an absent `bind:` partner, a verb on an inactive port; each of these refusals names
+the import, the instance, the port and every candidate, prints the source map of the import, and
+ends in a paste-ready `bind:` line. The expansion writes the same items a hand-written file writes
+(bare names, wires), and the wiring stage checks every connection on the constructed components,
+as it does for any file: whether the member declares default connections from the partner's class,
+whether a wired input or output or a provided output exists, whether load types and units agree.
+A refused item names the port it came from — the import, the instance, the port, the partner, the
+member and the files and lines, from the port-provenance table the import record keeps — and a
+missing default connection or port is reported as `EF-7H` or `EF-7J`.
 
 **Circuits.** `{circuit: dhw, member: Cylinder}` (or `member: [A, B]`) is one end of one hydronic
 circuit; the name is the medium (`dhw`, `sh`, `brine`, `solar_dhw`). A required end binds the one
@@ -321,14 +323,15 @@ other end of the same circuit in scope — another import's circuit port or a si
 (`ports: {sh: {circuit: sh}}` on the entry itself) — and `bind: {circuit: heating.dhw}` decides
 several; an end of another circuit is refused (`EF-7N`). The binding lowers from the files alone:
 every member of one end that carries the `{$port: <port>}` placeholder takes a bare name of each
-member of the other end. When the system is built, the post-construction port check verifies the
-hydronic naming convention on the constructed members: each of `MassFlow<C>`, `SupplyTemperature<C>`
-and `ReturnTemperature<C>` (`<C>` the name in camel case, `Dhw`, `SolarDhw`) must be an output of
-exactly one member of the two ends and an input, of the same load type and unit, of a member of the
-other end that carries the placeholder and declares default connections from the owner's class; and
-every bare name written must name an owner of an output its reader reads (`EF-7N`, `EF-7H`). A
-member of an end that owns none of the outputs the other end reads is therefore refused, not
-skipped. A circuit port under `provides:` is optional (D20). The record lists every circuit with
+member of the other end. The wiring expands those bare names through the readers' default
+connections and checks them like any connection, so the hydronic naming convention — each of
+`MassFlow<C>`, `SupplyTemperature<C>` and `ReturnTemperature<C>` (`<C>` the name in camel case,
+`Dhw`, `SolarDhw`) an output of exactly one member of the two ends and an input, of the same load
+type and unit, of a member of the other end — holds or the build is refused: a reader without
+default connections from a member of the other end (`EF-7H`, naming the circuit port), an output
+owned twice (`EF-26`), a load type or unit that differs (`EF-30`), a reader left without its circuit
+inputs (`EF-31`). A member of an end that owns none of the outputs the other end reads is therefore
+refused, not skipped. A circuit port under `provides:` is optional (D20). The record lists every circuit with
 both ends and their members.
 
 **Carriers.** A supply assembly provides a carrier, `provides: {connection: {carrier: natural_gas,
@@ -342,12 +345,12 @@ import that would add it ("add the import of `supply/gas_connection`"; the forma
 §5.2). For a fuel the provider's meter observes the consuming outputs: the meter takes a bare name
 of each consuming member, which the wiring expands through the default feeds the meter's constructor
 declares from the consumer's class (`add_dynamic_default_connections`, with their tags and weight).
-When the system is built, the post-construction port check verifies on the constructed components
-that every named output exists, that its `EnergyPort` carries the need's carrier (`EF-7Q`), and that
-the meter's default feeds from the consumer's class are exactly the named outputs (`EF-7H`,
-`EF-7J`). Electricity has no link: a need writes nothing, takes no verb, and checks that exactly
-one electricity provider exists; its outputs' carriers are verified alike. A fuel provider no need
-is bound to is refused.
+The wiring checks, beside the connections it makes, that every named output exists, that its
+`EnergyPort` carries the need's carrier (`EF-7Q`), and that the meter's default feeds from the
+consumer's class are exactly the named outputs (`EF-7H`, `EF-7J`), each refusal naming the need.
+Electricity has no link: a need writes nothing, takes no verb, and checks that exactly one
+electricity provider exists; its outputs' carriers are verified alike. A fuel provider no need is
+bound to is refused.
 
 **Facts.** A fact need, `{fact: pv_peak_power_in_watt, into: [Battery]}`, lowers to a
 `sizing_sources` line on each member naming the provider: a site entry or member whose class
@@ -377,8 +380,8 @@ path and the sha256 of its file, the preset, the parameters as given and as reso
 the members' addresses, display names and order paths, every port's state and partner, the binding
 decisions, the port-provenance table and the evaluation sequence — and the **source map** of every
 produced item, which every downstream error naming a produced component prints. A realized record
-re-runs without any assembly; its port-provenance table is checked against the constructed
-components as on the first run.
+re-runs without any assembly; a refusal on the re-run names the port from the record's
+port-provenance table as on the first run.
 
 **Inspecting.** `hisim energy-system describe <family>/<name>` (or a path to a `*.assembly.yaml`)
 prints an assembly's interface as its file declares it, with partner classes and requirement states

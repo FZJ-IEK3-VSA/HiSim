@@ -23,15 +23,15 @@ explicit wires the port names, exactly where the member's ``{$port: …}`` place
 
 **What is decided here, and what after construction.** Every entry states its class, so the
 expansion decides from the files alone which component is a candidate partner, whether a port has
-none, several or a verb to decide it, and whether the members a port names exist. Whether the
-member's class really declares default connections from the partner's class, and whether a wire's
-input and output exist, the constructed components say: a component creates its ports and default
-connections in its constructor, and no second declaration of them exists. The expansion therefore
+none, several or a verb to decide it, and whether the members a port names exist; those refusals
+name every candidate and end in a paste-ready ``bind:`` line. What it writes are the items a
+hand-written file writes — bare names and wires — and whether the constructed components accept
+them the wiring stage checks, like every other connection: a component creates its ports and
+default connections in its constructor, and no second declaration of them exists. The expansion
 writes one entry per lowered item into the port-provenance table of the import record
-(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and the post-construction port
-check (:mod:`hisim.energy_system.assemblies.port_check`) refuses, with the import, the port, the
-member, the partner, the files and lines, the candidates and a paste-ready ``bind:`` line, an item
-the constructed components do not have (``EF-7H``, ``EF-7J``) — before anything is connected.
+(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and a wiring refusal of such an
+item is restated with the import, the port, the member, the partner and the files and lines it
+came from (``EF-7H``, ``EF-7J``).
 
 **The default rule** mirrors the sizing engine's: a port binds to the one component in scope whose
 class is one of its partner classes, and a verb decides every other case. In scope are, at the top
@@ -40,12 +40,12 @@ own members and every member of its inner imports; a port never binds into its o
 
 **Circuits, carriers and facts** (hisim-lt0b.2). A circuit end binds the one other end of its
 circuit in scope; every member at one end that carries the circuit's placeholder takes a bare name
-of each member at the other end, and the post-construction port check verifies on the constructed
-members that those bare names mean the circuit's three outputs, each owned by one end and read by
-the other (§3.2, §11.1). A carrier need binds the one provider of its carrier: a fuel lowers to a
-bare name of each consuming member in its provider's meter, which observes the consuming outputs
-through the default feeds it declares (verified after construction, with each output's carrier),
-electricity to nothing but the check that exactly one provider exists (§5). A fact need lowers to a
+of each member at the other end, which the wiring expands through the reader's default connections
+from the owner's class, like any bare name (§3.2, §11.1). A carrier need binds the one provider of
+its carrier: a fuel lowers to a bare name of each consuming member in its provider's meter, which
+the wiring expands through the default feeds the meter declares, electricity to nothing but the
+check that exactly one provider exists (§5); the wiring also checks each consuming output's carrier
+and that the meter feeds exactly the named outputs. A fact need lowers to a
 ``sizing_sources`` line naming the provider (§6). ``{$switch: …}`` values are resolved with the
 parameters.
 
@@ -90,6 +90,7 @@ from hisim.energy_system.assemblies.record import (
     NotLowered,
     PortRecord,
     SourceMapEntry,
+    short_class_name,
 )
 from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
@@ -144,11 +145,6 @@ class ClassFacts:
             component = self.component_class(class_path, location, name)
             self._configs[class_path] = ClassBinder.configuration_class_of(component, location, name)
         return self._configs[class_path]
-
-    @staticmethod
-    def short_name(class_path: str) -> str:
-        """The class name of a dotted path, which default connections and partners are keyed by."""
-        return class_path.rsplit(".", 1)[-1]
 
 
 @dataclass
@@ -290,7 +286,6 @@ class Handle:
         fact: A fact port's fact, resolved.
         fact_into: The units a fact need lowers into.
         hint: The candidates and the paste-ready verb lines a refusal of this port prints.
-        candidates: The candidate partners in scope, ``name (Class)``, for the port-provenance table.
     """
 
     owner: str
@@ -311,7 +306,6 @@ class Handle:
     consumer_outputs: List[Tuple[Unit, str]] = field(default_factory=list)
     fact: Optional[str] = None
     fact_into: List[Unit] = field(default_factory=list)
-    candidates: Tuple[str, ...] = ()
 
     @property
     def partner_text(self) -> str:
@@ -1368,7 +1362,7 @@ class ImportExpander:
         return [
             unit
             for unit in units
-            if unit.name not in handle.own_units and ClassFacts.short_name(unit.class_path) in handle.port.partner
+            if unit.name not in handle.own_units and short_class_name(unit.class_path) in handle.port.partner
         ]
 
     def _resolve_target(
@@ -1401,7 +1395,7 @@ class ImportExpander:
         matching = [
             unit
             for unit in units
-            if ClassFacts.short_name(unit.class_path) in handle.port.partner and unit.name not in handle.own_units
+            if short_class_name(unit.class_path) in handle.port.partner and unit.name not in handle.own_units
         ]
         if len(matching) == 1:
             return matching[0], None, ""
@@ -1500,7 +1494,6 @@ class ImportExpander:
             self._decide_cross(handle, written, level, top, self._fact_rule(handle, level))
             return
         candidates = self._candidates(handle, level.units)
-        handle.candidates = tuple(f"{unit.name} ({ClassFacts.short_name(unit.class_path)})" for unit in candidates)
         handle.hint = (
             f"Candidates: {', '.join(unit.name for unit in candidates) or 'none'}; "
             + self._paste_lines(handle, candidates, level, optional=handle.state == "optional")
@@ -1595,7 +1588,7 @@ class ImportExpander:
     def _lower(self, handle: Handle, partner: Unit, provider: Optional[Tuple[str, str]], verb: str) -> None:
         """Lowers a decided need into its landings: a bare name, or the explicit wires it names."""
         port = handle.port
-        partner_class = ClassFacts.short_name(partner.class_path)
+        partner_class = short_class_name(partner.class_path)
         if partner_class not in port.partner and provider is None:
             raise self.error(
                 EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
@@ -1888,12 +1881,12 @@ class ImportExpander:
 
         The file decides the binding — the two ends of one circuit, their members and which members
         carry the circuit's placeholder. Which member owns and which reads each of the circuit's three
-        outputs the constructed members say, so every item is written into the port-provenance table
-        and the post-construction port check (:mod:`.port_check`) verifies the circuit once the
-        components exist: each output owned by exactly one member, read by a member of the other end
-        that carries the placeholder, of one load type and unit at both ends, and every bare name
-        written here naming an owner of an output its reader reads, whose class the reader declares
-        default connections from (§3.2, §11.1, hydronic spec §3.1).
+        outputs the constructed members say: the wiring expands every bare name written here through the
+        reader's default connections from the owner's class and checks the result like any connection —
+        a reader without defaults from that class, an output owned twice (an input fed twice), a load
+        type or unit that differs, a reader left without its circuit inputs (§3.2, §11.1, hydronic
+        spec §3.1). Every item is written into the port-provenance table, so a refusal names the circuit
+        port it came from.
         """
         end, other_end = handle.end, other.end
         assert end is not None and other_end is not None
@@ -1934,8 +1927,6 @@ class ImportExpander:
                         circuit=circuit,
                         end=this_end.label,
                         other_end=far_end.label,
-                        end_members=tuple(member.name for member in this_end.units),
-                        other_members=tuple(member.name for member in far_end.units),
                     )
         end.bound_to, other_end.bound_to = other_end, end
         for this_handle, far_end in ((handle, other_end), (other, end)):
@@ -2120,32 +2111,34 @@ class ImportExpander:
 
         For a fuel the meter takes a bare name of every consuming member, which the wiring expands
         through the default feeds the meter declares from that member's class — the tags and the
-        weight a recorded twin writes; for electricity nothing is written. Every consuming output is
-        written into the port-provenance table: whether it exists, carries the need's carrier by its
-        energy port, and is exactly what the meter's default feeds from its class observe, the
-        constructed components say, and the post-construction port check (:mod:`.port_check`)
-        verifies it.
+        weight a recorded twin writes; for electricity nothing is written. Every bare name and every
+        consuming output is written into the port-provenance table: whether an output exists, carries
+        the need's carrier by its energy port, and is exactly what the meter's default feeds from its
+        class observe, the constructed components say, and the wiring stage checks it with the bare
+        names it expands.
         """
         provision = provider.provision
         assert provision is not None
         carrier = handle.carrier or ""
         meter = provision.meter
         outputs: List[str] = []
-        items: List[AnyInputItem] = []
+        consumers: Dict[str, Unit] = {}
         for unit, output in handle.consumer_outputs:
             outputs.append(f"{unit.name}.{output}")
             self._note_lowered(handle, LoweredKind.FEED, meter, verb, unit, output=output, carrier=carrier)
-            if meter is None:
-                continue
-            item = DefaultInputs(source=unit.name)
-            if item not in items:
-                items.append(item)
+            if meter is not None:
+                consumers.setdefault(unit.name, unit)
+        items: List[AnyInputItem] = [DefaultInputs(source=name) for name in consumers]
         lowered: List[str] = []
         landing = provision.landing
         if items and landing is not None:
             filled = landing.unit.lowered.setdefault(landing.position, [])
             items = [item for item in items if item not in filled]
             filled.extend(items)
+            for item in items:
+                self._note_lowered(
+                    handle, LoweredKind.DEFAULT, landing.unit, verb, consumers[item.source], carrier=carrier
+                )
             note = (
                 f"carrier {carrier}: port {handle.port.name} of {handle.owner_path} bound to {provision.label} ({verb})"
             )
@@ -2359,7 +2352,7 @@ class ImportExpander:
         output: str = "",
         **context: Any,
     ) -> None:
-        """Writes one lowered item into the port-provenance table, for the post-construction check.
+        """Writes one lowered item into the port-provenance table, which a wiring refusal of it reads.
 
         ``context`` carries the fields of a circuit item or a feed (:class:`LoweredPort`).
         """
@@ -2377,8 +2370,6 @@ class ImportExpander:
                 input=target,
                 output=output,
                 chain=tuple(location.text for location in handle.chain),
-                candidates=handle.candidates,
-                remedy=handle.hint,
                 **context,
             )
         )
@@ -2556,7 +2547,7 @@ class ImportExpander:
                 section="internal",
                 kind=PortKind.NEED,
                 into=(receiver,),
-                partner=(ClassFacts.short_name(partner.class_path),),
+                partner=(short_class_name(partner.class_path),),
             ),
             state="required",
             landings=[

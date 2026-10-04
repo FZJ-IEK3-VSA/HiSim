@@ -359,6 +359,7 @@ class DynamicConnectionResolver:
                 feed.location,
                 f"the {feed.describe()} names the output '{source_output}', which "
                 f"'{feed.source}' ({source.get_full_classname()}) does not declare.",
+                item=feed.item,
                 alternatives=[existing.field_name for existing in source.outputs],
                 alternatives_label="outputs",
                 offending_value=source_output,
@@ -422,6 +423,7 @@ class DynamicConnectionResolver:
             f"the {feed.describe()} names no output of '{feed.source}', and the aggregator "
             f"'{feed.consumer}' declares {len(declarations)} default feeds for the class "
             f"'{source.get_classname()}', so which port is meant is undecidable.",
+            item=feed.item,
             alternatives=candidates,
             alternatives_label="outputs",
             remedy=(

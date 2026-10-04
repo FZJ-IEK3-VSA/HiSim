@@ -7,8 +7,8 @@ presets; the members, internal variants and inner imports; and the test contract
 Nothing is decided here: the page is the assembly file read through the same reader the expansion
 uses, and nothing is constructed. The page therefore states the interface as the file declares it
 and claims nothing about the member classes' default connections, inputs or outputs: those exist
-only on constructed components, and a build verifies them (the post-construction port check,
-:mod:`hisim.energy_system.assemblies.port_check`), which the page says in one line.
+only on constructed components, and a build's wiring stage checks them, which the page says in one
+line.
 """
 
 from __future__ import annotations

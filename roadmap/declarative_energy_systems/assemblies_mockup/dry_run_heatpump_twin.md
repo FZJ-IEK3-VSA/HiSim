@@ -46,7 +46,7 @@ Internal variants: `heating.dhw_side` = `with_dhw` (`serves_dhw: true`), `heatin
 
 | Port | State | Reason |
 |---|---|---|
-| `heating.sh` | required, active | `active_when: {with_buffer: [true]}` |
+| `heating.space_heating` | required, active | `active_when: {with_buffer: [true]}` |
 | `heating.dhw` (provided circuit) | required, active | `serves_dhw: true` |
 | `heating.electricity_dhw`, `heating.dhw_temperature`, `heating.ems_modifier` into `ControllerDHW` | active | `serves_dhw: true` |
 | `heating.solar_coil`, `dhw.solar_coil` | optional, **unbound** | no candidate (no solar import); no fallback to apply |
@@ -94,7 +94,7 @@ default connections from the partner's class as a bare name, or the explicit wir
 | `heating.weather` (→ `ControllerSH`) | link (data) | `Weather` | default | bare `Weather` in `heating-ControllerSH` |
 | `heating.weather` (→ `HeatPump`) | link (data) | `Weather` | default | explicit `TemperatureAmbient`, `TemperatureInputPrimary` ← `Weather.DailyAverageOutsideTemperatures`, named in the assembly's placeholder: the last resort of spec §3.2, since the class's default connections from `Weather` are not these two (`more_advanced_heat_pump_hplib.py` default connections); fixed by adding them to the class |
 | `heating.flow_temperature` | link (set point) | `HeatDistributionController` | default | bare `HeatDistributionController` in `heating-ControllerSH` — **G1** |
-| `heating.sh` | link (circuit) | `HeatDistributionSystem.sh` | default | bare `HeatDistributionSystem` in `heating-Buffer` (return temperature + mass flow, both the HDS's outputs); bare `heating-Buffer` in `HeatDistributionSystem` (supply temperature, the buffer's) |
+| `heating.space_heating` | link (circuit) | `HeatDistributionSystem.space_heating` | default | bare `HeatDistributionSystem` in `heating-Buffer` (return temperature + mass flow, both the HDS's outputs); bare `heating-Buffer` in `HeatDistributionSystem` (supply temperature, the buffer's) |
 | `heating.electricity` | existence check | `grid.connection` | exists | nothing: electricity has no link; the two electricity outputs it names are observed (below) |
 | `heating.electricity_sh`, `.electricity_dhw` | observed + controlled | `control.flows` | via `ems_modifier` | two EMS feeds, `dispatch: {}` |
 | `heating.ems_modifier` | actuate | `control` | `optional-bind:` | bare `control-EMS` in `heating-ControllerSH` (`SimpleHotWaterStorageTemperatureModifier`) and in `heating-ControllerDHW` (`DHWStorageTemperatureModifier`) |

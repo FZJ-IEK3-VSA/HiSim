@@ -144,7 +144,7 @@ imports:
       control: smart                                # R: temperature_control.type_of_system;
                                                     # M: temperature_control_system (a parameter, not an import; † preset)
     bind:
-      space_heating: HeatDistribution.sh                       # circuit space_heating: buffer <-> HDS (one candidate: the bind is optional)
+      space_heating: HeatDistribution.space_heating                       # circuit space_heating: buffer <-> HDS (one candidate: the bind is optional)
       flow_temperature: HeatDistributionController  # a need found by class; written for the reader
                                                     # electricity: no bind (refused): the one grid connection
     optional-bind:

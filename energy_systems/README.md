@@ -305,9 +305,14 @@ partner}` (the partner must exist), `optional-bind: {port: partner}` (binds if i
 unbound, and the record says so) and `none: [port]` (declines an optional port). `required_when` and
 `active_when` make a port depend on the parameters. Inside an assembly an inner import's port is
 bound by a verb on the inner import, by an `internal:` entry, or re-exported with `from:
-<inner>.<port>`. The default connections are checked at load time against the member class's
-`CLASS_INTERFACE` (`hisim/component_interface.py`): its inputs and outputs with load types and units,
-the classes it declares default connections from, and its KPIs. Every refusal names the import, the
+<inner>.<port>`. Binding a component needs no declaration beyond what its class already does in
+its constructor: the expansion decides from the files alone (every entry states its class) which
+component is a candidate and refuses what they decide — no partner, several and no verb, `none:` on a
+required port, an absent `bind:` partner, a verb on an inactive port. Whether the member really
+declares default connections from the partner's class, and whether a wired input or output or a
+provided output exists, is checked when the system is built: after every component is constructed
+and before anything is connected (`EF-7H`, `EF-7J`, `hisim/energy_system/assemblies/port_check.py`),
+from the port-provenance table the import record keeps. Every refusal names the import, the
 instance, the port and every candidate, prints the source map of the import, and ends in a
 paste-ready `bind:` line.
 
@@ -315,13 +320,17 @@ paste-ready `bind:` line.
 circuit; the name is the medium (`dhw`, `sh`, `brine`, `solar_dhw`). A required end binds the one
 other end of the same circuit in scope — another import's circuit port or a site entry's
 (`ports: {sh: {circuit: sh}}` on the entry itself) — and `bind: {circuit: heating.dhw}` decides
-several; an end of another circuit is refused (`EF-7N`). The binding lowers by the hydronic naming
-convention: each of `MassFlow<C>`, `SupplyTemperature<C>` and `ReturnTemperature<C>` (`<C>` the name
-in camel case, `Dhw`, `SolarDhw`) must be an output of exactly one member of the two ends and an
-input of a member of the other end, whose class declares default connections from the owner's
-class; each reader gets the owner's bare name where its `{$port: <port>}` placeholder stands. A
-circuit port under `provides:` is optional (D20). The record lists every circuit with both ends and
-the outputs each owns.
+several; an end of another circuit is refused (`EF-7N`). The binding lowers from the files alone:
+every member of one end that carries the `{$port: <port>}` placeholder takes a bare name of each
+member of the other end. When the system is built, the post-construction port check verifies the
+hydronic naming convention on the constructed members: each of `MassFlow<C>`, `SupplyTemperature<C>`
+and `ReturnTemperature<C>` (`<C>` the name in camel case, `Dhw`, `SolarDhw`) must be an output of
+exactly one member of the two ends and an input, of the same load type and unit, of a member of the
+other end that carries the placeholder and declares default connections from the owner's class; and
+every bare name written must name an owner of an output its reader reads (`EF-7N`, `EF-7H`). A
+member of an end that owns none of the outputs the other end reads is therefore refused, not
+skipped. A circuit port under `provides:` is optional (D20). The record lists every circuit with
+both ends and their members.
 
 **Carriers.** A supply assembly provides a carrier, `provides: {connection: {carrier: natural_gas,
 meter: Meter}}`, the meter carrying a `{$port: connection}` placeholder; a site entry provides one
@@ -331,13 +340,15 @@ with `ports: {gas: {carrier: natural_gas}}` and is its own meter. A carrier is w
 [Boiler.FuelUse]}` (an output may also be named by a provided port of the assembly), binds the one
 provider of its carrier in scope, `bind:` decides several, and no provider is refused with the
 import that would add it ("add the import of `supply/gas_connection`"; the format never adds one,
-§5.2). For a fuel the provider's meter observes the consuming outputs: each lowers to an aggregator
-feed with the tags and weight the meter's class declares for that output of the consumer's class
-(`ClassInterface.default_feeds`), the items a recorded twin writes. Electricity has no link: a need
-writes nothing, takes no verb, and checks that exactly one electricity provider exists. A fuel
-provider no need is bound to is refused. A consuming output's energy carrier must be the need's —
-checked at load time where the class declares it (`DeclaredPort.carrier`), and once the components
-are built against the output's `EnergyPort` otherwise.
+§5.2). For a fuel the provider's meter observes the consuming outputs: the meter takes a bare name
+of each consuming member, which the wiring expands through the default feeds the meter's constructor
+declares from the consumer's class (`add_dynamic_default_connections`, with their tags and weight).
+When the system is built, the post-construction port check verifies on the constructed components
+that every named output exists, that its `EnergyPort` carries the need's carrier (`EF-7Q`), and that
+the meter's default feeds from the consumer's class are exactly the named outputs (`EF-7H`,
+`EF-7J`). Electricity has no link: a need writes nothing, takes no verb, and checks that exactly
+one electricity provider exists; its outputs' carriers are verified alike. A fuel provider no need
+is bound to is refused.
 
 **Facts.** A fact need, `{fact: pv_peak_power_in_watt, into: [Battery]}`, lowers to a
 `sizing_sources` line on each member naming the provider: a site entry or member whose class
@@ -403,21 +414,29 @@ observer port, `interface: {observes: {reading: {into: [Meter], default: declare
 where its member writes `{$observes: reading}`, or a site entry with `observes: [...]` and
 `{$observes: observes}` in its inputs; an import's `observes:` replaces the port's default (a list for
 the assembly's one observer port, or `{<port>: [...]}`). The candidates are the outputs of every
-component of the expanded system that the observer's class declares a dynamic default connection
-from, `ClassInterface.default_feeds` (a class without them cannot observe, `EF-7H`), never its own.
+component of the expanded system that the constructed observer declares a dynamic default
+connection from — what its constructor adds with `add_dynamic_default_connections`, as the real
+meter and energy manager do (an observer declaring none cannot observe, `EF-7H`) — never its own.
+Those exist only once the observer is built, so the selection is lowered then: after every
+component is constructed and before anything is connected; the built file, and its realized
+record, carry the feeds. Each match is an `observe` item of the port-provenance table, and the
+post-construction port check verifies it on the instances: the observed output exists (`EF-7J`), a
+channel of the observer accepts its tags, load type and unit (`EF-7J`, `EF-7Q`), and a dispatch
+target is an input of the participant, of the quantity the channel dispatches, on a channel that
+allows a dispatch (`EF-7J`, `EF-7U`).
 `declared` takes them all; a selector matches by `component_type` (an `lt.ComponentType` name or a
 list), `flow` (an `lt.InandOutputType` name or a list) or `output` (a name) — the keys of one
 selector hold together, a list observes the union — with an optional `feed: {component_type, tags,
 weight}` override and `required: true`. Each match becomes an ordinary aggregator feed with the
 declaration's tags and weight, in the order site entries, then imports, instances and members as
-written, then the outputs as the class declares them; the build's feed resolution sorts them again.
+written, then the outputs as the observer declares them; the build's feed resolution sorts them again.
 Refused: a `required` selector or a whole selection matching nothing (an idle observer), a ranked feed
 on an observer that is no controller (`EF-7S`), and one output selected and fed explicitly to one
 observer (`EF-25`).
 
 The **grid** is `supply/electricity_grid`: the electricity provider (no link, no meter on the port)
 and a meter observing. Its two shapes are two selections on the `grid` import: left at `declared`,
-the meter observes every flow its class declares (the twins' `metered_directly`); beside an energy
+the meter observes every flow it declares (the twins' `metered_directly`); beside an energy
 manager it observes the manager's grid balance by name, `observes: [{output:
 TotalElectricityToOrFromGrid}]`, on its production channel at 999 (`ems_with_battery`; the real
 `ElectricityMeter` declares that feed from `L2GenericEnergyManagementSystem`). A component reading
@@ -430,11 +449,11 @@ controller and is refused without one unless `optional: true`), or `controllable
 (an L1 modifier need partnered with the manager's class: binding it lowers to the L1's default
 connections from the manager, the modifier; unbound, the output is not controlled). A **controller**
 assembly (`control/ems_self_consumption`) declares `actuates: {priorities: {$param: priorities}}`, its
-priority list, an ordered list of selectors. Its observer port ranks every feed its class declares at
+priority list, an ordered list of selectors. Its observer port ranks every feed the manager declares at
 a weight other than 999: residents and solar thermal rank-only with `dispatch: {}`, a `via` output with
 `dispatch: {}`, a battery with `dispatch: {target_input: LoadingPowerInput}`. **Weights are derived,
-never written**: each entry starts from the class default of its component types — the weight the
-class declares, for the real manager `L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS` (residents 1,
+never written**: each entry starts from the default of its component types — the weight the manager's
+constructor declares, for the real manager `L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS` (residents 1,
 space heating 2, hot water 3, solar thermal 4, battery 6) — the k-th further instance of a type gets
 `default + k`, and an entry not above every earlier entry's weights is raised to the next free one.
 One device each in the default order gives the class weights; a second battery gets 7; a list putting
@@ -442,9 +461,10 @@ the battery before space heating gives 1, 6, 7. Refused (`EF-7V`): an entry sele
 output or one an earlier entry ranks, an entry with `feed:`, a ranked output no entry selects, a
 weight reaching 999, two ports of one type at one weight, a weight written on a controller's
 selection. Refused (`EF-7U`): a controllable output no controller ranks or two do, a `via` output
-ranked by a manager it is not bound to, a `controllable` naming an input the manager's class does not
-actuate (it actuates only L1 modifiers and what it declares, `DeclaredFeed.dispatch_target`, D21), a
-target input actuated and also wired, `actuates:` on an import. The import record lists every
+ranked by a manager it is not bound to, a target input actuated and also wired, `actuates:` on an
+import; and, once built, a `controllable` naming an input the manager cannot actuate — not an input of
+the device, on a channel that forbids a dispatch, or of another quantity than the manager dispatches
+(it actuates only L1 modifiers and inputs of the quantity it dispatches, D21). The import record lists every
 observer with its selection, its feeds (tags, weight, dispatch, the ports they grow, the selector),
 a controller's priorities with the weight each entry gave, and every actuation.
 
@@ -461,11 +481,14 @@ every directory `HISIM_ASSEMBLY_PATH` names (`os.pathsep`-separated); a path fou
 The realized record's metadata carries the **import record** — per import and instance the assembly
 path and the sha256 of its file, the preset, the parameters as given and as resolved, the variants,
 the members' addresses, display names and order paths, every port's state and partner, the binding
-decisions and the evaluation sequence — and the **source map** of every produced item, which every
-downstream error naming a produced component prints. A realized record re-runs without any assembly.
+decisions, the port-provenance table and the evaluation sequence — and the **source map** of every
+produced item, which every downstream error naming a produced component prints. A realized record
+re-runs without any assembly; its port-provenance table is checked against the constructed
+components as on the first run.
 
 **Inspecting.** `hisim energy-system describe <family>/<name>` (or a path to a `*.assembly.yaml`)
-prints an assembly's interface with partner classes and requirement states, its parameters with
+prints an assembly's interface as its file declares it, with partner classes and requirement states
+(the partners' default connections are verified when a system is built, not here), its parameters with
 units, ranges, defaults and values, its constraints, presets, members, variants, inner imports and
 test contract; `describe` of a component class shows the unit every field declares. `hisim
 energy-system schema` writes `hisim/assembly_v4.schema.json` beside the energy-system schema (whose
@@ -478,11 +501,19 @@ entry for every energy-carrying or temperature output of every member (`{output:
 unit: WATT, min: 0, max: 200}`; a KPI is bounded as `{kpi: PV production, member: PVSystem, min:
 0}`), at least one `monotone` entry while it has a numeric parameter (`{parameter: volume_in_liter,
 kpi: Standby heat losses, member: Tank, direction: increasing}`, or `decreasing`, `constant`; a bare
-connection has nothing to sweep), and optionally `expect` bands per preset. The library check refuses
-an assembly without them, or with a declaration naming a member, output, KPI, parameter or preset
+connection has nothing to sweep), and optionally `expect` bands per preset.
+The contract test has two halves. The library check reads the file and refuses an assembly without
+a `tests:` block, a range or a `monotone`, or with a declaration naming a member, parameter or preset
 that does not exist. A member written in several variant options is checked once per option, against
 that option's class, and a problem names the option (hisim-lt0b.13); a `{$param: …}` carrier must be
-a carrier for every value it takes while its port is active. The generic harness,
+a carrier for every value it takes while its port is active. The member contract needs the
+constructed members (no class declares its outputs or KPIs a second time): the harness runs the base
+samples first and checks, on their members, that every energy-carrying or temperature output — a
+power or energy unit, a temperature load type or a °C/K unit (`MemberContract`,
+`hisim/energy_system/assemblies/testing/contract.py`) — has a `bounds` entry, that a bounds entry's
+unit is its output's, and that every named KPI is one the member's `get_component_kpi_entries`
+reports. A violation is a contract failure named by member and output (or KPI), and no declaration
+of the assembly is evaluated. The generic harness,
 `hisim/energy_system/assemblies/testing/`, executes the contract; nothing is written per assembly in
 Python.
 

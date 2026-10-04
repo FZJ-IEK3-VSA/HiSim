@@ -3,54 +3,66 @@
 HiSim has no bus. A meter and an energy manager are dynamic components whose inputs are added as
 their selectors match (§4.3, D13): each **observer** — a site entry with ``observes:``, or an
 assembly's observer port, its default replaced by the import's ``observes:`` — selects among the
-outputs its class declares dynamic default connections from
-(:attr:`~hisim.component_interface.ClassInterface.default_feeds`), and every match becomes an
-ordinary :class:`~hisim.energy_system.model.AggregatorFeed` with that declaration's tags and weight,
-written where the observer's ``{$observes: <port>}`` placeholder stands. The expanded file carries
-explicit feeds, so the channel matching and the feed resolution run unchanged.
+outputs the constructed observer declares dynamic default connections from (what its constructor
+adds with ``add_dynamic_default_connections``, read as
+:class:`~hisim.config.channels.ObservableFeed`), and every match becomes an ordinary
+:class:`~hisim.energy_system.model.AggregatorFeed` with that declaration's tags and weight, written
+where the observer's ``{$observes: <port>}`` placeholder stands. The expanded file carries explicit
+feeds, so the channel matching and the feed resolution run unchanged.
+
+**When.** What an observer may observe is declared in its constructor and nowhere else, so the
+selection runs once the components are constructed and before anything is connected: the
+expansion keeps every observer's context (:class:`~hisim.energy_system.assemblies.expansion.PendingSelection`)
+and the build completes it. Every match is written into the port-provenance table as an ``observe``
+item, which the post-construction port check verifies on the instances: the observed output exists,
+a channel of the observer accepts it with its load type and unit, and a dispatch target is an input
+of the participant on a channel that allows a dispatch.
 
 **Candidates and order.** The candidates are the outputs of every component of the expanded system
 — site entries in written order, then the imports in written order, each instance in written order,
-its members in production order — that the observer's class declares a feed from, in the order the
-class declares them; an observer never matches its own outputs. ``declared`` selects every
+its members in production order — that the observer declares a feed from, in the order it declares
+them; an observer never matches its own outputs. ``declared`` selects every
 candidate; a list of selectors the union of their matches, in candidate order (never a dict, file
 system or hash order); the feed resolution sorts them again at build time (``feed_resolution.py``).
 
 **Controllers** (§4.4, D11, D21). An assembly whose interface ``actuates:`` a priority list ranks the
-feeds of its observer port that its class declares at a ranked weight (anything but 999). Each entry
-of the list starts from the class's default weight of the component types it ranks — the weight its
-class declares, so the controller's own constants (``L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS``)
+feeds of its observer port that the controller declares at a ranked weight (anything but 999). Each
+entry of the list starts from the default weight of the component types it ranks — the weight the
+controller declares, so the controller's own constants (``L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS``)
 are the one source — the k-th further participant of one type gets ``default + k``, and an entry not
 above every earlier entry's weights is raised to the next free one, keeping its spacing. A default-order
 list with one participant per type therefore reproduces the class's weights; a second battery gets 7;
 a reordered list gets weights in list order. The feed's dispatch follows what the observed output
-states: ``controllable: {target_input: …}`` lowers to ``dispatch.target_input`` and must name the input
-the controller's class declares it actuates directly; ``controllable: {via: <need>}`` lowers to an
+states: ``controllable: {target_input: …}`` lowers to ``dispatch.target_input``, an input of the
+participant on a channel of the controller that allows a dispatch (verified after construction);
+``controllable: {via: <need>}`` lowers to an
 empty dispatch, and its need — bound to this controller — has already lowered to the L1's default
 connections from the controller's class, the modifier; an output with no ``controllable`` the class
 ranks is ranked only, with an empty dispatch (residents, solar thermal).
 
-**Refusals.** An observer class that declares no feeds (``EF-7H``); a ``required`` selector matching
-nothing, an observer whose selection matches nothing (idle), a ranked feed on an observer that is no
-controller, an import's ``observes:`` for a port its assembly lacks (``EF-7S``); a component reading
-another observer's output and an output that observer reads, the meter reading the EMS's grid balance
-and a flow the EMS observes (``EF-7T``, §3.3); a controllable output no controller selects or two do,
-a target input actuated twice, a ``controllable`` naming an input the controller may not actuate
-(``EF-7U``); an entry selecting a measured output or one an earlier entry ranks, a ranked output no
-entry selects, a weight reaching 999, two ports of one type at one weight (``EF-7V``); an output
-selected and fed explicitly to one observer (``EF-25``, as ``DUPLICATE_FEED``); and two participants of
-one observer whose derived port names collide (``EF-7W``). Every weight, dispatch and actuation goes
-to the import record, :class:`~hisim.energy_system.assemblies.record.ObserverRecord` and
+**Refusals.** A constructed observer that declares no dynamic default connections (``EF-7H``); a
+``required`` selector matching nothing, an observer whose selection matches nothing (idle), a ranked
+feed on an observer that is no controller, an import's ``observes:`` for a port its assembly lacks
+(``EF-7S``); a component reading another observer's output and an output that observer reads, the
+meter reading the EMS's grid balance and a flow the EMS observes (``EF-7T``, §3.3); a controllable
+output no controller selects or two do, a target input actuated twice (``EF-7U``); an entry selecting
+a measured output or one an earlier entry ranks, a ranked output no entry selects, a weight reaching
+999, two ports of one type at one weight (``EF-7V``); an output selected and fed explicitly to one
+observer (``EF-25``, as ``DUPLICATE_FEED``); and two participants of one observer whose derived port
+names collide (``EF-7W``). A dispatch target that is no input of the participant, on a channel that
+forbids a dispatch or of another quantity than the channel dispatches (``EF-7J``, ``EF-7U``), and an
+observed output its participant does not have or no channel accepts (``EF-7J``, ``EF-7Q``), the
+post-construction port check refuses. Every weight, dispatch and actuation goes to the import record,
+:class:`~hisim.energy_system.assemblies.record.ObserverRecord` and
 :class:`~hisim.energy_system.assemblies.record.ActuationRecord`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from hisim.component_interface import ClassInterface, DeclaredFeed
-from hisim.config.channels import ResolvedDynamicConnection
+from hisim.config.channels import ObservableFeed, ResolvedDynamicConnection
 from hisim.energy_system.assemblies.record import (
     ActuationRecord,
     FeedRecord,
@@ -146,7 +158,7 @@ class Match:
     """One output an observer's selection matched, with the declaration it matched by."""
 
     unit: "Unit"
-    declared: DeclaredFeed
+    declared: ObservableFeed
     selected_by: str
     override: Optional[FeedOverride]
     weight: int
@@ -202,7 +214,7 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
         units: Sequence["Unit"],
         slots: Sequence[ObserverSlot],
         controllables: Sequence[Controllable],
-        interface_of: Callable[["Unit"], Optional[ClassInterface]],
+        feeds_of: Callable[["Unit"], Mapping[str, Tuple[ObservableFeed, ...]]],
         record: ImportRecord,
         item_text: Callable[[AnyInputItem], str],
     ) -> None:
@@ -212,14 +224,14 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
             units: Every component of the expanded system, in candidate order.
             slots: Every observer, site entries first, then by import, instance and member.
             controllables: Every active controllable output.
-            interface_of: The class interface of a unit's class, or ``None``.
+            feeds_of: The constructed observer's declared feeds, by source class name.
             record: The import record the pass writes its observers and actuations to.
             item_text: Renders an input item for the port records.
         """
         self.units = list(units)
         self.slots = list(slots)
         self.controllables = list(controllables)
-        self.interface_of = interface_of
+        self.feeds_of = feeds_of
         self.record = record
         self.item_text = item_text
         self.by_name = {unit.name: unit for unit in self.units}
@@ -251,47 +263,37 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
 
     # ------------------------------------------------------------------------------------ selection
 
-    def _observer_interface(self, slot: ObserverSlot) -> ClassInterface:
-        """The observer's class interface; a class that declares no feeds cannot observe (``EF-7H``)."""
-        interface = self.interface_of(slot.unit)
-        if interface is None or not interface.default_feeds:
+    def _observer_feeds(self, slot: ObserverSlot) -> Mapping[str, Tuple[ObservableFeed, ...]]:
+        """The constructed observer's declared feeds; an observer that declares none cannot observe (``EF-7H``)."""
+        feeds = self.feeds_of(slot.unit)
+        if not any(feeds.values()):
             raise self.error(
                 EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
                 slot.owner,
-                f"{slot.label} observes, but {slot.unit.class_path} declares "
-                + ("no CLASS_INTERFACE" if interface is None else "no dynamic default connections (default_feeds)")
-                + f", so it has no candidates to select from ({slot.source}).",
+                f"{slot.label} observes, but the constructed {class_name_of(slot.unit)} declares no dynamic default "
+                f"connections, so it has no candidates to select from ({slot.source}).",
                 remedy=(
-                    f"Declare the outputs it observes on {slot.unit.class_path}: ClassInterface.default_feeds, one "
-                    "DeclaredFeed with its tags and weight per source class and output (hisim.component_interface)."
+                    f"Add the outputs it observes to {slot.unit.class_path}'s constructor: "
+                    "add_dynamic_default_connections, one connection with its tags and weight per source class and "
+                    "output."
                 ),
             )
-        return interface
+        return feeds
 
-    def _candidates(self, slot: ObserverSlot, interface: ClassInterface) -> List[Tuple["Unit", DeclaredFeed]]:
-        """Every output of the system the observer's class declares a feed from, in candidate order."""
-        candidates: List[Tuple["Unit", DeclaredFeed]] = []
+    def _candidates(self, slot: ObserverSlot) -> List[Tuple["Unit", ObservableFeed]]:
+        """Every output of the system the observer declares a feed from, in candidate order."""
+        feeds = self._observer_feeds(slot)
+        candidates: List[Tuple["Unit", ObservableFeed]] = []
         for unit in self.units:
             if unit is slot.unit:
                 continue
-            for declared in interface.feeds_from(class_name_of(unit)):
-                source_interface = self.interface_of(unit)
-                if source_interface is not None and source_interface.output(declared.output) is None:
-                    raise self.error(
-                        EnergySystemErrorId.PORT_CONTRACT,
-                        slot.owner,
-                        f"{slot.unit.class_path} declares a feed from {declared.source_class}.{declared.output}, "
-                        f"which is no output {unit.class_path} declares ({unit.name}) ({slot.source}).",
-                        alternatives=tuple(port.name for port in source_interface.outputs),
-                        alternatives_label="outputs",
-                    )
+            for declared in feeds.get(class_name_of(unit), ()):
                 candidates.append((unit, declared))
         return candidates
 
     def _select(self, slot: ObserverSlot) -> List[Match]:
         """The matches of one observer's selection, in candidate order (§4.2)."""
-        interface = self._observer_interface(slot)
-        candidates = self._candidates(slot, interface)
+        candidates = self._candidates(slot)
         listed = ", ".join(f"{unit.name}.{declared.output}" for unit, declared in candidates) or "none"
         matches: List[Match] = []
         if slot.selection.declared:
@@ -327,7 +329,7 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
     def _refuse_ranked_without_controller(self, slot: ObserverSlot) -> None:
         """Refuses a ranked feed on an observer that is no controller: ranking is the priorities' (§4.4)."""
         for match in slot.matches:
-            if match.weight != DeclaredFeed.MEASURED_ONLY_WEIGHT:
+            if match.weight != ObservableFeed.MEASURED_ONLY_WEIGHT:
                 raise self.error(
                     EnergySystemErrorId.OBSERVER_SELECTION,
                     slot.owner,
@@ -340,10 +342,9 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
     # -------------------------------------------------------------------------------------- ranking
 
     def _class_defaults(self, slot: ObserverSlot) -> Dict[str, int]:
-        """The controller class's default weight per type, from its own declarations; one per type."""
-        interface = self._observer_interface(slot)
+        """The controller's default weight per type, from its own declarations; one per type."""
         defaults: Dict[str, int] = {}
-        for declared in interface.default_feeds:
+        for declared in (feed for feeds in self._observer_feeds(slot).values() for feed in feeds):
             if not declared.is_ranked:
                 continue
             key = declared.component_type or f"{declared.source_class}.{declared.output}"
@@ -420,12 +421,12 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
             previous = max(previous, *weights)
             lines = []
             for match, weight in zip(selected, weights):
-                if weight >= DeclaredFeed.MEASURED_ONLY_WEIGHT:
+                if weight >= ObservableFeed.MEASURED_ONLY_WEIGHT:
                     raise self.error(
                         EnergySystemErrorId.PRIORITY_WEIGHTS,
                         slot.owner,
                         f"the priorities of {slot.label} derive the weight {weight} for {match.text}; a ranked "
-                        f"weight stays below {DeclaredFeed.MEASURED_ONLY_WEIGHT}, which marks a measured feed "
+                        f"weight stays below {ObservableFeed.MEASURED_ONLY_WEIGHT}, which marks a measured feed "
                         f"({slot.source}).",
                     )
                 assigned[id(match)] = weight
@@ -465,45 +466,18 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
         slot_record.priorities.extend(records)
 
     def _dispatch(self, slot: ObserverSlot, match: Match) -> None:
-        """Decides the dispatch of one ranked feed from what the observed output states (§4.4, D21)."""
+        """Decides the dispatch of one ranked feed from what the observed output states (§4.4, D21).
+
+        ``controllable: {target_input: …}`` lowers to that dispatch target; whether it is an input of
+        the participant on a channel of the controller that allows a dispatch, the post-construction
+        port check verifies on the instances.
+        """
         controllable = next((item for item in self.controllables if item.key == match.key), None)
-        target = match.declared.dispatch_target
-        if target is not None:
-            if controllable is None or controllable.port.controllable_target is None:
-                raise self.error(
-                    EnergySystemErrorId.ACTUATION,
-                    slot.owner,
-                    f"{class_name_of(slot.unit)} actuates {target} of {match.text} directly (D21), but "
-                    + (
-                        f"{controllable.text} states another way"
-                        if controllable is not None
-                        else "no assembly states that output controllable"
-                    )
-                    + f"; only a provided output with controllable: {{target_input: {target}}} is actuated "
-                    f"({slot.source}).",
-                    remedy=f"Import the device through its assembly, whose provided output states "
-                    f"controllable: {{target_input: {target}}}, or narrow the selection.",
-                )
-            if controllable.port.controllable_target != target:
-                raise self.error(
-                    EnergySystemErrorId.ACTUATION,
-                    slot.owner,
-                    f"{controllable.text} names the input {controllable.port.controllable_target}, but "
-                    f"{class_name_of(slot.unit)} actuates {target} of {match.text}; the controller actuates only "
-                    f"L1 modifiers and the inputs its class declares (D21) ({controllable.source}).",
-                )
+        if controllable is not None and controllable.port.controllable_target is not None:
+            target = controllable.port.controllable_target
             match.dispatch = DispatchSpec(target_input=target)
             match.control = f"target_input {target}"
             return
-        if controllable is not None and controllable.port.controllable_target is not None:
-            raise self.error(
-                EnergySystemErrorId.ACTUATION,
-                slot.owner,
-                f"{controllable.text} names the device input {controllable.port.controllable_target}, but "
-                f"{class_name_of(slot.unit)} actuates no input of {match.text} directly: the controller actuates only "
-                f"L1 set-point modifiers (controllable: {{via: <need>}}) and the inputs its class declares (D21) "
-                f"({controllable.source}).",
-            )
         if controllable is not None:
             via = controllable.via_handle
             bound = via.bound_partner if via is not None else None

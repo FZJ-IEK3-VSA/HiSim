@@ -8,15 +8,24 @@ content hash of what it read.
 import hashlib
 import os
 from pathlib import Path
+from typing import Any, Tuple
 
 import pytest
 
-from hisim.component_interface import ClassInterface, DeclaredPort
-from hisim import loadtypes as lt
 from hisim.energy_system.assemblies.library import CheckStrength, check_assembly, require_valid
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError
+from hisim.energy_system.assemblies.testing.contract import MemberContract
+from hisim.simulationparameters import SimulationParameters
 from tests.assemblies.helpers import Library, Mocks, mock_resolver
+from tests.assemblies.mock_components import (
+    MockBoiler,
+    MockBoilerConfig,
+    MockHeater,
+    MockHeaterConfig,
+    MockTank,
+    MockTankConfig,
+)
 
 
 def library_paths() -> list:
@@ -92,7 +101,6 @@ def test_the_library_check_lists_every_problem_of_a_file_at_once(tmp_path: Path)
         "takes an input from 'Outsider', which is no member",
         "'power_in_watt' is in KILOWATT, the field MockHeaterConfig.power_in_watt it feeds in WATT",
         "lowers into 'Nobody', which is no member",
-        "'Heater.NoSuchOutput', which is no output of 'Heater'",
         "a placeholder for 'undeclared', which is no port",
         "carries no test contract",
     ):
@@ -103,8 +111,13 @@ def test_the_library_check_lists_every_problem_of_a_file_at_once(tmp_path: Path)
 
 
 @pytest.mark.base
-def test_the_test_contract_must_bound_every_energy_and_temperature_output(tmp_path: Path) -> None:
-    """D24: a ``bounds`` entry per energy-carrying or temperature output, at least one ``monotone``."""
+def test_the_test_contract_is_checked_from_the_file(tmp_path: Path) -> None:
+    """D24 from the file: at least one ``monotone``, units of ``lt.Units``, names resolving to members and presets.
+
+    Which outputs need a bounds entry, a bounded output's unit and the KPIs a member reports the
+    constructed members say; the assembly test harness checks those in its isolation run, so the
+    library check, which constructs nothing, reports none of them.
+    """
     library = Library(tmp_path)
     library.add(
         "broken/unbounded",
@@ -122,7 +135,9 @@ def test_the_test_contract_must_bound_every_energy_and_temperature_output(tmp_pa
         tests:
           bounds:
             - {output: Tank.WaterTemperature, unit: KELVIN, min: 0, max: 400}
-            - {kpi: No such KPI, member: Tank, max: 1}
+            - {output: Pump.Flow, unit: METER_PER_SECOND, min: 0, max: 1}
+            - {output: Tank.HeatLoss, unit: FURLONG, min: 0, max: 1}
+            - {kpi: No such KPI, member: Pipe, max: 1}
           monotone: []
           expect:
             - {preset: missing, kpi: Standby heat losses, member: Tank, max: 1}
@@ -132,40 +147,12 @@ def test_the_test_contract_must_bound_every_energy_and_temperature_output(tmp_pa
 
     found = "\n".join(check_assembly(resolver.resolve("broken/unbounded", "test"), resolver, CheckStrength.LIBRARY))
 
-    assert "the WATT output 'Tank.HeatLoss' has no bounds entry" in found
-    assert "states KELVIN for 'Tank.WaterTemperature', whose unit is CELSIUS" in found
-    assert "'Tank' reports no KPI 'No such KPI'" in found
+    assert "the bounds entry names 'Pump.Flow', but 'Pump' is no member" in found
+    assert "the unit 'FURLONG' is no member of lt.Units" in found
+    assert "the entry names the member 'Pipe', which does not exist" in found
     assert "no monotone entry" in found
     assert "the preset 'missing', which the assembly does not offer" in found
-
-
-@pytest.mark.base
-def test_energy_and_temperature_outputs_are_decided_by_unit_and_load_type() -> None:
-    """The documented rule: a power or energy unit, a temperature load type or unit."""
-    rule = ClassInterface.carries_energy_or_temperature
-
-    assert rule(DeclaredPort("P", lt.LoadTypes.ELECTRICITY, lt.Units.WATT))
-    assert rule(DeclaredPort("E", lt.LoadTypes.HEATING, lt.Units.KWH))
-    assert rule(DeclaredPort("T", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS))
-    assert rule(DeclaredPort("dT", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN))
-    assert not rule(DeclaredPort("S", lt.LoadTypes.ON_OFF, lt.Units.ANY))
-    assert not rule(DeclaredPort("W", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP))
-
-
-@pytest.mark.base
-def test_a_class_interface_is_held_to_at_construction() -> None:
-    """A component adding a port its interface does not declare is refused by the component itself."""
-    from hisim.component_interface import ClassInterfaceViolation  # noqa: PLC0415
-    from hisim.simulationparameters import SimulationParameters  # noqa: PLC0415
-    from tests.assemblies.mock_components import MockWeather, MockWeatherConfig  # noqa: PLC0415
-
-    weather = MockWeather(SimulationParameters.one_day_only(2021, 900), MockWeatherConfig.preset_standard("W"))
-    with pytest.raises(ClassInterfaceViolation, match="adds the output 'Rogue'"):
-        weather.add_output("W", "Rogue", lt.LoadTypes.ANY, lt.Units.ANY, output_description="x")
-    with pytest.raises(ClassInterfaceViolation, match="default connections from 'MockTank'"):
-        from hisim.component import ComponentConnection  # noqa: PLC0415
-
-        weather.add_default_connections([ComponentConnection("X", "MockTank", "Y")])
+    assert "KELVIN" not in found and "No such KPI" not in found
 
 
 @pytest.mark.base
@@ -258,57 +245,68 @@ EVERY_BOUND = [
 ]
 
 
-def two_heaters(tmp_path: Path, bounds: list) -> list:
-    """The library problems of the two-option heater with the given bounds entries."""
+def two_heaters(tmp_path: Path, bounds: list) -> Tuple[list, Any]:
+    """The library problems of the two-option heater with the given bounds entries, and its test contract."""
     library = Library(tmp_path)
     text = TWO_OPTION_HEATER.replace(
         "{bounds}", "\n".join(f"    - {{output: {item}, min: -100000, max: 100000}}" for item in bounds)
     )
     library.add("dhw/two_heaters", text)
     resolver = library.resolver()
-    return check_assembly(resolver.resolve("dhw/two_heaters", "test"), resolver, CheckStrength.LIBRARY)
+    assembly = resolver.resolve("dhw/two_heaters", "test")
+    return check_assembly(assembly, resolver, CheckStrength.LIBRARY), assembly.model.tests
+
+
+def option_members(option: str) -> dict:
+    """The constructed members of one option of the two-option heater, as an isolation run of it builds them."""
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    heater: Any = (
+        MockHeater(parameters, MockHeaterConfig.preset_standard("Heater"))
+        if option == "immersion"
+        else MockBoiler(parameters, MockBoilerConfig.preset_condensing("Heater"))
+    )
+    return {"Tank": MockTank(parameters, MockTankConfig.preset_standard("Tank")), "Heater": heater}
 
 
 @pytest.mark.base
 def test_a_member_in_two_options_is_checked_against_each_options_class(tmp_path: Path) -> None:
-    """hisim-lt0b.13: a declaration holding for one option's class and not the other's is refused, naming the option.
+    """hisim-lt0b.13: a bounds entry naming an output only one option's member has fails in the other option.
 
-    Keyed by name, the check used to see only the last option's class — the boiler — so the electric
-    heater's outputs went unchecked. Every bounds entry is checked against both classes: one naming an
-    output only one option declares is refused for the other, as the harness would fail it in that
-    option's runs ("no result column"). The provided port is active only with electricity, so the
-    boiler owes it nothing.
+    The outputs exist on the constructed members only, so the library check, which constructs nothing,
+    finds no problem; the member contract of the harness checks every option's sample on its own
+    constructed members, and a bounds entry naming an output the option's class does not have fails
+    there, as the run would fail it ("no result column"). The provided port is active only with
+    electricity, so the boiler owes it nothing.
     """
-    listed = two_heaters(tmp_path, EVERY_BOUND)
+    listed, tests = two_heaters(tmp_path, EVERY_BOUND)
+    assert not listed, listed
 
-    expected = [
-        ("ThermalPower", "burner"),
-        ("ElectricityInput", "burner"),
-        ("SupplyTemperatureDhw", "immersion"),
-        ("ThermalPowerDhw", "immersion"),
-        ("FuelUse", "immersion"),
-        ("FlueLoss", "immersion"),
-    ]
-    assert len(listed) == len(expected), listed
-    for output, option in expected:
-        assert any(
-            f"the bounds entry names 'Heater.{output}', which is no output of 'Heater' in option '{option}' of the "
-            "variant 'heater'." in problem
-            for problem in listed
-        ), (output, option)
-    assert not any("the port 'electricity'" in problem for problem in listed)
+    for option, missing in (
+        ("burner", ["ThermalPower", "ElectricityInput"]),
+        ("immersion", ["SupplyTemperatureDhw", "ThermalPowerDhw", "FuelUse", "FlueLoss"]),
+    ):
+        contract = MemberContract(tests)
+        contract.check_outputs(option_members(option))
+        assert [(violation.subject, violation.rule) for violation in contract.violations] == [
+            (f"Heater.{output}", "bounds output") for output in missing
+        ], option
+        assert all(
+            "which is no output of the constructed Heater" in violation.message for violation in contract.violations
+        )
 
 
 @pytest.mark.base
 def test_an_output_only_one_option_declares_must_be_bounded_for_that_option(tmp_path: Path) -> None:
-    """Every energy or temperature output of every option's class owes a bounds entry, named by option."""
-    listed = two_heaters(tmp_path, [item for item in EVERY_BOUND if not item.startswith("Heater.ThermalPower,")])
+    """Every energy or temperature output of every option's constructed member owes a bounds entry."""
+    listed, tests = two_heaters(tmp_path, [item for item in EVERY_BOUND if not item.startswith("Heater.ThermalPower,")])
+    assert not listed, listed
 
-    assert any(
-        "the WATT output 'Heater.ThermalPower' in option 'immersion' of the variant 'heater' has no bounds entry."
-        in problem
-        for problem in listed
-    ), listed
+    contract = MemberContract(tests)
+    contract.check_outputs(option_members("immersion"))
+
+    assert "the WATT output 'Heater.ThermalPower' (HEATING) has no bounds entry." in [
+        violation.message for violation in contract.violations
+    ]
 
 
 @pytest.mark.base
@@ -344,7 +342,11 @@ def test_monotone_is_required_only_beside_a_numeric_parameter(tmp_path: Path) ->
 
 @pytest.mark.base
 def test_the_contract_check_of_observers_controllables_and_priorities(tmp_path: Path) -> None:
-    """An observer port's member carries its placeholder and declares feeds; ``via`` names a need; priorities a list."""
+    """From the file: an observer port's member carries its placeholder, ``via`` names a need, priorities a list.
+
+    Whether the observer's constructed component declares feeds, and whether a ``target_input`` is an input of
+    the constructed member, the build decides (test_assembly_selectors.py).
+    """
     library = Library(tmp_path)
     library.add(
         "control/broken",
@@ -389,11 +391,9 @@ def test_the_contract_check_of_observers_controllables_and_priorities(tmp_path: 
     for expected in (
         "'EMS' carries 0 '{$observes: flows}' placeholders; the feeds of the observer port 'flows' land at exactly "
         "one.",
-        "'Tank' (MockTank) declares no dynamic default connections (default_feeds), so the observer port 'flows' has "
-        "nothing to select.",
         "the priorities of 'priorities' are taken from 'order', which is no list parameter of the assembly.",
-        "the provided output 'charge' is controllable through 'NoSuchInput', which is no input of 'Battery'.",
         "the provided output 'heat' is controllable via 'nothing', which is no need of the assembly; 'via' names the "
         "need whose binding lowers to the L1 controller's modifier.",
     ):
         assert expected in listed, (expected, listed)
+    assert not any("NoSuchInput" in problem or "default_feeds" in problem for problem in listed), listed

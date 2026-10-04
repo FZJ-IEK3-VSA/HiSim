@@ -10,9 +10,11 @@ from hisim.energy_system.assemblies.expansion import expand_imports
 from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.document import RawDocument
+from hisim.energy_system.executor import BuiltEnergySystem, EnergySystemExecutor
 from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.source_lines import LineIndex
+from hisim.simulationparameters import SimulationParameters
 
 
 class Mocks:
@@ -69,6 +71,16 @@ def expand_text(
     """Reads and expands an inline energy-system file against the mock library (or a given one)."""
     model, lines = read_system(text, origin)
     return expand_imports(model, resolver or mock_resolver(), lines=lines)
+
+
+def build_text(text: str, result_directory: Path, resolver: Optional[AssemblyResolver] = None) -> BuiltEnergySystem:
+    """Reads, expands and builds an inline energy-system file (one day at 900 s), constructing every component."""
+    model, lines = read_system(text)
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    parameters.result_directory = str(result_directory)
+    return EnergySystemExecutor(
+        model, parameters, assembly_resolver=resolver or mock_resolver(), source_lines=lines
+    ).build()
 
 
 def site(*entries: str) -> str:

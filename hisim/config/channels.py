@@ -258,6 +258,60 @@ class DynamicConnectionChannel:
 
 
 @dataclass(frozen=True)
+class ObservableFeed:
+    """One output an aggregator observes from a class of participants, as its constructor declares it.
+
+    An aggregator — a meter, an energy manager — declares in its constructor, with
+    ``DynamicComponent.add_dynamic_default_connections``, which output of which participant class it
+    takes, with which tags and at which weight. That declaration exists only on the constructed
+    aggregator; no class states it a second time. This record is the same declaration in the
+    vocabulary an assembly's selectors speak (``assemblies_spec.md`` §4.1): the class name, the
+    output, the component type and flow tags by member name, and the weight. The assembly loader
+    builds the candidates of an observer's selection from it, once the observer is constructed.
+
+    Attributes:
+        source_class: The participant's class name (``Component.get_classname()``).
+        output: The participant's output.
+        tags: The flow tags, as ``lt.InandOutputType`` member names.
+        weight: The weight: :attr:`MEASURED_ONLY_WEIGHT` for an output the aggregator only measures,
+            any other for one it ranks.
+        component_type: The participant's ``lt.ComponentType`` member name, or ``None``.
+    """
+
+    #: The weight of a feed the aggregator only measures; any other weight is a rank.
+    MEASURED_ONLY_WEIGHT: ClassVar[int] = 999
+
+    source_class: str
+    output: str
+    tags: Tuple[str, ...]
+    weight: int
+    component_type: Optional[str] = None
+
+    @property
+    def is_ranked(self) -> bool:
+        """Whether the aggregator ranks this feed rather than only measuring it."""
+        return self.weight != self.MEASURED_ONLY_WEIGHT
+
+    @property
+    def all_tags(self) -> Tuple[str, ...]:
+        """The component type followed by the flow tags, the order a runtime connection lists them in."""
+        return ((self.component_type,) if self.component_type is not None else ()) + tuple(self.tags)
+
+    @classmethod
+    def from_connection(cls, connection: object) -> "ObservableFeed":
+        """The record of one dynamic default connection (``DynamicComponentConnection``) an aggregator added."""
+        tags = list(getattr(connection, "source_tags", ()) or ())
+        component_type = next((tag.name for tag in tags if isinstance(tag, lt.ComponentType)), None)
+        return cls(
+            source_class=str(getattr(connection, "source_class_name")),
+            output=str(getattr(connection, "source_component_field_name")),
+            tags=tuple(tag.name for tag in tags if isinstance(tag, lt.InandOutputType)),
+            weight=int(getattr(connection, "source_weight")),
+            component_type=component_type,
+        )
+
+
+@dataclass(frozen=True)
 class ResolvedDispatch:
     """The back-channel half of a resolved feed: the signal an aggregator sends a participant.
 

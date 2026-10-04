@@ -11,7 +11,13 @@ byte for byte what it was:
   says so), the constructs this step does not lower, and the file's final evaluation sequence;
 - the **source map**, a side table keyed by an expanded component and one of its items — the
   component itself, an input item, a sizing line, a config value — naming the import path, the
-  member, and the chain of files and lines it came from.
+  member, and the chain of files and lines it came from;
+- the **port-provenance table** (:class:`PortProvenance`), part of the import record: one entry per
+  item a port lowered to — a bare partner name, one wire, a provided output — with the import path,
+  the port, the member, the partner by name and class, the verb, the files and lines, the candidates
+  and the paste-ready verb lines. The expansion decides bindings from the file alone; the
+  post-construction port check reads this table once the components exist and refuses, with all of
+  it in the message, an item the constructed member or partner does not have.
 
 A realized record's ``metadata`` carries both (§9.1). Every downstream error that names a component
 the expansion produced prints that component's source-map entry, in the shape
@@ -26,7 +32,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.config import ComponentID
 from hisim.energy_system.address_table import AddressTable
-from hisim.energy_system.errors import EnergySystemCatalogueError
+from hisim.energy_system.errors import EnergySystemCatalogueError, EnergySystemErrorId, EnergySystemFormatError
 from hisim.energy_system.source_lines import SourceLocation
 
 
@@ -173,6 +179,195 @@ class PortRecord:
         return document
 
 
+class LoweredKind:
+    """What one provenance entry stands for; the post-construction port check reads it."""
+
+    #: A bare partner name: the member's default connections from the partner's class.
+    DEFAULT = "default"
+    #: One line of a port's ``wires:``: a named input of the member fed by a named output of the partner.
+    WIRE = "wire"
+    #: A provided port's output: a named output of the member.
+    PROVIDED = "provided"
+    #: One item of a bound hydronic circuit: a bare name of a member at the other end, written into a
+    #: member at this end that carries the circuit's placeholder. Both ends' members ride along, so
+    #: the check can decide which member owns and which reads each of the circuit's three outputs.
+    CIRCUIT = "circuit"
+    #: One consuming output of a bound carrier need: the consumer's output, its carrier and, for a
+    #: fuel, the provider's meter, which takes a bare name of the consumer and observes the output
+    #: through the default feeds it declares from the consumer's class.
+    FEED = "feed"
+    #: One output an observer's selection matched (§4.1): the observer, the participant and its output,
+    #: the feed's tags and, for a controller's ranked feed with a target, the participant's input it
+    #: dispatches to. Written once the observer is constructed, since its candidates are what its
+    #: constructor declares.
+    OBSERVE = "observe"
+
+    ALL: ClassVar[Tuple[str, ...]] = (DEFAULT, WIRE, PROVIDED, CIRCUIT, FEED, OBSERVE)
+
+    #: The fields that hold tuples, which a document holds as lists.
+    TUPLE_FIELDS: ClassVar[Tuple[str, ...]] = ("chain", "candidates", "end_members", "other_members", "tags")
+
+
+@dataclass(frozen=True)
+class LoweredPort:
+    """Where one item a port lowered to came from, as the post-construction port check needs it.
+
+    The expansion decides a binding from the file alone — every entry states its class — and
+    lowers it to items whose meaning only the constructed components can confirm: a bare name
+    means the member's default connections from the partner's class, a wire names an input and
+    an output, a circuit's bare names mean the circuit outputs the other end owns, a fuel feed
+    means the meter's default feeds from the consumer's class, an observed output is one a channel
+    of its observer accepts. One entry per such item carries
+    everything a refusal has to print once the components exist (``assemblies_spec.md`` §3.3).
+
+    Attributes:
+        kind: :class:`LoweredKind`: ``default``, ``wire``, ``provided``, ``circuit``, ``feed`` or
+            ``observe``.
+        owner: How a message names the port's owner, ``import pv[east]`` or ``component Thermostat``;
+            the location of a refusal.
+        import_path: The owner's import path, ``pv[east]`` or ``dhw → generator`` (it carries the
+            instance); a site entry's own name.
+        port: The port's name.
+        verb: What decided the binding: ``default``, ``bind``, ``optional-bind``, ``internal <name>``,
+            or the selector of an observe item; empty for a provided output.
+        member: The expanded name of the component the item lands in (or, for a provided output,
+            the component providing it; for a feed, the provider's meter, empty for electricity; for
+            an observe item, the observer).
+        member_class: That component's dotted class path; empty when ``member`` is.
+        partner: The expanded name of the bound partner (for a feed, the consumer; for an observe
+            item, the participant); empty for a provided output.
+        partner_class: The partner's dotted class path; empty for a provided output.
+        input: The member's input a wire feeds, or the participant's input an observe item
+            dispatches to; empty otherwise.
+        output: The partner's output a wire reads, the member's provided output, a feed's consuming
+            output or an observed output; empty for a bare name.
+        chain: The files and lines the port came from, outermost first.
+        candidates: Every candidate partner in scope, ``name (Class)``.
+        remedy: The paste-ready verb lines the expansion offered for this port.
+        carrier: A feed's carrier, an ``lt.EnergyBalanceCarrier`` value; empty otherwise.
+        circuit: A circuit item's circuit, its medium (``dhw``); empty otherwise.
+        end: The label of the circuit end the item lands at (``cylinder.circuit``); empty otherwise.
+        other_end: The label of the other end (``boiler.dhw``); empty otherwise.
+        end_members: The expanded components at ``end``.
+        other_members: The expanded components at ``other_end``.
+        tags: An observe item's component type and flow tags, by member name.
+    """
+
+    kind: str
+    owner: str
+    import_path: str
+    port: str
+    verb: str
+    member: str
+    member_class: str
+    partner: str = ""
+    partner_class: str = ""
+    input: str = ""
+    output: str = ""
+    chain: Tuple[str, ...] = ()
+    candidates: Tuple[str, ...] = ()
+    remedy: str = ""
+    carrier: str = ""
+    circuit: str = ""
+    end: str = ""
+    other_end: str = ""
+    end_members: Tuple[str, ...] = ()
+    other_members: Tuple[str, ...] = ()
+    tags: Tuple[str, ...] = ()
+
+    def source_text(self) -> str:
+        """The owner and its source map, as a message prints them."""
+        return f"({self.owner}, {' → '.join(self.chain)})"
+
+    def to_document(self) -> Dict[str, Any]:
+        """The entry as plain data; every field is written, so a re-run reads it back whole."""
+        return {
+            name: list(getattr(self, name)) if name in LoweredKind.TUPLE_FIELDS else getattr(self, name)
+            for name in self.__dataclass_fields__
+        }
+
+    @classmethod
+    def from_document(cls, document: Any, location: str) -> "LoweredPort":
+        """Reads one entry a realized record's metadata carries.
+
+        Args:
+            document: The entry as :meth:`to_document` wrote it.
+            location: Where it sits, for the message.
+
+        Returns:
+            The entry.
+
+        Raises:
+            EnergySystemFormatError: ``EF-07`` when it is not a mapping of exactly the written
+                fields, or its kind is unknown.
+        """
+        expected = set(cls.__dataclass_fields__)
+        if not isinstance(document, Mapping) or set(document) != expected:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.MALFORMED_BLOCK,
+                location,
+                "a port-provenance entry is a mapping of exactly the fields "
+                f"{', '.join(sorted(expected))}; found {document!r}.",
+            )
+        if document["kind"] not in LoweredKind.ALL:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.MALFORMED_BLOCK,
+                f"{location}.kind",
+                f"'{document['kind']}' is no kind of lowered port item.",
+                alternatives=LoweredKind.ALL,
+                alternatives_label="kinds",
+                offending_value=str(document["kind"]),
+            )
+        values: Dict[str, Any] = {
+            name: tuple(document[name]) if name in LoweredKind.TUPLE_FIELDS else document[name] for name in expected
+        }
+        return cls(**values)
+
+
+class PortProvenance:
+    """The port-provenance table: every item the expansion lowered a port to, in lowering order.
+
+    The import record holds it, the realized record's metadata carries it under
+    ``imports.port_provenance``, and the post-construction port check
+    (:mod:`hisim.energy_system.assemblies.port_check`) reads it — from the import record on a run,
+    from the metadata on a re-run, which expands nothing.
+    """
+
+    #: The key of the table in the ``imports`` block of a realized record's metadata.
+    METADATA_KEY: ClassVar[str] = "port_provenance"
+
+    @classmethod
+    def from_metadata(cls, metadata: Optional[Mapping[str, Any]]) -> List[LoweredPort]:
+        """Reads the table a realized record carries; empty for a record of a file without imports.
+
+        Args:
+            metadata: The record's ``metadata`` block, or ``None``.
+
+        Returns:
+            The entries, in the order they were written.
+
+        Raises:
+            EnergySystemFormatError: ``EF-07`` when the record carries an import record without the
+                table, or the table is malformed.
+        """
+        imports = (metadata or {}).get(AddressTable.IMPORTS_KEY)
+        if imports is None:
+            return []
+        location = f"metadata.{AddressTable.IMPORTS_KEY}.{cls.METADATA_KEY}"
+        if not isinstance(imports, Mapping) or not isinstance(imports.get(cls.METADATA_KEY), list):
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.MALFORMED_BLOCK,
+                location,
+                "the record carries an import record without its port-provenance list, so the ports its "
+                "expansion lowered cannot be checked against the constructed components.",
+                remedy="Re-run the authored file that imports the assemblies, which writes a complete record.",
+            )
+        return [
+            LoweredPort.from_document(entry, f"{location}[{index}]")
+            for index, entry in enumerate(imports[cls.METADATA_KEY])
+        ]
+
+
 @dataclass
 class InstanceRecord:
     """What the expansion did with one import or instance, at any depth.
@@ -233,18 +428,17 @@ class CircuitEndRecord:
     Attributes:
         owner: The import path (``heating``, ``dhw → cylinder``) or the site component holding it.
         port: The circuit port's name.
-        members: The expanded components at this end.
-        owns: The circuit outputs this end owns (``MassFlowDhw``, ``SupplyTemperatureDhw``).
+        members: The expanded components at this end. Which of them owns which of the circuit's
+            outputs the constructed components say; the post-construction port check verifies it.
     """
 
     owner: str
     port: str
     members: Tuple[str, ...]
-    owns: Tuple[str, ...]
 
     def to_document(self) -> Dict[str, Any]:
         """The end as plain data."""
-        return {"owner": self.owner, "port": self.port, "members": list(self.members), "owns": list(self.owns)}
+        return {"owner": self.owner, "port": self.port, "members": list(self.members)}
 
 
 @dataclass(frozen=True)
@@ -282,7 +476,7 @@ class CarrierConsumer:
         port: The need's name.
         outputs: The consuming outputs, ``<component>.<output>``.
         verb: The verb that bound it, ``default`` for the default rule.
-        lowered_to: The feeds written into the meter (none for electricity).
+        lowered_to: The bare names of the consumers written into the meter (none for electricity).
     """
 
     owner: str
@@ -573,12 +767,24 @@ class ImportRecord:
     def circuit(self, circuit: str) -> List[CircuitRecord]:
         """The bound circuits of one medium."""
         return [record for record in self.circuits if record.circuit == circuit]
+    port_provenance: List[LoweredPort] = field(default_factory=list)
+    #: The observers' selections the build completes once the components are constructed
+    #: (:class:`~hisim.energy_system.assemblies.expansion.PendingSelection`); ``None`` when the file
+    #: has no observer, or once completed. Never written: a realized record carries the completed feeds.
+    pending_selection: Optional[Any] = field(default=None, compare=False, repr=False)
 
     @property
     def is_empty(self) -> bool:
         """Whether the expansion did nothing at all."""
         return (
-            not (self.instances or self.addresses or self.site_ports or self.not_lowered or self.observers)
+            not (
+                self.instances
+                or self.addresses
+                or self.site_ports
+                or self.not_lowered
+                or self.observers
+                or self.port_provenance
+            )
             and self.source_map.is_empty
         )
 
@@ -607,6 +813,7 @@ class ImportRecord:
             "observers": [record.to_document() for record in self.observers],
             "actuations": [record.to_document() for record in self.actuations],
             "scoped_sizing_sources": [record.to_document() for record in self.scoped_sizing],
+            PortProvenance.METADATA_KEY: [entry.to_document() for entry in self.port_provenance],
         }
 
     def describe(self) -> Tuple[str, ...]:
@@ -624,8 +831,8 @@ class ImportRecord:
         for circuit in self.circuits:
             first, second = circuit.ends
             lines.append(
-                f"circuit {circuit.circuit}: {first.owner}.{first.port} ({', '.join(first.owns) or 'owns nothing'})"
-                f" <-> {second.owner}.{second.port} ({', '.join(second.owns) or 'owns nothing'})."
+                f"circuit {circuit.circuit}: {first.owner}.{first.port} ({', '.join(first.members)})"
+                f" <-> {second.owner}.{second.port} ({', '.join(second.members)})."
             )
         for carrier in self.carriers:
             consumers = ", ".join(f"{consumer.owner}.{consumer.port}" for consumer in carrier.consumers)

@@ -18,6 +18,9 @@ import yaml
 
 from hisim.cli import main
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemFormatError
+from hisim.energy_system.executor import build_energy_system
+from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from tests.assemblies.helpers import Mocks
 
@@ -180,6 +183,31 @@ def test_re_running_the_realized_record_needs_no_assembly_and_reproduces_it(hous
 
 
 @pytest.mark.base
+def test_a_re_run_checks_the_lowered_ports_from_the_records_port_provenance(house_run: Path, tmp_path: Path) -> None:
+    """``--rerun`` expands nothing; the post-construction check reads the table the record carries, and needs it."""
+    record = realized(house_run)
+    table = record["metadata"]["imports"]["port_provenance"]
+    weather = next(entry for entry in table if entry["member"] == "pv-east-PVSystem" and entry["port"] == "weather")
+    assert weather["kind"] == "default" and weather["partner"] == "Weather"
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    parameters.result_directory = str(tmp_path / "results")
+
+    weather["member"] = "hot_water-heater-tank-Tank"
+    tampered = tmp_path / "tampered.energy_system.yaml"
+    tampered.write_text(yaml.safe_dump(record, sort_keys=False), encoding="utf-8")
+    with pytest.raises(EnergySystemAssemblyError, match="EF-7H at import pv\\[east\\]: port 'weather' is bound to "
+                       "Weather \\(MockWeather\\), but hot_water-heater-tank-Tank \\(MockTank\\) declares no "
+                       "default connections from MockWeather"):
+        build_energy_system(tampered, parameters, rerun=True)
+
+    del record["metadata"]["imports"]["port_provenance"]
+    tampered.write_text(yaml.safe_dump(record, sort_keys=False), encoding="utf-8")
+    with pytest.raises(EnergySystemFormatError, match="EF-07 at metadata.imports.port_provenance: the record carries "
+                       "an import record without its port-provenance list"):
+        build_energy_system(tampered, parameters, rerun=True)
+
+
+@pytest.mark.base
 def test_describe_prints_an_assemblys_interface_parameters_and_test_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     """``hisim energy-system describe <family>/<name>``: ports with partners and states, parameters, contract."""
     monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
@@ -203,6 +231,10 @@ def test_describe_prints_an_assemblys_interface_parameters_and_test_contract(mon
         "test contract: 2 bounds, 1 monotone, 0 expect",
         "monotone  power_in_watt rises: Heater energy of Heater increasing",
         "set_temperature_in_celsius  float  CELSIUS",
+        "(as declared in the file; the members' default connections from the partner classes, the wired inputs and "
+        "outputs, the provided outputs, the circuits' owners and readers, the meters' default feeds and the consumed "
+        "carriers are verified on the constructed components when a system is built, and an observer selects among "
+        "what its constructed component declares)",
     ):
         assert " ".join(expected.split()) in text, expected
 

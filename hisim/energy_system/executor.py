@@ -12,7 +12,10 @@ switched-off component's class never has to import and the off rule cannot leak 
 stage. Structural validation runs before any class is imported, so that a file can be checked
 for shape without HiSim's component tree. Sizing completes before the first component exists, so
 that a contradiction is reported with nothing built. And the connections are checked only after
-construction, because a component's ports come into being inside its constructor.
+construction, because a component's ports come into being inside its constructor: the ports an
+expansion of imports lowered are checked against the constructed components first (the
+post-construction port check, :mod:`hisim.energy_system.assemblies.port_check`), then the wiring
+plans and connects every item.
 
 Two things belong to this module alone. The **simulation parameters** — the period, the
 resolution, the post-processing to run — live in their own file, because the same energy system
@@ -41,8 +44,9 @@ from hisim.energy_system.bindings import ClassBindings
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.comments import AnnotatedEmitter, write_record
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
-from hisim.energy_system.assemblies.expansion import check_consumer_carriers, expand_imports
-from hisim.energy_system.assemblies.record import ImportRecord
+from hisim.energy_system.assemblies.expansion import expand_imports
+from hisim.energy_system.assemblies.port_check import check_lowered_ports
+from hisim.energy_system.assemblies.record import ImportRecord, LoweredPort, PortProvenance
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import (
     EnergySystemCatalogueError,
@@ -57,7 +61,7 @@ from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import realize, verify_rerun
 from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
-from hisim.energy_system.wiring import WiredSystem, wire_energy_system
+from hisim.energy_system.wiring import WiredSystem, construct_components, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters, WeatherYearError
 
@@ -295,10 +299,10 @@ class EnergySystemExecutor:
             configured = configure_energy_system(
                 expanded, bindings=bindings, path_resolver=self.path_resolver
             )
-            wired, wiring_warnings = wire_energy_system(
-                expanded, configured, self.simulation_parameters
-            )
-            check_consumer_carriers(imports, wired.components)
+            components = construct_components(configured, self.simulation_parameters)
+            expanded = self.complete_selection(expanded, imports, expansion, dict(components))
+            check_lowered_ports(self.lowered_ports(expanded, imports), dict(components))
+            wired, wiring_warnings = wire_energy_system(expanded, components)
         except EnergySystemCatalogueError as error:
             annotated = imports.source_map.annotate(error)
             if annotated is error:
@@ -322,6 +326,64 @@ class EnergySystemExecutor:
             rerun=self.rerun,
             imports=imports,
         )
+
+    @staticmethod
+    def complete_selection(
+        model: EnergySystemFile,
+        imports: ImportRecord,
+        expansion: ExpansionRecord,
+        components: Mapping[str, Any],
+    ) -> EnergySystemFile:
+        """Lowers the observers' selections once the components are constructed (``assemblies_spec.md`` §4.1).
+
+        An observer selects among the outputs its constructed component declares dynamic default
+        connections from, so its feeds are written only now, before anything is connected; the file
+        with them passes the structural check again. A file without observers, and a re-run of a
+        record (whose feeds are already written), come back unchanged.
+
+        Args:
+            model: The expanded file, after the group expansion.
+            imports: What the expansion of imports did; it holds the pending selections.
+            expansion: What the group expansion removed.
+            components: The constructed components by name.
+
+        Returns:
+            The file whose observers carry their feeds.
+
+        Raises:
+            EnergySystemError: For a refusal of the selection, or of the structural check of the result.
+        """
+        pending = imports.pending_selection
+        if pending is None:
+            return model
+        completed: EnergySystemFile = pending.complete(model, components, expansion.dropped_components)
+        imports.pending_selection = None
+        validate_structure(completed)
+        return completed
+
+    @staticmethod
+    def lowered_ports(model: EnergySystemFile, imports: ImportRecord) -> List[LoweredPort]:
+        """The port-provenance table the post-construction port check reads.
+
+        A run that expanded imports has it in its import record. A re-run of a realized record
+        expands nothing, so it reads the table the record's metadata carries, and the check
+        refuses on a re-run exactly what it refused on the run. A file without imports yields an
+        empty table.
+
+        Args:
+            model: The expanded file, whose metadata a re-run's table comes from.
+            imports: What the expansion of imports did.
+
+        Returns:
+            The table, in lowering order.
+
+        Raises:
+            EnergySystemFormatError: ``EF-07`` when a record carries an import record without a
+                well-formed table.
+        """
+        if not imports.is_empty:
+            return list(imports.port_provenance)
+        return PortProvenance.from_metadata(model.metadata)
 
     def register(
         self,

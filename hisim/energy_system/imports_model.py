@@ -26,7 +26,7 @@ from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple, Union
 from pydantic import BaseModel, ConfigDict, Field
 
 from hisim import loadtypes as lt
-from hisim.component_interface import DeclaredFeed
+from hisim.config.channels import ObservableFeed
 
 
 class ParameterReference:
@@ -341,8 +341,9 @@ class Selector(BaseModel):
     member names) — or by an output's name; the keys it writes hold together (a selector with
     ``component_type`` and ``flow`` matches a feed carrying both), and a list of selectors observes
     the union of its matches. What is matched is never an output itself but an output *together
-    with the observer's declaration for it* (:class:`~hisim.component_interface.DeclaredFeed`): an
-    output the observer's class declares no dynamic default connection from is no candidate.
+    with the observer's declaration for it* (:class:`~hisim.config.channels.ObservableFeed`, read off the
+    constructed observer's dynamic default connections): an output the observer declares no dynamic
+    default connection from is no candidate.
 
     Attributes:
         component_types: The component types any of which a match carries.
@@ -366,8 +367,8 @@ class Selector(BaseModel):
     feed: Optional[FeedOverride] = None
     required: bool = False
 
-    def matches(self, declared: DeclaredFeed) -> bool:
-        """Whether a declared feed (an output with the observer's declaration for it) is a match."""
+    def matches(self, declared: ObservableFeed) -> bool:
+        """Whether an observable feed (an output with the observer's declaration for it) is a match."""
         if self.component_types and declared.component_type not in self.component_types:
             return False
         if self.flows and not any(flow in declared.tags for flow in self.flows):

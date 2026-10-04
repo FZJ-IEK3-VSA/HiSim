@@ -1,7 +1,9 @@
 """Observe and actuate: selectors, grid balance, double count, controller priorities (``assemblies_spec.md`` §4).
 
 HiSim has no bus: a meter and an energy manager are dynamic components whose inputs are added as
-their selectors match. These tests run the selection pass of the expansion on the mock library —
+their selectors match. What an observer may observe its constructor declares, so the selection runs
+once the components are constructed: these tests build each system (expansion, construction, the
+selection, the post-construction port check, the wiring) on the mock library —
 ``mock/electricity_grid`` (a meter observing), ``mock/ems_self_consumption`` (an energy manager
 observing and ranking by its priorities), ``mock/smart_heater`` (an output controllable through
 its L1's ``ems_modifier``) and ``mock/home_battery`` (an output actuated directly through
@@ -21,20 +23,17 @@ import pytest
 from dataclasses_json import dataclass_json
 
 from hisim.cli import main
-from hisim.component_interface import ClassInterface, DeclaredFeed, DeclaredPort
 from hisim import loadtypes as lt
 from hisim.config import ComponentID, ConfigBase, preset
-from hisim.config.channels import ResolvedDynamicConnection
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel, ResolvedDynamicConnection
 from hisim.config.names import NameSyntax
-from hisim.energy_system.assemblies.expansion import expand_imports
-from hisim.energy_system.assemblies.record import ImportRecord
+from hisim.energy_system.assemblies.record import ImportRecord, LoweredKind
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemError
-from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.model import AggregatorFeed, DispatchSpec, EnergySystemFile
 from hisim.simulationparameters import SimulationParameters
-from tests.assemblies.mock_components import MockAggregator
-from tests.assemblies.helpers import OCCUPANCY, WEATHER, Library, Mocks, expand_text, mock_resolver, site
+from tests.assemblies.mock_components import MEASURED, MockAggregator, MockHeater, MockOccupancy
+from tests.assemblies.helpers import OCCUPANCY, WEATHER, Library, Mocks, build_text, mock_resolver, site
 
 MOCKS = Mocks.MOCKS
 
@@ -47,13 +46,28 @@ def imports(*lines: str) -> str:
     return "imports:\n" + "".join(lines)
 
 
+#: Where the systems of the running test are built (a fresh directory per build).
+RESULTS: List[Path] = []
+
+
+@pytest.fixture(autouse=True, name="results")
+def fixture_results(tmp_path: Path) -> None:
+    """Every build of a test goes below its own temporary directory."""
+    RESULTS[:] = [tmp_path]
+
+
 def expand(text: str, resolver: Optional[AssemblyResolver] = None) -> Tuple[EnergySystemFile, ImportRecord]:
-    """Expands an inline file against the mock library (or the given one)."""
-    return expand_text(text, resolver or mock_resolver())
+    """Builds an inline file against the mock library (or the given one): the file with its selections lowered.
+
+    The selection runs on the constructed observers, so the file a test inspects is the built one.
+    """
+    directory = RESULTS[0] / f"build_{len(list(RESULTS[0].iterdir()))}"
+    built = build_text(text, directory, resolver or mock_resolver())
+    return built.model, built.imports
 
 
 def refusal(text: str, resolver: Optional[AssemblyResolver] = None) -> str:
-    """The message the expansion refuses an inline file with."""
+    """The message the build refuses an inline file with."""
     with pytest.raises(EnergySystemError) as raised:
         expand(text, resolver)
     return str(raised.value)
@@ -92,17 +106,14 @@ class RankingProbe(MockAggregator):
     """Declares the heater's and the residents' electricity ranked at 998, without component types."""
 
     CHANNELS = ()
-    CLASS_INTERFACE = ClassInterface(
-        outputs=(DeclaredPort("Balance", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),),
-        default_feeds=(
-            DeclaredFeed("MockHeater", "ElectricityInput", ("ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",), 998),
-            DeclaredFeed("MockOccupancy", "ElectricityConsumption", ("ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",), 998),
-        ),
-    )
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: RankingProbeConfig) -> None:
-        """Builds the probe."""
+        """Builds the probe: its balance, and the two flows it ranks."""
         super().__init__(my_simulation_parameters, config)
+        self.output_port("Balance", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        ems_controlled = lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+        self.observe(MockHeater, [("ElectricityInput", [ems_controlled], 998)])
+        self.observe(MockOccupancy, [("ElectricityConsumption", [ems_controlled], 998)])
 
 
 PROBE_CONTROLLER = """
@@ -127,7 +138,80 @@ tests: {bounds: [], monotone: []}
 """
 
 
+@dataclass_json
+@dataclass
+class GhostReaderConfig(ConfigBase):
+    """An observer declaring a feed from an output its participant does not have."""
+
+    MAIN_CLASS = "tests.assemblies.test_assembly_selectors.GhostReader"
+
+    component_id: ComponentID
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "GhostReaderConfig":
+        """The reader."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class GhostReader(MockAggregator):
+    """Declares the residents' ``Ghost`` output, which ``MockOccupancy`` does not add, on its production channel."""
+
+    CHANNELS = (
+        DynamicConnectionChannel(
+            key="production",
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_PRODUCTION}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: GhostReaderConfig) -> None:
+        """Builds the reader: one output, one feed from an output that does not exist."""
+        super().__init__(my_simulation_parameters, config)
+        self.output_port("Reading", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.observe(MockOccupancy, [("Ghost", [lt.InandOutputType.ELECTRICITY_PRODUCTION], MEASURED)])
+
+
 # ---------------------------------------------------------------------------------------- selection
+
+
+@pytest.mark.base
+def test_the_selection_reads_the_constructed_observer_and_records_observe_items() -> None:
+    """The meter's candidates are its constructor's connections; every match is an observe item of the table."""
+    _expanded, record = expand(
+        site(WEATHER, OCCUPANCY)
+        + imports("  pv: {assembly: mock/pv_array}\n", "  grid: {assembly: mock/electricity_grid}\n")
+    )
+
+    observed = [
+        (entry.member, entry.partner, entry.output, entry.tags, entry.verb)
+        for entry in record.port_provenance
+        if entry.kind == LoweredKind.OBSERVE
+    ]
+    assert observed == [
+        ("grid-Meter", "Occupancy", "ElectricityConsumption", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",), "declared"),
+        ("grid-Meter", "pv-PVSystem", "ElectricityOutput", ("PV", "ELECTRICITY_PRODUCTION"), "declared"),
+    ]
+    assert record.pending_selection is None
+
+
+@pytest.mark.base
+def test_an_observed_output_the_participant_does_not_have_is_refused_once_constructed() -> None:
+    """EF-7J: the observer's constructor declares a feed from ``Ghost``, which the constructed residents lack."""
+    reader = (
+        "Reader:\n  class: tests.assemblies.test_assembly_selectors.GhostReader\n  preset: standard\n"
+        "  observes: declared\n  inputs: [{$observes: observes}]\n"
+    )
+
+    message = refusal(site(WEATHER, OCCUPANCY, reader))
+
+    assert message.startswith(
+        "EF-7J at component Reader: Reader observes 'Ghost' of Occupancy (MockOccupancy), which is no output of the "
+        "constructed Occupancy"
+    ), message
+    assert "Valid outputs: ElectricityConsumption, WaterDemand." in message
 
 
 @pytest.mark.base
@@ -314,7 +398,7 @@ def test_a_class_that_declares_no_feeds_cannot_observe() -> None:
     message = refusal(site(WEATHER, OCCUPANCY, tank))
 
     assert message.startswith("EF-7H at component Tank: Tank (component Tank, port observes) observes, but")
-    assert "declares no dynamic default connections (default_feeds)" in message
+    assert "the constructed MockTank declares no dynamic default connections, so it has no candidates" in message
 
 
 @pytest.mark.base
@@ -711,7 +795,7 @@ def test_a_bound_controllable_output_the_controller_does_not_rank_is_refused() -
 
 @pytest.mark.base
 def test_a_controllable_naming_an_input_the_controller_may_not_actuate_is_refused(tmp_path: Path) -> None:
-    """D21: the manager actuates only L1 modifiers and the inputs its class declares, never the heater's signal."""
+    """D21: the manager dispatches electricity, so it never actuates the heater's on/off signal (after construction)."""
     library = Library(tmp_path)
     library.add(
         "generator/wired_heater",
@@ -738,7 +822,10 @@ def test_a_controllable_naming_an_input_the_controller_may_not_actuate_is_refuse
         library.resolver(),
     )
 
-    assert "EF-7U" in message and "names the device input Signal, but MockEnergyManager actuates no input of" in message
+    assert message.startswith(
+        "EF-7U at import control: control-EMS (MockEnergyManager) would dispatch ELECTRICITY in WATT to "
+        "heater-Heater.Signal, which takes ON_OFF in ANY"
+    ), message
 
 
 @pytest.mark.base
@@ -908,8 +995,8 @@ GRID_BALANCE = [
 
 
 def expanded_system(name: str) -> EnergySystemFile:
-    """One committed mock system, expanded."""
-    expanded, _record = expand_imports(parse_energy_system(Mocks.SYSTEMS / name), mock_resolver())
+    """One committed mock system, built: its file with the selections lowered on the constructed observers."""
+    expanded, _record = expand((Mocks.SYSTEMS / name).read_text(encoding="utf-8"))
     return expanded
 
 

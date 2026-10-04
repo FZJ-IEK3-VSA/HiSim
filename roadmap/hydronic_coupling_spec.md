@@ -85,7 +85,7 @@ from the same three values. The node also publishes `T_end` (next step's state) 
 ### 3.3 Dual-circuit generators
 
 A generator with a space-heating and a hot-water side (boiler, heat pump, district heating) presents two
-circuits, `Sh` and `Dhw`. The idle one has `m = 0`, and its supply temperature equals its return (no
+circuits, `SpaceHeating` and `Dhw` (the space-heating circuit is written out, never abbreviated; owner, 2026-10-04). The idle one has `m = 0`, and its supply temperature equals its return (no
 information, no energy). Which one runs is decided once per step (§10, D6).
 
 ### 3.4 Signs
@@ -217,6 +217,13 @@ the node: its mass is already computed (`mass_of_water_in_hds`, `:531`, 8.8 m of
 building as `T_amb`. The generator then sees the pipe water's `T̄` as its return, which fixes hisim-9uoo.12: the
 heat district heating bills is the heat that entered the pipe water, and the heat the building gets is what left
 it, with the pipe water's `ΔU` in between (§10, D3).
+
+**Who pumps follows from the circuit (owner, 2026-10-04, assemblies D25).** In stage D the HDS stops being told its
+position by `position_hot_water_storage_in_system`: if the component at the other end of its space-heating circuit
+publishes `MassFlowSpaceHeating` (a heat pump, a boiler, a substation with a pump), the HDS reads that flow through its
+default connections from that class; otherwise (a buffer in front of it, or a substation without a pump, today's
+`NO_STORAGE_MASS_FLOW_FIX`) the HDS pumps with its design flow. The enum is removed with the re-record of this stage, so
+a heating assembly with or without a buffer (two assemblies, no parameter) needs no site setting to agree with.
 
 ## 5. Generators
 

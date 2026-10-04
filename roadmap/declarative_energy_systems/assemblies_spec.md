@@ -162,9 +162,10 @@ address's **serialization**: `<import>[-<instance>]-…-<Member>`, e.g. `pv-east
   `hisim/renovisor/costs.py:88-93`) carry the serialization, `result.json` the structured address beside it. The
   serialized form is a contract with the RenoVisor frontend, settled with them on renovisorissues (§14, D15).
 - **Display names and labels.** Beside the address, the KPI JSON and `result.json` carry `display_name`, an English
-  default built from assembly metadata — the assembly's `name:` and an optional per-member `display:` template over its
-  parameters (`display: "PV array, {orientation}"`), rendered at expansion into `ComponentID.display_name`; site
-  components use their `DisplayConfig` — and `label`, the
+  default: the member's `display:` template over the resolved parameters (`display: "PV array, {orientation}"`),
+  rendered at expansion into `ComponentID.display_name`, else the component's `DisplayConfig.pretty_name`, else the
+  member name; the assembly's name is not prepended, it is the separate field `assembly` (decided, owner, 2026-10-04);
+  site components use their `DisplayConfig` — and `label`, the
   request's own name for the system, verbatim and optional, which wins over `display_name`. HiSim ships no
   translations: the frontend translates by the stable fields (assembly, member). See `roadmap/kpi_address_spec.md`.
 

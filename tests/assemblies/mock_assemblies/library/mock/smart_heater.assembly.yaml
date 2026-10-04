@@ -1,0 +1,47 @@
+# Mock: an electric heater whose thermostat (an L1) an energy manager may raise. Its electricity is
+# controllable through the need ems_modifier (spec §4.4, D21): binding it to the controller lowers to the
+# thermostat's default connections from the manager's class (its modifier) and lets the manager rank the
+# heater's draw with an empty dispatch; unbound, the heater is not controlled.
+schema_version: 4
+kind: assembly
+name: mock/smart_heater
+description: A mock electric space heater with its thermostat, controllable by an energy manager.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: 2000, range: {min: 500, max: 6000}, description: Rated power.}
+
+presets:
+  standard: {}
+
+components:
+  Controller:
+    order: 1
+    class: tests.assemblies.mock_components.MockController
+    preset: standard
+    inputs:
+      - {$port: tank_temperature}
+      - {$port: ems_modifier}
+  Heater:
+    order: 2
+    class: tests.assemblies.mock_components.MockHeater
+    preset: standard
+    config:
+      power_in_watt: {$param: power_in_watt}
+    inputs:
+      - Controller
+
+interface:
+  needs:
+    tank_temperature: {into: [Controller], partner: MockTank, optional: true}
+    ems_modifier: {into: [Controller], partner: MockEnergyManager, optional: true}
+  provides:
+    heat: {output: Heater.ThermalPower}
+    electricity: {output: Heater.ElectricityInput, controllable: {via: ems_modifier}}
+
+tests:
+  bounds:
+    - {output: Heater.ThermalPower, unit: WATT, min: 0, max: 6000}
+    - {output: Heater.ElectricityInput, unit: WATT, min: 0, max: 6000}
+  monotone:
+    - {parameter: power_in_watt, kpi: Heater energy, member: Heater, direction: increasing}

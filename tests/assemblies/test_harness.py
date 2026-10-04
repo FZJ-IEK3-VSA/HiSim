@@ -3,8 +3,8 @@
 The sampler is tested on an inline parameter box: the Latin hypercube puts exactly one sample in
 each ``1/N`` stratum of every numeric dimension, a constraint splits the box into its feasible
 branches, a seed reproduces its sample, and a discrete dimension draws each value equally often
-(within one). The monotone evaluation is tested on synthetic series. The deliberately wrong fixture
-under ``fixtures/wrong`` must fail by name, an assembly the library check refuses must not run at
+(within one). The monotone evaluation is tested on synthetic series. The deliberately wrong mock
+under ``mock_assemblies/wrong`` must fail by name, an assembly the library check refuses must not run at
 all, and a port without a registered test partner must refuse with the class it needs.
 """
 
@@ -44,10 +44,10 @@ from hisim.energy_system.assemblies.testing.samples import (
     SampleBook,
 )
 from scripts.golden_kpis import ABS_TOL, REL_TOL
-from tests.assemblies.helpers import Fixtures, Library, fixture_resolver
+from tests.assemblies.helpers import Library, Mocks, mock_resolver
 
-#: The fixture library that must fail the harness.
-WRONG = Fixtures.ROOT / "wrong"
+#: The mock library that must fail the harness.
+WRONG = Mocks.ROOT / "wrong"
 
 #: A parameter box for the sampler: two numbers (one an integer), an enum, a boolean.
 BOX = """
@@ -64,7 +64,7 @@ parameters:
 {constraints}
 components:
   Heater:
-    class: tests.assemblies.fixture_components.FakeHeater
+    class: tests.assemblies.mock_components.MockHeater
     preset: standard
     config:
       power_in_watt: {{$param: power_in_watt}}
@@ -75,7 +75,7 @@ def box(tmp_path: Path, constraints: str = "") -> ResolvedAssembly:
     """The inline box with the given ``constraints:`` block, resolved."""
     library = Library(tmp_path)
     library.add("sampled/box", BOX.format(constraints=constraints))
-    return library.resolver(with_fixtures=False).resolve("sampled/box", "test")
+    return library.resolver(with_mocks=False).resolve("sampled/box", "test")
 
 
 def sampler(assembly: ResolvedAssembly, size: int = 10, seed: int = 7) -> HypercubeSampler:
@@ -168,8 +168,8 @@ def test_a_constraint_splits_the_box_into_its_feasible_branches(
 @pytest.mark.base
 def test_the_deterministic_samples_cover_presets_boundaries_values_and_variants() -> None:
     """The electric heater: its presets, both ends of each range, each value, each thermostat option."""
-    resolver = fixture_resolver()
-    book = SampleBook(ParameterSpace(resolver.resolve("generator/electric_heater", "test")))
+    resolver = mock_resolver()
+    book = SampleBook(ParameterSpace(resolver.resolve("mock/electric_heater", "test")))
     DeterministicSamples.add_to(book)
     origins = [origin for sample in book.samples for origin in sample.origins]
 
@@ -192,8 +192,8 @@ def test_the_deterministic_samples_cover_presets_boundaries_values_and_variants(
 @pytest.mark.base
 def test_a_boundary_of_an_alternative_moves_into_its_branch() -> None:
     """``share_of_roof`` at its minimum states it, so the array's power becomes ``none`` (exactly_one_of)."""
-    resolver = fixture_resolver()
-    book = SampleBook(ParameterSpace(resolver.resolve("pv/array", "test")))
+    resolver = mock_resolver()
+    book = SampleBook(ParameterSpace(resolver.resolve("mock/pv_array", "test")))
     DeterministicSamples.add_to(book)
 
     (sample,) = [sample for sample in book.samples if "min of share_of_roof" in sample.origins]
@@ -234,7 +234,7 @@ def test_the_monotone_evaluation_names_the_first_pair_moving_the_wrong_way(
 
 
 @pytest.mark.base
-def test_the_wrong_fixture_fails_by_name(tmp_path: Path) -> None:
+def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
     """The wrong sign of a monotone and a bounds band the output leaves both fail, named; the rest passes."""
     resolver = AssemblyResolver([WRONG])
     report = AssemblyHarness(resolver, tmp_path).test_library(library_paths(resolver))
@@ -244,12 +244,12 @@ def test_the_wrong_fixture_fails_by_name(tmp_path: Path) -> None:
     message = str(caught.value)
     assert message.startswith("5 assembly test checks failed")
     assert (
-        "generator/backwards_heater [monotone] s001 → s003 (from s000): monotone power_in_watt rises: Heater energy "
+        "mock/backwards_heater [monotone] s001 → s003 (from s000): monotone power_in_watt rises: Heater energy "
         "of Heater decreasing: power_in_watt 500.0 → 2333.333333333333 moves Heater energy 3 → 14, which is not "
         "decreasing"
     ) in message
     assert (
-        "generator/backwards_heater [bounds] s000 (defaults): bounds Heater.ThermalPower [WATT] in [0, 1000]: 24 of "
+        "mock/backwards_heater [bounds] s000 (defaults): bounds Heater.ThermalPower [WATT] in [0, 1000]: 24 of "
         "96 steps leave the band; the first is step 0 with 2000"
     ) in message
     assert "ElectricityInput" not in message
@@ -269,7 +269,7 @@ def test_an_assembly_the_library_check_refuses_is_not_run(tmp_path: Path) -> Non
           power_in_watt: {{type: float, unit: WATT, default: 2000, range: {{min: 500, max: 6000}}, description: P.}}
         components:
           Heater:
-            class: tests.assemblies.fixture_components.FakeHeater
+            class: tests.assemblies.mock_components.MockHeater
             preset: standard
             config:
               power_in_watt: {{$param: power_in_watt}}
@@ -288,7 +288,7 @@ def test_an_assembly_the_library_check_refuses_is_not_run(tmp_path: Path) -> Non
             "direction: increasing}\n",
         ),
     )
-    harness = AssemblyHarness(library.resolver(with_fixtures=False), tmp_path / "out")
+    harness = AssemblyHarness(library.resolver(with_mocks=False), tmp_path / "out")
 
     untested = harness.test("broken/untested")
     nameless = harness.test("broken/nameless")
@@ -301,35 +301,38 @@ def test_an_assembly_the_library_check_refuses_is_not_run(tmp_path: Path) -> Non
 
 @pytest.mark.base
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class(tmp_path: Path) -> None:
-    """An empty registry: the array's weather port names FakeWeather."""
-    harness = AssemblyHarness(fixture_resolver(), tmp_path, registry=TestPartnerRegistry([], []))
+    """An empty registry: the array's weather port names MockWeather."""
+    harness = AssemblyHarness(mock_resolver(), tmp_path, registry=TestPartnerRegistry([], []))
 
-    with pytest.raises(TestPartnerMissingError, match="the port 'weather' of 'pv/array' needs a test partner of the "
-                       "class FakeWeather, and no registry serves it"):
-        harness.test("pv/array")
+    with pytest.raises(
+        TestPartnerMissingError,
+        match="the port 'weather' of 'mock/pv_array' needs a test partner of the class MockWeather, and no "
+        "registry serves it",
+    ):
+        harness.test("mock/pv_array")
 
 
 @pytest.mark.base
 def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly_computes() -> None:
     """The boiler: a gas provider for its fuel, a cylinder for its optional dhw end; the connection: a consumer."""
-    resolver = fixture_resolver()
-    builder = IsolationBuilder(resolver, TestPartnerRegistry.from_directories([Fixtures.LIBRARY]))
+    resolver = mock_resolver()
+    builder = IsolationBuilder(resolver, TestPartnerRegistry.from_directories([Mocks.LIBRARY]))
     for path, components, entry in (
         (
-            "heating/gas_boiler",
+            "mock/gas_boiler",
             ["GasMeter", "Occupancy", "Cylinder"],
-            {"assembly": "heating/gas_boiler", "preset": "standard", "bind": {"fuel": "GasMeter"},
+            {"assembly": "mock/gas_boiler", "preset": "standard", "bind": {"fuel": "GasMeter"},
              "optional-bind": {"dhw": "Cylinder"}},
         ),
         (
-            "supply/gas_connection",
+            "mock/gas_connection",
             ["Occupancy", "GasCylinder", "GasBoiler"],
-            {"assembly": "supply/gas_connection", "preset": "standard"},
+            {"assembly": "mock/gas_connection", "preset": "standard"},
         ),
         (
-            "generator/electric_heater",
+            "mock/electric_heater",
             ["Occupancy", "Tank", "Ems"],
-            {"assembly": "generator/electric_heater", "preset": "standard", "bind": {"tank_temperature": "Tank"},
+            {"assembly": "mock/electric_heater", "preset": "standard", "bind": {"tank_temperature": "Tank"},
              "optional-bind": {"ems_modifier": "Ems"}},
         ),
     ):
@@ -345,16 +348,16 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
 @pytest.mark.base
 def test_a_registry_that_does_not_read_is_refused_whole(tmp_path: Path) -> None:
     """A duplicate served class, an unknown requirement and a malformed serves block each refuse the file."""
-    weather = "{class: tests.assemblies.fixture_components.FakeWeather, preset: standard}"
+    weather = "{class: tests.assemblies.mock_components.MockWeather, preset: standard}"
     cases = {
-        "twice": f"partners:\n  A: {{serves: {{partner: FakeWeather}}, component: {weather}}}\n"
-        f"  B: {{serves: {{partner: FakeWeather}}, component: {weather}}}\n",
-        "unknown": f"partners:\n  A: {{serves: {{partner: FakeWeather}}, requires: [Nobody], component: {weather}}}\n",
-        "malformed": f"partners:\n  A: {{serves: {{class: FakeWeather}}, component: {weather}}}\n",
+        "twice": f"partners:\n  A: {{serves: {{partner: MockWeather}}, component: {weather}}}\n"
+        f"  B: {{serves: {{partner: MockWeather}}, component: {weather}}}\n",
+        "unknown": f"partners:\n  A: {{serves: {{partner: MockWeather}}, requires: [Nobody], component: {weather}}}\n",
+        "malformed": f"partners:\n  A: {{serves: {{class: MockWeather}}, component: {weather}}}\n",
         "carrier": f"partners:\n  A: {{serves: {{carrier: steam}}, component: {weather}}}\n",
     }
     messages = {
-        "twice": "the partner class FakeWeather is served twice, by 'A'",
+        "twice": "the partner class MockWeather is served twice, by 'A'",
         "unknown": "requires 'Nobody', which is no registered partner",
         "malformed": "write one of {partner: <class>}",
         "carrier": "names the carrier 'steam', which is none of",
@@ -387,7 +390,7 @@ def test_the_shards_are_disjoint_deterministic_and_cover_the_library() -> None:
 
 
 @pytest.mark.base
-def test_the_command_fails_on_the_wrong_fixture_and_refuses_samples_in_the_pr_tier(tmp_path: Path) -> None:
+def test_the_command_fails_on_the_wrong_mock_and_refuses_samples_in_the_pr_tier(tmp_path: Path) -> None:
     """Exit 1 with every failed check on the standard error stream; exit 2 for --samples with --tier pr."""
     out, err = io.StringIO(), io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):

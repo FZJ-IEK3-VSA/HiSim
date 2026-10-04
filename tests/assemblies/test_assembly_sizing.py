@@ -1,6 +1,6 @@
 """Sizing across assemblies (``assemblies_spec.md`` §6, §13 step 3, D10; bead hisim-lt0b.4).
 
-Four things are proven here on fixture classes. A ``many: true`` fact port binds every provider of its
+Four things are proven here on mock classes. A ``many: true`` fact port binds every provider of its
 fact in scope and lowers to a ``sizing_sources`` list in instance order, which a ``Sum(Many(...))`` law
 adds up; reordering the instances reorders the list and never the sum, and one array gives exactly the
 number the one-provider law gives, down to the CSVs (and, for the real battery, the heat-pump twin's
@@ -26,12 +26,12 @@ from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemEr
 from hisim.energy_system.groups import expand_groups
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.model import EnergySystemFile, SourceReference
-from tests.assemblies.helpers import WEATHER, Fixtures, Library, expand_text, fixture_resolver, site
+from tests.assemblies.helpers import WEATHER, Library, Mocks, expand_text, mock_resolver, site
 
 FACT = "pv_peak_power_in_watt"
 POWER = "maximal_thermal_power_in_watt"
-TWO_ARRAYS = Fixtures.SYSTEMS / "two_array_house.energy_system.yaml"
-CSV_PARAMETERS = Fixtures.ROOT / "one_day_csv.simulation.yaml"
+TWO_ARRAYS = Mocks.SYSTEMS / "two_array_house.energy_system.yaml"
+CSV_PARAMETERS = Mocks.ROOT / "one_day_csv.simulation.yaml"
 REPOSITORY = Path(__file__).resolve().parents[2]
 
 
@@ -48,16 +48,16 @@ def two_arrays(east_first: bool = True) -> str:
     first, second = (east, west) if east_first else (west, east)
     return (
         site(WEATHER)
-        + "imports:\n  pv:\n    assembly: pv/array\n    instances:\n"
+        + "imports:\n  pv:\n    assembly: mock/pv_array\n    instances:\n"
         + f"      {first}\n      {second}\n"
-        + "  battery: {assembly: storage/array_battery}\n"
+        + "  battery: {assembly: mock/array_battery}\n"
     )
 
 
 def run(system: Path, parameters: Path, result: Path, *extra: str) -> Path:
-    """Runs one fixture system through the console command against the fixture library."""
+    """Runs one mock system through the console command against the mock library."""
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Fixtures.LIBRARY))
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
     try:
         code = main(["energy-system", "run", str(system), str(parameters), "--result-dir", str(result), *extra])
     finally:
@@ -132,7 +132,7 @@ def test_a_shuffled_written_order_reorders_the_list_but_not_the_sum() -> None:
 @pytest.mark.base
 def test_the_two_array_house_runs_and_its_record_re_runs_with_the_list(tmp_path: Path) -> None:
     """The realized record writes the list and both inputs; re-running it reproduces it without assemblies."""
-    first = run(TWO_ARRAYS, Fixtures.PARAMETERS, tmp_path / "first")
+    first = run(TWO_ARRAYS, Mocks.PARAMETERS, tmp_path / "first")
     record = load(first / "realized.energy_system.yaml")
     audit = load(first / "realized.audit.yaml")
 
@@ -153,7 +153,7 @@ def test_the_two_array_house_runs_and_its_record_re_runs_with_the_list(tmp_path:
             "value": 8.0,
         }
     ]
-    run(first / "realized.energy_system.yaml", Fixtures.PARAMETERS, tmp_path / "second", "--rerun")
+    run(first / "realized.energy_system.yaml", Mocks.PARAMETERS, tmp_path / "second", "--rerun")
 
 
 @pytest.mark.base
@@ -163,12 +163,12 @@ def test_one_array_sized_by_the_sum_is_byte_identical_to_the_one_provider_law(tm
     def one_array(assembly: str) -> Path:
         system = tmp_path / f"{assembly.replace('/', '_')}.energy_system.yaml"
         system.write_text(
-            site(WEATHER) + "imports:\n  pv: {assembly: pv/array}\n" + f"  battery: {{assembly: {assembly}}}\n",
+            site(WEATHER) + "imports:\n  pv: {assembly: mock/pv_array}\n" + f"  battery: {{assembly: {assembly}}}\n",
             encoding="utf-8",
         )
         return run(system, CSV_PARAMETERS, tmp_path / assembly.replace("/", "_"))
 
-    scalar, summed = one_array("storage/battery"), one_array("storage/array_battery")
+    scalar, summed = one_array("mock/battery"), one_array("mock/array_battery")
     csvs = sorted(path.name for path in scalar.glob("*.csv"))
 
     assert "battery-Battery_Capacity.csv" in csvs
@@ -221,7 +221,7 @@ parameters:
   capacity_in_kwh: {{type: float, unit: KWH, default: AUTO}}
 components:
   Battery:
-    class: tests.assemblies.fixture_components.{cls}
+    class: tests.assemblies.mock_components.{cls}
     preset: {preset}
     config: {{capacity_in_kwh: {{$param: capacity_in_kwh}}}}
 interface:
@@ -235,11 +235,11 @@ def battery_library(tmp_path: Path) -> Library:
     library = Library(tmp_path)
     library.add(
         "sizing/list_into_one",
-        ONE_ARRAY_BATTERY.format(name="list_into_one", cls="FakeBattery", preset="sized_to_pv", many=", many: true"),
+        ONE_ARRAY_BATTERY.format(name="list_into_one", cls="MockBattery", preset="sized_to_pv", many=", many: true"),
     )
     library.add(
         "sizing/one_into_sum",
-        ONE_ARRAY_BATTERY.format(name="one_into_sum", cls="FakeArrayBattery", preset="sized_to_all_arrays", many=""),
+        ONE_ARRAY_BATTERY.format(name="one_into_sum", cls="MockArrayBattery", preset="sized_to_all_arrays", many=""),
     )
     return library
 
@@ -249,17 +249,17 @@ def test_a_fact_port_whose_cardinality_is_not_the_laws_is_refused(tmp_path: Path
     """A list into a one-provider law and one provider into a sum are both EF-7X, naming field and law."""
     library = battery_library(tmp_path)
     with pytest.raises(EnergySystemAssemblyError) as raised:
-        expand_text(two_arrays().replace("storage/array_battery", "sizing/list_into_one"), library.resolver())
+        expand_text(two_arrays().replace("mock/array_battery", "sizing/list_into_one"), library.resolver())
     assert raised.value.error_id is EnergySystemErrorId.FACT_READ_CARDINALITY
     assert (
         "fact port 'pv_power' (many: true) lowers the list [pv-east-PVSystem, pv-west-PVSystem] into battery-Battery, "
-        "but FakeBatteryConfig.capacity_in_kwh <- (0.001 * Size.PV_PEAK_POWER_IN_WATT).rounded(2) reads "
+        "but MockBatteryConfig.capacity_in_kwh <- (0.001 * Size.PV_PEAK_POWER_IN_WATT).rounded(2) reads "
         "pv_peak_power_in_watt from one provider"
     ) in str(raised.value)
 
     with pytest.raises(EnergySystemAssemblyError) as raised:
         expand_text(
-            site(WEATHER) + "imports:\n  pv: {assembly: pv/array}\n  battery: {assembly: sizing/one_into_sum}\n",
+            site(WEATHER) + "imports:\n  pv: {assembly: mock/pv_array}\n  battery: {assembly: sizing/one_into_sum}\n",
             library.resolver(),
         )
     assert raised.value.error_id is EnergySystemErrorId.FACT_READ_CARDINALITY
@@ -271,7 +271,7 @@ def test_a_pinned_field_reads_nothing_so_its_cardinality_is_not_checked(tmp_path
     """A list into a one-provider law is fine while the file pins the field: nothing reads the list."""
     library = battery_library(tmp_path)
     text = two_arrays().replace(
-        "battery: {assembly: storage/array_battery}",
+        "battery: {assembly: mock/array_battery}",
         "battery: {assembly: sizing/list_into_one, parameters: {capacity_in_kwh: 4.0}}",
     )
     expanded, _record = expand_text(text, library.resolver())
@@ -285,7 +285,7 @@ def test_a_many_port_takes_no_verb_and_needs_a_provider() -> None:
     with pytest.raises(EnergySystemAssemblyError) as raised:
         expand_text(
             two_arrays().replace(
-                "{assembly: storage/array_battery}", "{assembly: storage/array_battery, bind: {pv_power: pv.east}}"
+                "{assembly: mock/array_battery}", "{assembly: mock/array_battery, bind: {pv_power: pv.east}}"
             )
         )
     assert raised.value.error_id is EnergySystemErrorId.PORT_CONTRACT
@@ -294,7 +294,7 @@ def test_a_many_port_takes_no_verb_and_needs_a_provider() -> None:
     )
 
     with pytest.raises(EnergySystemAssemblyError) as raised:
-        expand_text(site(WEATHER) + "imports:\n  battery: {assembly: storage/array_battery}\n")
+        expand_text(site(WEATHER) + "imports:\n  battery: {assembly: mock/array_battery}\n")
     assert raised.value.error_id is EnergySystemErrorId.FACT_NOT_PROVIDED
 
 
@@ -306,19 +306,19 @@ schema_version: 4
 kind: assembly
 name: dhw/{name}
 components:
-  Burner: {{class: tests.assemblies.fixture_components.FakeBurner, preset: condensing}}
+  Burner: {{class: tests.assemblies.mock_components.MockBurner, preset: condensing}}
 {extra}"""
 
 SITE_BOILER = """
 Boiler:
-  class: tests.assemblies.fixture_components.FakeBurner
+  class: tests.assemblies.mock_components.MockBurner
   preset: condensing
   config: {power_in_watt: 20000.0}
 """
 
 SITE_BUFFER = """
 Buffer:
-  class: tests.assemblies.fixture_components.FakeBuffer
+  class: tests.assemblies.mock_components.MockBuffer
   preset: sized_to_generator
 """
 
@@ -338,7 +338,7 @@ def export_library(tmp_path: Path) -> Library:
         "dhw/buffered_burner",
         BURNER.format(
             name="buffered_burner",
-            extra="  Buffer: {class: tests.assemblies.fixture_components.FakeBuffer, preset: sized_to_generator}\n",
+            extra="  Buffer: {class: tests.assemblies.mock_components.MockBuffer, preset: sized_to_generator}\n",
         ),
     )
     for name, interface in (
@@ -441,7 +441,7 @@ def test_a_reader_in_an_enabled_group_gets_its_line_in_the_group(tmp_path: Path)
     text = (
         site(SITE_BOILER)
         + "groups:\n  storage:\n    enabled: true\n    components:\n"
-        + "      Buffer: {class: tests.assemblies.fixture_components.FakeBuffer, preset: sized_to_generator}\n"
+        + "      Buffer: {class: tests.assemblies.mock_components.MockBuffer, preset: sized_to_generator}\n"
         + "imports:\n  dhw: {assembly: dhw/internal_burner}\n"
     )
     expanded, record = expand_text(text, library.resolver())
@@ -461,7 +461,7 @@ schema_version: 4
 kind: assembly
 name: heating/{preset}_burner
 components:
-  Burner: {{class: tests.assemblies.fixture_components.FakeBurner, preset: {preset}}}
+  Burner: {{class: tests.assemblies.mock_components.MockBurner, preset: {preset}}}
 interface:
   needs:
     fuel: {{carrier: natural_gas, outputs: [Burner.FuelUse]}}
@@ -475,7 +475,7 @@ def test_a_gas_provider_serving_burners_of_different_fuel_constants_is_refused(t
     for preset in ("condensing", "conventional"):
         library.add(f"heating/{preset}_burner", BURNER_HEATING.format(preset=preset))
     text = site(WEATHER) + (
-        "imports:\n  gas: {assembly: supply/gas_connection}\n"
+        "imports:\n  gas: {assembly: mock/gas_connection}\n"
         "  space: {assembly: heating/condensing_burner}\n  water: {assembly: heating/conventional_burner}\n"
     )
 
@@ -498,4 +498,4 @@ def test_a_file_without_imports_is_untouched_by_the_scope_rules() -> None:
     assert paths
     for path in paths:
         model = parse_energy_system(path)
-        assert expand_imports(model, fixture_resolver())[0] is model, path.name
+        assert expand_imports(model, mock_resolver())[0] is model, path.name

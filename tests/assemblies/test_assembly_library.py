@@ -16,22 +16,22 @@ from hisim import loadtypes as lt
 from hisim.energy_system.assemblies.library import CheckStrength, check_assembly, require_valid
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError
-from tests.assemblies.helpers import Fixtures, Library, fixture_resolver
+from tests.assemblies.helpers import Library, Mocks, mock_resolver
 
 
 def library_paths() -> list:
-    """Every assembly of the fixture library, as library paths."""
+    """Every assembly of the mock library, as library paths."""
     return sorted(
-        path.relative_to(Fixtures.LIBRARY).as_posix()[: -len(".assembly.yaml")]
-        for path in Fixtures.LIBRARY.rglob("*.assembly.yaml")
+        path.relative_to(Mocks.LIBRARY).as_posix()[: -len(".assembly.yaml")]
+        for path in Mocks.LIBRARY.rglob("*.assembly.yaml")
     )
 
 
 @pytest.mark.base
 @pytest.mark.parametrize("library_path", library_paths())
-def test_every_fixture_assembly_passes_the_library_check(library_path: str) -> None:
+def test_every_mock_assembly_passes_the_library_check(library_path: str) -> None:
     """Descriptions, ranges, the test contract, ports, units and order: nothing missing anywhere."""
-    resolver = fixture_resolver()
+    resolver = mock_resolver()
 
     assert not check_assembly(resolver.resolve(library_path, "test"), resolver, CheckStrength.LIBRARY)
 
@@ -56,7 +56,7 @@ def test_the_library_check_lists_every_problem_of_a_file_at_once(tmp_path: Path)
           bad: {nothing: 1}
         components:
           Heater:
-            class: tests.assemblies.fixture_components.FakeHeater
+            class: tests.assemblies.mock_components.MockHeater
             preset: standard
             config:
               power_in_watt: {$param: power_in_watt}
@@ -70,7 +70,7 @@ def test_the_library_check_lists_every_problem_of_a_file_at_once(tmp_path: Path)
               one: {when: [a], components: {}}
         interface:
           needs:
-            weather: {into: [Nobody], partner: FakeWeather}
+            weather: {into: [Nobody], partner: MockWeather}
           provides:
             heat: {output: Heater.NoSuchOutput}
         """,
@@ -90,7 +90,7 @@ def test_the_library_check_lists_every_problem_of_a_file_at_once(tmp_path: Path)
         "the preset 'bad' sets 'nothing', which is no parameter",
         "covers no option for mode='b'",
         "takes an input from 'Outsider', which is no member",
-        "'power_in_watt' is in KILOWATT, the field FakeHeaterConfig.power_in_watt it feeds in WATT",
+        "'power_in_watt' is in KILOWATT, the field MockHeaterConfig.power_in_watt it feeds in WATT",
         "lowers into 'Nobody', which is no member",
         "'Heater.NoSuchOutput', which is no output of 'Heater'",
         "a placeholder for 'undeclared', which is no port",
@@ -116,7 +116,7 @@ def test_the_test_contract_must_bound_every_energy_and_temperature_output(tmp_pa
           volume_in_liter: {type: float, unit: LITER, default: 150, range: {min: 50, max: 500}, description: Volume.}
         components:
           Tank:
-            class: tests.assemblies.fixture_components.FakeTank
+            class: tests.assemblies.mock_components.MockTank
             preset: standard
             config: {volume_in_liter: {$param: volume_in_liter}}
         tests:
@@ -157,60 +157,59 @@ def test_a_class_interface_is_held_to_at_construction() -> None:
     """A component adding a port its interface does not declare is refused by the component itself."""
     from hisim.component_interface import ClassInterfaceViolation  # noqa: PLC0415
     from hisim.simulationparameters import SimulationParameters  # noqa: PLC0415
-    from tests.assemblies.fixture_components import FakeWeather, FakeWeatherConfig  # noqa: PLC0415
+    from tests.assemblies.mock_components import MockWeather, MockWeatherConfig  # noqa: PLC0415
 
-    weather = FakeWeather(SimulationParameters.one_day_only(2021, 900), FakeWeatherConfig.preset_standard("W"))
+    weather = MockWeather(SimulationParameters.one_day_only(2021, 900), MockWeatherConfig.preset_standard("W"))
     with pytest.raises(ClassInterfaceViolation, match="adds the output 'Rogue'"):
         weather.add_output("W", "Rogue", lt.LoadTypes.ANY, lt.Units.ANY, output_description="x")
-    with pytest.raises(ClassInterfaceViolation, match="default connections from 'FakeTank'"):
+    with pytest.raises(ClassInterfaceViolation, match="default connections from 'MockTank'"):
         from hisim.component import ComponentConnection  # noqa: PLC0415
 
-        weather.add_default_connections([ComponentConnection("X", "FakeTank", "Y")])
+        weather.add_default_connections([ComponentConnection("X", "MockTank", "Y")])
 
 
 @pytest.mark.base
 def test_the_resolver_searches_the_library_directories_and_hashes_what_it_reads() -> None:
     """A library path resolves to one file; the record carries the sha256 of its bytes."""
-    resolved = fixture_resolver().resolve("pv/array", "test")
+    resolved = mock_resolver().resolve("mock/pv_array", "test")
 
-    assert resolved.file == Fixtures.LIBRARY / "pv" / "array.assembly.yaml"
+    assert resolved.file == Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml"
     assert resolved.sha256 == hashlib.sha256(resolved.file.read_bytes()).hexdigest()
-    assert resolved.label == "pv/array.assembly.yaml"
+    assert resolved.label == "mock/pv_array.assembly.yaml"
 
 
 @pytest.mark.base
 def test_a_name_found_in_two_places_is_refused(tmp_path: Path) -> None:
     """A library path is never shadowed."""
     library = Library(tmp_path)
-    library.add("pv/array", (Fixtures.LIBRARY / "pv" / "array.assembly.yaml").read_text(encoding="utf-8"))
+    library.add("mock/pv_array", (Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml").read_text(encoding="utf-8"))
 
     with pytest.raises(EnergySystemAssemblyError, match="EF-72 .*found in two places"):
-        library.resolver().resolve("pv/array", "imports.pv")
+        library.resolver().resolve("mock/pv_array", "imports.pv")
 
 
 @pytest.mark.base
 def test_an_unknown_assembly_is_refused_with_the_ones_available() -> None:
     """The message lists the library and suggests the near miss."""
-    with pytest.raises(EnergySystemAssemblyError, match="EF-71 .*Did you mean: pv/array"):
-        fixture_resolver().resolve("pv/arrays", "imports.pv")
+    with pytest.raises(EnergySystemAssemblyError, match="EF-71 .*Did you mean: mock/pv_array"):
+        mock_resolver().resolve("mock/pv_arrays", "imports.pv")
     with pytest.raises(EnergySystemAssemblyError, match="EF-71 .*not an assembly path"):
-        fixture_resolver().resolve("../pv", "imports.pv")
+        mock_resolver().resolve("../pv", "imports.pv")
 
 
 @pytest.mark.base
 def test_the_default_resolver_reads_the_environment_variable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``HISIM_ASSEMBLY_PATH`` adds directories after the repository's library; a missing one is refused."""
-    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, os.pathsep.join([str(Fixtures.LIBRARY)]))
-    assert (
-        AssemblyResolver.default().resolve("pv/array", "test").file == Fixtures.LIBRARY / "pv" / "array.assembly.yaml"
-    )
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, os.pathsep.join([str(Mocks.LIBRARY)]))
+    resolved = AssemblyResolver.default().resolve("mock/pv_array", "test")
+    assert resolved.file == Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml"
 
     monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(tmp_path / "missing"))
     with pytest.raises(EnergySystemAssemblyError, match="EF-71 .*does not exist"):
         AssemblyResolver.default()
 
 
-#: A storage water heater of the mockup's shape (``dhw/storage_water_heater``) on fixture classes: the
+#: A storage water heater of the mockup's shape (``dhw/storage_water_heater``) on mock classes: the
 #: member ``Heater`` is an electric heater in one option and a gas boiler in the other.
 TWO_OPTION_HEATER = """
 schema_version: 4
@@ -223,7 +222,7 @@ presets:
   standard: {}
 components:
   Tank:
-    class: tests.assemblies.fixture_components.FakeTank
+    class: tests.assemblies.mock_components.MockTank
     preset: standard
 variants:
   heater:
@@ -232,11 +231,11 @@ variants:
       immersion:
         when: [electricity]
         components:
-          Heater: {class: tests.assemblies.fixture_components.FakeHeater, preset: standard}
+          Heater: {class: tests.assemblies.mock_components.MockHeater, preset: standard}
       burner:
         when: [natural_gas]
         components:
-          Heater: {class: tests.assemblies.fixture_components.FakeBoiler, preset: condensing}
+          Heater: {class: tests.assemblies.mock_components.MockBoiler, preset: condensing}
 interface:
   provides:
     electricity: {output: Heater.ElectricityInput, active_when: {energy_carrier: [electricity]}}
@@ -328,7 +327,7 @@ def test_monotone_is_required_only_beside_a_numeric_parameter(tmp_path: Path) ->
             parameters: {parameters}
             presets: {{standard: {{}}}}
             components:
-              Weather: {{class: tests.assemblies.fixture_components.FakeWeather, preset: standard}}
+              Weather: {{class: tests.assemblies.mock_components.MockWeather, preset: standard}}
             tests:
               bounds: [{{output: Weather.TemperatureOutside, unit: CELSIUS, min: -30, max: 50}}]
               monotone: []
@@ -359,14 +358,14 @@ def test_the_contract_check_of_observers_controllables_and_priorities(tmp_path: 
         presets: {standard: {}}
         components:
           EMS:
-            class: tests.assemblies.fixture_components.FakeEnergyManager
+            class: tests.assemblies.mock_components.MockEnergyManager
             preset: optimize_own_consumption
           Tank:
-            class: tests.assemblies.fixture_components.FakeTank
+            class: tests.assemblies.mock_components.MockTank
             preset: standard
             inputs: [{$observes: flows}]
           Battery:
-            class: tests.assemblies.fixture_components.FakeBattery
+            class: tests.assemblies.mock_components.MockBattery
             preset: sized_to_pv
         interface:
           observes:
@@ -390,7 +389,7 @@ def test_the_contract_check_of_observers_controllables_and_priorities(tmp_path: 
     for expected in (
         "'EMS' carries 0 '{$observes: flows}' placeholders; the feeds of the observer port 'flows' land at exactly "
         "one.",
-        "'Tank' (FakeTank) declares no dynamic default connections (default_feeds), so the observer port 'flows' has "
+        "'Tank' (MockTank) declares no dynamic default connections (default_feeds), so the observer port 'flows' has "
         "nothing to select.",
         "the priorities of 'priorities' are taken from 'order', which is no list parameter of the assembly.",
         "the provided output 'charge' is controllable through 'NoSuchInput', which is no input of 'Battery'.",

@@ -1,0 +1,64 @@
+# Mock: an electric heater with its thermostat, which an energy manager may raise.
+schema_version: 4
+kind: assembly
+name: mock/electric_heater
+description: A mock electric heater and its thermostat.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: 2000, range: {min: 500, max: 6000}, description: Rated power.}
+  set_temperature_in_celsius:
+    {type: float, unit: CELSIUS, default: 45, range: {min: 35, max: 65}, description: Thermostat set point.}
+  with_thermostat:
+    {type: bool, default: true, description: Whether the heater has its own thermostat.}
+  control:
+    {type: enum, values: [standard, eco], default: standard, description: The thermostat's preset.}
+
+presets:
+  standard: {}
+  eco: {control: eco, set_temperature_in_celsius: 40}
+
+components:
+  Heater:
+    order: 2
+    class: tests.assemblies.mock_components.MockHeater
+    preset: standard
+    config:
+      power_in_watt: {$param: power_in_watt}
+    inputs:
+      - Controller
+
+variants:
+  thermostat:
+    selected_by: with_thermostat
+    options:
+      fitted:
+        when: [true]
+        components:
+          Controller:
+            order: 1
+            class: tests.assemblies.mock_components.MockController
+            preset: {$param: control}
+            config:
+              set_temperature_in_celsius: {$param: set_temperature_in_celsius}
+            inputs:
+              - {$port: tank_temperature}
+              - {$port: ems_modifier}
+      none:
+        when: [false]
+        components: {}
+
+interface:
+  needs:
+    tank_temperature: {into: [Controller], partner: MockTank, active_when: {with_thermostat: [true]}}
+    ems_modifier: {into: [Controller], partner: MockEms, optional: true, active_when: {with_thermostat: [true]}}
+  provides:
+    heat: {output: Heater.ThermalPower}
+    electricity: {output: Heater.ElectricityInput}
+
+tests:
+  bounds:
+    - {output: Heater.ThermalPower, unit: WATT, min: 0, max: 6000}
+    - {output: Heater.ElectricityInput, unit: WATT, min: 0, max: 6000}
+  monotone:
+    - {parameter: power_in_watt, kpi: Heater energy, member: Heater, direction: increasing}

@@ -28,13 +28,13 @@ from hisim.energy_system.source_lines import LineIndex
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 from hisim.config import DisplayConfig
 from hisim.simulationparameters import SimulationParameters
-from tests.assemblies.fixture_components import FakeBoiler, FakeBoilerConfig
-from tests.assemblies.helpers import OCCUPANCY, WEATHER, Fixtures, Library, expand_text, fixture_resolver, site
+from tests.assemblies.mock_components import MockBoiler, MockBoilerConfig
+from tests.assemblies.helpers import OCCUPANCY, WEATHER, Library, Mocks, expand_text, mock_resolver, site
 
 #: The boiler house's three imports of the circuit and the carrier.
-GAS = "  gas: {assembly: supply/gas_connection}\n"
-BOILER = "  boiler: {assembly: heating/gas_boiler}\n"
-CYLINDER = "  cylinder: {assembly: dhw/cylinder}\n"
+GAS = "  gas: {assembly: mock/gas_connection}\n"
+BOILER = "  boiler: {assembly: mock/gas_boiler}\n"
+CYLINDER = "  cylinder: {assembly: mock/dhw_cylinder}\n"
 
 #: The site of most systems here.
 SITE = site(WEATHER, OCCUPANCY)
@@ -48,11 +48,11 @@ def refusal(text: str, library: Library = None) -> str:  # type: ignore[assignme
 
 
 def expand_boiler_house():
-    """The boiler house fixture, expanded with its line index."""
-    path = Fixtures.SYSTEMS / "boiler_house.energy_system.yaml"
+    """The boiler house mock, expanded with its line index."""
+    path = Mocks.SYSTEMS / "boiler_house.energy_system.yaml"
     return expand_imports(
         parse_energy_system(path),
-        fixture_resolver(),
+        mock_resolver(),
         lines=LineIndex.from_text(path.read_text(encoding="utf-8"), path.name),
     )
 
@@ -96,14 +96,16 @@ def test_a_required_circuit_end_without_the_other_end_is_refused() -> None:
         "EF-7A at import cylinder: required port 'circuit' (circuit dhw) has no other end of the circuit dhw"
     )
     assert "candidates: none" in message
-    assert re.search(r"\(import cylinder, inline.energy_system.yaml:\d+ → dhw/cylinder.assembly.yaml:\d+\)", message)
+    assert re.search(
+        r"\(import cylinder, inline.energy_system.yaml:\d+ → mock/dhw_cylinder.assembly.yaml:\d+\)", message
+    )
     assert "MassFlowDhw, SupplyTemperatureDhw, ReturnTemperatureDhw" in message
 
 
 @pytest.mark.base
 def test_two_ends_for_one_circuit_need_a_verb_and_bind_decides() -> None:
     """EF-7B lists both ends with a paste-ready line each; ``bind:`` picks one."""
-    boilers = "  boiler:\n    assembly: heating/gas_boiler\n    instances: {a: {}, b: {}}\n"
+    boilers = "  boiler:\n    assembly: mock/gas_boiler\n    instances: {a: {}, b: {}}\n"
     message = refusal(SITE + "imports:\n" + GAS + boilers + CYLINDER)
 
     assert message.startswith(
@@ -130,7 +132,7 @@ def test_binding_a_circuit_of_another_medium_is_refused(tmp_path: Path) -> None:
         name: solar/collector
         components:
           Collector:
-            class: tests.assemblies.fixture_components.FakeCollector
+            class: tests.assemblies.mock_components.MockCollector
             preset: standard
             inputs: [{$port: loop}]
         interface:
@@ -162,8 +164,8 @@ def test_binding_a_circuit_of_another_medium_is_refused(tmp_path: Path) -> None:
 def test_two_ends_that_both_own_an_output_are_refused_naming_it() -> None:
     """EF-7N: two boilers bound to each other both own the mass flow."""
     boilers = (
-        "  first: {assembly: heating/gas_boiler, bind: {dhw: second.dhw}}\n"
-        "  second: {assembly: heating/gas_boiler}\n"
+        "  first: {assembly: mock/gas_boiler, bind: {dhw: second.dhw}}\n"
+        "  second: {assembly: mock/gas_boiler}\n"
     )
     message = refusal(SITE + "imports:\n" + GAS + boilers)
 
@@ -177,7 +179,8 @@ def test_two_ends_that_both_own_an_output_are_refused_naming_it() -> None:
 def test_two_ends_of_which_neither_owns_an_output_are_refused_naming_it() -> None:
     """EF-7N: two cylinders own the return leg twice and the mass flow not at all."""
     cylinders = (
-        "  first: {assembly: dhw/cylinder, bind: {circuit: second.circuit}}\n  second: {assembly: dhw/cylinder}\n"
+        "  first: {assembly: mock/dhw_cylinder, bind: {circuit: second.circuit}}\n"
+        "  second: {assembly: mock/dhw_cylinder}\n"
     )
     message = refusal(SITE + "imports:\n" + cylinders)
 
@@ -187,14 +190,14 @@ def test_two_ends_of_which_neither_owns_an_output_are_refused_naming_it() -> Non
     )
 
 
-#: A dhw end of one fake class, inline.
+#: A dhw end of one mock class, inline.
 DHW_END = """
 schema_version: 4
 kind: assembly
 name: odd/{name}
 components:
   End:
-    class: tests.assemblies.fixture_components.{cls}
+    class: tests.assemblies.mock_components.{cls}
     preset: standard
 {inputs}interface:
   needs:
@@ -206,7 +209,7 @@ components:
 def test_an_output_no_member_of_the_other_end_reads_is_refused(tmp_path: Path) -> None:
     """EF-7N: the boiler owns the mass flow, the other end reads nothing."""
     library = Library(tmp_path)
-    library.add("odd/return_only", DHW_END.format(name="return_only", cls="FakeDhwReturn", inputs=""))
+    library.add("odd/return_only", DHW_END.format(name="return_only", cls="MockDhwReturn", inputs=""))
 
     message = refusal(SITE + "imports:\n" + GAS + BOILER + "  end: {assembly: odd/return_only}\n", library)
 
@@ -218,18 +221,18 @@ def test_an_output_no_member_of_the_other_end_reads_is_refused(tmp_path: Path) -
 
 @pytest.mark.base
 def test_a_reader_without_default_connections_from_the_owner_is_refused(tmp_path: Path) -> None:
-    """EF-7H: the sink reads the boiler's outputs but declares no default connections from FakeBoiler."""
+    """EF-7H: the sink reads the boiler's outputs but declares no default connections from MockBoiler."""
     library = Library(tmp_path)
     library.add(
         "odd/sink",
-        DHW_END.format(name="sink", cls="FakeDhwSink", inputs="    inputs: [{$port: circuit}]\n"),
+        DHW_END.format(name="sink", cls="MockDhwSink", inputs="    inputs: [{$port: circuit}]\n"),
     )
 
     message = refusal(SITE + "imports:\n" + GAS + BOILER + "  end: {assembly: odd/sink}\n", library)
 
     assert message.startswith(
-        "EF-7H at import end: the circuit dhw: end-End (FakeDhwSink) reads MassFlowDhw from boiler-Boiler, but "
-        "declares no default connections from FakeBoiler"
+        "EF-7H at import end: the circuit dhw: end-End (MockDhwSink) reads MassFlowDhw from boiler-Boiler, but "
+        "declares no default connections from MockBoiler"
     )
 
 
@@ -238,7 +241,7 @@ def test_an_optional_circuit_end_with_a_candidate_and_no_verb_is_refused() -> No
     """EF-7E (D8 i): two optional ends; the intent must be written."""
     cylinder = f"""
     Cylinder:
-      class: {Fixtures.FAKES}.FakeCylinder
+      class: {Mocks.MOCKS}.MockCylinder
       preset: standard
       inputs:
         - Occupancy
@@ -260,9 +263,9 @@ def test_a_circuit_end_reading_without_a_placeholder_fails_the_library_check(tmp
     library = Library(tmp_path)
     library.add(
         "broken/cylinder",
-        (Fixtures.LIBRARY / "dhw" / "cylinder.assembly.yaml")
+        (Mocks.LIBRARY / "mock" / "dhw_cylinder.assembly.yaml")
         .read_text(encoding="utf-8")
-        .replace("name: dhw/cylinder", "name: broken/cylinder")
+        .replace("name: mock/dhw_cylinder", "name: broken/cylinder")
         .replace("      - {$port: circuit}\n", ""),
     )
     resolver = library.resolver()
@@ -280,7 +283,7 @@ def test_a_site_entry_is_a_circuit_end_of_its_own() -> None:
     """A site component's circuit port binds an import's end, alike both ways."""
     cylinder = f"""
     Cylinder:
-      class: {Fixtures.FAKES}.FakeCylinder
+      class: {Mocks.MOCKS}.MockCylinder
       preset: standard
       inputs:
         - Occupancy
@@ -329,7 +332,7 @@ def test_a_fuel_need_without_a_provider_is_refused_naming_the_supply_assembly() 
         "candidates: none"
     )
     assert re.search(
-        r"\(import boiler, inline.energy_system.yaml:\d+ → heating/gas_boiler.assembly.yaml:\d+\)", message
+        r"\(import boiler, inline.energy_system.yaml:\d+ → mock/gas_boiler.assembly.yaml:\d+\)", message
     )
     assert "add the import of `supply/gas_connection`" in message
 
@@ -362,7 +365,7 @@ def test_site_entries_need_and_provide_carriers_alike() -> None:
     """A site boiler's need binds an imported connection; a site meter provides gas to an imported boiler."""
     boiler = f"""
     Boiler:
-      class: {Fixtures.FAKES}.FakeBoiler
+      class: {Mocks.MOCKS}.MockBoiler
       preset: condensing
       ports:
         fuel: {{carrier: natural_gas, outputs: [FuelUse]}}
@@ -375,7 +378,7 @@ def test_site_entries_need_and_provide_carriers_alike() -> None:
 
     meter = f"""
     Meter:
-      class: {Fixtures.FAKES}.FakeGasMeter
+      class: {Mocks.MOCKS}.MockGasMeter
       preset: standard
       inputs: [{{$port: gas}}]
       ports:
@@ -393,15 +396,15 @@ def test_site_entries_need_and_provide_carriers_alike() -> None:
 def test_both_ends_may_write_the_binding_but_must_agree() -> None:
     """Verbs on both ends naming each other bind once; naming a third end is refused (EF-7N)."""
     agreed = (
-        "  heater: {assembly: heating/gas_boiler, bind: {dhw: cylinder}}\n"
-        "  cylinder: {assembly: dhw/cylinder, bind: {circuit: heater.dhw}}\n"
+        "  heater: {assembly: mock/gas_boiler, bind: {dhw: cylinder}}\n"
+        "  cylinder: {assembly: mock/dhw_cylinder, bind: {circuit: heater.dhw}}\n"
     )
     expanded, _record = expand_text(SITE + "imports:\n" + GAS + agreed)
     assert expanded.components["heater-Boiler"].inputs == (DefaultInputs(source="cylinder-Cylinder"),)
     disagreeing = (
-        "  cylinder: {assembly: dhw/cylinder, bind: {circuit: heater.dhw}}\n"
-        "  heater: {assembly: heating/gas_boiler, bind: {dhw: spare}}\n"
-        "  spare: {assembly: dhw/cylinder}\n"
+        "  cylinder: {assembly: mock/dhw_cylinder, bind: {circuit: heater.dhw}}\n"
+        "  heater: {assembly: mock/gas_boiler, bind: {dhw: spare}}\n"
+        "  spare: {assembly: mock/dhw_cylinder}\n"
     )
     message = refusal(SITE + "imports:\n" + GAS + disagreeing)
     assert message.startswith(
@@ -409,10 +412,10 @@ def test_both_ends_may_write_the_binding_but_must_agree() -> None:
         "yet the import 'heater' writes 'bind: spare' for it"
     )
 
-    boilers = "  boiler:\n    assembly: heating/gas_boiler\n    instances: {a: {}, b: {}}\n"
+    boilers = "  boiler:\n    assembly: mock/gas_boiler\n    instances: {a: {}, b: {}}\n"
 
-    first = "  first: {assembly: dhw/cylinder, bind: {circuit: boiler.a.dhw}}\n"
-    second = "  second: {assembly: dhw/cylinder, bind: {circuit: boiler.a.dhw}}\n"
+    first = "  first: {assembly: mock/dhw_cylinder, bind: {circuit: boiler.a.dhw}}\n"
+    second = "  second: {assembly: mock/dhw_cylinder, bind: {circuit: boiler.a.dhw}}\n"
     message = refusal(SITE + "imports:\n" + GAS + boilers + first + second)
     assert message.startswith(
         "EF-7N at import second: circuit port 'circuit' (circuit dhw) is bound to 'boiler.a.dhw', whose circuit "
@@ -427,7 +430,7 @@ kind: assembly
 name: supply/oil
 components:
   Meter:
-    class: tests.assemblies.fixture_components.FakeGasMeter
+    class: tests.assemblies.mock_components.MockGasMeter
     preset: standard
     inputs: [{$port: connection}]
 interface:
@@ -463,9 +466,9 @@ def test_a_consuming_output_of_another_carrier_is_refused(tmp_path: Path) -> Non
     library = Library(tmp_path)
     library.add(
         "heating/oil_boiler",
-        (Fixtures.LIBRARY / "heating" / "gas_boiler.assembly.yaml")
+        (Mocks.LIBRARY / "mock" / "gas_boiler.assembly.yaml")
         .read_text(encoding="utf-8")
-        .replace("name: heating/gas_boiler", "name: heating/oil_boiler")
+        .replace("name: mock/gas_boiler", "name: heating/oil_boiler")
         .replace("carrier: natural_gas", "carrier: heating_oil"),
     )
     resolver = library.resolver()
@@ -476,7 +479,7 @@ def test_a_consuming_output_of_another_carrier_is_refused(tmp_path: Path) -> Non
     ), problems
 
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
-    boiler = FakeBoiler(parameters, FakeBoilerConfig.preset_condensing("Boiler"))
+    boiler = MockBoiler(parameters, MockBoilerConfig.preset_condensing("Boiler"))
     record = ImportRecord(
         carriers=[
             CarrierRecord(
@@ -494,13 +497,13 @@ def test_a_consuming_output_of_another_carrier_is_refused(tmp_path: Path) -> Non
 
 @pytest.mark.base
 def test_an_output_the_meter_declares_no_feed_from_is_refused(tmp_path: Path) -> None:
-    """EF-7H: the gas meter declares a default feed from FakeBoiler.FuelUse only."""
+    """EF-7H: the gas meter declares a default feed from MockBoiler.FuelUse only."""
     library = Library(tmp_path)
     library.add(
         "heating/flue",
-        (Fixtures.LIBRARY / "heating" / "gas_boiler.assembly.yaml")
+        (Mocks.LIBRARY / "mock" / "gas_boiler.assembly.yaml")
         .read_text(encoding="utf-8")
-        .replace("name: heating/gas_boiler", "name: heating/flue")
+        .replace("name: mock/gas_boiler", "name: heating/flue")
         .replace("outputs: [Boiler.FuelUse]", "outputs: [Boiler.FlueLoss]"),
     )
 
@@ -508,9 +511,9 @@ def test_an_output_the_meter_declares_no_feed_from_is_refused(tmp_path: Path) ->
 
     assert message.startswith(
         "EF-7H at import boiler: carrier need 'fuel' (carrier natural_gas) would feed boiler-Boiler.FlueLoss into the "
-        "meter gas-Meter (FakeGasMeter), which declares no default feed from FakeBoiler.FlueLoss"
+        "meter gas-Meter (MockGasMeter), which declares no default feed from MockBoiler.FlueLoss"
     )
-    assert "FakeBoiler.FuelUse" in message
+    assert "MockBoiler.FuelUse" in message
 
 
 #: An electricity consumer and a grid connection, inline.
@@ -520,7 +523,7 @@ kind: assembly
 name: consumer/heater
 components:
   Heater:
-    class: tests.assemblies.fixture_components.FakeHeater
+    class: tests.assemblies.mock_components.MockHeater
     preset: standard
 interface:
   needs:
@@ -629,21 +632,21 @@ def test_a_fact_port_lowers_to_a_sizing_line_naming_the_provider() -> None:
 @pytest.mark.base
 def test_a_scalar_fact_with_two_providers_is_the_sizing_engines_ambiguity() -> None:
     """EF-4B, the engine's ambiguity, at load time: both arrays listed, a paste-ready line each."""
-    pv = "  pv:\n    assembly: pv/array\n    instances: {east: {}, west: {}}\n"
-    message = refusal(SITE + "imports:\n" + pv + "  battery: {assembly: storage/battery}\n")
+    pv = "  pv:\n    assembly: mock/pv_array\n    instances: {east: {}, west: {}}\n"
+    message = refusal(SITE + "imports:\n" + pv + "  battery: {assembly: mock/battery}\n")
 
     assert message.startswith(
         "EF-4B at import battery: port 'pv_power' (fact pv_peak_power_in_watt) has 2 candidates pv-east-PVSystem, "
         "pv-west-PVSystem and no verb"
     )
     assert "`bind: {pv_power: pv.east.peak_power}`, `bind: {pv_power: pv.west.peak_power}`" in message
-    assert re.search(r"\(import battery, inline.energy_system.yaml:\d+ → storage/battery.assembly.yaml:\d+\)", message)
+    assert re.search(r"\(import battery, inline.energy_system.yaml:\d+ → mock/battery.assembly.yaml:\d+\)", message)
 
 
 @pytest.mark.base
 def test_a_fact_without_a_provider_and_a_bind_to_a_non_provider_are_refused() -> None:
     """EF-7R both: nobody contributes the fact, and the bound site entry does not."""
-    battery = "  battery: {assembly: storage/battery}\n"
+    battery = "  battery: {assembly: mock/battery}\n"
     message = refusal(SITE + "imports:\n" + battery)
     assert message.startswith(
         "EF-7R at import battery: required fact port 'pv_power' finds no provider of the fact pv_peak_power_in_watt"
@@ -652,7 +655,7 @@ def test_a_fact_without_a_provider_and_a_bind_to_a_non_provider_are_refused() ->
     message = refusal(SITE + "imports:\n" + battery.replace("}", ", bind: {pv_power: Weather}}"))
     assert message.startswith(
         "EF-7R at import battery: fact port 'pv_power' (fact pv_peak_power_in_watt) is bound to 'Weather' "
-        "(FakeWeatherConfig), which does not contribute pv_peak_power_in_watt"
+        "(MockWeatherConfig), which does not contribute pv_peak_power_in_watt"
     )
 
 
@@ -661,12 +664,12 @@ def test_a_site_component_providing_the_fact_is_bound_by_the_default_rule() -> N
     """A site array is the one provider in scope; the line names it by its own name."""
     roof = f"""
     Roof:
-      class: {Fixtures.FAKES}.FakePVSystem
+      class: {Mocks.MOCKS}.MockPVSystem
       preset: rooftop
       inputs: [Weather]
     """
     expanded, _record = expand_text(
-        site(WEATHER, OCCUPANCY, roof) + "imports:\n  battery: {assembly: storage/battery}\n"
+        site(WEATHER, OCCUPANCY, roof) + "imports:\n  battery: {assembly: mock/battery}\n"
     )
 
     assert expanded.components["battery-Battery"].sizing_sources == {
@@ -680,16 +683,16 @@ def test_a_provided_fact_outside_the_classes_contributions_fails_the_contract(tm
     library = Library(tmp_path)
     library.add(
         "broken/pv",
-        (Fixtures.LIBRARY / "pv" / "array.assembly.yaml")
+        (Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml")
         .read_text(encoding="utf-8")
-        .replace("name: pv/array", "name: broken/pv")
+        .replace("name: mock/pv_array", "name: broken/pv")
         .replace("{fact: pv_peak_power_in_watt, member: PVSystem}", "{fact: heating_load_in_watt, member: PVSystem}"),
     )
     resolver = library.resolver()
 
     problems = check_assembly(resolver.resolve("broken/pv", "test"), resolver, CheckStrength.EXPANSION)
     assert any(
-        "the provided fact 'heating_load_in_watt' is not among the SIZING_CONTRIBUTIONS of FakePVSystemConfig"
+        "the provided fact 'heating_load_in_watt' is not among the SIZING_CONTRIBUTIONS of MockPVSystemConfig"
         in problem
         for problem in problems
     ), problems
@@ -712,9 +715,9 @@ def test_a_switch_takes_the_case_its_parameter_or_variant_selects(tmp_path: Path
     library = Library(tmp_path)
     library.add(
         "switch/heater",
-        (Fixtures.LIBRARY / "generator" / "electric_heater.assembly.yaml")
+        (Mocks.LIBRARY / "mock" / "electric_heater.assembly.yaml")
         .read_text(encoding="utf-8")
-        .replace("name: generator/electric_heater", "name: switch/heater")
+        .replace("name: mock/electric_heater", "name: switch/heater")
         .replace(
             "      power_in_watt: {$param: power_in_watt}\n",
             "      power_in_watt: {$switch: thermostat, fitted: {$param: power_in_watt}, none: 1500}\n",
@@ -731,7 +734,7 @@ def test_a_switch_takes_the_case_its_parameter_or_variant_selects(tmp_path: Path
 def test_a_switch_must_name_one_selector_and_cover_its_values(tmp_path: Path) -> None:
     """The library check: an unknown selector, a missing case, an unknown case."""
     library = Library(tmp_path)
-    base = (Fixtures.LIBRARY / "heating" / "gas_boiler.assembly.yaml").read_text(encoding="utf-8")
+    base = (Mocks.LIBRARY / "mock" / "gas_boiler.assembly.yaml").read_text(encoding="utf-8")
     cases = {
         "broken/selector": "{$switch: kind, condensing: 0.95, standard: 0.85}",
         "broken/cases": "{$switch: boiler_type, condensing: 0.95, old: 0.8}",
@@ -739,7 +742,7 @@ def test_a_switch_must_name_one_selector_and_cover_its_values(tmp_path: Path) ->
     for name, switch in cases.items():
         library.add(
             name,
-            base.replace("name: heating/gas_boiler", f"name: {name}").replace(
+            base.replace("name: mock/gas_boiler", f"name: {name}").replace(
                 "{$switch: boiler_type, condensing: 0.95, standard: 0.85}", switch
             ),
         )

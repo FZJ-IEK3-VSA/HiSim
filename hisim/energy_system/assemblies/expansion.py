@@ -364,7 +364,7 @@ class Handle:
 
     @property
     def partner_label(self) -> str:
-        """What the port binds to, as a message names it: ``partner FakeWeather``, ``circuit dhw``."""
+        """What the port binds to, as a message names it: ``partner MockWeather``, ``circuit dhw``."""
         if self.port.kind == PortKind.CIRCUIT:
             return f"circuit {self.end.circuit if self.end is not None else self.port.circuit}"
         if self.port.kind == PortKind.CARRIER:

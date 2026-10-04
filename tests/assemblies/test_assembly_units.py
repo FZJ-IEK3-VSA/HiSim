@@ -26,8 +26,8 @@ from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import SchemaBuilder, build_schema
-from tests.assemblies.fixture_components import FakeBatteryConfig
-from tests.assemblies.helpers import Fixtures
+from tests.assemblies.mock_components import MockBatteryConfig
+from tests.assemblies.helpers import Mocks
 
 #: Numeric parameters the mockup declares without a unit, by ``(assembly, parameter)``: none since the
 #: mockup states ``unit: ANY`` on the parameters that feed a dimensionless field (docs/assemblies
@@ -54,7 +54,7 @@ def members_of(document: Dict[str, Any]) -> Iterator[Tuple[str, Dict[str, Any]]]
 def fed_fields() -> List[Tuple[str, str, str, str, Dict[str, Any]]]:
     """Every ``(assembly, member class, field, parameter, declaration)`` a mockup ``{$param}`` feeds."""
     fed = []
-    for path in sorted(Fixtures.MOCKUP.rglob("*.assembly.yaml")):
+    for path in sorted(Mocks.SPEC_MOCKUP.rglob("*.assembly.yaml")):
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         parameters = document.get("parameters") or {}
         for _name, member in members_of(document):
@@ -114,11 +114,11 @@ def test_every_field_a_mockup_parameter_feeds_declares_the_parameters_unit() -> 
 @pytest.mark.base
 def test_a_unit_on_a_sized_field_survives_the_codec_the_schema_and_describe() -> None:
     """``sized_field(unit=…)`` is metadata: the wire form is unchanged, the schema and ``describe`` state it."""
-    config = FakeBatteryConfig.preset_sized_to_pv("Battery")
-    decoded = FakeBatteryConfig.from_json(config.to_json())
+    config = MockBatteryConfig.preset_sized_to_pv("Battery")
+    decoded = MockBatteryConfig.from_json(config.to_json())
     assert decoded == config
     assert json.loads(config.to_json())["capacity_in_kwh"] == "AUTO"
-    assert declared_field_unit(FakeBatteryConfig, "capacity_in_kwh") == lt.Units.KWH
+    assert declared_field_unit(MockBatteryConfig, "capacity_in_kwh") == lt.Units.KWH
 
     schema = build_schema(ComponentClassScan.collect())
     pv_branch = next(

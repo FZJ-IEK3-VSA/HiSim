@@ -1,6 +1,6 @@
 """Reading assembly files and checking them against their schema (``assemblies_spec.md`` §2, §9.4).
 
-The mockup of the spec (``tests/assemblies/mockup``, a snapshot of
+The mockup of the spec (``tests/assemblies/spec_mockup_snapshot``, a snapshot of
 ``roadmap/declarative_energy_systems/assemblies_mockup`` at docs/assemblies d40ff770, PR #881) is the
 shape the format must accept. Since that commit every mockup assembly carries its test contract and a
 ``range`` on every numeric parameter, and the constructor calls are spelled as the format reads them,
@@ -33,7 +33,7 @@ from hisim.energy_system.imports_model import PortKind, Selection, Selector
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import build_schema, build_structural_schema, default_schema_path, render_schema
-from tests.assemblies.helpers import Fixtures
+from tests.assemblies.helpers import Mocks
 
 
 class MockupOwes:
@@ -91,12 +91,12 @@ class MockupOwes:
 
 def mockup_assemblies() -> List[Path]:
     """Every assembly of the mockup snapshot."""
-    return sorted(Fixtures.MOCKUP.rglob("*.assembly.yaml"))
+    return sorted(Mocks.SPEC_MOCKUP.rglob("*.assembly.yaml"))
 
 
 def library_path(path: Path) -> str:
     """The library path of a mockup assembly."""
-    return path.relative_to(Fixtures.MOCKUP).as_posix()[: -len(".assembly.yaml")]
+    return path.relative_to(Mocks.SPEC_MOCKUP).as_posix()[: -len(".assembly.yaml")]
 
 
 def problems(validator: Any, document: Any) -> List[Tuple[str, str]]:
@@ -126,7 +126,7 @@ def test_the_committed_assembly_schema_is_what_an_export_writes_today() -> None:
 def test_the_mockup_has_fifteen_assemblies_and_three_energy_systems() -> None:
     """The snapshot is complete, so the listings below cover every file."""
     assert len(mockup_assemblies()) == 15
-    assert len(list(Fixtures.MOCKUP.glob("*.energy_system.yaml"))) == 3
+    assert len(list(Mocks.SPEC_MOCKUP.glob("*.energy_system.yaml"))) == 3
 
 
 @pytest.mark.base
@@ -137,7 +137,7 @@ def test_every_mockup_assembly_validates_against_the_assembly_schema(assembly_va
     schema accepts exactly because they have nothing to sweep (D24 as amended).
     """
     found = {
-        path.relative_to(Fixtures.MOCKUP).as_posix(): problems(
+        path.relative_to(Mocks.SPEC_MOCKUP).as_posix(): problems(
             assembly_validator, yaml.safe_load(path.read_text(encoding="utf-8"))
         )
         for path in mockup_assemblies()
@@ -165,7 +165,7 @@ def test_the_schema_requires_a_monotone_entry_only_beside_a_numeric_parameter(as
 @pytest.mark.base
 def test_the_library_check_of_the_mockup_lists_only_what_the_repository_owes_it() -> None:
     """Missing class interfaces (lt0b.12), † classes and † carriers, and nothing else."""
-    resolver = AssemblyResolver([Fixtures.MOCKUP])
+    resolver = AssemblyResolver([Mocks.SPEC_MOCKUP])
     without_interface: Set[str] = set()
     not_written: Set[str] = set()
     carriers: Set[Tuple[str, str]] = set()
@@ -198,7 +198,7 @@ def test_the_library_check_of_the_mockup_lists_only_what_the_repository_owes_it(
 @pytest.mark.base
 def test_a_member_written_in_two_options_is_checked_against_each_options_class() -> None:
     """hisim-lt0b.13 on the mockup's storage water heater: ``Heater`` is checked as each option's class."""
-    resolver = AssemblyResolver([Fixtures.MOCKUP])
+    resolver = AssemblyResolver([Mocks.SPEC_MOCKUP])
     listed = check_assembly(resolver.resolve("dhw/storage_water_heater", "test"), resolver, CheckStrength.LIBRARY)
 
     for option, class_path in (
@@ -239,10 +239,10 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
     structural = jsonschema.Draft202012Validator(build_structural_schema())
     full = jsonschema.Draft202012Validator(build_schema(ComponentClassScan.collect()))
     for name in ("composed_heatpump_default.energy_system.yaml", "renovisor_full_house.energy_system.yaml"):
-        document = yaml.safe_load((Fixtures.MOCKUP / name).read_text(encoding="utf-8"))
+        document = yaml.safe_load((Mocks.SPEC_MOCKUP / name).read_text(encoding="utf-8"))
         assert problems(structural, document) == [], name
     heat_pump = yaml.safe_load(
-        (Fixtures.MOCKUP / "composed_heatpump_default.energy_system.yaml").read_text(encoding="utf-8")
+        (Mocks.SPEC_MOCKUP / "composed_heatpump_default.energy_system.yaml").read_text(encoding="utf-8")
     )
     assert problems(full, heat_pump) == []
 
@@ -250,7 +250,7 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
 @pytest.mark.base
 def test_the_heat_pump_composed_file_reads_into_the_model() -> None:
     """The reader takes the composed file: imports, verbs, site ports, placeholders, order, the grid's selection."""
-    model = parse_energy_system(Fixtures.MOCKUP / "composed_heatpump_default.energy_system.yaml")
+    model = parse_energy_system(Mocks.SPEC_MOCKUP / "composed_heatpump_default.energy_system.yaml")
 
     assert model.schema_version == 4
     assert list(model.imports) == ["heating", "dhw", "pv", "battery", "control", "grid"]
@@ -266,10 +266,10 @@ def test_the_heat_pump_composed_file_reads_into_the_model() -> None:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("path", mockup_assemblies(), ids=lambda path: path.relative_to(Fixtures.MOCKUP).as_posix())
+@pytest.mark.parametrize("path", mockup_assemblies(), ids=lambda path: path.relative_to(Mocks.SPEC_MOCKUP).as_posix())
 def test_every_mockup_assembly_reads(path: Path) -> None:
     """The reader takes the mockup's every construct: ports of all kinds, selectors, variants, placeholders, tests."""
-    name = path.relative_to(Fixtures.MOCKUP).as_posix()
+    name = path.relative_to(Mocks.SPEC_MOCKUP).as_posix()
     model, lines = AssemblyReader.read(path)
 
     assert model.name == name[: -len(".assembly.yaml")]
@@ -280,9 +280,9 @@ def test_every_mockup_assembly_reads(path: Path) -> None:
 @pytest.mark.base
 def test_the_controller_mockup_reads_its_observer_port_and_its_priorities() -> None:
     """``control/ems_self_consumption``: an observer port with ``default: declared``, priorities from a parameter."""
-    model, _lines = AssemblyReader.read(Fixtures.MOCKUP / "control" / "ems_self_consumption.assembly.yaml")
-    battery, _lines = AssemblyReader.read(Fixtures.MOCKUP / "storage" / "battery.assembly.yaml")
-    heat_pump, _lines = AssemblyReader.read(Fixtures.MOCKUP / "heating" / "air_source_heat_pump.assembly.yaml")
+    model, _lines = AssemblyReader.read(Mocks.SPEC_MOCKUP / "control" / "ems_self_consumption.assembly.yaml")
+    battery, _lines = AssemblyReader.read(Mocks.SPEC_MOCKUP / "storage" / "battery.assembly.yaml")
+    heat_pump, _lines = AssemblyReader.read(Mocks.SPEC_MOCKUP / "heating" / "air_source_heat_pump.assembly.yaml")
 
     assert model.ports["flows"].kind == PortKind.OBSERVER
     assert model.ports["flows"].selection == Selection(declared=True)
@@ -295,7 +295,7 @@ def test_the_controller_mockup_reads_its_observer_port_and_its_priorities() -> N
 @pytest.mark.base
 def test_the_reader_keeps_the_line_of_every_block() -> None:
     """The line index the source maps cite points at the written lines."""
-    path = Fixtures.LIBRARY / "pv" / "array.assembly.yaml"
+    path = Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml"
     text = path.read_text(encoding="utf-8").splitlines()
     _model, lines = AssemblyReader.read(path)
 
@@ -305,10 +305,10 @@ def test_the_reader_keeps_the_line_of_every_block() -> None:
 
 
 @pytest.mark.base
-def test_the_fixture_assembly_reads_every_block() -> None:
+def test_the_mock_assembly_reads_every_block() -> None:
     """Parameters, constraints, presets, members with display and ``$param`` preset, variants, ports, tests."""
-    heater, _ = AssemblyReader.read(Fixtures.LIBRARY / "generator" / "electric_heater.assembly.yaml")
-    pv, _ = AssemblyReader.read(Fixtures.LIBRARY / "pv" / "array.assembly.yaml")
+    heater, _ = AssemblyReader.read(Mocks.LIBRARY / "mock" / "electric_heater.assembly.yaml")
+    pv, _ = AssemblyReader.read(Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml")
 
     assert heater.parameters["with_thermostat"].allowed_values == (True, False)
     assert heater.variants["thermostat"].options["fitted"].components["Controller"].preset_parameter == "control"

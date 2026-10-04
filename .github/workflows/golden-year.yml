@@ -72,7 +72,7 @@
 # seeded Latin hypercube sample of every assembly's parameter box beside its
 # deterministic samples, under the same gate as the full-year pairs, and its result
 # joins the `golden-year` status. Until the first real assemblies land (spec §13 step
-# 4) the library is the fixture library under tests/assemblies/fixtures/library. A
+# 4) the library is the mock library under tests/assemblies/mock_assemblies/library. A
 # failed check fails the job and uploads the JSON report; opening a bead for it, as for
 # a golden drift, is the owner's manual step today.
 #
@@ -326,13 +326,13 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
-      # `python -m` puts the workspace on the import path, where the fixture library's fake
-      # components live (tests.assemblies.fixture_components); the console script would not.
+      # `python -m` puts the workspace on the import path, where the mock library's mock
+      # components live (tests.assemblies.mock_components); the console script would not.
       # The command fails on a failed check, after writing its report.
       - name: Assembly test harness, nightly tier
         run: |
           python -m hisim.cli energy-system test-assemblies --tier nightly \
-            --library tests/assemblies/fixtures/library --out results/assembly-tests
+            --library tests/assemblies/mock_assemblies/library --out results/assembly-tests
       - name: Upload the assembly test report
         if: always()
         uses: actions/upload-artifact@v7

@@ -1,0 +1,34 @@
+# Mock: an indirectly heated cylinder, the other end of the dhw circuit, owning the return leg.
+schema_version: 4
+kind: assembly
+name: mock/dhw_cylinder
+description: A mock hot-water cylinder charged over the dhw circuit.
+
+parameters:
+  volume_in_liter:
+    {type: float, unit: LITER, default: 200, range: {min: 50, max: 500}, description: Usable cylinder volume.}
+
+presets:
+  standard: {}
+
+components:
+  Cylinder:
+    class: tests.assemblies.mock_components.MockCylinder
+    preset: standard
+    config:
+      volume_in_liter: {$param: volume_in_liter}
+    inputs:
+      - {$port: hot_water_demand}
+      - {$port: circuit}
+
+interface:
+  needs:
+    hot_water_demand: {into: [Cylinder], partner: MockOccupancy}
+    circuit: {circuit: dhw, member: Cylinder}
+
+tests:
+  bounds:
+    - {output: Cylinder.ReturnTemperatureDhw, unit: CELSIUS, min: 0, max: 100}
+    - {output: Cylinder.HeatReceived, unit: WATT, min: -20000, max: 20000}
+  monotone:
+    - {parameter: volume_in_liter, kpi: Cylinder heat received, member: Cylinder, direction: increasing}

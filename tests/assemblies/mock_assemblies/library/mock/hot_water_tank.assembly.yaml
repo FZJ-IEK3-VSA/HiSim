@@ -1,0 +1,36 @@
+# Mock: a hot-water tank, heated by whatever the importer binds to its heat port.
+schema_version: 4
+kind: assembly
+name: mock/hot_water_tank
+description: A mock hot-water tank.
+
+parameters:
+  volume_in_liter:
+    {type: float, unit: LITER, default: 150, range: {min: 50, max: 500}, description: Usable volume.}
+
+presets:
+  standard: {}
+
+components:
+  Tank:
+    class: tests.assemblies.mock_components.MockTank
+    preset: standard
+    config:
+      volume_in_liter: {$param: volume_in_liter}
+    inputs:
+      - {$port: hot_water_demand}
+      - {$port: heat}
+
+interface:
+  needs:
+    hot_water_demand: {into: [Tank], partner: MockOccupancy}
+    heat: {into: [Tank], partner: MockHeater}
+  provides:
+    temperature: {output: Tank.WaterTemperature}
+
+tests:
+  bounds:
+    - {output: Tank.WaterTemperature, unit: CELSIUS, min: 0, max: 100}
+    - {output: Tank.HeatLoss, unit: WATT, min: 0, max: 200}
+  monotone:
+    - {parameter: volume_in_liter, kpi: Standby heat losses, member: Tank, direction: increasing}

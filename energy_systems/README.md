@@ -304,9 +304,14 @@ partner}` (the partner must exist), `optional-bind: {port: partner}` (binds if i
 unbound, and the record says so) and `none: [port]` (declines an optional port). `required_when` and
 `active_when` make a port depend on the parameters. Inside an assembly an inner import's port is
 bound by a verb on the inner import, by an `internal:` entry, or re-exported with `from:
-<inner>.<port>`. The default connections are checked at load time against the member class's
-`CLASS_INTERFACE` (`hisim/component_interface.py`): its inputs and outputs with load types and units,
-the classes it declares default connections from, and its KPIs. Every refusal names the import, the
+<inner>.<port>`. Binding a component needs no declaration beyond what its class already does in
+its constructor: the expansion decides from the files alone (every entry states its class) which
+component is a candidate and refuses what they decide — no partner, several and no verb, `none:` on a
+required port, an absent `bind:` partner, a verb on an inactive port. Whether the member really
+declares default connections from the partner's class, and whether a wired input or output or a
+provided output exists, is checked when the system is built: after every component is constructed
+and before anything is connected (`EF-7H`, `EF-7J`, `hisim/energy_system/assemblies/port_check.py`),
+from the port-provenance table the import record keeps. Every refusal names the import, the
 instance, the port and every candidate, prints the source map of the import, and ends in a
 paste-ready `bind:` line.
 
@@ -314,13 +319,17 @@ paste-ready `bind:` line.
 circuit; the name is the medium (`dhw`, `sh`, `brine`, `solar_dhw`). A required end binds the one
 other end of the same circuit in scope — another import's circuit port or a site entry's
 (`ports: {sh: {circuit: sh}}` on the entry itself) — and `bind: {circuit: heating.dhw}` decides
-several; an end of another circuit is refused (`EF-7N`). The binding lowers by the hydronic naming
-convention: each of `MassFlow<C>`, `SupplyTemperature<C>` and `ReturnTemperature<C>` (`<C>` the name
-in camel case, `Dhw`, `SolarDhw`) must be an output of exactly one member of the two ends and an
-input of a member of the other end, whose class declares default connections from the owner's
-class; each reader gets the owner's bare name where its `{$port: <port>}` placeholder stands. A
-circuit port under `provides:` is optional (D20). The record lists every circuit with both ends and
-the outputs each owns.
+several; an end of another circuit is refused (`EF-7N`). The binding lowers from the files alone:
+every member of one end that carries the `{$port: <port>}` placeholder takes a bare name of each
+member of the other end. When the system is built, the post-construction port check verifies the
+hydronic naming convention on the constructed members: each of `MassFlow<C>`, `SupplyTemperature<C>`
+and `ReturnTemperature<C>` (`<C>` the name in camel case, `Dhw`, `SolarDhw`) must be an output of
+exactly one member of the two ends and an input, of the same load type and unit, of a member of the
+other end that carries the placeholder and declares default connections from the owner's class; and
+every bare name written must name an owner of an output its reader reads (`EF-7N`, `EF-7H`). A
+member of an end that owns none of the outputs the other end reads is therefore refused, not
+skipped. A circuit port under `provides:` is optional (D20). The record lists every circuit with
+both ends and their members.
 
 **Carriers.** A supply assembly provides a carrier, `provides: {connection: {carrier: natural_gas,
 meter: Meter}}`, the meter carrying a `{$port: connection}` placeholder; a site entry provides one
@@ -330,13 +339,15 @@ with `ports: {gas: {carrier: natural_gas}}` and is its own meter. A carrier is w
 [Boiler.FuelUse]}` (an output may also be named by a provided port of the assembly), binds the one
 provider of its carrier in scope, `bind:` decides several, and no provider is refused with the
 import that would add it ("add the import of `supply/gas_connection`"; the format never adds one,
-§5.2). For a fuel the provider's meter observes the consuming outputs: each lowers to an aggregator
-feed with the tags and weight the meter's class declares for that output of the consumer's class
-(`ClassInterface.default_feeds`), the items a recorded twin writes. Electricity has no link: a need
-writes nothing, takes no verb, and checks that exactly one electricity provider exists. A fuel
-provider no need is bound to is refused. A consuming output's energy carrier must be the need's —
-checked at load time where the class declares it (`DeclaredPort.carrier`), and once the components
-are built against the output's `EnergyPort` otherwise.
+§5.2). For a fuel the provider's meter observes the consuming outputs: the meter takes a bare name
+of each consuming member, which the wiring expands through the default feeds the meter's constructor
+declares from the consumer's class (`add_dynamic_default_connections`, with their tags and weight).
+When the system is built, the post-construction port check verifies on the constructed components
+that every named output exists, that its `EnergyPort` carries the need's carrier (`EF-7Q`), and that
+the meter's default feeds from the consumer's class are exactly the named outputs (`EF-7H`,
+`EF-7J`). Electricity has no link: a need writes nothing, takes no verb, and checks that exactly
+one electricity provider exists; its outputs' carriers are verified alike. A fuel provider no need
+is bound to is refused.
 
 **Facts.** A fact need, `{fact: pv_peak_power_in_watt, into: [Battery]}`, lowers to a
 `sizing_sources` line on each member naming the provider: a site entry or member whose class
@@ -364,11 +375,14 @@ every directory `HISIM_ASSEMBLY_PATH` names (`os.pathsep`-separated); a path fou
 The realized record's metadata carries the **import record** — per import and instance the assembly
 path and the sha256 of its file, the preset, the parameters as given and as resolved, the variants,
 the members' addresses, display names and order paths, every port's state and partner, the binding
-decisions and the evaluation sequence — and the **source map** of every produced item, which every
-downstream error naming a produced component prints. A realized record re-runs without any assembly.
+decisions, the port-provenance table and the evaluation sequence — and the **source map** of every
+produced item, which every downstream error naming a produced component prints. A realized record
+re-runs without any assembly; its port-provenance table is checked against the constructed
+components as on the first run.
 
 **Inspecting.** `hisim energy-system describe <family>/<name>` (or a path to a `*.assembly.yaml`)
-prints an assembly's interface with partner classes and requirement states, its parameters with
+prints an assembly's interface as its file declares it, with partner classes and requirement states
+(the partners' default connections are verified when a system is built, not here), its parameters with
 units, ranges, defaults and values, its constraints, presets, members, variants, inner imports and
 test contract; `describe` of a component class shows the unit every field declares. `hisim
 energy-system schema` writes `hisim/assembly_v4.schema.json` beside the energy-system schema (whose
@@ -381,8 +395,15 @@ entry for every energy-carrying or temperature output of every member (`{output:
 unit: WATT, min: 0, max: 200}`; a KPI is bounded as `{kpi: PV production, member: PVSystem, min:
 0}`), at least one `monotone` entry (`{parameter: volume_in_liter, kpi: Standby heat losses, member:
 Tank, direction: increasing}`, or `decreasing`, `constant`), and optionally `expect` bands per preset.
-The library check refuses an assembly without them, or with a declaration naming a member, output,
-KPI, parameter or preset that does not exist. The generic harness,
+The contract test has two halves. The library check reads the file and refuses an assembly without
+a `tests:` block, a range or a `monotone`, or with a declaration naming a member, parameter or preset
+that does not exist. The member contract needs the constructed members (no class declares its
+outputs or KPIs a second time): the harness runs the base samples first and checks, on their
+members, that every energy-carrying or temperature output — a power or energy unit, a temperature
+load type or a °C/K unit (`MemberContract`, `hisim/energy_system/assemblies/testing/contract.py`) —
+has a `bounds` entry, that a bounds entry's unit is its output's, and that every named KPI is one
+the member's `get_component_kpi_entries` reports. A violation is a contract failure named by member
+and output (or KPI), and no declaration of the assembly is evaluated. The generic harness,
 `hisim/energy_system/assemblies/testing/`, executes the contract; nothing is written per assembly in
 Python.
 

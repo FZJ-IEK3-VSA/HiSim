@@ -22,7 +22,6 @@ import pandas as pd
 from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.component_interface import ClassInterface, ClassInterfaceViolation
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.energy_port import EnergyPort
 from hisim.sim_repository import SimRepository
@@ -241,13 +240,6 @@ class Component:
     # `Simulator.check_cost_declarations`, and again in the postprocessing bridge under D7.
     cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
-    #: The class-level statement of this component's inputs, outputs and default-connection
-    #: sources (:mod:`hisim.component_interface`), which an assembly's ports are checked against at
-    #: load time (``assemblies_spec.md`` §3.3). ``None`` is no statement: such a class cannot be
-    #: bound through an assembly port until it declares one. A declared interface is enforced by
-    #: :meth:`add_input`, :meth:`add_output` and :meth:`add_default_connections`.
-    CLASS_INTERFACE: ClassVar[Optional[ClassInterface]] = None
-
     @classmethod
     def get_classname(cls):
         """Gets the class name. Helper function for default connections."""
@@ -365,13 +357,6 @@ class Component:
         for connection in connections:
             if connection.source_class_name != component_name:
                 raise ValueError("Trying to add connections to different components in one go.")
-        interface = type(self).CLASS_INTERFACE
-        if interface is not None and not interface.declares_defaults_from(component_name):
-            raise ClassInterfaceViolation(
-                f"{self.get_full_classname()} adds default connections from '{component_name}', which its "
-                "CLASS_INTERFACE does not list (it lists: "
-                f"{', '.join(interface.default_connection_sources) or 'none'})."
-            )
         self.default_connections[component_name] = connections
         log.trace(
             "added default connections for connections from : " + component_name + "\n" + str(self.default_connections)
@@ -398,7 +383,6 @@ class Component:
         mandatory: bool,
     ) -> ComponentInput:
         """Adds an input definition."""
-        self._check_declared(field_name, load_type, unit, "input")
         myinput = ComponentInput(object_name, field_name, load_type, unit, mandatory)
         self.inputs.append(myinput)
         return myinput
@@ -417,8 +401,6 @@ class Component:
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
-        self._check_declared(field_name, load_type, unit, "output")
-        self._check_declared_carrier(field_name, energy_port)
         outp = ComponentOutput(
             object_name,
             field_name,
@@ -432,50 +414,6 @@ class Component:
         )
         self.outputs.append(outp)
         return outp
-
-    def _check_declared(self, field_name: str, load_type: lt.LoadTypes, unit: lt.Units, kind: str) -> None:
-        """Refuses a port the class interface does not declare with this load type and unit.
-
-        Args:
-            field_name: The port's name.
-            load_type: The load type it is added with.
-            unit: The unit it is added with.
-            kind: ``"input"`` or ``"output"``.
-
-        Raises:
-            ClassInterfaceViolation: If the class declares an interface and it lists no such port,
-                or lists it with another load type or unit.
-        """
-        interface = type(self).CLASS_INTERFACE
-        if interface is None:
-            return
-        declared = interface.input(field_name) if kind == "input" else interface.output(field_name)
-        if declared is None or declared.load_type != load_type or declared.unit != unit:
-            raise ClassInterfaceViolation(
-                f"{self.get_full_classname()} adds the {kind} '{field_name}' ({load_type}, {unit}), which its "
-                f"CLASS_INTERFACE declares as {declared!r}."
-            )
-
-    def _check_declared_carrier(self, field_name: str, energy_port: Optional[EnergyPort]) -> None:
-        """Refuses an output whose energy port carries another carrier than the class interface declares.
-
-        Args:
-            field_name: The output's name.
-            energy_port: The energy port it is added with, or ``None``.
-
-        Raises:
-            ClassInterfaceViolation: If the class interface declares a carrier for the output and the
-                output is added without an energy port or with one of another carrier.
-        """
-        interface = type(self).CLASS_INTERFACE
-        declared = interface.output(field_name) if interface is not None else None
-        if declared is None or declared.carrier is None:
-            return
-        if energy_port is None or energy_port.carrier != declared.carrier:
-            raise ClassInterfaceViolation(
-                f"{self.get_full_classname()} adds the output '{field_name}' with the energy port {energy_port!r}, "
-                f"but its CLASS_INTERFACE declares the carrier {declared.carrier.value}."
-            )
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:
         """Connecting an input to an output."""

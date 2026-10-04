@@ -1,11 +1,15 @@
 """The harness: tiers, the library walk and its shards, and the test of one assembly (§9.4, D24).
 
-**Tiers.** ``pr`` runs the contract test — the library check, which refuses an assembly without
-descriptions, ranges, ``tests.bounds`` on every energy-carrying or temperature output and a
-``tests.monotone``, and every declaration naming a missing member, output, KPI, parameter or
-preset — and the deterministic samples with every declaration. ``nightly`` adds the seeded Latin
-hypercube sample of the parameter box (:mod:`.samples`). An assembly the contract test refuses is
-not run at all: its problems are its failures.
+**Tiers.** ``pr`` runs the contract test and the deterministic samples with every declaration.
+``nightly`` adds the seeded Latin hypercube sample of the parameter box (:mod:`.samples`).
+
+**The contract test** has two halves. The library check reads the file and refuses an assembly
+without descriptions, ranges or a ``tests.monotone``, and every declaration naming a missing member,
+parameter or preset; an assembly it refuses is not run at all. The member contract (:mod:`.contract`)
+needs the constructed members: every base sample runs first, and on their members the harness checks
+that every energy-carrying or temperature output has a ``tests.bounds`` entry, that a bounds entry's
+unit is its output's, and that every named KPI is one the member reports. A violation is a contract
+failure named by member and output (or KPI), and no declaration of the assembly is evaluated.
 
 **One assembly.** Every base sample (the deterministic ones, and the hypercube in the nightly
 tier) runs once in its isolation system (:mod:`.isolation`) and is checked: the run raised
@@ -46,6 +50,7 @@ from hisim.energy_system.assemblies.testing.checks import (
     output_column,
     series_violation,
 )
+from hisim.energy_system.assemblies.testing.contract import MemberContract
 from hisim.energy_system.assemblies.testing.errors import HarnessUsageError, SampleConstructionError
 from hisim.energy_system.assemblies.testing.isolation import (
     SUBJECT,
@@ -215,6 +220,7 @@ class _AssemblyTest:
         self.space = ParameterSpace(assembly)
         self.book = SampleBook(self.space)
         self.outcomes: Dict[str, RunOutcome] = {}
+        self.checked: Set[str] = set()
         self.sweeps: Set[Tuple[str, Tuple[str, ...]]] = set()
         self.tests = assembly.model.tests
         self.directory = harness.out / AssemblyHarness.RUNS / assembly.path
@@ -231,10 +237,65 @@ class _AssemblyTest:
             return
         bases = list(self.book.samples)
         for sample in bases:
-            self.outcome(sample)
-        self.check_expect()
-        self.check_monotone(bases)
+            self.run_sample(sample)
+        if self.check_member_contract(bases):
+            for sample in bases:
+                self.outcome(sample)
+            self.check_expect()
+            self.check_monotone(bases)
         self.report.samples_by_kind = sample_summary(self.book.samples)
+
+    def check_member_contract(self, bases: Sequence[Sample]) -> bool:
+        """The member contract on the constructed members of the base runs; ``False`` when it fails.
+
+        Every violation is a ``contract`` failure named by member and output (or KPI); the runs are
+        recorded, and no declaration is evaluated. A KPI no finished run could read off its member is
+        a contract failure too: the contract is verified, never assumed.
+        """
+        contract = MemberContract(self.tests)
+        kpis_checked: Set[Tuple[str, str]] = set()
+        constructed = False
+        for sample in bases:
+            outcome = self.outcomes[sample.sample_id]
+            if not outcome.components:
+                continue
+            constructed = True
+            contract.check_outputs(outcome.components)
+            if outcome.finished and outcome.results is not None:
+                kpis_checked |= contract.check_kpis(outcome.components, outcome.outputs, outcome.results)
+        if not constructed:
+            first = self.outcomes[bases[0].sample_id] if bases else None
+            reason = first.failure[1] if first is not None and first.failure is not None else "no base sample"
+            self.report.fail("contract", "-", "the constructed members", f"no base sample constructed: {reason}")
+            self.record_runs(bases)
+            return False
+        for member, kpi in contract.kpi_declarations():
+            seen = any(member in self.outcomes[sample.sample_id].components for sample in bases)
+            if seen and (member, kpi) not in kpis_checked:
+                self.report.fail(
+                    "contract", "-", f"{member}: {kpi}", f"no base run of '{member}' finished, so its KPI '{kpi}' is "
+                    "unverified."
+                )
+        for violation in contract.violations:
+            self.report.fail("contract", "-", violation.subject, violation.message)
+        if self.report.failures:
+            self.record_runs(bases)
+            return False
+        return True
+
+    def record_runs(self, samples: Sequence[Sample]) -> None:
+        """Records runs whose checks are not evaluated, because the contract failed."""
+        for sample in samples:
+            outcome = self.outcomes[sample.sample_id]
+            self.report.runs.append(
+                RunRecord(
+                    sample=sample,
+                    directory=str(outcome.directory),
+                    seconds=outcome.seconds,
+                    bindings=[binding.to_document() for binding in outcome.bindings],
+                    failed_checks=0,
+                )
+            )
 
     # ----------------------------------------------------------------------------------------- runs
 
@@ -243,8 +304,8 @@ class _AssemblyTest:
         """A sample as a failure names it: its id and its first origin."""
         return f"{sample.sample_id} ({sample.origins[0]})"
 
-    def outcome(self, sample: Sample) -> RunOutcome:
-        """The sample's run, running and checking it the first time it is asked for."""
+    def run_sample(self, sample: Sample) -> RunOutcome:
+        """Builds and runs one sample once, without checking it."""
         if sample.sample_id in self.outcomes:
             return self.outcomes[sample.sample_id]
         directory = self.directory / sample.sample_id
@@ -261,6 +322,14 @@ class _AssemblyTest:
         else:
             outcome = self.harness.runner.run(system, self.space, sample, directory)
         self.outcomes[sample.sample_id] = outcome
+        return outcome
+
+    def outcome(self, sample: Sample) -> RunOutcome:
+        """The sample's run, running it if needed and checking it the first time it is asked for."""
+        if sample.sample_id in self.checked:
+            return self.outcomes[sample.sample_id]
+        outcome = self.run_sample(sample)
+        self.checked.add(sample.sample_id)
         before = self.report.checks_failed
         self.check_run(sample, outcome)
         record = RunRecord(

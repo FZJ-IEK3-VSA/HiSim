@@ -5,12 +5,12 @@ that can run on a real assembly moves to the real library in step 4 (hisim-lt0b.
 is test-only, and its names say so: the family ``mock/``, the classes ``Mock*``.
 
 The mock assemblies under ``tests/assemblies/mock_assemblies/library`` are built from these classes
-and nothing else (``assemblies_spec.md`` §13 step 1). Each class declares, at class
-level, what the expansion of imports checks at load time — its inputs and outputs with their load
-types and units, the classes it declares default connections from, and the KPIs it reports
-(:class:`~hisim.component_interface.ClassInterface`) — and its configuration declares the unit of
-every field an assembly parameter feeds (D16 b). The constructors build their ports and default
-connections *from* those declarations, so a mock cannot drift from what it declares.
+and nothing else (``assemblies_spec.md`` §13 step 1). Like every HiSim component, each mock creates
+its inputs, its outputs and its default connections in its constructor (``add_input``,
+``add_output``, ``add_default_connections``) and nowhere else; the post-construction port check of a
+build reads them off the constructed instance. Its configuration declares the unit of every field an
+assembly parameter feeds (D16 b). :class:`MockBareDevice` declares no default connections at all,
+for the refusal of a port lowered into a member without them.
 
 The physics is a toy: a weather series, an occupancy drawing hot water and electricity, a PV array
 producing from the temperature, a tank losing heat and filled by a heater a thermostat switches,
@@ -20,7 +20,7 @@ few iterations, so a one-day run is fast.
 For the circuit, carrier and fact ports (hisim-lt0b.2) a gas boiler charges a cylinder over a
 ``dhw`` circuit — the boiler owns ``MassFlowDhw`` and ``SupplyTemperatureDhw``, the cylinder owns
 ``ReturnTemperatureDhw``, each reading the other's by its default connections — and burns natural
-gas that a gas meter observes through the default feed its class declares; the boiler declares its
+gas that a gas meter observes through the default feed its constructor declares; the boiler declares its
 energy ports, fuel in, heat out and flue loss, so the energy-balance check closes its balance every
 step. A battery sizes its capacity from the PV arrays' peak power, the fact the array contributes.
 """
@@ -34,8 +34,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.component import Component, ComponentConnection, ComponentOutput, SingleTimeStepValues
-from hisim.component_interface import ClassInterface, DeclaredFeed, DeclaredPort
+from hisim.component import Component, ComponentConnection, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.config import (
     ComponentID,
     ConfigBase,
@@ -64,53 +63,41 @@ UNIT = "unit"
 
 
 class MockComponent(Component):
-    """The shared behaviour of every mock: ports and default connections from its interface."""
+    """The shared behaviour of every mock: helpers its constructor adds ports and default connections with."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
-
-    #: Source class name to ``{input: output}`` of its default connections.
-    DEFAULTS: Dict[str, Dict[str, str]] = {}
-
-    #: Inputs that may stay unconnected.
-    OPTIONAL_INPUTS: tuple = ()
-
-    #: Output name to the energy port it is added with.
-    ENERGY_PORTS: Dict[str, EnergyPort] = {}
 
     #: KPI name to ``(output, factor)``: the KPI is the output's sum over the run times the factor.
     SUM_KPIS: Dict[str, tuple] = {}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: Any) -> None:
-        """Builds the ports and the default connections the class interface declares."""
+        """Builds the component; the subclass's constructor adds its ports and default connections."""
         super().__init__(
             name=config.component_id.key,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=DisplayConfig(),
         )
-        interface = type(self).CLASS_INTERFACE
-        assert interface is not None
-        self.ports_in = {
-            port.name: self.add_input(
-                self.component_name, port.name, port.load_type, port.unit, port.name not in self.OPTIONAL_INPUTS
-            )
-            for port in interface.inputs
-        }
-        self.ports_out: Dict[str, ComponentOutput] = {
-            port.name: self.add_output(
-                self.component_name,
-                port.name,
-                port.load_type,
-                port.unit,
-                energy_port=self.ENERGY_PORTS.get(port.name),
-                output_description=port.name,
-            )
-            for port in interface.outputs
-        }
-        for source, wires in self.DEFAULTS.items():
-            self.add_default_connections(
-                [ComponentConnection(target, source, output) for target, output in wires.items()]
-            )
+        self.ports_in: Dict[str, ComponentInput] = {}
+        self.ports_out: Dict[str, ComponentOutput] = {}
+
+    def input_port(self, name: str, load_type: lt.LoadTypes, unit: lt.Units, *, mandatory: bool = True) -> None:
+        """Adds one input (``add_input``)."""
+        self.ports_in[name] = self.add_input(self.component_name, name, load_type, unit, mandatory)
+
+    def output_port(
+        self, name: str, load_type: lt.LoadTypes, unit: lt.Units, energy_port: Optional[EnergyPort] = None
+    ) -> None:
+        """Adds one output (``add_output``), with its energy port where it carries energy."""
+        self.ports_out[name] = self.add_output(
+            self.component_name, name, load_type, unit, energy_port=energy_port, output_description=name
+        )
+
+    def defaults_from(self, source_class: str, wires: Dict[str, str]) -> None:
+        """Adds the default connections from one source class, ``{input: output}`` (``add_default_connections``)."""
+        self.add_default_connections(
+            [ComponentConnection(target, source_class, output) for target, output in wires.items()]
+        )
 
     def value(self, stsv: SingleTimeStepValues, name: str) -> float:
         """The current value of one input (0 when it is optional and unconnected)."""
@@ -184,13 +171,10 @@ class MockWeather(MockComponent):
     Stands in for the real ``Weather`` in the mock assemblies.
     """
 
-    CLASS_INTERFACE = ClassInterface(
-        outputs=(DeclaredPort("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
-    )
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockWeatherConfig) -> None:
         """Builds the weather."""
         super().__init__(my_simulation_parameters, config)
+        self.output_port("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """A daily wave around the mean."""
@@ -223,16 +207,11 @@ class MockOccupancy(MockComponent):
     Stands in for the residents' occupancy (``UtspLpgConnector``) in the mock assemblies.
     """
 
-    CLASS_INTERFACE = ClassInterface(
-        outputs=(
-            DeclaredPort("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP),
-            DeclaredPort("ElectricityConsumption", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),
-        ),
-    )
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockOccupancyConfig) -> None:
         """Builds the occupancy."""
         super().__init__(my_simulation_parameters, config)
+        self.output_port("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP)
+        self.output_port("ElectricityConsumption", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Draws in the morning and the evening."""
@@ -297,17 +276,12 @@ class MockPVSystem(MockComponent):
 
     PRODUCTION_KPI = "PV production"
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(DeclaredPort("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
-        outputs=(DeclaredPort("ElectricityOutput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),),
-        default_connection_sources=("MockWeather",),
-        kpis=(PRODUCTION_KPI,),
-    )
-    DEFAULTS = {"MockWeather": {"TemperatureOutside": "TemperatureOutside"}}
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockPVSystemConfig) -> None:
         """Builds the array."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.output_port("ElectricityOutput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.defaults_from("MockWeather", {"TemperatureOutside": "TemperatureOutside"})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Production proportional to power, orientation and temperature."""
@@ -361,28 +335,18 @@ class MockTank(MockComponent):
 
     STANDBY_KPI = "Standby heat losses"
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(
-            DeclaredPort("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP),
-            DeclaredPort("ThermalPower", lt.LoadTypes.HEATING, lt.Units.WATT),
-        ),
-        outputs=(
-            DeclaredPort("WaterTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-            DeclaredPort("HeatLoss", lt.LoadTypes.HEATING, lt.Units.WATT),
-        ),
-        default_connection_sources=("MockOccupancy", "MockHeater"),
-        kpis=(STANDBY_KPI,),
-    )
-    DEFAULTS = {
-        "MockOccupancy": {"WaterDemand": "WaterDemand"},
-        "MockHeater": {"ThermalPower": "ThermalPower"},
-    }
     #: The standby loss over the run in kWh (a power in W summed over 15-minute steps).
     SUM_KPIS = {STANDBY_KPI: ("HeatLoss", 0.25e-3)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockTankConfig) -> None:
         """Builds the tank."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP)
+        self.input_port("ThermalPower", lt.LoadTypes.HEATING, lt.Units.WATT)
+        self.output_port("WaterTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.output_port("HeatLoss", lt.LoadTypes.HEATING, lt.Units.WATT)
+        self.defaults_from("MockOccupancy", {"WaterDemand": "WaterDemand"})
+        self.defaults_from("MockHeater", {"ThermalPower": "ThermalPower"})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """A quasi-static balance: heat in minus draw and standby loss."""
@@ -420,23 +384,16 @@ class MockHeater(MockComponent):
 
     ENERGY_KPI = "Heater energy"
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(DeclaredPort("Signal", lt.LoadTypes.ON_OFF, lt.Units.ANY),),
-        outputs=(
-            DeclaredPort("ThermalPower", lt.LoadTypes.HEATING, lt.Units.WATT),
-            DeclaredPort("ElectricityInput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),
-        ),
-        default_connection_sources=("MockController",),
-        kpis=(ENERGY_KPI,),
-    )
-    DEFAULTS = {"MockController": {"Signal": "Signal"}}
-    OPTIONAL_INPUTS = ("Signal",)
     #: The electricity the heater drew over the run in kWh (a power in W summed over 15-minute steps).
     SUM_KPIS = {ENERGY_KPI: ("ElectricityInput", 0.25e-3)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockHeaterConfig) -> None:
         """Builds the heater."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port("Signal", lt.LoadTypes.ON_OFF, lt.Units.ANY, mandatory=False)
+        self.output_port("ThermalPower", lt.LoadTypes.HEATING, lt.Units.WATT)
+        self.output_port("ElectricityInput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.defaults_from("MockController", {"Signal": "Signal"})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Full power when on."""
@@ -477,23 +434,14 @@ class MockController(MockComponent):
     Stands in for a heater's thermostat (an L1 controller) in the mock assemblies.
     """
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(
-            DeclaredPort("TankTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-            DeclaredPort("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
-        ),
-        outputs=(DeclaredPort("Signal", lt.LoadTypes.ON_OFF, lt.Units.ANY),),
-        default_connection_sources=("MockTank", "MockEms"),
-    )
-    DEFAULTS = {
-        "MockTank": {"TankTemperature": "WaterTemperature"},
-        "MockEms": {"Modifier": "Modifier"},
-    }
-    OPTIONAL_INPUTS = ("Modifier", "TankTemperature")
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockControllerConfig) -> None:
         """Builds the controller."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port("TankTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, mandatory=False)
+        self.input_port("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN, mandatory=False)
+        self.output_port("Signal", lt.LoadTypes.ON_OFF, lt.Units.ANY)
+        self.defaults_from("MockTank", {"TankTemperature": "WaterTemperature"})
+        self.defaults_from("MockEms", {"Modifier": "Modifier"})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """On in one step of four, longer the higher the (raised) set point; off above a safety limit.
@@ -533,64 +481,49 @@ class MockEms(MockComponent):
     Stands in for an energy manager in the mock assemblies.
     """
 
-    CLASS_INTERFACE = ClassInterface(
-        outputs=(DeclaredPort("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),),
-    )
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockEmsConfig) -> None:
         """Builds the energy manager."""
         super().__init__(my_simulation_parameters, config)
+        self.output_port("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """A constant offset."""
         self.set(stsv, "Modifier", self.config.offset_in_kelvin)
 
 
-# --------------------------------------------------------------------------------- undeclared class
+# -------------------------------------------------------------------------------------- bare device
 
 
 @dataclass_json
 @dataclass
-class UndeclaredDeviceConfig(ConfigBase):
-    """A component class that makes no class-level statement, for the refusals that need one."""
+class MockBareDeviceConfig(ConfigBase):
+    """A device with one input and no default connections, for the refusal that needs one."""
 
-    MAIN_CLASS = "tests.assemblies.mock_components.UndeclaredDevice"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockBareDevice"
 
     component_id: ComponentID
     rating_in_watt: float = 100.0
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "UndeclaredDeviceConfig":
+    def preset_standard(cls, name: str) -> "MockBareDeviceConfig":
         """Nothing to configure."""
         return cls(component_id=ComponentID(name=name))
 
 
-class UndeclaredDevice(Component):
-    """Declares no CLASS_INTERFACE.
+class MockBareDevice(MockComponent):
+    """Takes the outside temperature, but declares no default connections from any class.
 
-    Stands in for a component class that declares no class interface in the mock assemblies.
+    Stands in for a component class whose author has not yet added the default connections a port
+    lowers to; a port binding it to a weather station is refused once it is constructed.
     """
 
-    cost_relevance = CostRelevance.FREE_OF_COST
-
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: UndeclaredDeviceConfig) -> None:
-        """Builds the device."""
-        super().__init__(config.component_id.key, my_simulation_parameters, config, DisplayConfig())
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockBareDeviceConfig) -> None:
+        """Builds the device: one input, no default connections."""
+        super().__init__(my_simulation_parameters, config)
+        self.input_port("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, mandatory=False)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Nothing."""
-
-    def i_prepare_simulation(self) -> None:
-        """Nothing."""
-
-    def i_save_state(self) -> None:
-        """Stateless."""
-
-    def i_restore_state(self) -> None:
-        """Stateless."""
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Nothing."""
 
 
@@ -631,33 +564,33 @@ class MockBoiler(MockComponent):
 
     FUEL_KPI = "Boiler fuel"
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
-        outputs=(
-            DeclaredPort(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
-            DeclaredPort(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-            DeclaredPort(
-                "ThermalPowerDhw", lt.LoadTypes.HEATING, lt.Units.WATT, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT
-            ),
-            DeclaredPort("FuelUse", lt.LoadTypes.GAS, lt.Units.WATT_HOUR, lt.EnergyBalanceCarrier.NATURAL_GAS),
-            DeclaredPort("FlueLoss", lt.LoadTypes.GAS, lt.Units.WATT, lt.EnergyBalanceCarrier.NATURAL_GAS),
-        ),
-        default_connection_sources=("MockCylinder",),
-        kpis=(FUEL_KPI,),
-    )
-    DEFAULTS = {"MockCylinder": {RETURN_TEMPERATURE_DHW: RETURN_TEMPERATURE_DHW}}
-    ENERGY_PORTS = {
-        "FuelUse": EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
-        "ThermalPowerDhw": EnergyPort(
-            lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=MASS_FLOW_DHW
-        ),
-        "FlueLoss": EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.NATURAL_GAS),
-    }
     SUM_KPIS = {FUEL_KPI: ("FuelUse", 1e-3)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockBoilerConfig) -> None:
-        """Builds the boiler."""
+        """Builds the boiler: the circuit's mass flow and supply leg out, its return leg in, gas in."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.output_port(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.output_port(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.output_port(
+            "ThermalPowerDhw",
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            EnergyPort(lt.EnergyRole.OUT, lt.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=MASS_FLOW_DHW),
+        )
+        self.output_port(
+            "FuelUse",
+            lt.LoadTypes.GAS,
+            lt.Units.WATT_HOUR,
+            EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
+        )
+        self.output_port(
+            "FlueLoss",
+            lt.LoadTypes.GAS,
+            lt.Units.WATT,
+            EnergyPort(lt.EnergyRole.LOSS, lt.EnergyBalanceCarrier.NATURAL_GAS),
+        )
+        self.defaults_from("MockCylinder", {RETURN_TEMPERATURE_DHW: RETURN_TEMPERATURE_DHW})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Heats one step in two at full power, supplying ten kelvin above the return leg."""
@@ -696,28 +629,18 @@ class MockCylinder(MockComponent):
 
     TEMPERATURE_KPI = "Cylinder heat received"
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(
-            DeclaredPort("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP),
-            DeclaredPort(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
-            DeclaredPort(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-        ),
-        outputs=(
-            DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-            DeclaredPort("HeatReceived", lt.LoadTypes.HEATING, lt.Units.WATT),
-        ),
-        default_connection_sources=("MockOccupancy", "MockBoiler"),
-        kpis=(TEMPERATURE_KPI,),
-    )
-    DEFAULTS = {
-        "MockOccupancy": {"WaterDemand": "WaterDemand"},
-        "MockBoiler": {MASS_FLOW_DHW: MASS_FLOW_DHW, SUPPLY_TEMPERATURE_DHW: SUPPLY_TEMPERATURE_DHW},
-    }
     SUM_KPIS = {TEMPERATURE_KPI: ("HeatReceived", 0.25e-3)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockCylinderConfig) -> None:
-        """Builds the cylinder."""
+        """Builds the cylinder: the circuit's mass flow and supply leg in, its return leg out."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP)
+        self.input_port(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.input_port(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.output_port(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.output_port("HeatReceived", lt.LoadTypes.HEATING, lt.Units.WATT)
+        self.defaults_from("MockOccupancy", {"WaterDemand": "WaterDemand"})
+        self.defaults_from("MockBoiler", {MASS_FLOW_DHW: MASS_FLOW_DHW, SUPPLY_TEMPERATURE_DHW: SUPPLY_TEMPERATURE_DHW})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Returns water the colder the more is drawn, and receives the circuit's heat."""
@@ -767,12 +690,6 @@ class MockGasMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             dispatch=DispatchRule.FORBIDDEN,
         ),
-    )
-
-    CLASS_INTERFACE = ClassInterface(
-        outputs=(DeclaredPort("GasConsumption", lt.LoadTypes.GAS, lt.Units.WATT_HOUR),),
-        kpis=(CONSUMPTION_KPI,),
-        default_feeds=(DeclaredFeed("MockBoiler", "FuelUse", ("GAS_CONSUMPTION_UNCONTROLLED",), 999),),
     )
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockGasMeterConfig) -> None:
@@ -876,15 +793,12 @@ class MockBattery(MockComponent):
 
     CAPACITY_KPI = "Battery capacity"
 
-    CLASS_INTERFACE = ClassInterface(
-        outputs=(DeclaredPort("Capacity", lt.LoadTypes.ANY, lt.Units.KWH),),
-        kpis=(CAPACITY_KPI,),
-    )
     SUM_KPIS = {CAPACITY_KPI: ("Capacity", 1.0 / 96.0)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockBatteryConfig) -> None:
         """Builds the battery."""
         super().__init__(my_simulation_parameters, config)
+        self.output_port("Capacity", lt.LoadTypes.ANY, lt.Units.KWH)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """The capacity, every step."""
@@ -916,18 +830,12 @@ class MockCollector(MockComponent):
     Stands in for the collector of a ``SolarThermalSystem`` in the mock assemblies.
     """
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(DeclaredPort("ReturnTemperatureSolar", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
-        outputs=(
-            DeclaredPort("MassFlowSolar", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
-            DeclaredPort("SupplyTemperatureSolar", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-        ),
-    )
-    OPTIONAL_INPUTS = ("ReturnTemperatureSolar",)
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockCollectorConfig) -> None:
         """Builds the collector."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port("ReturnTemperatureSolar", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, mandatory=False)
+        self.output_port("MassFlowSolar", lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.output_port("SupplyTemperatureSolar", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """No sun in the mock."""
@@ -960,17 +868,12 @@ class MockDhwSink(MockComponent):
     Stands in for a dhw circuit end that declares no default connections in the mock assemblies.
     """
 
-    CLASS_INTERFACE = ClassInterface(
-        inputs=(
-            DeclaredPort(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC),
-            DeclaredPort(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
-        ),
-        outputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
-    )
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockDhwSinkConfig) -> None:
-        """Builds the sink."""
+        """Builds the sink: reads the boiler's two outputs, owns the return leg, no default connections."""
         super().__init__(my_simulation_parameters, config)
+        self.input_port(MASS_FLOW_DHW, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.input_port(SUPPLY_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.output_port(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """A constant return leg."""
@@ -999,13 +902,10 @@ class MockDhwReturn(MockComponent):
     Stands in for a dhw circuit end that only owns the return leg in the mock assemblies.
     """
 
-    CLASS_INTERFACE = ClassInterface(
-        outputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
-    )
-
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockDhwReturnConfig) -> None:
-        """Builds the end."""
+        """Builds the end: owns the return leg, reads nothing."""
         super().__init__(my_simulation_parameters, config)
+        self.output_port(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """A constant return leg."""

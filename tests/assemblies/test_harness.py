@@ -5,7 +5,8 @@ each ``1/N`` stratum of every numeric dimension, a constraint splits the box int
 branches, a seed reproduces its sample, and a discrete dimension draws each value equally often
 (within one). The monotone evaluation is tested on synthetic series. The deliberately wrong mock
 under ``mock_assemblies/wrong`` must fail by name, an assembly the library check refuses must not run at
-all, and a port without a registered test partner must refuse with the class it needs.
+all, one whose constructed members break the member contract must have no declaration evaluated, and
+a port without a registered test partner must refuse with the class it needs.
 """
 
 import io
@@ -22,6 +23,8 @@ from hisim.energy_system.assemblies.model import MonotoneDirection
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.testing import checks
 from hisim.energy_system.assemblies.testing.checks import MonotoneEvaluation
+from hisim.energy_system.assemblies.testing.contract import MemberContract
+from hisim import loadtypes as lt
 from hisim.energy_system.assemblies.testing.errors import (
     HarnessUsageError,
     TestPartnerMissingError,
@@ -257,8 +260,69 @@ def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
 
 
 @pytest.mark.base
-def test_an_assembly_the_library_check_refuses_is_not_run(tmp_path: Path) -> None:
-    """No test contract, and a monotone naming a KPI its member does not report: contract failures, no run."""
+def test_energy_and_temperature_outputs_are_decided_by_unit_and_load_type() -> None:
+    """The completeness rule of the member contract: a power or energy unit, a temperature load type or unit."""
+    rule = MemberContract.carries_energy_or_temperature
+
+    assert rule(lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+    assert rule(lt.LoadTypes.HEATING, lt.Units.KWH)
+    assert rule(lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+    assert rule(lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN)
+    assert rule(lt.LoadTypes.TEMPERATURE, lt.Units.ANY)
+    assert not rule(lt.LoadTypes.ON_OFF, lt.Units.ANY)
+    assert not rule(lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP)
+
+
+@pytest.mark.base
+def test_the_member_contract_reads_the_constructed_members_outputs(tmp_path: Path) -> None:
+    """An unbounded energy output and a bounds unit that is not the output's: contract failures by member and output."""
+    library = Library(tmp_path)
+    library.add(
+        "broken/half_bounded",
+        """
+        schema_version: 4
+        kind: assembly
+        name: broken/half_bounded
+        description: A heater.
+        parameters:
+          power_in_watt: {type: float, unit: WATT, default: 2000, range: {min: 500, max: 6000}, description: P.}
+        components:
+          Heater:
+            class: tests.assemblies.mock_components.MockHeater
+            preset: standard
+            config:
+              power_in_watt: {$param: power_in_watt}
+        tests:
+          bounds:
+            - {output: Heater.ThermalPower, unit: KWH, min: 0}
+          monotone:
+            - {parameter: power_in_watt, kpi: Heater energy, member: Heater, direction: increasing}
+        """,
+    )
+    report = AssemblyHarness(library.resolver(with_mocks=False), tmp_path / "out").test("broken/half_bounded")
+
+    assert [(failure.check, failure.declaration, failure.message) for failure in report.failures] == [
+        (
+            "contract",
+            "Heater.ElectricityInput",
+            "the WATT output 'Heater.ElectricityInput' (ELECTRICITY) has no bounds entry.",
+        ),
+        (
+            "contract",
+            "Heater.ThermalPower",
+            "the bounds entry states KWH for 'Heater.ThermalPower', whose unit is WATT.",
+        ),
+    ]
+    assert report.checks_passed == 0 and report.runs
+
+
+@pytest.mark.base
+def test_an_assembly_the_contract_test_refuses_has_no_declaration_evaluated(tmp_path: Path) -> None:
+    """Refused by the library check, no run; refused by the member contract, no declaration evaluated.
+
+    No test contract at all is the library check's refusal. A KPI its member does not report is a
+    member-contract failure on the constructed member: the base runs are recorded, nothing else checked.
+    """
     library = Library(tmp_path)
     text = """
         schema_version: 4
@@ -293,10 +357,14 @@ def test_an_assembly_the_library_check_refuses_is_not_run(tmp_path: Path) -> Non
     untested = harness.test("broken/untested")
     nameless = harness.test("broken/nameless")
 
-    assert not untested.runs and not nameless.runs
+    assert not untested.runs
     assert {failure.check for failure in untested.failures + nameless.failures} == {"contract"}
     assert any("carries no test contract" in failure.message for failure in untested.failures)
-    assert [failure.message.split(": ", 1)[1] for failure in nameless.failures] == ["'Heater' reports no KPI 'Nope'."]
+    assert [(failure.declaration, failure.message) for failure in nameless.failures] == [
+        ("Heater: Nope", "'Heater' reports no KPI 'Nope' (it reports: Heater energy).")
+    ]
+    assert nameless.runs and all(run.failed_checks == 0 for run in nameless.runs)
+    assert nameless.checks_passed == 0
 
 
 @pytest.mark.base

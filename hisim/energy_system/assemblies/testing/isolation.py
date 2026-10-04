@@ -221,6 +221,8 @@ class RunOutcome:
         results: The result frame, when the timesteps ran.
         outputs: The simulator's outputs, matching the frame's columns.
         members: Member name of the assembly under test to its runtime name.
+        components: Member name of the assembly under test to its constructed component, for the
+            member contract (:mod:`.contract`); empty when the system did not construct.
         bindings: The test partners of the run.
     """
 
@@ -231,6 +233,7 @@ class RunOutcome:
     results: Optional[pd.DataFrame] = None
     outputs: List[Any] = field(default_factory=list)
     members: Dict[str, str] = field(default_factory=dict)
+    components: Dict[str, Any] = field(default_factory=dict)
     bindings: Tuple[PartnerBinding, ...] = ()
     _finder: Optional[KpiFinder] = None
 
@@ -324,6 +327,10 @@ class IsolationRunner:
             outcome.results = getattr(built.simulator, "results_data_frame", None)
             outcome.outputs = list(built.simulator.all_outputs)
             outcome.members = self.members_of(built.imports.addresses)
+            constructed = dict(built.wired.components)
+            outcome.components = {
+                member: constructed[runtime] for member, runtime in outcome.members.items() if runtime in constructed
+            }
         return outcome
 
     @staticmethod

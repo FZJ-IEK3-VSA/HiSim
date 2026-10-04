@@ -31,7 +31,8 @@
       "import": null,
       "instance": null,
       "member": "CHP1",
-      "name": "CHP1"
+      "name": "CHP1",
+      "path": []
     },
     "tag": "CHP",
     "unit": "kWh",
@@ -45,7 +46,8 @@
       "import": null,
       "instance": null,
       "member": "CHP2",
-      "name": "CHP2"
+      "name": "CHP2",
+      "path": []
     },
     "tag": "CHP",
     "unit": "kWh",
@@ -59,7 +61,8 @@
       "import": null,
       "instance": null,
       "member": "CHP1",
-      "name": "CHP1"
+      "name": "CHP1",
+      "path": []
     },
     "tag": "CHP",
     "unit": "kg",
@@ -73,7 +76,8 @@
       "import": null,
       "instance": null,
       "member": "CHP2",
-      "name": "CHP2"
+      "name": "CHP2",
+      "path": []
     },
     "tag": "CHP",
     "unit": "kg",
@@ -87,7 +91,8 @@
       "import": null,
       "instance": null,
       "member": "CHP1",
-      "name": "CHP1"
+      "name": "CHP1",
+      "path": []
     },
     "tag": "CHP",
     "unit": "-",
@@ -101,7 +106,8 @@
       "import": null,
       "instance": null,
       "member": "CHP2",
-      "name": "CHP2"
+      "name": "CHP2",
+      "path": []
     },
     "tag": "CHP",
     "unit": "-",
@@ -115,7 +121,8 @@
       "import": null,
       "instance": null,
       "member": "CHP1",
-      "name": "CHP1"
+      "name": "CHP1",
+      "path": []
     },
     "tag": "CHP",
     "unit": "kWh",
@@ -129,7 +136,8 @@
       "import": null,
       "instance": null,
       "member": "CHP2",
-      "name": "CHP2"
+      "name": "CHP2",
+      "path": []
     },
     "tag": "CHP",
     "unit": "kWh",
@@ -351,7 +359,8 @@
       "import": null,
       "instance": null,
       "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController"
+      "name": "L2EMSElectricityController",
+      "path": []
     },
     "tag": "Energy Management System",
     "unit": "-",
@@ -365,7 +374,8 @@
       "import": null,
       "instance": null,
       "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController"
+      "name": "L2EMSElectricityController",
+      "path": []
     },
     "tag": "Energy Management System",
     "unit": "-",
@@ -379,7 +389,8 @@
       "import": null,
       "instance": null,
       "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController"
+      "name": "L2EMSElectricityController",
+      "path": []
     },
     "tag": "Energy Management System",
     "unit": "-",
@@ -393,7 +404,8 @@
       "import": null,
       "instance": null,
       "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController"
+      "name": "L2EMSElectricityController",
+      "path": []
     },
     "tag": "Energy Management System",
     "unit": "-",
@@ -543,7 +555,8 @@
       "import": null,
       "instance": null,
       "member": "UTSPConnector",
-      "name": "UTSPConnector"
+      "name": "UTSPConnector",
+      "path": []
     },
     "tag": "Residents",
     "unit": "kWh",
@@ -557,7 +570,8 @@
       "import": null,
       "instance": null,
       "member": "UTSPConnector",
-      "name": "UTSPConnector"
+      "name": "UTSPConnector",
+      "path": []
     },
     "tag": "Residents",
     "unit": "l",
@@ -571,7 +585,8 @@
       "import": null,
       "instance": null,
       "member": "UTSPConnector",
-      "name": "UTSPConnector"
+      "name": "UTSPConnector",
+      "path": []
     },
     "tag": "Residents",
     "unit": "kWh",

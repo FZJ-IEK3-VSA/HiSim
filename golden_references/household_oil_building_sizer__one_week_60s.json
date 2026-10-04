@@ -31,7 +31,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "W",
@@ -45,7 +46,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "m2",
@@ -59,7 +61,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
@@ -73,7 +76,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
@@ -87,7 +91,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "kWh",
@@ -101,7 +106,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "\u00b0C",
@@ -115,7 +121,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "\u00b0C",
@@ -129,7 +136,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "m2",
@@ -143,7 +151,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "kWh",
@@ -157,7 +166,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "W/m2",
@@ -171,7 +181,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "kWh/m2",
@@ -185,7 +196,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
@@ -199,7 +211,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
@@ -213,7 +226,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "kWh",
@@ -227,7 +241,8 @@
       "import": null,
       "instance": null,
       "member": "Building",
-      "name": "Building"
+      "name": "Building",
+      "path": []
     },
     "tag": "Building",
     "unit": "kWh",
@@ -377,7 +392,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kg",
@@ -391,7 +407,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kW",
@@ -405,7 +422,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kW",
@@ -419,7 +437,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kW",
@@ -433,11 +452,12 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kW",
-    "value": 0.06931600638173505
+    "value": 0.06931600638173503
   },
   "BUI1.Electricity Meter.Min power from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -447,7 +467,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kW",
@@ -461,7 +482,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kW",
@@ -475,7 +497,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "Euro",
@@ -489,7 +512,8 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
@@ -503,11 +527,12 @@
       "import": null,
       "instance": null,
       "member": "ElectricityMeter",
-      "name": "ElectricityMeter"
+      "name": "ElectricityMeter",
+      "path": []
     },
     "tag": "Electricity Meter",
     "unit": "kWh",
-    "value": 11.645089072131489
+    "value": 11.645089072131485
   },
   "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -589,7 +614,8 @@
       "import": null,
       "instance": null,
       "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController"
+      "name": "L2EMSElectricityController",
+      "path": []
     },
     "tag": "Energy Management System",
     "unit": "-",
@@ -603,7 +629,8 @@
       "import": null,
       "instance": null,
       "member": "L2EMSElectricityController",
-      "name": "L2EMSElectricityController"
+      "name": "L2EMSElectricityController",
+      "path": []
     },
     "tag": "Energy Management System",
     "unit": "-",
@@ -617,7 +644,8 @@
       "import": null,
       "instance": null,
       "member": "UTSPConnector",
-      "name": "UTSPConnector"
+      "name": "UTSPConnector",
+      "path": []
     },
     "tag": "Energy Management System",
     "unit": "kWh",
@@ -631,7 +659,8 @@
       "import": null,
       "instance": null,
       "member": "FuelMeter",
-      "name": "FuelMeter"
+      "name": "FuelMeter",
+      "path": []
     },
     "tag": "Fuel Meter",
     "unit": "kg",
@@ -645,7 +674,8 @@
       "import": null,
       "instance": null,
       "member": "FuelMeter",
-      "name": "FuelMeter"
+      "name": "FuelMeter",
+      "path": []
     },
     "tag": "Fuel Meter",
     "unit": "EUR",
@@ -659,7 +689,8 @@
       "import": null,
       "instance": null,
       "member": "FuelMeter",
-      "name": "FuelMeter"
+      "name": "FuelMeter",
+      "path": []
     },
     "tag": "Fuel Meter",
     "unit": "EUR",
@@ -673,7 +704,8 @@
       "import": null,
       "instance": null,
       "member": "FuelMeter",
-      "name": "FuelMeter"
+      "name": "FuelMeter",
+      "path": []
     },
     "tag": "Fuel Meter",
     "unit": "kWh",
@@ -685,7 +717,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 11.701821642714851
+    "value": 11.701821642714846
   },
   "BUI1.General.PV production": {
     "building": "BUI1",
@@ -823,7 +855,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -837,7 +870,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -851,7 +885,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -865,7 +900,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -879,7 +915,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -893,7 +930,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -907,7 +945,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -921,7 +960,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -935,7 +975,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
@@ -949,7 +990,8 @@
       "import": null,
       "instance": null,
       "member": "HeatDistributionSystem",
-      "name": "HeatDistributionSystem"
+      "name": "HeatDistributionSystem",
+      "path": []
     },
     "tag": "Heat Distribution System",
     "unit": "kWh",
@@ -963,7 +1005,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kg",
@@ -977,7 +1020,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "EUR",
@@ -991,7 +1035,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kWh",
@@ -1005,7 +1050,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kWh",
@@ -1019,7 +1065,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kg",
@@ -1033,7 +1080,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "EUR",
@@ -1047,7 +1095,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "EUR",
@@ -1061,7 +1110,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kWh",
@@ -1075,7 +1125,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kWh",
@@ -1089,7 +1140,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kg",
@@ -1103,7 +1155,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "EUR",
@@ -1117,7 +1170,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kWh",
@@ -1131,7 +1185,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kg",
@@ -1145,7 +1200,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "l",
@@ -1159,7 +1215,8 @@
       "import": null,
       "instance": null,
       "member": "ConventionalOilBoiler",
-      "name": "ConventionalOilBoiler"
+      "name": "ConventionalOilBoiler",
+      "path": []
     },
     "tag": "Oil Boiler",
     "unit": "kWh",
@@ -1173,7 +1230,8 @@
       "import": null,
       "instance": null,
       "member": "UTSPConnector",
-      "name": "UTSPConnector"
+      "name": "UTSPConnector",
+      "path": []
     },
     "tag": "Residents",
     "unit": "kWh",
@@ -1187,7 +1245,8 @@
       "import": null,
       "instance": null,
       "member": "UTSPConnector",
-      "name": "UTSPConnector"
+      "name": "UTSPConnector",
+      "path": []
     },
     "tag": "Residents",
     "unit": "l",
@@ -1201,7 +1260,8 @@
       "import": null,
       "instance": null,
       "member": "UTSPConnector",
-      "name": "UTSPConnector"
+      "name": "UTSPConnector",
+      "path": []
     },
     "tag": "Residents",
     "unit": "kWh",
@@ -1215,7 +1275,8 @@
       "import": null,
       "instance": null,
       "member": "DHWStorage",
-      "name": "DHWStorage"
+      "name": "DHWStorage",
+      "path": []
     },
     "tag": "Storage For Domestic Hot Water",
     "unit": "kWh",
@@ -1229,7 +1290,8 @@
       "import": null,
       "instance": null,
       "member": "SimpleHotWaterStorage",
-      "name": "SimpleHotWaterStorage"
+      "name": "SimpleHotWaterStorage",
+      "path": []
     },
     "tag": "Storage For Space Heating Hot Water",
     "unit": "kWh",

@@ -167,7 +167,8 @@
       "import": null,
       "instance": null,
       "member": "Electrolyzer",
-      "name": "Electrolyzer"
+      "name": "Electrolyzer",
+      "path": []
     },
     "tag": "Electrolyzer",
     "unit": "kWh",
@@ -181,7 +182,8 @@
       "import": null,
       "instance": null,
       "member": "Electrolyzer",
-      "name": "Electrolyzer"
+      "name": "Electrolyzer",
+      "path": []
     },
     "tag": "Electrolyzer",
     "unit": "kg",
@@ -195,7 +197,8 @@
       "import": null,
       "instance": null,
       "member": "Electrolyzer",
-      "name": "Electrolyzer"
+      "name": "Electrolyzer",
+      "path": []
     },
     "tag": "Electrolyzer",
     "unit": "h",
@@ -417,7 +420,8 @@
       "import": null,
       "instance": null,
       "member": "StandardTransformerAndRectifier",
-      "name": "StandardTransformerAndRectifier"
+      "name": "StandardTransformerAndRectifier",
+      "path": []
     },
     "tag": "Transformer",
     "unit": "kWh",
@@ -431,7 +435,8 @@
       "import": null,
       "instance": null,
       "member": "StandardTransformerAndRectifier",
-      "name": "StandardTransformerAndRectifier"
+      "name": "StandardTransformerAndRectifier",
+      "path": []
     },
     "tag": "Transformer",
     "unit": "kWh",

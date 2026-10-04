@@ -239,6 +239,11 @@ Declaring the units on the fields the first assemblies feed
 (PV azimuth and tilt, the battery's capacity, the EMS offsets, the collector area, the air conditioner's power) is the
 sweep of §13 step 1 (gap G10).
 
+**Every parameter does something (decided, owner, 2026-10-04).** The library check refuses a parameter that feeds no
+config field, law, preset, variant selector or display template, and an enum value that selects nothing (no variant
+option, preset or `$switch` case): a knob a user can set with no effect is a silent failure. A planned option is a
+comment naming what brings it back, not a declared value.
+
 **Constraints across parameters** are structured data, not expressions: `constraints: [{exactly_one_of: [power_in_watt,
 size_in_percent_of_roof_area]}, {at_most_one_of: […]}, {requires: {tilt_in_degree: [azimuth_in_degree]}}]`, each checked
 against the parameter declarations when the assembly is loaded and against the given values per import. **Internal
@@ -407,7 +412,9 @@ meter's production channel at 999 (twin :106-109). An observer never matches its
   order as written, then feed resolution's sort (`feed_resolution.py:10-14`); never a dict, file system or hash order.
 - **Coexistence.** Explicit feeds stay legal; an output both selected and fed explicitly to one observer is refused, as
   today's `DUPLICATE_FEED` refuses one output read twice by one dynamic component
-  (`hisim/energy_system/aggregator_ports.py:39-67`), and so is a `required: true` selector matching nothing. The twins
+  (`hisim/energy_system/aggregator_ports.py:39-67`), and so is any selector matching nothing (decided, owner, 2026-10-04: there is no `required:` flag; a selector that
+  finds no output is a typo or a stale line, and a file that wants to observe something only if present writes
+  nothing, since `declared` already observes everything the class can see). The twins
   keep their explicit feeds (§8); the gate of §13 proves a composed file's expansion writes exactly the twin's feeds.
 
 ### 4.3 Observe and actuate

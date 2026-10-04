@@ -40,7 +40,8 @@ serializes a structured address (`pv-east-PVSystem`, assemblies spec §2.4), and
 
 | Field (JSON) | Meaning | Site | Member |
 |---|---|---|---|
-| `import` | the import key | `null` | `pv` |
+| `import` | the import key of the outermost step | `null` | `pv` |
+| `path` | every step of the address, outermost first, each `{import, instance}`; `[]` for a site component (decided, owner, 2026-10-04: a nested member such as `heating-dhw-Tank` keeps every key addressable without splitting `name`) | `[]` | `[{"import": "pv", "instance": "east"}]` |
 | `instance` | the instance key = the request's system id; `null` if the import has none | `null` | `east` |
 | `member` | the name inside its assembly, or the plain component name | `Building` | `PVSystem` |
 | `assembly` | library path of the innermost owning assembly; informative, not identity | `null` | `pv/array` |

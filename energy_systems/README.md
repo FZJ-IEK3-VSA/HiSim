@@ -265,7 +265,7 @@ Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_
 on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
 which a file imports instead of writing their components out. This is step 1 of that spec (beads
 hisim-lt0b.1 and hisim-lt0b.2): the format, the loader, the expansion and the checks, proven on
-fixtures under `tests/assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does
+the mock assemblies under `tests/assemblies/mock_assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does
 not exist.
 
 ```yaml

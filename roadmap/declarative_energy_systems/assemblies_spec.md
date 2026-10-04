@@ -337,6 +337,9 @@ the import (§9.2), naming the instance, the port and every candidate, with a pa
   an inner port neither bound nor re-exported; a `bind:` on an electricity need or an electricity output, which have
   no link end (§4.3): refused, not ignored (owner, 2026-10-03);
 - a `bind:` naming a partner whose class a member declares no default connections from, or a circuit of another name;
+  a need bound to `<import>.<provided port>` whose member does not read that output (checked from the files when the
+  need has `wires:`, else against the default connections the wiring actually made; a bound output nothing reads is a
+  silent lie);
 - a carrier need without exactly one provider of its carrier (§5.1); a target input actuated twice; a meter observing
   the EMS's grid balance and an output that EMS observes (§4.3); observers are otherwise never counted, so an output
   read by many is legal;
@@ -569,6 +572,11 @@ inactive for a burner, and the EMS raises the thermostat's set point through `em
 which also makes the heater's feed controlled (§4.4). The full file is
 `assemblies_mockup/dhw/storage_water_heater.assembly.yaml` (§12).
 
+**One library check.** The expansion runs the complete library check on every assembly it loads, at run time as in
+the library test: a missing name, description, range, default-less parameter an import does not state, test contract
+or unit declaration refuses the file wherever it is used (2026-10-04, from the review of #885; there is no weaker
+"expansion strength").
+
 **Members per variant option (decided, owner, 2026-10-04).** An option that swaps a member's class names its own
 member (`Burner` in the gas option, `Immersion` in the electric one); one name for two classes is refused by the
 library check, since a contract or a port written once could not hold for both. A port's `into:` and a contract's
@@ -709,7 +717,9 @@ tests:
   modeller's plausibility judgement.
 - **Required (D24):** every parameter has a `default`; every numeric parameter has a `range`; every energy-carrying or
   temperature output of a member has a `bounds` entry; at least one `monotone` entry when the assembly has a numeric
-  parameter (an assembly without one, such as a bare supply connection, has nothing to sweep). The library test refuses an
+  parameter (an assembly without one, such as a bare supply connection, has nothing to sweep), naming a KPI of one of
+  its own members or a derived KPI by name (so a composite assembly made only of inner imports can state one). The
+  library test refuses an
   assembly missing any of them, as it
   refuses one without descriptions. A declaration that names a missing member, output, KPI or parameter is a contract
   error at load time.

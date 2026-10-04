@@ -20,14 +20,14 @@ from hisim.energy_system.loader import EnergySystemReader, dump_energy_system, p
 from hisim.energy_system.record import realize
 from hisim.energy_system.source_lines import LineIndex
 from hisim.simulationparameters import SimulationParameters
-from tests.assemblies.helpers import WEATHER, Fixtures, Library, fixture_resolver, read_system, site
+from tests.assemblies.helpers import WEATHER, Library, Mocks, mock_resolver, read_system, site
 
 
 def expand_house():
-    """The fixture house, expanded with its line index."""
-    text = Fixtures.HOUSE.read_text(encoding="utf-8")
+    """The mock house, expanded with its line index."""
+    text = Mocks.HOUSE.read_text(encoding="utf-8")
     return expand_imports(
-        parse_energy_system(Fixtures.HOUSE), fixture_resolver(), lines=LineIndex.from_text(text, Fixtures.HOUSE.name)
+        parse_energy_system(Mocks.HOUSE), mock_resolver(), lines=LineIndex.from_text(text, Mocks.HOUSE.name)
     )
 
 
@@ -38,8 +38,8 @@ def test_the_import_record_states_what_each_instance_became() -> None:
 
     west = record.instance("pv[west]")
     assert west is not None
-    assert west.assembly == "pv/array"
-    assert west.sha256 == hashlib.sha256((Fixtures.LIBRARY / "pv" / "array.assembly.yaml").read_bytes()).hexdigest()
+    assert west.assembly == "mock/pv_array"
+    assert west.sha256 == hashlib.sha256((Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml").read_bytes()).hexdigest()
     assert west.parameters_given == {"azimuth_in_degree": 270, "facing": "west", "power_in_watt": 3000}
     assert west.parameters_resolved["tilt_in_degree"] == 30
     assert west.reserved == {"installation_year": 2026}
@@ -74,7 +74,7 @@ def test_the_record_document_carries_the_addresses_and_the_sequence() -> None:
     assert document["addresses"]["pv-east-PVSystem"] == {
         "path": [{"import": "pv", "instance": "east"}],
         "member": "PVSystem",
-        "assembly": "pv/array",
+        "assembly": "mock/pv_array",
     }
     assert document["sequence"][6] == {"component": "hot_water-heater-tank-Tank", "order": "4.1.3.1"}
     assert document["not_lowered"] == []
@@ -106,12 +106,12 @@ def test_a_source_map_entry_names_the_import_path_and_every_file_and_line() -> N
     assert entry is not None
     assert entry.text() == (
         "hot_water-heater-tank-Tank (import hot_water → heater → tank, house.energy_system.yaml:31 → "
-        "dhw/package.assembly.yaml:18 → dhw/storage_water_heater.assembly.yaml:20 → "
-        "storage/hot_water_tank.assembly.yaml:15)"
+        "mock/dhw_package.assembly.yaml:18 → mock/storage_water_heater.assembly.yaml:20 → "
+        "mock/hot_water_tank.assembly.yaml:15)"
     )
     lowered = record.source_map.of("hot_water-heater-tank-Tank", "inputs[1]")
     assert lowered is not None and lowered.note == "port heat bound to hot_water-heater-Heater (bind)"
-    tank_file = (Fixtures.LIBRARY / "storage" / "hot_water_tank.assembly.yaml").read_text(encoding="utf-8").splitlines()
+    tank_file = (Mocks.LIBRARY / "mock" / "hot_water_tank.assembly.yaml").read_text(encoding="utf-8").splitlines()
     assert tank_file[lowered.chain[-1].line - 1].strip() == "- {$port: heat}"
 
 
@@ -121,7 +121,7 @@ def test_the_realized_record_carries_the_import_record_and_the_source_maps(tmp_p
     parameters = SimulationParameters.one_day_only(2021, 900)
     parameters.result_directory = str(tmp_path)
     built = EnergySystemExecutor(
-        parse_energy_system(Fixtures.HOUSE), parameters, assembly_resolver=fixture_resolver()
+        parse_energy_system(Mocks.HOUSE), parameters, assembly_resolver=mock_resolver()
     ).build()
 
     record = realize(built)
@@ -159,7 +159,7 @@ kind: assembly
 name: broken/misconfigured
 components:
   Tank:
-    class: tests.assemblies.fixture_components.FakeTank
+    class: tests.assemblies.mock_components.MockTank
     preset: standard
     config: {volum_in_liter: 100}
 """
@@ -170,10 +170,10 @@ kind: assembly
 name: broken/miswired
 components:
   Sky:
-    class: tests.assemblies.fixture_components.FakeWeather
+    class: tests.assemblies.mock_components.MockWeather
     preset: standard
   PVSystem:
-    class: tests.assemblies.fixture_components.FakePVSystem
+    class: tests.assemblies.mock_components.MockPVSystem
     preset: rooftop
     inputs:
       - {input: TemperatureOutside, from: Sky.Temperature}

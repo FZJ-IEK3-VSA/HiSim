@@ -1,12 +1,16 @@
-"""Fake components for the assembly fixtures: small, deterministic, and fully declared.
+"""Mock components for the mock assemblies: small, deterministic, and fully declared.
 
-The fixture assemblies under ``tests/assemblies/fixtures/library`` are built from these classes and
-nothing else (``assemblies_spec.md`` §13 step 1: fixtures only). Each class declares, at class
+A mock assembly or a mock class exists only for a shape the real library cannot show; everything
+that can run on a real assembly moves to the real library in step 4 (hisim-lt0b.5). What stays here
+is test-only, and its names say so: the family ``mock/``, the classes ``Mock*``.
+
+The mock assemblies under ``tests/assemblies/mock_assemblies/library`` are built from these classes
+and nothing else (``assemblies_spec.md`` §13 step 1). Each class declares, at class
 level, what the expansion of imports checks at load time — its inputs and outputs with their load
 types and units, the classes it declares default connections from, and the KPIs it reports
 (:class:`~hisim.component_interface.ClassInterface`) — and its configuration declares the unit of
 every field an assembly parameter feeds (D16 b). The constructors build their ports and default
-connections *from* those declarations, so a fixture cannot drift from what it declares.
+connections *from* those declarations, so a mock cannot drift from what it declares.
 
 The physics is a toy: a weather series, an occupancy drawing hot water and electricity, a PV array
 producing from the temperature, a tank losing heat and filled by a heater a thermostat switches,
@@ -34,8 +38,8 @@ from hisim.simulationparameters import SimulationParameters
 UNIT = "unit"
 
 
-class FixtureComponent(Component):
-    """The shared behaviour of every fixture: ports and default connections from its interface."""
+class MockComponent(Component):
+    """The shared behaviour of every mock: ports and default connections from its interface."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -100,7 +104,7 @@ class FixtureComponent(Component):
         return None
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> List[KpiEntry]:
-        """No KPIs unless the fixture reports one."""
+        """No KPIs unless the mock reports one."""
         return []
 
 
@@ -109,29 +113,32 @@ class FixtureComponent(Component):
 
 @dataclass_json
 @dataclass
-class FakeWeatherConfig(ConfigBase):
+class MockWeatherConfig(ConfigBase):
     """A constant-ish outside temperature."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeWeather"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockWeather"
 
     component_id: ComponentID
     mean_temperature_in_celsius: float = field(default=5.0, metadata={UNIT: lt.Units.CELSIUS})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeWeatherConfig":
+    def preset_standard(cls, name: str) -> "MockWeatherConfig":
         """A winter day around 5 °C."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeWeather(FixtureComponent):
-    """Outputs the outside temperature."""
+class MockWeather(MockComponent):
+    """Outputs the outside temperature.
+
+    Stands in for the real ``Weather`` in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeWeatherConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockWeatherConfig) -> None:
         """Builds the weather."""
         super().__init__(my_simulation_parameters, config)
 
@@ -145,23 +152,26 @@ class FakeWeather(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeOccupancyConfig(ConfigBase):
+class MockOccupancyConfig(ConfigBase):
     """Residents drawing hot water and electricity."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeOccupancy"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockOccupancy"
 
     component_id: ComponentID
     residents: int = 2
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeOccupancyConfig":
+    def preset_standard(cls, name: str) -> "MockOccupancyConfig":
         """Two residents."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeOccupancy(FixtureComponent):
-    """Outputs a hot-water draw and an electricity consumption."""
+class MockOccupancy(MockComponent):
+    """Outputs a hot-water draw and an electricity consumption.
+
+    Stands in for the residents' occupancy (``UtspLpgConnector``) in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(
@@ -170,7 +180,7 @@ class FakeOccupancy(FixtureComponent):
         ),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeOccupancyConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockOccupancyConfig) -> None:
         """Builds the occupancy."""
         super().__init__(my_simulation_parameters, config)
 
@@ -186,10 +196,10 @@ class FakeOccupancy(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakePVSystemConfig(ConfigBase):
+class MockPVSystemConfig(ConfigBase):
     """A PV array: its peak power and its orientation, each with its unit."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakePVSystem"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockPVSystem"
 
     component_id: ComponentID
     power_in_watt: float = field(default=5000.0, metadata={UNIT: lt.Units.WATT})
@@ -200,25 +210,28 @@ class FakePVSystemConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_rooftop(cls, name: str) -> "FakePVSystemConfig":
+    def preset_rooftop(cls, name: str) -> "MockPVSystemConfig":
         """A south-facing roof array."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakePVSystem(FixtureComponent):
-    """Produces electricity from the outside temperature (a toy stand-in for irradiance)."""
+class MockPVSystem(MockComponent):
+    """Produces electricity from the outside temperature (a toy stand-in for irradiance).
+
+    Stands in for the real ``PVSystem`` in the mock assemblies.
+    """
 
     PRODUCTION_KPI = "PV production"
 
     CLASS_INTERFACE = ClassInterface(
         inputs=(DeclaredPort("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
         outputs=(DeclaredPort("ElectricityOutput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),),
-        default_connection_sources=("FakeWeather",),
+        default_connection_sources=("MockWeather",),
         kpis=(PRODUCTION_KPI,),
     )
-    DEFAULTS = {"FakeWeather": {"TemperatureOutside": "TemperatureOutside"}}
+    DEFAULTS = {"MockWeather": {"TemperatureOutside": "TemperatureOutside"}}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakePVSystemConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockPVSystemConfig) -> None:
         """Builds the array."""
         super().__init__(my_simulation_parameters, config)
 
@@ -250,23 +263,26 @@ class FakePVSystem(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeTankConfig(ConfigBase):
+class MockTankConfig(ConfigBase):
     """A hot-water tank."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeTank"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockTank"
 
     component_id: ComponentID
     volume_in_liter: float = field(default=150.0, metadata={UNIT: lt.Units.LITER})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeTankConfig":
+    def preset_standard(cls, name: str) -> "MockTankConfig":
         """A 150 l tank."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeTank(FixtureComponent):
-    """Mixes the heater's power and the residents' draw into a temperature."""
+class MockTank(MockComponent):
+    """Mixes the heater's power and the residents' draw into a temperature.
+
+    Stands in for a hot-water storage tank in the mock assemblies.
+    """
 
     STANDBY_KPI = "Standby heat losses"
 
@@ -279,15 +295,15 @@ class FakeTank(FixtureComponent):
             DeclaredPort("WaterTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             DeclaredPort("HeatLoss", lt.LoadTypes.HEATING, lt.Units.WATT),
         ),
-        default_connection_sources=("FakeOccupancy", "FakeHeater"),
+        default_connection_sources=("MockOccupancy", "MockHeater"),
         kpis=(STANDBY_KPI,),
     )
     DEFAULTS = {
-        "FakeOccupancy": {"WaterDemand": "WaterDemand"},
-        "FakeHeater": {"ThermalPower": "ThermalPower"},
+        "MockOccupancy": {"WaterDemand": "WaterDemand"},
+        "MockHeater": {"ThermalPower": "ThermalPower"},
     }
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeTankConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockTankConfig) -> None:
         """Builds the tank."""
         super().__init__(my_simulation_parameters, config)
 
@@ -304,23 +320,26 @@ class FakeTank(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeHeaterConfig(ConfigBase):
+class MockHeaterConfig(ConfigBase):
     """An electric heater."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeHeater"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockHeater"
 
     component_id: ComponentID
     power_in_watt: float = field(default=2000.0, metadata={UNIT: lt.Units.WATT})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeHeaterConfig":
+    def preset_standard(cls, name: str) -> "MockHeaterConfig":
         """A 2 kW heater."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeHeater(FixtureComponent):
-    """Heats when its controller says so."""
+class MockHeater(MockComponent):
+    """Heats when its controller says so.
+
+    Stands in for an electric heater in the mock assemblies.
+    """
 
     ENERGY_KPI = "Heater energy"
 
@@ -330,13 +349,13 @@ class FakeHeater(FixtureComponent):
             DeclaredPort("ThermalPower", lt.LoadTypes.HEATING, lt.Units.WATT),
             DeclaredPort("ElectricityInput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),
         ),
-        default_connection_sources=("FakeController",),
+        default_connection_sources=("MockController",),
         kpis=(ENERGY_KPI,),
     )
-    DEFAULTS = {"FakeController": {"Signal": "Signal"}}
+    DEFAULTS = {"MockController": {"Signal": "Signal"}}
     OPTIONAL_INPUTS = ("Signal",)
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeHeaterConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockHeaterConfig) -> None:
         """Builds the heater."""
         super().__init__(my_simulation_parameters, config)
 
@@ -352,29 +371,32 @@ class FakeHeater(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeControllerConfig(ConfigBase):
+class MockControllerConfig(ConfigBase):
     """A thermostat on the tank."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeController"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockController"
 
     component_id: ComponentID
     set_temperature_in_celsius: float = field(default=45.0, metadata={UNIT: lt.Units.CELSIUS})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeControllerConfig":
+    def preset_standard(cls, name: str) -> "MockControllerConfig":
         """45 °C."""
         return cls(component_id=ComponentID(name=name))
 
     @preset
     @classmethod
-    def preset_eco(cls, name: str) -> "FakeControllerConfig":
+    def preset_eco(cls, name: str) -> "MockControllerConfig":
         """40 °C."""
         return cls(component_id=ComponentID(name=name), set_temperature_in_celsius=40.0)
 
 
-class FakeController(FixtureComponent):
-    """Switches the heater on below the set point, which an energy manager may raise."""
+class MockController(MockComponent):
+    """Switches the heater on below the set point, which an energy manager may raise.
+
+    Stands in for a heater's thermostat (an L1 controller) in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         inputs=(
@@ -382,15 +404,15 @@ class FakeController(FixtureComponent):
             DeclaredPort("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
         ),
         outputs=(DeclaredPort("Signal", lt.LoadTypes.ON_OFF, lt.Units.ANY),),
-        default_connection_sources=("FakeTank", "FakeEms"),
+        default_connection_sources=("MockTank", "MockEms"),
     )
     DEFAULTS = {
-        "FakeTank": {"TankTemperature": "WaterTemperature"},
-        "FakeEms": {"Modifier": "Modifier"},
+        "MockTank": {"TankTemperature": "WaterTemperature"},
+        "MockEms": {"Modifier": "Modifier"},
     }
     OPTIONAL_INPUTS = ("Modifier", "TankTemperature")
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeControllerConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockControllerConfig) -> None:
         """Builds the controller."""
         super().__init__(my_simulation_parameters, config)
 
@@ -411,29 +433,32 @@ class FakeController(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeEmsConfig(ConfigBase):
+class MockEmsConfig(ConfigBase):
     """An energy manager raising set points by a fixed offset."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeEms"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockEms"
 
     component_id: ComponentID
     offset_in_kelvin: float = field(default=2.0, metadata={UNIT: lt.Units.KELVIN})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeEmsConfig":
+    def preset_standard(cls, name: str) -> "MockEmsConfig":
         """Raises by 2 K."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeEms(FixtureComponent):
-    """Outputs a set-point modifier."""
+class MockEms(MockComponent):
+    """Outputs a set-point modifier.
+
+    Stands in for an energy manager in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeEmsConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockEmsConfig) -> None:
         """Builds the energy manager."""
         super().__init__(my_simulation_parameters, config)
 
@@ -450,7 +475,7 @@ class FakeEms(FixtureComponent):
 class UndeclaredDeviceConfig(ConfigBase):
     """A component class that makes no class-level statement, for the refusals that need one."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.UndeclaredDevice"
+    MAIN_CLASS = "tests.assemblies.mock_components.UndeclaredDevice"
 
     component_id: ComponentID
     rating_in_watt: float = 100.0
@@ -463,7 +488,10 @@ class UndeclaredDeviceConfig(ConfigBase):
 
 
 class UndeclaredDevice(Component):
-    """Declares no CLASS_INTERFACE."""
+    """Declares no CLASS_INTERFACE.
+
+    Stands in for a component class that declares no class interface in the mock assemblies.
+    """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

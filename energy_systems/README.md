@@ -264,8 +264,8 @@ a grouped file or a twin changes rather than edited by hand.
 Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_systems/assemblies_spec.md`,
 on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
 which a file imports instead of writing their components out. This is step 1a of that spec (bead
-hisim-lt0b.1): the format, the loader, the expansion and the checks, proven on fixtures under
-`tests/assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does not exist.
+hisim-lt0b.1): the format, the loader, the expansion and the checks, proven on the mock assemblies under
+`tests/assemblies/mock_assemblies/`. No real assembly ships yet, so `energy_systems/assemblies/` does not exist.
 
 ```yaml
 schema_version: 4

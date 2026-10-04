@@ -1,8 +1,8 @@
-# Fixture: an electric heater with its thermostat, which an energy manager may raise.
+# Mock: an electric heater with its thermostat, which an energy manager may raise.
 schema_version: 4
 kind: assembly
-name: generator/electric_heater
-description: A fake electric heater and its thermostat.
+name: mock/electric_heater
+description: A mock electric heater and its thermostat.
 
 parameters:
   power_in_watt:
@@ -21,7 +21,7 @@ presets:
 components:
   Heater:
     order: 2
-    class: tests.assemblies.fixture_components.FakeHeater
+    class: tests.assemblies.mock_components.MockHeater
     preset: standard
     config:
       power_in_watt: {$param: power_in_watt}
@@ -37,7 +37,7 @@ variants:
         components:
           Controller:
             order: 1
-            class: tests.assemblies.fixture_components.FakeController
+            class: tests.assemblies.mock_components.MockController
             preset: {$param: control}
             config:
               set_temperature_in_celsius: {$param: set_temperature_in_celsius}
@@ -50,8 +50,8 @@ variants:
 
 interface:
   needs:
-    tank_temperature: {into: [Controller], partner: FakeTank, active_when: {with_thermostat: [true]}}
-    ems_modifier: {into: [Controller], partner: FakeEms, optional: true, active_when: {with_thermostat: [true]}}
+    tank_temperature: {into: [Controller], partner: MockTank, active_when: {with_thermostat: [true]}}
+    ems_modifier: {into: [Controller], partner: MockEms, optional: true, active_when: {with_thermostat: [true]}}
   provides:
     heat: {output: Heater.ThermalPower}
     electricity: {output: Heater.ElectricityInput}

@@ -622,6 +622,15 @@ feed checks, the energy-balance report, economics (a subject without a catalogue
   for freshness (§8). Each assembly has one example (a minimal system file importing it, which also joins the golden
   configuration so its default result is a golden leaf set) and the test contract of §9.4.
 
+- **Mock assemblies (owner, 2026-10-04).** The format's own tests use a test-only library,
+  `tests/assemblies/mock_assemblies/` (family `mock/`, classes `Mock*` in `mock_components.py`), whose paths can never
+  collide with the real library's. A mock assembly or class exists only for a shape the real library cannot show — a
+  refusal, a deliberately wrong contract, depth-4 nesting, a cycle, a backwards heater — and every test that can run on a
+  real assembly moves to the real library when it exists (§13 step 4); the mock library then shrinks to that residue.
+  Each mock class says in one line which real class or role it stands in for. The spec's design mockup
+  (`roadmap/declarative_energy_systems/assemblies_mockup/`) is a design document, not a test input: the schema test reads
+  it only until the first real assemblies land, then the mockup is marked historical.
+
 ### 9.4 Testing an assembly
 
 "Tested fragments" means more than one run at the defaults (owner, 2026-10-03). Every assembly carries its **test

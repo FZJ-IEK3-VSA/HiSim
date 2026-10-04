@@ -59,6 +59,7 @@ from typing import ClassVar, Dict, Mapping, Optional, Tuple
 
 from hisim import hydronics
 from hisim import loadtypes as lt
+from hisim.config.names import NameSyntax
 
 
 @dataclass(frozen=True)
@@ -183,9 +184,15 @@ class HydronicPort:
     """The three outputs of one water circuit, as one end of it declares them (spec §3.5).
 
     ``mass_flow`` is the pump owner's output (kg/s), ``supply_temperature`` and ``return_temperature`` the
-    outputs (°C) of the components the water leaves on each leg. ``role`` is ``OUT`` for the supply owner and
-    ``IN`` for the receiver; it says on which side of that end's balance the circuit's heat counts and never
-    changes the heat's sign, which is the circuit's own (negative for a cooling circuit, §3.4).
+    outputs (°C) of the components the water leaves on each leg; each is a name under HiSim's one identifier
+    rule, :meth:`hisim.config.names.NameSyntax.require_identifier`, the rule every output name obeys.
+
+    ``role`` is ``OUT`` for the supply owner and ``IN`` for the receiver; it says on which side of that end's
+    balance the circuit's heat counts and never changes the heat's sign, which is the circuit's own (negative for
+    a cooling circuit, §3.4). :meth:`kilowatt_hours` returns that heat with the §3.4 sign whatever the role, and
+    the balance check (stage E) adds it on the ``IN`` side and subtracts it on the ``OUT`` side. The role is
+    checked at construction to be ``IN`` or ``OUT``, because :class:`~hisim.loadtypes.EnergyRole` also has
+    ``LOSS`` and ``STORED_CHANGE``, which a circuit end cannot be.
     """
 
     mass_flow: str
@@ -200,7 +207,7 @@ class HydronicPort:
         """Refuse names that are not distinct identifiers and a role other than ``IN`` or ``OUT``.
 
         Raises:
-            HydronicPortError: If a name is not an identifier, two names coincide, or the role is not an
+            HydronicPortError: If a name breaks HiSim's identifier rule, two names coincide, or the role is not an
                 :class:`~hisim.loadtypes.EnergyRole` ``IN`` or ``OUT``.
         """
         names = {
@@ -209,10 +216,10 @@ class HydronicPort:
             "return_temperature": self.return_temperature,
         }
         for field_name, output_name in names.items():
-            if not isinstance(output_name, str) or not output_name.isidentifier():
-                raise HydronicPortError(
-                    f"A hydronic port's {field_name} must name an output by an identifier, got {output_name!r}."
-                )
+            try:
+                NameSyntax.require_identifier(output_name, f"hydronic port {field_name} output")
+            except ValueError as error:
+                raise HydronicPortError(f"A hydronic port's {field_name} must name an output: {error}") from error
         if len(set(names.values())) != len(names):
             raise HydronicPortError(
                 f"A hydronic port names three distinct outputs, got mass_flow={self.mass_flow!r}, "

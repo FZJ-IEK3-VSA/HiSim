@@ -1,6 +1,6 @@
-"""One composed fixture system through ``hisim energy-system run``, and what its results say.
+"""One composed mock system through ``hisim energy-system run``, and what its results say.
 
-The fixture house imports two PV instances, a hot-water package nested three deep and a backup
+The mock house imports two PV instances, a hot-water package nested three deep and a backup
 heater, and runs one day. The run must write the import record and the source maps into the
 realized record, and its ``all_kpis.json`` must address each array by import and instance, so that
 the finder returns exactly the two arrays for ``import_key="pv"`` (``roadmap/kpi_address_spec.md``,
@@ -19,18 +19,18 @@ import yaml
 from hisim.cli import main
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
-from tests.assemblies.helpers import Fixtures
+from tests.assemblies.helpers import Mocks
 
 
 @pytest.fixture(name="house_run", scope="module")
 def fixture_house_run(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Runs the fixture house once for the module, through the console command."""
+    """Runs the mock house once for the module, through the console command."""
     result = tmp_path_factory.mktemp("house_run")
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Fixtures.LIBRARY))
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
     try:
         code = main(
-            ["energy-system", "run", str(Fixtures.HOUSE), str(Fixtures.PARAMETERS), "--result-dir", str(result)]
+            ["energy-system", "run", str(Mocks.HOUSE), str(Mocks.PARAMETERS), "--result-dir", str(result)]
         )
     finally:
         monkeypatch.undo()
@@ -61,7 +61,7 @@ def test_the_run_writes_the_import_record_and_the_source_maps(house_run: Path) -
         "hot_water",
         "backup",
     ]
-    assert metadata["imports"]["addresses"]["backup-Heater"]["assembly"] == "generator/electric_heater"
+    assert metadata["imports"]["addresses"]["backup-Heater"]["assembly"] == "mock/electric_heater"
     assert metadata["source_map"]["pv-east-PVSystem"]["inputs[0]"]["note"] == "port weather bound to Weather (default)"
 
 
@@ -77,7 +77,7 @@ def test_the_kpis_of_two_instances_carry_their_import_and_instance(house_run: Pa
         "pv",
         "east",
         "PVSystem",
-        "pv/array",
+        "mock/pv_array",
     )
     assert (west["import"], west["instance"], west["name"]) == ("pv", "west", "pv-west-PVSystem")
     assert east["display_name"] == "PV array, east, azimuth 90"
@@ -99,14 +99,14 @@ def fixture_boiler_run(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Runs the boiler house — a dhw circuit, a natural-gas carrier, a fact port — once for the module."""
     result = tmp_path_factory.mktemp("boiler_run")
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Fixtures.LIBRARY))
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
     try:
         code = main(
             [
                 "energy-system",
                 "run",
-                str(Fixtures.SYSTEMS / "boiler_house.energy_system.yaml"),
-                str(Fixtures.ROOT / "one_day_balance.simulation.yaml"),
+                str(Mocks.SYSTEMS / "boiler_house.energy_system.yaml"),
+                str(Mocks.ROOT / "one_day_balance.simulation.yaml"),
                 "--result-dir",
                 str(result),
             ]
@@ -146,7 +146,7 @@ def test_the_boiler_houses_realized_record_re_runs_without_any_assembly(boiler_r
             "energy-system",
             "run",
             str(boiler_run / "realized.energy_system.yaml"),
-            str(Fixtures.ROOT / "one_day_balance.simulation.yaml"),
+            str(Mocks.ROOT / "one_day_balance.simulation.yaml"),
             "--rerun",
             "--result-dir",
             str(tmp_path),
@@ -164,7 +164,7 @@ def test_re_running_the_realized_record_needs_no_assembly_and_reproduces_it(hous
             "energy-system",
             "run",
             str(house_run / "realized.energy_system.yaml"),
-            str(Fixtures.PARAMETERS),
+            str(Mocks.PARAMETERS),
             "--rerun",
             "--result-dir",
             str(tmp_path),
@@ -182,17 +182,17 @@ def test_re_running_the_realized_record_needs_no_assembly_and_reproduces_it(hous
 @pytest.mark.base
 def test_describe_prints_an_assemblys_interface_parameters_and_test_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     """``hisim energy-system describe <family>/<name>``: ports with partners and states, parameters, contract."""
-    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Fixtures.LIBRARY))
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
     out = io.StringIO()
     with redirect_stdout(out):
-        code = main(["energy-system", "describe", "generator/electric_heater"])
+        code = main(["energy-system", "describe", "mock/electric_heater"])
     text = " ".join(out.getvalue().split())
 
     assert code == 0
     for expected in (
-        "generator/electric_heater — A fake electric heater and its thermostat.",
-        "tank_temperature        need from FakeTank into Controller; required, active when with_thermostat in [True]",
-        "ems_modifier            need from FakeEms into Controller; optional (bind:, optional-bind: or none:), active "
+        "mock/electric_heater — A mock electric heater and its thermostat.",
+        "tank_temperature        need from MockTank into Controller; required, active when with_thermostat in [True]",
+        "ems_modifier            need from MockEms into Controller; optional (bind:, optional-bind: or none:), active "
         "when",
         "heat                    provides Heater.ThermalPower; provided",
         "power_in_watt           float  WATT  range [500, 6000]  default 2000 — Rated power.",
@@ -212,7 +212,7 @@ def test_describe_reads_an_assembly_file_by_its_path() -> None:
     """A ``*.assembly.yaml`` argument is read directly."""
     out = io.StringIO()
     with redirect_stdout(out):
-        code = main(["energy-system", "describe", str(Fixtures.LIBRARY / "pv" / "array.assembly.yaml")])
+        code = main(["energy-system", "describe", str(Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml")])
 
     assert code == 0
     assert "bounds    PVSystem.ElectricityOutput [WATT]: 0 … 20000" in out.getvalue()
@@ -222,10 +222,10 @@ def test_describe_reads_an_assembly_file_by_its_path() -> None:
 @pytest.mark.base
 def test_describe_prints_circuit_carrier_and_fact_ports(monkeypatch: pytest.MonkeyPatch) -> None:
     """A provision with its meter, a carrier need with its outputs, a circuit end with its outputs, a fact need."""
-    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Fixtures.LIBRARY))
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
     out = io.StringIO()
     with redirect_stdout(out):
-        for assembly in ("supply/gas_connection", "heating/gas_boiler", "storage/battery", "pv/array"):
+        for assembly in ("mock/gas_connection", "mock/gas_boiler", "mock/battery", "mock/pv_array"):
             assert main(["energy-system", "describe", assembly]) == 0
     text = " ".join(out.getvalue().split())
 

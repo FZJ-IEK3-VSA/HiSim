@@ -1,1 +1,1 @@
-"""Tests of the assemblies: the fixture library, its fake components, and the format, expansion and checks."""
+"""Tests of the assemblies: the mock library, its mock components, and the format, expansion and checks."""

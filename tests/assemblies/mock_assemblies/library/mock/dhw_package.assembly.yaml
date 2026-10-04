@@ -1,9 +1,9 @@
-# Fixture: nested (depth 3 from a file). A storage water heater and a small panel of its own; every
+# Mock: nested (depth 3 from a file). A storage water heater and a small panel of its own; every
 # port of the inner import is re-exported.
 schema_version: 4
 kind: assembly
-name: dhw/package
-description: A fake hot-water package with a booster panel.
+name: mock/dhw_package
+description: A mock hot-water package with a booster panel.
 
 parameters:
   volume_in_liter:
@@ -16,12 +16,12 @@ presets:
 
 imports:
   heater:
-    assembly: dhw/storage_water_heater
+    assembly: mock/storage_water_heater
     parameters: {volume_in_liter: {$param: volume_in_liter}}
 
 components:
   Panel:
-    class: tests.assemblies.fixture_components.FakePVSystem
+    class: tests.assemblies.mock_components.MockPVSystem
     preset: rooftop
     config:
       power_in_watt: {$param: panel_power_in_watt}
@@ -32,7 +32,7 @@ interface:
   needs:
     hot_water_demand: {from: heater.hot_water_demand}
     ems_modifier: {from: heater.ems_modifier, optional: true}
-    weather: {into: [Panel], partner: FakeWeather}
+    weather: {into: [Panel], partner: MockWeather}
   provides:
     electricity: {from: heater.electricity}
     panel: {output: Panel.ElectricityOutput}

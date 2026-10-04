@@ -1,8 +1,8 @@
-# Fixture: an indirectly heated cylinder, the other end of the dhw circuit, owning the return leg.
+# Mock: an indirectly heated cylinder, the other end of the dhw circuit, owning the return leg.
 schema_version: 4
 kind: assembly
-name: dhw/cylinder
-description: A fake hot-water cylinder charged over the dhw circuit.
+name: mock/dhw_cylinder
+description: A mock hot-water cylinder charged over the dhw circuit.
 
 parameters:
   volume_in_liter:
@@ -13,7 +13,7 @@ presets:
 
 components:
   Cylinder:
-    class: tests.assemblies.fixture_components.FakeCylinder
+    class: tests.assemblies.mock_components.MockCylinder
     preset: standard
     config:
       volume_in_liter: {$param: volume_in_liter}
@@ -23,7 +23,7 @@ components:
 
 interface:
   needs:
-    hot_water_demand: {into: [Cylinder], partner: FakeOccupancy}
+    hot_water_demand: {into: [Cylinder], partner: MockOccupancy}
     circuit: {circuit: dhw, member: Cylinder}
 
 tests:

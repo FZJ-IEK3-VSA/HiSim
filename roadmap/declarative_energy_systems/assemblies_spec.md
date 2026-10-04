@@ -457,7 +457,11 @@ priorities:                                                   # control/ems_self
 
 The list orders the outputs the controller ranks: a battery's is required and binds to the one controller; a `via:` one
 (heat pump, immersion heater) is controlled only when its import binds `ems_modifier` (§3.1); a rank-only feed the EMS
-class declares (residents, solar thermal) is ranked with `dispatch: {}` (dry run G18). The lowering derives the EMS
+class declares (residents, solar thermal) is ranked with `dispatch: {}` (dry run G18). A heat pump whose import does not bind
+`ems_modifier` beside an EMS is a legal, uncontrolled observation (decided, owner, 2026-10-04, G5): the EMS class declares
+rank-only feeds for `HEAT_PUMP_BUILDING` and `HEAT_PUMP_DHW` as it does for residents and solar thermal (step 4, a
+result-neutral component change, every EMS twin controls its heat pump), so its consumption stays in the EMS balance
+and the priorities list simply does not steer it. The lowering derives the EMS
 weights deterministically. Each entry starts from the EMS class default of its component types (residents 1, space
 heating 2, hot water 3, solar thermal 4, battery 6: `controller_l2_energy_management_system.py:409`, `:444`, `:466`,
 `:503`, `:525`, `:555`, `:581`); the k-th further instance of a type gets `default + k`, and an entry not above every

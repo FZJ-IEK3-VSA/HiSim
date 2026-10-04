@@ -549,6 +549,13 @@ inactive for a burner, and the EMS raises the thermostat's set point through `em
 which also makes the heater's feed controlled (§4.4). The full file is
 `assemblies_mockup/dhw/storage_water_heater.assembly.yaml` (§12).
 
+**Members per variant option (decided, owner, 2026-10-04).** An option that swaps a member's class names its own
+member (`Burner` in the gas option, `Immersion` in the electric one); one name for two classes is refused by the
+library check, since a contract or a port written once could not hold for both. A port's `into:` and a contract's
+`bounds`/`monotone`/`expect` may name members of any option; at expansion only the members the selected option has
+are bound and checked, and a port that names no existing member in the selected option is a contract error, so a port
+never binds nothing silently. `describe` prints the members per option.
+
 ## 6. Sizing across assemblies
 
 The resolver sees the expanded system: every member is an ordinary config under its expanded name, so the engine's

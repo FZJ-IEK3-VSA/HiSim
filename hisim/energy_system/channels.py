@@ -27,6 +27,7 @@ from hisim.config.channels import (
     ConnectionTag,
     DispatchRule,
     DynamicConnectionChannel,
+    ObservableFeed,
 )
 from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemErrorId
 
@@ -58,7 +59,7 @@ class FeedRequest:
 
     #: Weight reserved for a participant an aggregator only measures and never controls. It is
     #: the value every legacy default connection of the electricity meter already spells out.
-    MONITORED_ONLY_WEIGHT: ClassVar[int] = 999
+    MONITORED_ONLY_WEIGHT: ClassVar[int] = ObservableFeed.MEASURED_ONLY_WEIGHT
 
     consumer: str
     source: str

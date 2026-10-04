@@ -66,13 +66,26 @@ class EnergySystemErrorId(enum.Enum):
     provider (and a provider without a consumer), ``EF-7Q`` for a consuming output whose energy
     carrier is not the need's, ``EF-7R`` for a fact port bound to a component that does not
     provide the fact, and five for observe and actuate (§4): ``EF-7S`` for an observer's selection
-    (a class that declares no feeds, a required selector matching nothing, an idle observer, a
-    ranked feed on an observer that is no controller), ``EF-7T`` for the double count of a meter
-    reading a controller's balance and a flow that controller observes, ``EF-7U`` for an actuation
-    (a controllable output no controller selects, a target input actuated twice, a ``controllable``
-    naming an input the controller may not actuate), ``EF-7V`` for the weights a controller derives
-    from its priorities, and ``EF-7W`` for two participants of one observer whose derived port names
-    collide. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero.
+    (an observer whose constructed component declares no dynamic default connections, a required
+    selector matching nothing, an idle observer, a ranked feed on an observer that is no
+    controller), ``EF-7T`` for the double count of a meter reading a controller's balance and a flow
+    that controller observes, ``EF-7U`` for an actuation (a controllable output no controller
+    selects, a target input actuated twice, a ``controllable`` naming an input the controller may
+    not actuate), ``EF-7V`` for the weights a controller derives from its priorities, and ``EF-7W``
+    for two participants of one observer whose derived port names collide. The letters ``I`` and
+    ``O`` are skipped, as they read like a one and a zero.
+    The expansion raises them from the files, before any class is constructed. What only the
+    constructed components can say is decided and checked later in the build, once every component
+    is constructed and before anything is connected. The observers' selections are lowered then
+    (:mod:`hisim.energy_system.assemblies.selectors`): their candidates are the dynamic default
+    connections the constructed observer declares, so ``EF-7S`` … ``EF-7W`` fire at that stage.
+    The post-construction port check (:mod:`hisim.energy_system.assemblies.port_check`) follows:
+    ``EF-7H`` for a lowered bare name, circuit item or fuel feed whose receiving component declares
+    no default connections (or default feeds) from the partner's class, ``EF-7J`` for a lowered wire,
+    provided output or observed output naming an input or output the constructed component does
+    not have, or an observed output no channel of its observer accepts, ``EF-7N`` for circuit ends
+    whose constructed members do not own and read the circuit's three outputs, and ``EF-7Q`` for a
+    consuming output whose constructed energy port is not of the need's carrier.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -426,7 +439,11 @@ class EnergySystemAssemblyError(EnergySystemCatalogueError):
     sees the file: an assembly that cannot be found or is found twice, a cycle or a nesting
     deeper than four, a parameter of the wrong type, value, range or unit, a violated
     constraint, a port that cannot be bound (§3.3), an evaluation order that is not a valid
-    numbering, and a construct the current step of the assemblies work does not lower yet.
+    numbering, and a construct the current step of the assemblies work does not lower yet. Also
+    raised by the post-construction port check of the build (``EF-7H``, ``EF-7J``, ``EF-7N``,
+    ``EF-7Q``), which confirms on the constructed components what a lowered port means: the
+    member's default connections from its partner's class, a wired input and output, a provided
+    output, the ownership of a circuit's outputs, a meter's default feeds and a consumption's carrier.
 
     Every message names the import and, where there is one, the instance and the port, and
     carries the source map of the import — the files and lines it came from — so that a failure

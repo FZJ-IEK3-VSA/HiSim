@@ -7,9 +7,10 @@ shape the format must accept. Since that commit every mockup assembly carries it
 so the whole mockup validates against the assembly schema and reads into the model without a defect.
 
 Run through the library check, it lists exactly what the repository still owes it, pinned here by
-kind so the lists shrink as the classes catch up: the real classes that declare no ``CLASS_INTERFACE``
-yet (hisim-lt0b.12), the classes that do not exist yet (†), and the carriers that are no
-``lt.EnergyBalanceCarrier`` yet (†: ``wood_logs``, ``lpg``, ``hvo``). What the expansion refuses by
+kind so the lists shrink as the classes catch up: the classes that do not exist yet (†) and the
+carriers that are no ``lt.EnergyBalanceCarrier`` yet (†: ``wood_logs``, ``lpg``, ``hvo``). What a
+class's constructed components offer — default connections, outputs, feeds — no class declares a
+second time, so the library check asks nothing of the real classes beyond importing them. What the expansion refuses by
 design until a later step (``EF-7L``: ``$fact``, ``$derived``, ``many: true``, fact exports) is pinned
 beside them.
 """
@@ -38,29 +39,6 @@ from tests.assemblies.helpers import Mocks
 
 class MockupOwes:
     """What the library check of the mockup lists, by kind: what the repository owes the mockup."""
-
-    #: Real classes the mockup names that declare no ``CLASS_INTERFACE`` yet (hisim-lt0b.12).
-    WITHOUT_CLASS_INTERFACE: Set[str] = {
-        "hisim.components.advanced_battery_bslib.Battery",
-        "hisim.components.advanced_ev_battery_bslib.CarBattery",
-        "hisim.components.controller_l1_generic_ev_charge.L1Controller",
-        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
-        "hisim.components.electricity_meter.ElectricityMeter",
-        "hisim.components.fuel_meter.FuelMeter",
-        "hisim.components.gas_meter.GasMeter",
-        "hisim.components.generic_boiler.GenericBoiler",
-        "hisim.components.generic_car.Car",
-        "hisim.components.generic_pv_system.PVSystem",
-        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
-        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
-        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
-        "hisim.components.simple_air_conditioner.SimpleAirConditioner",
-        "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
-        "hisim.components.simple_water_storage.SimpleDHWStorage",
-        "hisim.components.simple_water_storage.SimpleHotWaterStorage",
-        "hisim.components.solar_thermal_system.SolarThermalSystem",
-        "hisim.components.solar_thermal_system.SolarThermalSystemController",
-    }
 
     #: Classes the mockup names that do not exist yet (†); they import from no module.
     NOT_YET_WRITTEN: Set[str] = {
@@ -164,25 +142,19 @@ def test_the_schema_requires_a_monotone_entry_only_beside_a_numeric_parameter(as
 
 @pytest.mark.base
 def test_the_library_check_of_the_mockup_lists_only_what_the_repository_owes_it() -> None:
-    """Missing class interfaces (lt0b.12), † classes and † carriers, and nothing else."""
+    """† classes and † carriers, and nothing else."""
     resolver = AssemblyResolver([Mocks.SPEC_MOCKUP])
-    without_interface: Set[str] = set()
     not_written: Set[str] = set()
     carriers: Set[Tuple[str, str]] = set()
     other: List[str] = []
     for path in mockup_assemblies():
         name = library_path(path)
         for problem in check_assembly(resolver.resolve(name, "test"), resolver, CheckStrength.LIBRARY):
-            interface = re.search(
-                r"\((hisim\.[\w.]+)\)(?: in option '\w+' of the variant '\w+')? declares no CLASS_INTERFACE", problem
-            )
             missing = re.search(r"the module '([\w.]+)' of '\w+' cannot be imported", problem)
             carrier = re.search(
                 r"(?:names|takes the carrier) '(\w+)'(?: with some parameters)?, which is no carrier", problem
             )
-            if interface is not None:
-                without_interface.add(interface.group(1))
-            elif missing is not None:
+            if missing is not None:
                 not_written.add(missing.group(1))
             elif carrier is not None:
                 carriers.add((name, carrier.group(1)))
@@ -190,26 +162,28 @@ def test_the_library_check_of_the_mockup_lists_only_what_the_repository_owes_it(
                 other.append(problem)
 
     assert not other, other
-    assert without_interface == MockupOwes.WITHOUT_CLASS_INTERFACE | MockupOwes.NOT_YET_WRITTEN
     assert not_written == {class_path.rsplit(".", 1)[0] for class_path in MockupOwes.NOT_YET_WRITTEN}
     assert carriers == MockupOwes.CARRIERS_NOT_YET
 
 
 @pytest.mark.base
 def test_a_member_written_in_two_options_is_checked_against_each_options_class() -> None:
-    """hisim-lt0b.13 on the mockup's storage water heater: ``Heater`` is checked as each option's class."""
-    resolver = AssemblyResolver([Mocks.SPEC_MOCKUP])
-    listed = check_assembly(resolver.resolve("dhw/storage_water_heater", "test"), resolver, CheckStrength.LIBRARY)
+    """hisim-lt0b.13 on the mockup's storage water heater: ``Heater`` is checked as each option's class.
 
-    for option, class_path in (
-        ("immersion", "hisim.components.immersion_heater.ImmersionHeater"),
-        ("burner", "hisim.components.generic_boiler.GenericBoiler"),
-    ):
-        assert any(
-            f"'Heater' ({class_path}) in option '{option}' of the variant 'heater' declares no CLASS_INTERFACE, so "
-            "the outputs its test contract must bound are unknown." in problem
-            for problem in listed
-        ), option
+    The burner's ``GenericBoiler`` imports and passes; the immersion option's † class is reported at its own
+    option's line, once, not hidden behind the other option's class of the same member name.
+    """
+    resolver = AssemblyResolver([Mocks.SPEC_MOCKUP])
+    assembly = resolver.resolve("dhw/storage_water_heater", "test")
+    listed = check_assembly(assembly, resolver, CheckStrength.LIBRARY)
+
+    heater = [problem for problem in listed if "the class of 'Heater'" in problem]
+    assert len(heater) == 1, heater
+    assert "the module 'hisim.components.immersion_heater' of 'Heater' cannot be imported" in heater[0]
+    immersion = assembly.model.variants["heater"].options["immersion"]
+    assert heater[0].startswith(f"{assembly.label}:")
+    assert "Heater" in immersion.components
+    assert not any("GenericBoiler" in problem for problem in listed), listed
 
 
 @pytest.mark.base

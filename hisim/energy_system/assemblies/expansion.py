@@ -18,9 +18,20 @@ The expansion works **innermost first**. For each import and each of its instanc
    and offers the assembly's own ports to its importer;
 
 and at the top level it binds every port of every import and of every site entry, lowering a need
-to the bare partner name (the member class's default connections from the partner's class, checked
-at load time against the class's :class:`~hisim.component_interface.ClassInterface`) or to the
+to the bare partner name (the member's default connections from the partner's class) or to the
 explicit wires the port names, exactly where the member's ``{$port: …}`` placeholder stands.
+
+**What is decided here, and what after construction.** Every entry states its class, so the
+expansion decides from the files alone which component is a candidate partner, whether a port has
+none, several or a verb to decide it, and whether the members a port names exist. Whether the
+member's class really declares default connections from the partner's class, and whether a wire's
+input and output exist, the constructed components say: a component creates its ports and default
+connections in its constructor, and no second declaration of them exists. The expansion therefore
+writes one entry per lowered item into the port-provenance table of the import record
+(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and the post-construction port
+check (:mod:`hisim.energy_system.assemblies.port_check`) refuses, with the import, the port, the
+member, the partner, the files and lines, the candidates and a paste-ready ``bind:`` line, an item
+the constructed components do not have (``EF-7H``, ``EF-7J``) — before anything is connected.
 
 **The default rule** mirrors the sizing engine's: a port binds to the one component in scope whose
 class is one of its partner classes, and a verb decides every other case. In scope are, at the top
@@ -28,9 +39,12 @@ level, the site entries and every member of every import at any depth, and insid
 own members and every member of its inner imports; a port never binds into its own instance.
 
 **Circuits, carriers and facts** (hisim-lt0b.2). A circuit end binds the one other end of its
-circuit in scope and lowers to each end's default connections from the other end's owners of the
-circuit's three outputs (§3.2, §11.1). A carrier need binds the one provider of its carrier: a
-fuel lowers to the aggregator feeds its provider's meter class declares for the consuming outputs,
+circuit in scope; every member at one end that carries the circuit's placeholder takes a bare name
+of each member at the other end, and the post-construction port check verifies on the constructed
+members that those bare names mean the circuit's three outputs, each owned by one end and read by
+the other (§3.2, §11.1). A carrier need binds the one provider of its carrier: a fuel lowers to a
+bare name of each consuming member in its provider's meter, which observes the consuming outputs
+through the default feeds it declares (verified after construction, with each output's carrier),
 electricity to nothing but the check that exactly one provider exists (§5). A fact need lowers to a
 ``sizing_sources`` line naming the provider (§6). ``{$switch: …}`` values are resolved with the
 parameters.
@@ -60,7 +74,6 @@ import string
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
-from hisim.component_interface import ClassInterface
 from hisim.config import AddressStep, ComponentID
 from hisim.config.contributions import declared_facts_of
 from hisim.config.sizing import declared_field_unit
@@ -78,6 +91,8 @@ from hisim.energy_system.assemblies.record import (
     CircuitRecord,
     ImportRecord,
     InstanceRecord,
+    LoweredKind,
+    LoweredPort,
     NotLowered,
     PortRecord,
     SourceMapEntry,
@@ -90,6 +105,8 @@ from hisim.energy_system.assemblies.selectors import (
     SelectionLowering,
     resolve_priorities,
 )
+from hisim.config.channels import ObservableFeed
+from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import (
     EnergySystemAssemblyError,
@@ -124,7 +141,7 @@ MAXIMUM_DEPTH = 4
 
 
 class ClassFacts:
-    """Component classes, configuration classes and class interfaces, imported once per path."""
+    """Component classes and configuration classes, imported once per path."""
 
     def __init__(self) -> None:
         """Starts with empty caches."""
@@ -143,10 +160,6 @@ class ClassFacts:
             component = self.component_class(class_path, location, name)
             self._configs[class_path] = ClassBinder.configuration_class_of(component, location, name)
         return self._configs[class_path]
-
-    def interface(self, class_path: str, location: str, name: str) -> Optional[ClassInterface]:
-        """The class interface a component class declares, or ``None``."""
-        return getattr(self.component_class(class_path, location, name), "CLASS_INTERFACE", None)
 
     @staticmethod
     def short_name(class_path: str) -> str:
@@ -293,6 +306,8 @@ class Handle:
         fact: A fact port's fact, resolved.
         fact_into: The units a fact need lowers into.
         bound_partner: The expanded name a need was lowered to, once bound.
+        hint: The candidates and the paste-ready verb lines a refusal of this port prints.
+        candidates: The candidate partners in scope, ``name (Class)``, for the port-provenance table.
     """
 
     owner: str
@@ -314,6 +329,7 @@ class Handle:
     fact: Optional[str] = None
     fact_into: List[Unit] = field(default_factory=list)
     bound_partner: Optional[str] = None
+    candidates: Tuple[str, ...] = ()
 
     @property
     def partner_text(self) -> str:
@@ -523,17 +539,8 @@ class ImportExpander:
         for verbs, handle in self._decision_order(handles):
             self._decide(handle, verbs, level, top=True)
         self._check_provisions()
-        SelectionLowering(
-            all_units,
-            self._slots,
-            self._controllables,
-            lambda unit: self.classes.interface(unit.class_path, f"components.{unit.name}", unit.name),
-            self.record,
-            self._item_text,
-        ).lower()
         self._order_top(site_units, instances)
-        for record, instance_handles in self._recorded:
-            record.ports = [self._port_record(handle) for handle in instance_handles.values()]
+        self._record_ports()
         if self.record.not_lowered:
             raise self.error(
                 EnergySystemErrorId.NOT_LOWERED_IN_THIS_STEP,
@@ -543,7 +550,53 @@ class ImportExpander:
                 + ".",
                 remedy="They are parsed and recorded, never ignored; the steps named deliver them.",
             )
-        return self._assemble(site_units, all_units), self.record
+        assembled = self._assemble(site_units, all_units)
+        if self._slots or self._controllables:
+            self.record.pending_selection = PendingSelection(self, all_units)
+        return assembled, self.record
+
+    def _record_ports(self) -> None:
+        """Writes every instance's port records from its handles' current state."""
+        for record, instance_handles in self._recorded:
+            record.ports = [self._port_record(handle) for handle in instance_handles.values()]
+
+    def complete_selection(
+        self, all_units: Sequence[Unit], feeds_of: Callable[[Unit], Mapping[str, Tuple[ObservableFeed, ...]]]
+    ) -> Dict[str, ComponentEntry]:
+        """Lowers every observer's selection against the constructed observers' declared feeds.
+
+        Fills the observers' placeholders, the import record (observers, actuations, port records,
+        source map) and the port-provenance table, and returns the observers' final entries.
+
+        Raises:
+            EnergySystemAssemblyError: For any condition of :class:`SelectionLowering`.
+        """
+        SelectionLowering(
+            all_units, self._slots, self._controllables, feeds_of, self.record, self._item_text
+        ).lower()
+        for slot in self._slots:
+            for match in slot.matches:
+                self.record.port_provenance.append(
+                    LoweredPort(
+                        kind=LoweredKind.OBSERVE,
+                        owner=slot.owner,
+                        import_path=slot.owner_path,
+                        port=slot.port,
+                        verb=match.selected_by,
+                        member=slot.unit.name,
+                        member_class=slot.unit.class_path,
+                        partner=match.unit.name,
+                        partner_class=match.unit.class_path,
+                        input=(match.dispatch.target_input or "") if match.dispatch is not None else "",
+                        output=match.declared.output,
+                        chain=(slot.source,),
+                        tags=((match.component_type,) if match.component_type else ()) + tuple(match.tags),
+                    )
+                )
+        self._record_ports()
+        observers = list(dict.fromkeys(slot.unit.name for slot in self._slots))
+        units = {unit.name: unit for unit in all_units}
+        return {name: self._final_entry(units[name]) for name in observers}
 
     def offered_ports(self, key: str) -> Dict[str, "OfferedPort"]:
         """The ports one top-level import offers its importer, resolved for its parameters, unbound.
@@ -1159,6 +1212,8 @@ class ImportExpander:
                         )
                 else:
                     handle.provider = (unit.name, output or "")
+                    if handle.state != "inactive":
+                        self._note_lowered(handle, LoweredKind.PROVIDED, unit, "", output=output or "")
                     if port.is_controllable and handle.state != "inactive":
                         self._controllables.append(
                             Controllable(
@@ -1789,6 +1844,7 @@ class ImportExpander:
             self._decide_cross(handle, written, level, top, self._fact_rule(handle, level))
             return
         candidates = self._candidates(handle, level.units)
+        handle.candidates = tuple(f"{unit.name} ({ClassFacts.short_name(unit.class_path)})" for unit in candidates)
         handle.hint = (
             f"Candidates: {', '.join(unit.name for unit in candidates) or 'none'}; "
             + self._paste_lines(handle, candidates, level, optional=handle.state == "optional")
@@ -1899,9 +1955,10 @@ class ImportExpander:
                 items: List[AnyInputItem] = [
                     ExplicitWire(source=partner.name, input=target, output=output) for target, output in wires.items()
                 ]
-                self._check_wires(handle, landing, partner, wires)
+                for target, output in wires.items():
+                    self._note_lowered(handle, LoweredKind.WIRE, landing.unit, verb, partner, target, output)
             else:
-                self._check_default_connections(handle, landing, partner)
+                self._note_lowered(handle, LoweredKind.DEFAULT, landing.unit, verb, partner)
                 items = [DefaultInputs(source=partner.name)]
             if landing.position in landing.unit.lowered:
                 raise self.error(
@@ -2171,123 +2228,34 @@ class ImportExpander:
             remedy="Write the binding on one end, or make both name each other.",
         )
 
-    def _interface_or_refuse(self, handle: Handle, unit: Unit, what: str) -> ClassInterface:
-        """The class interface of a unit a port lowers into or from; a class without one cannot be checked."""
-        interface = self.classes.interface(unit.class_path, f"components.{unit.name}", unit.name)
-        if interface is None:
-            raise self.error(
-                EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
-                handle.owner,
-                f"port '{handle.port.name}' would {what} {unit.name}, but {unit.class_path} declares no "
-                f"CLASS_INTERFACE, so it cannot be checked at load time {handle.source_text()}.",
-                remedy=f"Declare CLASS_INTERFACE on {unit.class_path} (hisim.component_interface).",
-            )
-        return interface
+    def _lower_circuit(self, handle: Handle, other: Handle, verb: str) -> None:
+        """Lowers a bound circuit: every placeholder at one end takes a bare name of each member of the other end.
 
-    def _lower_circuit(self, handle: Handle, other: Handle, verb: str) -> None:  # pylint: disable=too-many-locals
-        """Lowers a bound circuit: each end's readers get the default connections from the other end's owners.
-
-        Each of the circuit's three outputs must be owned (declared as an output) by exactly one member of
-        the two ends and read (declared as an input) by a member of the other end, whose class declares
-        default connections from the owner's class (§3.2, §11.1, hydronic spec §3.1).
+        The file decides the binding — the two ends of one circuit, their members and which members
+        carry the circuit's placeholder. Which member owns and which reads each of the circuit's three
+        outputs the constructed members say, so every item is written into the port-provenance table
+        and the post-construction port check (:mod:`.port_check`) verifies the circuit once the
+        components exist: each output owned by exactly one member, read by a member of the other end
+        that carries the placeholder, of one load type and unit at both ends, and every bare name
+        written here naming an owner of an output its reader reads, whose class the reader declares
+        default connections from (§3.2, §11.1, hydronic spec §3.1).
         """
         end, other_end = handle.end, other.end
         assert end is not None and other_end is not None
         circuit = end.circuit
-        names = CircuitNaming.outputs(circuit)
-        interfaces = {
-            unit.name: self._interface_or_refuse(handle, unit, f"join the circuit {circuit} at")
-            for unit in end.units + other_end.units
-        }
-        owners: Dict[str, Tuple[CircuitEndState, Unit]] = {}
-        for name in names:
-            owning = [
-                (circuit_end, unit)
-                for circuit_end in (end, other_end)
-                for unit in circuit_end.units
-                if interfaces[unit.name].output(name) is not None
-            ]
-            if len(owning) != 1:
-                raise self.error(
-                    EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
-                    handle.owner,
-                    f"the circuit {circuit} between {end.label} and {other_end.label} needs exactly one owner of "
-                    f"the output {name}, but "
-                    + (
-                        "no member of either end declares it"
-                        if not owning
-                        else f"{' and '.join(unit.name for _end, unit in owning)} both declare it"
-                    )
-                    + f" {handle.source_text()}.",
-                    remedy=(
-                        f"Each of {', '.join(names)} is owned by one end and read by the other (hydronic spec §3.1)."
-                    ),
-                )
-            owners[name] = owning[0]
-        reads: Dict[str, List[Unit]] = {}
-        owned: Dict[int, List[str]] = {id(end): [], id(other_end): []}
-        for name, (owner_end, owner) in owners.items():
-            owned[id(owner_end)].append(name)
-            reader_end = other_end if owner_end is end else end
-            readers = [unit for unit in reader_end.units if interfaces[unit.name].input(name) is not None]
-            if not readers:
-                raise self.error(
-                    EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
-                    handle.owner,
-                    f"the circuit {circuit}: {owner.name} at {owner_end.label} owns the output {name}, but no member "
-                    f"of {reader_end.label} ({', '.join(unit.name for unit in reader_end.units)}) reads it "
-                    f"{handle.source_text()}.",
-                )
-            owner_output = interfaces[owner.name].output(name)
-            for reader in readers:
-                reader_input = interfaces[reader.name].input(name)
-                assert owner_output is not None and reader_input is not None
-                if (owner_output.load_type, owner_output.unit) != (reader_input.load_type, reader_input.unit):
-                    raise self.error(
-                        EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
-                        handle.owner,
-                        f"the circuit {circuit}: {owner.name}.{name} is {owner_output.load_type.name} in "
-                        f"{owner_output.unit.name}, but {reader.name} reads {name} as {reader_input.load_type.name} "
-                        f"in {reader_input.unit.name} {handle.source_text()}.",
-                    )
-                owner_class = ClassFacts.short_name(owner.class_path)
-                if not interfaces[reader.name].declares_defaults_from(owner_class):
-                    raise self.error(
-                        EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
-                        handle.owner,
-                        f"the circuit {circuit}: {reader.name} ({ClassFacts.short_name(reader.class_path)}) reads "
-                        f"{name} from {owner.name}, but declares no default connections from {owner_class} "
-                        f"{handle.source_text()}.",
-                        alternatives=interfaces[reader.name].default_connection_sources,
-                        alternatives_label="classes it declares default connections from",
-                    )
-                sources = reads.setdefault(reader.name, [])
-                if owner not in sources:
-                    sources.append(owner)
+        if not handle.landings and not other.landings:
+            raise self.error(
+                EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+                handle.owner,
+                f"the circuit {circuit} between {end.label} and {other_end.label} has no '{{$port: …}}' placeholder at "
+                f"either end, so no member reads any of {', '.join(CircuitNaming.outputs(circuit))} "
+                f"{handle.source_text()}.",
+                remedy="A member that reads the circuit's outputs carries the circuit port's placeholder.",
+            )
         lowered: List[str] = []
         for this_end, this_handle, far_end in ((end, handle, other_end), (other_end, other, end)):
-            landings = {landing.unit.name: landing for landing in this_handle.landings}
-            for unit in this_end.units:
-                sources = reads.get(unit.name, [])
-                landing = landings.get(unit.name)
-                if sources and landing is None:
-                    raise self.error(
-                        EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
-                        this_handle.owner,
-                        f"the circuit {circuit}: {unit.name} reads from {far_end.label} but carries no "
-                        f"'{{$port: {this_handle.port.name}}}' placeholder for the items to land at "
-                        f"{this_handle.source_text()}.",
-                    )
-                if landing is None:
-                    continue
-                if not sources:
-                    raise self.error(
-                        EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
-                        this_handle.owner,
-                        f"the circuit {circuit}: {unit.name} carries a '{{$port: {this_handle.port.name}}}' "
-                        f"placeholder but reads none of {', '.join(names)} from {far_end.label} "
-                        f"{this_handle.source_text()}.",
-                    )
+            for landing in this_handle.landings:
+                unit = landing.unit
                 if landing.position in unit.lowered:
                     raise self.error(
                         EnergySystemErrorId.PORT_CONTRACT,
@@ -2295,12 +2263,25 @@ class ImportExpander:
                         f"the placeholder of '{unit.name}' at inputs[{landing.position}] is filled twice "
                         f"{this_handle.source_text()}.",
                     )
-                items: List[AnyInputItem] = [DefaultInputs(source=source.name) for source in sources]
+                items: List[AnyInputItem] = [DefaultInputs(source=source.name) for source in far_end.units]
                 unit.lowered[landing.position] = items
                 unit.notes[landing.position] = (
                     f"circuit {circuit}: port {this_handle.port.name} bound to {far_end.label} ({verb})"
                 )
                 lowered.extend(f"{unit.name}.inputs: {self._item_text(item)}" for item in items)
+                for source in far_end.units:
+                    self._note_lowered(
+                        this_handle,
+                        LoweredKind.CIRCUIT,
+                        unit,
+                        verb,
+                        source,
+                        circuit=circuit,
+                        end=this_end.label,
+                        other_end=far_end.label,
+                        end_members=tuple(member.name for member in this_end.units),
+                        other_members=tuple(member.name for member in far_end.units),
+                    )
         end.bound_to, other_end.bound_to = other_end, end
         for this_handle, far_end in ((handle, other_end), (other, end)):
             this_handle.record = {
@@ -2314,15 +2295,8 @@ class ImportExpander:
             CircuitRecord(
                 circuit=circuit,
                 ends=(
-                    CircuitEndRecord(
-                        end.owner, end.port, tuple(unit.name for unit in end.units), tuple(owned[id(end)])
-                    ),
-                    CircuitEndRecord(
-                        other_end.owner,
-                        other_end.port,
-                        tuple(unit.name for unit in other_end.units),
-                        tuple(owned[id(other_end)]),
-                    ),
+                    CircuitEndRecord(end.owner, end.port, tuple(unit.name for unit in end.units)),
+                    CircuitEndRecord(other_end.owner, other_end.port, tuple(unit.name for unit in other_end.units)),
                 ),
                 verb=verb,
                 lowered_to=tuple(lowered),
@@ -2489,69 +2463,34 @@ class ImportExpander:
     def _lower_carrier(self, handle: Handle, provider: Handle, verb: str) -> None:
         """Lowers a bound carrier need: the provider's meter observes the consuming outputs (§3.2, §5.1).
 
-        For a fuel the meter gets one aggregator feed per consuming output, with the tags and the weight
-        the meter's class declares for that output of the consumer's class (its default feeds, the
-        items a recorded twin writes); for electricity nothing is written. Every consuming output must
-        exist, and its energy carrier, where its class states it, must be the need's.
+        For a fuel the meter takes a bare name of every consuming member, which the wiring expands
+        through the default feeds the meter declares from that member's class — the tags and the
+        weight a recorded twin writes; for electricity nothing is written. Every consuming output is
+        written into the port-provenance table: whether it exists, carries the need's carrier by its
+        energy port, and is exactly what the meter's default feeds from its class observe, the
+        constructed components say, and the post-construction port check (:mod:`.port_check`)
+        verifies it.
         """
         provision = provider.provision
         assert provision is not None
         carrier = handle.carrier or ""
         meter = provision.meter
-        meter_interface = (
-            self._interface_or_refuse(handle, meter, f"feed {carrier} consumers into") if meter is not None else None
-        )
         outputs: List[str] = []
         items: List[AnyInputItem] = []
         for unit, output in handle.consumer_outputs:
-            interface = self._interface_or_refuse(handle, unit, f"take the {carrier} consumption from")
-            declared = interface.output(output)
-            if declared is None:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    handle.owner,
-                    f"carrier need '{handle.port.name}' names '{output}', which is no output of {unit.name} "
-                    f"{handle.source_text()}.",
-                    alternatives=tuple(port.name for port in interface.outputs),
-                    alternatives_label="outputs",
-                    offending_value=output,
-                )
-            if declared.carrier is not None and declared.carrier.value != carrier:
-                raise self.error(
-                    EnergySystemErrorId.CARRIER_MISMATCH,
-                    handle.owner,
-                    f"carrier need '{handle.port.name}' is of {carrier}, but {unit.name}.{output} carries "
-                    f"{declared.carrier.value} by its class's energy port {handle.source_text()}.",
-                )
             outputs.append(f"{unit.name}.{output}")
-            if meter is None or meter_interface is None:
+            self._note_lowered(handle, LoweredKind.FEED, meter, verb, unit, output=output, carrier=carrier)
+            if meter is None:
                 continue
-            feed = meter_interface.feed(ClassFacts.short_name(unit.class_path), output)
-            if feed is None:
-                raise self.error(
-                    EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
-                    handle.owner,
-                    f"carrier need '{handle.port.name}' (carrier {carrier}) would feed {unit.name}.{output} into the "
-                    f"meter {meter.name} ({ClassFacts.short_name(meter.class_path)}), which declares no default "
-                    f"feed from {ClassFacts.short_name(unit.class_path)}.{output} {handle.source_text()}.",
-                    alternatives=tuple(f"{item.source_class}.{item.output}" for item in meter_interface.default_feeds),
-                    alternatives_label="default feeds it declares",
-                    remedy="Declare the feed on the meter's class (ClassInterface.default_feeds, with its tags and "
-                    "weight), or name an output it declares.",
-                )
-            items.append(
-                AggregatorFeed(
-                    source=unit.name,
-                    output=output,
-                    component_type=feed.component_type,
-                    tags=tuple(feed.tags),
-                    weight=feed.weight,
-                )
-            )
+            item = DefaultInputs(source=unit.name)
+            if item not in items:
+                items.append(item)
         lowered: List[str] = []
         landing = provision.landing
         if items and landing is not None:
-            landing.unit.lowered.setdefault(landing.position, []).extend(items)
+            filled = landing.unit.lowered.setdefault(landing.position, [])
+            items = [item for item in items if item not in filled]
+            filled.extend(items)
             note = (
                 f"carrier {carrier}: port {handle.port.name} of {handle.owner_path} bound to {provision.label} ({verb})"
             )
@@ -2754,70 +2693,40 @@ class ImportExpander:
             return f"{{from: {item.source}.{item.output}, tags: [{', '.join(item.tags)}], weight: {item.weight}}}"
         return item.source
 
-    def _check_default_connections(self, handle: Handle, landing: Landing, partner: Unit) -> None:
-        """Refuses a binding the landing's class declares no default connections for (``EF-7H``)."""
-        partner_class = ClassFacts.short_name(partner.class_path)
-        location = f"components.{landing.unit.name}"
-        interface = self.classes.interface(landing.unit.class_path, location, landing.unit.name)
-        if interface is None:
-            raise self.error(
-                EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
-                handle.owner,
-                f"port '{handle.port.name}' would lower to {landing.unit.name}'s default connections from "
-                f"{partner.name} ({partner_class}), but {landing.unit.class_path} declares no CLASS_INTERFACE, "
-                f"so its default connections cannot be checked at load time {handle.source_text()}.",
-                remedy=(
-                    f"Declare CLASS_INTERFACE on {landing.unit.class_path} (hisim.component_interface), or name the "
-                    f"wires on the placeholder. {handle.hint}"
-                ),
-            )
-        if not interface.declares_defaults_from(partner_class):
-            raise self.error(
-                EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
-                handle.owner,
-                f"port '{handle.port.name}' is bound to {partner.name} ({partner_class}), but "
-                f"{landing.unit.name} ({ClassFacts.short_name(landing.unit.class_path)}) declares no default "
-                f"connections from {partner_class} {handle.source_text()}.",
-                alternatives=interface.default_connection_sources,
-                alternatives_label="classes it declares default connections from",
-                remedy="Bind a partner of one of those classes, or add the default connection to the class. "
-                + handle.hint,
-            )
+    def _note_lowered(
+        self,
+        handle: Handle,
+        kind: str,
+        member: Optional[Unit],
+        verb: str,
+        partner: Optional[Unit] = None,
+        target: str = "",
+        output: str = "",
+        **context: Any,
+    ) -> None:
+        """Writes one lowered item into the port-provenance table, for the post-construction check.
 
-    def _check_wires(self, handle: Handle, landing: Landing, partner: Unit, wires: Mapping[str, str]) -> None:
-        """Checks the inputs and, where the partner's class declares them, the outputs a port's wires name."""
-        interface = self.classes.interface(
-            landing.unit.class_path, f"components.{landing.unit.name}", landing.unit.name
-        )
-        if interface is None:
-            raise self.error(
-                EnergySystemErrorId.PORT_CONTRACT,
-                handle.owner,
-                f"port '{handle.port.name}' wires inputs of {landing.unit.name}, whose class "
-                f"{landing.unit.class_path} declares no CLASS_INTERFACE to check them against {handle.source_text()}.",
+        ``context`` carries the fields of a circuit item or a feed (:class:`LoweredPort`).
+        """
+        self.record.port_provenance.append(
+            LoweredPort(
+                kind=kind,
+                owner=handle.owner,
+                import_path=handle.owner_path,
+                port=handle.port.name,
+                verb=verb,
+                member=member.name if member is not None else "",
+                member_class=member.class_path if member is not None else "",
+                partner=partner.name if partner is not None else "",
+                partner_class=partner.class_path if partner is not None else "",
+                input=target,
+                output=output,
+                chain=tuple(location.text for location in handle.chain),
+                candidates=handle.candidates,
+                remedy=handle.hint,
+                **context,
             )
-        for target, output in wires.items():
-            if interface.input(target) is None:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    handle.owner,
-                    f"port '{handle.port.name}' wires '{target}', which is no input of {landing.unit.name} "
-                    f"{handle.source_text()}.",
-                    alternatives=tuple(port.name for port in interface.inputs),
-                    alternatives_label="inputs",
-                    offending_value=target,
-                )
-            partner_interface = self.classes.interface(partner.class_path, f"components.{partner.name}", partner.name)
-            if partner_interface is not None and partner_interface.output(output) is None:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    handle.owner,
-                    f"port '{handle.port.name}' wires '{target}' from '{output}', which is no output of "
-                    f"{partner.name} {handle.source_text()}.",
-                    alternatives=tuple(port.name for port in partner_interface.outputs),
-                    alternatives_label="outputs",
-                    offending_value=output,
-                )
+        )
 
     @staticmethod
     def _decision_order(handles: Sequence[Tuple[BindingVerbs, Handle]]) -> List[Tuple[BindingVerbs, Handle]]:
@@ -3297,42 +3206,64 @@ class ImportExpander:
         )
 
 
-def check_consumer_carriers(record: ImportRecord, components: Sequence[Tuple[str, Any]]) -> None:
-    """Checks, once the components are built, that every consuming output carries its need's carrier.
+class PendingSelection:
+    """The observers' selections of one expansion, kept until the components are constructed (§4.1).
 
-    The expansion checks the carrier of a consuming output at load time where its class states it
-    (``DeclaredPort.carrier``); a class whose fuel follows its configuration (a boiler's
-    ``energy_carrier``) can state it only once built, so the same rule is checked here against the
-    output's ``EnergyPort`` (``assemblies_spec.md`` §5.1, §11.2): an output without an energy port
-    cannot be a consumption the balance books, and one of another carrier would be metered as the
-    wrong fuel.
-
-    Args:
-        record: The import record of the expansion.
-        components: The built components by name.
-
-    Raises:
-        EnergySystemAssemblyError: ``EF-7Q`` naming the component, the output and both carriers.
+    An observer selects among the outputs its constructed component declares dynamic default
+    connections from, which exist only once it is built: no class declares them a second time. The
+    expansion therefore keeps every observer's context — the units in candidate order, the slots,
+    the controllable outputs and the expander that renders the final entries — in the import record,
+    and the build completes it between construction and the post-construction port check
+    (:meth:`complete`): the selection is lowered, the observers' entries are rewritten with their
+    feeds, and every match becomes an ``observe`` item of the port-provenance table.
     """
-    built = dict(components)
-    for provider in record.carriers:
-        for consumer in provider.consumers:
-            for reference in consumer.outputs:
-                name, output = reference.rsplit(".", 1)
-                component = built[name]
-                port = next((item.energy_port for item in component.outputs if item.field_name == output), None)
-                carrier = getattr(getattr(port, "carrier", None), "value", None)
-                if carrier != provider.carrier:
-                    raise EnergySystemAssemblyError(
-                        EnergySystemErrorId.CARRIER_MISMATCH,
-                        f"components.{name}",
-                        f"the carrier need '{consumer.port}' of {consumer.owner} is of {provider.carrier} and bound "
-                        f"to {provider.provider}.{provider.port}, but {reference} "
-                        + (f"carries {carrier} by its energy port" if carrier else "declares no energy port")
-                        + " once built.",
-                        remedy="Name an output whose energy port carries the need's carrier, or configure the "
-                        "component for that carrier.",
-                    )
+
+    def __init__(self, expander: ImportExpander, all_units: Sequence[Unit]) -> None:
+        """Keeps the expander and its units for the completion."""
+        self.expander = expander
+        self.units = list(all_units)
+
+    @staticmethod
+    def feeds_of(components: Mapping[str, Any]) -> Callable[[Unit], Mapping[str, Tuple[ObservableFeed, ...]]]:
+        """The declared feeds of a constructed observer, by source class name, from its dynamic default connections."""
+
+        def read(unit: Unit) -> Mapping[str, Tuple[ObservableFeed, ...]]:
+            component = components[unit.name]
+            declared = getattr(component, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, None)
+            if not isinstance(declared, Mapping):
+                return {}
+            return {
+                str(source_class): tuple(ObservableFeed.from_connection(connection) for connection in connections)
+                for source_class, connections in declared.items()
+            }
+
+        return read
+
+    def complete(
+        self, model: EnergySystemFile, components: Mapping[str, Any], dropped: Sequence[str] = ()
+    ) -> EnergySystemFile:
+        """Lowers the selections against the constructed observers and returns the file with their feeds.
+
+        Args:
+            model: The expanded file, after the group expansion.
+            components: The constructed components by name.
+            dropped: The components the group expansion removed; an item naming one stays dropped.
+
+        Returns:
+            The file with every observer's entry carrying its feeds.
+
+        Raises:
+            EnergySystemAssemblyError: For any refusal of the selection (``EF-7H``, ``EF-7S`` …
+                ``EF-7W``, ``EF-25``).
+        """
+        finals = self.expander.complete_selection(self.units, self.feeds_of(components))
+        removed = set(dropped)
+        updated = dict(model.components)
+        for name, entry in finals.items():
+            assert name in updated, f"the observer '{name}' is no top-level component of the expanded file"
+            inputs = tuple(item for item in entry.inputs if item.source not in removed)
+            updated[name] = entry.model_copy(update={"inputs": inputs})
+        return model.model_copy(update={"components": updated})
 
 
 def expand_imports(

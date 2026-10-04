@@ -8,7 +8,9 @@ property of the class as written down, it is a property of the object the config
 produced, and a configuration that switches a feature off removes the ports that go with it.
 
 The work happens in four passes, and nothing is connected until all four have succeeded.
-Components are **constructed** in file order. Every input item is **planned** into concrete
+Components are **constructed** in file order (:func:`construct_components`, called by the
+executor on its own, so that the post-construction port check of the assemblies runs between
+construction and connection). Every input item is **planned** into concrete
 wires: a bare item expands through the target's declared default connections for the source's
 class, an explicit wire names both ports itself, and a feed is handed to the aggregator's
 channel machinery, which creates the ports and reports the wires that fill them. The plan is
@@ -392,32 +394,52 @@ class WiringPlanner:
             )
 
 
+def construct_components(
+    system: ConfiguredSystem, simulation_parameters: SimulationParameters
+) -> Tuple[Tuple[str, Component], ...]:
+    """Constructs every component of a configured energy system, in file order.
+
+    The seventh stage of the lifecycle. It is separate from the wiring so that a check needing
+    the constructed components — the post-construction port check of the assemblies
+    (:mod:`hisim.energy_system.assemblies.port_check`) — runs between the two, when every
+    component's ports and default connections exist and nothing is connected yet.
+
+    Args:
+        system: The configured system, its configurations complete and sized.
+        simulation_parameters: Parameters of the run, handed to every component.
+
+    Returns:
+        The ``(name, component)`` pairs in file order.
+
+    Raises:
+        EnergySystemWiringError: ``EF-33`` if a component's constructor raises.
+    """
+    return ComponentBuilder(system, simulation_parameters).build()
+
+
 def wire_energy_system(
     model: EnergySystemFile,
-    system: ConfiguredSystem,
-    simulation_parameters: SimulationParameters,
+    components: Sequence[Tuple[str, Component]],
 ) -> Tuple[WiredSystem, Tuple[str, ...]]:
-    """Builds every component of a configured energy system and connects it as the file says.
+    """Connects the constructed components of an energy system as the file says.
 
-    The seventh and eighth stages of the lifecycle in one call, because they are one unit from
-    outside: a component's ports exist only once it is constructed, so nothing about the
-    connections can be decided before construction, and nothing should be constructed that is
-    not going to be connected.
+    The eighth stage of the lifecycle: a component's ports exist only once it is constructed
+    (:func:`construct_components`), so nothing about the connections can be decided before
+    construction, and nothing should be constructed that is not going to be connected.
 
     Args:
         model: The energy system, after group expansion and validation.
-        system: Its configurations, complete and sized.
-        simulation_parameters: Parameters of the run, handed to every component.
+        components: The constructed ``(name, component)`` pairs in file order.
 
     Returns:
         The wired system and the warnings a run should print: one line per component that feeds
         nothing, which is legal but far more often a forgotten input item.
 
     Raises:
-        EnergySystemWiringError: ``EF-21`` … ``EF-33`` for anything wrong with the connections
-            or with a component's construction; every message names both ends.
+        EnergySystemWiringError: ``EF-21`` … ``EF-32`` for anything wrong with the connections;
+            every message names both ends.
     """
-    components = ComponentBuilder(system, simulation_parameters).build()
+    components = tuple(components)
     planner = WiringPlanner(model, components)
     wires = planner.plan()
     checker = WiringChecker(

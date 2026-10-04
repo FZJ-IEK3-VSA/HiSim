@@ -346,6 +346,21 @@ the import (§9.2), naming the instance, the port and every candidate, with a pa
 
 An `optional-bind:` never fails: the import record (§2.3) says "bound `control-EMS`" or "not bound: partner absent".
 
+**Where the checks run (decided, owner, 2026-10-04).** The expansion decides from the files alone what it can (every
+entry states its `class:`): candidates, the binding verbs, the circuit and carrier topology, fact providers, parameter
+units. It writes exactly what a hand-written file writes — bare-name default inputs, wires, feeds — and a provenance
+table (import, instance, port, member, partner, file:line per lowered item) into the import record. Then HiSim assembles
+the whole system and **the wiring stage is the connection check**: a bare name whose target declares no default
+connections from the partner's class, a wire to a missing input or output, a load-type or unit disagreement, an input
+fed twice are refused there as today, and a refused item carries its provenance and the port it came from. No separate
+pass re-verifies connections before wiring, no class declares its ports a second time (a class-level interface
+declaration was tried and rejected: it duplicated every constructor), and no stage edits the expanded file after
+construction. The two facts the wiring cannot see — that a fed output's `EnergyPort` carries the need's carrier, and
+that a provider's meter feeds exactly the named outputs — are two wiring checks beside the others. A selector
+(`observes:`) is a filter on HiSim's automatic dynamic default connections, resolved at wiring against the components
+present; circuit completeness is what the energy balance verifies by the naming convention (hydronic stage E). The
+candidates and paste-ready `bind:` lines belong to the expansion-time errors, which need no instances.
+
 ## 4. Selectors: observe and actuate
 
 ### 4.1 Syntax

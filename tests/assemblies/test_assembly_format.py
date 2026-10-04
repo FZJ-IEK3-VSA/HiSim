@@ -1,6 +1,6 @@
 """Reading assembly files and checking them against their schema (``assemblies_spec.md`` §2, §9.4).
 
-The mockup of the spec (``tests/assemblies/mockup``, a snapshot of
+The mockup of the spec (``tests/assemblies/spec_mockup_snapshot``, a snapshot of
 ``roadmap/declarative_energy_systems/assemblies_mockup`` at docs/assemblies df91d5f0, PR #881) is the
 shape the format must accept. It predates the test contract of §9.4, so validated against the
 assembly schema its assemblies report the missing ``tests`` block and the missing ``range`` of each
@@ -28,7 +28,7 @@ from hisim.energy_system.imports_model import PortKind
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import build_schema, build_structural_schema, default_schema_path, render_schema
-from tests.assemblies.helpers import Fixtures
+from tests.assemblies.helpers import Mocks
 
 
 class MockupDefects:
@@ -52,7 +52,7 @@ class MockupDefects:
 
 def mockup_assemblies() -> List[Path]:
     """Every assembly of the mockup snapshot."""
-    return sorted(Fixtures.MOCKUP.rglob("*.assembly.yaml"))
+    return sorted(Mocks.SPEC_MOCKUP.rglob("*.assembly.yaml"))
 
 
 def problems(validator: Any, document: Any) -> List[Tuple[str, str]]:
@@ -82,7 +82,7 @@ def test_the_committed_assembly_schema_is_what_an_export_writes_today() -> None:
 def test_the_mockup_has_fifteen_assemblies_and_three_energy_systems() -> None:
     """The snapshot is complete, so the listing below covers every file."""
     assert len(mockup_assemblies()) == 15
-    assert len(list(Fixtures.MOCKUP.glob("*.energy_system.yaml"))) == 3
+    assert len(list(Mocks.SPEC_MOCKUP.glob("*.energy_system.yaml"))) == 3
 
 
 @pytest.mark.base
@@ -94,7 +94,7 @@ def test_the_mockup_assemblies_owe_only_their_test_contract(assembly_validator: 
     contract: Set[Tuple[str, str]] = set()
     other: List[Tuple[str, str, str]] = []
     for path in mockup_assemblies():
-        name = path.relative_to(Fixtures.MOCKUP).as_posix()
+        name = path.relative_to(Mocks.SPEC_MOCKUP).as_posix()
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         for where, message in problems(assembly_validator, document):
             if message == "'tests' is a required property" and where == "":
@@ -108,7 +108,7 @@ def test_the_mockup_assemblies_owe_only_their_test_contract(assembly_validator: 
 
     assert not other, other
     assert {name for name, item in contract if item == "tests"} == {
-        path.relative_to(Fixtures.MOCKUP).as_posix() for path in mockup_assemblies()
+        path.relative_to(Mocks.SPEC_MOCKUP).as_posix() for path in mockup_assemblies()
     }
     assert ("pv/array.assembly.yaml", "parameters/azimuth_in_degree") in contract
 
@@ -119,7 +119,7 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
     structural = jsonschema.Draft202012Validator(build_structural_schema())
     full = jsonschema.Draft202012Validator(build_schema(ComponentClassScan.collect()))
     for name in ("composed_heatpump_default.energy_system.yaml", "renovisor_full_house.energy_system.yaml"):
-        document = yaml.safe_load((Fixtures.MOCKUP / name).read_text(encoding="utf-8"))
+        document = yaml.safe_load((Mocks.SPEC_MOCKUP / name).read_text(encoding="utf-8"))
         found = [
             (where, message)
             for where, message in problems(structural, document)
@@ -127,7 +127,7 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
         ]
         assert found == [], name
     heat_pump = yaml.safe_load(
-        (Fixtures.MOCKUP / "composed_heatpump_default.energy_system.yaml").read_text(encoding="utf-8")
+        (Mocks.SPEC_MOCKUP / "composed_heatpump_default.energy_system.yaml").read_text(encoding="utf-8")
     )
     assert problems(full, heat_pump) == []
 
@@ -135,7 +135,7 @@ def test_the_mockup_composed_files_have_the_shape_of_a_version_4_file() -> None:
 @pytest.mark.base
 def test_the_heat_pump_composed_file_reads_into_the_model() -> None:
     """The reader takes the composed file: imports, verbs, site ports, placeholders, order."""
-    model = parse_energy_system(Fixtures.MOCKUP / "composed_heatpump_default.energy_system.yaml")
+    model = parse_energy_system(Mocks.SPEC_MOCKUP / "composed_heatpump_default.energy_system.yaml")
 
     assert model.schema_version == 4
     assert list(model.imports) == ["heating", "dhw", "pv", "battery", "control", "grid"]
@@ -149,10 +149,10 @@ def test_the_heat_pump_composed_file_reads_into_the_model() -> None:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("path", mockup_assemblies(), ids=lambda path: path.relative_to(Fixtures.MOCKUP).as_posix())
+@pytest.mark.parametrize("path", mockup_assemblies(), ids=lambda path: path.relative_to(Mocks.SPEC_MOCKUP).as_posix())
 def test_every_mockup_assembly_reads_except_its_pinned_defect(path: Path) -> None:
     """The reader takes the mockup's every construct: ports of all kinds, variants, placeholders, ``$`` values."""
-    name = path.relative_to(Fixtures.MOCKUP).as_posix()
+    name = path.relative_to(Mocks.SPEC_MOCKUP).as_posix()
     if name in MockupDefects.CONSTRUCTOR_SPELLING:
         with pytest.raises(EnergySystemFormatError, match="names exactly one constructor"):
             AssemblyReader.read(path)
@@ -167,7 +167,7 @@ def test_every_mockup_assembly_reads_except_its_pinned_defect(path: Path) -> Non
 @pytest.mark.base
 def test_the_reader_keeps_the_line_of_every_block() -> None:
     """The line index the source maps cite points at the written lines."""
-    path = Fixtures.LIBRARY / "pv" / "array.assembly.yaml"
+    path = Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml"
     text = path.read_text(encoding="utf-8").splitlines()
     _model, lines = AssemblyReader.read(path)
 
@@ -177,10 +177,10 @@ def test_the_reader_keeps_the_line_of_every_block() -> None:
 
 
 @pytest.mark.base
-def test_the_fixture_assembly_reads_every_block() -> None:
+def test_the_mock_assembly_reads_every_block() -> None:
     """Parameters, constraints, presets, members with display and ``$param`` preset, variants, ports, tests."""
-    heater, _ = AssemblyReader.read(Fixtures.LIBRARY / "generator" / "electric_heater.assembly.yaml")
-    pv, _ = AssemblyReader.read(Fixtures.LIBRARY / "pv" / "array.assembly.yaml")
+    heater, _ = AssemblyReader.read(Mocks.LIBRARY / "mock" / "electric_heater.assembly.yaml")
+    pv, _ = AssemblyReader.read(Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml")
 
     assert heater.parameters["with_thermostat"].allowed_values == (True, False)
     assert heater.variants["thermostat"].options["fitted"].components["Controller"].preset_parameter == "control"

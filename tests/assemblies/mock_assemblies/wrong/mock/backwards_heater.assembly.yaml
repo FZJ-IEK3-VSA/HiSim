@@ -1,12 +1,12 @@
-# Fixture, deliberately wrong: a heater whose test contract the harness must fail by name. It passes the
+# Mock, deliberately wrong: a heater whose test contract the harness must fail by name. It passes the
 # library check — every name resolves, every energy output is bounded, a monotone entry exists — but its
 # monotone declaration has the wrong sign (the heater draws more energy the higher its power, not less) and
 # its bounds band on the thermal power is one the output leaves (the heater runs at its full power, 500 to
 # 6000 W, while the band ends at 1000 W). tests/assemblies/test_harness.py runs it.
 schema_version: 4
 kind: assembly
-name: generator/backwards_heater
-description: A fake electric heater with a wrong test contract.
+name: mock/backwards_heater
+description: A mock electric heater with a wrong test contract.
 
 parameters:
   power_in_watt:
@@ -17,10 +17,10 @@ presets:
 
 components:
   Controller:
-    class: tests.assemblies.fixture_components.FakeController
+    class: tests.assemblies.mock_components.MockController
     preset: standard
   Heater:
-    class: tests.assemblies.fixture_components.FakeHeater
+    class: tests.assemblies.mock_components.MockHeater
     preset: standard
     config:
       power_in_watt: {$param: power_in_watt}

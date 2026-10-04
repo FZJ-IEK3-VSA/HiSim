@@ -1,9 +1,9 @@
-# Fixture: a supply assembly. The natural-gas connection and its meter; the meter observes every bound
+# Mock: a supply assembly. The natural-gas connection and its meter; the meter observes every bound
 # consumer's fuel output through the default feed its class declares (spec §5.1).
 schema_version: 4
 kind: assembly
-name: supply/gas_connection
-description: A fake natural-gas connection with its meter.
+name: mock/gas_connection
+description: A mock natural-gas connection with its meter.
 
 parameters:
   calibration:
@@ -14,7 +14,7 @@ presets:
 
 components:
   Meter:
-    class: tests.assemblies.fixture_components.FakeGasMeter
+    class: tests.assemblies.mock_components.MockGasMeter
     preset: standard
     display: "Gas meter"
     config:

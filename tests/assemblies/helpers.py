@@ -1,4 +1,4 @@
-"""Shared helpers of the assemblies tests: the fixture library, inline files and expansion in one call."""
+"""Shared helpers of the assemblies tests: the mock library, inline files and expansion in one call."""
 
 from __future__ import annotations
 
@@ -15,22 +15,22 @@ from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.source_lines import LineIndex
 
 
-class Fixtures:
-    """Where the fixture files live."""
+class Mocks:
+    """Where the mock files live."""
 
-    ROOT: ClassVar[Path] = Path(__file__).resolve().parent / "fixtures"
+    ROOT: ClassVar[Path] = Path(__file__).resolve().parent / "mock_assemblies"
     LIBRARY: ClassVar[Path] = ROOT / "library"
     SYSTEMS: ClassVar[Path] = ROOT / "systems"
     HOUSE: ClassVar[Path] = SYSTEMS / "house.energy_system.yaml"
     PARAMETERS: ClassVar[Path] = ROOT / "one_day_kpis.simulation.yaml"
-    MOCKUP: ClassVar[Path] = Path(__file__).resolve().parent / "mockup"
+    SPEC_MOCKUP: ClassVar[Path] = Path(__file__).resolve().parent / "spec_mockup_snapshot"
 
-    #: Dotted prefix of the fake component classes.
-    FAKES: ClassVar[str] = "tests.assemblies.fixture_components"
+    #: Dotted prefix of the mock component classes.
+    MOCKS: ClassVar[str] = "tests.assemblies.mock_components"
 
 
 class Library:
-    """A temporary assembly library beside the fixture library, for the files one test needs."""
+    """A temporary assembly library beside the mock library, for the files one test needs."""
 
     def __init__(self, directory: Path) -> None:
         """Prepares an empty library in a test's temporary directory."""
@@ -44,16 +44,16 @@ class Library:
         target.write_text(textwrap.dedent(text).lstrip(), encoding="utf-8")
         return target
 
-    def resolver(self, *, with_fixtures: bool = True) -> AssemblyResolver:
-        """A resolver over this library, after the fixture library when asked."""
-        directories: List[Path] = [Fixtures.LIBRARY] if with_fixtures else []
+    def resolver(self, *, with_mocks: bool = True) -> AssemblyResolver:
+        """A resolver over this library, after the mock library when asked."""
+        directories: List[Path] = [Mocks.LIBRARY] if with_mocks else []
         directories.append(self.directory)
         return AssemblyResolver(directories)
 
 
-def fixture_resolver() -> AssemblyResolver:
-    """A resolver over the fixture library alone."""
-    return AssemblyResolver([Fixtures.LIBRARY])
+def mock_resolver() -> AssemblyResolver:
+    """A resolver over the mock library alone."""
+    return AssemblyResolver([Mocks.LIBRARY])
 
 
 def read_system(text: str, origin: str = "inline.energy_system.yaml") -> Tuple[EnergySystemFile, LineIndex]:
@@ -66,9 +66,9 @@ def read_system(text: str, origin: str = "inline.energy_system.yaml") -> Tuple[E
 def expand_text(
     text: str, resolver: Optional[AssemblyResolver] = None, origin: str = "inline.energy_system.yaml"
 ) -> Tuple[EnergySystemFile, ImportRecord]:
-    """Reads and expands an inline energy-system file against the fixture library (or a given one)."""
+    """Reads and expands an inline energy-system file against the mock library (or a given one)."""
     model, lines = read_system(text, origin)
-    return expand_imports(model, resolver or fixture_resolver(), lines=lines)
+    return expand_imports(model, resolver or mock_resolver(), lines=lines)
 
 
 def site(*entries: str) -> str:
@@ -77,19 +77,19 @@ def site(*entries: str) -> str:
     return f"schema_version: 4\nname: inline\ncomponents:\n{body}\n"
 
 
-#: The two site entries most fixture systems need.
+#: The two site entries most mock systems need.
 WEATHER = f"""
 Weather:
-  class: {Fixtures.FAKES}.FakeWeather
+  class: {Mocks.MOCKS}.MockWeather
   preset: standard
 """
 OCCUPANCY = f"""
 Occupancy:
-  class: {Fixtures.FAKES}.FakeOccupancy
+  class: {Mocks.MOCKS}.MockOccupancy
   preset: standard
 """
 EMS = f"""
 Ems:
-  class: {Fixtures.FAKES}.FakeEms
+  class: {Mocks.MOCKS}.MockEms
   preset: standard
 """

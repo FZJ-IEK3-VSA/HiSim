@@ -28,7 +28,7 @@ from hisim.config.channels import (
     DispatchRule,
     DynamicConnectionChannel,
 )
-from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemErrorId, WrittenItem
 
 __all__ = [
     "ChannelDeclarationError",
@@ -54,6 +54,9 @@ class FeedRequest:
     tag list handed to an aggregator component-type-first by construction: no file, no default
     declaration and no reordering downstream can produce a list that violates the ordering the
     existing tag-based runtime lookups grew up on.
+
+    A feed expanded from a bare item carries that item (``item``), so a refusal of the feed names
+    the item it came from, and through it the assembly port that lowered it.
     """
 
     #: Weight reserved for a participant an aggregator only measures and never controls. It is
@@ -70,6 +73,7 @@ class FeedRequest:
     dispatch_tags: Optional[Tuple[lt.InandOutputType, ...]] = None
     has_dispatch: bool = False
     origin: str = ""
+    item: Optional[WrittenItem] = None
 
     @property
     def effective_tags(self) -> Tuple[ConnectionTag, ...]:

@@ -7,8 +7,8 @@ is test-only, and its names say so: the family ``mock/``, the classes ``Mock*``.
 The mock assemblies under ``tests/assemblies/mock_assemblies/library`` are built from these classes
 and nothing else (``assemblies_spec.md`` §13 step 1). Like every HiSim component, each mock creates
 its inputs, its outputs and its default connections in its constructor (``add_input``,
-``add_output``, ``add_default_connections``) and nowhere else; the post-construction port check of a
-build reads them off the constructed instance. Its configuration declares the unit of every field an
+``add_output``, ``add_default_connections``) and nowhere else; the wiring stage of a build reads
+them off the constructed instance. Its configuration declares the unit of every field an
 assembly parameter feeds (D16 b). :class:`MockBareDevice` declares no default connections at all,
 for the refusal of a port lowered into a member without them.
 

@@ -2,11 +2,12 @@
 
 A circuit port is one end of one hydronic circuit: it binds the one other end of the same circuit in
 scope and lowers, at every member carrying its placeholder, to a bare name of each member of the
-other end; the post-construction port check verifies on the built members that those mean the
-circuit's three outputs. A carrier need binds the one provider of its carrier: for a fuel the
-provider's meter takes a bare name of the consumer and observes the consuming outputs through the
-default feeds its constructor declares, verified after construction with each output's carrier; for
-electricity nothing is wired and only the one grid connection is checked. A fact need lowers to a
+other end, which the wiring expands and checks like any bare name. A carrier need binds the one
+provider of its carrier: for a fuel the provider's meter takes a bare name of the consumer and
+observes the consuming outputs through the default feeds its constructor declares, and the wiring
+checks each output's carrier and that the meter feeds exactly the named outputs; for electricity
+nothing is wired and only the one grid connection is checked. A wiring refusal of a lowered item
+names the port it came from. A fact need lowers to a
 ``sizing_sources`` line naming the provider.
 Every refusal is a named error of the ``EF-7x`` band (``EF-4B`` for an ambiguous fact, the sizing
 engine's own) naming the instance, the port and every candidate, with the source map of the import
@@ -24,12 +25,17 @@ from hisim.config import ComponentID
 from hisim.config.base import AddressStep
 from hisim.energy_system.assemblies.expansion import expand_imports
 from hisim.energy_system.assemblies.library import CheckStrength, check_assembly
-from hisim.energy_system.assemblies.port_check import check_lowered_ports
-from hisim.energy_system.assemblies.record import LoweredKind, LoweredPort
-from hisim.energy_system.errors import EnergySystemAssemblyError
+from hisim.energy_system.assemblies.record import LoweredKind, LoweredPort, PortProvenance
+from hisim.energy_system.errors import (
+    EnergySystemAssemblyError,
+    EnergySystemCatalogueError,
+    EnergySystemWiringError,
+    WrittenItem,
+)
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.model import DefaultInputs, SourceReference
 from hisim.energy_system.source_lines import LineIndex
+from hisim.energy_system.wiring_checks import check_consuming_carriers, check_meter_feeds
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 from hisim.config import DisplayConfig
 from hisim.simulationparameters import SimulationParameters
@@ -62,10 +68,10 @@ def refusal(text: str, library: Library = None) -> str:  # type: ignore[assignme
 
 
 def build_refusal(text: str, result_directory: Path, library: Library = None) -> str:  # type: ignore[assignment]
-    """Builds a file whose expansion succeeds and whose post-construction port check refuses; the message."""
+    """Builds a file whose expansion succeeds and whose wiring refuses a lowered item; the message."""
     resolver = library.resolver() if library is not None else None
     expand_text(text, resolver)
-    with pytest.raises(EnergySystemAssemblyError) as raised:
+    with pytest.raises(EnergySystemCatalogueError) as raised:
         build_text(text, result_directory, resolver)
     return str(raised.value)
 
@@ -188,7 +194,7 @@ def test_binding_a_circuit_of_another_medium_is_refused(tmp_path: Path) -> None:
 
 @pytest.mark.base
 def test_two_ends_that_both_own_an_output_are_refused_naming_it(tmp_path: Path) -> None:
-    """EF-7N once built: two boilers bound to each other both own the mass flow."""
+    """EF-7H from the wiring: two boilers bound to each other; a boiler reads its return leg from a cylinder only."""
     boilers = (
         "  first: {assembly: mock/gas_boiler, bind: {dhw: second.dhw}}\n"
         "  second: {assembly: mock/gas_boiler}\n"
@@ -196,14 +202,16 @@ def test_two_ends_that_both_own_an_output_are_refused_naming_it(tmp_path: Path) 
     message = build_refusal(SITE + "imports:\n" + GAS + boilers, tmp_path)
 
     assert message.startswith(
-        "EF-7N at import first: the circuit dhw between first.dhw and second.dhw needs exactly one owner of the "
-        "output MassFlowDhw, but first-Boiler and second-Boiler both declare it"
+        "EF-7H at import first: circuit port 'dhw' (circuit dhw, first.dhw bound to second.dhw by bind) lowers to the "
+        "bare name 'second-Boiler' (MockBoiler) in first-Boiler (MockBoiler)"
     )
+    assert re.search(r"\(import first, inline.energy_system.yaml:\d+ → mock/gas_boiler.assembly.yaml:\d+\)", message)
+    assert "declares no default connections for the class 'MockBoiler'" in message
 
 
 @pytest.mark.base
 def test_two_ends_of_which_neither_owns_an_output_are_refused_naming_it(tmp_path: Path) -> None:
-    """EF-7N once built: two cylinders own the return leg twice and the mass flow not at all."""
+    """EF-7H from the wiring: two cylinders bound to each other; a cylinder reads the circuit from a boiler only."""
     cylinders = (
         "  first: {assembly: mock/dhw_cylinder, bind: {circuit: second.circuit}}\n"
         "  second: {assembly: mock/dhw_cylinder}\n"
@@ -211,9 +219,10 @@ def test_two_ends_of_which_neither_owns_an_output_are_refused_naming_it(tmp_path
     message = build_refusal(SITE + "imports:\n" + cylinders, tmp_path)
 
     assert message.startswith(
-        "EF-7N at import first: the circuit dhw between first.circuit and second.circuit needs exactly one owner of "
-        "the output MassFlowDhw, but no member of either end declares it"
+        "EF-7H at import first: circuit port 'circuit' (circuit dhw, first.circuit bound to second.circuit by bind) "
+        "lowers to the bare name 'second-Cylinder' (MockCylinder) in first-Cylinder (MockCylinder)"
     )
+    assert "Valid source classes: MockBoiler, MockOccupancy." in message
 
 
 #: A dhw end of one mock class, inline.
@@ -233,7 +242,7 @@ components:
 
 @pytest.mark.base
 def test_an_output_no_member_of_the_other_end_reads_is_refused(tmp_path: Path) -> None:
-    """EF-7N once built: the boiler owns the mass flow, the other end reads nothing."""
+    """EF-7H from the wiring: the boiler takes a bare name of an end it declares no default connections from."""
     library = Library(tmp_path)
     library.add("odd/return_only", DHW_END.format(name="return_only", cls="MockDhwReturn", inputs=""))
 
@@ -242,15 +251,14 @@ def test_an_output_no_member_of_the_other_end_reads_is_refused(tmp_path: Path) -
     )
 
     assert message.startswith(
-        "EF-7N at import boiler: the circuit dhw: boiler-Boiler at boiler.dhw owns the output MassFlowDhw, but no "
-        "member "
-        "of end.circuit (end-End) reads it"
+        "EF-7H at import boiler: circuit port 'dhw' (circuit dhw, boiler.dhw bound to end.circuit by default) lowers "
+        "to the bare name 'end-End' (MockDhwReturn) in boiler-Boiler (MockBoiler)"
     )
 
 
 @pytest.mark.base
 def test_a_reader_without_default_connections_from_the_owner_is_refused(tmp_path: Path) -> None:
-    """EF-7H once built: the sink reads the boiler's outputs but declares no default connections from MockBoiler."""
+    """EF-7H from the wiring: neither end declares default connections from the other's class; the first is named."""
     library = Library(tmp_path)
     library.add(
         "odd/sink",
@@ -261,8 +269,12 @@ def test_a_reader_without_default_connections_from_the_owner_is_refused(tmp_path
     message = build_refusal(text, tmp_path / "r", library)
 
     assert message.startswith(
-        "EF-7H at import end: the circuit dhw: end-End (MockDhwSink) reads MassFlowDhw from boiler-Boiler, but "
-        "declares no default connections from MockBoiler"
+        "EF-7H at import boiler: circuit port 'dhw' (circuit dhw, boiler.dhw bound to end.circuit by default) lowers "
+        "to the bare name 'end-End' (MockDhwSink) in boiler-Boiler (MockBoiler)"
+    )
+    assert message.endswith(
+        "Add the default connection from MockDhwSink to MockBoiler, or bind the port to a partner of a class it "
+        "declares default connections from."
     )
 
 
@@ -289,7 +301,7 @@ def test_an_optional_circuit_end_with_a_candidate_and_no_verb_is_refused() -> No
 
 @pytest.mark.base
 def test_a_circuit_end_reading_without_a_placeholder_is_refused_once_built(tmp_path: Path) -> None:
-    """EF-7N: the constructed cylinder reads the boiler's outputs, so it needs the port's placeholder."""
+    """EF-31: without the placeholder nothing feeds the cylinder's circuit inputs; the wiring names the import."""
     library = Library(tmp_path)
     library.add(
         "broken/cylinder",
@@ -306,14 +318,18 @@ def test_a_circuit_end_reading_without_a_placeholder_is_refused_once_built(tmp_p
     )
 
     assert message.startswith(
-        "EF-7N at import boiler: the circuit dhw: cylinder-Cylinder reads MassFlowDhw from boiler-Boiler at boiler.dhw "
-        "but carries no placeholder of the circuit port"
+        "EF-31 at components.cylinder-Cylinder.inputs: the mandatory input 'cylinder-Cylinder.MassFlowDhw'"
+    )
+    assert re.search(
+        r"\[source: cylinder-Cylinder \(import cylinder, inline.energy_system.yaml:\d+ → "
+        r"broken/cylinder.assembly.yaml:\d+\)\]$",
+        message,
     )
 
 
 @pytest.mark.base
 def test_a_bare_name_of_a_member_owning_nothing_its_reader_reads_is_refused(tmp_path: Path) -> None:
-    """EF-7N: every member of one end lowers a bare name into each reader at the other; a non-owner is refused."""
+    """EF-7H: every member of one end lowers a bare name into each reader at the other; a non-owner is refused."""
     library = Library(tmp_path)
     library.add(
         "odd/boiler_and_return",
@@ -342,10 +358,10 @@ def test_a_bare_name_of_a_member_owning_nothing_its_reader_reads_is_refused(tmp_
     )
 
     assert message.startswith(
-        "EF-7N at import cylinder: the circuit dhw: cylinder-Cylinder at cylinder.circuit carries the placeholder of "
-        "port 'circuit' and so takes a bare name of boiler-Spare at boiler.dhw, but reads none of MassFlowDhw, "
-        "SupplyTemperatureDhw, ReturnTemperatureDhw from it"
+        "EF-7H at import cylinder: circuit port 'circuit' (circuit dhw, cylinder.circuit bound to boiler.dhw by "
+        "default) lowers to the bare name 'boiler-Spare' (MockEms) in cylinder-Cylinder (MockCylinder)"
     )
+    assert "Valid source classes: MockBoiler, MockOccupancy." in message
 
 
 @pytest.mark.base
@@ -537,7 +553,7 @@ def test_binding_a_provider_of_another_carrier_is_refused(tmp_path: Path) -> Non
 
 @pytest.mark.base
 def test_a_consuming_output_of_another_carrier_is_refused_once_built(tmp_path: Path) -> None:
-    """EF-7Q: the constructed boiler's FuelUse carries natural_gas by its energy port, the need heating_oil."""
+    """EF-7Q from the wiring: the constructed boiler's FuelUse carries natural_gas by its energy port, the need oil."""
     library = Library(tmp_path)
     library.add("supply/oil", OIL)
     library.add(
@@ -557,32 +573,23 @@ def test_a_consuming_output_of_another_carrier_is_refused_once_built(tmp_path: P
     )
 
     assert message.startswith(
-        "EF-7Q at import boiler: carrier need 'fuel' is of heating_oil, but boiler-Boiler.FuelUse carries natural_gas "
-        "by its energy port"
+        "EF-7Q at import boiler: carrier need 'fuel' (carrier heating_oil) names the output 'FuelUse' of boiler-Boiler "
+        "(MockBoiler), which the meter oil-Meter (MockGasMeter) observes (import boiler, inline.energy_system.yaml:"
     )
+    assert "the wiring refuses it: the output 'boiler-Boiler.FuelUse' (tests.assemblies.mock_components.MockBoiler) " \
+        "is consumed as heating_oil, but its energy port carries natural_gas." in message
 
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
     boiler = MockBoiler(parameters, MockBoilerConfig.preset_condensing("Boiler"))
-    feed = LoweredPort(
-        kind=LoweredKind.FEED,
-        owner="import boiler",
-        import_path="boiler",
-        port="fuel",
-        verb="default",
-        member="",
-        member_class="",
-        partner="Boiler",
-        partner_class=f"{Mocks.MOCKS}.MockBoiler",
-        output="MassFlowDhw",
-        carrier="natural_gas",
-    )
-    with pytest.raises(EnergySystemAssemblyError, match="EF-7Q at import boiler: .*declares no energy port"):
-        check_lowered_ports([feed], {"Boiler": boiler})
+    feed = WrittenItem(member="", partner="Boiler", output="MassFlowDhw", carrier="natural_gas")
+    with pytest.raises(EnergySystemWiringError, match="EF-7Q at components.Boiler: .*no energy port") as raised:
+        check_consuming_carriers({"Boiler": boiler}, [feed])
+    assert raised.value.item == feed
 
 
 @pytest.mark.base
 def test_an_output_the_meter_declares_no_feed_from_is_refused(tmp_path: Path) -> None:
-    """EF-7H once built: the constructed gas meter declares a default feed from MockBoiler.FuelUse only."""
+    """EF-7H from the wiring: the constructed gas meter declares a default feed from MockBoiler.FuelUse only."""
     library = Library(tmp_path)
     library.add(
         "heating/flue",
@@ -596,10 +603,31 @@ def test_an_output_the_meter_declares_no_feed_from_is_refused(tmp_path: Path) ->
     message = build_refusal(text, tmp_path / "r", library)
 
     assert message.startswith(
-        "EF-7H at import boiler: carrier need 'fuel' (carrier natural_gas) would feed boiler-Boiler.FlueLoss into the "
-        "meter gas-Meter (MockGasMeter), which declares no default feed from MockBoiler.FlueLoss"
+        "EF-7H at import boiler: carrier need 'fuel' (carrier natural_gas) names the output 'FlueLoss' of "
+        "boiler-Boiler (MockBoiler), which the meter gas-Meter (MockGasMeter) observes"
     )
-    assert "MockBoiler.FuelUse" in message
+    assert "declares no default feed of MockBoiler.FlueLoss" in message
+    assert "Valid default feeds it declares from that class: MockBoiler.FuelUse." in message
+
+
+@pytest.mark.base
+def test_a_meter_without_default_feeds_from_the_consumers_class_is_refused_naming_the_need(tmp_path: Path) -> None:
+    """EF-7H from the wiring: the meter's bare name of a heater has no default feed to expand into."""
+    library = Library(tmp_path)
+    library.add("consumer/gas_heater", HEATER.replace("consumer/heater", "consumer/gas_heater").replace(
+        "electricity: {carrier: electricity", "fuel: {carrier: natural_gas"
+    ))
+
+    message = build_refusal(SITE + "imports:\n" + GAS + "  heater: {assembly: consumer/gas_heater}\n", tmp_path / "r",
+                            library)
+
+    assert message.startswith(
+        "EF-7H at import heater: carrier need 'fuel' (carrier natural_gas, bound by default) lowers to the bare name "
+        "'heater-Heater' (MockHeater) in the meter gas-Meter (MockGasMeter) (import heater, inline.energy_system.yaml:"
+    )
+    assert "'gas-Meter' (tests.assemblies.mock_components.MockGasMeter) declares no default connections for the " \
+        "class 'MockHeater'." in message
+    assert "Valid source classes: MockBoiler." in message
 
 
 @pytest.mark.base
@@ -612,26 +640,42 @@ def test_a_meter_feeding_more_outputs_of_the_consumer_than_the_need_names_is_ref
     meter.add_dynamic_default_connections(
         declared + [dataclasses.replace(declared[0], source_component_field_name="FlueLoss")]
     )
-    feed = LoweredPort(
-        kind=LoweredKind.FEED,
-        owner="import boiler",
-        import_path="boiler",
-        port="fuel",
-        verb="default",
-        member="Meter",
-        member_class=f"{Mocks.MOCKS}.MockGasMeter",
-        partner="Boiler",
-        partner_class=f"{Mocks.MOCKS}.MockBoiler",
-        output="FuelUse",
-        carrier="natural_gas",
-    )
+    feed = WrittenItem(member="Meter", partner="Boiler", output="FuelUse", carrier="natural_gas")
 
-    with pytest.raises(EnergySystemAssemblyError) as raised:
-        check_lowered_ports([feed], {"Boiler": boiler, "Meter": meter})
+    with pytest.raises(EnergySystemWiringError) as raised:
+        check_meter_feeds({"Boiler": boiler, "Meter": meter}, [feed])
 
     assert str(raised.value).startswith(
-        "EF-7J at import boiler: the meter Meter (MockGasMeter) takes a bare name of Boiler, which it expands into "
-        "every default feed it declares from MockBoiler: FuelUse, FlueLoss; no carrier need bound to it names FlueLoss"
+        "EF-7J at components.Meter.inputs: the meter 'Meter' (tests.assemblies.mock_components.MockGasMeter) expands "
+        "the bare name 'Boiler' into every default feed it declares from MockBoiler, and no consuming output names "
+        "FlueLoss, which it would meter as well."
+    )
+    assert raised.value.item == feed
+
+    restated = PortProvenance.restate(
+        raised.value,
+        [
+            LoweredPort(
+                kind=LoweredKind.FEED,
+                owner="import boiler",
+                import_path="boiler",
+                port="fuel",
+                verb="default",
+                member="Meter",
+                member_class=f"{Mocks.MOCKS}.MockGasMeter",
+                partner="Boiler",
+                partner_class=f"{Mocks.MOCKS}.MockBoiler",
+                output="FuelUse",
+                chain=("x.assembly.yaml:3",),
+                carrier="natural_gas",
+            )
+        ],
+    )
+    assert isinstance(restated, EnergySystemAssemblyError)
+    assert str(restated).startswith(
+        "EF-7J at import boiler: carrier need 'fuel' (carrier natural_gas) names the output 'FuelUse' of Boiler "
+        "(MockBoiler), which the meter Meter (MockGasMeter) observes (import boiler, x.assembly.yaml:3); the wiring "
+        "refuses it: the meter 'Meter'"
     )
 
 

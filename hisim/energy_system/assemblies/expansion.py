@@ -23,15 +23,15 @@ explicit wires the port names, exactly where the member's ``{$port: …}`` place
 
 **What is decided here, and what after construction.** Every entry states its class, so the
 expansion decides from the files alone which component is a candidate partner, whether a port has
-none, several or a verb to decide it, and whether the members a port names exist. Whether the
-member's class really declares default connections from the partner's class, and whether a wire's
-input and output exist, the constructed components say: a component creates its ports and default
-connections in its constructor, and no second declaration of them exists. The expansion therefore
+none, several or a verb to decide it, and whether the members a port names exist; those refusals
+name every candidate and end in a paste-ready ``bind:`` line. What it writes are the items a
+hand-written file writes — bare names and wires — and whether the constructed components accept
+them the wiring stage checks, like every other connection: a component creates its ports and
+default connections in its constructor, and no second declaration of them exists. The expansion
 writes one entry per lowered item into the port-provenance table of the import record
-(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and the post-construction port
-check (:mod:`hisim.energy_system.assemblies.port_check`) refuses, with the import, the port, the
-member, the partner, the files and lines, the candidates and a paste-ready ``bind:`` line, an item
-the constructed components do not have (``EF-7H``, ``EF-7J``) — before anything is connected.
+(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and a wiring refusal of such an
+item is restated with the import, the port, the member, the partner and the files and lines it
+came from (``EF-7H``, ``EF-7J``).
 
 **The default rule** mirrors the sizing engine's: a port binds to the one component in scope whose
 class is one of its partner classes, and a verb decides every other case. In scope are, at the top
@@ -40,20 +40,21 @@ own members and every member of its inner imports; a port never binds into its o
 
 **Circuits, carriers and facts** (hisim-lt0b.2). A circuit end binds the one other end of its
 circuit in scope; every member at one end that carries the circuit's placeholder takes a bare name
-of each member at the other end, and the post-construction port check verifies on the constructed
-members that those bare names mean the circuit's three outputs, each owned by one end and read by
-the other (§3.2, §11.1). A carrier need binds the one provider of its carrier: a fuel lowers to a
-bare name of each consuming member in its provider's meter, which observes the consuming outputs
-through the default feeds it declares (verified after construction, with each output's carrier),
-electricity to nothing but the check that exactly one provider exists (§5). A fact need lowers to a
+of each member at the other end, which the wiring expands through the reader's default connections
+from the owner's class, like any bare name (§3.2, §11.1). A carrier need binds the one provider of
+its carrier: a fuel lowers to a bare name of each consuming member in its provider's meter, which
+the wiring expands through the default feeds the meter declares, electricity to nothing but the
+check that exactly one provider exists (§5); the wiring also checks each consuming output's carrier
+and that the meter feeds exactly the named outputs. A fact need lowers to a
 ``sizing_sources`` line naming the provider (§6). ``{$switch: …}`` values are resolved with the
 parameters.
 
-**Observe and actuate** (hisim-lt0b.3, §4). Once every port is bound, every observer — a site
-entry's ``observes:``, an assembly's observer port with its import's ``observes:`` — is lowered by
-:mod:`.selectors`: its matches become aggregator feeds where its ``{$observes: …}`` placeholder
-stands, a controller derives its weights from its priorities, and the double count, duplicate feeds,
-derived port names and actuations are checked.
+**Observe and actuate** (hisim-lt0b.3, §4). Every observer — a site entry's ``observes:``, an
+assembly's observer port with its import's ``observes:`` — and every controllable output goes into
+the import record's :class:`~.selectors.SelectionPlan`, and each observer gets an ``observe`` row of
+the port-provenance table. The wiring stage selects: the observer's dynamic default connections
+over the present components, filtered by its selection, a controller's weights derived from its
+priorities (:mod:`.selectors`); the selected feeds are planned and checked like written ones.
 
 **What the expansion does not lower** — many-reads and fact exports (hisim-lt0b.4), and the
 ``$fact`` and ``$derived`` values — is listed in the import record and refused as a whole with
@@ -96,17 +97,16 @@ from hisim.energy_system.assemblies.record import (
     NotLowered,
     PortRecord,
     SourceMapEntry,
+    short_class_name,
 )
 from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.selectors import (
     Controllable,
     ObserverSlot,
-    SelectionLowering,
+    SelectionPlan,
     resolve_priorities,
 )
-from hisim.config.channels import ObservableFeed
-from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import (
     EnergySystemAssemblyError,
@@ -160,11 +160,6 @@ class ClassFacts:
             component = self.component_class(class_path, location, name)
             self._configs[class_path] = ClassBinder.configuration_class_of(component, location, name)
         return self._configs[class_path]
-
-    @staticmethod
-    def short_name(class_path: str) -> str:
-        """The class name of a dotted path, which default connections and partners are keyed by."""
-        return class_path.rsplit(".", 1)[-1]
 
 
 @dataclass
@@ -307,7 +302,6 @@ class Handle:
         fact_into: The units a fact need lowers into.
         bound_partner: The expanded name a need was lowered to, once bound.
         hint: The candidates and the paste-ready verb lines a refusal of this port prints.
-        candidates: The candidate partners in scope, ``name (Class)``, for the port-provenance table.
     """
 
     owner: str
@@ -329,7 +323,6 @@ class Handle:
     fact: Optional[str] = None
     fact_into: List[Unit] = field(default_factory=list)
     bound_partner: Optional[str] = None
-    candidates: Tuple[str, ...] = ()
 
     @property
     def partner_text(self) -> str:
@@ -552,7 +545,10 @@ class ImportExpander:
             )
         assembled = self._assemble(site_units, all_units)
         if self._slots or self._controllables:
-            self.record.pending_selection = PendingSelection(self, all_units)
+            self._note_observers()
+            self.record.selection_plan = SelectionPlan(
+                all_units, self._slots, self._controllables, self.record, self._item_text
+            )
         return assembled, self.record
 
     def _record_ports(self) -> None:
@@ -560,43 +556,30 @@ class ImportExpander:
         for record, instance_handles in self._recorded:
             record.ports = [self._port_record(handle) for handle in instance_handles.values()]
 
-    def complete_selection(
-        self, all_units: Sequence[Unit], feeds_of: Callable[[Unit], Mapping[str, Tuple[ObservableFeed, ...]]]
-    ) -> Dict[str, ComponentEntry]:
-        """Lowers every observer's selection against the constructed observers' declared feeds.
+    def _note_observers(self) -> None:
+        """Writes one ``observe`` row per observer into the port-provenance table.
 
-        Fills the observers' placeholders, the import record (observers, actuations, port records,
-        source map) and the port-provenance table, and returns the observers' final entries.
-
-        Raises:
-            EnergySystemAssemblyError: For any condition of :class:`SelectionLowering`.
+        The wiring selects the observer's feeds and plans each with the row's item, so a refusal of
+        a selected feed names the observer port and the selection.
         """
-        SelectionLowering(
-            all_units, self._slots, self._controllables, feeds_of, self.record, self._item_text
-        ).lower()
         for slot in self._slots:
-            for match in slot.matches:
-                self.record.port_provenance.append(
-                    LoweredPort(
-                        kind=LoweredKind.OBSERVE,
-                        owner=slot.owner,
-                        import_path=slot.owner_path,
-                        port=slot.port,
-                        verb=match.selected_by,
-                        member=slot.unit.name,
-                        member_class=slot.unit.class_path,
-                        partner=match.unit.name,
-                        partner_class=match.unit.class_path,
-                        input=(match.dispatch.target_input or "") if match.dispatch is not None else "",
-                        output=match.declared.output,
-                        chain=(slot.source,),
-                        tags=((match.component_type,) if match.component_type else ()) + tuple(match.tags),
-                    )
+            chain = (
+                tuple(location.text for location in slot.handle.chain)
+                if slot.handle is not None
+                else (slot.source,)
+            )
+            self.record.port_provenance.append(
+                LoweredPort(
+                    kind=LoweredKind.OBSERVE,
+                    owner=slot.owner,
+                    import_path=slot.owner_path,
+                    port=slot.port,
+                    verb=slot.selection.text(),
+                    member=slot.unit.name,
+                    member_class=slot.unit.class_path,
+                    chain=chain,
                 )
-        self._record_ports()
-        observers = list(dict.fromkeys(slot.unit.name for slot in self._slots))
-        units = {unit.name: unit for unit in all_units}
-        return {name: self._final_entry(units[name]) for name in observers}
+            )
 
     def offered_ports(self, key: str) -> Dict[str, "OfferedPort"]:
         """The ports one top-level import offers its importer, resolved for its parameters, unbound.
@@ -637,13 +620,13 @@ class ImportExpander:
         for name, handle in instance.handles.items():
             port = handle.port
             observer_classes = tuple(
-                ClassFacts.short_name(slot.unit.class_path)
+                short_class_name(slot.unit.class_path)
                 for slot in self._slots
                 if slot.handle is handle
             )
             controlled = next(
                 (
-                    ClassFacts.short_name(item.unit.class_path)
+                    short_class_name(item.unit.class_path)
                     for item in self._controllables
                     if item.port is port and port.controllable_target is not None and not port.controllable_optional
                 ),
@@ -656,7 +639,7 @@ class ImportExpander:
                 is_provision=port.is_provision,
                 partner=tuple(port.partner),
                 circuit=handle.end.circuit if handle.end is not None else None,
-                end_classes=tuple(ClassFacts.short_name(unit.class_path) for unit in handle.end.units)
+                end_classes=tuple(short_class_name(unit.class_path) for unit in handle.end.units)
                 if handle.end is not None
                 else (),
                 carrier=handle.carrier,
@@ -720,7 +703,6 @@ class ImportExpander:
                     owner_path=name,
                     port=site_port,
                     selection=entry.observes,
-                    position=fitting[0],
                     source=unit.chain[-1].text,
                 )
             )
@@ -1354,7 +1336,6 @@ class ImportExpander:
                         owner_path=handle.owner_path,
                         port=name,
                         selection=selection,
-                        position=positions[0],
                         source=handle.source_text(),
                         handle=handle,
                         priorities=priorities,
@@ -1699,7 +1680,7 @@ class ImportExpander:
         return [
             unit
             for unit in units
-            if unit.name not in handle.own_units and ClassFacts.short_name(unit.class_path) in handle.port.partner
+            if unit.name not in handle.own_units and short_class_name(unit.class_path) in handle.port.partner
         ]
 
     def _resolve_target(
@@ -1732,7 +1713,7 @@ class ImportExpander:
         matching = [
             unit
             for unit in units
-            if ClassFacts.short_name(unit.class_path) in handle.port.partner and unit.name not in handle.own_units
+            if short_class_name(unit.class_path) in handle.port.partner and unit.name not in handle.own_units
         ]
         if len(matching) == 1:
             return matching[0], None, ""
@@ -1844,7 +1825,6 @@ class ImportExpander:
             self._decide_cross(handle, written, level, top, self._fact_rule(handle, level))
             return
         candidates = self._candidates(handle, level.units)
-        handle.candidates = tuple(f"{unit.name} ({ClassFacts.short_name(unit.class_path)})" for unit in candidates)
         handle.hint = (
             f"Candidates: {', '.join(unit.name for unit in candidates) or 'none'}; "
             + self._paste_lines(handle, candidates, level, optional=handle.state == "optional")
@@ -1939,7 +1919,7 @@ class ImportExpander:
     def _lower(self, handle: Handle, partner: Unit, provider: Optional[Tuple[str, str]], verb: str) -> None:
         """Lowers a decided need into its landings: a bare name, or the explicit wires it names."""
         port = handle.port
-        partner_class = ClassFacts.short_name(partner.class_path)
+        partner_class = short_class_name(partner.class_path)
         if partner_class not in port.partner and provider is None:
             raise self.error(
                 EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
@@ -2233,12 +2213,12 @@ class ImportExpander:
 
         The file decides the binding — the two ends of one circuit, their members and which members
         carry the circuit's placeholder. Which member owns and which reads each of the circuit's three
-        outputs the constructed members say, so every item is written into the port-provenance table
-        and the post-construction port check (:mod:`.port_check`) verifies the circuit once the
-        components exist: each output owned by exactly one member, read by a member of the other end
-        that carries the placeholder, of one load type and unit at both ends, and every bare name
-        written here naming an owner of an output its reader reads, whose class the reader declares
-        default connections from (§3.2, §11.1, hydronic spec §3.1).
+        outputs the constructed members say: the wiring expands every bare name written here through the
+        reader's default connections from the owner's class and checks the result like any connection —
+        a reader without defaults from that class, an output owned twice (an input fed twice), a load
+        type or unit that differs, a reader left without its circuit inputs (§3.2, §11.1, hydronic
+        spec §3.1). Every item is written into the port-provenance table, so a refusal names the circuit
+        port it came from.
         """
         end, other_end = handle.end, other.end
         assert end is not None and other_end is not None
@@ -2279,8 +2259,6 @@ class ImportExpander:
                         circuit=circuit,
                         end=this_end.label,
                         other_end=far_end.label,
-                        end_members=tuple(member.name for member in this_end.units),
-                        other_members=tuple(member.name for member in far_end.units),
                     )
         end.bound_to, other_end.bound_to = other_end, end
         for this_handle, far_end in ((handle, other_end), (other, end)):
@@ -2465,32 +2443,34 @@ class ImportExpander:
 
         For a fuel the meter takes a bare name of every consuming member, which the wiring expands
         through the default feeds the meter declares from that member's class — the tags and the
-        weight a recorded twin writes; for electricity nothing is written. Every consuming output is
-        written into the port-provenance table: whether it exists, carries the need's carrier by its
-        energy port, and is exactly what the meter's default feeds from its class observe, the
-        constructed components say, and the post-construction port check (:mod:`.port_check`)
-        verifies it.
+        weight a recorded twin writes; for electricity nothing is written. Every bare name and every
+        consuming output is written into the port-provenance table: whether an output exists, carries
+        the need's carrier by its energy port, and is exactly what the meter's default feeds from its
+        class observe, the constructed components say, and the wiring stage checks it with the bare
+        names it expands.
         """
         provision = provider.provision
         assert provision is not None
         carrier = handle.carrier or ""
         meter = provision.meter
         outputs: List[str] = []
-        items: List[AnyInputItem] = []
+        consumers: Dict[str, Unit] = {}
         for unit, output in handle.consumer_outputs:
             outputs.append(f"{unit.name}.{output}")
             self._note_lowered(handle, LoweredKind.FEED, meter, verb, unit, output=output, carrier=carrier)
-            if meter is None:
-                continue
-            item = DefaultInputs(source=unit.name)
-            if item not in items:
-                items.append(item)
+            if meter is not None:
+                consumers.setdefault(unit.name, unit)
+        items: List[AnyInputItem] = [DefaultInputs(source=name) for name in consumers]
         lowered: List[str] = []
         landing = provision.landing
         if items and landing is not None:
             filled = landing.unit.lowered.setdefault(landing.position, [])
             items = [item for item in items if item not in filled]
             filled.extend(items)
+            for item in items:
+                self._note_lowered(
+                    handle, LoweredKind.DEFAULT, landing.unit, verb, consumers[item.source], carrier=carrier
+                )
             note = (
                 f"carrier {carrier}: port {handle.port.name} of {handle.owner_path} bound to {provision.label} ({verb})"
             )
@@ -2704,7 +2684,7 @@ class ImportExpander:
         output: str = "",
         **context: Any,
     ) -> None:
-        """Writes one lowered item into the port-provenance table, for the post-construction check.
+        """Writes one lowered item into the port-provenance table, which a wiring refusal of it reads.
 
         ``context`` carries the fields of a circuit item or a feed (:class:`LoweredPort`).
         """
@@ -2722,8 +2702,6 @@ class ImportExpander:
                 input=target,
                 output=output,
                 chain=tuple(location.text for location in handle.chain),
-                candidates=handle.candidates,
-                remedy=handle.hint,
                 **context,
             )
         )
@@ -2901,7 +2879,7 @@ class ImportExpander:
                 section="internal",
                 kind=PortKind.NEED,
                 into=(receiver,),
-                partner=(ClassFacts.short_name(partner.class_path),),
+                partner=(short_class_name(partner.class_path),),
             ),
             state="required",
             landings=[
@@ -3204,66 +3182,6 @@ class ImportExpander:
                 "addresses": {**dict(self.model.addresses), **self.record.addresses},
             }
         )
-
-
-class PendingSelection:
-    """The observers' selections of one expansion, kept until the components are constructed (§4.1).
-
-    An observer selects among the outputs its constructed component declares dynamic default
-    connections from, which exist only once it is built: no class declares them a second time. The
-    expansion therefore keeps every observer's context — the units in candidate order, the slots,
-    the controllable outputs and the expander that renders the final entries — in the import record,
-    and the build completes it between construction and the post-construction port check
-    (:meth:`complete`): the selection is lowered, the observers' entries are rewritten with their
-    feeds, and every match becomes an ``observe`` item of the port-provenance table.
-    """
-
-    def __init__(self, expander: ImportExpander, all_units: Sequence[Unit]) -> None:
-        """Keeps the expander and its units for the completion."""
-        self.expander = expander
-        self.units = list(all_units)
-
-    @staticmethod
-    def feeds_of(components: Mapping[str, Any]) -> Callable[[Unit], Mapping[str, Tuple[ObservableFeed, ...]]]:
-        """The declared feeds of a constructed observer, by source class name, from its dynamic default connections."""
-
-        def read(unit: Unit) -> Mapping[str, Tuple[ObservableFeed, ...]]:
-            component = components[unit.name]
-            declared = getattr(component, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, None)
-            if not isinstance(declared, Mapping):
-                return {}
-            return {
-                str(source_class): tuple(ObservableFeed.from_connection(connection) for connection in connections)
-                for source_class, connections in declared.items()
-            }
-
-        return read
-
-    def complete(
-        self, model: EnergySystemFile, components: Mapping[str, Any], dropped: Sequence[str] = ()
-    ) -> EnergySystemFile:
-        """Lowers the selections against the constructed observers and returns the file with their feeds.
-
-        Args:
-            model: The expanded file, after the group expansion.
-            components: The constructed components by name.
-            dropped: The components the group expansion removed; an item naming one stays dropped.
-
-        Returns:
-            The file with every observer's entry carrying its feeds.
-
-        Raises:
-            EnergySystemAssemblyError: For any refusal of the selection (``EF-7H``, ``EF-7S`` …
-                ``EF-7W``, ``EF-25``).
-        """
-        finals = self.expander.complete_selection(self.units, self.feeds_of(components))
-        removed = set(dropped)
-        updated = dict(model.components)
-        for name, entry in finals.items():
-            assert name in updated, f"the observer '{name}' is no top-level component of the expanded file"
-            inputs = tuple(item for item in entry.inputs if item.source not in removed)
-            updated[name] = entry.model_copy(update={"inputs": inputs})
-        return model.model_copy(update={"components": updated})
 
 
 def expand_imports(

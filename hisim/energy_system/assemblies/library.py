@@ -24,10 +24,10 @@ the member classes only to know that they exist and which configuration they tak
 inputs, outputs, default connections and KPIs come into being in its constructor, and no class
 declares them a second time, so everything that needs them is checked where the components are
 constructed: whether a member declares default connections from a port's partner class, whether a
-wire's input and output and a provided output exist, which members own and read a circuit's
-three outputs, whether a carrier need's consuming outputs exist, carry its carrier and are fed by
-the provider's meter — the post-construction port check of every build
-(:mod:`hisim.energy_system.assemblies.port_check`); whether every energy-carrying or
+wire's input and output and a provided output exist, whether a circuit's members own and read its
+three outputs, whether a carrier need's consuming outputs exist, carry its carrier and are exactly
+what the provider's meter feeds — the wiring stage of every build, which checks every connection on
+the constructed components; whether every energy-carrying or
 temperature output carries a ``tests.bounds`` entry, whether a bounds entry's unit is its output's
 and whether a named KPI is one its member reports — the assembly test harness's isolation run, on
 the constructed members, before any declaration is evaluated.
@@ -455,7 +455,7 @@ class LibraryChecker:
         """The contract check of §3.3 from the file: every port names existing members and placeholders.
 
         Whether the members' constructed components have the default connections, inputs and outputs
-        the ports lower to is the post-construction port check's (:mod:`.port_check`).
+        the ports lower to is the wiring stage's to check, on every build.
         """
         members = self._templates()
         for name, port in self.model.ports.items():
@@ -570,7 +570,7 @@ class LibraryChecker:
         """A need's member template carries its placeholder.
 
         Whether its constructed component declares default connections from the partner classes, and
-        has the inputs its wires name, the post-construction port check verifies.
+        has the inputs its wires name, the wiring stage checks.
         """
         into = template.name
         option = self._option(template, templates)
@@ -584,7 +584,7 @@ class LibraryChecker:
         """A controllable provided output's ``via`` names a need of the assembly (§4.4).
 
         Whether the output exists on the constructed member, and the input a ``target_input`` names,
-        the post-construction port check verifies.
+        the wiring stage checks.
         """
         if port.controllable_via is not None:
             via = self.model.ports.get(port.controllable_via)
@@ -656,7 +656,7 @@ class LibraryChecker:
         """A circuit end names existing members (§3.3).
 
         Which member owns and which reads the circuit's three outputs the constructed members say; the
-        post-construction port check (:mod:`.port_check`) verifies it on every build.
+        wiring stage checks the bare names the circuit lowers to on every build.
         """
         for member_name in port.members:
             if member_name not in members:
@@ -680,7 +680,7 @@ class LibraryChecker:
         """A carrier names a carrier; a need names outputs of existing members, a provision its meter (§5.1).
 
         Whether a named output exists and carries the need's carrier, the constructed member says; the
-        post-construction port check verifies it.
+        wiring stage checks it on every build.
         """
         literal = port.carrier if isinstance(port.carrier, str) else None
         if literal is not None and not Carriers.is_carrier(literal):

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import difflib
 import enum
+from dataclasses import dataclass
 from typing import ClassVar, Iterable, Optional, Sequence
 
 
@@ -70,22 +71,23 @@ class EnergySystemErrorId(enum.Enum):
     selector matching nothing, an idle observer, a ranked feed on an observer that is no
     controller), ``EF-7T`` for the double count of a meter reading a controller's balance and a flow
     that controller observes, ``EF-7U`` for an actuation (a controllable output no controller
-    selects, a target input actuated twice, a ``controllable`` naming an input the controller may
-    not actuate), ``EF-7V`` for the weights a controller derives from its priorities, and ``EF-7W``
-    for two participants of one observer whose derived port names collide. The letters ``I`` and
-    ``O`` are skipped, as they read like a one and a zero.
-    The expansion raises them from the files, before any class is constructed. What only the
-    constructed components can say is decided and checked later in the build, once every component
-    is constructed and before anything is connected. The observers' selections are lowered then
-    (:mod:`hisim.energy_system.assemblies.selectors`): their candidates are the dynamic default
-    connections the constructed observer declares, so ``EF-7S`` … ``EF-7W`` fire at that stage.
-    The post-construction port check (:mod:`hisim.energy_system.assemblies.port_check`) follows:
-    ``EF-7H`` for a lowered bare name, circuit item or fuel feed whose receiving component declares
-    no default connections (or default feeds) from the partner's class, ``EF-7J`` for a lowered wire,
-    provided output or observed output naming an input or output the constructed component does
-    not have, or an observed output no channel of its observer accepts, ``EF-7N`` for circuit ends
-    whose constructed members do not own and read the circuit's three outputs, and ``EF-7Q`` for a
-    consuming output whose constructed energy port is not of the need's carrier.
+    selects or two do, a controllable whose need is bound elsewhere), ``EF-7V`` for the weights a
+    controller derives from its priorities, and ``EF-7W`` for two participants of one observer whose
+    derived port names collide. The letters ``I`` and ``O`` are skipped, as they read like a one
+    and a zero. The expansion raises most of them from the files, before any class is constructed.
+    The rest fire during wiring, which checks every connection on the constructed components:
+    the observers' selections run there, as a filter on the observer's dynamic default connections
+    (:mod:`hisim.energy_system.assemblies.selectors`), so ``EF-7S``, ``EF-7U`` and ``EF-7V`` fire in
+    the wiring's planning and ``EF-7T`` with the planned feeds; and when an item the wiring refuses
+    was lowered from an assembly port or selected by an observer, the refusal is restated with the
+    port it came from (``ImportRecord.annotate`` in :mod:`hisim.energy_system.assemblies.record`):
+    ``EF-7H`` for a bare name — a port's, a circuit's or a carrier need's in its provider's meter —
+    whose member declares no default connections (or default feeds) from the partner's class (the
+    wiring's ``EF-23``), ``EF-7J`` for a wire or a provided or consuming output naming an input or
+    output the constructed component does not have (the wiring's ``EF-21``/``EF-22``) and for a
+    meter feeding an output of a consumer that no need names, ``EF-7Q`` for a consuming output whose
+    constructed energy port is not of the need's carrier, and ``EF-7W`` for two selected
+    participants whose derived port names collide (the wiring's ``EF-32``).
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -282,6 +284,9 @@ class EnergySystemCatalogueError(EnergySystemError):
         self.location = location
         self.problem = problem
         self.alternatives = tuple(alternatives) if alternatives is not None else ()
+        self.alternatives_label = alternatives_label
+        self.offending_value = offending_value
+        self.remedy = remedy
         super().__init__(
             self.build_message(
                 error_id,
@@ -414,7 +419,74 @@ class EnergySystemWiringError(EnergySystemCatalogueError):
     correctly — the system it describes simply cannot be wired as written, so the message names
     both ends of the offending connection and, where the set is closed, the ports or channels
     that were available instead.
+
+    A refusal of one input item of the file carries that item (:class:`WrittenItem`), which is how
+    the item an assembly port lowered to is told apart from a written one: the build looks it up in
+    the port-provenance table and names the port it came from.
     """
+
+    def __init__(
+        self,
+        error_id: EnergySystemErrorId,
+        location: str,
+        problem: str,
+        *,
+        item: Optional[WrittenItem] = None,
+        alternatives: Optional[Sequence[str]] = None,
+        alternatives_label: str = "values",
+        offending_value: Optional[str] = None,
+        remedy: Optional[str] = None,
+    ) -> None:
+        """Builds the exception; see :class:`EnergySystemCatalogueError`.
+
+        Args:
+            error_id: The catalogue identifier.
+            location: The dotted key path of the offending element.
+            problem: One sentence naming what is wrong.
+            item: The input item the refusal is about, when it is about one.
+            alternatives: The closed set of acceptable values, if any.
+            alternatives_label: The noun introducing that set.
+            offending_value: The written value, for the "did you mean" hint.
+            remedy: An optional closing instruction.
+        """
+        super().__init__(
+            error_id,
+            location,
+            problem,
+            alternatives=alternatives,
+            alternatives_label=alternatives_label,
+            offending_value=offending_value,
+            remedy=remedy,
+        )
+        self.item = item
+
+
+@dataclass(frozen=True)
+class WrittenItem:
+    """One input item of an energy-system file, by what it connects: the subject of a wiring refusal.
+
+    A bare item names its member and partner only; a written wire adds the input and the output; an
+    output the file declares to exist (an assembly's provided port) names its member and output and
+    no partner; a consuming output an assembly's carrier need names adds its carrier, with the
+    provider's meter as the member reading it (none for electricity) and the consumer as the
+    partner. The fields are those of a port-provenance entry
+    (:class:`~hisim.energy_system.assemblies.record.LoweredPort`), so a refused item is found in that
+    table by equality.
+
+    Attributes:
+        member: The component the item sits in: a wire's target, a declared output's owner.
+        partner: The component it reads from; empty for a declared output.
+        input: The member's input a written wire feeds; empty otherwise.
+        output: The partner's output a written wire reads or a meter observes, or the member's
+            declared output; empty for a bare item.
+        carrier: The energy carrier a consuming output is stated to carry; empty otherwise.
+    """
+
+    member: str
+    partner: str = ""
+    input: str = ""
+    output: str = ""
+    carrier: str = ""
 
 
 class EnergySystemSizingError(EnergySystemCatalogueError):
@@ -440,10 +512,11 @@ class EnergySystemAssemblyError(EnergySystemCatalogueError):
     deeper than four, a parameter of the wrong type, value, range or unit, a violated
     constraint, a port that cannot be bound (§3.3), an evaluation order that is not a valid
     numbering, and a construct the current step of the assemblies work does not lower yet. Also
-    raised by the post-construction port check of the build (``EF-7H``, ``EF-7J``, ``EF-7N``,
-    ``EF-7Q``), which confirms on the constructed components what a lowered port means: the
-    member's default connections from its partner's class, a wired input and output, a provided
-    output, the ownership of a circuit's outputs, a meter's default feeds and a consumption's carrier.
+    raised during wiring (``EF-7H``, ``EF-7J``, ``EF-7Q``): the wiring stage checks every connection
+    on the constructed components, and its refusal of an item an assembly port lowered to — a bare
+    name the member declares no default connections for, a wire or a provided output naming a port
+    the component does not have, a consuming output of another carrier or one the meter does not
+    feed exactly — is restated with the import, the port and the files it came from.
 
     Every message names the import and, where there is one, the instance and the port, and
     carries the source map of the import — the files and lines it came from — so that a failure

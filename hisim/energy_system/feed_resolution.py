@@ -233,10 +233,15 @@ class DynamicConnectionResolver:
         target = self.components_by_name[target_name]
         channels = self._require_channels(target_name, target, len(feeds))
         resolved = [self._resolve_feed(target_name, target, channels, feed) for feed in feeds]
-        AggregatorPortChecker.check_participant_ports_are_unique(target_name, resolved)
+        items = {
+            (connection.source_name, connection.source_output): feed.item
+            for feed, connection in zip(feeds, resolved)
+            if feed.item is not None
+        }
+        AggregatorPortChecker.check_participant_ports_are_unique(target_name, resolved, items)
         resolved.sort(key=lambda connection: connection.sort_key())
         DispatchSignalPlanner(target_name, target).check(resolved)
-        created = AggregatorPortChecker.check_port_names_are_free(target_name, target, resolved)
+        created = AggregatorPortChecker.check_port_names_are_free(target_name, target, resolved, items)
         try:
             getattr(target, self.RESOLUTION_HOOK)(list(resolved))
         except ValueError as error:
@@ -359,6 +364,7 @@ class DynamicConnectionResolver:
                 feed.location,
                 f"the {feed.describe()} names the output '{source_output}', which "
                 f"'{feed.source}' ({source.get_full_classname()}) does not declare.",
+                item=feed.item,
                 alternatives=[existing.field_name for existing in source.outputs],
                 alternatives_label="outputs",
                 offending_value=source_output,
@@ -422,6 +428,7 @@ class DynamicConnectionResolver:
             f"the {feed.describe()} names no output of '{feed.source}', and the aggregator "
             f"'{feed.consumer}' declares {len(declarations)} default feeds for the class "
             f"'{source.get_classname()}', so which port is meant is undecidable.",
+            item=feed.item,
             alternatives=candidates,
             alternatives_label="outputs",
             remedy=(

@@ -8,7 +8,12 @@ both ends of a connection because both components already exist.
 Five rules, in the order in which their failures are most useful to an author. An explicit wire
 may not reach into a port that feed resolution created, because that port is not in the file the
 author is reading and its name is derived rather than declared. Every wire must name ports that
-exist, which is the check that catches a renamed output and a port a configuration switched off.
+exist, which is the check that catches a renamed output and a port a configuration switched off;
+so must every output the file declares without reading it by name (an assembly's provided port, a
+carrier need's consuming output). A consuming output must also carry its need's carrier by its
+energy port, and a meter must feed exactly the consuming outputs named of each consumer — the two
+things about such an output no wire shows (:func:`check_consuming_carriers`,
+:func:`check_meter_feeds`).
 The two ends of a wire must agree on load type and unit, unless one of them is declared as the
 wildcard that means "whatever the other carries". No input may be fed twice, which the format
 has no way of merging. And no mandatory input may be left open, unless the port itself says its
@@ -31,7 +36,9 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim.config.channels import PortTypeCompatibility
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
+from hisim.energy_system.channels import FeedRequest
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError, WrittenItem
+from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 
 
 @dataclass(frozen=True)
@@ -46,7 +53,9 @@ class PlannedWire:
     unit.
 
     ``origin`` records which item produced the wire, so a duplicate-feed message can name the two
-    items that collide even when one of them came from a default expansion.
+    items that collide even when one of them came from a default expansion, and ``item`` is that
+    item as data — the subject of a refusal, which the build looks up in the port-provenance table
+    of the assemblies — or ``None`` for a wire feed resolution derived.
     """
 
     source_name: str
@@ -56,6 +65,7 @@ class PlannedWire:
     target_runtime_name: str
     target_input: str
     origin: str
+    item: Optional[WrittenItem] = None
 
     def describe(self) -> str:
         """Builds the one-line rendering of the wire that messages and the log name it by.
@@ -88,6 +98,7 @@ class WiringChecker:
         written_wire_count: int,
         created_ports: Mapping[str, Sequence[str]],
         system_name: str,
+        declared_outputs: Sequence[WrittenItem] = (),
     ) -> None:
         """Prepares the checker for one planned wiring.
 
@@ -98,12 +109,17 @@ class WiringChecker:
                 the rest were derived by feed resolution and are exempt from the first check.
             created_ports: The ports feed resolution created, keyed by aggregator name.
             system_name: Name of the energy system, used in the message for an open input.
+            declared_outputs: Outputs the file states exist without any item reading them by name:
+                an assembly's provided output (a member and an output) and a carrier need's
+                consuming output (the consumer as partner, its output and carrier, and the
+                provider's meter as member, empty for electricity).
         """
         self.components_by_name = dict(components_by_name)
         self.wires = list(wires)
         self.written_wire_count = written_wire_count
         self.created_ports = {name: list(ports) for name, ports in created_ports.items()}
         self.system_name = system_name
+        self.declared_outputs = tuple(declared_outputs)
 
     def check_all(self) -> None:
         """Runs every connection check, stopping at the first violation.
@@ -114,6 +130,8 @@ class WiringChecker:
         """
         self._check_written_wires_avoid_derived_ports()
         self._check_ports_exist()
+        check_consuming_carriers(self.components_by_name, self.declared_outputs)
+        check_meter_feeds(self.components_by_name, self.declared_outputs)
         self._check_port_types_agree()
         self._check_no_input_is_fed_twice()
         self._check_mandatory_inputs_are_connected()
@@ -155,6 +173,7 @@ class WiringChecker:
                         f"the connection {wire.describe()} names the {side} "
                         f"'{name}.{port}', which the file does not contain: it is created by "
                         "resolving that aggregator's feeds.",
+                        item=wire.item,
                         remedy=(
                             "A written wire may only name a port a component declares itself; "
                             "use the feed's 'dispatch' block for the back-channel."
@@ -164,10 +183,26 @@ class WiringChecker:
     def _check_ports_exist(self) -> None:
         """Verifies that every planned wire names an existing output and an existing input.
 
+        Every declared output is looked up as well: nothing reads it, so no wire would.
+
         Raises:
             EnergySystemWiringError: ``EF-21`` for a missing output, ``EF-22`` for a missing
                 input, each listing the ports the component does declare.
         """
+        for declared in self.declared_outputs:
+            owner = declared.partner or declared.member
+            member = self.components_by_name[owner]
+            if find_output(member, declared.output) is None:
+                raise EnergySystemWiringError(
+                    EnergySystemErrorId.UNKNOWN_OUTPUT_PORT,
+                    f"components.{owner}",
+                    f"the output '{declared.output}' is declared on '{owner}' "
+                    f"({member.get_full_classname()}), which does not have it.",
+                    item=declared,
+                    alternatives=[port.field_name for port in member.outputs],
+                    alternatives_label="outputs",
+                    offending_value=declared.output,
+                )
         for wire in self.wires:
             source = self.components_by_name[wire.source_name]
             target = self.components_by_name[wire.target_name]
@@ -178,6 +213,7 @@ class WiringChecker:
                     f"the connection {wire.describe()} names the output '{wire.source_output}', "
                     f"which '{wire.source_name}' ({source.get_full_classname()}) does not "
                     "declare.",
+                    item=wire.item,
                     alternatives=[port.field_name for port in source.outputs],
                     alternatives_label="outputs",
                     offending_value=wire.source_output,
@@ -189,6 +225,7 @@ class WiringChecker:
                     f"the connection {wire.describe()} names the input '{wire.target_input}', "
                     f"which '{wire.target_name}' ({target.get_full_classname()}) does not "
                     "declare.",
+                    item=wire.item,
                     alternatives=[port.field_name for port in target.inputs],
                     alternatives_label="inputs",
                     offending_value=wire.target_input,
@@ -215,6 +252,7 @@ class WiringChecker:
                     f"load type mismatch on the connection {wire.describe()}: the output "
                     f"carries '{output.load_type.name}' but the input expects "
                     f"'{target_input.loadtype.name}'.",
+                    item=wire.item,
                     remedy="Align the two port declarations, or wire a different pair of ports.",
                 )
             if not PortTypeCompatibility.units_agree(output.unit, target_input.unit):
@@ -223,6 +261,7 @@ class WiringChecker:
                     f"components.{wire.target_name}.inputs",
                     f"unit mismatch on the connection {wire.describe()}: the output is in "
                     f"'{output.unit.value}' but the input expects '{target_input.unit.value}'.",
+                    item=wire.item,
                     remedy="Align the two port declarations, or wire a different pair of ports.",
                 )
 
@@ -246,6 +285,7 @@ class WiringChecker:
                     f"components.{wire.target_name}.inputs",
                     f"the input '{wire.target_name}.{wire.target_input}' is fed twice: by "
                     f"{previous.describe()} and by {wire.describe()}.",
+                    item=wire.item,
                     remedy="Every input takes exactly one source; remove one of the two items.",
                 )
             seen[key] = wire
@@ -284,6 +324,128 @@ class WiringChecker:
                         "open if its source may legitimately be absent."
                     ),
                 )
+
+
+def check_consuming_carriers(components_by_name: Mapping[str, Component], declared: Sequence[WrittenItem]) -> None:
+    """Verifies that every consuming output carries its need's carrier by its energy port.
+
+    Args:
+        components_by_name: Every component of the system, keyed by its name in the file.
+        declared: The declared outputs; those with a carrier are consuming outputs, their consumer
+            the partner. Each exists, which :meth:`WiringChecker.check_all` has checked before.
+
+    Raises:
+        EnergySystemWiringError: ``EF-7Q`` for an output without an energy port of that carrier.
+    """
+    for item in declared:
+        if not item.carrier:
+            continue
+        consumer = components_by_name[item.partner]
+        output = find_output(consumer, item.output)
+        assert output is not None  # nosec - checked before
+        carrier = output.energy_port.carrier.value if output.energy_port is not None else None
+        if carrier != item.carrier:
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.CARRIER_MISMATCH,
+                f"components.{item.partner}",
+                f"the output '{item.partner}.{item.output}' ({consumer.get_full_classname()}) is consumed as "
+                f"{item.carrier}, but "
+                + (f"its energy port carries {carrier}." if carrier else "it declares no energy port."),
+                item=item,
+                remedy="Name an output whose energy port carries the need's carrier, or configure the component "
+                "for that carrier.",
+            )
+
+
+def check_meter_feeds(components_by_name: Mapping[str, Component], declared: Sequence[WrittenItem]) -> None:
+    """Verifies that a meter feeds exactly the consuming outputs named of each consumer.
+
+    A meter takes a bare name of a consumer and expands it into every default feed it declares from
+    the consumer's class; a declared feed no need names would be metered as well, and a named
+    output the meter declares no feed of would not be metered at all.
+
+    Args:
+        components_by_name: Every component of the system, keyed by its name in the file.
+        declared: The declared outputs; those with a carrier and a member are consuming outputs a
+            meter observes.
+
+    Raises:
+        EnergySystemWiringError: ``EF-7H`` for a named output the meter declares no default feed of,
+            ``EF-7J`` for a default feed of an output no need names.
+    """
+    named: Dict[Tuple[str, str], List[WrittenItem]] = {}
+    for item in declared:
+        if item.carrier and item.member:
+            named.setdefault((item.member, item.partner), []).append(item)
+    for (meter_name, consumer_name), items in named.items():
+        meter, consumer = components_by_name[meter_name], components_by_name[consumer_name]
+        consumer_class = consumer.get_classname()
+        fed = [
+            str(feed.source_component_field_name)
+            for feed in DynamicConnectionResolver.default_feeds_of(meter, consumer_class)
+        ]
+        for item in items:
+            if item.output not in fed:
+                raise EnergySystemWiringError(
+                    EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
+                    f"components.{meter_name}.inputs",
+                    f"the meter '{meter_name}' ({meter.get_full_classname()}) declares no default feed of "
+                    f"{consumer_class}.{item.output}, so it would not meter '{consumer_name}.{item.output}'.",
+                    item=item,
+                    alternatives=[f"{consumer_class}.{name}" for name in fed],
+                    alternatives_label="default feeds it declares from that class",
+                    remedy="Add the default feed (add_dynamic_default_connections) to the meter's class, or name "
+                    "an output it feeds.",
+                )
+        unnamed = [name for name in fed if name not in {item.output for item in items}]
+        if unnamed:
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.PORT_CONTRACT,
+                f"components.{meter_name}.inputs",
+                f"the meter '{meter_name}' ({meter.get_full_classname()}) expands the bare name '{consumer_name}' "
+                f"into every default feed it declares from {consumer_class}, and no consuming output names "
+                f"{', '.join(unnamed)}, which it would meter as well.",
+                item=items[0],
+                remedy=f"Name {', '.join(unnamed)} as a consuming output as well, or drop the feed from the "
+                "meter's class.",
+            )
+
+
+def check_double_count(feeds_by_target: Mapping[str, Sequence[FeedRequest]]) -> None:
+    """Refuses an aggregator reading another aggregator's output and a flow that one observes.
+
+    An aggregator such as an energy manager sums what it observes into a balance; a meter reading
+    that balance and one of the flows behind it counts the flow twice (``assemblies_spec.md`` §3.3,
+    §4.3). Every planned feed counts, written, expanded from a bare item or selected.
+
+    Args:
+        feeds_by_target: The planned feeds of every aggregator.
+
+    Raises:
+        EnergySystemWiringError: ``EF-7T`` at the first aggregator counting a flow twice.
+    """
+    observed = {
+        name: {(feed.source, feed.output or "") for feed in feeds} for name, feeds in feeds_by_target.items()
+    }
+    for name, feeds in feeds_by_target.items():
+        for other, other_observed in observed.items():
+            reading = [feed for feed in feeds if feed.source == other]
+            if other == name or not reading:
+                continue
+            both = sorted(observed[name] & other_observed)
+            if not both:
+                continue
+            reads = sorted({feed.output or "" for feed in reading})
+            listed = ", ".join(f"{source}.{output}" for source, output in both)
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.DOUBLE_COUNT,
+                f"components.{name}.inputs",
+                f"'{name}' observes {other}.{', '.join(reads)}, the balance {other} sums over what it observes, "
+                f"and also {listed}, which {other} observes: the flow would be counted twice.",
+                item=reading[0].item,
+                remedy=f"Let '{name}' observe only {other}'s balance ({other}.{reads[0]}), or only the flows "
+                f"without {other}.",
+            )
 
 
 def find_output(component: Component, field_name: str) -> Optional[ComponentOutput]:

@@ -1,4 +1,4 @@
-"""Observe and actuate: lowering observer selections and a controller's priorities (``assemblies_spec.md`` §4).
+"""Observe and actuate: an observer's selection and a controller's priorities (``assemblies_spec.md`` §4).
 
 HiSim has no bus. A meter and an energy manager are dynamic components whose inputs are added as
 their selectors match (§4.3, D13): each **observer** — a site entry with ``observes:``, or an
@@ -6,24 +6,22 @@ assembly's observer port, its default replaced by the import's ``observes:`` —
 outputs the constructed observer declares dynamic default connections from (what its constructor
 adds with ``add_dynamic_default_connections``, read as
 :class:`~hisim.config.channels.ObservableFeed`), and every match becomes an ordinary
-:class:`~hisim.energy_system.model.AggregatorFeed` with that declaration's tags and weight, written
-where the observer's ``{$observes: <port>}`` placeholder stands. The expanded file carries explicit
-feeds, so the channel matching and the feed resolution run unchanged.
+:class:`~hisim.energy_system.model.AggregatorFeed` with that declaration's tags and weight.
 
-**When.** What an observer may observe is declared in its constructor and nowhere else, so the
-selection runs once the components are constructed and before anything is connected: the
-expansion keeps every observer's context (:class:`~hisim.energy_system.assemblies.expansion.PendingSelection`)
-and the build completes it. Every match is written into the port-provenance table as an ``observe``
-item, which the post-construction port check verifies on the instances: the observed output exists,
-a channel of the observer accepts it with its load type and unit, and a dispatch target is an input
-of the participant on a channel that allows a dispatch.
+**Where.** ``observes: declared`` is what HiSim's ``connect_automatically`` does for dynamic default
+connections: every present component the observer declares a feed from, with the declared feeds.
+A selector is a filter on that set. The selection therefore runs in the wiring stage, where the
+components exist: the expansion keeps every observer and every controllable output in a
+:class:`SelectionPlan` and an ``observe`` row of the port-provenance table, the wiring planner asks
+the plan for each observer's feeds and plans them like written feeds, each carrying the observe
+row's item, so a refusal of one names the observer port. The realized record writes the selected
+feeds into the observer's inputs, so a re-run reads them as written feeds.
 
-**Candidates and order.** The candidates are the outputs of every component of the expanded system
-— site entries in written order, then the imports in written order, each instance in written order,
-its members in production order — that the observer declares a feed from, in the order it declares
-them; an observer never matches its own outputs. ``declared`` selects every
-candidate; a list of selectors the union of their matches, in candidate order (never a dict, file
-system or hash order); the feed resolution sorts them again at build time (``feed_resolution.py``).
+**Candidates and order.** The candidates are the outputs of every present component — site entries
+in written order, then the imports in written order, each instance in written order, its members in
+production order — that the observer declares a feed from, in the order it declares them; an
+observer never matches its own outputs. ``declared`` selects every candidate; a list of selectors
+the union of their matches, in candidate order; the feed resolution sorts them again.
 
 **Controllers** (§4.4, D11, D21). An assembly whose interface ``actuates:`` a priority list ranks the
 feeds of its observer port that the controller declares at a ranked weight (anything but 999). Each
@@ -33,34 +31,31 @@ are the one source — the k-th further participant of one type gets ``default +
 above every earlier entry's weights is raised to the next free one, keeping its spacing. A default-order
 list with one participant per type therefore reproduces the class's weights; a second battery gets 7;
 a reordered list gets weights in list order. The feed's dispatch follows what the observed output
-states: ``controllable: {target_input: …}`` lowers to ``dispatch.target_input``, an input of the
-participant on a channel of the controller that allows a dispatch (verified after construction);
-``controllable: {via: <need>}`` lowers to an
-empty dispatch, and its need — bound to this controller — has already lowered to the L1's default
-connections from the controller's class, the modifier; an output with no ``controllable`` the class
-ranks is ranked only, with an empty dispatch (residents, solar thermal).
+states: ``controllable: {target_input: …}`` lowers to ``dispatch.target_input``; ``controllable: {via:
+<need>}`` lowers to an empty dispatch, and its need — bound to this controller — has already lowered
+to the L1's default connections from the controller's class, the modifier; an output with no
+``controllable`` the class ranks is ranked only, with an empty dispatch (residents, solar thermal).
 
-**Refusals.** A constructed observer that declares no dynamic default connections (``EF-7H``); a
-``required`` selector matching nothing, an observer whose selection matches nothing (idle), a ranked
-feed on an observer that is no controller, an import's ``observes:`` for a port its assembly lacks
-(``EF-7S``); a component reading another observer's output and an output that observer reads, the
-meter reading the EMS's grid balance and a flow the EMS observes (``EF-7T``, §3.3); a controllable
-output no controller selects or two do, a target input actuated twice (``EF-7U``); an entry selecting
-a measured output or one an earlier entry ranks, a ranked output no entry selects, a weight reaching
-999, two ports of one type at one weight (``EF-7V``); an output selected and fed explicitly to one
-observer (``EF-25``, as ``DUPLICATE_FEED``); and two participants of one observer whose derived port
-names collide (``EF-7W``). A dispatch target that is no input of the participant, on a channel that
-forbids a dispatch or of another quantity than the channel dispatches (``EF-7J``, ``EF-7U``), and an
-observed output its participant does not have or no channel accepts (``EF-7J``, ``EF-7Q``), the
-post-construction port check refuses. Every weight, dispatch and actuation goes to the import record,
+**Refusals here.** A constructed observer that declares no dynamic default connections (``EF-7H``); a
+``required`` selector matching nothing, an idle observer, a ranked feed on an observer that is no
+controller (``EF-7S``); a controllable output no controller selects or two do, a ``via`` need bound to
+another controller or none (``EF-7U``); an entry selecting a measured output or one an earlier entry
+ranks, a ranked output no entry selects, a weight reaching 999, two ports of one type at one weight
+(``EF-7V``). Everything about the selected feeds as connections is the wiring's, restated with the
+observer port: an observed output the participant does not have (``EF-7J``), a channel that does not
+accept it (``EF-28``), an output fed twice (``EF-25``), two participants whose derived port names
+collide (``EF-7W``), a target input actuated twice or also wired (``EF-26``), and the double count of
+a component reading an aggregator's balance and a flow that aggregator observes (``EF-7T``). Every
+weight, dispatch and actuation goes to the import record,
 :class:`~hisim.energy_system.assemblies.record.ObserverRecord` and
 :class:`~hisim.energy_system.assemblies.record.ActuationRecord`.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.config.channels import ObservableFeed, ResolvedDynamicConnection
 from hisim.energy_system.assemblies.record import (
@@ -71,9 +66,10 @@ from hisim.energy_system.assemblies.record import (
     PriorityRecord,
 )
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
+from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import FeedOverride, Port, Selection, Selector
 from hisim.energy_system.imports_reader import ImportsReader
-from hisim.energy_system.model import AggregatorFeed, AnyInputItem, DispatchSpec, ExplicitWire
+from hisim.energy_system.model import AggregatorFeed, AnyInputItem, DispatchSpec
 
 if TYPE_CHECKING:  # pragma: no cover - the expansion imports this module
     from hisim.energy_system.assemblies.expansion import Handle, Unit
@@ -94,7 +90,6 @@ class ObserverSlot:
         owner_path: The import path or the site component's name.
         port: The observer port (``observes`` for a site entry).
         selection: What it observes: the import's ``observes:`` or the port's default.
-        position: Where its feeds land in the unit's written inputs.
         source: The source map of the observer, for a message.
         handle: The port's handle in its instance, whose record the pass fills; ``None`` on the site.
         priorities: For a controller, its priority list, resolved.
@@ -105,7 +100,6 @@ class ObserverSlot:
     owner_path: str
     port: str
     selection: Selection
-    position: int
     source: str
     handle: Optional["Handle"] = None
     priorities: Optional[Tuple[Selector, ...]] = None
@@ -206,45 +200,60 @@ class Match:
         )
 
 
-class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, one entry point
-    """Lowers every observer of one expanded system, after every port is bound."""
+class SelectionPlan:
+    """Every observer and controllable output of one expanded system, selected when the wiring asks.
+
+    The expansion builds the plan once every port is bound; the wiring planner calls :meth:`select`
+    with the constructed components and plans the feeds it returns like written feeds. The plan
+    writes its observers and actuations into the import record it was given.
+    """
 
     def __init__(
         self,
         units: Sequence["Unit"],
         slots: Sequence[ObserverSlot],
         controllables: Sequence[Controllable],
-        feeds_of: Callable[["Unit"], Mapping[str, Tuple[ObservableFeed, ...]]],
         record: ImportRecord,
         item_text: Callable[[AnyInputItem], str],
     ) -> None:
-        """Prepares the pass.
+        """Keeps the plan.
 
         Args:
             units: Every component of the expanded system, in candidate order.
             slots: Every observer, site entries first, then by import, instance and member.
             controllables: Every active controllable output.
-            feeds_of: The constructed observer's declared feeds, by source class name.
-            record: The import record the pass writes its observers and actuations to.
+            record: The import record the selection writes its observers and actuations to.
             item_text: Renders an input item for the port records.
         """
         self.units = list(units)
         self.slots = list(slots)
         self.controllables = list(controllables)
-        self.feeds_of = feeds_of
         self.record = record
         self.item_text = item_text
-        self.by_name = {unit.name: unit for unit in self.units}
+        self.components: Mapping[str, Any] = {}
 
     @staticmethod
     def error(error_id: EnergySystemErrorId, location: str, problem: str, **kwargs: Any) -> EnergySystemAssemblyError:
-        """One refusal of the pass."""
+        """One refusal of the selection."""
         return EnergySystemAssemblyError(error_id, location, problem, **kwargs)
 
     # ---------------------------------------------------------------------------------- entry point
 
-    def lower(self) -> None:
-        """Selects, ranks, lowers and checks every observer; fills the import record."""
+    def select(self, components: Mapping[str, Any]) -> Dict[str, List[AggregatorFeed]]:
+        """Selects, ranks and checks every observer against the constructed components.
+
+        Args:
+            components: The constructed components by their name in the expanded file; a unit the
+                group expansion removed is no candidate.
+
+        Returns:
+            Every observer's feeds, in the order the slots list them.
+
+        Raises:
+            EnergySystemAssemblyError: ``EF-7H``, ``EF-7S``, ``EF-7U``, ``EF-7V`` for a refusal of the
+                selection.
+        """
+        self.components = components
         for slot in self.slots:
             slot.matches = self._select(slot)
         for slot in self.slots:
@@ -253,19 +262,20 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
             else:
                 self._rank(slot)
         self._check_controllables()
+        feeds: Dict[str, List[AggregatorFeed]] = {}
         for slot in self.slots:
-            self._land(slot)
-        self._check_actuated_once()
-        aggregators = self._aggregators()
-        self._check_duplicates(aggregators)
-        self._check_port_names(aggregators)
-        self._check_double_count(aggregators)
+            feeds.setdefault(slot.unit.name, []).extend(self._land(slot))
+        return feeds
 
     # ------------------------------------------------------------------------------------ selection
 
     def _observer_feeds(self, slot: ObserverSlot) -> Mapping[str, Tuple[ObservableFeed, ...]]:
         """The constructed observer's declared feeds; an observer that declares none cannot observe (``EF-7H``)."""
-        feeds = self.feeds_of(slot.unit)
+        declared = getattr(self.components[slot.unit.name], DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, None)
+        feeds = {
+            str(source_class): tuple(ObservableFeed.from_connection(connection) for connection in connections)
+            for source_class, connections in (declared.items() if isinstance(declared, Mapping) else ())
+        }
         if not any(feeds.values()):
             raise self.error(
                 EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
@@ -281,11 +291,11 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
         return feeds
 
     def _candidates(self, slot: ObserverSlot) -> List[Tuple["Unit", ObservableFeed]]:
-        """Every output of the system the observer declares a feed from, in candidate order."""
+        """Every output of the present components the observer declares a feed from, in candidate order."""
         feeds = self._observer_feeds(slot)
         candidates: List[Tuple["Unit", ObservableFeed]] = []
         for unit in self.units:
-            if unit is slot.unit:
+            if unit is slot.unit or unit.name not in self.components:
                 continue
             for declared in feeds.get(class_name_of(unit), ()):
                 candidates.append((unit, declared))
@@ -469,8 +479,7 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
         """Decides the dispatch of one ranked feed from what the observed output states (§4.4, D21).
 
         ``controllable: {target_input: …}`` lowers to that dispatch target; whether it is an input of
-        the participant on a channel of the controller that allows a dispatch, the post-construction
-        port check verifies on the instances.
+        the participant on a channel of the controller that allows a dispatch, the wiring checks.
         """
         controllable = next((item for item in self.controllables if item.key == match.key), None)
         if controllable is not None and controllable.port.controllable_target is not None:
@@ -550,18 +559,10 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
         self.record.observers.append(record)
         return record
 
-    def _land(self, slot: ObserverSlot) -> None:
-        """Writes the observer's feeds at its placeholder and records them and its actuations."""
+    def _land(self, slot: ObserverSlot) -> List[AggregatorFeed]:
+        """The observer's feeds; records them, its actuations and its port's record."""
         unit = slot.unit
-        if slot.position in unit.lowered:
-            raise self.error(
-                EnergySystemErrorId.PORT_CONTRACT,
-                slot.owner,
-                f"the placeholder of '{unit.name}' at inputs[{slot.position}] is filled twice ({slot.source}).",
-            )
-        items: List[AnyInputItem] = [match.feed() for match in slot.matches]
-        unit.lowered[slot.position] = items
-        unit.notes[slot.position] = f"observer {slot.port} of {slot.owner_path}, selection {slot.selection.text()}"
+        items = [match.feed() for match in slot.matches]
         record = self._observer_record(slot)
         for match in slot.matches:
             target_input = match.dispatch.target_input if match.dispatch is not None else None
@@ -609,148 +610,21 @@ class SelectionLowering:  # pylint: disable=too-few-public-methods  # one pass, 
                     )
                 )
         if slot.handle is not None:
-            slot.handle.record = {
-                "state": "controller" if slot.priorities is not None else "observer",
-                "partner": f"{len(items)} feed{'s' if len(items) != 1 else ''}",
-                "verb": "selection",
-                "lowered_to": tuple(f"{unit.name}.inputs: {self.item_text(item)}" for item in items),
-            }
-
-    def _check_actuated_once(self) -> None:
-        """A target input a controller actuates is wired by nothing else (§4.3: each exactly once)."""
-        targets: Dict[Tuple[str, str], str] = {}
-        for actuation in self.record.actuations:
-            if actuation.kind != "target_input":
-                continue
-            component, target_input = actuation.target.rsplit(".", 1)
-            key = (component, target_input)
-            if key in targets:
-                raise self.error(
-                    EnergySystemErrorId.ACTUATION,
-                    f"components.{component}",
-                    f"{component}.{target_input} is actuated by {targets[key]} and by {actuation.controller}; each "
-                    "target input is actuated exactly once (D21).",
-                )
-            targets[key] = actuation.controller
-            unit = self.by_name[component]
-            for item in self._items_of(unit):
-                if isinstance(item, ExplicitWire) and item.input == target_input:
-                    raise self.error(
-                        EnergySystemErrorId.ACTUATION,
-                        f"components.{component}",
-                        f"{component}.{target_input} is actuated by {actuation.controller} and also wired from "
-                        f"{item.source}.{item.output}; each target input is actuated exactly once (D21).",
+            instance = self.record.instance(slot.owner_path)
+            if instance is not None:
+                instance.ports = [
+                    dataclasses.replace(
+                        port,
+                        state="controller" if slot.priorities is not None else "observer",
+                        partner=f"{len(items)} feed{'s' if len(items) != 1 else ''}",
+                        verb="selection",
+                        lowered_to=tuple(f"{unit.name}.inputs: {self.item_text(item)}" for item in items),
                     )
-
-    # --------------------------------------------------------------------------------------- checks
-
-    @staticmethod
-    def _items_of(unit: "Unit", written_only: bool = False) -> List[AnyInputItem]:
-        """Every input item of a unit as the expanded file will write it, sources expanded."""
-        items: List[AnyInputItem] = []
-        for item in unit.entry.inputs:
-            if unit.identity is None:
-                items.append(item)
-                continue
-            if item.source in unit.dropped_names:
-                continue
-            items.append(item.model_copy(update={"source": unit.local_names.get(item.source, item.source)}))
-        if not written_only:
-            for position in sorted(unit.lowered):
-                items.extend(unit.lowered[position])
+                    if port.port == slot.port
+                    else port
+                    for port in instance.ports
+                ]
         return items
-
-    def _aggregators(self) -> Dict[str, List[Tuple[AggregatorFeed, str]]]:
-        """Every unit holding aggregator feeds, with each feed and where it came from."""
-        landed = {(slot.unit.name, slot.position): slot for slot in self.slots}
-        aggregators: Dict[str, List[Tuple[AggregatorFeed, str]]] = {}
-        for unit in self.units:
-            found: List[Tuple[AggregatorFeed, str]] = []
-            for item in self._items_of(unit, written_only=True):
-                if isinstance(item, AggregatorFeed):
-                    found.append((item, "written in its inputs"))
-            for position in sorted(unit.lowered):
-                slot = landed.get((unit.name, position))
-                for item in unit.lowered[position]:
-                    if not isinstance(item, AggregatorFeed):
-                        continue
-                    if slot is not None:
-                        match = next(entry for entry in slot.matches if entry.key == (item.source, item.output))
-                        found.append((item, f"selected by {slot.owner}.{slot.port} ({match.selected_by})"))
-                    else:
-                        found.append((item, unit.notes.get(position, "lowered by a port")))
-            if found:
-                aggregators[unit.name] = found
-        return aggregators
-
-    def _check_duplicates(self, aggregators: Dict[str, List[Tuple[AggregatorFeed, str]]]) -> None:
-        """An output selected and fed explicitly to one observer is refused, as ``DUPLICATE_FEED`` (§4.2)."""
-        for name, feeds in aggregators.items():
-            seen: Dict[Tuple[str, str], str] = {}
-            for feed, origin in feeds:
-                key = (feed.source, feed.output or "")
-                if key in seen:
-                    raise self.error(
-                        EnergySystemErrorId.DUPLICATE_FEED,
-                        f"components.{name}.inputs",
-                        f"'{name}' observes '{feed.source}.{feed.output}' twice: {seen[key]} and {origin}; a dynamic "
-                        "component sums what it is given, so the flow would be counted twice.",
-                        remedy="Remove the explicit feed, or narrow the selection.",
-                    )
-                seen[key] = origin
-
-    def _check_port_names(self, aggregators: Dict[str, List[Tuple[AggregatorFeed, str]]]) -> None:
-        """Two participants of one observer may not derive one port name (hisim-lt0b.11, ``EF-7W``)."""
-        for name, feeds in aggregators.items():
-            owners: Dict[str, str] = {}
-            for feed, _origin in feeds:
-                if feed.output is None:
-                    continue
-                ports = [ResolvedDynamicConnection.input_name_for(feed.source, feed.output)]
-                if feed.dispatch is not None:
-                    ports.append(
-                        ResolvedDynamicConnection.dispatch_name_for(
-                            feed.source, feed.output, feed.dispatch.target_input
-                        )
-                    )
-                for port in ports:
-                    previous = owners.get(port)
-                    if previous is not None and previous != f"{feed.source}.{feed.output}":
-                        raise self.error(
-                            EnergySystemErrorId.DERIVED_PORT_COLLISION,
-                            f"components.{name}.inputs",
-                            f"'{name}' would grow the port '{port}' for {previous} and for "
-                            f"{feed.source}.{feed.output}: a derived port name is the participant's name with '_' "
-                            "for '-' (NameSyntax.port_name_part), unique per observer.",
-                            remedy="Rename the site component or the import so the two names differ after the "
-                            "replacement.",
-                        )
-                    owners[port] = f"{feed.source}.{feed.output}"
-
-    def _check_double_count(self, aggregators: Dict[str, List[Tuple[AggregatorFeed, str]]]) -> None:
-        """Refuses a component reading another observer's output and an output that observer reads (§3.3, §4.3)."""
-        observed: Dict[str, Set[Tuple[str, str]]] = {
-            name: {(feed.source, feed.output or "") for feed, _origin in feeds} for name, feeds in aggregators.items()
-        }
-        for name, feeds in aggregators.items():
-            for other, other_observed in observed.items():
-                if other == name:
-                    continue
-                reads = sorted({feed.output or "" for feed, _origin in feeds if feed.source == other})
-                if not reads:
-                    continue
-                both = sorted(observed[name] & other_observed)
-                if both:
-                    listed = ", ".join(f"{source}.{output}" for source, output in both)
-                    raise self.error(
-                        EnergySystemErrorId.DOUBLE_COUNT,
-                        f"components.{name}.inputs",
-                        f"'{name}' observes {other}.{', '.join(reads)}, the balance {other} sums over what it "
-                        f"observes, and also {listed}, which {other} observes: the flow would be counted twice "
-                        "(assemblies_spec.md §3.3, §4.3).",
-                        remedy=f"Let '{name}' observe only {other}'s balance — on the grid import, observes: "
-                        f"[{{output: {reads[0]}}}] — or only the flows, without {other}.",
-                    )
 
 
 def resolve_priorities(raw: Any, location: str) -> Tuple[Selector, ...]:
@@ -758,4 +632,4 @@ def resolve_priorities(raw: Any, location: str) -> Tuple[Selector, ...]:
     return ImportsReader.selectors(raw, location)
 
 
-__all__ = ["Controllable", "Match", "ObserverSlot", "SelectionLowering", "resolve_priorities"]
+__all__ = ["Controllable", "Match", "ObserverSlot", "SelectionPlan", "resolve_priorities"]

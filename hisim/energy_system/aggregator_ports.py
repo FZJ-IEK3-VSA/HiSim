@@ -20,9 +20,10 @@ port lists every component has, so this module imports no component code.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence, Tuple
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError, WrittenItem
 from hisim.energy_system.resolution import ResolvedDynamicConnection
 
 
@@ -37,7 +38,10 @@ class AggregatorPortChecker:
 
     @classmethod
     def check_participant_ports_are_unique(
-        cls, target_name: str, resolved: Sequence[ResolvedDynamicConnection]
+        cls,
+        target_name: str,
+        resolved: Sequence[ResolvedDynamicConnection],
+        items: Mapping[Tuple[str, str], WrittenItem] = MappingProxyType({}),
     ) -> None:
         """Enforces that a participant's ``(name, output)`` pair is unique per aggregator.
 
@@ -47,6 +51,7 @@ class AggregatorPortChecker:
         Args:
             target_name: Name of the aggregator.
             resolved: Its resolved connections.
+            items: The item of the file each ``(participant, output)`` came from, where one did.
 
         Raises:
             EnergySystemWiringError: ``EF-25`` if two connections measure the same port.
@@ -61,13 +66,18 @@ class AggregatorPortChecker:
                     f"components.{target_name}.inputs",
                     f"'{target_name}' measures '{key[0]}.{key[1]}' twice: via "
                     f"{previous.describe()} and via {connection.describe()}.",
+                    item=items.get(key),
                     remedy="A participant's output feeds one aggregator at most once.",
                 )
             seen[key] = connection
 
     @classmethod
     def check_port_names_are_free(
-        cls, target_name: str, target: Any, resolved: Sequence[ResolvedDynamicConnection]
+        cls,
+        target_name: str,
+        target: Any,
+        resolved: Sequence[ResolvedDynamicConnection],
+        items: Mapping[Tuple[str, str], WrittenItem] = MappingProxyType({}),
     ) -> List[str]:
         """Rejects a derived port name the aggregator already uses.
 
@@ -80,6 +90,7 @@ class AggregatorPortChecker:
             target_name: Name of the aggregator.
             target: The aggregator component.
             resolved: Its resolved connections, already sorted.
+            items: The item of the file each ``(participant, output)`` came from, where one did.
 
         Returns:
             The names resolution is about to create, inputs and dispatch outputs together.
@@ -100,6 +111,7 @@ class AggregatorPortChecker:
                         f"components.{target_name}.inputs",
                         f"resolving {connection.describe()} would create the port '{name}' on "
                         f"'{target_name}', which already has a port of that name.",
+                        item=items.get((connection.source_name, connection.source_output)),
                         remedy=(
                             "Derived port names carry no counter; rename the participant or "
                             "the output it is measured on."

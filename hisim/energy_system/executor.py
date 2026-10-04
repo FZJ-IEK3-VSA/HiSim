@@ -12,10 +12,10 @@ switched-off component's class never has to import and the off rule cannot leak 
 stage. Structural validation runs before any class is imported, so that a file can be checked
 for shape without HiSim's component tree. Sizing completes before the first component exists, so
 that a contradiction is reported with nothing built. And the connections are checked only after
-construction, because a component's ports come into being inside its constructor: the ports an
-expansion of imports lowered are checked against the constructed components first (the
-post-construction port check, :mod:`hisim.energy_system.assemblies.port_check`), then the wiring
-plans and connects every item.
+construction, because a component's ports come into being inside its constructor: the wiring
+stage checks every connection on the constructed components — the items an expansion of imports
+lowered exactly like the written ones — and a refusal of a lowered item names the port it came
+from.
 
 Two things belong to this module alone. The **simulation parameters** — the period, the
 resolution, the post-processing to run — live in their own file, because the same energy system
@@ -45,8 +45,7 @@ from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.comments import AnnotatedEmitter, write_record
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
 from hisim.energy_system.assemblies.expansion import expand_imports
-from hisim.energy_system.assemblies.port_check import check_lowered_ports
-from hisim.energy_system.assemblies.record import ImportRecord, LoweredPort, PortProvenance
+from hisim.energy_system.assemblies.record import ImportRecord, LoweredKind, LoweredPort, PortProvenance
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import (
     EnergySystemCatalogueError,
@@ -61,7 +60,7 @@ from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import realize, verify_rerun
 from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
-from hisim.energy_system.wiring import WiredSystem, construct_components, wire_energy_system
+from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters, WeatherYearError
 
@@ -293,18 +292,25 @@ class EnergySystemExecutor:
             self.model, self.assembly_resolver, lines=self.source_lines, path_resolver=self.path_resolver
         )
         expanded, expansion = expand_groups(imported)
+        provenance = self.port_provenance(expanded, imports)
         try:
             validate_structure(expanded)
             bindings = validate_classes(expanded)
             configured = configure_energy_system(
                 expanded, bindings=bindings, path_resolver=self.path_resolver
             )
-            components = construct_components(configured, self.simulation_parameters)
-            expanded = self.complete_selection(expanded, imports, expansion, dict(components))
-            check_lowered_ports(self.lowered_ports(expanded, imports), dict(components))
-            wired, wiring_warnings = wire_energy_system(expanded, components)
+            wired, wiring_warnings = wire_energy_system(
+                expanded,
+                configured,
+                self.simulation_parameters,
+                declared_outputs=[
+                    entry.item for entry in provenance if entry.kind in (LoweredKind.PROVIDED, LoweredKind.FEED)
+                ],
+                selection=imports.selection_plan,
+            )
+            expanded = self.with_selected_feeds(expanded, wired)
         except EnergySystemCatalogueError as error:
-            annotated = imports.source_map.annotate(error)
+            annotated = imports.annotate(error, provenance)
             if annotated is error:
                 raise
             raise annotated from error
@@ -328,47 +334,44 @@ class EnergySystemExecutor:
         )
 
     @staticmethod
-    def complete_selection(
-        model: EnergySystemFile,
-        imports: ImportRecord,
-        expansion: ExpansionRecord,
-        components: Mapping[str, Any],
-    ) -> EnergySystemFile:
-        """Lowers the observers' selections once the components are constructed (``assemblies_spec.md`` §4.1).
+    def with_selected_feeds(model: EnergySystemFile, wired: WiredSystem) -> EnergySystemFile:
+        """The file with every observer's selected feeds written into its inputs, as the record states it.
 
-        An observer selects among the outputs its constructed component declares dynamic default
-        connections from, so its feeds are written only now, before anything is connected; the file
-        with them passes the structural check again. A file without observers, and a re-run of a
-        record (whose feeds are already written), come back unchanged.
+        The wiring selected and connected them; written into the observer's inputs, after its own
+        items, they make the realized record a file whose re-run reads them as written feeds and
+        selects nothing. A file without observers comes back unchanged. The result passes the
+        structural check, so the record is a file the loader accepts.
 
         Args:
-            model: The expanded file, after the group expansion.
-            imports: What the expansion of imports did; it holds the pending selections.
-            expansion: What the group expansion removed.
-            components: The constructed components by name.
+            model: The expanded file the wiring planned.
+            wired: The wired system and the feeds its selection chose.
 
         Returns:
-            The file whose observers carry their feeds.
+            The file the run record is written from.
 
         Raises:
-            EnergySystemError: For a refusal of the selection, or of the structural check of the result.
+            EnergySystemFormatError: When the observer's items and its selected feeds together are not
+                a well-formed entry.
         """
-        pending = imports.pending_selection
-        if pending is None:
+        if not wired.selected_feeds:
             return model
-        completed: EnergySystemFile = pending.complete(model, components, expansion.dropped_components)
-        imports.pending_selection = None
+        components = dict(model.components)
+        for observer, feeds in wired.selected_feeds:
+            entry = components[observer]
+            components[observer] = entry.model_copy(update={"inputs": tuple(entry.inputs) + tuple(feeds)})
+        completed = model.model_copy(update={"components": components})
         validate_structure(completed)
         return completed
 
     @staticmethod
-    def lowered_ports(model: EnergySystemFile, imports: ImportRecord) -> List[LoweredPort]:
-        """The port-provenance table the post-construction port check reads.
+    def port_provenance(model: EnergySystemFile, imports: ImportRecord) -> List[LoweredPort]:
+        """The port-provenance table: what a wiring refusal of a lowered item is restated with.
 
         A run that expanded imports has it in its import record. A re-run of a realized record
-        expands nothing, so it reads the table the record's metadata carries, and the check
-        refuses on a re-run exactly what it refused on the run. A file without imports yields an
-        empty table.
+        expands nothing, so it reads the table the record's metadata carries, and a refusal on a
+        re-run names the port it named on the run. Its provided and consuming outputs are the
+        outputs the wiring checks without any item reading them by name, a consuming output with
+        its carrier and its meter. A file without imports yields an empty table.
 
         Args:
             model: The expanded file, whose metadata a re-run's table comes from.

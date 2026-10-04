@@ -2,8 +2,8 @@
 
 HiSim has no bus: a meter and an energy manager are dynamic components whose inputs are added as
 their selectors match. What an observer may observe its constructor declares, so the selection runs
-once the components are constructed: these tests build each system (expansion, construction, the
-selection, the post-construction port check, the wiring) on the mock library —
+in the wiring stage: these tests build each system (expansion, construction, the wiring with its
+selection) on the mock library —
 ``mock/electricity_grid`` (a meter observing), ``mock/ems_self_consumption`` (an energy manager
 observing and ranking by its priorities), ``mock/smart_heater`` (an output controllable through
 its L1's ``ems_modifier``) and ``mock/home_battery`` (an output actuated directly through
@@ -59,7 +59,7 @@ def fixture_results(tmp_path: Path) -> None:
 def expand(text: str, resolver: Optional[AssemblyResolver] = None) -> Tuple[EnergySystemFile, ImportRecord]:
     """Builds an inline file against the mock library (or the given one): the file with its selections lowered.
 
-    The selection runs on the constructed observers, so the file a test inspects is the built one.
+    The selection runs in the wiring, so the file a test inspects is the built one, the selected feeds written in.
     """
     directory = RESULTS[0] / f"build_{len(list(RESULTS[0].iterdir()))}"
     built = build_text(text, directory, resolver or mock_resolver())
@@ -179,27 +179,33 @@ class GhostReader(MockAggregator):
 
 @pytest.mark.base
 def test_the_selection_reads_the_constructed_observer_and_records_observe_items() -> None:
-    """The meter's candidates are its constructor's connections; every match is an observe item of the table."""
-    _expanded, record = expand(
+    """The meter's candidates are its constructor's connections; the observer is one observe row, its feeds recorded."""
+    expanded, record = expand(
         site(WEATHER, OCCUPANCY)
         + imports("  pv: {assembly: mock/pv_array}\n", "  grid: {assembly: mock/electricity_grid}\n")
     )
 
     observed = [
-        (entry.member, entry.partner, entry.output, entry.tags, entry.verb)
+        (entry.owner, entry.port, entry.member, entry.verb)
         for entry in record.port_provenance
         if entry.kind == LoweredKind.OBSERVE
     ]
-    assert observed == [
-        ("grid-Meter", "Occupancy", "ElectricityConsumption", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",), "declared"),
-        ("grid-Meter", "pv-PVSystem", "ElectricityOutput", ("PV", "ELECTRICITY_PRODUCTION"), "declared"),
+    assert observed == [("import grid", "reading", "grid-Meter", "declared")]
+    meter = record.observer("grid-Meter")
+    assert meter is not None
+    assert [(feed.source, feed.output, feed.tags) for feed in meter.feeds] == [
+        ("Occupancy", "ElectricityConsumption", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",)),
+        ("pv-PVSystem", "ElectricityOutput", ("ELECTRICITY_PRODUCTION",)),
     ]
-    assert record.pending_selection is None
+    assert [(feed.source, feed.output) for feed in feeds(expanded, "grid-Meter")] == [
+        ("Occupancy", "ElectricityConsumption"),
+        ("pv-PVSystem", "ElectricityOutput"),
+    ]
 
 
 @pytest.mark.base
 def test_an_observed_output_the_participant_does_not_have_is_refused_once_constructed() -> None:
-    """EF-7J: the observer's constructor declares a feed from ``Ghost``, which the constructed residents lack."""
+    """EF-7J from the wiring: the observer declares a feed from ``Ghost``, which the constructed residents lack."""
     reader = (
         "Reader:\n  class: tests.assemblies.test_assembly_selectors.GhostReader\n  preset: standard\n"
         "  observes: declared\n  inputs: [{$observes: observes}]\n"
@@ -208,9 +214,10 @@ def test_an_observed_output_the_participant_does_not_have_is_refused_once_constr
     message = refusal(site(WEATHER, OCCUPANCY, reader))
 
     assert message.startswith(
-        "EF-7J at component Reader: Reader observes 'Ghost' of Occupancy (MockOccupancy), which is no output of the "
-        "constructed Occupancy"
+        "EF-7J at component Reader: observer port 'observes' selects declared for Reader (GhostReader) (component "
+        "Reader, inline.energy_system.yaml:"
     ), message
+    assert "the feed 'Occupancy.Ghost' -> 'Reader' (weight 999) names the output 'Ghost'" in message
     assert "Valid outputs: ElectricityConsumption, WaterDemand." in message
 
 
@@ -425,7 +432,7 @@ def test_a_site_entry_observes_at_its_placeholder() -> None:
 
 @pytest.mark.base
 def test_an_output_selected_and_fed_explicitly_is_refused_as_a_duplicate_feed() -> None:
-    """EF-25, as today's DUPLICATE_FEED: one output read twice by one observer."""
+    """EF-25, the wiring's DUPLICATE_FEED, restated with the observer: one output read twice by one observer."""
     meter = (
         f"Meter:\n  class: {MOCKS}.MockElectricityMeter\n  preset: standard\n  observes: declared\n"
         "  inputs:\n    - {$observes: observes}\n"
@@ -435,9 +442,9 @@ def test_an_output_selected_and_fed_explicitly_is_refused_as_a_duplicate_feed() 
     message = refusal(site(WEATHER, OCCUPANCY, meter))
 
     assert message.startswith(
-        "EF-25 at components.Meter.inputs: 'Meter' observes 'Occupancy.ElectricityConsumption' twice"
+        "EF-25 at component Meter: observer port 'observes' selects declared for Meter (MockElectricityMeter)"
     )
-    assert "written in its inputs" in message and "selected by component Meter.observes (declared)" in message
+    assert "the wiring refuses it: 'Meter' measures 'Occupancy.ElectricityConsumption' twice" in message
 
 
 @pytest.mark.base
@@ -485,7 +492,7 @@ def test_an_observer_that_is_no_controller_ranks_nothing() -> None:
 
 @pytest.mark.base
 def test_the_meter_observing_the_balance_and_a_flow_the_ems_observes_is_a_double_count() -> None:
-    """The grid left at its default beside a controller: EF-7T (§3.3, §4.3), with the paste-ready selection."""
+    """The grid left at its default beside a controller: EF-7T (§3.3, §4.3) from the wiring, naming the grid's port."""
     message = refusal(
         site(WEATHER, OCCUPANCY)
         + imports(
@@ -496,11 +503,15 @@ def test_the_meter_observing_the_balance_and_a_flow_the_ems_observes_is_a_double
     )
 
     assert message.startswith(
-        "EF-7T at components.grid-Meter.inputs: 'grid-Meter' observes control-EMS.TotalElectricityToOrFromGrid, the "
-        "balance control-EMS sums over what it observes, and also Occupancy.ElectricityConsumption, "
-        "pv-PVSystem.ElectricityOutput, which control-EMS observes"
+        "EF-7T at import grid: observer port 'reading' selects declared for grid-Meter (MockElectricityMeter) (import "
+        "grid, inline.energy_system.yaml:"
     )
-    assert "observes: [{output: TotalElectricityToOrFromGrid}]" in message
+    assert (
+        "the wiring refuses it: 'grid-Meter' observes control-EMS.TotalElectricityToOrFromGrid, the balance "
+        "control-EMS sums over what it observes, and also Occupancy.ElectricityConsumption, "
+        "pv-PVSystem.ElectricityOutput, which control-EMS observes" in message
+    )
+    assert "Let 'grid-Meter' observe only control-EMS's balance (control-EMS.TotalElectricityToOrFromGrid)" in message
 
 
 @pytest.mark.base
@@ -795,7 +806,7 @@ def test_a_bound_controllable_output_the_controller_does_not_rank_is_refused() -
 
 @pytest.mark.base
 def test_a_controllable_naming_an_input_the_controller_may_not_actuate_is_refused(tmp_path: Path) -> None:
-    """D21: the manager dispatches electricity, so it never actuates the heater's on/off signal (after construction)."""
+    """D21: the manager dispatches electricity, so the wiring refuses its dispatch into the heater's on/off signal."""
     library = Library(tmp_path)
     library.add(
         "generator/wired_heater",
@@ -823,14 +834,17 @@ def test_a_controllable_naming_an_input_the_controller_may_not_actuate_is_refuse
     )
 
     assert message.startswith(
-        "EF-7U at import control: control-EMS (MockEnergyManager) would dispatch ELECTRICITY in WATT to "
-        "heater-Heater.Signal, which takes ON_OFF in ANY"
+        "EF-30 at import control: observer port 'flows' selects declared for control-EMS (MockEnergyManager)"
     ), message
+    assert (
+        "the wiring refuses it: load type mismatch on the connection 'control-EMS.DispatchToheater_Heater_Signal' -> "
+        "'heater-Heater.Signal'" in message
+    )
 
 
 @pytest.mark.base
 def test_a_target_input_actuated_and_wired_is_refused(tmp_path: Path) -> None:
-    """The battery's ``LoadingPowerInput`` is the manager's: a wire into it as well is EF-7U."""
+    """The battery's ``LoadingPowerInput`` is the manager's: a wire into it as well is the wiring's EF-26."""
     library = Library(tmp_path)
     library.add(
         "storage/wired_battery",
@@ -865,9 +879,10 @@ def test_a_target_input_actuated_and_wired_is_refused(tmp_path: Path) -> None:
         library.resolver(),
     )
 
+    assert message.startswith("EF-26 at import control: observer port 'flows' selects [{component_type: [RESIDENTS, ")
     assert (
-        "EF-7U at components.battery-Battery: battery-Battery.LoadingPowerInput is actuated by control-EMS and "
-        "also wired from battery-Heater.ElectricityInput" in message
+        "the input 'battery-Battery.LoadingPowerInput' is fed twice: by 'battery-Heater.ElectricityInput' -> "
+        "'battery-Battery.LoadingPowerInput'" in message
     )
 
 
@@ -911,7 +926,7 @@ def test_two_instances_of_one_class_feeding_one_observer_get_distinct_ports() ->
 
 @pytest.mark.base
 def test_two_participants_whose_port_names_collide_are_refused() -> None:
-    """A site entry ``pv_east_PVSystem`` beside the member ``pv-east-PVSystem``: one port name, EF-7W."""
+    """A site entry ``pv_east_PVSystem`` beside the member ``pv-east-PVSystem``: one port name, EF-32 as EF-7W."""
     roof = f"pv_east_PVSystem:\n  class: {MOCKS}.MockPVSystem\n  preset: rooftop\n  inputs: [Weather]\n"
 
     message = refusal(
@@ -923,10 +938,10 @@ def test_two_participants_whose_port_names_collide_are_refused() -> None:
     )
 
     assert message.startswith(
-        "EF-7W at components.grid-Meter.inputs: 'grid-Meter' would grow the port "
-        "'ElectricityOutputFrompv_east_PVSystem' "
-        "for pv_east_PVSystem.ElectricityOutput and for pv-east-PVSystem.ElectricityOutput"
+        "EF-7W at import grid: observer port 'reading' selects [{component_type: PV}] for grid-Meter "
+        "(MockElectricityMeter)"
     )
+    assert "would create the port 'ElectricityOutputFrompv_east_PVSystem' on 'grid-Meter'" in message
 
 
 # -------------------------------------------------------------------------------- the twin shapes (E)

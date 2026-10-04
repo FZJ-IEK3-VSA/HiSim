@@ -83,6 +83,7 @@ class ChannelMatcher:
                 f"the {feed.describe()} carries the tags "
                 f"{sorted(tag.name for tag in feed_tags)}, which match no channel of the "
                 f"aggregator {target}.",
+                item=feed.item,
                 alternatives=[channel.describe() for channel in channels],
                 alternatives_label="channels",
             )
@@ -94,6 +95,7 @@ class ChannelMatcher:
                 feed.location,
                 f"the {feed.describe()} matches {len(winners)} equally specific channels of "
                 f"the aggregator {target}, so which one it belongs to is undecidable.",
+                item=feed.item,
                 alternatives=[channel.describe() for channel in winners],
                 alternatives_label="channels",
                 remedy=(
@@ -219,6 +221,7 @@ class ChannelMatcher:
                 f"the {feed.describe()} feeds a '{source_load_type.name}' output into the "
                 f"channel {channel.describe()} of the aggregator {target}, which carries "
                 f"'{channel.load_type.name}'.",
+                item=feed.item,
             )
         if source_unit is not None and not channel.accepts_unit(source_unit):
             raise EnergySystemWiringError(
@@ -227,6 +230,7 @@ class ChannelMatcher:
                 f"the {feed.describe()} feeds an output in '{source_unit.value}' into the "
                 f"channel {channel.describe()} of the aggregator {target}, which is in "
                 f"'{channel.unit.value}'.",
+                item=feed.item,
             )
 
     @classmethod
@@ -258,6 +262,7 @@ class ChannelMatcher:
                 f"the {feed.describe()} uses the reserved monitored-only weight "
                 f"{FeedRequest.MONITORED_ONLY_WEIGHT} and therefore cannot carry a dispatch "
                 "block.",
+                item=feed.item,
             )
         if feed.has_dispatch and channel.dispatch is DispatchRule.FORBIDDEN:
             raise EnergySystemWiringError(
@@ -265,6 +270,7 @@ class ChannelMatcher:
                 feed.location,
                 f"the {feed.describe()} carries a dispatch block, but the channel "
                 f"{channel.describe()} of the aggregator {target} never sends a signal back.",
+                item=feed.item,
             )
         if not feed.has_dispatch and channel.dispatch is DispatchRule.REQUIRED:
             raise EnergySystemWiringError(
@@ -273,6 +279,7 @@ class ChannelMatcher:
                 f"the {feed.describe()} has no dispatch block, but the channel "
                 f"{channel.describe()} of the aggregator {target} dispatches to every "
                 "participant on it and needs an output to write to.",
+                item=feed.item,
             )
         if channel.dispatch is DispatchRule.FORBIDDEN and not monitored_only:
             raise EnergySystemWiringError(
@@ -281,6 +288,7 @@ class ChannelMatcher:
                 f"the {feed.describe()} carries a dispatch rank, but the channel "
                 f"{channel.describe()} of the aggregator {target} forbids dispatch, so the "
                 "participant could never be served.",
+                item=feed.item,
                 remedy=(
                     f"Give it the reserved monitored-only weight "
                     f"{FeedRequest.MONITORED_ONLY_WEIGHT}."
@@ -293,6 +301,7 @@ class ChannelMatcher:
                 f"the {feed.describe()} uses the reserved monitored-only weight "
                 f"{FeedRequest.MONITORED_ONLY_WEIGHT}, but the channel {channel.describe()} of "
                 f"the aggregator {target} dispatches to every participant and needs a real rank.",
+                item=feed.item,
             )
 
     @classmethod
@@ -324,5 +333,6 @@ class ChannelMatcher:
                 f"{sorted(tag.name for tag in written)}, but the channel {channel.describe()} "
                 f"of the aggregator {target} dispatches with "
                 f"{sorted(tag.name for tag in channel.dispatch_tags)}.",
+                item=feed.item,
                 remedy="Omit 'dispatch.tags' to inherit the channel's tags.",
             )

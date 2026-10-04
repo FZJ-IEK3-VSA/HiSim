@@ -303,9 +303,14 @@ partner}` (the partner must exist), `optional-bind: {port: partner}` (binds if i
 unbound, and the record says so) and `none: [port]` (declines an optional port). `required_when` and
 `active_when` make a port depend on the parameters. Inside an assembly an inner import's port is
 bound by a verb on the inner import, by an `internal:` entry, or re-exported with `from:
-<inner>.<port>`. The default connections are checked at load time against the member class's
-`CLASS_INTERFACE` (`hisim/component_interface.py`): its inputs and outputs with load types and units,
-the classes it declares default connections from, and its KPIs. Every refusal names the import, the
+<inner>.<port>`. Binding a component needs no declaration beyond what its class already does in
+its constructor: the expansion decides from the files alone (every entry states its class) which
+component is a candidate and refuses what they decide — no partner, several and no verb, `none:` on a
+required port, an absent `bind:` partner, a verb on an inactive port. Whether the member really
+declares default connections from the partner's class, and whether a wired input or output or a
+provided output exists, is checked when the system is built: after every component is constructed
+and before anything is connected (`EF-7H`, `EF-7J`, `hisim/energy_system/assemblies/port_check.py`),
+from the port-provenance table the import record keeps. Every refusal names the import, the
 instance, the port and every candidate, prints the source map of the import, and ends in a
 paste-ready `bind:` line.
 
@@ -318,11 +323,14 @@ every directory `HISIM_ASSEMBLY_PATH` names (`os.pathsep`-separated); a path fou
 The realized record's metadata carries the **import record** — per import and instance the assembly
 path and the sha256 of its file, the preset, the parameters as given and as resolved, the variants,
 the members' addresses, display names and order paths, every port's state and partner, the binding
-decisions and the evaluation sequence — and the **source map** of every produced item, which every
-downstream error naming a produced component prints. A realized record re-runs without any assembly.
+decisions, the port-provenance table and the evaluation sequence — and the **source map** of every
+produced item, which every downstream error naming a produced component prints. A realized record
+re-runs without any assembly; its port-provenance table is checked against the constructed
+components as on the first run.
 
 **Inspecting.** `hisim energy-system describe <family>/<name>` (or a path to a `*.assembly.yaml`)
-prints an assembly's interface with partner classes and requirement states, its parameters with
+prints an assembly's interface as its file declares it, with partner classes and requirement states
+(the partners' default connections are verified when a system is built, not here), its parameters with
 units, ranges, defaults and values, its constraints, presets, members, variants, inner imports and
 test contract. `hisim energy-system schema` writes `hisim/assembly_v4.schema.json` beside the
 energy-system schema; it states the library contract, so validating a draft lists what it still

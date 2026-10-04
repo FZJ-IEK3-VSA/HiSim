@@ -18,9 +18,20 @@ The expansion works **innermost first**. For each import and each of its instanc
    and offers the assembly's own ports to its importer;
 
 and at the top level it binds every port of every import and of every site entry, lowering a need
-to the bare partner name (the member class's default connections from the partner's class, checked
-at load time against the class's :class:`~hisim.component_interface.ClassInterface`) or to the
+to the bare partner name (the member's default connections from the partner's class) or to the
 explicit wires the port names, exactly where the member's ``{$port: …}`` placeholder stands.
+
+**What is decided here, and what after construction.** Every entry states its class, so the
+expansion decides from the files alone which component is a candidate partner, whether a port has
+none, several or a verb to decide it, and whether the members a port names exist. Whether the
+member's class really declares default connections from the partner's class, and whether a wire's
+input and output exist, the constructed components say: a component creates its ports and default
+connections in its constructor, and no second declaration of them exists. The expansion therefore
+writes one entry per lowered item into the port-provenance table of the import record
+(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and the post-construction port
+check (:mod:`hisim.energy_system.assemblies.port_check`) refuses, with the import, the port, the
+member, the partner, the files and lines, the candidates and a paste-ready ``bind:`` line, an item
+the constructed components do not have (``EF-7H``, ``EF-7J``) — before anything is connected.
 
 **The default rule** mirrors the sizing engine's: a port binds to the one component in scope whose
 class is one of its partner classes, and a verb decides every other case. In scope are, at the top
@@ -47,7 +58,6 @@ import string
 from dataclasses import dataclass, field
 from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
-from hisim.component_interface import ClassInterface
 from hisim.config import AddressStep, ComponentID
 from hisim.config.sizing import declared_field_unit
 from hisim.energy_system.assemblies.model import MemberTemplate, ParameterDeclaration
@@ -60,6 +70,8 @@ from hisim.energy_system.assemblies.parameters import (
 from hisim.energy_system.assemblies.record import (
     ImportRecord,
     InstanceRecord,
+    LoweredKind,
+    LoweredPort,
     NotLowered,
     PortRecord,
     SourceMapEntry,
@@ -94,7 +106,7 @@ MAXIMUM_DEPTH = 4
 
 
 class ClassFacts:
-    """Component classes, configuration classes and class interfaces, imported once per path."""
+    """Component classes and configuration classes, imported once per path."""
 
     def __init__(self) -> None:
         """Starts with empty caches."""
@@ -113,10 +125,6 @@ class ClassFacts:
             component = self.component_class(class_path, location, name)
             self._configs[class_path] = ClassBinder.configuration_class_of(component, location, name)
         return self._configs[class_path]
-
-    def interface(self, class_path: str, location: str, name: str) -> Optional[ClassInterface]:
-        """The class interface a component class declares, or ``None``."""
-        return getattr(self.component_class(class_path, location, name), "CLASS_INTERFACE", None)
 
     @staticmethod
     def short_name(class_path: str) -> str:
@@ -194,6 +202,8 @@ class Handle:
         chain: The source map of the owner's port.
         record: The port's record in the import record.
         decided: Whether a verb, an internal entry, a re-export or the default rule has decided it.
+        hint: The candidates and the paste-ready verb lines a refusal of this port prints.
+        candidates: The candidate partners in scope, ``name (Class)``, for the port-provenance table.
     """
 
     owner: str
@@ -208,6 +218,7 @@ class Handle:
     record: Dict[str, Any] = field(default_factory=dict)
     decided: bool = False
     hint: str = ""
+    candidates: Tuple[str, ...] = ()
 
     @property
     def partner_text(self) -> str:
@@ -825,6 +836,8 @@ class ImportExpander:
                         )
                 else:
                     handle.provider = (unit.name, output or "")
+                    if handle.state != "inactive":
+                        self._note_lowered(handle, LoweredKind.PROVIDED, unit, "", output=output or "")
             elif port.kind == PortKind.REEXPORT:
                 inner_key, inner_port = (port.reexports or ".").split(".", 1)
                 results = inner.get(inner_key)
@@ -1063,6 +1076,7 @@ class ImportExpander:
             handle.decided = True
             return
         candidates = self._candidates(handle, level.units)
+        handle.candidates = tuple(f"{unit.name} ({ClassFacts.short_name(unit.class_path)})" for unit in candidates)
         handle.hint = (
             f"Candidates: {', '.join(unit.name for unit in candidates) or 'none'}; "
             + self._paste_lines(handle, candidates, level, optional=handle.state == "optional")
@@ -1173,9 +1187,10 @@ class ImportExpander:
                 items: List[AnyInputItem] = [
                     ExplicitWire(source=partner.name, input=target, output=output) for target, output in wires.items()
                 ]
-                self._check_wires(handle, landing, partner, wires)
+                for target, output in wires.items():
+                    self._note_lowered(handle, LoweredKind.WIRE, landing.unit, verb, partner, target, output)
             else:
-                self._check_default_connections(handle, landing, partner)
+                self._note_lowered(handle, LoweredKind.DEFAULT, landing.unit, verb, partner)
                 items = [DefaultInputs(source=partner.name)]
             if landing.position in landing.unit.lowered:
                 raise self.error(
@@ -1198,70 +1213,35 @@ class ImportExpander:
             return f"{{input: {item.input}, from: {item.source}.{item.output}}}"
         return item.source
 
-    def _check_default_connections(self, handle: Handle, landing: Landing, partner: Unit) -> None:
-        """Refuses a binding the landing's class declares no default connections for (``EF-7H``)."""
-        partner_class = ClassFacts.short_name(partner.class_path)
-        location = f"components.{landing.unit.name}"
-        interface = self.classes.interface(landing.unit.class_path, location, landing.unit.name)
-        if interface is None:
-            raise self.error(
-                EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
-                handle.owner,
-                f"port '{handle.port.name}' would lower to {landing.unit.name}'s default connections from "
-                f"{partner.name} ({partner_class}), but {landing.unit.class_path} declares no CLASS_INTERFACE, "
-                f"so its default connections cannot be checked at load time {handle.source_text()}.",
-                remedy=(
-                    f"Declare CLASS_INTERFACE on {landing.unit.class_path} (hisim.component_interface), or name the "
-                    f"wires on the placeholder. {handle.hint}"
-                ),
+    def _note_lowered(
+        self,
+        handle: Handle,
+        kind: str,
+        member: Unit,
+        verb: str,
+        partner: Optional[Unit] = None,
+        target: str = "",
+        output: str = "",
+    ) -> None:
+        """Writes one lowered item into the port-provenance table, for the post-construction check."""
+        self.record.port_provenance.append(
+            LoweredPort(
+                kind=kind,
+                owner=handle.owner,
+                import_path=handle.owner_path,
+                port=handle.port.name,
+                verb=verb,
+                member=member.name,
+                member_class=member.class_path,
+                partner=partner.name if partner is not None else "",
+                partner_class=partner.class_path if partner is not None else "",
+                input=target,
+                output=output,
+                chain=tuple(location.text for location in handle.chain),
+                candidates=handle.candidates,
+                remedy=handle.hint,
             )
-        if not interface.declares_defaults_from(partner_class):
-            raise self.error(
-                EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
-                handle.owner,
-                f"port '{handle.port.name}' is bound to {partner.name} ({partner_class}), but "
-                f"{landing.unit.name} ({ClassFacts.short_name(landing.unit.class_path)}) declares no default "
-                f"connections from {partner_class} {handle.source_text()}.",
-                alternatives=interface.default_connection_sources,
-                alternatives_label="classes it declares default connections from",
-                remedy="Bind a partner of one of those classes, or add the default connection to the class. "
-                + handle.hint,
-            )
-
-    def _check_wires(self, handle: Handle, landing: Landing, partner: Unit, wires: Mapping[str, str]) -> None:
-        """Checks the inputs and, where the partner's class declares them, the outputs a port's wires name."""
-        interface = self.classes.interface(
-            landing.unit.class_path, f"components.{landing.unit.name}", landing.unit.name
         )
-        if interface is None:
-            raise self.error(
-                EnergySystemErrorId.PORT_CONTRACT,
-                handle.owner,
-                f"port '{handle.port.name}' wires inputs of {landing.unit.name}, whose class "
-                f"{landing.unit.class_path} declares no CLASS_INTERFACE to check them against {handle.source_text()}.",
-            )
-        for target, output in wires.items():
-            if interface.input(target) is None:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    handle.owner,
-                    f"port '{handle.port.name}' wires '{target}', which is no input of {landing.unit.name} "
-                    f"{handle.source_text()}.",
-                    alternatives=tuple(port.name for port in interface.inputs),
-                    alternatives_label="inputs",
-                    offending_value=target,
-                )
-            partner_interface = self.classes.interface(partner.class_path, f"components.{partner.name}", partner.name)
-            if partner_interface is not None and partner_interface.output(output) is None:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    handle.owner,
-                    f"port '{handle.port.name}' wires '{target}' from '{output}', which is no output of "
-                    f"{partner.name} {handle.source_text()}.",
-                    alternatives=tuple(port.name for port in partner_interface.outputs),
-                    alternatives_label="outputs",
-                    offending_value=output,
-                )
 
     def _bind_inside(
         self,

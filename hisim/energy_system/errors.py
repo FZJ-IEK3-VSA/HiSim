@@ -62,7 +62,12 @@ class EnergySystemErrorId(enum.Enum):
     parameters and their units, ``EF-7A`` … ``EF-7J`` for the binding of ports (§3.3), ``EF-7K`` for
     the evaluation order, ``EF-7L`` for a construct a later step of the assemblies work lowers, and
     ``EF-7M`` for a verb naming a port the assembly does not have. The letter ``I`` is skipped, as
-    it reads like a one.
+    it reads like a one. The expansion raises them from the files, before any class is constructed;
+    two of them fire a second time, later in the build: once every component is constructed and
+    before anything is connected, the post-construction port check
+    (:mod:`hisim.energy_system.assemblies.port_check`) raises ``EF-7H`` for a lowered bare name whose
+    member declares no default connections from the partner's class, and ``EF-7J`` for a lowered
+    wire or provided output naming an input or output the constructed component does not have.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -407,7 +412,10 @@ class EnergySystemAssemblyError(EnergySystemCatalogueError):
     sees the file: an assembly that cannot be found or is found twice, a cycle or a nesting
     deeper than four, a parameter of the wrong type, value, range or unit, a violated
     constraint, a port that cannot be bound (§3.3), an evaluation order that is not a valid
-    numbering, and a construct the current step of the assemblies work does not lower yet.
+    numbering, and a construct the current step of the assemblies work does not lower yet. Also
+    raised by the post-construction port check of the build (``EF-7H``, ``EF-7J``), which confirms
+    on the constructed components what a lowered port means: the member's default connections from
+    its partner's class, a wired input and output, a provided output.
 
     Every message names the import and, where there is one, the instance and the port, and
     carries the source map of the import — the files and lines it came from — so that a failure

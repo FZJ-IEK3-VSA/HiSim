@@ -11,8 +11,6 @@ from pathlib import Path
 
 import pytest
 
-from hisim.component_interface import ClassInterface, DeclaredPort
-from hisim import loadtypes as lt
 from hisim.energy_system.assemblies.library import CheckStrength, check_assembly, require_valid
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError
@@ -92,7 +90,6 @@ def test_the_library_check_lists_every_problem_of_a_file_at_once(tmp_path: Path)
         "takes an input from 'Outsider', which is no member",
         "'power_in_watt' is in KILOWATT, the field MockHeaterConfig.power_in_watt it feeds in WATT",
         "lowers into 'Nobody', which is no member",
-        "'Heater.NoSuchOutput', which is no output of 'Heater'",
         "a placeholder for 'undeclared', which is no port",
         "carries no test contract",
     ):
@@ -103,8 +100,13 @@ def test_the_library_check_lists_every_problem_of_a_file_at_once(tmp_path: Path)
 
 
 @pytest.mark.base
-def test_the_test_contract_must_bound_every_energy_and_temperature_output(tmp_path: Path) -> None:
-    """D24: a ``bounds`` entry per energy-carrying or temperature output, at least one ``monotone``."""
+def test_the_test_contract_is_checked_from_the_file(tmp_path: Path) -> None:
+    """D24 from the file: at least one ``monotone``, units of ``lt.Units``, names resolving to members and presets.
+
+    Which outputs need a bounds entry, a bounded output's unit and the KPIs a member reports the
+    constructed members say; the assembly test harness checks those in its isolation run, so the
+    library check, which constructs nothing, reports none of them.
+    """
     library = Library(tmp_path)
     library.add(
         "broken/unbounded",
@@ -122,7 +124,9 @@ def test_the_test_contract_must_bound_every_energy_and_temperature_output(tmp_pa
         tests:
           bounds:
             - {output: Tank.WaterTemperature, unit: KELVIN, min: 0, max: 400}
-            - {kpi: No such KPI, member: Tank, max: 1}
+            - {output: Pump.Flow, unit: METER_PER_SECOND, min: 0, max: 1}
+            - {output: Tank.HeatLoss, unit: FURLONG, min: 0, max: 1}
+            - {kpi: No such KPI, member: Pipe, max: 1}
           monotone: []
           expect:
             - {preset: missing, kpi: Standby heat losses, member: Tank, max: 1}
@@ -132,40 +136,12 @@ def test_the_test_contract_must_bound_every_energy_and_temperature_output(tmp_pa
 
     found = "\n".join(check_assembly(resolver.resolve("broken/unbounded", "test"), resolver, CheckStrength.LIBRARY))
 
-    assert "the WATT output 'Tank.HeatLoss' has no bounds entry" in found
-    assert "states KELVIN for 'Tank.WaterTemperature', whose unit is CELSIUS" in found
-    assert "'Tank' reports no KPI 'No such KPI'" in found
+    assert "the bounds entry names 'Pump.Flow', but 'Pump' is no member" in found
+    assert "the unit 'FURLONG' is no member of lt.Units" in found
+    assert "the entry names the member 'Pipe', which does not exist" in found
     assert "no monotone entry" in found
     assert "the preset 'missing', which the assembly does not offer" in found
-
-
-@pytest.mark.base
-def test_energy_and_temperature_outputs_are_decided_by_unit_and_load_type() -> None:
-    """The documented rule: a power or energy unit, a temperature load type or unit."""
-    rule = ClassInterface.carries_energy_or_temperature
-
-    assert rule(DeclaredPort("P", lt.LoadTypes.ELECTRICITY, lt.Units.WATT))
-    assert rule(DeclaredPort("E", lt.LoadTypes.HEATING, lt.Units.KWH))
-    assert rule(DeclaredPort("T", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS))
-    assert rule(DeclaredPort("dT", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN))
-    assert not rule(DeclaredPort("S", lt.LoadTypes.ON_OFF, lt.Units.ANY))
-    assert not rule(DeclaredPort("W", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP))
-
-
-@pytest.mark.base
-def test_a_class_interface_is_held_to_at_construction() -> None:
-    """A component adding a port its interface does not declare is refused by the component itself."""
-    from hisim.component_interface import ClassInterfaceViolation  # noqa: PLC0415
-    from hisim.simulationparameters import SimulationParameters  # noqa: PLC0415
-    from tests.assemblies.mock_components import MockWeather, MockWeatherConfig  # noqa: PLC0415
-
-    weather = MockWeather(SimulationParameters.one_day_only(2021, 900), MockWeatherConfig.preset_standard("W"))
-    with pytest.raises(ClassInterfaceViolation, match="adds the output 'Rogue'"):
-        weather.add_output("W", "Rogue", lt.LoadTypes.ANY, lt.Units.ANY, output_description="x")
-    with pytest.raises(ClassInterfaceViolation, match="default connections from 'MockTank'"):
-        from hisim.component import ComponentConnection  # noqa: PLC0415
-
-        weather.add_default_connections([ComponentConnection("X", "MockTank", "Y")])
+    assert "KELVIN" not in found and "No such KPI" not in found
 
 
 @pytest.mark.base

@@ -566,7 +566,7 @@ class ImportExpander:
                 is_provision=port.is_provision,
                 partner=tuple(port.partner),
                 circuit=handle.end.circuit if handle.end is not None else None,
-                end_classes=tuple(ClassFacts.short_name(unit.class_path) for unit in handle.end.units)
+                end_classes=tuple(short_class_name(unit.class_path) for unit in handle.end.units)
                 if handle.end is not None
                 else (),
                 carrier=handle.carrier,

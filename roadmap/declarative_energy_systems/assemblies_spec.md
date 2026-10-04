@@ -851,7 +851,10 @@ natural_gas) is required and no provider of natural_gas exists", with the import
 3. **Sizing.** `Many` with `Sum`; the battery laws over all arrays; fact exports (§6). One array stays byte-identical.
 4. **First assemblies.** The site, one heating assembly (`heating/air_source_heat_pump`), `pv/array`, `storage/battery`,
    `control/ems_self_consumption`, `supply/electricity_grid`. Gate: site plus these imports expands to the heat-pump
-   twin byte for byte under the rename map, and a one-day run gives identical result columns; each carries its test
+   twin byte for byte under the rename map and a short, listed set of intended differences (decided, owner, 2026-10-04,
+   G7: a many fact port with one provider writes its one-element `sizing_sources` list where the twin writes no line —
+   one lowering rule whatever the count, and adding a second array never changes the first one's lines), and a one-day
+   run gives identical result columns; each carries its test
    contract (§9.4) and the harness runs them in the PR gate. Waits for hydronic stages C and D (§11.1).
 5. **One heating assembly per PR,** each with the equality gate against that generator's twin: condensing gas, oil,
    pellets, wood chips, hydrogen, ground source, district heating, electric heating, then solar thermal, with

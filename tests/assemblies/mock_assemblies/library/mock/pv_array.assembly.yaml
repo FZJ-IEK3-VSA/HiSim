@@ -1,8 +1,8 @@
-# Fixture: one PV array, imported once per array as named instances.
+# Mock: one PV array, imported once per array as named instances.
 schema_version: 4
 kind: assembly
-name: pv/array
-description: One fake PV array on the roof.
+name: mock/pv_array
+description: One mock PV array on the roof.
 
 parameters:
   azimuth_in_degree:
@@ -25,7 +25,7 @@ presets:
 
 components:
   PVSystem:
-    class: tests.assemblies.fixture_components.FakePVSystem
+    class: tests.assemblies.mock_components.MockPVSystem
     preset: rooftop
     display: "PV array, {facing}, azimuth {azimuth_in_degree}"
     config:
@@ -38,7 +38,7 @@ components:
 
 interface:
   needs:
-    weather: {into: [PVSystem], partner: FakeWeather}
+    weather: {into: [PVSystem], partner: MockWeather}
   provides:
     production: {output: PVSystem.ElectricityOutput}
     peak_power: {fact: pv_peak_power_in_watt, member: PVSystem}

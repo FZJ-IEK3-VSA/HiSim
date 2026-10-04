@@ -16,7 +16,7 @@ from hisim.config import AddressStep, ComponentID, DisplayConfig, NameSyntax
 from hisim.energy_system.errors import EnergySystemFormatError
 from hisim.energy_system.validation import validate_structure
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
-from tests.assemblies.fixture_components import FakePVSystemConfig
+from tests.assemblies.mock_components import MockPVSystemConfig
 from tests.assemblies.helpers import read_system
 
 
@@ -38,7 +38,7 @@ def test_an_empty_path_leaves_the_key_and_the_dump_exactly_as_they_were(
 @pytest.mark.base
 def test_the_key_serializes_the_address_with_hyphens() -> None:
     """Import and instance keys, then the member, joined by ``-``; building and unit still by ``_``."""
-    east = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="pv/array")
+    east = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="mock/pv_array")
     nested = ComponentID("Tank", path=(AddressStep("dhw"), AddressStep("tank")))
     housed = ComponentID("HeatPump", building="BUI1", path=(AddressStep("heating"),))
 
@@ -51,10 +51,12 @@ def test_the_key_serializes_the_address_with_hyphens() -> None:
 @pytest.mark.base
 def test_an_address_stays_frozen_hashable_and_round_trips_through_its_dump() -> None:
     """The identity is a value: equal addresses hash alike, a list path is frozen, the dump reads back."""
-    identity = ComponentID("PVSystem", path=[AddressStep("pv", "east")], assembly="pv/array")  # type: ignore[arg-type]
+    identity = ComponentID(
+        "PVSystem", path=[AddressStep("pv", "east")], assembly="mock/pv_array"  # type: ignore[arg-type]
+    )
 
     assert identity.path == (AddressStep("pv", "east"),)
-    assert hash(identity) == hash(ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="pv/array"))
+    assert hash(identity) == hash(ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="mock/pv_array"))
     assert ComponentID.from_dict(identity.to_dict()) == identity
     with pytest.raises(dataclasses.FrozenInstanceError):
         identity.name = "Other"  # type: ignore[misc]
@@ -75,9 +77,9 @@ def test_an_import_or_instance_key_obeys_the_identifier_rule(bad: str) -> None:
 @pytest.mark.base
 def test_the_cache_key_is_the_same_wherever_a_member_sits() -> None:
     """The address, like the building, decides nothing about a cached series."""
-    plain = FakePVSystemConfig.preset_rooftop("PVSystem")
-    addressed = FakePVSystemConfig.preset_rooftop("PVSystem")
-    addressed.component_id = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="pv/array")
+    plain = MockPVSystemConfig.preset_rooftop("PVSystem")
+    addressed = MockPVSystemConfig.preset_rooftop("PVSystem")
+    addressed.component_id = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="mock/pv_array")
 
     assert addressed.cache_key_view().to_json() == plain.cache_key_view().to_json()
     assert plain.to_dict()["component_id"] == {"name": "PVSystem", "building": None, "unit": None}
@@ -128,7 +130,7 @@ def test_an_authored_file_with_a_hyphen_in_a_name_is_refused() -> None:
             name: authored
             components:
               pv-east:
-                class: tests.assemblies.fixture_components.FakeWeather
+                class: tests.assemblies.mock_components.MockWeather
                 preset: standard
             """
         )
@@ -143,7 +145,7 @@ def test_a_hyphenated_name_no_expansion_produced_is_refused_by_the_validator() -
         name: built
         components:
           Weather:
-            class: tests.assemblies.fixture_components.FakeWeather
+            class: tests.assemblies.mock_components.MockWeather
             preset: standard
         """
     )

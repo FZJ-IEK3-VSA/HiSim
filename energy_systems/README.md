@@ -265,8 +265,8 @@ Schema version 4 of the format adds **assemblies** (`roadmap/declarative_energy_
 on PR #881): fragments of an energy system in files of their own, `<family>/<name>.assembly.yaml`,
 which a file imports instead of writing their components out. These are steps 1 and 2 of that spec
 (beads hisim-lt0b.1, hisim-lt0b.2, hisim-lt0b.8 and hisim-lt0b.3): the format, the loader, the
-expansion, the checks, the test harness, and observe and actuate, proven on fixtures under
-`tests/assemblies/`. No real assembly ships yet, so
+expansion, the checks, the test harness, and observe and actuate, proven on the mock assemblies under
+`tests/assemblies/mock_assemblies/`. No real assembly ships yet, so
 `energy_systems/assemblies/` does not exist.
 
 ```yaml
@@ -470,7 +470,7 @@ Python.
   move that way within the golden gate's tolerance. Every failure is collected, the JSON report and a
   one-screen summary written, and the run then fails listing all of them.
 - *Tiers.* The PR tier — the contract test and the deterministic samples — runs as
-  `tests/assemblies/test_harness_pr_tier.py` on the fixture library. The nightly tier, with the
+  `tests/assemblies/test_harness_pr_tier.py` on the mock library. The nightly tier, with the
   hypercube, runs beside the full-year goldens (job `assemblies-nightly` in `golden-year.yml`) and
   uploads its report.
 
@@ -485,7 +485,7 @@ per sample with its `isolation.energy_system.yaml`, plus `assembly_test_report.j
 `assembly_test_summary.txt` (a fresh temporary directory when omitted). `--samples` and `--seed` set
 the nightly hypercube (16 per branch, seed 20261003) and are refused with `--tier pr`. Exit 0 when
 every check held, 1 when one failed, 2 for a command the harness cannot run as asked.
-`tests/assemblies/fixtures/wrong/` holds an assembly whose contract is deliberately wrong, which
+`tests/assemblies/mock_assemblies/wrong/` holds an assembly whose contract is deliberately wrong, which
 the harness must fail by name.
 
 **Errors.** The `EF-7x` band of `hisim/energy_system/errors.py`: `EF-70` … `EF-75` reading, resolving

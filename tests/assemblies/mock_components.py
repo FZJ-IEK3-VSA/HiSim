@@ -1,12 +1,16 @@
-"""Fake components for the assembly fixtures: small, deterministic, and fully declared.
+"""Mock components for the mock assemblies: small, deterministic, and fully declared.
 
-The fixture assemblies under ``tests/assemblies/fixtures/library`` are built from these classes and
-nothing else (``assemblies_spec.md`` §13 step 1: fixtures only). Each class declares, at class
+A mock assembly or a mock class exists only for a shape the real library cannot show; everything
+that can run on a real assembly moves to the real library in step 4 (hisim-lt0b.5). What stays here
+is test-only, and its names say so: the family ``mock/``, the classes ``Mock*``.
+
+The mock assemblies under ``tests/assemblies/mock_assemblies/library`` are built from these classes
+and nothing else (``assemblies_spec.md`` §13 step 1). Each class declares, at class
 level, what the expansion of imports checks at load time — its inputs and outputs with their load
 types and units, the classes it declares default connections from, and the KPIs it reports
 (:class:`~hisim.component_interface.ClassInterface`) — and its configuration declares the unit of
 every field an assembly parameter feeds (D16 b). The constructors build their ports and default
-connections *from* those declarations, so a fixture cannot drift from what it declares.
+connections *from* those declarations, so a mock cannot drift from what it declares.
 
 The physics is a toy: a weather series, an occupancy drawing hot water and electricity, a PV array
 producing from the temperature, a tank losing heat and filled by a heater a thermostat switches,
@@ -60,8 +64,8 @@ from hisim.simulationparameters import SimulationParameters
 UNIT = "unit"
 
 
-class FixtureComponent(Component):
-    """The shared behaviour of every fixture: ports and default connections from its interface."""
+class MockComponent(Component):
+    """The shared behaviour of every mock: ports and default connections from its interface."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -160,29 +164,32 @@ class FixtureComponent(Component):
 
 @dataclass_json
 @dataclass
-class FakeWeatherConfig(ConfigBase):
+class MockWeatherConfig(ConfigBase):
     """A constant-ish outside temperature."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeWeather"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockWeather"
 
     component_id: ComponentID
     mean_temperature_in_celsius: float = field(default=5.0, metadata={UNIT: lt.Units.CELSIUS})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeWeatherConfig":
+    def preset_standard(cls, name: str) -> "MockWeatherConfig":
         """A winter day around 5 °C."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeWeather(FixtureComponent):
-    """Outputs the outside temperature."""
+class MockWeather(MockComponent):
+    """Outputs the outside temperature.
+
+    Stands in for the real ``Weather`` in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeWeatherConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockWeatherConfig) -> None:
         """Builds the weather."""
         super().__init__(my_simulation_parameters, config)
 
@@ -196,23 +203,26 @@ class FakeWeather(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeOccupancyConfig(ConfigBase):
+class MockOccupancyConfig(ConfigBase):
     """Residents drawing hot water and electricity."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeOccupancy"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockOccupancy"
 
     component_id: ComponentID
     residents: int = 2
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeOccupancyConfig":
+    def preset_standard(cls, name: str) -> "MockOccupancyConfig":
         """Two residents."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeOccupancy(FixtureComponent):
-    """Outputs a hot-water draw and an electricity consumption."""
+class MockOccupancy(MockComponent):
+    """Outputs a hot-water draw and an electricity consumption.
+
+    Stands in for the residents' occupancy (``UtspLpgConnector``) in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(
@@ -221,7 +231,7 @@ class FakeOccupancy(FixtureComponent):
         ),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeOccupancyConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockOccupancyConfig) -> None:
         """Builds the occupancy."""
         super().__init__(my_simulation_parameters, config)
 
@@ -237,10 +247,10 @@ class FakeOccupancy(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakePVSystemConfig(ConfigBase):
+class MockPVSystemConfig(ConfigBase):
     """A PV array: its peak power — or the share of the roof it covers instead — and its orientation."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakePVSystem"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockPVSystem"
 
     #: The peak power of the whole roof, which a share of it is taken of.
     ROOF_PEAK_POWER_IN_WATT: ClassVar[float] = 20000.0
@@ -275,25 +285,28 @@ class FakePVSystemConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_rooftop(cls, name: str) -> "FakePVSystemConfig":
+    def preset_rooftop(cls, name: str) -> "MockPVSystemConfig":
         """A south-facing roof array."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakePVSystem(FixtureComponent):
-    """Produces electricity from the outside temperature (a toy stand-in for irradiance)."""
+class MockPVSystem(MockComponent):
+    """Produces electricity from the outside temperature (a toy stand-in for irradiance).
+
+    Stands in for the real ``PVSystem`` in the mock assemblies.
+    """
 
     PRODUCTION_KPI = "PV production"
 
     CLASS_INTERFACE = ClassInterface(
         inputs=(DeclaredPort("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
         outputs=(DeclaredPort("ElectricityOutput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),),
-        default_connection_sources=("FakeWeather",),
+        default_connection_sources=("MockWeather",),
         kpis=(PRODUCTION_KPI,),
     )
-    DEFAULTS = {"FakeWeather": {"TemperatureOutside": "TemperatureOutside"}}
+    DEFAULTS = {"MockWeather": {"TemperatureOutside": "TemperatureOutside"}}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakePVSystemConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockPVSystemConfig) -> None:
         """Builds the array."""
         super().__init__(my_simulation_parameters, config)
 
@@ -326,23 +339,26 @@ class FakePVSystem(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeTankConfig(ConfigBase):
+class MockTankConfig(ConfigBase):
     """A hot-water tank."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeTank"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockTank"
 
     component_id: ComponentID
     volume_in_liter: float = field(default=150.0, metadata={UNIT: lt.Units.LITER})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeTankConfig":
+    def preset_standard(cls, name: str) -> "MockTankConfig":
         """A 150 l tank."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeTank(FixtureComponent):
-    """Mixes the heater's power and the residents' draw into a temperature."""
+class MockTank(MockComponent):
+    """Mixes the heater's power and the residents' draw into a temperature.
+
+    Stands in for a hot-water storage tank in the mock assemblies.
+    """
 
     STANDBY_KPI = "Standby heat losses"
 
@@ -355,17 +371,17 @@ class FakeTank(FixtureComponent):
             DeclaredPort("WaterTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             DeclaredPort("HeatLoss", lt.LoadTypes.HEATING, lt.Units.WATT),
         ),
-        default_connection_sources=("FakeOccupancy", "FakeHeater"),
+        default_connection_sources=("MockOccupancy", "MockHeater"),
         kpis=(STANDBY_KPI,),
     )
     DEFAULTS = {
-        "FakeOccupancy": {"WaterDemand": "WaterDemand"},
-        "FakeHeater": {"ThermalPower": "ThermalPower"},
+        "MockOccupancy": {"WaterDemand": "WaterDemand"},
+        "MockHeater": {"ThermalPower": "ThermalPower"},
     }
     #: The standby loss over the run in kWh (a power in W summed over 15-minute steps).
     SUM_KPIS = {STANDBY_KPI: ("HeatLoss", 0.25e-3)}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeTankConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockTankConfig) -> None:
         """Builds the tank."""
         super().__init__(my_simulation_parameters, config)
 
@@ -382,23 +398,26 @@ class FakeTank(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeHeaterConfig(ConfigBase):
+class MockHeaterConfig(ConfigBase):
     """An electric heater."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeHeater"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockHeater"
 
     component_id: ComponentID
     power_in_watt: float = field(default=2000.0, metadata={UNIT: lt.Units.WATT})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeHeaterConfig":
+    def preset_standard(cls, name: str) -> "MockHeaterConfig":
         """A 2 kW heater."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeHeater(FixtureComponent):
-    """Heats when its controller says so."""
+class MockHeater(MockComponent):
+    """Heats when its controller says so.
+
+    Stands in for an electric heater in the mock assemblies.
+    """
 
     ENERGY_KPI = "Heater energy"
 
@@ -408,10 +427,10 @@ class FakeHeater(FixtureComponent):
             DeclaredPort("ThermalPower", lt.LoadTypes.HEATING, lt.Units.WATT),
             DeclaredPort("ElectricityInput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),
         ),
-        default_connection_sources=("FakeController",),
+        default_connection_sources=("MockController",),
         kpis=(ENERGY_KPI,),
     )
-    DEFAULTS = {"FakeController": {"Signal": "Signal"}}
+    DEFAULTS = {"MockController": {"Signal": "Signal"}}
     OPTIONAL_INPUTS = ("Signal",)
     #: Electricity in, space-heating heat out, one for one: the balance closes every step.
     ENERGY_PORTS = {
@@ -421,7 +440,7 @@ class FakeHeater(FixtureComponent):
     #: The electricity the heater drew over the run in kWh (a power in W summed over 15-minute steps).
     SUM_KPIS = {ENERGY_KPI: ("ElectricityInput", 0.25e-3)}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeHeaterConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockHeaterConfig) -> None:
         """Builds the heater."""
         super().__init__(my_simulation_parameters, config)
 
@@ -437,29 +456,32 @@ class FakeHeater(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeControllerConfig(ConfigBase):
+class MockControllerConfig(ConfigBase):
     """A thermostat on the tank."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeController"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockController"
 
     component_id: ComponentID
     set_temperature_in_celsius: float = field(default=45.0, metadata={UNIT: lt.Units.CELSIUS})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeControllerConfig":
+    def preset_standard(cls, name: str) -> "MockControllerConfig":
         """45 °C."""
         return cls(component_id=ComponentID(name=name))
 
     @preset
     @classmethod
-    def preset_eco(cls, name: str) -> "FakeControllerConfig":
+    def preset_eco(cls, name: str) -> "MockControllerConfig":
         """40 °C."""
         return cls(component_id=ComponentID(name=name), set_temperature_in_celsius=40.0)
 
 
-class FakeController(FixtureComponent):
-    """Switches the heater on below the set point, which an energy manager may raise."""
+class MockController(MockComponent):
+    """Switches the heater on below the set point, which an energy manager may raise.
+
+    Stands in for a heater's thermostat (an L1 controller) in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         inputs=(
@@ -467,16 +489,16 @@ class FakeController(FixtureComponent):
             DeclaredPort("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),
         ),
         outputs=(DeclaredPort("Signal", lt.LoadTypes.ON_OFF, lt.Units.ANY),),
-        default_connection_sources=("FakeTank", "FakeEms", "FakeEnergyManager"),
+        default_connection_sources=("MockTank", "MockEms", "MockEnergyManager"),
     )
     DEFAULTS = {
-        "FakeTank": {"TankTemperature": "WaterTemperature"},
-        "FakeEms": {"Modifier": "Modifier"},
-        "FakeEnergyManager": {"Modifier": "Modifier"},
+        "MockTank": {"TankTemperature": "WaterTemperature"},
+        "MockEms": {"Modifier": "Modifier"},
+        "MockEnergyManager": {"Modifier": "Modifier"},
     }
     OPTIONAL_INPUTS = ("Modifier", "TankTemperature")
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeControllerConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockControllerConfig) -> None:
         """Builds the controller."""
         super().__init__(my_simulation_parameters, config)
 
@@ -497,29 +519,32 @@ class FakeController(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeEmsConfig(ConfigBase):
+class MockEmsConfig(ConfigBase):
     """An energy manager raising set points by a fixed offset."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeEms"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockEms"
 
     component_id: ComponentID
     offset_in_kelvin: float = field(default=2.0, metadata={UNIT: lt.Units.KELVIN})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeEmsConfig":
+    def preset_standard(cls, name: str) -> "MockEmsConfig":
         """Raises by 2 K."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeEms(FixtureComponent):
-    """Outputs a set-point modifier."""
+class MockEms(MockComponent):
+    """Outputs a set-point modifier.
+
+    Stands in for an energy manager in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort("Modifier", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeEmsConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockEmsConfig) -> None:
         """Builds the energy manager."""
         super().__init__(my_simulation_parameters, config)
 
@@ -536,7 +561,7 @@ class FakeEms(FixtureComponent):
 class UndeclaredDeviceConfig(ConfigBase):
     """A component class that makes no class-level statement, for the refusals that need one."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.UndeclaredDevice"
+    MAIN_CLASS = "tests.assemblies.mock_components.UndeclaredDevice"
 
     component_id: ComponentID
     rating_in_watt: float = 100.0
@@ -549,7 +574,10 @@ class UndeclaredDeviceConfig(ConfigBase):
 
 
 class UndeclaredDevice(Component):
-    """Declares no CLASS_INTERFACE."""
+    """Declares no CLASS_INTERFACE.
+
+    Stands in for a component class that declares no class interface in the mock assemblies.
+    """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -583,10 +611,10 @@ RETURN_TEMPERATURE_DHW = "ReturnTemperatureDhw"
 
 @dataclass_json
 @dataclass
-class FakeBoilerConfig(ConfigBase):
+class MockBoilerConfig(ConfigBase):
     """A gas boiler charging a cylinder over the dhw circuit."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeBoiler"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockBoiler"
 
     component_id: ComponentID
     power_in_watt: float = field(default=3000.0, metadata={UNIT: lt.Units.WATT})
@@ -594,16 +622,18 @@ class FakeBoilerConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_condensing(cls, name: str) -> "FakeBoilerConfig":
+    def preset_condensing(cls, name: str) -> "MockBoilerConfig":
         """A 3 kW condensing boiler."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeBoiler(FixtureComponent):
+class MockBoiler(MockComponent):
     """Owns the dhw circuit's mass flow and supply leg, reads its return leg, and burns natural gas.
 
     Every step it heats at a schedule's power; the gas it burns is that heat over its efficiency,
     and the rest leaves as flue loss, so its energy ports — gas in, heat out, flue loss — balance.
+
+    Stands in for the real ``GenericBoiler`` in the mock assemblies.
     """
 
     FUEL_KPI = "Boiler fuel"
@@ -619,10 +649,10 @@ class FakeBoiler(FixtureComponent):
             DeclaredPort("FuelUse", lt.LoadTypes.GAS, lt.Units.WATT_HOUR, lt.EnergyBalanceCarrier.NATURAL_GAS),
             DeclaredPort("FlueLoss", lt.LoadTypes.GAS, lt.Units.WATT, lt.EnergyBalanceCarrier.NATURAL_GAS),
         ),
-        default_connection_sources=("FakeCylinder",),
+        default_connection_sources=("MockCylinder",),
         kpis=(FUEL_KPI,),
     )
-    DEFAULTS = {"FakeCylinder": {RETURN_TEMPERATURE_DHW: RETURN_TEMPERATURE_DHW}}
+    DEFAULTS = {"MockCylinder": {RETURN_TEMPERATURE_DHW: RETURN_TEMPERATURE_DHW}}
     ENERGY_PORTS = {
         "FuelUse": EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output="FuelUse"),
         "ThermalPowerDhw": EnergyPort(
@@ -632,7 +662,7 @@ class FakeBoiler(FixtureComponent):
     }
     SUM_KPIS = {FUEL_KPI: ("FuelUse", 1e-3)}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeBoilerConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockBoilerConfig) -> None:
         """Builds the boiler."""
         super().__init__(my_simulation_parameters, config)
 
@@ -650,23 +680,26 @@ class FakeBoiler(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeCylinderConfig(ConfigBase):
+class MockCylinderConfig(ConfigBase):
     """A hot-water cylinder charged over the dhw circuit."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeCylinder"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockCylinder"
 
     component_id: ComponentID
     volume_in_liter: float = field(default=200.0, metadata={UNIT: lt.Units.LITER})
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeCylinderConfig":
+    def preset_standard(cls, name: str) -> "MockCylinderConfig":
         """A 200 l cylinder."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeCylinder(FixtureComponent):
-    """Owns the dhw circuit's return leg and reads the boiler's mass flow and supply leg."""
+class MockCylinder(MockComponent):
+    """Owns the dhw circuit's return leg and reads the boiler's mass flow and supply leg.
+
+    Stands in for an indirectly heated hot-water cylinder in the mock assemblies.
+    """
 
     TEMPERATURE_KPI = "Cylinder heat received"
 
@@ -680,16 +713,16 @@ class FakeCylinder(FixtureComponent):
             DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             DeclaredPort("HeatReceived", lt.LoadTypes.HEATING, lt.Units.WATT),
         ),
-        default_connection_sources=("FakeOccupancy", "FakeBoiler"),
+        default_connection_sources=("MockOccupancy", "MockBoiler"),
         kpis=(TEMPERATURE_KPI,),
     )
     DEFAULTS = {
-        "FakeOccupancy": {"WaterDemand": "WaterDemand"},
-        "FakeBoiler": {MASS_FLOW_DHW: MASS_FLOW_DHW, SUPPLY_TEMPERATURE_DHW: SUPPLY_TEMPERATURE_DHW},
+        "MockOccupancy": {"WaterDemand": "WaterDemand"},
+        "MockBoiler": {MASS_FLOW_DHW: MASS_FLOW_DHW, SUPPLY_TEMPERATURE_DHW: SUPPLY_TEMPERATURE_DHW},
     }
     SUM_KPIS = {TEMPERATURE_KPI: ("HeatReceived", 0.25e-3)}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeCylinderConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockCylinderConfig) -> None:
         """Builds the cylinder."""
         super().__init__(my_simulation_parameters, config)
 
@@ -706,10 +739,10 @@ class FakeCylinder(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeGasMeterConfig(ConfigBase):
+class MockGasMeterConfig(ConfigBase):
     """A gas meter."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeGasMeter"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockGasMeter"
 
     component_id: ComponentID
     #: A calibration factor of the reading; dimensionless.
@@ -717,13 +750,16 @@ class FakeGasMeterConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeGasMeterConfig":
+    def preset_standard(cls, name: str) -> "MockGasMeterConfig":
         """A calibrated meter."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeGasMeter(DynamicComponent):
-    """Sums the gas its consumers burn, as the real gas meter does, on one declared channel."""
+class MockGasMeter(DynamicComponent):
+    """Sums the gas its consumers burn, as the real gas meter does, on one declared channel.
+
+    Stands in for the real ``GasMeter`` in the mock assemblies.
+    """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -743,10 +779,10 @@ class FakeGasMeter(DynamicComponent):
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort("GasConsumption", lt.LoadTypes.GAS, lt.Units.WATT_HOUR),),
         kpis=(CONSUMPTION_KPI,),
-        default_feeds=(DeclaredFeed("FakeBoiler", "FuelUse", ("GAS_CONSUMPTION_UNCONTROLLED",), 999),),
+        default_feeds=(DeclaredFeed("MockBoiler", "FuelUse", ("GAS_CONSUMPTION_UNCONTROLLED",), 999),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeGasMeterConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockGasMeterConfig) -> None:
         """Builds the meter and its one declared default feed."""
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
@@ -769,8 +805,8 @@ class FakeGasMeter(DynamicComponent):
         self.add_dynamic_default_connections(
             [
                 DynamicComponentConnection(
-                    source_component_class=FakeBoiler,
-                    source_class_name=FakeBoiler.get_classname(),
+                    source_component_class=MockBoiler,
+                    source_class_name=MockBoiler.get_classname(),
                     source_component_field_name="FuelUse",
                     source_load_type=lt.LoadTypes.GAS,
                     source_unit=lt.Units.WATT_HOUR,
@@ -821,10 +857,10 @@ class FakeGasMeter(DynamicComponent):
 
 @dataclass_json
 @dataclass
-class FakeBatteryConfig(ConfigBase):
+class MockBatteryConfig(ConfigBase):
     """A battery sized from the PV peak power beside it, with its unit on the sized field."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeBattery"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockBattery"
 
     component_id: ComponentID
     #: One kWh per kWp of the array it is bound to, unless pinned.
@@ -834,17 +870,19 @@ class FakeBatteryConfig(ConfigBase):
 
     @preset
     @classmethod
-    def preset_sized_to_pv(cls, name: str) -> "FakeBatteryConfig":
+    def preset_sized_to_pv(cls, name: str) -> "MockBatteryConfig":
         """Capacity AUTO."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeBattery(FixtureComponent):
+class MockBattery(MockComponent):
     """Publishes its capacity, and charges at the power an energy manager writes into ``LoadingPowerInput``.
 
     The toy has no state: the AC power it draws (positive) or delivers (negative) is the requested
     power, limited to its capacity in kWh taken as kW. Without a controller the input stays
     unconnected and the battery idles.
+
+    Stands in for the real ``Battery`` in the mock assemblies.
     """
 
     CAPACITY_KPI = "Battery capacity"
@@ -860,7 +898,7 @@ class FakeBattery(FixtureComponent):
     OPTIONAL_INPUTS = ("LoadingPowerInput",)
     SUM_KPIS = {CAPACITY_KPI: ("Capacity", 1.0 / 96.0)}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeBatteryConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockBatteryConfig) -> None:
         """Builds the battery."""
         super().__init__(my_simulation_parameters, config)
 
@@ -877,22 +915,25 @@ class FakeBattery(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeCollectorConfig(ConfigBase):
+class MockCollectorConfig(ConfigBase):
     """A solar collector, one end of a ``solar`` circuit: an end of another medium than ``dhw``."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeCollector"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockCollector"
 
     component_id: ComponentID
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeCollectorConfig":
+    def preset_standard(cls, name: str) -> "MockCollectorConfig":
         """A collector."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeCollector(FixtureComponent):
-    """Owns the ``solar`` circuit's mass flow and supply leg."""
+class MockCollector(MockComponent):
+    """Owns the ``solar`` circuit's mass flow and supply leg.
+
+    Stands in for the collector of a ``SolarThermalSystem`` in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         inputs=(DeclaredPort("ReturnTemperatureSolar", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
@@ -903,12 +944,12 @@ class FakeCollector(FixtureComponent):
     )
     OPTIONAL_INPUTS = ("ReturnTemperatureSolar",)
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeCollectorConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockCollectorConfig) -> None:
         """Builds the collector."""
         super().__init__(my_simulation_parameters, config)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """No sun in the fixture."""
+        """No sun in the mock."""
         self.set(stsv, "MassFlowSolar", 0.0)
         self.set(stsv, "SupplyTemperatureSolar", self.value(stsv, "ReturnTemperatureSolar"))
 
@@ -918,22 +959,25 @@ class FakeCollector(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeDhwSinkConfig(ConfigBase):
+class MockDhwSinkConfig(ConfigBase):
     """A dhw end that reads the boiler's outputs but declares no default connections from it."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeDhwSink"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockDhwSink"
 
     component_id: ComponentID
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeDhwSinkConfig":
+    def preset_standard(cls, name: str) -> "MockDhwSinkConfig":
         """A sink."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeDhwSink(FixtureComponent):
-    """Reads ``MassFlowDhw`` and ``SupplyTemperatureDhw``, owns ``ReturnTemperatureDhw``, declares no defaults."""
+class MockDhwSink(MockComponent):
+    """Reads ``MassFlowDhw`` and ``SupplyTemperatureDhw``, owns ``ReturnTemperatureDhw``, declares no defaults.
+
+    Stands in for a dhw circuit end that declares no default connections in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         inputs=(
@@ -943,7 +987,7 @@ class FakeDhwSink(FixtureComponent):
         outputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeDhwSinkConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockDhwSinkConfig) -> None:
         """Builds the sink."""
         super().__init__(my_simulation_parameters, config)
 
@@ -954,28 +998,31 @@ class FakeDhwSink(FixtureComponent):
 
 @dataclass_json
 @dataclass
-class FakeDhwReturnConfig(ConfigBase):
+class MockDhwReturnConfig(ConfigBase):
     """A dhw end that only owns the return leg and reads nothing."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeDhwReturn"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockDhwReturn"
 
     component_id: ComponentID
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeDhwReturnConfig":
+    def preset_standard(cls, name: str) -> "MockDhwReturnConfig":
         """A return leg."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeDhwReturn(FixtureComponent):
-    """Owns ``ReturnTemperatureDhw`` and reads none of the boiler's outputs."""
+class MockDhwReturn(MockComponent):
+    """Owns ``ReturnTemperatureDhw`` and reads none of the boiler's outputs.
+
+    Stands in for a dhw circuit end that only owns the return leg in the mock assemblies.
+    """
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort(RETURN_TEMPERATURE_DHW, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeDhwReturnConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockDhwReturnConfig) -> None:
         """Builds the end."""
         super().__init__(my_simulation_parameters, config)
 
@@ -988,7 +1035,7 @@ class FakeDhwReturn(FixtureComponent):
 
 
 def _declared_connections(target: type) -> List[List[DynamicComponentConnection]]:
-    """The runtime dynamic default connections of a fixture aggregator, built from its declared feeds.
+    """The runtime dynamic default connections of a mock aggregator, built from its declared feeds.
 
     One list per source class, in declaration order, so the constructor adds exactly what the class
     interface declares (``DynamicComponent._check_declared_feed`` holds it to that).
@@ -1014,8 +1061,8 @@ def _declared_connections(target: type) -> List[List[DynamicComponentConnection]
     return list(by_class.values())
 
 
-class FixtureAggregator(DynamicComponent):
-    """The shared behaviour of the fixture observers: declared outputs, declared feeds, no state, no cost."""
+class MockAggregator(DynamicComponent):
+    """The shared behaviour of the mock observers: declared outputs, declared feeds, no state, no cost."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -1085,26 +1132,26 @@ class FixtureAggregator(DynamicComponent):
 
 @dataclass_json
 @dataclass
-class FakeEnergyManagerConfig(ConfigBase):
+class MockEnergyManagerConfig(ConfigBase):
     """A surplus controller raising set points by a fixed offset."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeEnergyManager"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockEnergyManager"
 
     component_id: ComponentID
     offset_in_kelvin: float = field(default=2.0, metadata={UNIT: lt.Units.KELVIN})
 
     @preset
     @classmethod
-    def preset_optimize_own_consumption(cls, name: str) -> "FakeEnergyManagerConfig":
+    def preset_optimize_own_consumption(cls, name: str) -> "MockEnergyManagerConfig":
         """Raises by 2 K on surplus."""
         return cls(component_id=ComponentID(name=name))
 
 
-#: The real controller's default weight per participant kind, which the fixture declares its feeds at.
+#: The real controller's default weight per participant kind, which the mock declares its feeds at.
 EMS_WEIGHTS = L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS
 
 
-class FakeEnergyManager(FixtureAggregator):
+class MockEnergyManager(MockAggregator):
     """An energy manager of the real one's shape: its channels, its weight table, a grid balance and a modifier.
 
     It observes electricity flows, ranks the controllable ones by weight and writes each one's
@@ -1115,6 +1162,8 @@ class FakeEnergyManager(FixtureAggregator):
     outputs are named by the format's templates, ``DispatchTo<participant>_<input>`` and
     ``DispatchFor<participant>_<output>``: they exist per feed, so no static interface lists them
     (hisim-lt0b.15).
+
+    Stands in for the real ``L2GenericEnergyManagementSystem`` in the mock assemblies.
     """
 
     GRID_BALANCE_KPI = "Grid balance"
@@ -1131,22 +1180,22 @@ class FakeEnergyManager(FixtureAggregator):
         kpis=(GRID_BALANCE_KPI,),
         default_feeds=(
             DeclaredFeed(
-                "FakeOccupancy",
+                "MockOccupancy",
                 "ElectricityConsumption",
                 ("ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",),
                 EMS_WEIGHTS[lt.ComponentType.RESIDENTS],
                 "RESIDENTS",
             ),
-            DeclaredFeed("FakePVSystem", "ElectricityOutput", ("ELECTRICITY_PRODUCTION",), 999, "PV"),
+            DeclaredFeed("MockPVSystem", "ElectricityOutput", ("ELECTRICITY_PRODUCTION",), 999, "PV"),
             DeclaredFeed(
-                "FakeHeater",
+                "MockHeater",
                 "ElectricityInput",
                 ("ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",),
                 EMS_WEIGHTS[lt.ComponentType.ELECTRIC_HEATING_SH],
                 "ELECTRIC_HEATING_SH",
             ),
             DeclaredFeed(
-                "FakeBattery",
+                "MockBattery",
                 "AcBatteryPowerUsed",
                 ("ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",),
                 EMS_WEIGHTS[lt.ComponentType.BATTERY],
@@ -1157,7 +1206,7 @@ class FakeEnergyManager(FixtureAggregator):
     )
     SUM_KPIS = {GRID_BALANCE_KPI: ("TotalElectricityToOrFromGrid", 0.25e-3)}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeEnergyManagerConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockEnergyManagerConfig) -> None:
         """Builds the energy manager."""
         super().__init__(my_simulation_parameters, config)
 
@@ -1177,26 +1226,28 @@ class FakeEnergyManager(FixtureAggregator):
 
 @dataclass_json
 @dataclass
-class FakeElectricityMeterConfig(ConfigBase):
+class MockElectricityMeterConfig(ConfigBase):
     """An electricity meter."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeElectricityMeter"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockElectricityMeter"
 
     component_id: ComponentID
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeElectricityMeterConfig":
+    def preset_standard(cls, name: str) -> "MockElectricityMeterConfig":
         """A meter."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeElectricityMeter(FixtureAggregator):
+class MockElectricityMeter(MockAggregator):
     """Books production minus consumption as grid exchange, on the real meter's two channels.
 
     It declares the flows it may observe — the residents, a PV array and a heater — and an energy
     manager's grid balance on the production channel at 999, the feed the real meter declares from
     the real EMS (``assemblies_spec.md`` §4.3, dry run G6).
+
+    Stands in for the real ``ElectricityMeter`` in the mock assemblies.
     """
 
     EXCHANGE_KPI = "Grid exchange"
@@ -1222,17 +1273,17 @@ class FakeElectricityMeter(FixtureAggregator):
         outputs=(DeclaredPort("ElectricityToAndFromGrid", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),),
         kpis=(EXCHANGE_KPI,),
         default_feeds=(
-            DeclaredFeed("FakeOccupancy", "ElectricityConsumption", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",), 999),
-            DeclaredFeed("FakePVSystem", "ElectricityOutput", ("ELECTRICITY_PRODUCTION",), 999, "PV"),
+            DeclaredFeed("MockOccupancy", "ElectricityConsumption", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",), 999),
+            DeclaredFeed("MockPVSystem", "ElectricityOutput", ("ELECTRICITY_PRODUCTION",), 999, "PV"),
             DeclaredFeed(
-                "FakeHeater", "ElectricityInput", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",), 999, "ELECTRIC_HEATING_SH"
+                "MockHeater", "ElectricityInput", ("ELECTRICITY_CONSUMPTION_UNCONTROLLED",), 999, "ELECTRIC_HEATING_SH"
             ),
-            DeclaredFeed("FakeEnergyManager", "TotalElectricityToOrFromGrid", ("ELECTRICITY_PRODUCTION",), 999),
+            DeclaredFeed("MockEnergyManager", "TotalElectricityToOrFromGrid", ("ELECTRICITY_PRODUCTION",), 999),
         ),
     )
     SUM_KPIS = {EXCHANGE_KPI: ("ElectricityToAndFromGrid", 0.25e-3)}
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeElectricityMeterConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockElectricityMeterConfig) -> None:
         """Builds the meter."""
         super().__init__(my_simulation_parameters, config)
 
@@ -1244,22 +1295,25 @@ class FakeElectricityMeter(FixtureAggregator):
 
 @dataclass_json
 @dataclass
-class FakeLoggerConfig(ConfigBase):
+class MockLoggerConfig(ConfigBase):
     """A logger that observes other loggers."""
 
-    MAIN_CLASS = "tests.assemblies.fixture_components.FakeLogger"
+    MAIN_CLASS = "tests.assemblies.mock_components.MockLogger"
 
     component_id: ComponentID
 
     @preset
     @classmethod
-    def preset_standard(cls, name: str) -> "FakeLoggerConfig":
+    def preset_standard(cls, name: str) -> "MockLoggerConfig":
         """A logger."""
         return cls(component_id=ComponentID(name=name))
 
 
-class FakeLogger(FixtureAggregator):
-    """Declares a feed from its own class, so an observer's own outputs are a candidate of nobody but another logger."""
+class MockLogger(MockAggregator):
+    """Declares a feed from its own class, so an observer's own outputs are a candidate of nobody but another logger.
+
+    Stands in for an observer that observes other observers in the mock assemblies.
+    """
 
     CHANNELS = (
         DynamicConnectionChannel(
@@ -1273,10 +1327,10 @@ class FakeLogger(FixtureAggregator):
 
     CLASS_INTERFACE = ClassInterface(
         outputs=(DeclaredPort("Reading", lt.LoadTypes.ELECTRICITY, lt.Units.WATT),),
-        default_feeds=(DeclaredFeed("FakeLogger", "Reading", ("ELECTRICITY_PRODUCTION",), 999),),
+        default_feeds=(DeclaredFeed("MockLogger", "Reading", ("ELECTRICITY_PRODUCTION",), 999),),
     )
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: FakeLoggerConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockLoggerConfig) -> None:
         """Builds the logger."""
         super().__init__(my_simulation_parameters, config)
 

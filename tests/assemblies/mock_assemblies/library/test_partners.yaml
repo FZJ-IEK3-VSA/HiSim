@@ -1,56 +1,56 @@
-# The test partners of the fixture library (assemblies_spec.md §9.4): the site components the assembly
+# The test partners of the mock library (assemblies_spec.md §9.4): the site components the assembly
 # test harness places beside an assembly it runs in isolation, one for every port whose binding changes
 # what the assembly computes. Read by hisim/energy_system/assemblies/testing/partners.py, which documents
 # the format; every partner is a site entry as an energy-system file writes it.
 partners:
   # --------------------------------------------------------------------------- partners of needs
   Weather:
-    serves: {partner: FakeWeather}
-    component: {class: tests.assemblies.fixture_components.FakeWeather, preset: standard}
+    serves: {partner: MockWeather}
+    component: {class: tests.assemblies.mock_components.MockWeather, preset: standard}
   Occupancy:
-    serves: {partner: FakeOccupancy}
-    component: {class: tests.assemblies.fixture_components.FakeOccupancy, preset: standard}
+    serves: {partner: MockOccupancy}
+    component: {class: tests.assemblies.mock_components.MockOccupancy, preset: standard}
   Ems:
-    serves: {partner: FakeEms}
-    component: {class: tests.assemblies.fixture_components.FakeEms, preset: standard}
+    serves: {partner: MockEms}
+    component: {class: tests.assemblies.mock_components.MockEms, preset: standard}
   Controller:
-    serves: {partner: FakeController}
-    component: {class: tests.assemblies.fixture_components.FakeController, preset: standard}
+    serves: {partner: MockController}
+    component: {class: tests.assemblies.mock_components.MockController, preset: standard}
   Heater:
     # A heater a thermostat switches, so the tank it heats sees heat on its schedule.
-    serves: {partner: FakeHeater}
+    serves: {partner: MockHeater}
     requires: [Controller]
     component:
-      class: tests.assemblies.fixture_components.FakeHeater
+      class: tests.assemblies.mock_components.MockHeater
       preset: standard
       inputs: [Controller]
   Tank:
     # A tank the residents draw from, heated by the one heater in scope: the assembly's own.
-    serves: {partner: FakeTank}
+    serves: {partner: MockTank}
     requires: [Occupancy]
     component:
-      class: tests.assemblies.fixture_components.FakeTank
+      class: tests.assemblies.mock_components.MockTank
       preset: standard
       inputs: [Occupancy, {$port: heat}]
       ports:
-        heat: {partner: FakeHeater}
+        heat: {partner: MockHeater}
 
   # ------------------------------------------------------------------------ the other circuit ends
   Cylinder:
     # The cylinder end of the dhw circuit, for an assembly whose end is a boiler.
-    serves: {circuit: dhw, other_end: [FakeBoiler]}
+    serves: {circuit: dhw, other_end: [MockBoiler]}
     requires: [Occupancy]
     component:
-      class: tests.assemblies.fixture_components.FakeCylinder
+      class: tests.assemblies.mock_components.MockCylinder
       preset: standard
       inputs: [Occupancy, {$port: dhw}]
       ports:
         dhw: {circuit: dhw}
   Boiler:
     # The boiler end of the dhw circuit, for an assembly whose end is a cylinder.
-    serves: {circuit: dhw, other_end: [FakeCylinder]}
+    serves: {circuit: dhw, other_end: [MockCylinder]}
     component:
-      class: tests.assemblies.fixture_components.FakeBoiler
+      class: tests.assemblies.mock_components.MockBoiler
       preset: condensing
       inputs: [{$port: dhw}]
       ports:
@@ -61,7 +61,7 @@ partners:
     # The natural-gas connection a fuel need binds; its meter observes the consumers' feeds.
     serves: {carrier: natural_gas}
     component:
-      class: tests.assemblies.fixture_components.FakeGasMeter
+      class: tests.assemblies.mock_components.MockGasMeter
       preset: standard
       inputs: [{$port: gas}]
       ports:
@@ -71,16 +71,16 @@ partners:
     serves: {consumes: natural_gas}
     requires: [GasCylinder]
     component:
-      class: tests.assemblies.fixture_components.FakeBoiler
+      class: tests.assemblies.mock_components.MockBoiler
       preset: condensing
       inputs: [GasCylinder]
       ports:
         fuel: {carrier: natural_gas, outputs: [FuelUse]}
   GasCylinder:
-    serves: {partner: FakeCylinder}
+    serves: {partner: MockCylinder}
     requires: [Occupancy, GasBoiler]
     component:
-      class: tests.assemblies.fixture_components.FakeCylinder
+      class: tests.assemblies.mock_components.MockCylinder
       preset: standard
       inputs: [Occupancy, GasBoiler]
 
@@ -90,24 +90,24 @@ partners:
     serves: {fact: pv_peak_power_in_watt}
     requires: [Weather]
     component:
-      class: tests.assemblies.fixture_components.FakePVSystem
+      class: tests.assemblies.mock_components.MockPVSystem
       preset: rooftop
       inputs: [Weather]
 
   # --------------------------------------------------------------------------- observe and actuate
   MeteredResidents:
     # A flow the electricity meter observes, so its observer port in isolation is not idle.
-    serves: {observed_by: FakeElectricityMeter}
-    component: {class: tests.assemblies.fixture_components.FakeOccupancy, preset: standard}
+    serves: {observed_by: MockElectricityMeter}
+    component: {class: tests.assemblies.mock_components.MockOccupancy, preset: standard}
   RankedResidents:
     # A flow the energy manager observes and ranks (residents, rank-only), so its observer port is not idle.
-    serves: {observed_by: FakeEnergyManager}
-    component: {class: tests.assemblies.fixture_components.FakeOccupancy, preset: standard}
+    serves: {observed_by: MockEnergyManager}
+    component: {class: tests.assemblies.mock_components.MockOccupancy, preset: standard}
   Control:
     # The controller an L1's ems_modifier binds: a controller is an assembly (its priorities are a parameter).
-    serves: {partner: FakeEnergyManager}
-    import: {assembly: control/ems_self_consumption}
+    serves: {partner: MockEnergyManager}
+    import: {assembly: mock/ems_self_consumption}
   BatteryControl:
     # The one controller a battery's controllable output binds (controllable: {target_input: LoadingPowerInput}).
-    serves: {controls: FakeBattery}
-    import: {assembly: control/ems_self_consumption}
+    serves: {controls: MockBattery}
+    import: {assembly: mock/ems_self_consumption}

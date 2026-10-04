@@ -3,7 +3,7 @@
 An assembly runs in isolation beside the smallest set of site components its ports need: a test
 partner for each. Which component stands in for what is data, not code: every library directory
 may hold a ``test_partners.yaml`` beside its assemblies, and the registry is the union of those
-files along the library's search path. The fixture library's file maps the fake classes; the
+files along the library's search path. The mock library's file maps the mock classes; the
 repository's library gets its own when its first assemblies land (§13 step 4), mapping each real
 partner class to a minimal preset.
 
@@ -12,13 +12,13 @@ serves and the other partners it reads::
 
     partners:
       Weather:
-        serves: {partner: FakeWeather}
-        component: {class: tests.assemblies.fixture_components.FakeWeather, preset: standard}
+        serves: {partner: MockWeather}
+        component: {class: tests.assemblies.mock_components.MockWeather, preset: standard}
       Cylinder:
-        serves: {circuit: dhw, other_end: [FakeBoiler]}
+        serves: {circuit: dhw, other_end: [MockBoiler]}
         requires: [Occupancy]
         component:
-          class: tests.assemblies.fixture_components.FakeCylinder
+          class: tests.assemblies.mock_components.MockCylinder
           preset: standard
           inputs: [Occupancy, {$port: dhw}]
           ports: {dhw: {circuit: dhw}}

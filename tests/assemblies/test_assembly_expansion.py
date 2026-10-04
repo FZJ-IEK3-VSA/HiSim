@@ -18,7 +18,7 @@ from hisim.energy_system.executor import EnergySystemExecutor
 from hisim.energy_system.loader import dump_energy_system, parse_energy_system
 from hisim.energy_system.model import DefaultInputs
 from hisim.simulationparameters import SimulationParameters
-from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Fixtures, Library, expand_text, fixture_resolver, site
+from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Library, Mocks, expand_text, mock_resolver, site
 
 
 def committed_energy_systems() -> List[Path]:
@@ -39,7 +39,7 @@ def test_a_file_without_imports_expands_to_itself_byte_for_byte(path: Path) -> N
     """Every committed file: the same object comes back, its dump is unchanged, the record is empty."""
     model = parse_energy_system(path)
 
-    expanded, record = expand_imports(model, fixture_resolver())
+    expanded, record = expand_imports(model, mock_resolver())
 
     assert expanded is model
     assert record.is_empty
@@ -49,10 +49,10 @@ def test_a_file_without_imports_expands_to_itself_byte_for_byte(path: Path) -> N
 @pytest.mark.base
 def test_expanding_an_expanded_file_changes_nothing() -> None:
     """Idempotency: the flat file has no imports left and expands to itself."""
-    model = parse_energy_system(Fixtures.HOUSE)
-    once, _record = expand_imports(model, fixture_resolver())
+    model = parse_energy_system(Mocks.HOUSE)
+    once, _record = expand_imports(model, mock_resolver())
 
-    twice, record = expand_imports(once, fixture_resolver())
+    twice, record = expand_imports(once, mock_resolver())
 
     assert twice == once
     assert record.is_empty
@@ -62,7 +62,7 @@ def test_expanding_an_expanded_file_changes_nothing() -> None:
 @pytest.mark.base
 def test_the_house_expands_to_flat_named_members_in_the_declared_sequence() -> None:
     """Addresses, the sequence of ``order:`` paths, schema version 3 and no import left."""
-    expanded, record = expand_imports(parse_energy_system(Fixtures.HOUSE), fixture_resolver())
+    expanded, record = expand_imports(parse_energy_system(Mocks.HOUSE), mock_resolver())
 
     assert expanded.schema_version == 3
     assert expanded.imports == {}
@@ -86,7 +86,7 @@ def test_the_house_expands_to_flat_named_members_in_the_declared_sequence() -> N
     assert expanded.addresses["hot_water-heater-tank-Tank"] == ComponentID(
         "Tank",
         path=(AddressStep("hot_water"), AddressStep("heater"), AddressStep("tank")),
-        assembly="storage/hot_water_tank",
+        assembly="mock/hot_water_tank",
     )
     assert expanded.addresses["pv-west-PVSystem"].path == (AddressStep("pv", "west"),)
 
@@ -94,7 +94,7 @@ def test_the_house_expands_to_flat_named_members_in_the_declared_sequence() -> N
 @pytest.mark.base
 def test_inner_imports_are_expanded_and_bound_before_their_importer() -> None:
     """Innermost first: the tank's heat need is bound inside its assembly before any top-level port."""
-    _expanded, record = expand_imports(parse_energy_system(Fixtures.HOUSE), fixture_resolver())
+    _expanded, record = expand_imports(parse_energy_system(Mocks.HOUSE), mock_resolver())
 
     paths = [instance.path for instance in record.instances]
     assert paths.index("hot_water → heater → tank") < paths.index("hot_water → heater") < paths.index("hot_water")
@@ -110,7 +110,7 @@ def test_the_simulator_adds_the_components_in_the_record_sequence(tmp_path: Path
     parameters.result_directory = str(tmp_path)
 
     built = EnergySystemExecutor(
-        parse_energy_system(Fixtures.HOUSE), parameters, assembly_resolver=fixture_resolver()
+        parse_energy_system(Mocks.HOUSE), parameters, assembly_resolver=mock_resolver()
     ).build()
 
     registered = [wrapper.my_component.component_name for wrapper in built.simulator.wrapped_components]
@@ -125,9 +125,9 @@ def test_without_order_the_site_comes_first_then_the_imports_in_written_order() 
         site(WEATHER, OCCUPANCY)
         + """
 imports:
-  pv: {assembly: pv/array}
-  tank: {assembly: storage/hot_water_tank, bind: {heat: backup}}
-  backup: {assembly: generator/electric_heater, parameters: {with_thermostat: false}}
+  pv: {assembly: mock/pv_array}
+  tank: {assembly: mock/hot_water_tank, bind: {heat: backup}}
+  backup: {assembly: mock/electric_heater, parameters: {with_thermostat: false}}
 """
     )
 
@@ -148,7 +148,7 @@ def test_a_repeated_or_partial_numbering_is_refused(orders: tuple, message: str)
     weather = WEATHER.replace("Weather:\n", f"Weather:\n  {orders[0]}\n")
     occupancy = OCCUPANCY.replace("Occupancy:\n", f"Occupancy:\n  {orders[1]}\n") if orders[1] else OCCUPANCY
     with pytest.raises(EnergySystemAssemblyError, match=f"EF-7K .*{message}"):
-        expand_text(site(weather, occupancy) + "imports:\n  pv: {order: 3, assembly: pv/array}\n")
+        expand_text(site(weather, occupancy) + "imports:\n  pv: {order: 3, assembly: mock/pv_array}\n")
 
 
 @pytest.mark.base
@@ -156,9 +156,9 @@ def test_order_with_components_in_a_group_is_refused() -> None:
     """``order:`` positions the top level only; a grouped component could not be placed."""
     text = (
         site(WEATHER.replace("Weather:\n", "Weather:\n  order: 1\n"))
-        + "imports:\n  pv: {order: 2, assembly: pv/array}\n"
+        + "imports:\n  pv: {order: 2, assembly: mock/pv_array}\n"
         + "groups:\n  extra:\n    enabled: true\n    components:\n"
-        + "      Occupancy: {class: tests.assemblies.fixture_components.FakeOccupancy, preset: standard}\n"
+        + "      Occupancy: {class: tests.assemblies.mock_components.MockOccupancy, preset: standard}\n"
     )
     with pytest.raises(EnergySystemAssemblyError, match="EF-7K .*groups or variants hold components"):
         expand_text(text)
@@ -171,7 +171,7 @@ def test_parameters_presets_and_substitution() -> None:
         site(WEATHER, OCCUPANCY)
         + """
 imports:
-  dhw: {assembly: dhw/storage_water_heater, preset: large, parameters: {volume_in_liter: 250}, none: [ems_modifier]}
+  dhw: {assembly: mock/storage_water_heater, preset: large, parameters: {volume_in_liter: 250}, none: [ems_modifier]}
 """
     )
 
@@ -191,7 +191,7 @@ def test_a_variant_selects_its_members_and_drops_the_references_to_the_others() 
     """Without a thermostat the controller is gone, and so is the heater's input from it."""
     expanded, record = expand_text(
         site(WEATHER)
-        + "imports:\n  heater: {assembly: generator/electric_heater, parameters: {with_thermostat: false}}\n"
+        + "imports:\n  heater: {assembly: mock/electric_heater, parameters: {with_thermostat: false}}\n"
     )
 
     assert list(expanded.components) == ["Weather", "heater-Heater"]
@@ -208,9 +208,9 @@ def test_a_preset_named_by_a_parameter_and_a_display_name() -> None:
         site(WEATHER, OCCUPANCY, EMS)
         + """
 imports:
-  tank: {assembly: storage/hot_water_tank, bind: {heat: heater}}
-  heater: {assembly: generator/electric_heater, preset: eco, bind: {ems_modifier: Ems}}
-  pv: {assembly: pv/array, preset: east_facing}
+  tank: {assembly: mock/hot_water_tank, bind: {heat: heater}}
+  heater: {assembly: mock/electric_heater, preset: eco, bind: {ems_modifier: Ems}}
+  pv: {assembly: mock/pv_array, preset: east_facing}
 """
     )
 
@@ -224,7 +224,7 @@ imports:
 @pytest.mark.parametrize(
     "parameters, message",
     [
-        ("{nope: 1}", "'nope', which is not a parameter of 'pv/array'"),
+        ("{nope: 1}", "'nope', which is not a parameter of 'mock/pv_array'"),
         ("{azimuth_in_degree: north}", "'north' is not a number"),
         ("{azimuth_in_degree: 400}", "outside the range \\[0.0, 360.0\\]"),
         ("{facing: up}", "'up' is not one of the allowed values"),
@@ -237,16 +237,18 @@ imports:
 def test_a_parameter_that_does_not_fit_is_refused(parameters: str, message: str) -> None:
     """Type, range, allowed values, unknown names and constraints are checked per import."""
     with pytest.raises(EnergySystemAssemblyError, match=message):
-        expand_text(site(WEATHER) + f"imports:\n  pv: {{assembly: pv/array, parameters: {parameters}}}\n")
+        expand_text(site(WEATHER) + f"imports:\n  pv: {{assembly: mock/pv_array, parameters: {parameters}}}\n")
 
 
 @pytest.mark.base
 def test_an_unknown_preset_and_a_parameter_reference_at_the_top_are_refused() -> None:
     """An energy-system file has presets to name, but no parameters to refer to."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-76 .*no preset 'north'.*Valid presets: east_facing, south"):
-        expand_text(site(WEATHER) + "imports:\n  pv: {assembly: pv/array, preset: north}\n")
+        expand_text(site(WEATHER) + "imports:\n  pv: {assembly: mock/pv_array, preset: north}\n")
     with pytest.raises(EnergySystemAssemblyError, match="EF-76 .*has no parameters"):
-        expand_text(site(WEATHER) + "imports:\n  pv: {assembly: pv/array, parameters: {tilt_in_degree: {$param: x}}}\n")
+        expand_text(
+            site(WEATHER) + "imports:\n  pv: {assembly: mock/pv_array, parameters: {tilt_in_degree: {$param: x}}}\n"
+        )
 
 
 UNIT_ASSEMBLY = """
@@ -257,7 +259,7 @@ parameters:
   rating: {{type: float, unit: {unit}, default: 1, description: A rating.}}
 components:
   PVSystem:
-    class: tests.assemblies.fixture_components.FakePVSystem
+    class: tests.assemblies.mock_components.MockPVSystem
     preset: rooftop
     config: {{{field}: {{$param: rating}}}}
 """
@@ -272,7 +274,7 @@ components:
             "unitless",
             "ANY",
             "shading_factor",
-            "EF-79 .*'shading_factor' of FakePVSystemConfig .*declares no unit .*import x, "
+            "EF-79 .*'shading_factor' of MockPVSystemConfig .*declares no unit .*import x, "
             "inline.energy_system.yaml:\\d+.*unit=lt.Units",
         ),
     ],
@@ -295,7 +297,7 @@ def test_a_sized_field_declares_its_unit() -> None:
 
     from hisim import loadtypes as lt  # noqa: PLC0415
     from hisim.config.sizing import declared_field_unit, sized_field  # noqa: PLC0415
-    from tests.assemblies.fixture_components import FakeTankConfig  # noqa: PLC0415
+    from tests.assemblies.mock_components import MockTankConfig  # noqa: PLC0415
 
     @dataclasses.dataclass
     class Sized:
@@ -305,8 +307,8 @@ def test_a_sized_field_declares_its_unit() -> None:
         volume: float = sized_field(rule=1.0, unit=lt.Units.LITER)
 
     assert declared_field_unit(Sized, "volume") is lt.Units.LITER
-    assert declared_field_unit(FakeTankConfig, "volume_in_liter") is lt.Units.LITER
-    assert declared_field_unit(FakeTankConfig, "component_id") is None
+    assert declared_field_unit(MockTankConfig, "volume_in_liter") is lt.Units.LITER
+    assert declared_field_unit(MockTankConfig, "component_id") is None
 
 
 CYCLE = """
@@ -353,11 +355,11 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
         name: later/everything
         components:
           Tank:
-            class: tests.assemblies.fixture_components.FakeTank
+            class: tests.assemblies.mock_components.MockTank
             preset: standard
             config: {volume_in_liter: {$fact: storage_volume}}
           Battery:
-            class: tests.assemblies.fixture_components.FakeBattery
+            class: tests.assemblies.mock_components.MockBattery
             preset: sized_to_pv
         interface:
           needs:
@@ -387,13 +389,13 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
 def test_an_import_key_may_not_share_a_name_with_the_site() -> None:
     """A verb names a partner by a bare name, so the two namespaces stay apart."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-52 .*the import 'Weather'"):
-        expand_text(site(WEATHER) + "imports:\n  Weather: {assembly: pv/array}\n")
+        expand_text(site(WEATHER) + "imports:\n  Weather: {assembly: mock/pv_array}\n")
 
 
 @pytest.mark.base
 def test_the_expanded_house_items_name_the_serialized_partners() -> None:
     """Internal references are rewritten; lowered ports write bare partner names."""
-    expanded, _record = expand_imports(parse_energy_system(Fixtures.HOUSE), fixture_resolver())
+    expanded, _record = expand_imports(parse_energy_system(Mocks.HOUSE), mock_resolver())
 
     assert expanded.components["hot_water-heater-Heater"].inputs == (
         DefaultInputs(source="hot_water-heater-Controller"),

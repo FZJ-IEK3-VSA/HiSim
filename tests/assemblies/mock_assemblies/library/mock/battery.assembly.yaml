@@ -1,9 +1,9 @@
-# Fixture: a battery sized from the PV peak power a fact port binds (spec §3.2, §6); the capacity is a
+# Mock: a battery sized from the PV peak power a fact port binds (spec §3.2, §6); the capacity is a
 # sized field whose unit the parameter states (D16 b).
 schema_version: 4
 kind: assembly
-name: storage/battery
-description: A fake battery sized to one PV array.
+name: mock/battery
+description: A mock battery sized to one PV array.
 
 parameters:
   capacity_in_kwh:
@@ -16,7 +16,7 @@ presets:
 
 components:
   Battery:
-    class: tests.assemblies.fixture_components.FakeBattery
+    class: tests.assemblies.mock_components.MockBattery
     preset: sized_to_pv
     display: "Battery, {chemistry}"
     config:

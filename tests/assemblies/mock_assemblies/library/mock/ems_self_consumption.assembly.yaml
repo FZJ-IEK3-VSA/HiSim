@@ -1,11 +1,11 @@
-# Fixture: the controller assembly (assemblies_spec.md §4.3, §4.4, D11, D21). Its energy manager observes
+# Mock: the controller assembly (assemblies_spec.md §4.3, §4.4, D11, D21). Its energy manager observes
 # the electricity flows its class declares, ranks the controllable ones by the priority list — the weights
 # are derived from the class's defaults, never written — and outputs their balance, which a meter may
 # observe instead of the flows (the double count of both is refused).
 schema_version: 4
 kind: assembly
-name: control/ems_self_consumption
-description: A fake surplus controller maximising self-consumption.
+name: mock/ems_self_consumption
+description: A mock surplus controller maximising self-consumption.
 
 parameters:
   priorities:
@@ -28,7 +28,7 @@ presets:
 
 components:
   EMS:
-    class: tests.assemblies.fixture_components.FakeEnergyManager
+    class: tests.assemblies.mock_components.MockEnergyManager
     preset: optimize_own_consumption
     inputs:
       - {$observes: flows}

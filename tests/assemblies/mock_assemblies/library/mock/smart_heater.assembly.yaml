@@ -1,11 +1,11 @@
-# Fixture: an electric heater whose thermostat (an L1) an energy manager may raise. Its electricity is
+# Mock: an electric heater whose thermostat (an L1) an energy manager may raise. Its electricity is
 # controllable through the need ems_modifier (spec §4.4, D21): binding it to the controller lowers to the
 # thermostat's default connections from the manager's class (its modifier) and lets the manager rank the
 # heater's draw with an empty dispatch; unbound, the heater is not controlled.
 schema_version: 4
 kind: assembly
-name: generator/smart_heater
-description: A fake electric space heater with its thermostat, controllable by an energy manager.
+name: mock/smart_heater
+description: A mock electric space heater with its thermostat, controllable by an energy manager.
 
 parameters:
   power_in_watt:
@@ -17,14 +17,14 @@ presets:
 components:
   Controller:
     order: 1
-    class: tests.assemblies.fixture_components.FakeController
+    class: tests.assemblies.mock_components.MockController
     preset: standard
     inputs:
       - {$port: tank_temperature}
       - {$port: ems_modifier}
   Heater:
     order: 2
-    class: tests.assemblies.fixture_components.FakeHeater
+    class: tests.assemblies.mock_components.MockHeater
     preset: standard
     config:
       power_in_watt: {$param: power_in_watt}
@@ -33,8 +33,8 @@ components:
 
 interface:
   needs:
-    tank_temperature: {into: [Controller], partner: FakeTank, optional: true}
-    ems_modifier: {into: [Controller], partner: FakeEnergyManager, optional: true}
+    tank_temperature: {into: [Controller], partner: MockTank, optional: true}
+    ems_modifier: {into: [Controller], partner: MockEnergyManager, optional: true}
   provides:
     heat: {output: Heater.ThermalPower}
     electricity: {output: Heater.ElectricityInput, controllable: {via: ems_modifier}}

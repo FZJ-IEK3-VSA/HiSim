@@ -149,8 +149,14 @@ linear with constant coefficients. With `G = Σ m_i c + UA`, `T∞ = (Σ m_i c T
 - `T̄ = T∞ + (T0 − T∞) (1 − e^(−a))/a` (for `a → 0`: `T̄ = T0`, no division)
 
 One closed form per call, no sub-stepping, the same for the buffer, the DHW tank and the HDS pipe water. It lives
-in a new module `hisim/components/hydronics.py` (`MixedNode.step(T0, inflows, UA, T_amb, dt) -> (T_end, T_mean)`),
-so storages stop carrying their own mixing, booking and loss code.
+in a new module `hisim/hydronics.py` (`MixedNode.step(T0, inflows, UA, T_amb, dt, C) -> (T_end, T_mean, Q_i, loss)`;
+not under `hisim/components/`, because `hisim/energy_port.py`, imported by the base `Component`, delegates to it), so
+storages stop carrying their own mixing, booking and loss code. Stage A (PR #890) fixed the constants and the open
+parameters (owner, 2026-10-04): water `c = 4180 J/(kg K)`, pinned equal to `PhysicsConfig`'s; water density
+`992 kg/m³`, the value at 40 °C both storages use today, so stages C and D replace arithmetic without moving a number
+(`PhysicsConfig`'s 1000 is aligned in stage C as one deliberate change); the §6 accelerator uses a secant step after
+six of the node's own iterates when the estimated contraction lies in [0, 1), under-relaxation by 0.5 on a residual
+sign change, and the plain iterate otherwise.
 
 ### 4.2 Properties
 

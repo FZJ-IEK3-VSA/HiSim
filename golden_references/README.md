@@ -25,7 +25,7 @@ and stored here, in `<setup_id>__<param_id>.json` (keys sorted, two-space indent
     "building": "BUI1",
     "tag": "Building",
     "name": "Conditioned floor area",
-    "source": {"import": null, "instance": null, "member": "Building", "assembly": null, "name": "Building"}
+    "source": {"import": null, "instance": null, "path": [], "member": "Building", "assembly": null, "name": "Building"}
   },
   "BUI1.General.Self-sufficiency rate of electricity": {
     "value": 41.2, "unit": "%", "building": "BUI1", "tag": "General",

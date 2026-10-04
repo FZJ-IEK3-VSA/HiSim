@@ -18,7 +18,6 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple
 
-from hisim.config import ComponentID, DisplayConfig
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts
@@ -44,6 +43,8 @@ from hisim.economics.subsidies import (
 )
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
+
+from tests.fake_component_source import plain_component_source
 
 
 class SyntheticPlan:
@@ -116,8 +117,8 @@ class SyntheticPlan:
 
     @staticmethod
     def component_source(subject: str) -> KpiSource:
-        """The KPI source a simulated component of that name records."""
-        return KpiSource.for_component(ComponentID(subject), DisplayConfig())
+        """The KPI source a simulated component of that name records (:func:`plain_component_source`)."""
+        return plain_component_source(subject)
 
     #: Id of the one scheme of :func:`always_eligible_catalog`.
     GRANT_SCHEME = "SYNTHETIC_GRANT"

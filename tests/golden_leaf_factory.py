@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping, Optional, Tuple
 
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiSource
 from scripts.golden_kpis import golden_leaf
 
 
@@ -30,13 +30,18 @@ def component(
     tag: str = "Building",
     building: str = "BUI1",
     member: Optional[str] = None,
-    import_key: Optional[str] = None,
-    instance: Optional[str] = None,
+    path: Tuple[Tuple[str, Optional[str]], ...] = (),
 ) -> Tuple[str, Dict[str, Any]]:
-    """One component KPI as ``(key, leaf)``; the member defaults to the source's runtime name."""
+    """One component KPI as ``(key, leaf)``; the member defaults to the source's runtime name.
+
+    ``path`` is the source's address path as ``(import, instance)`` steps, outermost first; its
+    first step is the source's ``import`` and ``instance``, and an empty one makes a site component.
+    """
+    steps = tuple(KpiAddressStep(import_key=import_key, instance=instance) for import_key, instance in path)
     source = KpiSource(
-        import_key=import_key,
-        instance=instance,
+        import_key=steps[0].import_key if steps else None,
+        instance=steps[0].instance if steps else None,
+        path=steps,
         member=source_name if member is None else member,
         assembly=None,
         name=source_name,

@@ -28,6 +28,7 @@ from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.economics.views import carrier_year_one_bills
 from hisim.loadtypes import ComponentType
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep
 
 from tests.economics.synthetic_stages import (
     SyntheticPlan,
@@ -571,6 +572,74 @@ class TestTheSourceOfARow:
         result = StagedEvaluator(database).evaluate([old_stage, heat_pump_stage(4)], parameters, perspective)
 
         with pytest.raises(ValueError, match="Stage 0 was read from an economic_inputs.json written before"):
+            StagedDocument(result, parameters, perspective)
+
+    @staticmethod
+    def _with_boiler_source(stage, **changes):
+        """The stage with the boiler's recorded source changed in the given fields."""
+        boiler = SyntheticPlan.BOILER_SUBJECT
+        sources = dict(stage.inputs.component_sources)
+        sources[boiler] = replace(sources[boiler], **changes)
+        return replace(stage, inputs=replace(stage.inputs, component_sources=sources))
+
+    def test_two_stages_differing_only_in_presentation_are_one_component(self, parameters, database):
+        """Catches a kept component whose display name or label changed between stages being refused.
+
+        ``display_name`` and ``label`` are presentation; the identity fields decide whether two
+        stages name one component, and the first stage's presentation stands.
+        """
+        perspective = brownfield_perspective()
+        renamed = self._with_boiler_source(envelope_stage(4), display_name="Old gas boiler", label="Kessel")
+        result = StagedEvaluator(database).evaluate([baseline_stage(), renamed], parameters, perspective)
+
+        document = StagedDocument(result, parameters, perspective).to_json()
+
+        boiler = {row["subject"]: row for row in document["plan"]["by_subject"]}[SyntheticPlan.BOILER_SUBJECT]
+        assert boiler["source"] == SyntheticPlan.component_source(SyntheticPlan.BOILER_SUBJECT).to_dict()
+
+    @pytest.mark.parametrize(
+        "changes",
+        [
+            {
+                "import_key": "heating",
+                "instance": None,
+                "path": (KpiAddressStep(import_key="heating", instance=None),),
+            },
+            {
+                "import_key": "heating",
+                "instance": "sys-1",
+                "path": (KpiAddressStep(import_key="heating", instance="sys-1"),),
+            },
+            {"member": "Boiler2"},
+            {"assembly": "lib/boiler"},
+            {"name": "Boiler2"},
+        ],
+        ids=["import", "instance", "member", "assembly", "name"],
+    )
+    def test_two_stages_differing_in_an_identity_field_are_refused(self, parameters, database, changes):
+        """Catches one subject silently standing for two components across the stages.
+
+        ``import`` and ``instance`` are the first step of the path, so they change with it.
+        """
+        perspective = brownfield_perspective()
+        other = self._with_boiler_source(envelope_stage(4), **changes)
+        result = StagedEvaluator(database).evaluate([baseline_stage(), other], parameters, perspective)
+
+        with pytest.raises(ValueError, match="The subject 'GenericBoiler' is two components across the stages"):
+            StagedDocument(result, parameters, perspective)
+
+    def test_two_stages_differing_only_below_the_first_step_of_the_path_are_refused(self, parameters, database):
+        """Catches the comparison reading only ``import``/``instance`` and missing a deeper path step."""
+        outer = KpiAddressStep(import_key="heating", instance="sys-1")
+        imported = {"import_key": "heating", "instance": "sys-1"}
+        perspective = brownfield_perspective()
+        first = self._with_boiler_source(baseline_stage(), path=(outer,), **imported)
+        deeper = self._with_boiler_source(
+            envelope_stage(4), path=(outer, KpiAddressStep(import_key="boiler", instance=None)), **imported
+        )
+        result = StagedEvaluator(database).evaluate([first, deeper], parameters, perspective)
+
+        with pytest.raises(ValueError, match="The subject 'GenericBoiler' is two components across the stages"):
             StagedDocument(result, parameters, perspective)
 
 

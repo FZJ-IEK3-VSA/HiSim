@@ -69,8 +69,9 @@ before: "Conditioned floor area": {"name": "Conditioned floor area", "value": 14
             "nameOfSourceComponent": "Building"}
 after:  "Conditioned floor area (Building)": {"name": "Conditioned floor area", "value": 140.0, ...,
             "nameOfSourceComponent": "Building",
-            "source": {"import": null, "instance": null, "member": "Building", "assembly": null,
-                       "name": "Building", "display_name": "Building", "label": null}}
+            "source": {"import": null, "instance": null, "path": [], "member": "Building",
+                       "assembly": null, "name": "Building", "display_name": "Building",
+                       "label": null}}
 ```
 
 `...` stands for the entry's other fields (`unit`, `description`, `tag`, `valueMin`, `valueMax`).

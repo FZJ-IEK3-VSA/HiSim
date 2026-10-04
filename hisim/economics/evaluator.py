@@ -294,9 +294,18 @@ class EvaluationInputs:
     #: simulated, keyed by its component name, which is the subject its cost facts carry. It is
     #: what tells a cost subject that is a HiSim component (a ``by_subject`` row's ``source``)
     #: from one that is not (an envelope measure, a carrier, a synthetic subject), which nothing
-    #: else in this record says. Empty for inputs built by hand with no component behind them;
-    #: ``None`` only on a file written before the field existed, which a reader that needs the
-    #: sources refuses rather than calling every subject a non-component.
+    #: else in this record says.
+    #:
+    #: ``{}`` and ``None`` say different things. ``{}`` is a known fact: these inputs were built in
+    #: code with no simulated component behind them (a test, a synthetic stage, a re-pricing that
+    #: assembles subjects itself), so every subject truly is a non-component and a ``by_subject``
+    #: row's ``source`` is rightly ``null``. ``None`` is an unknown: the inputs were read from an
+    #: ``economic_inputs.json`` written before the field existed, so whether a subject was a
+    #: component cannot be said, and a reader that needs the sources refuses it
+    #: (``StagedDocument``) rather than calling every subject a non-component. ``{}`` is the
+    #: default because a record constructed in code knows its own components -- the bridge fills
+    #: the map from the simulation, and code that names none has none -- while only the reader of
+    #: an old file can produce ``None``, which it sets explicitly.
     component_sources: Optional[Dict[str, KpiSource]] = field(default_factory=dict)
 
     def annual_heat_demand(self) -> Optional[float]:

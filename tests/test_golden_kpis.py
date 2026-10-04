@@ -12,7 +12,7 @@ from typing import Any, Dict
 
 import pytest
 
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
 from scripts.golden_kpis import (
     ABS_TOL,
     ADDRESS,
@@ -32,10 +32,18 @@ from tests.golden_leaf_factory import component, derived, general, key_of, leaf_
 pytestmark = pytest.mark.base
 
 
-def _entry(name: str, value: Any, unit: str = "kWh", source: KpiSource | None = None) -> Dict[str, Any]:
+def _entry(
+    name: str,
+    value: Any,
+    unit: str = "kWh",
+    source: KpiSource | None = None,
+    tag: KpiTagEnumClass = KpiTagEnumClass.GENERAL,
+) -> Dict[str, Any]:
     """One serialized KPI entry, as ``all_kpis.json`` holds it."""
     legacy_name = None if source is None else source.name
-    return KpiEntry(name=name, unit=unit, value=value, source=source, name_of_source_component=legacy_name).to_dict()
+    return KpiEntry(
+        name=name, unit=unit, value=value, tag=tag, source=source, name_of_source_component=legacy_name
+    ).to_dict()
 
 
 # --------------------------------------------------------------------------- #
@@ -50,7 +58,9 @@ def test_golden_leaves_keys_every_kpi_by_its_dotted_address_and_stores_its_field
                 "Self-sufficiency rate of electricity": _entry("Self-sufficiency rate of electricity", 41.2, "%")
             },
             "Building": {
-                "Conditioned floor area (Building)": _entry("Conditioned floor area", 121, "m2", building),
+                "Conditioned floor area (Building)": _entry(
+                    "Conditioned floor area", 121, "m2", building, tag=KpiTagEnumClass.BUILDING
+                ),
             },
         }
     }
@@ -72,7 +82,14 @@ def test_golden_leaves_keys_every_kpi_by_its_dotted_address_and_stores_its_field
             "building": "BUI1",
             "tag": "Building",
             "name": "Conditioned floor area",
-            "source": {"import": None, "instance": None, "member": "Building", "assembly": None, "name": "Building"},
+            "source": {
+                "import": None,
+                "instance": None,
+                "path": [],
+                "member": "Building",
+                "assembly": None,
+                "name": "Building",
+            },
         },
     }
     assert isinstance(leaves["BUI1.Building.Conditioned floor area (Building)"]["value"], float)
@@ -93,21 +110,21 @@ def test_golden_leaves_of_an_empty_collection_is_empty() -> None:
 
 def test_golden_leaves_refuse_an_entry_written_before_the_source_existed() -> None:
     """Catches a golden being written with a guessed source for an old ``all_kpis.json``."""
-    old_entry = {"name": "x", "unit": "kWh", "value": 1.0, "nameOfSourceComponent": "Battery"}
+    old_entry = {"name": "x", "unit": "kWh", "value": 1.0, "tag": "Battery", "nameOfSourceComponent": "Battery"}
     with pytest.raises(GoldenFormatError, match="carries no 'source'"):
         golden_leaves({"BUI1": {"Battery": {"x": old_entry}}})
 
 
 def test_golden_leaves_refuse_a_key_that_disagrees_with_its_entry() -> None:
     """Catches a collection whose key was built by hand drifting from its entry (the finder's check)."""
-    entry = _entry("x", 1.0, source=KpiSource(member="Battery", name="Battery"))
+    entry = _entry("x", 1.0, source=KpiSource(member="Battery", name="Battery"), tag=KpiTagEnumClass.BATTERY)
     with pytest.raises(ValueError, match="addresses itself as 'BUI1.Battery.x \\(Battery\\)'"):
         golden_leaves({"BUI1": {"Battery": {"x": entry}}})
 
 
 def test_golden_leaves_refuse_an_entry_without_a_unit() -> None:
     """Catches a golden storing a KPI whose unit nobody can compare."""
-    entry = {"name": "x", "value": 1.0, "source": None}
+    entry = {"name": "x", "value": 1.0, "tag": "General", "source": None}
     with pytest.raises(GoldenFormatError, match="no unit"):
         golden_leaves({"BUI1": {"General": {"x": entry}}})
 
@@ -147,7 +164,43 @@ def test_read_golden_refuses_a_source_with_presentation_fields() -> None:
     """Catches ``display_name`` or ``label`` creeping into the goldens, where they would churn."""
     key, leaf = component("Floor area", "Building", 121.0)
     leaf["source"]["display_name"] = "Building"
-    with pytest.raises(GoldenFormatError, match="exactly the fields import, instance, member, assembly, name"):
+    with pytest.raises(GoldenFormatError, match="exactly the fields import, instance, path, member, assembly, name"):
+        read_golden({key: leaf}, "test")
+
+
+def test_a_leaf_source_carries_its_whole_address_path() -> None:
+    """Catches a golden dropping the inner steps of a component's path, or reading them back reordered."""
+    key, leaf = component("Floor area", "heating-sys-1-Building", 121.0, path=(("heating", "sys-1"), ("hp", None)))
+
+    assert leaf["source"]["path"] == [{"import": "heating", "instance": "sys-1"}, {"import": "hp", "instance": None}]
+    assert leaf["source"]["import"] == "heating" and leaf["source"]["instance"] == "sys-1"
+    assert read_golden(json.loads(json.dumps({key: leaf})), "test") == {key: leaf}
+
+
+def test_read_golden_refuses_a_source_without_its_path_as_stale() -> None:
+    """Catches a golden written before ``source.path`` existed being read as a site component."""
+    key, leaf = component("Floor area", "Building", 121.0)
+    del leaf["source"]["path"]
+    with pytest.raises(
+        GoldenFormatError, match="'source' has no 'path'.*stale.*golden-update workflow with force_rewrite"
+    ):
+        read_golden({key: leaf}, "test")
+
+
+@pytest.mark.parametrize(
+    "path, message",
+    [
+        ("heating", "source.path is not a list of address steps"),
+        ([{"import": "heating"}], r"source.path\[0\]: an address step must be an object with exactly the keys"),
+        ([{"import": "", "instance": None}], r"source.path\[0\]: the address step's import is not a non-empty"),
+        ([{"import": "heating", "instance": None}], "are not the outermost step of its path"),
+    ],
+)
+def test_read_golden_refuses_a_malformed_path(path: Any, message: str) -> None:
+    """Catches a hand-edited path, or one that contradicts the source's import, passing as an address."""
+    key, leaf = component("Floor area", "Building", 121.0)
+    leaf["source"]["path"] = path
+    with pytest.raises(GoldenFormatError, match=message):
         read_golden({key: leaf}, "test")
 
 

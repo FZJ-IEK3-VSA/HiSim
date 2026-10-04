@@ -8,11 +8,11 @@ and carrying the address's fields beside the value and the unit::
     "BUI1.Building.Conditioned floor area (Building)": {
         "value": 121.2, "unit": "m2", "building": "BUI1", "tag": "Building",
         "name": "Conditioned floor area",
-        "source": {"import": null, "instance": null, "member": "Building",
+        "source": {"import": null, "instance": null, "path": [], "member": "Building",
                    "assembly": null, "name": "Building"}
     }
 
-``source`` holds the five identity fields of the entry's
+``source`` holds the identity fields (``KpiSource.IDENTITY_FIELDS``) of the entry's
 :class:`~hisim.postprocessing.kpi_computation.kpi_structure.KpiSource` (its ``display_name``
 and ``label`` are presentation and stay out), and is ``null`` for a derived KPI. The key is
 built from the fields by :class:`KpiAddress` and checked against them on every read
@@ -43,7 +43,9 @@ ABS_TOL = 0.0
 #: The fields of a golden leaf, exactly these and no others.
 LEAF_FIELDS = ("value", "unit", "building", "tag", "name", "source")
 #: The identity fields of a leaf's ``source`` (``KpiSource`` without ``display_name`` and ``label``).
-SOURCE_FIELDS = ("import", "instance", "member", "assembly", "name")
+SOURCE_FIELDS = KpiSource.IDENTITY_FIELDS
+#: The source fields of a leaf written before ``source.path`` existed: a stale golden.
+SOURCE_FIELDS_BEFORE_PATH = ("import", "instance", "member", "assembly", "name")
 
 #: What to do about a golden in a form this tooling does not read.
 REBLESS_HINT = (
@@ -92,20 +94,22 @@ def _coerce(value: Any) -> Any:
     return float(value) if _is_number(value) else value
 
 
-def source_fields(source: Optional[KpiSource]) -> Optional[dict[str, Optional[str]]]:
+def source_fields(source: Optional[KpiSource]) -> Optional[dict[str, Any]]:
     """The identity fields of a source as a golden leaf stores them, or ``None`` for a derived KPI.
 
     Args:
         source: The entry's source.
 
     Returns:
-        ``{"import", "instance", "member", "assembly", "name"}``, or ``None``.
+        ``{"import", "instance", "path", "member", "assembly", "name"}`` (:data:`SOURCE_FIELDS`),
+        ``path`` a list of ``{"import", "instance"}`` steps, or ``None``.
     """
     if source is None:
         return None
     return {
         "import": source.import_key,
         "instance": source.instance,
+        "path": [step.to_dict() for step in source.path],
         "member": source.member,
         "assembly": source.assembly,
         "name": source.name,
@@ -176,21 +180,26 @@ def golden_leaves(all_kpis: Any) -> dict[str, dict[str, Any]]:
 
 
 def _source_of_leaf(raw: Any, where: str) -> Optional[KpiSource]:
-    """Read a leaf's ``source`` back into a :class:`KpiSource`, refusing anything but the five fields."""
+    """Read a leaf's ``source`` back into a :class:`KpiSource`, refusing anything but the identity fields."""
     if raw is None:
         return None
+    if isinstance(raw, dict) and set(raw) == set(SOURCE_FIELDS_BEFORE_PATH):
+        raise GoldenFormatError(
+            f"{where}: 'source' has no 'path': the golden was written before the source carried its "
+            f"address path, so it is stale; {REBLESS_HINT}."
+        )
     if not isinstance(raw, dict) or set(raw) != set(SOURCE_FIELDS):
         raise GoldenFormatError(
             f"{where}: 'source' must be null or an object with exactly the fields {', '.join(SOURCE_FIELDS)}, "
             f"got {raw!r}; {REBLESS_HINT}."
         )
     for field_name in SOURCE_FIELDS:
-        if raw[field_name] is not None and not isinstance(raw[field_name], str):
+        if field_name != "path" and raw[field_name] is not None and not isinstance(raw[field_name], str):
             raise GoldenFormatError(f"{where}: source.{field_name} is not a string or null: {raw[field_name]!r}.")
     if not raw["name"]:
         raise GoldenFormatError(f"{where}: source.name is empty; {REBLESS_HINT}.")
-    # The five identity fields are checked above; the strict decoder reads them, the two
-    # presentation fields (display_name, label) explicitly absent from a golden leaf.
+    # The identity fields are checked above; the strict decoder reads them (and the path's steps),
+    # the two presentation fields (display_name, label) explicitly absent from a golden leaf.
     try:
         return KpiSource.from_json_object(raw, where)
     except ValueError as error:

@@ -39,7 +39,7 @@ from types import MappingProxyType
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.components.building.building import Building
-from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.renovisor.constants import ComfortGrades, GradeScale
 from hisim.renovisor.layers import EnvelopeLayers
 from hisim.renovisor.provenance import MissingField, Period, ProvenancedValue
@@ -86,7 +86,7 @@ class KpiDocument:
     """
 
     #: The file ``WRITE_KPIS_TO_JSON`` writes into the simulation's result directory.
-    FILE_NAME: ClassVar[str] = "all_kpis.json"
+    FILE_NAME: ClassVar[str] = ALL_KPIS_FILE_NAME
 
     #: The key every entry carries its plain, unqualified KPI name under.
     NAME_KEY: ClassVar[str] = "name"

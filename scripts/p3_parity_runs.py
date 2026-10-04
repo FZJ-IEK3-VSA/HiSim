@@ -30,6 +30,7 @@ from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple, cast
 import pandas as pd
 
 from hisim.energy_system.parity import WiringSnapshot
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 
@@ -181,7 +182,7 @@ class ParitySide:
     )
 
     #: The file KPI computation writes, read back from the side's own result directory.
-    KPI_FILENAME: ClassVar[str] = "all_kpis.json"
+    KPI_FILENAME: ClassVar[str] = ALL_KPIS_FILE_NAME
 
     @classmethod
     def python(cls, setup_path: Path, parameters: SimulationParameters) -> RunOutcome:

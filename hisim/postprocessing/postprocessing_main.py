@@ -52,6 +52,8 @@ Execution flow
 from __future__ import annotations
 import importlib
 import json
+import math
+import numbers
 
 import os
 import pickle
@@ -66,7 +68,7 @@ from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
-from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
 
@@ -1217,7 +1219,7 @@ class PostProcessor:
             # Get KPIs from ppdt
             kpi_collection_dict = ppdt.kpi_collection_dict
 
-            pathname = os.path.join(ppdt.simulation_parameters.result_directory, "all_kpis.json")
+            pathname = os.path.join(ppdt.simulation_parameters.result_directory, ALL_KPIS_FILE_NAME)
             with open(pathname, "w", encoding="utf-8") as outfile:
                 json.dump(kpi_collection_dict, outfile, indent=5)
 
@@ -1254,12 +1256,29 @@ class PostProcessor:
             """Say whether a Building component contributed its own KPIs to this collection.
 
             True when the Building's own KPI exists and its value is not ``None``: a floor area
-            that was not computed cannot normalize anything either. Several entries of that name
-            in one building raise (:meth:`KpiFinder.value`).
+            that was not computed cannot normalize anything either. A floor area that was computed
+            but is zero, negative or not finite raises, naming the building and the KPI, instead of
+            reaching the per-m² divisions. Several entries of that name in one building raise
+            (:meth:`KpiFinder.value`). This is the only lenient decision of the writer: every other
+            KPI it reads fails the run by name when it is missing or ambiguous.
             """
             if not finder.addresses(building=building_object, name=BUILDING_OWN_KPI_NAME):
                 return False
-            return finder.value(building=building_object, name=BUILDING_OWN_KPI_NAME) is not None
+            floor_area = finder.value(building=building_object, name=BUILDING_OWN_KPI_NAME)
+            if floor_area is None:
+                return False
+            if isinstance(floor_area, bool) or not isinstance(floor_area, numbers.Real):
+                raise ValueError(
+                    f"Building-sizer KPI JSON for {building_object}: the KPI '{BUILDING_OWN_KPI_NAME}' is "
+                    f"{floor_area!r}, not a number."
+                )
+            if not math.isfinite(floor_area) or floor_area <= 0:
+                raise ValueError(
+                    f"Building-sizer KPI JSON for {building_object}: the KPI '{BUILDING_OWN_KPI_NAME}' is "
+                    f"{floor_area!r} m², but every per-m² field divides by it; a computed floor area must be a "
+                    "positive finite number."
+                )
+            return True
 
         kpi_dict = {}
 

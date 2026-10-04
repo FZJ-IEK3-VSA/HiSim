@@ -27,6 +27,7 @@ from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.groups import expand_groups
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.validation import validate_structure
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
 
 
 class Report:
@@ -409,7 +410,7 @@ class KpiAddressRenderer:
     """
 
     #: The file a result directory holds the KPI collection in.
-    FILE_NAME: str = "all_kpis.json"
+    FILE_NAME: str = ALL_KPIS_FILE_NAME
 
     @classmethod
     def document_path(cls, path: Path) -> Path:

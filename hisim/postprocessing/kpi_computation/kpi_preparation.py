@@ -1914,7 +1914,7 @@ class KpiPreparation:
         Raises:
             ValueError: If an entry carries no source (entries collected through
                 :meth:`hisim.component.Component.component_kpi_entries` always do, so that is a
-                caller keying entries it built itself), if its deprecated
+                caller keying entries it built itself), if it carries no tag, if its deprecated
                 ``name_of_source_component`` is set and differs from ``source.name`` (an unset one
                 is filled from ``source.name``), if two entries name one
                 source name with different sources, or if two entries produce one key, which
@@ -1930,6 +1930,12 @@ class KpiPreparation:
                     f"The component KPI entry '{entry.name}' carries no source. Every component KPI "
                     "entry has to name the component it is reported for; collect entries through "
                     "Component.component_kpi_entries, which stamps it."
+                )
+            if entry.tag is None:
+                raise ValueError(
+                    f"The component KPI entry '{entry.name}' of the component '{source.name}' carries no tag. "
+                    "Every KPI entry is filed under a KpiTagEnumClass tag; an untagged one would be filed "
+                    "under the tag 'None'."
                 )
             entry.require_consistent_source(where="Keying a building's component KPIs")
             known = sources_by_name.setdefault(source.name, source)

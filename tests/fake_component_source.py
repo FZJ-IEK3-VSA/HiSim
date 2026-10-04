@@ -12,6 +12,16 @@ from hisim.config import ComponentID, DisplayConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 
 
+def plain_component_source(component_name: str) -> KpiSource:
+    """The KPI source a plain component of that name, with no building, unit or display name, records.
+
+    The one place the tests build it: the bridge's test doubles (:class:`NamedComponentSource`) and
+    the synthetic stages (``tests.economics.synthetic_stages.SyntheticPlan.component_source``)
+    both record this source, so a cost row and its component's KPIs join on the same fields.
+    """
+    return KpiSource.for_component(ComponentID(component_name), DisplayConfig())
+
+
 class NamedComponentSource:
     """Gives a test double of a component the KPI source of a plain component of its name."""
 
@@ -19,4 +29,4 @@ class NamedComponentSource:
 
     def kpi_source(self) -> KpiSource:
         """The KPI source a plain component of this name, with no display name, records."""
-        return KpiSource.for_component(ComponentID(self.component_name), DisplayConfig())
+        return plain_component_source(self.component_name)

@@ -404,7 +404,12 @@ class StagedDocument:
         Raises:
             ValueError: If a stage's inputs were read from a file written before the sources
                 existed, which would leave every row's ``source`` unknowable; or if two stages give
-                one subject different sources, which would make one subject two components.
+                one subject sources that differ in an identity field (``import``, ``instance``,
+                ``path``, ``member``, ``assembly``, ``name``: :attr:`KpiSource.IDENTITY_FIELDS`),
+                which would make one subject two components.
+                ``display_name`` and ``label`` are presentation: a stage that renamed the label of
+                a kept component still prices the same component, and the first stage's
+                presentation stands.
         """
         sources: Dict[str, KpiSource] = {}
         for index, stage in enumerate(result.stages):
@@ -417,7 +422,7 @@ class StagedDocument:
                 )
             for subject, source in stage_sources.items():
                 known = sources.setdefault(subject, source)
-                if known != source:
+                if known.identity() != source.identity():
                     raise ValueError(
                         f"The subject '{subject}' is two components across the stages: {known} and {source}."
                     )

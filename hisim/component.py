@@ -228,6 +228,10 @@ class SingleTimeStepValues:
         return error_msg
 
 
+class ComponentNameMismatchError(ValueError):
+    """A component was constructed with a name other than its config's ``component_id.key``."""
+
+
 class Component:
     """Base class for all components."""
 
@@ -260,8 +264,8 @@ class Component:
         """Initializes the component class.
 
         Args:
-            name: The unique runtime name of this component, normally
-                ``config.component_id.key``. It becomes the prefix of every output name and
+            name: The unique runtime name of this component; it must equal
+                ``my_config.component_id.key``. It becomes the prefix of every output name and
                 therefore of every result column, and it is the key a declarative
                 energy-system file addresses this component by, so it has to be a plain
                 identifier.
@@ -276,6 +280,7 @@ class Component:
         Raises:
             ValueError: If ``name`` is not a usable identifier, if ``my_simulation_parameters``
                 is ``None``, or if ``my_config`` is not a ``ConfigBase``.
+            ComponentNameMismatchError: If ``name`` is not ``my_config.component_id.key``.
             ConfigSizingError: If ``my_config`` still has fields awaiting sizing.
         """
         # The single choke point where a component's runtime name becomes real. Enforcing the
@@ -308,6 +313,16 @@ class Component:
                     "Call .resolve(ctx) with a SizingContext or set the fields explicitly -- for an "
                     "identity field, from its provider, e.g. "
                     "config.weather_identity = my_weather_config.identity()."
+                )
+            # The runtime name and the structured identity are one string: the name prefixes
+            # every output and result column, the identity's key is what a KPI source, an
+            # energy-system file and the economics address the component by. A name that
+            # differs would make the same component two different things in two places.
+            if name != my_config.component_id.key:
+                raise ComponentNameMismatchError(
+                    f"Component {type(self).__name__} ({type(my_config).__name__}) was constructed with the "
+                    f"name '{name}', but its config's component_id.key is '{my_config.component_id.key}'; a "
+                    "component's name must be its key (pass name=my_config.component_id.key)."
                 )
             # Subclasses read their concrete config's fields off this base-typed slot; that
             # works for the type checker because ConfigBase carries a checking-only

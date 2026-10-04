@@ -14,6 +14,10 @@ from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, Union
 
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource, KpiTagEnumClass
 
+#: The file ``WRITE_KPIS_TO_JSON`` writes the tag-sorted KPI collection to, in a result directory;
+#: the one spelling every writer and reader of ``all_kpis.json`` uses.
+ALL_KPIS_FILE_NAME: str = "all_kpis.json"
+
 
 @dataclass(frozen=True)
 class KpiAddress:
@@ -75,8 +79,8 @@ class KpiFinder:
         sorted_collection: ``building -> tag -> key -> entry``.
 
     Raises:
-        ValueError: If the collection or a level of it is not a mapping, an entry has no ``name``
-            or no ``value``, or a key differs from the key its entry's address produces.
+        ValueError: If the collection or a level of it is not a mapping, an entry has no ``name``,
+            no ``value`` or no ``tag``, or a key differs from the key its entry's address produces.
     """
 
     def __init__(self, sorted_collection: Mapping[str, Mapping[Any, Mapping[str, Mapping[str, Any]]]]) -> None:
@@ -123,7 +127,7 @@ class KpiFinder:
 
     @staticmethod
     def _address_of(building: str, tag: str, key: str, entry: Any) -> KpiAddress:
-        """The address of one entry, refusing an entry whose key is not the one its address produces."""
+        """The address of one entry, refusing an untagged entry and one whose key its address does not produce."""
         if not isinstance(entry, Mapping) or not isinstance(entry.get("name"), str):
             raise ValueError(f"KPI collection: {building}.{tag}.{key} is not a KPI entry with a name.")
         if "value" not in entry:
@@ -131,9 +135,15 @@ class KpiFinder:
                 f"KPI collection: {building}.{tag}.{key} has no 'value' and so is not a KPI entry; "
                 "an entry whose value is not known carries \"value\": null."
             )
-        address = KpiAddress(
-            building=str(building), tag=tag, name=entry["name"], source=KpiSource.from_entry_dict(entry)
-        )
+        source = KpiSource.from_entry_dict(entry)
+        if entry.get("tag") is None:
+            reported_for = f"the component '{source.name}'" if source is not None else "no component (a derived KPI)"
+            raise ValueError(
+                f"KPI collection: the KPI entry '{entry['name']}' under '{building}.{tag}.{key}', reported for "
+                f"{reported_for}, carries no tag. Every KPI entry is filed under a KpiTagEnumClass tag; an "
+                "untagged one would be filed under the tag 'None'."
+            )
+        address = KpiAddress(building=str(building), tag=tag, name=entry["name"], source=source)
         # An entry written before the source existed was keyed by its bare name while it was the
         # only one of that name in its building; its address is the one of today's scheme.
         written_before_source = "source" not in entry and key == address.name

@@ -60,6 +60,68 @@ class KpiTagEnumClass(Enum):
 
 @dataclass_json
 @dataclass(frozen=True, kw_only=True)
+class KpiAddressStep:
+    """One step of a component's address path: the import it came through and that import's instance.
+
+    Serialized as ``{"import": <key>, "instance": <key or null>}``, the exact keys
+    :meth:`from_json_object` accepts. Named apart from the ``AddressStep`` a
+    :class:`~hisim.config.ComponentID` carries once assemblies exist: that one is the identity's
+    step, this one its serialized copy in a KPI source, filled from it by
+    :meth:`KpiSource.for_component`.
+
+    Attributes:
+        import_key: The key of the import (JSON ``import``, a Python keyword); never empty.
+        instance: The instance key of that import, or ``None`` if the import has none.
+    """
+
+    import_key: str = field(metadata=dataclasses_json_config(field_name="import"))
+    instance: Optional[str] = field(default=None, metadata=dataclasses_json_config(field_name="instance"))
+
+    #: The JSON names of a step's fields: the only keys a step object has.
+    JSON_NAMES: ClassVar[Tuple[str, ...]] = ("import", "instance")
+
+    def __post_init__(self) -> None:
+        """Refuse a step without an import key, or with an instance that is not a string."""
+        if not isinstance(self.import_key, str) or not self.import_key:
+            raise ValueError(f"An address step needs a non-empty import key, got {self.import_key!r}.")
+        if self.instance is not None and not isinstance(self.instance, str):
+            raise ValueError(f"An address step's instance is neither a string nor None: {self.instance!r}.")
+
+    @classmethod
+    def from_json_object(cls, raw: Any, where: str) -> "KpiAddressStep":
+        """Decode one serialized step strictly: an object with exactly ``import`` and ``instance``.
+
+        Args:
+            raw: The parsed JSON object.
+            where: What holds the step (a source and an index), named in every error.
+
+        Returns:
+            The step.
+
+        Raises:
+            ValueError: If ``raw`` is not an object with exactly the keys :attr:`JSON_NAMES`,
+                ``import`` is not a non-empty string, or ``instance`` is neither a string nor null.
+        """
+        if not isinstance(raw, Mapping) or set(raw) != set(cls.JSON_NAMES):
+            raise ValueError(
+                f"{where}: an address step must be an object with exactly the keys "
+                f"{', '.join(cls.JSON_NAMES)}, got {raw!r}."
+            )
+        if not isinstance(raw["import"], str) or not raw["import"]:
+            raise ValueError(f"{where}: the address step's import is not a non-empty string: {raw['import']!r}.")
+        if raw["instance"] is not None and not isinstance(raw["instance"], str):
+            raise ValueError(f"{where}: the address step's instance is neither a string nor null: {raw['instance']!r}.")
+        return cls(import_key=raw["import"], instance=raw["instance"])
+
+    if TYPE_CHECKING:
+
+        def to_dict(self) -> Dict[str, Any]:
+            """Stub for the dict dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
+
+
+@dataclass_json
+@dataclass(frozen=True, kw_only=True)
 class KpiSource:
     """The structured address of the component a KPI entry is reported for.
 
@@ -71,20 +133,27 @@ class KpiSource:
     (:class:`~hisim.postprocessing.kpi_computation.kpi_address.KpiFinder`) and never split a key.
 
     Serialized with the field names of the spec, in snake_case even inside the camelCase
-    :class:`KpiEntry`, each one pinned below: ``import``, ``instance``, ``member``, ``assembly``,
-    ``name``, ``display_name``, ``label``.
+    :class:`KpiEntry`, each one pinned below: ``import``, ``instance``, ``path``, ``member``,
+    ``assembly``, ``name``, ``display_name``, ``label``. The identity fields -- what says which
+    component a source is -- are :attr:`IDENTITY_FIELDS`; ``display_name`` and ``label`` are
+    presentation.
 
     Attributes:
         import_key: The key of the import the component came from (JSON ``import``, a Python
             keyword); ``None`` for a component written directly into the energy system.
         instance: The instance key of that import (the request's system id); ``None`` if the
             import has none, and for a site component.
+        path: Every address step from the energy system down to the component, outermost first
+            (:class:`KpiAddressStep`, JSON ``[{"import": ..., "instance": ...}, ...]``); ``()``
+            (JSON ``[]``) for a site component. ``import`` and ``instance`` are its first step:
+            equal to ``path[0]`` when the path is non-empty, both ``None`` when it is empty.
         member: The component's name inside its assembly, or its plain component name
             (``ComponentID.name``, without building or unit). ``None`` only on a source read back
             from a JSON written before the source existed.
-        assembly: Library path of the innermost owning assembly; informative, not identity.
-        name: The runtime name, the serialized address (``Component.component_name``, which is
-            ``ComponentID.key``): the string the KPI key is qualified with.
+        assembly: Library path of the innermost owning assembly; one of :attr:`IDENTITY_FIELDS`.
+        name: The runtime name, the serialized address (``Component.component_name``, which the
+            ``Component`` constructor enforces to be ``ComponentID.key``): the string the KPI key
+            is qualified with.
         display_name: The English default label: the component's ``DisplayConfig.pretty_name``,
             else its member name. Never an identifier.
         label: The request's own name for the system, passed through verbatim; ``None`` today.
@@ -92,6 +161,7 @@ class KpiSource:
 
     import_key: Optional[str] = field(default=None, metadata=dataclasses_json_config(field_name="import"))
     instance: Optional[str] = field(default=None, metadata=dataclasses_json_config(field_name="instance"))
+    path: Tuple[KpiAddressStep, ...] = field(default=(), metadata=dataclasses_json_config(field_name="path"))
     member: Optional[str] = field(default=None, metadata=dataclasses_json_config(field_name="member"))
     assembly: Optional[str] = field(default=None, metadata=dataclasses_json_config(field_name="assembly"))
     name: str = field(metadata=dataclasses_json_config(field_name="name"))
@@ -102,6 +172,7 @@ class KpiSource:
     JSON_NAMES: ClassVar[Tuple[str, ...]] = (
         "import",
         "instance",
+        "path",
         "member",
         "assembly",
         "name",
@@ -109,18 +180,45 @@ class KpiSource:
         "label",
     )
 
+    #: The JSON names of the fields that say which component a source is: two sources naming one
+    #: component agree on all of them, whatever their ``display_name`` and ``label``.
+    IDENTITY_FIELDS: ClassVar[Tuple[str, ...]] = ("import", "instance", "path", "member", "assembly", "name")
+
     def __post_init__(self) -> None:
-        """Refuse a source without a name: the name is what the KPI key is qualified with."""
+        """Refuse a source without a name, or whose ``import``/``instance`` is not its path's first step."""
         if not isinstance(self.name, str) or not self.name:
             raise ValueError(f"A KPI source needs a non-empty runtime name, got {self.name!r}.")
+        # Typed Any: a caller (or dataclasses_json) may hand over what the annotation does not promise.
+        path: Any = self.path
+        if isinstance(path, list):
+            # dataclasses_json's from_dict hands a JSON array over as a list; the field is a tuple.
+            path = tuple(path)
+            object.__setattr__(self, "path", path)
+        if not isinstance(path, tuple) or not all(isinstance(step, KpiAddressStep) for step in path):
+            raise ValueError(f"The KPI source '{self.name}': path is not a sequence of address steps: {path!r}.")
+        outermost = (path[0].import_key, path[0].instance) if path else (None, None)
+        if (self.import_key, self.instance) != outermost:
+            raise ValueError(
+                f"The KPI source '{self.name}': import {self.import_key!r} and instance {self.instance!r} "
+                f"are not the outermost step of its path {[step.to_dict() for step in path]!r}; they must "
+                "equal path[0], and both be null for a site component, whose path is empty."
+            )
+
+    def identity(self) -> Tuple[Any, ...]:
+        """The values of :attr:`IDENTITY_FIELDS`, in that order: what two sources of one component share."""
+        return (self.import_key, self.instance, self.path, self.member, self.assembly, self.name)
 
     @classmethod
     def for_component(cls, component_id: "ComponentID", display_config: "DisplayConfig") -> "KpiSource":
         """The source of a component's KPIs: the one place a source is built from a component.
 
-        Assemblies do not exist yet, so every component is a plain one: no import, no instance,
-        no assembly, no label; its member is its name and its runtime name is its key. The
-        assemblies work (``assemblies_spec.md`` §2.4) extends this method and nothing else.
+        The path is the identity's own: a ``ComponentID`` that carries a ``path`` of address
+        steps (each with an ``import_key`` and an ``instance``, outermost first) gives each step
+        to the source, and ``import`` and ``instance`` are its first step; one without a path, as
+        every ``ComponentID`` is until assemblies exist, is a site component with ``path`` ``()``.
+        No assembly and no label yet; the member is the component's name and its runtime name is
+        its key. The assemblies work (``assemblies_spec.md`` §2.4) extends this method and
+        nothing else.
 
         Args:
             component_id: The component's structured identity.
@@ -131,9 +229,14 @@ class KpiSource:
             The component's source.
         """
         pretty_name = display_config.pretty_name
+        path = tuple(
+            KpiAddressStep(import_key=step.import_key, instance=step.instance)
+            for step in getattr(component_id, "path", ())
+        )
         return cls(
-            import_key=None,
-            instance=None,
+            import_key=path[0].import_key if path else None,
+            instance=path[0].instance if path else None,
+            path=path,
             member=component_id.name,
             assembly=None,
             name=component_id.key,
@@ -184,7 +287,9 @@ class KpiSource:
         know and fails with a bare ``KeyError`` on a missing one, this refuses every key that is
         not one of :attr:`JSON_NAMES` and requires ``name``; ``import``, ``instance``,
         ``member``, ``assembly``, ``display_name`` and ``label`` may be absent and then are
-        ``None``. Every present value is a string or ``null``.
+        ``None``, and every present one is a string or ``null``. ``path`` is a list of step
+        objects (:meth:`KpiAddressStep.from_json_object`); an absent one is ``[]``, a site
+        component's, which a source naming an import then contradicts.
 
         Args:
             raw: The parsed JSON object.
@@ -195,7 +300,9 @@ class KpiSource:
 
         Raises:
             ValueError: If ``raw`` is not an object, lacks ``name``, carries a key that is not
-                one of :attr:`JSON_NAMES`, or holds a value that is neither a string nor ``null``.
+                one of :attr:`JSON_NAMES`, holds a value other than ``path`` that is neither a
+                string nor ``null``, holds a ``path`` that is not a list of step objects, or names
+                an ``import``/``instance`` that is not its path's first step.
         """
         if not isinstance(raw, Mapping):
             raise ValueError(f"{where}: a KPI source must be a JSON object, got {raw!r}.")
@@ -208,17 +315,28 @@ class KpiSource:
         if "name" not in raw:
             raise ValueError(f"{where}: the KPI source has no 'name', the runtime name its KPI key is qualified with.")
         for key, value in raw.items():
-            if value is not None and not isinstance(value, str):
+            if key != "path" and value is not None and not isinstance(value, str):
                 raise ValueError(f"{where}: source.{key} is neither a string nor null: {value!r}.")
-        return cls(
-            import_key=raw.get("import"),
-            instance=raw.get("instance"),
-            member=raw.get("member"),
-            assembly=raw.get("assembly"),
-            name=raw["name"],
-            display_name=raw.get("display_name"),
-            label=raw.get("label"),
+        raw_path = raw.get("path", [])
+        if not isinstance(raw_path, list):
+            raise ValueError(f"{where}: source.path is not a list of address steps: {raw_path!r}.")
+        path = tuple(
+            KpiAddressStep.from_json_object(step, f"{where}: source.path[{index}]")
+            for index, step in enumerate(raw_path)
         )
+        try:
+            return cls(
+                import_key=raw.get("import"),
+                instance=raw.get("instance"),
+                path=path,
+                member=raw.get("member"),
+                assembly=raw.get("assembly"),
+                name=raw["name"],
+                display_name=raw.get("display_name"),
+                label=raw.get("label"),
+            )
+        except ValueError as error:
+            raise ValueError(f"{where}: {error}") from error
 
     if TYPE_CHECKING:
 
@@ -245,7 +363,8 @@ class KpiEntry:
     nested ``building -> tag -> key -> entry``. A **component KPI** is always keyed
     ``"<name> (<source.name>)"``, whether or not another component of the building reports the
     same name, and its entry carries ``source`` (:class:`KpiSource`, an object with the fields
-    ``import``, ``instance``, ``member``, ``assembly``, ``name``, ``display_name``, ``label``). A
+    ``import``, ``instance``, ``path``, ``member``, ``assembly``, ``name``, ``display_name``,
+    ``label``). A
     **derived KPI** (the General tag, the meter-derived cost totals, district totals) is keyed by
     its bare name and carries ``"source": null``. A key's shape is fixed by its producer, never by
     who else is present, and readers filter on ``source.*`` rather than splitting keys
@@ -256,7 +375,7 @@ class KpiEntry:
                     "nameOfSourceComponent": "Building"}
         after:  "Conditioned floor area (Building)": {"name": "Conditioned floor area", ...,
                     "nameOfSourceComponent": "Building",
-                    "source": {"import": null, "instance": null, "member": "Building",
+                    "source": {"import": null, "instance": null, "path": [], "member": "Building",
                                "assembly": null, "name": "Building", "display_name": "Building",
                                "label": null}}
 

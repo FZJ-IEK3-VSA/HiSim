@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import pytest
@@ -19,7 +19,7 @@ from hisim.component import Component
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress, KpiFinder
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiEntry, KpiSource, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 from scripts.golden_kpis import golden_leaves
 
@@ -70,11 +70,13 @@ def test_the_source_serializes_under_the_exact_names_of_the_contract() -> None:
     """Catches the camelCase entry leaking its case into the source, or ``import`` losing its name.
 
     ``import`` is a Python keyword, so the field is ``import_key`` in Python and must be pinned to
-    ``import`` in JSON; ``display_name`` sits inside a camelCase entry and must stay snake_case.
+    ``import`` in JSON, in the source and in each step of its path; ``display_name`` sits inside a
+    camelCase entry and must stay snake_case. The path has two steps, so their order round-trips.
     """
     source = KpiSource(
         import_key="pv",
         instance="east",
+        path=(KpiAddressStep(import_key="pv", instance="east"), KpiAddressStep(import_key="inverter", instance=None)),
         member="PVSystem",
         assembly="pv/array",
         name="pv-east-PVSystem",
@@ -88,6 +90,7 @@ def test_the_source_serializes_under_the_exact_names_of_the_contract() -> None:
     assert written["source"] == {
         "import": "pv",
         "instance": "east",
+        "path": [{"import": "pv", "instance": "east"}, {"import": "inverter", "instance": None}],
         "member": "PVSystem",
         "assembly": "pv/array",
         "name": "pv-east-PVSystem",
@@ -96,6 +99,7 @@ def test_the_source_serializes_under_the_exact_names_of_the_contract() -> None:
     }
     assert "nameOfSourceComponent" in written
     assert KpiEntry.from_dict(json.loads(json.dumps(written))).source == source
+    assert KpiSource.from_json_object(json.loads(json.dumps(written["source"])), "here") == source
 
 
 @pytest.mark.base
@@ -175,7 +179,9 @@ def test_the_key_of_a_component_kpi_is_qualified_whoever_else_is_present() -> No
 @pytest.mark.base
 def test_the_address_builds_the_key_and_the_golden_form() -> None:
     """Catches the one place that builds a key disagreeing with the golden references' flat form."""
-    source = KpiSource(name="pv-east-PVSystem", import_key="pv", instance="east", member="PVSystem")
+    source = KpiSource(
+        name="pv-east-PVSystem", import_key="pv", instance="east", path=_steps(("pv", "east")), member="PVSystem"
+    )
     address = KpiAddress(building="BUI1", tag="PV", name="Electricity production", source=source)
 
     assert address.key == "Electricity production (pv-east-PVSystem)"
@@ -185,6 +191,11 @@ def test_the_address_builds_the_key_and_the_golden_form() -> None:
     )
 
 
+def _steps(*steps: Tuple[str, Optional[str]]) -> Tuple[KpiAddressStep, ...]:
+    """An address path of ``(import, instance)`` steps, outermost first."""
+    return tuple(KpiAddressStep(import_key=import_key, instance=instance) for import_key, instance in steps)
+
+
 def _composed_collection() -> Dict[str, Any]:
     """The worked example of the spec: two PV arrays of one import, a heat pump, a Building, a derived KPI."""
 
@@ -192,9 +203,25 @@ def _composed_collection() -> Dict[str, Any]:
         written = KpiEntry(name=name, unit="kWh", value=value, source=source, name_of_source_component=source.name)
         return {**written.to_dict(), "tag": tag}
 
-    east = KpiSource(import_key="pv", instance="east", member="PVSystem", assembly="pv/array", name="pv-east-PVSystem")
-    west = KpiSource(import_key="pv", instance="west", member="PVSystem", assembly="pv/array", name="pv-west-PVSystem")
-    heat_pump = KpiSource(import_key="heating", member="HeatPump", name="heating-HeatPump")
+    east = KpiSource(
+        import_key="pv",
+        instance="east",
+        path=_steps(("pv", "east")),
+        member="PVSystem",
+        assembly="pv/array",
+        name="pv-east-PVSystem",
+    )
+    west = KpiSource(
+        import_key="pv",
+        instance="west",
+        path=_steps(("pv", "west")),
+        member="PVSystem",
+        assembly="pv/array",
+        name="pv-west-PVSystem",
+    )
+    heat_pump = KpiSource(
+        import_key="heating", path=_steps(("heating", None)), member="HeatPump", name="heating-HeatPump"
+    )
     building = KpiSource(member="Building", name="Building")
     production = "Electricity production"
     return {
@@ -262,10 +289,20 @@ def test_the_finder_reads_a_json_written_before_the_source_existed() -> None:
     legacy = {
         "BUI1": {
             "Car": {
-                "Distance driven": {"name": "Distance driven", "value": 42.0, "nameOfSourceComponent": "Car1"},
-                "Battery losses (Car1)": {"name": "Battery losses", "value": 1.0, "nameOfSourceComponent": "Car1"},
+                "Distance driven": {
+                    "name": "Distance driven",
+                    "value": 42.0,
+                    "tag": "Car",
+                    "nameOfSourceComponent": "Car1",
+                },
+                "Battery losses (Car1)": {
+                    "name": "Battery losses",
+                    "value": 1.0,
+                    "tag": "Car",
+                    "nameOfSourceComponent": "Car1",
+                },
             },
-            "General": {"Self-consumption rate": {"name": "Self-consumption rate", "value": 41.2}},
+            "General": {"Self-consumption rate": {"name": "Self-consumption rate", "value": 41.2, "tag": "General"}},
         }
     }
 
@@ -282,7 +319,14 @@ def test_the_finder_reads_a_json_written_before_the_source_existed() -> None:
 def test_the_finder_refuses_a_key_that_disagrees_with_its_entry() -> None:
     """Catches a collection whose keys were built by hand drifting from the entries they hold."""
     source = KpiSource.for_component(ComponentID("Car1"), DisplayConfig())
-    entry = KpiEntry(name="Distance driven", unit="km", value=1.0, source=source, name_of_source_component="Car1")
+    entry = KpiEntry(
+        name="Distance driven",
+        unit="km",
+        value=1.0,
+        tag=KpiTagEnumClass.CAR,
+        source=source,
+        name_of_source_component="Car1",
+    )
 
     with pytest.raises(ValueError, match="addresses itself as 'BUI1.Car.Distance driven \\(Car1\\)'"):
         KpiFinder({"BUI1": {"Car": {"Distance driven": entry.to_dict()}}})
@@ -308,8 +352,8 @@ def test_the_golden_leaf_form_carries_the_address_fields_without_the_presentatio
     """Catches the golden references losing the source's identity, or churning on its presentation.
 
     ``scripts/golden_kpis.py::golden_leaves`` keys every leaf by its dotted address and stores the
-    value, the unit and the address fields; of the source only the five identity fields, never
-    ``display_name`` or ``label``.
+    value, the unit and the address fields; of the source only the identity fields, its path
+    included, never ``display_name`` or ``label``.
     """
     leaves = golden_leaves(_composed_collection())
 
@@ -323,6 +367,7 @@ def test_the_golden_leaf_form_carries_the_address_fields_without_the_presentatio
         "source": {
             "import": "pv",
             "instance": "east",
+            "path": [{"import": "pv", "instance": "east"}],
             "member": "PVSystem",
             "assembly": "pv/array",
             "name": "pv-east-PVSystem",
@@ -363,8 +408,12 @@ def test_the_cli_writes_a_value_that_is_not_a_number_as_json_and_omits_an_empty_
     collection = {
         "BUI1": {
             "General": {
-                "Not computed": KpiEntry(name="Not computed", unit="", value=None).to_dict(),
-                "Heating system": KpiEntry(name="Heating system", unit="-", value="Gas boiler").to_dict(),
+                "Not computed": KpiEntry(
+                    name="Not computed", unit="", value=None, tag=KpiTagEnumClass.GENERAL
+                ).to_dict(),
+                "Heating system": KpiEntry(
+                    name="Heating system", unit="-", value="Gas boiler", tag=KpiTagEnumClass.GENERAL
+                ).to_dict(),
             }
         }
     }
@@ -421,6 +470,37 @@ def test_an_entry_without_a_value_is_not_a_kpi_entry() -> None:
 
 
 @pytest.mark.base
+def test_an_untagged_component_entry_is_refused_by_name_when_keyed() -> None:
+    """Catches an entry without a tag being filed under the tag ``"None"`` instead of failing."""
+    source = KpiSource.for_component(ComponentID("Car1"), DisplayConfig())
+    untagged = KpiEntry(name="Distance driven", unit="km", value=1.0, source=source)
+
+    with pytest.raises(
+        ValueError, match="The component KPI entry 'Distance driven' of the component 'Car1' carries no tag"
+    ):
+        KpiPreparation.keyed_component_entries([untagged])
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("tag_field", [{"tag": None}, {}])
+def test_the_finder_refuses_an_untagged_entry_by_name(tag_field: Dict[str, Any]) -> None:
+    """Catches the finder filing a collection's untagged entry under the tag ``"None"``."""
+    entry = {
+        "name": "Distance driven",
+        "value": 1.0,
+        "source": KpiSource.for_component(ComponentID("Car1"), DisplayConfig()).to_dict(),
+        **tag_field,
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="the KPI entry 'Distance driven' under 'BUI1.None.Distance driven \\(Car1\\)', reported for the "
+        "component 'Car1', carries no tag",
+    ):
+        KpiFinder({"BUI1": {None: {"Distance driven (Car1)": entry}}})
+
+
+@pytest.mark.base
 def test_keying_fills_an_unset_deprecated_source_name_and_refuses_a_different_one() -> None:
     """Catches an entry with a source but no ``name_of_source_component`` being refused, or a mismatch passing."""
     source = KpiSource.for_component(ComponentID("Car1"), DisplayConfig())
@@ -430,7 +510,12 @@ def test_keying_fills_an_unset_deprecated_source_name_and_refuses_a_different_on
 
     assert keyed["Distance driven (Car1)"]["nameOfSourceComponent"] == "Car1"
     different = KpiEntry(
-        name="Distance driven", unit="km", value=1.0, source=source, name_of_source_component="Car2"
+        name="Distance driven",
+        unit="km",
+        value=1.0,
+        tag=KpiTagEnumClass.CAR,
+        source=source,
+        name_of_source_component="Car2",
     )
     with pytest.raises(ValueError, match="names two different sources"):
         KpiPreparation.keyed_component_entries([different])
@@ -466,6 +551,68 @@ def test_a_serialized_source_is_decoded_strictly(raw: Any, message: str) -> None
         KpiSource.from_entry_dict({"name": "Distance driven", "value": 1.0, "source": raw})
     with pytest.raises(ValueError, match=f"somewhere: {message}"):
         KpiSource.from_json_object(raw, "somewhere")
+
+
+#: How a source refuses a path whose first step is not its own import and instance.
+_NOT_OUTERMOST = "The KPI source 'pv-east-PVSystem': import 'pv' and instance 'east' are not the outermost step"
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "path, message",
+    [
+        ({"import": "pv"}, "source.path is not a list of address steps"),
+        (["pv"], r"source.path\[0\]: an address step must be an object with exactly the keys import, instance"),
+        ([{"import": "pv"}], r"source.path\[0\]: an address step must be an object with exactly the keys"),
+        (
+            [{"import": "pv", "instance": None, "member": "x"}],
+            r"source.path\[0\]: an address step must be an object with exactly the keys",
+        ),
+        ([{"import": None, "instance": None}], r"source.path\[0\]: the address step's import is not a non-empty"),
+        ([{"import": "pv", "instance": 3}], r"source.path\[0\]: the address step's instance is neither a string"),
+        (
+            [{"import": "pv", "instance": "west"}],
+            f"{_NOT_OUTERMOST} of its path \\[\\{{'import': 'pv', 'instance': 'west'",
+        ),
+        ([], f"{_NOT_OUTERMOST} of its path \\[\\]"),
+    ],
+)
+def test_a_serialized_path_is_decoded_strictly(path: Any, message: str) -> None:
+    """Catches a malformed path, or one whose first step is not the source's import, being read."""
+    raw = {"import": "pv", "instance": "east", "path": path, "member": "PVSystem", "name": "pv-east-PVSystem"}
+    with pytest.raises(ValueError, match=f"somewhere: {message}"):
+        KpiSource.from_json_object(raw, "somewhere")
+
+
+@pytest.mark.base
+def test_a_source_without_a_path_is_a_site_component() -> None:
+    """Catches an absent path read as anything but ``[]``, and a source naming an import without one."""
+    assert KpiSource.from_json_object({"name": "Car1"}, "here").path == ()
+    with pytest.raises(ValueError, match="import 'pv' and instance None are not the outermost step"):
+        KpiSource(import_key="pv", name="pv-PVSystem")
+
+
+@pytest.mark.base
+def test_a_component_id_with_a_path_gives_the_source_every_step() -> None:
+    """Catches ``for_component`` dropping the path an assembly-built identity carries, or its order.
+
+    ``ComponentID`` carries no path on this branch; the stand-in has the shape the assemblies
+    work gives it (``path`` of steps with ``import_key`` and ``instance``, outermost first).
+    """
+    from types import SimpleNamespace
+
+    component_id = SimpleNamespace(
+        name="HeatPump",
+        key="heating-sys-1-hp-HeatPump",
+        path=(SimpleNamespace(import_key="heating", instance="sys-1"), SimpleNamespace(import_key="hp", instance=None)),
+    )
+
+    source = KpiSource.for_component(component_id, DisplayConfig())  # type: ignore[arg-type]
+
+    assert source.path == _steps(("heating", "sys-1"), ("hp", None))
+    assert (source.import_key, source.instance) == ("heating", "sys-1")
+    assert source.member == "HeatPump" and source.name == "heating-sys-1-hp-HeatPump"
+    assert KpiSource.for_component(ComponentID("Car1"), DisplayConfig()).path == ()
 
 
 @pytest.mark.base
@@ -506,3 +653,32 @@ def test_the_building_sizer_json_is_skipped_for_a_floor_area_without_a_value(
     else:
         with pytest.raises(ValueError, match="No KPI matches building='BUI1', name='Total costs for simulated period'"):
             PostProcessor().write_kpis_to_json_for_building_sizer(ppdt, ["BUI1"])  # type: ignore[arg-type]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("floor_area", [0.0, -12.5, float("nan"), float("inf")])
+def test_the_building_sizer_json_refuses_a_floor_area_that_cannot_normalize(floor_area: float) -> None:
+    """Catches a computed floor area of zero (or negative, or not finite) reaching the per-m² divisions.
+
+    Only ``None`` means "no Building, skip"; a computed floor area that cannot divide is refused by
+    name, building and KPI, before any cost KPI is read.
+    """
+    from types import SimpleNamespace
+
+    from hisim.postprocessing.postprocessing_main import BUILDING_OWN_KPI_NAME, PostProcessor
+    from hisim.postprocessingoptions import PostProcessingOptions
+
+    building = KpiSource.for_component(ComponentID("Building"), DisplayConfig())
+    entry = KpiEntry(
+        name=BUILDING_OWN_KPI_NAME, unit="m2", value=floor_area, tag=KpiTagEnumClass.BUILDING, source=building
+    )
+    ppdt = SimpleNamespace(
+        kpi_collection_dict=_collection([entry]),
+        post_processing_options=[PostProcessingOptions.COMPUTE_KPIS],
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=f"Building-sizer KPI JSON for BUI1: the KPI '{BUILDING_OWN_KPI_NAME}' is .* m², but every per-m² field",
+    ):
+        PostProcessor().write_kpis_to_json_for_building_sizer(ppdt, ["BUI1"])  # type: ignore[arg-type]

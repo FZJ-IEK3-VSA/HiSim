@@ -24,7 +24,7 @@ from hisim.renovisor.apply import AddedLayer
 from hisim.components.building.building import Building
 from hisim.config import ComponentID, DisplayConfig
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
 from hisim.renovisor.capabilities import ProbeSet
 from hisim.renovisor.constants import ComfortGrades, GradeScale
 from hisim.renovisor.kpis import (
@@ -66,7 +66,7 @@ def document_of(values: Dict[str, float]) -> KpiDocument:
         {
             "BUI1": {
                 "General": {
-                    name: {"name": name, "unit": "kWh", "value": value}
+                    name: {"name": name, "unit": "kWh", "value": value, "tag": "General"}
                     for name, value in values.items()
                 }
             }
@@ -74,11 +74,12 @@ def document_of(values: Dict[str, float]) -> KpiDocument:
     )
 
 
-def component_entries(component: str, units_and_values: Dict[str, Any]) -> Dict[str, Any]:
+def component_entries(component: str, tag: KpiTagEnumClass, units_and_values: Dict[str, Any]) -> Dict[str, Any]:
     """Return the entries one component reports, keyed and shaped as ``WRITE_KPIS_TO_JSON`` writes them.
 
     Args:
         component: The runtime name of the reporting component.
+        tag: The tag the component files its KPIs under.
         units_and_values: KPI name -> ``(unit, value)``.
 
     Returns:
@@ -87,7 +88,7 @@ def component_entries(component: str, units_and_values: Dict[str, Any]) -> Dict[
     source = KpiSource.for_component(ComponentID(component), DisplayConfig())
     return {
         KpiAddress.key_for(name, source): KpiEntry(
-            name=name, unit=unit, value=value, source=source, name_of_source_component=source.name
+            name=name, unit=unit, value=value, tag=tag, source=source, name_of_source_component=source.name
         ).to_dict()
         for name, (unit, value) in units_and_values.items()
     }
@@ -316,7 +317,7 @@ def test_the_kpi_document_finds_an_entry_by_its_plain_name() -> None:
         {
             "BUI1": {
                 "Electricity Meter": component_entries(
-                    "ElectricityMeter", {"Total energy from grid": ("kWh", 18.0)}
+                    "ElectricityMeter", KpiTagEnumClass.ELECTRICITY_METER, {"Total energy from grid": ("kWh", 18.0)}
                 )
             }
         }
@@ -332,8 +333,12 @@ def test_the_kpi_document_refuses_a_name_two_components_report() -> None:
         {
             "BUI1": {
                 "Electricity Meter": {
-                    **component_entries("MeterA", {"Total energy from grid": ("kWh", 18.0)}),
-                    **component_entries("MeterB", {"Total energy from grid": ("kWh", 2.0)}),
+                    **component_entries(
+                        "MeterA", KpiTagEnumClass.ELECTRICITY_METER, {"Total energy from grid": ("kWh", 18.0)}
+                    ),
+                    **component_entries(
+                        "MeterB", KpiTagEnumClass.ELECTRICITY_METER, {"Total energy from grid": ("kWh", 2.0)}
+                    ),
                 }
             }
         }
@@ -351,7 +356,7 @@ def test_the_kpi_document_reads_a_file_written_by_the_run(tmp_path: Path) -> Non
     """The loader takes a result directory, and an absent file is an absent document."""
     assert KpiDocument.load(tmp_path) is None
     (tmp_path / KpiDocument.FILE_NAME).write_text(
-        json.dumps({"BUI1": {"General": {"x": {"name": "x", "unit": "-", "value": 1.0}}}}),
+        json.dumps({"BUI1": {"General": {"x": {"name": "x", "unit": "-", "value": 1.0, "tag": "General"}}}}),
         encoding="utf-8",
     )
 
@@ -416,7 +421,7 @@ def comfort_document(below: float, above: float, unit: str = Building.DEGREE_HOU
         The document, in the three-level shape HiSim writes.
     """
     values = {ComfortSources.UNDERHEATING_NAME: (unit, below), ComfortSources.OVERHEATING_NAME: (unit, above)}
-    return KpiDocument({"BUI1": {"Building": component_entries("Building", values)}})
+    return KpiDocument({"BUI1": {"Building": component_entries("Building", KpiTagEnumClass.BUILDING, values)}})
 
 
 def nearly_a_year() -> Period:
@@ -487,9 +492,10 @@ class TestComfortGrades:
     @pytest.mark.parametrize("value", [float("nan"), float("inf")])
     def test_a_non_finite_sum_is_absent_with_the_value(self, value: float) -> None:
         """A NaN temperature propagates to the sum; it is named, not graded as the worst or best."""
-        document = KpiDocument(
-            {"BUI1": {"Building": component_entries("Building", {ComfortSources.OVERHEATING_NAME: ("°C*h", value)})}}
+        entries = component_entries(
+            "Building", KpiTagEnumClass.BUILDING, {ComfortSources.OVERHEATING_NAME: ("°C*h", value)}
         )
+        document = KpiDocument({"BUI1": {"Building": entries}})
         block = build(document, a_full_year(), layers_of())
 
         assert KpiField.SUMMER_HEAT_PROTECTION.value not in block.values

@@ -368,11 +368,17 @@ class TestSerializationRoundtrip:
 
         from hisim.config import ComponentID, DisplayConfig
         from hisim.economics.serialization import SerializationFileNames, read_inputs, write_inputs
-        from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
+        from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiSource
 
         source = KpiSource.for_component(ComponentID("HeatPump"), DisplayConfig.show("Heat pump"))
         write_inputs(replace(self._inputs(), component_sources={"HeatPump": source}), str(tmp_path))
         assert read_inputs(str(tmp_path)).component_sources == {"HeatPump": source}
+
+        steps = (KpiAddressStep(import_key="heating", instance="sys-1"), KpiAddressStep(import_key="hp"))
+        imported = replace(source, import_key="heating", instance="sys-1", path=steps)
+        write_inputs(replace(self._inputs(), component_sources={"HeatPump": imported}), str(tmp_path))
+        read_back = read_inputs(str(tmp_path)).component_sources
+        assert read_back is not None and read_back["HeatPump"].path == steps
 
         path = tmp_path / SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME
         raw = json_module.loads(path.read_text(encoding="utf-8"))

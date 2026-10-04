@@ -115,7 +115,7 @@ variants:
               sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP           # 50 l/kW, simple_water_storage.py:150
               volume_heating_water_storage_in_liter: {$param: buffer_volume_in_liter}
             inputs:
-              - {$port: sh}                                         # WaterTemperatureFromHeatDistribution, WaterMassFlowRate...
+              - {$port: space_heating}                                         # WaterTemperatureFromHeatDistribution, WaterMassFlowRate...
               - HeatPump                                            # TemperatureOutputSH, MassFlowOutputSH
       direct:
         when: [false]
@@ -129,7 +129,7 @@ interface:
   needs:
     weather:          {into: [HeatPump, ControllerSH], partner: Weather}
     flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (gap G1)
-    sh:               {circuit: sh, member: Buffer, active_when: {with_buffer: [true]}}
+    space_heating:               {circuit: space_heating, member: Buffer, active_when: {with_buffer: [true]}}
                       # the naming convention gives the site's HDS pump and return leg, the buffer the supply leg
     electricity:      {carrier: electricity, outputs: [electricity_sh, electricity_dhw]}
     ems_modifier:     {into: [ControllerSH, ControllerDHW], partner: L2GenericEnergyManagementSystem, optional: true}

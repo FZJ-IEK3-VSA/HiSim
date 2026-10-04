@@ -71,9 +71,9 @@ components:
     inputs:
       - Building
       - HeatDistributionController
-      - {$port: sh}
+      - {$port: space_heating}
     ports:
-      sh: {circuit: sh}                             # pump and return leg are the HDS's (naming convention)
+      space_heating: {circuit: space_heating}                             # pump and return leg are the HDS's (naming convention)
 
 imports:
   heating:
@@ -81,7 +81,7 @@ imports:
     assembly: heating/air_source_heat_pump          # parameter defaults = the twin (preset de_twin)
     optional-bind: {ems_modifier: control}          # optional port: intent required (D8 i); a heat pump without
                                                     # an EMS is a normal house, so inert when `control` is absent;
-                                                    # sh, flow_temperature, weather, dhw_temperature (the one
+                                                    # space_heating, flow_temperature, weather, dhw_temperature (the one
                                                     # SimpleDHWStorage, dhw's cylinder) bind their one partner;
                                                     # electricity: only the check that one grid connection exists
   dhw:

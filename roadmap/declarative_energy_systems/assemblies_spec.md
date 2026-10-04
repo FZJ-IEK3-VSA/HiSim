@@ -749,10 +749,10 @@ Decided (owner, 2026-10-03, D17): there is **one base file, the site** (`energy_
 the heat generator is an assembly. A translated file is `site + heating import + dhw import + pv instances + battery
 instances + control import + supply imports`. The site holds weather, occupancy, building, the heat distribution system
 and its controller (D12) and what the hydronic stages leave on the house side; its entries carry `ports:` blocks where
-an import binds to them (the `sh` circuit, the EMS modifier inputs). The `heating/<generator>` assemblies —
+an import binds to them (the `space_heating` circuit, the EMS modifier inputs). The `heating/<generator>` assemblies —
 `condensing_gas_boiler`, `oil_boiler`, `pellet_boiler`, `wood_chip_boiler`, `hydrogen_boiler`, `air_source_heat_pump`,
 `ground_source_heat_pump`, `district_heating`, `electric_heating`, and `heating/solar_thermal` beside one of them — each
-expose an `sh` and a `dhw` circuit port and their carrier needs, and hold their buffer vessel (D12). The translator's
+expose an `space_heating` and a `dhw` circuit port and their carrier needs, and hold their buffer vessel (D12). The translator's
 rule R4 becomes **"may only pick tested assemblies, their presets and parameters"**: it writes the site's configuration
 values as today and an `imports` block (assemblies, presets, instance keys, parameters, binding verbs), nothing else;
 `DiffRule` (`translate.py:386-483`) checks the `imports` block against the library.
@@ -812,7 +812,7 @@ A circuit port is one end of one circuit (hydronic spec §3.1): its circuit name
 the binding lowers to the members' default connections for them (§3.2). The `HydronicPort` ends are then found from the
 wiring (spec §3.5, "the two ends come from the wiring, never from a declared peer"), so an assembly needs nothing beyond
 the wires its port produced. A circuit port binds exactly one partner; a split is a valve assembly with one circuit per
-branch. The dual-circuit generators (spec §3.3, circuits `Sh` and `Dhw`) make a heating assembly possible: `sh` binds
+branch. The dual-circuit generators (spec §3.3, circuits `SpaceHeating` and `Dhw`) make a heating assembly possible: `space_heating` binds
 the site's distribution side (D12), `dhw` binds `dhw/indirect_cylinder` or is declined. **Dependency:** the heating
 assemblies require hydronic stages C (DHW chain) and D (SH chain) of spec §9.5; before them generator, buffer and HDS
 are coupled through default connections (spec §9.2) and cannot be cut at a circuit. Stages A–B and §13 steps 1–3 proceed
@@ -955,7 +955,7 @@ All by the owner on 2026-10-03.
   Per-participant fuel constants in the meter follow when a second burner needs them.
 - **D11 — Dispatch:** the controller assembly owns the priority list and derives the weights (§4.4).
 - **D12 — Site versus heating assembly:** (b): the buffer vessel lives in each heating assembly; the site keeps the HDS
-  and its controller and exposes one `sh` circuit; `distribution/<type>` waits for a request that changes the HDS.
+  and its controller and exposes one `space_heating` circuit; `distribution/<type>` waits for a request that changes the HDS.
 - **D13 — Metering:** meters are observers, each with its own selection, and billing is the economics file's (§4.3).
 - **D16 — Unit check source:** (b): every config field an assembly parameter feeds declares its unit
   (`sized_field`/config `unit=`), and the check compares the parameter's unit with it; a fed field without a declared
@@ -1001,6 +1001,18 @@ All by the owner on 2026-10-03.
   stratified); an assembly without the contract is refused by the library test (§9.4). Rejected: a sibling test file
   (drifts) and hand-written Python tests per assembly
   (no generic harness, no `describe`).
+
+- **D25 — Buffer or no buffer is a different assembly, and the pump owner follows the circuit (owner, 2026-10-04):**
+  `heating/air_source_heat_pump` (buffer inside) and `heating/air_source_heat_pump_direct` (the heat pump feeds the
+  distribution) are two assemblies; there is no `with_buffer` parameter. The HeatDistribution's
+  `position_hot_water_storage_in_system` encodes who owns the mass flow of the space-heating loop (two loops and two
+  pumps with a buffer; one loop pumped by the generator without one; a fixed flow when the generator has no pump,
+  district heating). That is a property of the circuit, which the hydronic design already states: one pump owner per
+  circuit, who publishes `MassFlowSpaceHeating`. From hydronic stage D on the HDS derives it from what the other end
+  of its circuit publishes (it reads the flow through its default connections from that class, else it pumps), and the
+  enum goes away; no fact, no site setting, nothing written twice. Step 4 waits for stages C and D, so the first real
+  assemblies never meet the enum. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
+  HDS inside the direct assembly (two shapes of the Building's input, D19), a site value checked against the import.
 
 ### 14.2 Open
 

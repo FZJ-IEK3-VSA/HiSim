@@ -1,12 +1,11 @@
-"""Binding ports: the load-time refusals and the post-construction port check (``assemblies_spec.md`` §3.1–§3.3).
+"""Binding ports: the load-time refusals and the wiring refusals of lowered items (``assemblies_spec.md`` §3.1–§3.3).
 
 Every refusal is a named error of the ``EF-7x`` band whose message names the import (and instance),
-the port, its partner classes and every candidate, carries the source map of the import, and ends
-in a paste-ready ``bind:`` line where one exists. One test per refusal, each asserting exactly
-those parts. What the files decide is refused by the expansion; what only the constructed
-components say — a member's default connections from its partner's class, a wired input or output,
-a provided output — is refused by the post-construction port check of the build, before anything is
-connected.
+the port and carries the source map of the import. What the files decide is refused by the
+expansion, naming the port's partner classes and every candidate and ending in a paste-ready
+``bind:`` line where one exists. What only the constructed components say — a member's default
+connections from its partner's class, a wired input or output, a provided output — the wiring stage
+refuses like any connection, and the refusal names the port the item came from.
 """
 
 import re
@@ -14,20 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from hisim.energy_system.assemblies.port_check import check_lowered_ports
-from hisim.energy_system.assemblies.record import LoweredKind, LoweredPort
-from hisim.energy_system.errors import EnergySystemAssemblyError
+from hisim.energy_system.assemblies.record import LoweredKind
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemWiringError
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
-from hisim.simulationparameters import SimulationParameters
 from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Library, Mocks, build_text, expand_text, site
-from tests.assemblies.mock_components import (
-    MockPVSystem,
-    MockPVSystemConfig,
-    MockTank,
-    MockTankConfig,
-    MockWeather,
-    MockWeatherConfig,
-)
 
 #: A second weather station, for an ambiguous partner.
 WEATHER_2 = WEATHER.replace("Weather:", "Weather2:")
@@ -44,7 +33,7 @@ def refusal(text: str, library: Library = None) -> str:  # type: ignore[assignme
 
 
 def build_refusal(text: str, result_directory: Path, library: Library = None) -> str:  # type: ignore[assignment]
-    """Builds a file whose expansion succeeds and whose post-construction port check refuses; the message."""
+    """Builds a file whose expansion succeeds and whose wiring refuses a lowered item; the message."""
     expand_text(text, library.resolver() if library is not None else None)
     with pytest.raises(EnergySystemAssemblyError) as raised:
         build_text(text, result_directory, library.resolver() if library is not None else None)
@@ -164,7 +153,7 @@ def test_binding_a_partner_of_another_class_is_refused() -> None:
 
 @pytest.mark.base
 def test_binding_a_provider_the_member_declares_no_default_connections_from_is_refused(tmp_path: Path) -> None:
-    """EF-7H after construction: the constructed tank declares no default connections from a PV system."""
+    """EF-7H from the wiring: the constructed tank declares no default connections from a PV system."""
     message = build_refusal(
         site(WEATHER, OCCUPANCY)
         + "imports:\n  pv: {assembly: mock/pv_array}\n"
@@ -172,11 +161,17 @@ def test_binding_a_provider_the_member_declares_no_default_connections_from_is_r
         tmp_path,
     )
 
-    assert message.startswith("EF-7H at import tank: port 'heat' is bound to pv-PVSystem (MockPVSystem)")
-    assert "tank-Tank (MockTank) declares no default connections from MockPVSystem" in message
+    assert message.startswith(
+        "EF-7H at import tank: port 'heat' is bound to pv-PVSystem (MockPVSystem) by bind and lowers to the bare "
+        "name 'pv-PVSystem' in tank-Tank (MockTank) (import tank, inline.energy_system.yaml:"
+    )
     assert re.search(r"\(import tank, inline.energy_system.yaml:\d+ → mock/hot_water_tank.assembly.yaml:\d+\)", message)
-    assert "Valid classes it declares default connections from: MockHeater, MockOccupancy." in message
-    assert "Candidates: none; add to the import 'tank' one of `bind: {heat: <partner>}`" in message
+    assert "the wiring refuses it: the bare item 'pv-PVSystem' of 'tank-Tank' cannot be expanded" in message
+    assert "Valid source classes: MockHeater, MockOccupancy." in message
+    assert message.endswith(
+        "Add the default connection from MockPVSystem to MockTank, or bind the port to a partner of a class it "
+        "declares default connections from."
+    )
 
 
 #: An assembly whose member declares no default connections at all.
@@ -197,18 +192,20 @@ BARE_DEVICE = """
 
 @pytest.mark.base
 def test_a_member_without_default_connections_from_its_partner_is_refused_once_constructed(tmp_path: Path) -> None:
-    """EF-7H: the expansion binds by class name; the constructed device has no default connections to lower to."""
+    """EF-7H: the expansion binds by class name; the wiring finds no default connections on the constructed device."""
     library = Library(tmp_path)
     library.add("broken/bare", BARE_DEVICE)
 
     message = build_refusal(site(WEATHER) + "imports:\n  device: {assembly: broken/bare}\n", tmp_path / "r", library)
 
     assert message.startswith(
-        "EF-7H at import device: port 'weather' is bound to Weather (MockWeather), but device-Device "
-        "(MockBareDevice) declares no default connections from MockWeather"
+        "EF-7H at import device: port 'weather' is bound to Weather (MockWeather) by default and lowers to the bare "
+        "name 'Weather' in device-Device (MockBareDevice)"
     )
     assert re.search(r"\(import device, inline.energy_system.yaml:\d+ → broken/bare.assembly.yaml:\d+\)", message)
-    assert "Candidates: Weather; add to the import 'device' one of `bind: {weather: Weather}`" in message
+    assert "'device-Device' (tests.assemblies.mock_components.MockBareDevice) declares no default connections for " \
+        "the class 'MockWeather'" in message
+    assert "Add the default connection from MockWeather to MockBareDevice" in message
 
 
 @pytest.mark.base
@@ -236,7 +233,7 @@ def test_an_optional_bind_to_an_absent_partner_is_recorded_not_bound() -> None:
 
 @pytest.mark.base
 def test_explicit_wires_lower_to_wires_and_their_inputs_are_checked(tmp_path: Path) -> None:
-    """A port's ``wires:`` lowers to explicit wires; a wire naming no input is a contract error."""
+    """A port's ``wires:`` lowers to explicit wires; the wiring refuses one naming no input, naming the port."""
     library = Library(tmp_path)
     wired = """
         schema_version: 4
@@ -261,14 +258,17 @@ def test_explicit_wires_lower_to_wires_and_their_inputs_are_checked(tmp_path: Pa
 
     message = build_refusal(site(WEATHER) + "imports:\n  pv: {assembly: wired/broken}\n", tmp_path / "r", library)
     assert message.startswith(
-        "EF-7J at import pv: port 'weather' wires 'Irradiance', which is no input of pv-PVSystem (MockPVSystem)"
+        "EF-7J at import pv: port 'weather' is bound to Weather (MockWeather) by default and lowers to the wire "
+        "'Irradiance' from 'TemperatureOutside' in pv-PVSystem (MockPVSystem)"
     )
+    assert "names the input 'Irradiance', which 'pv-PVSystem'" in message
+    assert re.search(r"\(import pv, inline.energy_system.yaml:\d+ → wired/broken.assembly.yaml:\d+\)", message)
     assert "Valid inputs: TemperatureOutside." in message
 
 
 @pytest.mark.base
 def test_a_wire_naming_an_output_the_partner_does_not_have_is_refused_once_constructed(tmp_path: Path) -> None:
-    """EF-7J: the wired output is looked up on the constructed partner."""
+    """EF-7J: the wiring looks the wired output up on the constructed partner."""
     library = Library(tmp_path)
     library.add(
         "wired/sky",
@@ -290,15 +290,49 @@ def test_a_wire_naming_an_output_the_partner_does_not_have_is_refused_once_const
     message = build_refusal(site(WEATHER) + "imports:\n  pv: {assembly: wired/sky}\n", tmp_path / "r", library)
 
     assert message.startswith(
-        "EF-7J at import pv: port 'weather' wires 'TemperatureOutside' from 'Temperature', which is no output of "
-        "Weather (MockWeather)"
+        "EF-7J at import pv: port 'weather' is bound to Weather (MockWeather) by default and lowers to the wire "
+        "'TemperatureOutside' from 'Temperature' in pv-PVSystem (MockPVSystem)"
     )
+    assert "names the output 'Temperature', which 'Weather' (tests.assemblies.mock_components.MockWeather)" in message
     assert "Did you mean: TemperatureOutside?" in message
 
 
 @pytest.mark.base
+def test_any_other_wiring_refusal_of_a_lowered_item_keeps_its_id_and_names_the_port(tmp_path: Path) -> None:
+    """EF-30 stays EF-30: the wiring's load-type check refuses a lowered wire and the message names the port."""
+    library = Library(tmp_path)
+    library.add(
+        "wired/mixed",
+        """
+        schema_version: 4
+        kind: assembly
+        name: wired/mixed
+        components:
+          PVSystem:
+            class: tests.assemblies.mock_components.MockPVSystem
+            preset: rooftop
+            inputs: [{$port: climate, wires: {TemperatureOutside: ElectricityConsumption}}]
+        interface:
+          needs:
+            climate: {into: [PVSystem], partner: MockOccupancy}
+        """,
+    )
+
+    with pytest.raises(EnergySystemWiringError) as raised:
+        build_text(site(OCCUPANCY) + "imports:\n  pv: {assembly: wired/mixed}\n", tmp_path / "r", library.resolver())
+
+    message = str(raised.value)
+    assert message.startswith(
+        "EF-30 at import pv: port 'climate' is bound to Occupancy (MockOccupancy) by default and lowers to the wire "
+        "'TemperatureOutside' from 'ElectricityConsumption' in pv-PVSystem (MockPVSystem)"
+    )
+    assert re.search(r"\(import pv, inline.energy_system.yaml:\d+ → wired/mixed.assembly.yaml:\d+\)", message)
+    assert "the wiring refuses it: load type mismatch" in message
+
+
+@pytest.mark.base
 def test_a_provided_output_the_member_does_not_have_is_refused_once_constructed(tmp_path: Path) -> None:
-    """EF-7J: a provided port's output is looked up on the constructed member."""
+    """EF-7J: nothing reads the provided output, and the wiring looks it up on the constructed member all the same."""
     library = Library(tmp_path)
     library.add(
         "broken/provides",
@@ -320,8 +354,10 @@ def test_a_provided_output_the_member_does_not_have_is_refused_once_constructed(
     message = build_refusal(text, tmp_path / "r", library)
 
     assert message.startswith(
-        "EF-7J at import heater: port 'heat' provides 'NoSuchOutput', which is no output of heater-Heater (MockHeater)"
+        "EF-7J at import heater: port 'heat' provides the output 'NoSuchOutput' of heater-Heater (MockHeater) "
+        "(import heater, inline.energy_system.yaml:"
     )
+    assert "the wiring refuses it: the output 'NoSuchOutput' is declared on 'heater-Heater'" in message
     assert "Valid outputs: ElectricityInput, ThermalPower." in message
 
 
@@ -342,61 +378,12 @@ def test_the_port_provenance_table_lists_every_lowered_item_and_a_fitting_system
     )
     assert (weather.partner, weather.partner_class) == ("Weather", f"{Mocks.MOCKS}.MockWeather")
     assert weather.member_class == f"{Mocks.MOCKS}.MockPVSystem"
-    assert weather.candidates == ("Weather (MockWeather)",)
     assert weather.chain[-1].startswith("mock/pv_array.assembly.yaml:")
-    assert "`bind: {weather: Weather}`" in weather.remedy
     assert {entry.kind for entry in record.port_provenance} >= {LoweredKind.DEFAULT, LoweredKind.PROVIDED}
     assert record.to_document()["port_provenance"][0] == record.port_provenance[0].to_document()
 
     built = build_text(Mocks.HOUSE.read_text(encoding="utf-8"), tmp_path)
     assert built.imports.port_provenance == record.port_provenance
-
-
-@pytest.mark.base
-def test_the_post_construction_check_reads_the_constructed_instances() -> None:
-    """The check alone, on mocks: a fitting bare name and wire pass; a missing default or output is refused by name."""
-    parameters = SimulationParameters.one_day_only(2021, 900)
-    components = {
-        "Weather": MockWeather(parameters, MockWeatherConfig.preset_standard("Weather")),
-        "PV": MockPVSystem(parameters, MockPVSystemConfig.preset_rooftop("PV")),
-        "Tank": MockTank(parameters, MockTankConfig.preset_standard("Tank")),
-    }
-
-    def entry(kind: str, member: str, member_class: str, wired: str = "", output: str = "") -> LoweredPort:
-        return LoweredPort(
-            kind=kind,
-            owner="import x",
-            import_path="x",
-            port="p",
-            verb="bind",
-            member=member,
-            member_class=f"{Mocks.MOCKS}.{member_class}",
-            partner="Weather",
-            partner_class=f"{Mocks.MOCKS}.MockWeather",
-            chain=("x.assembly.yaml:3",),
-            remedy="add to the import 'x' one of `bind: {p: Weather}`.",
-            input=wired,
-            output=output,
-        )
-
-    check_lowered_ports(
-        [
-            entry(LoweredKind.DEFAULT, "PV", "MockPVSystem"),
-            entry(LoweredKind.WIRE, "PV", "MockPVSystem", wired="TemperatureOutside", output="TemperatureOutside"),
-        ],
-        components,
-    )
-    with pytest.raises(EnergySystemAssemblyError, match=r"^EF-7H at import x: port 'p' is bound to Weather "
-                       r"\(MockWeather\), but Tank \(MockTank\) declares no default connections from MockWeather "
-                       r"\(import x, x.assembly.yaml:3\)"):
-        check_lowered_ports([entry(LoweredKind.DEFAULT, "Tank", "MockTank")], components)
-    with pytest.raises(EnergySystemAssemblyError, match="EF-7J at import x: port 'p' wires 'TemperatureOutside' from "
-                       "'Sun', which is no output of Weather"):
-        check_lowered_ports(
-            [entry(LoweredKind.WIRE, "PV", "MockPVSystem", wired="TemperatureOutside", output="Sun")], components
-        )
-    with pytest.raises(EnergySystemAssemblyError, match="EF-7J at import x: port 'p' lowered an item for 'Ghost'"):
-        check_lowered_ports([entry(LoweredKind.DEFAULT, "Ghost", "MockPVSystem")], components)
 
 
 CONTROL = """

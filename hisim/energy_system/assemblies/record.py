@@ -14,10 +14,10 @@ byte for byte what it was:
   member, and the chain of files and lines it came from;
 - the **port-provenance table** (:class:`PortProvenance`), part of the import record: one entry per
   item a port lowered to — a bare partner name, one wire, a provided output — with the import path,
-  the port, the member, the partner by name and class, the verb, the files and lines, the candidates
-  and the paste-ready verb lines. The expansion decides bindings from the file alone; the
-  post-construction port check reads this table once the components exist and refuses, with all of
-  it in the message, an item the constructed member or partner does not have.
+  the port, the member, the partner by name and class, the verb and the files and lines. The
+  expansion writes the same items a hand-written file writes; the wiring stage checks every
+  connection on the constructed components, and its refusal of a lowered item is found in this
+  table and restated with the port it came from (:meth:`ImportRecord.annotate`).
 
 A realized record's ``metadata`` carries both (§9.1). Every downstream error that names a component
 the expansion produced prints that component's source-map entry, in the shape
@@ -28,11 +28,17 @@ generator/dhw_heat_pump.assembly.yaml:9)``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.config import ComponentID
 from hisim.energy_system.address_table import AddressTable
-from hisim.energy_system.errors import EnergySystemCatalogueError, EnergySystemErrorId, EnergySystemFormatError
+from hisim.energy_system.errors import (
+    EnergySystemAssemblyError,
+    EnergySystemCatalogueError,
+    EnergySystemErrorId,
+    EnergySystemFormatError,
+    WrittenItem,
+)
 from hisim.energy_system.source_lines import SourceLocation
 
 
@@ -180,7 +186,7 @@ class PortRecord:
 
 
 class LoweredKind:
-    """What one provenance entry stands for; the post-construction port check reads it."""
+    """What one provenance entry stands for, as the record states it."""
 
     #: A bare partner name: the member's default connections from the partner's class.
     DEFAULT = "default"
@@ -194,13 +200,13 @@ class LoweredKind:
 
 @dataclass(frozen=True)
 class LoweredPort:
-    """Where one item a port lowered to came from, as the post-construction port check needs it.
+    """Where one item a port lowered to came from: one row of the port-provenance table.
 
     The expansion decides a binding from the file alone — every entry states its class — and
-    lowers it to items whose meaning only the constructed components can confirm: a bare name
-    means the member's default connections from the partner's class, a wire names an input and
-    an output. One entry per such item carries everything a refusal has to print once the
-    components exist (``assemblies_spec.md`` §3.3).
+    lowers it to the items a hand-written file would write: a bare partner name (the member's
+    default connections from the partner's class), explicit wires, and for a provided port the
+    output it names. The wiring stage checks those items on the constructed components like any
+    other; this row is what its refusal of one is restated with (``assemblies_spec.md`` §3.3).
 
     Attributes:
         kind: :class:`LoweredKind`: ``default``, ``wire`` or ``provided``.
@@ -220,8 +226,6 @@ class LoweredPort:
         output: The partner's output a wire reads, or the member's provided output; empty for a
             bare name.
         chain: The files and lines the port came from, outermost first.
-        candidates: Every candidate partner in scope, ``name (Class)``.
-        remedy: The paste-ready verb lines the expansion offered for this port.
     """
 
     kind: str
@@ -236,12 +240,31 @@ class LoweredPort:
     input: str = ""
     output: str = ""
     chain: Tuple[str, ...] = ()
-    candidates: Tuple[str, ...] = ()
-    remedy: str = ""
+
+    @property
+    def item(self) -> WrittenItem:
+        """The item of the expanded file this row stands for, as a wiring refusal names it."""
+        return WrittenItem(member=self.member, partner=self.partner, input=self.input, output=self.output)
 
     def source_text(self) -> str:
         """The owner and its source map, as a message prints them."""
         return f"({self.owner}, {' → '.join(self.chain)})"
+
+    def text(self) -> str:
+        """The port and what it lowered to, with its source map, as a refusal opens."""
+        member = f"{self.member} ({short_class_name(self.member_class)})"
+        if self.kind == LoweredKind.PROVIDED:
+            return f"port '{self.port}' provides the output '{self.output}' of {member} {self.source_text()}"
+        lowered = (
+            f"the wire '{self.input}' from '{self.output}'"
+            if self.kind == LoweredKind.WIRE
+            else f"the bare name '{self.partner}'"
+        )
+        partner = f"{self.partner} ({short_class_name(self.partner_class)})"
+        return (
+            f"port '{self.port}' is bound to {partner} by {self.verb} and lowers to {lowered} in {member} "
+            f"{self.source_text()}"
+        )
 
     def to_document(self) -> Dict[str, Any]:
         """The entry as plain data; every field is written, so a re-run reads it back whole."""
@@ -258,8 +281,6 @@ class LoweredPort:
             "input": self.input,
             "output": self.output,
             "chain": list(self.chain),
-            "candidates": list(self.candidates),
-            "remedy": self.remedy,
         }
 
     @classmethod
@@ -296,21 +317,33 @@ class LoweredPort:
             )
         values = {name: document[name] for name in expected}
         values["chain"] = tuple(document["chain"])
-        values["candidates"] = tuple(document["candidates"])
         return cls(**values)
+
+
+def short_class_name(class_path: str) -> str:
+    """The class name of a dotted path, which default connections and partners are keyed by."""
+    return class_path.rsplit(".", 1)[-1]
 
 
 class PortProvenance:
     """The port-provenance table: every item the expansion lowered a port to, in lowering order.
 
-    The import record holds it, the realized record's metadata carries it under
-    ``imports.port_provenance``, and the post-construction port check
-    (:mod:`hisim.energy_system.assemblies.port_check`) reads it — from the import record on a run,
-    from the metadata on a re-run, which expands nothing.
+    The import record holds it and the realized record's metadata carries it under
+    ``imports.port_provenance``; a build reads it — from the import record on a run, from the
+    metadata on a re-run, which expands nothing — to restate a wiring refusal of a lowered item
+    with the port it came from (:meth:`ImportRecord.annotate`).
     """
 
     #: The key of the table in the ``imports`` block of a realized record's metadata.
     METADATA_KEY: ClassVar[str] = "port_provenance"
+
+    #: The wiring refusals that, for a lowered item, mean a port's contract is not met: the
+    #: assemblies' identifier of each (``assemblies_spec.md`` §3.3). Any other refusal keeps its own.
+    PORT_REFUSALS: ClassVar[Dict[EnergySystemErrorId, EnergySystemErrorId]] = {
+        EnergySystemErrorId.NO_DECLARED_DEFAULTS: EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
+        EnergySystemErrorId.UNKNOWN_OUTPUT_PORT: EnergySystemErrorId.PORT_CONTRACT,
+        EnergySystemErrorId.UNKNOWN_INPUT_PORT: EnergySystemErrorId.PORT_CONTRACT,
+    }
 
     @classmethod
     def from_metadata(cls, metadata: Optional[Mapping[str, Any]]) -> List[LoweredPort]:
@@ -334,14 +367,55 @@ class PortProvenance:
             raise EnergySystemFormatError(
                 EnergySystemErrorId.MALFORMED_BLOCK,
                 location,
-                "the record carries an import record without its port-provenance list, so the ports its "
-                "expansion lowered cannot be checked against the constructed components.",
+                "the record carries an import record without its port-provenance list, so a refusal of an "
+                "item its expansion lowered could not name the port it came from.",
                 remedy="Re-run the authored file that imports the assemblies, which writes a complete record.",
             )
         return [
             LoweredPort.from_document(entry, f"{location}[{index}]")
             for index, entry in enumerate(imports[cls.METADATA_KEY])
         ]
+
+    @classmethod
+    def restate(cls, error: EnergySystemCatalogueError, table: Sequence[LoweredPort]) -> EnergySystemCatalogueError:
+        """Returns a wiring refusal of a lowered item restated with the port it came from.
+
+        The refused item is found in the table by equality; an error about no item, or about an
+        item no port lowered to, is returned unchanged. The restatement opens with the owner, the
+        port, the partner, the member and the files and lines, and keeps the wiring's own problem
+        text, alternatives and remedy; a missing default connection gets the one remedy that makes
+        sense once the components exist.
+
+        Args:
+            error: An error the build raised.
+            table: The port-provenance table.
+
+        Returns:
+            The error itself, or its restatement, ``EF-7H``/``EF-7J`` for a port's contract and the
+            wiring's own identifier for any other refusal.
+        """
+        item = getattr(error, "item", None)
+        row = next((entry for entry in table if entry.item == item), None) if item is not None else None
+        if row is None:
+            return error
+        error_id = cls.PORT_REFUSALS.get(error.error_id, error.error_id)
+        remedy = error.remedy
+        if error_id == EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS:
+            partner, member = short_class_name(row.partner_class), short_class_name(row.member_class)
+            remedy = (
+                f"Add the default connection from {partner} to {member}, or bind the port to a partner of a class "
+                "it declares default connections from."
+            )
+        error_class = EnergySystemAssemblyError if error_id in cls.PORT_REFUSALS.values() else type(error)
+        return error_class(
+            error_id,
+            row.owner,
+            f"{row.text()}; the wiring refuses it: {error.problem}",
+            alternatives=error.alternatives,
+            alternatives_label=error.alternatives_label,
+            offending_value=error.offending_value,
+            remedy=remedy,
+        )
 
 
 @dataclass
@@ -443,6 +517,28 @@ class ImportRecord:
             not (self.instances or self.addresses or self.site_ports or self.not_lowered or self.port_provenance)
             and self.source_map.is_empty
         )
+
+    def annotate(
+        self, error: EnergySystemCatalogueError, provenance: Sequence[LoweredPort]
+    ) -> EnergySystemCatalogueError:
+        """Returns a build error with the assembly context of what it refuses: the one place this happens.
+
+        A wiring refusal of an item a port lowered to is restated with that port
+        (:meth:`PortProvenance.restate`); any other error naming a component the expansion produced
+        gets that component's source-map entry appended (:meth:`SourceMap.annotate`).
+
+        Args:
+            error: An error a stage after the expansion raised.
+            provenance: The port-provenance table: this record's on a run, the realized record's on
+                a re-run.
+
+        Returns:
+            The error itself, or its annotated copy.
+        """
+        restated = PortProvenance.restate(error, provenance)
+        if restated is not error:
+            return restated
+        return self.source_map.annotate(error)
 
     def instance(self, path: str) -> Optional[InstanceRecord]:
         """The record of one import path, ``pv[east]`` or ``dhw → generator``."""

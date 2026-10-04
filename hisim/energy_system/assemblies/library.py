@@ -20,8 +20,8 @@ the member classes only to know that they exist and which configuration they tak
 inputs, outputs, default connections and KPIs come into being in its constructor, and no class
 declares them a second time, so everything that needs them is checked where the components are
 constructed: whether a member declares default connections from a port's partner class, whether a
-wire's input and output and a provided output exist — the post-construction port check of every
-build (:mod:`hisim.energy_system.assemblies.port_check`); whether every energy-carrying or
+wire's input and output and a provided output exist — the wiring stage of every build, which checks
+every connection on the constructed components; whether every energy-carrying or
 temperature output carries a ``tests.bounds`` entry, whether a bounds entry's unit is its output's
 and whether a named KPI is one its member reports — the assembly test harness's isolation run, on
 the constructed members, before any declaration is evaluated.
@@ -395,7 +395,7 @@ class LibraryChecker:
         """The contract check of §3.3 from the file: every port names existing members and placeholders.
 
         Whether the members' constructed components have the default connections, inputs and outputs
-        the ports lower to is the post-construction port check's (:mod:`.port_check`).
+        the ports lower to is the wiring stage's to check, on every build.
         """
         members = {member.name: member for member in self._all_members()}
         placeholders: Dict[str, Set[str]] = {}

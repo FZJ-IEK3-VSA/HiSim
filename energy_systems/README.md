@@ -306,13 +306,15 @@ bound by a verb on the inner import, by an `internal:` entry, or re-exported wit
 <inner>.<port>`. Binding a component needs no declaration beyond what its class already does in
 its constructor: the expansion decides from the files alone (every entry states its class) which
 component is a candidate and refuses what they decide — no partner, several and no verb, `none:` on a
-required port, an absent `bind:` partner, a verb on an inactive port. Whether the member really
-declares default connections from the partner's class, and whether a wired input or output or a
-provided output exists, is checked when the system is built: after every component is constructed
-and before anything is connected (`EF-7H`, `EF-7J`, `hisim/energy_system/assemblies/port_check.py`),
-from the port-provenance table the import record keeps. Every refusal names the import, the
-instance, the port and every candidate, prints the source map of the import, and ends in a
-paste-ready `bind:` line.
+required port, an absent `bind:` partner, a verb on an inactive port; each of these refusals names
+the import, the instance, the port and every candidate, prints the source map of the import, and
+ends in a paste-ready `bind:` line. The expansion writes the same items a hand-written file writes
+(bare names, wires), and the wiring stage checks every connection on the constructed components,
+as it does for any file: whether the member declares default connections from the partner's class,
+whether a wired input or output or a provided output exists, whether load types and units agree.
+A refused item names the port it came from — the import, the instance, the port, the partner, the
+member and the files and lines, from the port-provenance table the import record keeps — and a
+missing default connection or port is reported as `EF-7H` or `EF-7J`.
 
 Circuit ports, carrier needs and fact ports (hisim-lt0b.2), observer and actuator selectors and
 controllable outputs (hisim-lt0b.3) are read and recorded, and a file that uses one is refused
@@ -325,8 +327,8 @@ path and the sha256 of its file, the preset, the parameters as given and as reso
 the members' addresses, display names and order paths, every port's state and partner, the binding
 decisions, the port-provenance table and the evaluation sequence — and the **source map** of every
 produced item, which every downstream error naming a produced component prints. A realized record
-re-runs without any assembly; its port-provenance table is checked against the constructed
-components as on the first run.
+re-runs without any assembly; a refusal on the re-run names the port from the record's
+port-provenance table as on the first run.
 
 **Inspecting.** `hisim energy-system describe <family>/<name>` (or a path to a `*.assembly.yaml`)
 prints an assembly's interface as its file declares it, with partner classes and requirement states

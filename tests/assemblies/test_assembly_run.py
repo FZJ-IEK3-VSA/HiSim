@@ -119,8 +119,10 @@ def test_re_running_the_realized_record_needs_no_assembly_and_reproduces_it(hous
 
 
 @pytest.mark.base
-def test_a_re_run_checks_the_lowered_ports_from_the_records_port_provenance(house_run: Path, tmp_path: Path) -> None:
-    """``--rerun`` expands nothing; the post-construction check reads the table the record carries, and needs it."""
+def test_a_re_run_names_the_port_of_a_refused_item_from_the_records_port_provenance(
+    house_run: Path, tmp_path: Path
+) -> None:
+    """``--rerun`` expands nothing; a wiring refusal names the port from the table the record carries, and needs it."""
     record = realized(house_run)
     table = record["metadata"]["imports"]["port_provenance"]
     weather = next(entry for entry in table if entry["member"] == "pv-east-PVSystem" and entry["port"] == "weather")
@@ -128,12 +130,15 @@ def test_a_re_run_checks_the_lowered_ports_from_the_records_port_provenance(hous
     parameters = SimulationParameters.one_day_only(2021, 900)
     parameters.result_directory = str(tmp_path / "results")
 
-    weather["member"] = "hot_water-heater-tank-Tank"
+    # The record wires the east array from the occupancy, which it declares no default connections from.
+    assert record["components"]["pv-east-PVSystem"]["inputs"] == ["Weather"]
+    record["components"]["pv-east-PVSystem"]["inputs"] = ["Occupancy"]
+    weather["partner"], weather["partner_class"] = "Occupancy", f"{Mocks.MOCKS}.MockOccupancy"
     tampered = tmp_path / "tampered.energy_system.yaml"
     tampered.write_text(yaml.safe_dump(record, sort_keys=False), encoding="utf-8")
     with pytest.raises(EnergySystemAssemblyError, match="EF-7H at import pv\\[east\\]: port 'weather' is bound to "
-                       "Weather \\(MockWeather\\), but hot_water-heater-tank-Tank \\(MockTank\\) declares no "
-                       "default connections from MockWeather"):
+                       "Occupancy \\(MockOccupancy\\) by default and lowers to the bare name 'Occupancy' in "
+                       "pv-east-PVSystem \\(MockPVSystem\\)"):
         build_energy_system(tampered, parameters, rerun=True)
 
     del record["metadata"]["imports"]["port_provenance"]

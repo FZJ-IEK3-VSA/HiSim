@@ -8,15 +8,18 @@ property of the class as written down, it is a property of the object the config
 produced, and a configuration that switches a feature off removes the ports that go with it.
 
 The work happens in four passes, and nothing is connected until all four have succeeded.
-Components are **constructed** in file order (:func:`construct_components`, called by the
-executor on its own, so that the post-construction port check of the assemblies runs between
-construction and connection). Every input item is **planned** into concrete
+Components are **constructed** in file order. Every input item is **planned** into concrete
 wires: a bare item expands through the target's declared default connections for the source's
 class, an explicit wire names both ports itself, and a feed is handed to the aggregator's
 channel machinery, which creates the ports and reports the wires that fill them. The plan is
 then **checked** as a whole — ports exist, their load types and units agree, no input is fed
 twice, no mandatory input is left open — and only afterwards are the wires **applied**. A file
 that fails therefore leaves no half-wired simulator behind.
+
+This is the one connection check there is, for written items and for the items an expansion of
+assembly imports lowered alike: a refusal carries the item it refuses
+(:class:`~hisim.energy_system.errors.WrittenItem`), and the build names the assembly port the item
+came from when there is one.
 
 Two rules are worth calling out because they are easy to mistake for over-strictness. An
 explicit wire may not name a port that feed resolution created, because that port does not
@@ -29,7 +32,7 @@ the failure mode this format exists to remove.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from hisim import log
 from hisim.component import Component
@@ -39,6 +42,7 @@ from hisim.energy_system.configure import ConfiguredSystem
 from hisim.energy_system.errors import (
     EnergySystemErrorId,
     EnergySystemWiringError,
+    WrittenItem,
 )
 from hisim.energy_system.model import (
     AggregatorFeed,
@@ -285,6 +289,7 @@ class WiringPlanner:
             target_name=consumer,
             target_input=item.input,
             origin=f"the explicit wire '{item.input}' of '{consumer}'",
+            item=WrittenItem(member=consumer, partner=item.source, input=item.input, output=item.output),
         )
 
     def _wire_from_resolution(self, wire: ResolvedDynamicWire) -> PlannedWire:
@@ -305,7 +310,13 @@ class WiringPlanner:
         )
 
     def _planned(
-        self, source_name: str, source_output: str, target_name: str, target_input: str, origin: str
+        self,
+        source_name: str,
+        source_output: str,
+        target_name: str,
+        target_input: str,
+        origin: str,
+        item: Optional[WrittenItem] = None,
     ) -> PlannedWire:
         """Builds a planned wire, resolving both ends to their runtime component names.
 
@@ -315,6 +326,7 @@ class WiringPlanner:
             target_name: The consuming component's name in the file.
             target_input: Name of its input port.
             origin: Description of the item this wire came from.
+            item: That item as data; ``None`` for a wire feed resolution derived.
 
         Returns:
             The planned wire.
@@ -327,6 +339,7 @@ class WiringPlanner:
             target_runtime_name=self.components_by_name[target_name].component_name,
             target_input=target_input,
             origin=origin,
+            item=item,
         )
 
     def _expand_default_item(self, consumer: str, item: DefaultInputs) -> None:
@@ -352,6 +365,7 @@ class WiringPlanner:
         static = target.default_connections.get(source_class) or []
         dynamic = self.resolver.default_feeds_of(target, source_class)
         origin = f"the bare item '{item.source}' of '{consumer}'"
+        written = WrittenItem(member=consumer, partner=item.source)
         if static and dynamic:
             raise EnergySystemWiringError(
                 EnergySystemErrorId.NO_DECLARED_DEFAULTS,
@@ -374,7 +388,11 @@ class WiringPlanner:
                 f"components.{consumer}.inputs",
                 f"{origin} cannot be expanded: '{consumer}' ({target.get_full_classname()}) "
                 f"declares no default connections for the class '{source_class}'.",
-                alternatives=sorted(target.default_connections),
+                item=written,
+                alternatives=sorted(
+                    set(target.default_connections)
+                    | set(getattr(target, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, None) or {})
+                ),
                 alternatives_label="source classes",
                 offending_value=source_class,
                 remedy=(
@@ -390,56 +408,40 @@ class WiringPlanner:
                     target_name=consumer,
                     target_input=connection.target_input_name,
                     origin=origin,
+                    item=written,
                 )
             )
 
 
-def construct_components(
-    system: ConfiguredSystem, simulation_parameters: SimulationParameters
-) -> Tuple[Tuple[str, Component], ...]:
-    """Constructs every component of a configured energy system, in file order.
-
-    The seventh stage of the lifecycle. It is separate from the wiring so that a check needing
-    the constructed components — the post-construction port check of the assemblies
-    (:mod:`hisim.energy_system.assemblies.port_check`) — runs between the two, when every
-    component's ports and default connections exist and nothing is connected yet.
-
-    Args:
-        system: The configured system, its configurations complete and sized.
-        simulation_parameters: Parameters of the run, handed to every component.
-
-    Returns:
-        The ``(name, component)`` pairs in file order.
-
-    Raises:
-        EnergySystemWiringError: ``EF-33`` if a component's constructor raises.
-    """
-    return ComponentBuilder(system, simulation_parameters).build()
-
-
 def wire_energy_system(
     model: EnergySystemFile,
-    components: Sequence[Tuple[str, Component]],
+    system: ConfiguredSystem,
+    simulation_parameters: SimulationParameters,
+    declared_outputs: Sequence[WrittenItem] = (),
 ) -> Tuple[WiredSystem, Tuple[str, ...]]:
-    """Connects the constructed components of an energy system as the file says.
+    """Builds every component of a configured energy system and connects it as the file says.
 
-    The eighth stage of the lifecycle: a component's ports exist only once it is constructed
-    (:func:`construct_components`), so nothing about the connections can be decided before
-    construction, and nothing should be constructed that is not going to be connected.
+    The seventh and eighth stages of the lifecycle in one call, because they are one unit from
+    outside: a component's ports exist only once it is constructed, so nothing about the
+    connections can be decided before construction, and nothing should be constructed that is
+    not going to be connected.
 
     Args:
         model: The energy system, after group expansion and validation.
-        components: The constructed ``(name, component)`` pairs in file order.
+        system: Its configurations, complete and sized.
+        simulation_parameters: Parameters of the run, handed to every component.
+        declared_outputs: Outputs the file states exist without any item reading them (the
+            outputs of an assembly's provided ports); each is checked like a wire's output.
 
     Returns:
         The wired system and the warnings a run should print: one line per component that feeds
         nothing, which is legal but far more often a forgotten input item.
 
     Raises:
-        EnergySystemWiringError: ``EF-21`` … ``EF-32`` for anything wrong with the connections;
-            every message names both ends.
+        EnergySystemWiringError: ``EF-21`` … ``EF-33`` for anything wrong with the connections
+            or with a component's construction; every message names both ends.
     """
-    components = tuple(components)
+    components = ComponentBuilder(system, simulation_parameters).build()
     planner = WiringPlanner(model, components)
     wires = planner.plan()
     checker = WiringChecker(
@@ -448,6 +450,7 @@ def wire_energy_system(
         written_wire_count=planner.written_wire_count,
         created_ports=planner.resolver.created_ports,
         system_name=model.name,
+        declared_outputs=declared_outputs,
     )
     checker.check_all()
     checker.apply()

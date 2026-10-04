@@ -23,15 +23,15 @@ explicit wires the port names, exactly where the member's ``{$port: …}`` place
 
 **What is decided here, and what after construction.** Every entry states its class, so the
 expansion decides from the files alone which component is a candidate partner, whether a port has
-none, several or a verb to decide it, and whether the members a port names exist. Whether the
-member's class really declares default connections from the partner's class, and whether a wire's
-input and output exist, the constructed components say: a component creates its ports and default
-connections in its constructor, and no second declaration of them exists. The expansion therefore
+none, several or a verb to decide it, and whether the members a port names exist; those refusals
+name every candidate and end in a paste-ready ``bind:`` line. What it writes are the items a
+hand-written file writes — bare names and wires — and whether the constructed components accept
+them the wiring stage checks, like every other connection: a component creates its ports and
+default connections in its constructor, and no second declaration of them exists. The expansion
 writes one entry per lowered item into the port-provenance table of the import record
-(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and the post-construction port
-check (:mod:`hisim.energy_system.assemblies.port_check`) refuses, with the import, the port, the
-member, the partner, the files and lines, the candidates and a paste-ready ``bind:`` line, an item
-the constructed components do not have (``EF-7H``, ``EF-7J``) — before anything is connected.
+(:class:`~hisim.energy_system.assemblies.record.PortProvenance`), and a wiring refusal of such an
+item is restated with the import, the port, the member, the partner and the files and lines it
+came from (``EF-7H``, ``EF-7J``).
 
 **The default rule** mirrors the sizing engine's: a port binds to the one component in scope whose
 class is one of its partner classes, and a verb decides every other case. In scope are, at the top
@@ -75,6 +75,7 @@ from hisim.energy_system.assemblies.record import (
     NotLowered,
     PortRecord,
     SourceMapEntry,
+    short_class_name,
 )
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.classes import ClassBinder
@@ -125,11 +126,6 @@ class ClassFacts:
             component = self.component_class(class_path, location, name)
             self._configs[class_path] = ClassBinder.configuration_class_of(component, location, name)
         return self._configs[class_path]
-
-    @staticmethod
-    def short_name(class_path: str) -> str:
-        """The class name of a dotted path, which default connections and partners are keyed by."""
-        return class_path.rsplit(".", 1)[-1]
 
 
 @dataclass
@@ -203,7 +199,6 @@ class Handle:
         record: The port's record in the import record.
         decided: Whether a verb, an internal entry, a re-export or the default rule has decided it.
         hint: The candidates and the paste-ready verb lines a refusal of this port prints.
-        candidates: The candidate partners in scope, ``name (Class)``, for the port-provenance table.
     """
 
     owner: str
@@ -218,7 +213,6 @@ class Handle:
     record: Dict[str, Any] = field(default_factory=dict)
     decided: bool = False
     hint: str = ""
-    candidates: Tuple[str, ...] = ()
 
     @property
     def partner_text(self) -> str:
@@ -969,7 +963,7 @@ class ImportExpander:
         return [
             unit
             for unit in units
-            if unit.name not in handle.own_units and ClassFacts.short_name(unit.class_path) in handle.port.partner
+            if unit.name not in handle.own_units and short_class_name(unit.class_path) in handle.port.partner
         ]
 
     def _resolve_target(
@@ -1002,7 +996,7 @@ class ImportExpander:
         matching = [
             unit
             for unit in units
-            if ClassFacts.short_name(unit.class_path) in handle.port.partner and unit.name not in handle.own_units
+            if short_class_name(unit.class_path) in handle.port.partner and unit.name not in handle.own_units
         ]
         if len(matching) == 1:
             return matching[0], None, ""
@@ -1076,7 +1070,6 @@ class ImportExpander:
             handle.decided = True
             return
         candidates = self._candidates(handle, level.units)
-        handle.candidates = tuple(f"{unit.name} ({ClassFacts.short_name(unit.class_path)})" for unit in candidates)
         handle.hint = (
             f"Candidates: {', '.join(unit.name for unit in candidates) or 'none'}; "
             + self._paste_lines(handle, candidates, level, optional=handle.state == "optional")
@@ -1171,7 +1164,7 @@ class ImportExpander:
     def _lower(self, handle: Handle, partner: Unit, provider: Optional[Tuple[str, str]], verb: str) -> None:
         """Lowers a decided need into its landings: a bare name, or the explicit wires it names."""
         port = handle.port
-        partner_class = ClassFacts.short_name(partner.class_path)
+        partner_class = short_class_name(partner.class_path)
         if partner_class not in port.partner and provider is None:
             raise self.error(
                 EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
@@ -1223,7 +1216,7 @@ class ImportExpander:
         target: str = "",
         output: str = "",
     ) -> None:
-        """Writes one lowered item into the port-provenance table, for the post-construction check."""
+        """Writes one lowered item into the port-provenance table, which a wiring refusal of it reads."""
         self.record.port_provenance.append(
             LoweredPort(
                 kind=kind,
@@ -1238,8 +1231,6 @@ class ImportExpander:
                 input=target,
                 output=output,
                 chain=tuple(location.text for location in handle.chain),
-                candidates=handle.candidates,
-                remedy=handle.hint,
             )
         )
 
@@ -1394,7 +1385,7 @@ class ImportExpander:
                 section="internal",
                 kind=PortKind.NEED,
                 into=(receiver,),
-                partner=(ClassFacts.short_name(partner.class_path),),
+                partner=(short_class_name(partner.class_path),),
             ),
             state="required",
             landings=[

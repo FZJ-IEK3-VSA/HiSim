@@ -1,0 +1,33 @@
+# Mock: a battery sized from the PV peak power a fact port binds (spec §3.2, §6); the capacity is a
+# sized field whose unit the parameter states (D16 b).
+schema_version: 4
+kind: assembly
+name: mock/battery
+description: A mock battery sized to one PV array.
+
+parameters:
+  capacity_in_kwh:
+    {type: float, unit: KWH, default: AUTO, range: {min: 0, max: 50}, description: "Capacity; AUTO is 1 kWh per kWp."}
+  chemistry:
+    {type: enum, values: [lfp, nmc], default: lfp, description: "The cell chemistry, for the display name."}
+
+presets:
+  standard: {}
+
+components:
+  Battery:
+    class: tests.assemblies.mock_components.MockBattery
+    preset: sized_to_pv
+    display: "Battery, {chemistry}"
+    config:
+      capacity_in_kwh: {$param: capacity_in_kwh}
+
+interface:
+  needs:
+    pv_power: {fact: pv_peak_power_in_watt, into: [Battery]}
+
+tests:
+  bounds:
+    - {output: Battery.Capacity, unit: KWH, min: 0, max: 50}
+  monotone:
+    - {parameter: capacity_in_kwh, kpi: Battery capacity, member: Battery, direction: increasing}

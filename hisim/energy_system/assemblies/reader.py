@@ -392,7 +392,7 @@ class AssemblyReader:
         return MonotoneDeclaration(
             parameter=RawDocument.string(block.get("parameter"), f"{location}.parameter", required=True) or "",
             kpi=RawDocument.string(block.get("kpi"), f"{location}.kpi", required=True) or "",
-            member=RawDocument.string(block.get("member"), f"{location}.member", required=True) or "",
+            member=RawDocument.string(block.get("member"), f"{location}.member", required=False),
             direction=direction,
         )
 

@@ -39,20 +39,21 @@ class Library:
         self.directory = directory / "library"
         self.directory.mkdir(parents=True, exist_ok=True)
 
-    def add(self, library_path: str, text: str, *, probe: Optional[str] = None) -> Path:
+    def add(self, library_path: str, text: str, *, contract: bool = False) -> Path:
         """Writes one assembly file, dedenting the text.
 
         Args:
             library_path: Where the file goes, ``<family>/<name>``.
             text: The file, indented as the test writes it.
-            probe: For a file whose test is about something else, the member :func:`probe_contract`
-                names; the contract is appended after the text, so no line the test asserts on moves.
+            contract: For a file whose test is about something else and that has no numeric
+                parameter, append :data:`EMPTY_CONTRACT` after the text, so no line the test asserts
+                on moves.
         """
         target = self.directory / f"{library_path}.assembly.yaml"
         target.parent.mkdir(parents=True, exist_ok=True)
         written = textwrap.dedent(text).lstrip()
-        if probe is not None:
-            written += probe_contract(probe)
+        if contract:
+            written += EMPTY_CONTRACT
         target.write_text(written, encoding="utf-8")
         return target
 
@@ -63,28 +64,10 @@ class Library:
         return AssemblyResolver(directories)
 
 
-def probe_contract(member: str) -> str:
-    """The smallest library contract (D24), for an inline assembly whose test is about something else.
-
-    The expansion runs the full library check on every assembly it imports, so an inline assembly
-    carries what the library requires: a described, ranged parameter, and a ``tests:`` block with one
-    ``monotone`` entry over it naming one of its own members. The file must declare no ``parameters:``
-    or ``tests:`` block of its own.
-
-    Args:
-        member: A member of the assembly, which the monotone entry names.
-
-    Returns:
-        The two blocks, unindented, to follow the rest of the file.
-    """
-    return (
-        "parameters:\n"
-        "  probe: {type: float, default: 1, range: {min: 0, max: 2}, description: A parameter the contract moves.}\n"
-        "tests:\n"
-        "  bounds: []\n"
-        "  monotone:\n"
-        f"    - {{parameter: probe, kpi: probe, member: {member}, direction: constant}}\n"
-    )
+#: The library contract (D24) of an assembly without a numeric parameter: a ``tests:`` block, which
+#: owes no monotone entry. The expansion runs the full library check on every assembly it imports, so
+#: an inline assembly whose test is about something else carries it.
+EMPTY_CONTRACT = "tests: {bounds: [], monotone: []}\n"
 
 
 def mock_resolver() -> AssemblyResolver:

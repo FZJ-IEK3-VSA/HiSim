@@ -10,7 +10,7 @@ and reads that table, so that the record's writer and the reader re-running it a
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict, List, Mapping
+from typing import Any, ClassVar, Dict, List, Mapping, Tuple
 
 from hisim.config import AddressStep, ComponentID
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
@@ -24,6 +24,9 @@ class AddressTable:
 
     #: The key of the address table inside the import record.
     ADDRESSES_KEY: ClassVar[str] = "addresses"
+
+    #: The keys :meth:`address_document` writes for one entry; ``path`` and ``member`` always.
+    ENTRY_KEYS: ClassVar[Tuple[str, ...]] = ("path", "member", "assembly", "display_name")
 
     @classmethod
     def step_document(cls, step: AddressStep) -> Dict[str, Any]:
@@ -42,6 +45,8 @@ class AddressTable:
         }
         if identity.assembly is not None:
             document["assembly"] = identity.assembly
+        if identity.display_name is not None:
+            document["display_name"] = identity.display_name
         return document
 
     @classmethod
@@ -78,12 +83,21 @@ class AddressTable:
     @classmethod
     def _entry(cls, name: str, entry: Any, location: str) -> ComponentID:
         """Reads one entry of the table, refusing anything :meth:`address_document` does not write."""
-        if not isinstance(entry, Mapping) or not {"path", "member"} <= set(entry) <= {"path", "member", "assembly"}:
-            raise cls._malformed(location, f"an address is a mapping of path, member and assembly; found {entry!r}.")
-        path, member, assembly = entry["path"], entry["member"], entry.get("assembly")
-        if not isinstance(path, list) or not isinstance(member, str) or not isinstance(assembly, (str, type(None))):
+        if not isinstance(entry, Mapping) or not {"path", "member"} <= set(entry) <= set(cls.ENTRY_KEYS):
             raise cls._malformed(
-                location, f"an address has a list 'path', a string 'member' and a string 'assembly'; found {entry!r}."
+                location, f"an address is a mapping of {', '.join(cls.ENTRY_KEYS)}; found {entry!r}."
+            )
+        path, member = entry["path"], entry["member"]
+        assembly, display_name = entry.get("assembly"), entry.get("display_name")
+        if (
+            not isinstance(path, list)
+            or not isinstance(member, str)
+            or not all(isinstance(value, (str, type(None))) for value in (assembly, display_name))
+        ):
+            raise cls._malformed(
+                location,
+                "an address has a list 'path', a string 'member' and string 'assembly' and 'display_name'; "
+                f"found {entry!r}.",
             )
         steps: List[AddressStep] = []
         for index, step in enumerate(path):
@@ -98,7 +112,7 @@ class AddressTable:
                     f"{location}.path[{index}]", f"the step {step!r} is no address step: {error}"
                 ) from error
         try:
-            identity = ComponentID(name=member, path=tuple(steps), assembly=assembly)
+            identity = ComponentID(name=member, path=tuple(steps), assembly=assembly, display_name=display_name)
         except (TypeError, ValueError) as error:
             raise cls._malformed(location, f"the member '{member}' is no component name: {error}") from error
         if identity.address != name:

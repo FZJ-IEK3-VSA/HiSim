@@ -212,14 +212,24 @@ class BoundsDeclaration(BaseModel):
 
 
 class MonotoneDeclaration(BaseModel):
-    """``tests.monotone``: one parameter rises, a member's KPI moves in one direction."""
+    """``tests.monotone``: one parameter rises, a KPI moves in one direction.
+
+    The KPI is a member's (``member`` names one of the assembly's own members) or a derived KPI,
+    named alone (``member`` omitted): the only kind a composite assembly of inner imports, with no
+    member of its own, can name.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     parameter: str
     kpi: str
-    member: str
+    member: Optional[str] = None
     direction: MonotoneDirection
+
+    @property
+    def subject(self) -> str:
+        """The KPI as a reader writes it: ``<kpi> of <member>``, or the derived KPI's name."""
+        return f"{self.kpi} of {self.member}" if self.member is not None else f"{self.kpi} (derived)"
 
 
 class ExpectDeclaration(BaseModel):

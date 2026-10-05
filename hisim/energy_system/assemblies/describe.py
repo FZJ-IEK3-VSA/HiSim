@@ -19,7 +19,7 @@ from typing import Any, List, TextIO, Tuple
 from hisim.energy_system.assemblies.model import NO_DEFAULT, AssemblyFile, ParameterDeclaration
 from hisim.energy_system.assemblies.reader import AssemblyReader
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
-from hisim.energy_system.imports_model import Port, PortKind, PortState
+from hisim.energy_system.imports_model import CircuitNaming, Port, PortKind, PortState
 
 
 class AssemblyDescription:
@@ -31,8 +31,8 @@ class AssemblyDescription:
     #: The line under the ports saying what the page does not know.
     VERIFIED_AT_BUILD = (
         "as declared in the file; the members' default connections from the partner classes, the wired "
-        "inputs and outputs and the provided outputs are verified on the constructed components when a "
-        "system is built"
+        "inputs and outputs, the provided outputs, the circuits' owners and readers, the meters' default "
+        "feeds and the consumed carriers are verified on the constructed components when a system is built"
     )
 
     @classmethod
@@ -107,11 +107,11 @@ class AssemblyDescription:
     @classmethod
     def state_of(cls, port: Port) -> str:
         """A port's requirement state as the page states it (§3.1)."""
-        if port.kind == PortKind.PROVIDED or port.section == "provides":
+        if port.is_provision or (port.section == "provides" and port.kind != PortKind.CIRCUIT):
             state = PortState.PROVIDED.value
         elif port.required_when:
             state = f"{PortState.REQUIRED.value} when " + cls._conditions(port.required_when)
-        elif port.optional:
+        elif port.optional or port.section == "provides":
             state = f"{PortState.OPTIONAL.value} (bind:, optional-bind: or none:)"
         else:
             state = PortState.REQUIRED.value
@@ -153,9 +153,40 @@ class AssemblyDescription:
             text = f"re-exports {port.reexports}"
         elif port.kind == PortKind.INTERNAL:
             return f"internal {port.ends[0]} → {port.ends[1]}"
+        elif port.kind == PortKind.CIRCUIT:
+            text = (
+                f"circuit {port.circuit} at {', '.join(port.members)} "
+                f"({', '.join(CircuitNaming.outputs(port.circuit or ''))})"
+            )
+        elif port.kind == PortKind.CARRIER and port.is_provision:
+            text = f"provides carrier {cls._written(port.carrier)}" + (
+                f", metered by {port.meter}" if port.meter else ", no link"
+            )
+        elif port.kind == PortKind.CARRIER:
+            text = f"needs carrier {cls._written(port.carrier)} for {', '.join(port.outputs)}"
+        elif port.kind == PortKind.FACT and port.is_provision:
+            text = (
+                f"provides fact {cls._written(port.fact)} from {port.members[0]}"
+                if port.members
+                else f"exports fact {cls._written(port.fact)} (fact exports: hisim-lt0b.4)"
+            )
+        elif port.kind == PortKind.FACT:
+            text = f"needs fact {cls._written(port.fact)} into {', '.join(port.into)}" + (
+                " (many: true, hisim-lt0b.4)" if port.many else ""
+            )
         else:
-            text = f"{port.kind.value} (not lowered in step 1a: {port.kind.delivering_step})"
+            text = f"{port.kind.value} (not lowered yet: {port.kind.delivering_step})"
         return f"{text}; {cls.state_of(port)}"
+
+    @staticmethod
+    def _written(value: Any) -> str:
+        """A carrier or a fact as written: a name, a parameter reference or a switch."""
+        if isinstance(value, dict):
+            if "$param" in value:
+                return f"{{$param: {value['$param']}}}"
+            cases = ", ".join(f"{key}: {item}" for key, item in value.items() if key != "$switch")
+            return f"{{$switch: {value.get('$switch')}, {cases}}}"
+        return str(value)
 
     @classmethod
     def _parameters(cls, model: AssemblyFile, out: TextIO) -> None:
@@ -207,7 +238,7 @@ class AssemblyDescription:
             cls._line(f"bounds    {bounds.subject}{unit}: {cls._band(bounds.min, bounds.max)}", out)
         for monotone in tests.monotone:
             cls._line(
-                f"monotone  {monotone.parameter} rises: {monotone.kpi} of {monotone.member} {monotone.direction.value}",
+                f"monotone  {monotone.parameter} rises: {monotone.subject} {monotone.direction.value}",
                 out,
             )
         for expect in tests.expect:

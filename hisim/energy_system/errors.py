@@ -61,18 +61,25 @@ class EnergySystemErrorId(enum.Enum):
     The ``EF-7x`` band is the assemblies' (``assemblies_spec.md``): ``EF-70`` … ``EF-75`` for reading,
     resolving and library-checking an assembly file, ``EF-76``/``EF-77`` for an import's
     parameters, ``EF-78``/``EF-79`` for their units (listed, each under its own identifier, among the
-    problems of the library check's ``EF-75``, which every import runs), ``EF-7A`` … ``EF-7J``
-    for the binding of ports (§3.3), ``EF-7K`` for the evaluation order, ``EF-7L`` for a construct a
-    later step of the assemblies work lowers, and ``EF-7M`` for a verb naming a port the assembly does
-    not have. The letter ``I`` is skipped, as it reads like a one. The expansion raises them from the
-    files, before any class is constructed. Two of them fire a second time, during wiring: the
-    wiring stage checks every connection on the constructed components, and when the item it refuses
-    was lowered from an assembly port, the refusal is restated with the port it came from
-    (``ImportRecord.annotate`` in :mod:`hisim.energy_system.assemblies.record`): ``EF-7H`` for a bare
-    name whose member declares no default connections from the partner's class (the wiring's
-    ``EF-23``), ``EF-7J`` for a wire or a provided output naming an input or output the constructed
-    component does not have (the wiring's ``EF-21``/``EF-22``), and ``EF-7J`` for a need bound to a
-    provided output that the member's default connections do not read.
+    problems of the library check's ``EF-75``, which every import runs), ``EF-7A`` … ``EF-7J`` for
+    the binding of ports (§3.3), ``EF-7K`` for the evaluation order, ``EF-7L`` for a construct a later
+    step of the assemblies work lowers, ``EF-7M`` for a verb naming a port the assembly does not have,
+    ``EF-7N`` for the two ends of a hydronic circuit that do not fit together, ``EF-7P`` for a carrier
+    need without exactly one provider (and a provider without a consumer), ``EF-7Q`` for a consuming
+    output whose energy carrier is not the need's, and ``EF-7R`` for a fact port bound to a component
+    that does not provide the fact. The letters ``I`` and ``O`` are skipped, as they read like a one
+    and a zero. The expansion raises them from the files, before any class is constructed. Three of
+    them fire a second time, during wiring: the wiring stage checks every connection on the
+    constructed components, and when the item it refuses was lowered from an assembly port, the
+    refusal is restated with the port it came from (``ImportRecord.annotate`` in
+    :mod:`hisim.energy_system.assemblies.record`): ``EF-7H`` for a bare name — a port's, a circuit's
+    or a carrier need's in its provider's meter — whose member declares no default connections (or
+    default feeds) from the partner's class (the wiring's ``EF-23``), ``EF-7J`` for a wire or a
+    provided or consuming output naming an input or output the constructed component does not have
+    (the wiring's ``EF-21``/``EF-22``), for a meter feeding an output of a consumer that no need
+    names, and for a need bound to a provided output that the member's default connections do not
+    read, and ``EF-7Q`` for a consuming output whose constructed energy port is not of the need's
+    carrier.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -168,6 +175,10 @@ class EnergySystemErrorId(enum.Enum):
     ORDER_INVALID = "EF-7K"
     NOT_LOWERED_IN_THIS_STEP = "EF-7L"
     UNKNOWN_PORT = "EF-7M"
+    CIRCUIT_ENDS_DO_NOT_FIT = "EF-7N"
+    CARRIER_PROVIDER = "EF-7P"
+    CARRIER_MISMATCH = "EF-7Q"
+    FACT_NOT_PROVIDED = "EF-7R"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
     RECORDED_NAME_INVALID = "EF-R1"
@@ -443,7 +454,9 @@ class WrittenItem:
 
     A bare item names its member and partner only; a written wire adds the input and the output; an
     output the file declares to exist (an assembly's provided port) names its member and output and
-    no partner. The fields are those of a port-provenance entry
+    no partner; a consuming output an assembly's carrier need names adds its carrier, with the
+    provider's meter as the member reading it (none for electricity) and the consumer as the
+    partner. The fields are those of a port-provenance entry
     (:class:`~hisim.energy_system.assemblies.record.LoweredPort`), so a refused item is found in that
     table by equality.
 
@@ -451,14 +464,16 @@ class WrittenItem:
         member: The component the item sits in: a wire's target, a declared output's owner.
         partner: The component it reads from; empty for a declared output.
         input: The member's input a written wire feeds; empty otherwise.
-        output: The partner's output a written wire reads, or the member's declared output; empty
-            for a bare item.
+        output: The partner's output a written wire reads or a meter observes, or the member's
+            declared output; empty for a bare item.
+        carrier: The energy carrier a consuming output is stated to carry; empty otherwise.
     """
 
     member: str
     partner: str = ""
     input: str = ""
     output: str = ""
+    carrier: str = ""
 
 
 class EnergySystemSizingError(EnergySystemCatalogueError):
@@ -484,10 +499,11 @@ class EnergySystemAssemblyError(EnergySystemCatalogueError):
     deeper than four, a parameter of the wrong type, value, range or unit, a violated
     constraint, a port that cannot be bound (§3.3), an evaluation order that is not a valid
     numbering, and a construct the current step of the assemblies work does not lower yet. Also
-    raised during wiring (``EF-7H``, ``EF-7J``): the wiring stage checks every connection on the
-    constructed components, and its refusal of an item an assembly port lowered to — a bare name
-    the member declares no default connections for, a wire or a provided output naming a port the
-    component does not have — is restated with the import, the port and the files it came from.
+    raised during wiring (``EF-7H``, ``EF-7J``, ``EF-7Q``): the wiring stage checks every connection
+    on the constructed components, and its refusal of an item an assembly port lowered to — a bare
+    name the member declares no default connections for, a wire or a provided output naming a port
+    the component does not have, a consuming output of another carrier or one the meter does not
+    feed exactly — is restated with the import, the port and the files it came from.
 
     Every message names the import and, where there is one, the instance and the port, and
     carries the source map of the import — the files and lines it came from — so that a failure

@@ -76,12 +76,15 @@ def test_an_import_or_instance_key_obeys_the_identifier_rule(bad: str) -> None:
 
 @pytest.mark.base
 def test_the_cache_key_is_the_same_wherever_a_member_sits() -> None:
-    """The address, like the building, decides nothing about a cached series."""
+    """The address and the display name, like the building, decide nothing about a cached series."""
     plain = MockPVSystemConfig.preset_rooftop("PVSystem")
     addressed = MockPVSystemConfig.preset_rooftop("PVSystem")
-    addressed.component_id = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="mock/pv_array")
+    addressed.component_id = ComponentID(
+        "PVSystem", path=(AddressStep("pv", "east"),), assembly="mock/pv_array", display_name="PV array, east"
+    )
 
     assert addressed.cache_key_view().to_json() == plain.cache_key_view().to_json()
+    assert addressed.to_dict()["component_id"]["display_name"] == "PV array, east"
     assert plain.to_dict()["component_id"] == {"name": "PVSystem", "building": None, "unit": None}
 
 

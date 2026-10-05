@@ -31,6 +31,7 @@ the failure mode this format exists to remove.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -192,6 +193,7 @@ class WiringPlanner:
         self.resolver = DynamicConnectionResolver(self.components_by_name)
         self.wires: List[PlannedWire] = []
         self.feeds_by_target: Dict[str, List[FeedRequest]] = {}
+        self.bare_feed_items: Dict[Tuple[str, str], WrittenItem] = {}
         self.written_wire_count = 0
 
     def plan(self) -> List[PlannedWire]:
@@ -295,6 +297,9 @@ class WiringPlanner:
     def _wire_from_resolution(self, wire: ResolvedDynamicWire) -> PlannedWire:
         """Turns one wire reported by feed resolution into a planned wire.
 
+        A wire of a feed a bare item expanded into — forward into the aggregator or back from it —
+        carries that bare item, so a refusal of it names the item and the port that lowered it.
+
         Args:
             wire: The wire resolution derived from a feed.
 
@@ -307,6 +312,8 @@ class WiringPlanner:
             target_name=wire.target_name,
             target_input=wire.target_input,
             origin=wire.origin,
+            item=self.bare_feed_items.get((wire.target_name, wire.source_name))
+            or self.bare_feed_items.get((wire.source_name, wire.target_name)),
         )
 
     def _planned(
@@ -379,8 +386,9 @@ class WiringPlanner:
                 ),
             )
         if dynamic:
+            self.bare_feed_items[(consumer, item.source)] = written
             for feed in self.resolver.expand_default_item(consumer, item.source):
-                self._collect_feed(consumer, feed)
+                self._collect_feed(consumer, dataclasses.replace(feed, item=written))
             return
         if not static:
             raise EnergySystemWiringError(
@@ -430,8 +438,9 @@ def wire_energy_system(
         model: The energy system, after group expansion and validation.
         system: Its configurations, complete and sized.
         simulation_parameters: Parameters of the run, handed to every component.
-        declared_outputs: Outputs the file states exist without any item reading them (the
-            outputs of an assembly's provided ports); each is checked like a wire's output.
+        declared_outputs: Outputs the file states exist without any item reading them by name (an
+            assembly's provided outputs, a carrier need's consuming outputs); each is checked like a
+            wire's output, a consuming output also for its carrier and its meter's feeds.
 
     Returns:
         The wired system and the warnings a run should print: one line per component that feeds

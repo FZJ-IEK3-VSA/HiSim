@@ -122,15 +122,11 @@ def test_an_inner_port_neither_bound_nor_re_exported_is_refused(tmp_path: Path) 
         name: broken/open_tank
         imports:
           tank: {assembly: mock/hot_water_tank}
-        components:
-          Sky:
-            class: tests.assemblies.mock_components.MockWeather
-            preset: standard
         interface:
           needs:
             hot_water_demand: {from: tank.hot_water_demand}
         """,
-        probe="Sky",
+        contract=True,
     )
 
     message = refusal(site(WEATHER, OCCUPANCY) + "imports:\n  dhw: {assembly: broken/open_tank}\n", library)
@@ -202,7 +198,7 @@ BARE_DEVICE = """
 def test_a_member_without_default_connections_from_its_partner_is_refused_once_constructed(tmp_path: Path) -> None:
     """EF-7H: the expansion binds by class name; the wiring finds no default connections on the constructed device."""
     library = Library(tmp_path)
-    library.add("broken/bare", BARE_DEVICE, probe="Device")
+    library.add("broken/bare", BARE_DEVICE, contract=True)
 
     message = build_refusal(site(WEATHER) + "imports:\n  device: {assembly: broken/bare}\n", tmp_path / "r", library)
 
@@ -256,9 +252,9 @@ def test_explicit_wires_lower_to_wires_and_their_inputs_are_checked(tmp_path: Pa
           needs:
             weather: {{into: [PVSystem], partner: MockWeather}}
         """
-    library.add("wired/pv", wired.format(target="TemperatureOutside"), probe="PVSystem")
+    library.add("wired/pv", wired.format(target="TemperatureOutside"), contract=True)
     library.add(
-        "wired/broken", wired.format(target="Irradiance").replace("wired/pv", "wired/broken"), probe="PVSystem"
+        "wired/broken", wired.format(target="Irradiance").replace("wired/pv", "wired/broken"), contract=True
     )
 
     expanded, _record = expand_text(site(WEATHER) + "imports:\n  pv: {assembly: wired/pv}\n", library.resolver())
@@ -295,7 +291,7 @@ def test_a_wire_naming_an_output_the_partner_does_not_have_is_refused_once_const
           needs:
             weather: {into: [PVSystem], partner: MockWeather}
         """,
-        probe="PVSystem",
+        contract=True,
     )
 
     message = build_refusal(site(WEATHER) + "imports:\n  pv: {assembly: wired/sky}\n", tmp_path / "r", library)
@@ -327,7 +323,7 @@ def test_any_other_wiring_refusal_of_a_lowered_item_keeps_its_id_and_names_the_p
           needs:
             climate: {into: [PVSystem], partner: MockOccupancy}
         """,
-        probe="PVSystem",
+        contract=True,
     )
 
     with pytest.raises(EnergySystemWiringError) as raised:
@@ -360,7 +356,7 @@ def test_a_provided_output_the_member_does_not_have_is_refused_once_constructed(
           provides:
             heat: {output: Heater.NoSuchOutput}
         """,
-        probe="Heater",
+        contract=True,
     )
 
     text = site(WEATHER) + "imports:\n  heater: {assembly: broken/provides}\n"
@@ -426,7 +422,7 @@ Thermostat:
 def test_a_site_entry_binds_an_import_member_through_its_port(tmp_path: Path) -> None:
     """The verbs work alike on a site entry: ``optional-bind:`` binds when the import exists, else stays inert."""
     library = Library(tmp_path)
-    library.add("control/ems", CONTROL, probe="EMS")
+    library.add("control/ems", CONTROL, contract=True)
 
     expanded, record = expand_text(
         site(SITE_CONTROLLER) + "imports:\n  control: {assembly: control/ems}\n", library.resolver()
@@ -517,7 +513,7 @@ def test_a_need_bound_to_a_provided_output_its_wires_do_not_read_is_refused(tmp_
           needs:
             heat: {into: [Tank], partner: MockHeater}
         """,
-        probe="Tank",
+        contract=True,
     )
 
     expanded, _record = expand_text(TANK_BOUND_TO.format(tank="wired/tank", output="heat"), library.resolver())
@@ -529,3 +525,46 @@ def test_a_need_bound_to_a_provided_output_its_wires_do_not_read_is_refused(tmp_
         "EF-7J at import tank: port 'heat' is bound to the provided output 'ElectricityInput' of backup-Heater, but "
         "its wires into tank-Tank read ThermalPower"
     )
+
+
+#: An assembly re-exporting the weather need of a two-instance inner import.
+ARRAYS = """
+    schema_version: 4
+    kind: assembly
+    name: multi/arrays
+    imports:
+      arrays:
+        assembly: mock/pv_array
+        instances: {a: {azimuth_in_degree: 90}, b: {azimuth_in_degree: 270}}
+    interface:
+      needs:
+    {needs}
+    """
+
+
+@pytest.mark.base
+def test_a_re_export_of_a_multi_instance_inner_import_names_the_instance(tmp_path: Path) -> None:
+    """Each instance has its own port: ``from: arrays[a].weather``; ``from: arrays.weather`` is refused."""
+    library = Library(tmp_path)
+    library.add(
+        "multi/arrays",
+        ARRAYS.replace(
+            "{needs}", "      weather_a: {from: 'arrays[a].weather'}\n          weather_b: {from: 'arrays[b].weather'}"
+        ),
+        contract=True,
+    )
+    library.add(
+        "multi/ambiguous",
+        ARRAYS.replace("multi/arrays", "multi/ambiguous").replace("{needs}", "      weather: {from: arrays.weather}"),
+        contract=True,
+    )
+
+    expanded, record = expand_text(site(WEATHER) + "imports:\n  roof: {assembly: multi/arrays}\n", library.resolver())
+    assert expanded.components["roof-arrays-a-PVSystem"].inputs == (DefaultInputs(source="Weather"),)
+    assert expanded.components["roof-arrays-b-PVSystem"].inputs == (DefaultInputs(source="Weather"),)
+    inner = record.instance("roof → arrays[a]")
+    assert inner is not None and inner.port("weather").partner == "as roof.weather_a"  # type: ignore[union-attr]
+
+    message = refusal(site(WEATHER) + "imports:\n  roof: {assembly: multi/ambiguous}\n", library)
+    assert "the port 'weather' re-exports 'arrays.weather' of the inner import 'arrays', which has the instances " \
+        "a, b, each with its own 'weather'; re-export each by name: from: arrays[a].weather" in message

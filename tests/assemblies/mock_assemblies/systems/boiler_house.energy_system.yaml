@@ -1,0 +1,31 @@
+# Mock: a composed house with a hydronic circuit, a carrier and a sizing fact. A gas boiler charges a
+# cylinder over the dhw circuit (each end reads the other's outputs by default connections), burns natural
+# gas the gas connection's meter observes, and a battery is sized from the east array's peak power.
+schema_version: 4
+name: mock_boiler_house
+description: A composed mock house with a circuit, a carrier and a fact port.
+
+components:
+  Weather:
+    class: tests.assemblies.mock_components.MockWeather
+    preset: standard
+  Occupancy:
+    class: tests.assemblies.mock_components.MockOccupancy
+    preset: standard
+
+imports:
+  gas:
+    assembly: mock/gas_connection
+  boiler:
+    assembly: mock/gas_boiler
+    parameters: {power_in_watt: 4000}
+  cylinder:
+    assembly: mock/dhw_cylinder
+  pv:
+    assembly: mock/pv_array
+    instances:
+      east: {azimuth_in_degree: 90, facing: east}
+      west: {azimuth_in_degree: 270, facing: west, power_in_watt: 3000}
+  battery:
+    assembly: mock/battery
+    bind: {pv_power: pv.east}

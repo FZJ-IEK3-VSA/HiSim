@@ -78,6 +78,7 @@ def test_the_record_document_carries_the_addresses_and_the_sequence() -> None:
         "path": [{"import": "pv", "instance": "east"}],
         "member": "PVSystem",
         "assembly": "mock/pv_array",
+        "display_name": "PV array, east, azimuth 90",
     }
     assert document["sequence"][6] == {"component": "hot_water-heater-tank-Tank", "order": "4.1.3.1"}
     assert document["not_lowered"] == []
@@ -185,19 +186,19 @@ components:
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    "assembly, member, error_class, marker",
+    "assembly, error_class, marker",
     [
-        (MISCONFIGURED, "Tank", EnergySystemBindingError, "EF-17 at components.x-Tank"),
-        (MISWIRED, "Sky", EnergySystemWiringError, "EF-21 at components.x-PVSystem"),
+        (MISCONFIGURED, EnergySystemBindingError, "EF-17 at components.x-Tank"),
+        (MISWIRED, EnergySystemWiringError, "EF-21 at components.x-PVSystem"),
     ],
 )
 def test_a_downstream_error_prints_the_source_map_entry_of_what_it_names(
-    tmp_path: Path, assembly: str, member: str, error_class: type, marker: str
+    tmp_path: Path, assembly: str, error_class: type, marker: str
 ) -> None:
     """Class validation and wiring errors about a produced component say where it came from."""
     library = Library(tmp_path)
     name = assembly.split("name: ")[1].split("\n")[0]
-    library.add(name, assembly, probe=member)
+    library.add(name, assembly, contract=True)
     model, lines = read_system(site(WEATHER) + f"imports:\n  x: {{assembly: {name}}}\n")
     parameters = SimulationParameters.one_day_only(2021, 900)
     parameters.result_directory = str(tmp_path / "results")
@@ -235,7 +236,7 @@ ADDRESSED: Dict[str, Any] = {
         ({"addresses": {"pv-PVSystem": "pv"}}, "metadata.imports.addresses.pv-PVSystem: an address is a mapping"),
         (
             {"addresses": {"pv-PVSystem": {"path": [{"import": "pv"}], "member": "PVSystem", "order": 1}}},
-            "metadata.imports.addresses.pv-PVSystem: an address is a mapping of path, member and assembly",
+            "metadata.imports.addresses.pv-PVSystem: an address is a mapping of path, member, assembly, display_name",
         ),
         (
             {"addresses": {"pv-PVSystem": {"path": "pv", "member": "PVSystem"}}},

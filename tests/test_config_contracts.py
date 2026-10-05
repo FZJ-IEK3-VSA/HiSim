@@ -805,3 +805,18 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
             for fact in contribution.facts
         )
         assert declared == expected_facts
+
+
+@pytest.mark.base
+def test_the_charging_set_point_is_a_fraction() -> None:
+    """``battery_set_soc`` declares ``Units.ANY``; its domain, 0 to 1, is checked by the configuration."""
+    from utspclient.helpers.lpgdata import ChargingStationSets  # noqa: PLC0415
+
+    from hisim.components.controller_l1_generic_ev_charge import ChargingStationConfig  # noqa: PLC0415
+
+    config = ChargingStationConfig.for_charging_station_set("Wallbox", ChargingStationSets.Charging_At_Home_with_11_kW)
+    assert config.battery_set_soc == 0.8
+    wrong_values: Tuple[Any, ...] = (80, -0.1, "0.8")
+    for wrong in wrong_values:
+        with pytest.raises(ValueError, match="battery_set_soc is .*a fraction of its capacity from 0 to 1"):
+            dataclasses.replace(config, battery_set_soc=wrong)

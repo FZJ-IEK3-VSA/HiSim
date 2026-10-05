@@ -255,7 +255,12 @@
                 ]
               }
             },
-            "description": "A site entry has no parameters, so its ports carry no required_when/active_when."
+            "properties": {
+              "carrier": {
+                "type": "string"
+              }
+            },
+            "description": "A site entry has no parameters, so its ports carry no required_when/active_when and a carrier is written as itself."
           }
         },
         "bind": {
@@ -385,7 +390,8 @@
                       {
                         "const": "AUTO"
                       }
-                    ]
+                    ],
+                    "x-unit": "WATT"
                   },
                   "custom_battery_capacity_generic_in_kilowatt_hour": {
                     "anyOf": [
@@ -395,7 +401,8 @@
                       {
                         "const": "AUTO"
                       }
-                    ]
+                    ],
+                    "x-unit": "KWH"
                   }
                 }
               },
@@ -1312,7 +1319,8 @@
                     "type": "integer"
                   },
                   "battery_set_soc": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "ANY"
                   },
                   "device_co2_footprint_in_kg": {
                     "type": "number"
@@ -1373,13 +1381,16 @@
                     "type": "number"
                   },
                   "building_indoor_temperature_offset_value": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "CELSIUS"
                   },
                   "domestic_hot_water_storage_temperature_offset_value": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "CELSIUS"
                   },
                   "space_heating_water_storage_temperature_offset_value": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "CELSIUS"
                   },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
@@ -4014,13 +4025,16 @@
                     ]
                   },
                   "azimuth": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "DEGREES"
                   },
                   "tilt": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "DEGREES"
                   },
                   "share_of_maximum_pv_potential": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "ANY"
                   },
                   "load_module_data": {
                     "type": "boolean"
@@ -4099,7 +4113,8 @@
                       {
                         "const": "AUTO"
                       }
-                    ]
+                    ],
+                    "x-unit": "WATT"
                   },
                   "weather_identity": {
                     "anyOf": [
@@ -4636,7 +4651,8 @@
                       {
                         "type": "null"
                       }
-                    ]
+                    ],
+                    "x-unit": "ANY"
                   },
                   "standardized_scop_en14825_w55": {
                     "anyOf": [
@@ -4646,7 +4662,8 @@
                       {
                         "type": "null"
                       }
-                    ]
+                    ],
+                    "x-unit": "ANY"
                   },
                   "cycling_mode": {
                     "type": "boolean"
@@ -4778,7 +4795,8 @@
                       {
                         "const": "AUTO"
                       }
-                    ]
+                    ],
+                    "x-unit": "WATT"
                   }
                 }
               },
@@ -5013,7 +5031,8 @@
                 "properties": {
                   "component_id": {},
                   "nominal_cooling_power_w": {
-                    "type": "number"
+                    "type": "number",
+                    "x-unit": "WATT"
                   },
                   "eta_carnot": {
                     "type": "number"
@@ -5272,7 +5291,8 @@
                       {
                         "const": "AUTO"
                       }
-                    ]
+                    ],
+                    "x-unit": "LITER"
                   }
                 }
               },
@@ -5392,7 +5412,8 @@
                       {
                         "const": "AUTO"
                       }
-                    ]
+                    ],
+                    "x-unit": "LITER"
                   }
                 }
               },
@@ -5513,7 +5534,8 @@
                       {
                         "const": "AUTO"
                       }
-                    ]
+                    ],
+                    "x-unit": "SQUARE_METER"
                   },
                   "delta_temperature_n_k": {
                     "type": "number"
@@ -6242,7 +6264,8 @@
           "$ref": "#/$defs/reference"
         },
         "from": {
-          "$ref": "#/$defs/reference"
+          "type": "string",
+          "pattern": "^([A-Za-z_][A-Za-z0-9_]*)(?:\\[([A-Za-z_][A-Za-z0-9_]*)\\])?\\.([A-Za-z_][A-Za-z0-9_]*)$"
         },
         "circuit": {
           "$ref": "#/$defs/name"
@@ -6265,13 +6288,18 @@
           "type": [
             "string",
             "object"
-          ]
+          ],
+          "description": "An lt.EnergyBalanceCarrier value (natural_gas, electricity, heating_oil, ...) or a {$param: ...}/{$switch: ...} resolving to one (assemblies_spec.md \u00a75)."
         },
         "outputs": {
           "type": "array",
+          "minItems": 1,
           "items": {
-            "$ref": "#/$defs/name"
+            "$ref": "#/$defs/source"
           }
+        },
+        "meter": {
+          "$ref": "#/$defs/name"
         },
         "fact": {
           "type": [

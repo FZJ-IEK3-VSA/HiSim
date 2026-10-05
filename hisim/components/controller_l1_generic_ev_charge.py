@@ -2,7 +2,7 @@
 """Controller of EV battery with configuration and state."""
 
 from typing import ClassVar, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
 import pandas as pd
@@ -19,7 +19,7 @@ from hisim.loadtypes import Units, ComponentType, InandOutputType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, unit_metadata
 from hisim.economics.facts import CostRelevance
 
 
@@ -56,8 +56,9 @@ class ChargingStationConfig(ConfigBase):
     lower_threshold_charging_power_in_watt: float
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int = 1
-    #: set point for state of charge of battery
-    battery_set_soc: float = 0.8
+    #: set point for state of charge of battery, a fraction of its capacity between 0 and 1. ``lt.Units``
+    #: has no unit for a fraction, so the field declares ``ANY`` and the domain is checked here.
+    battery_set_soc: float = field(default=0.8, metadata=unit_metadata(lt.Units.ANY))
     #: CO2 footprint of investment in kg. estimated value  # Todo: check value
     device_co2_footprint_in_kg: float = 100.0
     #: cost for investment in Euro  # Todo: check value
@@ -69,6 +70,20 @@ class ChargingStationConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: float = 50.0
     #: subsidies as percentage of investment
     subsidy_as_percentage_of_investment_costs: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Refuses a state-of-charge set point outside its domain, a fraction from 0 to 1.
+
+        Raises:
+            ValueError: For a ``battery_set_soc`` that is no number or lies outside [0, 1]; a set
+                point of 80 meant as a percentage would otherwise charge the car forever.
+        """
+        soc = self.battery_set_soc
+        if isinstance(soc, bool) or not isinstance(soc, (int, float)) or not 0.0 <= soc <= 1.0:
+            raise ValueError(
+                f"{type(self).__name__}.battery_set_soc is {soc!r}; it is the state of charge the car is "
+                "charged to, a fraction of its capacity from 0 to 1 (0.8, not 80)."
+            )
 
     @classmethod
     def charging_power_in_watt_of(cls, charging_station_set: JsonReference) -> float:

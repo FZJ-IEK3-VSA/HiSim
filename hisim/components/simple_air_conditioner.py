@@ -13,7 +13,7 @@ Sign convention (matching the existing ``AirConditioner``):
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -23,7 +23,7 @@ from hisim.component import (
     CapexCostDataClass,
     OpexCostDataClass,
 )
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset, unit_metadata
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
@@ -64,7 +64,7 @@ class SimpleAirConditionerConfig(ConfigBase):
 
     component_id: ComponentID
     #: Cooling power the machine delivers at full modulation, in W.
-    nominal_cooling_power_w: float = 2000.0
+    nominal_cooling_power_w: float = field(default=2000.0, metadata=unit_metadata(Units.WATT))
     #: Share of the Carnot coefficient of performance the machine actually reaches.
     eta_carnot: float = 0.3
     #: Temperature difference, in K, below which outdoor and indoor air count as equally warm.

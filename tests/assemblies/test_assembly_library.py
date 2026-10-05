@@ -9,12 +9,15 @@ import hashlib
 import os
 from pathlib import Path
 
+import jsonschema
 import pytest
+import yaml
 
 from hisim.energy_system.assemblies.library import check_assembly, require_valid
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
+from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder
 from hisim.energy_system.errors import EnergySystemAssemblyError
-from tests.assemblies.helpers import Library, Mocks, mock_resolver
+from tests.assemblies.helpers import WEATHER, Library, Mocks, expand_text, mock_resolver, site
 
 
 def library_paths() -> list:
@@ -184,3 +187,79 @@ def test_the_default_resolver_reads_the_environment_variable(tmp_path: Path, mon
     monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(tmp_path / "missing"))
     with pytest.raises(EnergySystemAssemblyError, match="EF-71 .*does not exist"):
         AssemblyResolver.default()
+
+
+@pytest.mark.base
+def test_a_composite_of_inner_imports_owes_a_monotone_on_a_derived_kpi(tmp_path: Path) -> None:
+    """D24 as decided: a numeric parameter asks for one monotone entry, a member's KPI or a derived one by name.
+
+    ``mock/pv_pair`` imports two arrays and has no member of its own; its monotone entry names the
+    derived ``PV production`` alone. Without the entry it is refused, as by the schema; a member it
+    names must be its own; an assembly without a numeric parameter owes no monotone entry.
+    """
+    composite = (Mocks.LIBRARY / "mock" / "pv_pair.assembly.yaml").read_text(encoding="utf-8")
+    validator = jsonschema.Draft202012Validator(AssemblySchemaBuilder().build())
+    resolver = mock_resolver()
+    assert not check_assembly(resolver.resolve("mock/pv_pair", "test"), resolver)
+    assert validator.is_valid(yaml.safe_load(composite))
+    expanded, _record = expand_text(site(WEATHER) + "imports:\n  roof: {assembly: mock/pv_pair}\n")
+    assert list(expanded.components) == ["Weather", "roof-east-PVSystem", "roof-west-PVSystem"]
+
+    library = Library(tmp_path)
+    monotone = "    - {parameter: power_in_watt, kpi: PV production, direction: increasing}\n"
+    library.add("mock/no_monotone", composite.replace("mock/pv_pair", "mock/no_monotone").replace(monotone, ""))
+    library.add(
+        "mock/foreign",
+        composite.replace("mock/pv_pair", "mock/foreign").replace("direction: increasing", "member: PVSystem, "
+                                                                  "direction: increasing"),
+    )
+    no_monotone = check_assembly(library.resolver().resolve("mock/no_monotone", "test"), library.resolver())
+    foreign = check_assembly(library.resolver().resolve("mock/foreign", "test"), library.resolver())
+
+    assert len(no_monotone) == 1 and no_monotone[0].endswith(
+        "the test contract has no monotone entry, but the assembly has the numeric parameter power_in_watt; at "
+        "least one is required, naming a KPI of one of its own members or a derived KPI by name."
+    )
+    assert not validator.is_valid(yaml.safe_load(composite.replace(monotone, "")))
+    assert len(foreign) == 1 and foreign[0].endswith("the entry names the member 'PVSystem', which does not exist.")
+
+    library.add(
+        "mock/plain",
+        """
+        schema_version: 4
+        kind: assembly
+        name: mock/plain
+        components:
+          Sky: {class: tests.assemblies.mock_components.MockWeather, preset: standard}
+        tests: {bounds: [], monotone: []}
+        """,
+    )
+    assert not check_assembly(library.resolver().resolve("mock/plain", "test"), library.resolver())
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "display, problem",
+    [
+        ("Array {power_in_watt:d} W", "formats the float parameter 'power_in_watt' with '{power_in_watt:d}', which "
+         "does not fit it: Unknown format code 'd' for object of type 'float'."),
+        ("Array {facing:.1f}", "formats the enum parameter 'facing' with '{facing:.1f}', which does not fit it"),
+        ("Array {}", "names '', which is no parameter."),
+        ("Array {power", "is no format string"),
+    ],
+)
+def test_a_display_template_is_checked_against_the_parameter_types(tmp_path: Path, display: str, problem: str) -> None:
+    """A spec the parameter's type cannot take is a library-check problem, not a ValueError at expansion."""
+    library = Library(tmp_path)
+    library.add(
+        "mock/displayed",
+        (Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml")
+        .read_text(encoding="utf-8")
+        .replace("name: mock/pv_array", "name: mock/displayed")
+        .replace('display: "PV array, {facing}, azimuth {azimuth_in_degree}"', f'display: "{display}"'),
+    )
+    resolver = library.resolver()
+
+    found = check_assembly(resolver.resolve("mock/displayed", "test"), resolver)
+
+    assert len(found) == 1 and problem in found[0], found

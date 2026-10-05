@@ -189,8 +189,18 @@ class LoweredKind:
     WIRE = "wire"
     #: A provided port's output: a named output of the member.
     PROVIDED = "provided"
+    #: One item of a bound hydronic circuit: a bare name of a member at the other end, written into a
+    #: member at this end that carries the circuit's placeholder.
+    CIRCUIT = "circuit"
+    #: One consuming output of a bound carrier need: the consumer's output, its carrier and, for a
+    #: fuel, the provider's meter, which takes a bare name of the consumer (a ``default`` row) and
+    #: observes the output through the default feeds it declares from the consumer's class.
+    FEED = "feed"
 
-    ALL: ClassVar[Tuple[str, ...]] = (DEFAULT, WIRE, PROVIDED)
+    ALL: ClassVar[Tuple[str, ...]] = (DEFAULT, WIRE, PROVIDED, CIRCUIT, FEED)
+
+    #: The fields that hold tuples, which a document holds as lists.
+    TUPLE_FIELDS: ClassVar[Tuple[str, ...]] = ("chain",)
 
 
 @dataclass(frozen=True)
@@ -199,12 +209,15 @@ class LoweredPort:
 
     The expansion decides a binding from the file alone — every entry states its class — and
     lowers it to the items a hand-written file would write: a bare partner name (the member's
-    default connections from the partner's class), explicit wires, and for a provided port the
-    output it names. The wiring stage checks those items on the constructed components like any
-    other; this row is what its refusal of one is restated with (``assemblies_spec.md`` §3.3).
+    default connections from the partner's class), explicit wires, for a provided port the output it
+    names, for a circuit a bare name of every member of the other end in every member carrying the
+    circuit's placeholder, and for a fuel a bare name of the consumer in the provider's meter. The
+    wiring stage checks those items on the constructed components like any other; this row is what
+    its refusal of one is restated with (``assemblies_spec.md`` §3.3). A feed row also states a
+    consuming output and its carrier, which the wiring checks on the constructed consumer and meter.
 
     Attributes:
-        kind: :class:`LoweredKind`: ``default``, ``wire`` or ``provided``.
+        kind: :class:`LoweredKind`: ``default``, ``wire``, ``provided``, ``circuit`` or ``feed``.
         owner: How a message names the port's owner, ``import pv[east]`` or ``component Thermostat``;
             the location of a refusal.
         import_path: The owner's import path, ``pv[east]`` or ``dhw → generator`` (it carries the
@@ -213,14 +226,20 @@ class LoweredPort:
         verb: What decided the binding: ``default``, ``bind``, ``optional-bind``, ``internal <name>``;
             empty for a provided output.
         member: The expanded name of the component the item lands in (or, for a provided output,
-            the component providing it).
-        member_class: That component's dotted class path.
-        partner: The expanded name of the bound partner; empty for a provided output.
+            the component providing it; for a feed, the provider's meter, empty for electricity).
+        member_class: That component's dotted class path; empty when ``member`` is.
+        partner: The expanded name of the bound partner (for a feed, the consumer); empty for a
+            provided output.
         partner_class: The partner's dotted class path; empty for a provided output.
         input: The member's input a wire feeds; empty otherwise.
-        output: The partner's output a wire reads, or the member's provided output; empty for a
-            bare name.
+        output: The partner's output a wire reads, the member's provided output, or a feed's
+            consuming output; empty for a bare name.
         chain: The files and lines the port came from, outermost first.
+        carrier: A feed's carrier, an ``lt.EnergyBalanceCarrier`` value, and the carrier of a meter's
+            bare name of a consumer (a ``default`` row); empty otherwise.
+        circuit: A circuit item's circuit, its medium (``dhw``); empty otherwise.
+        end: The label of the circuit end the item lands at (``cylinder.circuit``); empty otherwise.
+        other_end: The label of the other end (``boiler.dhw``); empty otherwise.
         bound_output: For a bare name a verb lowered from ``bind: {<need>: <import>.<provided port>}``,
             the output that provided port names: the member's default connections from the partner's
             class must read it (:meth:`PortProvenance.check_bound_outputs`); empty otherwise.
@@ -238,12 +257,26 @@ class LoweredPort:
     input: str = ""
     output: str = ""
     chain: Tuple[str, ...] = ()
+    carrier: str = ""
+    circuit: str = ""
+    end: str = ""
+    other_end: str = ""
     bound_output: str = ""
 
     @property
     def item(self) -> WrittenItem:
-        """The item of the expanded file this row stands for, as a wiring refusal names it."""
-        return WrittenItem(member=self.member, partner=self.partner, input=self.input, output=self.output)
+        """The item of the expanded file this row stands for, as a wiring refusal names it.
+
+        A carrier is part of a consuming output's item only; a meter's bare name of a consumer is the
+        bare item a hand-written file writes.
+        """
+        return WrittenItem(
+            member=self.member,
+            partner=self.partner,
+            input=self.input,
+            output=self.output,
+            carrier=self.carrier if self.output else "",
+        )
 
     def source_text(self) -> str:
         """The owner and its source map, as a message prints them."""
@@ -254,12 +287,27 @@ class LoweredPort:
         member = f"{self.member} ({short_class_name(self.member_class)})"
         if self.kind == LoweredKind.PROVIDED:
             return f"port '{self.port}' provides the output '{self.output}' of {member} {self.source_text()}"
-        lowered = (
-            f"the wire '{self.input}' from '{self.output}'"
-            if self.kind == LoweredKind.WIRE
-            else f"the bare name '{self.partner}'"
-        )
         partner = f"{self.partner} ({short_class_name(self.partner_class)})"
+        if self.kind == LoweredKind.FEED:
+            observed = f", which the meter {member} observes" if self.member else ""
+            return (
+                f"carrier need '{self.port}' (carrier {self.carrier}) names the output '{self.output}' of {partner}"
+                f"{observed} {self.source_text()}"
+            )
+        if self.kind == LoweredKind.CIRCUIT:
+            return (
+                f"circuit port '{self.port}' (circuit {self.circuit}, {self.end} bound to {self.other_end} by "
+                f"{self.verb}) lowers to the bare name '{self.partner}' "
+                f"({short_class_name(self.partner_class)}) in {member} {self.source_text()}"
+            )
+        if self.carrier:
+            return (
+                f"carrier need '{self.port}' (carrier {self.carrier}, bound by {self.verb}) lowers to the bare name "
+                f"'{self.partner}' ({short_class_name(self.partner_class)}) in the meter {member} {self.source_text()}"
+            )
+        lowered = f"the wire '{self.input}' from '{self.output}'" if self.kind == LoweredKind.WIRE else (
+            f"the bare name '{self.partner}'"
+        )
         return (
             f"port '{self.port}' is bound to {partner} by {self.verb} and lowers to {lowered} in {member} "
             f"{self.source_text()}"
@@ -268,19 +316,8 @@ class LoweredPort:
     def to_document(self) -> Dict[str, Any]:
         """The entry as plain data; every field is written, so a re-run reads it back whole."""
         return {
-            "kind": self.kind,
-            "owner": self.owner,
-            "import_path": self.import_path,
-            "port": self.port,
-            "verb": self.verb,
-            "member": self.member,
-            "member_class": self.member_class,
-            "partner": self.partner,
-            "partner_class": self.partner_class,
-            "input": self.input,
-            "output": self.output,
-            "chain": list(self.chain),
-            "bound_output": self.bound_output,
+            name: list(getattr(self, name)) if name in LoweredKind.TUPLE_FIELDS else getattr(self, name)
+            for name in self.__dataclass_fields__
         }
 
     @classmethod
@@ -315,8 +352,9 @@ class LoweredPort:
                 alternatives_label="kinds",
                 offending_value=str(document["kind"]),
             )
-        values = {name: document[name] for name in expected}
-        values["chain"] = tuple(document["chain"])
+        values: Dict[str, Any] = {
+            name: tuple(document[name]) if name in LoweredKind.TUPLE_FIELDS else document[name] for name in expected
+        }
         return cls(**values)
 
 
@@ -433,8 +471,10 @@ class PortProvenance:
             table: The port-provenance table.
 
         Returns:
-            The error itself, or its restatement, ``EF-7H``/``EF-7J`` for a port's contract and the
-            wiring's own identifier for any other refusal.
+            The error itself, or its restatement: ``EF-7H``/``EF-7J`` for the wiring's ``EF-23``,
+            ``EF-21`` and ``EF-22``, and the refusal's own identifier otherwise — the wiring's
+            (``EF-26``, ``EF-30``, …), or the ``EF-7x`` one the wiring's checks of consuming outputs
+            raise. A restatement with an ``EF-7x`` identifier is an assembly error.
         """
         item = getattr(error, "item", None)
         row = next((entry for entry in table if entry.item == item), None) if item is not None else None
@@ -442,13 +482,14 @@ class PortProvenance:
             return error
         error_id = cls.PORT_REFUSALS.get(error.error_id, error.error_id)
         remedy = error.remedy
-        if error_id == EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS:
+        if error.error_id == EnergySystemErrorId.NO_DECLARED_DEFAULTS:
             partner, member = short_class_name(row.partner_class), short_class_name(row.member_class)
             remedy = (
                 f"Add the default connection from {partner} to {member}, or bind the port to a partner of a class "
                 "it declares default connections from."
             )
-        error_class = EnergySystemAssemblyError if error_id in cls.PORT_REFUSALS.values() else type(error)
+        assembly_band = error_id.value.startswith("EF-7")
+        error_class = EnergySystemAssemblyError if assembly_band else type(error)
         return error_class(
             error_id,
             row.owner,
@@ -515,6 +556,111 @@ class InstanceRecord:
 
 
 @dataclass(frozen=True)
+class CircuitEndRecord:
+    """One end of a bound hydronic circuit, as the record states it.
+
+    Attributes:
+        owner: The import path (``heating``, ``dhw → cylinder``) or the site component holding it.
+        port: The circuit port's name.
+        members: The expanded components at this end. Which of them owns which of the circuit's
+            outputs the constructed components say; the wiring of the bare names checks it.
+    """
+
+    owner: str
+    port: str
+    members: Tuple[str, ...]
+
+    def to_document(self) -> Dict[str, Any]:
+        """The end as plain data."""
+        return {"owner": self.owner, "port": self.port, "members": list(self.members)}
+
+
+@dataclass(frozen=True)
+class CircuitRecord:
+    """One bound hydronic circuit (``assemblies_spec.md`` §3.2, §11.1): its medium, both ends, the wiring.
+
+    Attributes:
+        circuit: The circuit's name, its medium (``dhw``).
+        ends: The two ends, the one whose port decided the binding first.
+        verb: The verb that bound it, ``default`` for the default rule.
+        lowered_to: The items the binding wrote, as ``<component>.inputs: <item>``.
+    """
+
+    circuit: str
+    ends: Tuple[CircuitEndRecord, CircuitEndRecord]
+    verb: str
+    lowered_to: Tuple[str, ...]
+
+    def to_document(self) -> Dict[str, Any]:
+        """The circuit as plain data."""
+        return {
+            "circuit": self.circuit,
+            "ends": [end.to_document() for end in self.ends],
+            "verb": self.verb,
+            "lowered_to": list(self.lowered_to),
+        }
+
+
+@dataclass(frozen=True)
+class CarrierConsumer:
+    """One carrier need bound to a provider: whose outputs the provider's meter observes.
+
+    Attributes:
+        owner: The import path or site component holding the need.
+        port: The need's name.
+        outputs: The consuming outputs, ``<component>.<output>``.
+        verb: The verb that bound it, ``default`` for the default rule.
+        lowered_to: The bare names of the consumers written into the meter (none for electricity).
+    """
+
+    owner: str
+    port: str
+    outputs: Tuple[str, ...]
+    verb: str
+    lowered_to: Tuple[str, ...]
+
+    def to_document(self) -> Dict[str, Any]:
+        """The consumer as plain data."""
+        return {
+            "owner": self.owner,
+            "port": self.port,
+            "outputs": list(self.outputs),
+            "verb": self.verb,
+            "lowered_to": list(self.lowered_to),
+        }
+
+
+@dataclass
+class CarrierRecord:
+    """One provider of a carrier and every need bound to it (``assemblies_spec.md`` §5.1).
+
+    Attributes:
+        carrier: The carrier, an ``lt.EnergyBalanceCarrier`` value.
+        provider: The import path or site component providing it.
+        port: The providing port.
+        meter: The expanded meter that observes the consumers; ``None`` for electricity, which has
+            no link and whose need is only the check that this one provider exists.
+        consumers: Every need bound to the provider, in binding order.
+    """
+
+    carrier: str
+    provider: str
+    port: str
+    meter: Optional[str]
+    consumers: List[CarrierConsumer] = field(default_factory=list)
+
+    def to_document(self) -> Dict[str, Any]:
+        """The provider as plain data."""
+        return {
+            "carrier": self.carrier,
+            "provider": self.provider,
+            "port": self.port,
+            "meter": self.meter,
+            "consumers": [consumer.to_document() for consumer in self.consumers],
+        }
+
+
+@dataclass(frozen=True)
 class NotLowered:
     """A construct the expansion met that a later step of the assemblies work lowers.
 
@@ -528,7 +674,7 @@ class NotLowered:
 
     def text(self) -> str:
         """The construct as a message lists it."""
-        return f"{self.where} — not lowered in step 1a, delivered by {self.step}"
+        return f"{self.where} — not lowered yet, delivered by {self.step}"
 
 
 @dataclass
@@ -538,7 +684,8 @@ class ImportRecord:
     ``instances`` lists every import and instance at every depth, each after the imports nested in
     it (the expansion works innermost first); ``decisions`` lists every port binding in the order
     it was made, an inner assembly's before its importer's; ``sequence`` is the final evaluation
-    sequence with each component's order path.
+    sequence with each component's order path; ``circuits`` lists every bound hydronic circuit
+    with both its ends, and ``carriers`` every provider of a carrier with the needs bound to it.
 
     An expansion that imported nothing produces an empty record, which keeps every consumer free
     of a case distinction, as :class:`~hisim.energy_system.groups.ExpansionRecord` does.
@@ -551,6 +698,16 @@ class ImportRecord:
     not_lowered: List[NotLowered] = field(default_factory=list)
     source_map: SourceMap = field(default_factory=SourceMap)
     decisions: List[str] = field(default_factory=list)
+    circuits: List[CircuitRecord] = field(default_factory=list)
+    carriers: List[CarrierRecord] = field(default_factory=list)
+
+    def carrier(self, carrier: str) -> List[CarrierRecord]:
+        """The providers of one carrier."""
+        return [record for record in self.carriers if record.carrier == carrier]
+
+    def circuit(self, circuit: str) -> List[CircuitRecord]:
+        """The bound circuits of one medium."""
+        return [record for record in self.circuits if record.circuit == circuit]
     port_provenance: List[LoweredPort] = field(default_factory=list)
 
     @property
@@ -603,5 +760,7 @@ class ImportRecord:
             ],
             "not_lowered": [item.text() for item in self.not_lowered],
             "bindings": list(self.decisions),
+            "circuits": [record.to_document() for record in self.circuits],
+            "carriers": [record.to_document() for record in self.carriers],
             PortProvenance.METADATA_KEY: [entry.to_document() for entry in self.port_provenance],
         }

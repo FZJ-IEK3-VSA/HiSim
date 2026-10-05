@@ -302,7 +302,9 @@ class EnergySystemExecutor:
                 expanded,
                 configured,
                 self.simulation_parameters,
-                declared_outputs=[entry.item for entry in provenance if entry.kind == LoweredKind.PROVIDED],
+                declared_outputs=[
+                    entry.item for entry in provenance if entry.kind in (LoweredKind.PROVIDED, LoweredKind.FEED)
+                ],
             )
             PortProvenance.check_bound_outputs(provenance, wired.wires)
         except EnergySystemCatalogueError as error:
@@ -335,8 +337,9 @@ class EnergySystemExecutor:
 
         A run that expanded imports has it in its import record. A re-run of a realized record
         expands nothing, so it reads the table the record's metadata carries, and a refusal on a
-        re-run names the port it named on the run. Its provided outputs are the outputs the
-        wiring checks without any item reading them. A file without imports yields an empty table.
+        re-run names the port it named on the run. Its provided and consuming outputs are the
+        outputs the wiring checks without any item reading them by name, a consuming output with
+        its carrier and its meter. A file without imports yields an empty table.
 
         Args:
             model: The expanded file, whose metadata a re-run's table comes from.

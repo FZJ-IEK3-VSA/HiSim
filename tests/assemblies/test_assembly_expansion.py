@@ -347,10 +347,6 @@ kind: assembly
 name: cycle/{name}
 imports:
   inner: {{assembly: cycle/{other}}}
-components:
-  Sky:
-    class: tests.assemblies.mock_components.MockWeather
-    preset: standard
 """
 
 
@@ -358,8 +354,8 @@ components:
 def test_a_cycle_of_imports_is_refused(tmp_path: Path) -> None:
     """An assembly importing itself through another is refused, naming the chain."""
     library = Library(tmp_path)
-    library.add("cycle/a", CYCLE.format(name="a", other="b"), probe="Sky")
-    library.add("cycle/b", CYCLE.format(name="b", other="a"), probe="Sky")
+    library.add("cycle/a", CYCLE.format(name="a", other="b"), contract=True)
+    library.add("cycle/b", CYCLE.format(name="b", other="a"), contract=True)
 
     with pytest.raises(EnergySystemAssemblyError, match="EF-73 .*cycle/a → cycle/b → cycle/a"):
         expand_text(site(WEATHER) + "imports:\n  x: {assembly: cycle/a}\n", library.resolver())
@@ -373,7 +369,7 @@ def test_nesting_deeper_than_four_is_refused(tmp_path: Path) -> None:
         library.add(
             f"deep/l{level}",
             CYCLE.format(name=f"l{level}", other=f"l{level + 1}").replace("cycle/", "deep/"),
-            probe="Sky",
+            contract=True,
         )
 
     with pytest.raises(EnergySystemAssemblyError, match="EF-74 .*nest 5 deep"):
@@ -382,7 +378,7 @@ def test_nesting_deeper_than_four_is_refused(tmp_path: Path) -> None:
 
 @pytest.mark.base
 def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -> None:
-    """Circuit, carrier and fact ports and selectors are parsed and recorded, and the file is refused."""
+    """Selectors, controllable outputs, many-reads, fact exports and ``$fact`` are recorded and refused (EF-7L)."""
     library = Library(tmp_path)
     library.add(
         "later/everything",
@@ -395,15 +391,17 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
             class: tests.assemblies.mock_components.MockTank
             preset: standard
             config: {volume_in_liter: {$fact: storage_volume}}
+          Battery:
+            class: tests.assemblies.mock_components.MockBattery
+            preset: sized_to_pv
         interface:
           needs:
-            circuit: {circuit: dhw, member: Tank}
-            fuel: {carrier: NATURAL_GAS, outputs: [loss]}
-            size: {fact: number_of_apartments, into: [Tank]}
+            pv_power: {fact: pv_peak_power_in_watt, many: true, into: [Battery]}
           provides:
             loss: {output: Tank.HeatLoss, controllable: {via: x}}
+            capacity: {fact: pv_peak_power_in_watt, export: true}
         """,
-        probe="Tank",
+        contract=True,
     )
 
     with pytest.raises(EnergySystemAssemblyError) as raised:
@@ -414,12 +412,12 @@ def test_a_construct_a_later_step_lowers_is_refused_and_listed(tmp_path: Path) -
     message = str(raised.value)
     assert "EF-7L" in message
     for construct in (
-        "import x: observes — not lowered in step 1a, delivered by hisim-lt0b.3",
-        "x: port circuit (circuit) — not lowered in step 1a, delivered by hisim-lt0b.2",
-        "x: port fuel (carrier)",
-        "x: port size (fact)",
+        "import x: observes — not lowered yet, delivered by hisim-lt0b.3",
+        "x: port pv_power (fact, many: true) — not lowered yet, delivered by hisim-lt0b.4",
+        "x: port capacity (fact export) — not lowered yet, delivered by hisim-lt0b.4",
         "x: port loss (controllable)",
-        "x: member Tank config.volume_in_liter ($fact)",
+        "x: member Tank config.volume_in_liter ($fact) — not lowered yet, delivered by no step: the sizing engine "
+        "reads a fact only through a law its class declares on the field",
     ):
         assert construct in message, construct
 
@@ -522,3 +520,21 @@ def test_the_substitution_keeps_the_type_of_a_sequence() -> None:
 
     assert substituted == {"pair": ({"a": 1}, 5), "list": [5]}
     assert isinstance(substituted["pair"], tuple) and isinstance(substituted["list"], list)
+
+
+@pytest.mark.base
+def test_a_display_template_that_does_not_render_the_resolved_values_is_refused(tmp_path: Path) -> None:
+    """EF-76: the spec fits a float, the resolved value is none."""
+    library = Library(tmp_path)
+    library.add(
+        "mock/displayed",
+        (Mocks.LIBRARY / "mock" / "pv_array.assembly.yaml")
+        .read_text(encoding="utf-8")
+        .replace("name: mock/pv_array", "name: mock/displayed")
+        .replace('display: "PV array, {facing}, azimuth {azimuth_in_degree}"', 'display: "Share {share_of_roof:.2f}"'),
+    )
+
+    with pytest.raises(EnergySystemAssemblyError, match=r"EF-76 at mock/displayed.assembly.yaml: components.PVSystem."
+                       r"display: the display template 'Share \{share_of_roof:.2f\}' of 'PVSystem' does not render "
+                       r"with share_of_roof=None"):
+        expand_text(site(WEATHER) + "imports:\n  pv: {assembly: mock/displayed}\n", library.resolver())

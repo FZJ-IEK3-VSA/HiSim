@@ -5,8 +5,9 @@
 schema (:attr:`AssemblySchemaBuilder.FILENAME`). The assembly schema is format-only — an assembly
 names its members' classes as plain dotted strings, and whether they exist is the library check's
 question — and it states the library contract of D24 as schema rules: every parameter carries a
-description, every numeric parameter a ``range``, and the file a ``tests`` block with at least one
-``monotone`` entry. Validating a draft against it therefore lists exactly what the draft still owes.
+description, every numeric parameter a ``range``, and the file a ``tests`` block, with at least one
+``monotone`` entry when it has a numeric parameter. Validating a draft against it therefore lists
+exactly what the draft still owes.
 
 The blocks both files share — an import, its instances and verbs, a port, the ``{$port: …}``
 placeholder — are defined once here, in :class:`AssemblyFormatDefinitions`, and spliced into both;
@@ -21,7 +22,7 @@ from typing import Any, ClassVar, Dict, List
 
 from hisim import loadtypes as lt
 from hisim.energy_system.assemblies.model import AssemblyFile, ConstraintKind, ParameterType, MonotoneDirection
-from hisim.energy_system.imports_model import BindingVerbs, InstanceEntry
+from hisim.energy_system.imports_model import BindingVerbs, InstanceEntry, ReexportReference
 from hisim.energy_system.imports_reader import ImportsReader
 from hisim.energy_system.model import ComponentEntry
 from hisim.energy_system.schema_definitions import SharedSchemaDefinitions
@@ -69,7 +70,11 @@ class AssemblyFormatDefinitions:
                 "additionalProperties": {
                     "$ref": "#/$defs/port",
                     "propertyNames": {"not": {"enum": list(ImportsReader.CONDITION_KEYS)}},
-                    "description": "A site entry has no parameters, so its ports carry no required_when/active_when.",
+                    "properties": {"carrier": {"type": "string"}},
+                    "description": (
+                        "A site entry has no parameters, so its ports carry no required_when/active_when and a "
+                        "carrier is written as itself."
+                    ),
                 },
             },
             **cls.verb_properties(),
@@ -118,11 +123,18 @@ class AssemblyFormatDefinitions:
                     "partner": cls.names(),
                     "wires": {"type": "object", "additionalProperties": {"$ref": "#/$defs/name"}},
                     "output": {"$ref": "#/$defs/reference"},
-                    "from": {"$ref": "#/$defs/reference"},
+                    "from": {"type": "string", "pattern": ReexportReference.PATTERN.pattern},
                     "circuit": {"$ref": "#/$defs/name"},
                     "member": cls.names(),
-                    "carrier": {"type": ["string", "object"]},
-                    "outputs": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+                    "carrier": {
+                        "type": ["string", "object"],
+                        "description": (
+                            "An lt.EnergyBalanceCarrier value (natural_gas, electricity, heating_oil, ...) or a "
+                            "{$param: ...}/{$switch: ...} resolving to one (assemblies_spec.md §5)."
+                        ),
+                    },
+                    "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+                    "meter": {"$ref": "#/$defs/name"},
                     "fact": {"type": ["string", "object"]},
                     "many": {"type": "boolean"},
                     "export": {"type": "boolean"},
@@ -211,6 +223,7 @@ class AssemblySchemaBuilder:
         definitions = {**SharedSchemaDefinitions.names(), **SharedSchemaDefinitions.items()}
         definitions.update(AssemblyFormatDefinitions.definitions())
         definitions.update(self._own_definitions())
+        numeric = [kind.value for kind in ParameterType if kind.is_numeric]
         return {
             "$schema": self.DIALECT,
             "$id": self.FILENAME,
@@ -257,6 +270,24 @@ class AssemblySchemaBuilder:
                 "interface": {"$ref": "#/$defs/interface"},
                 "tests": {"$ref": "#/$defs/tests"},
             },
+            "allOf": [
+                {
+                    # D24 as decided: an assembly with a numeric parameter states at least one monotone entry.
+                    "if": {
+                        "required": ["parameters"],
+                        "properties": {
+                            "parameters": {
+                                "not": {
+                                    "additionalProperties": {
+                                        "not": {"properties": {"type": {"enum": numeric}}, "required": ["type"]}
+                                    }
+                                }
+                            }
+                        },
+                    },
+                    "then": {"properties": {"tests": {"properties": {"monotone": {"minItems": 1}}}}},
+                }
+            ],
             "$defs": definitions,
         }
 
@@ -371,7 +402,7 @@ class AssemblySchemaBuilder:
                 "required": ["bounds", "monotone"],
                 "properties": {
                     "bounds": {"type": "array", "items": {"$ref": "#/$defs/bounds"}},
-                    "monotone": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/monotone"}},
+                    "monotone": {"type": "array", "items": {"$ref": "#/$defs/monotone"}},
                     "expect": {"type": "array", "items": {"$ref": "#/$defs/expect"}},
                 },
             },
@@ -392,11 +423,14 @@ class AssemblySchemaBuilder:
             "monotone": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["parameter", "kpi", "member", "direction"],
+                "required": ["parameter", "kpi", "direction"],
                 "properties": {
                     "parameter": {"$ref": "#/$defs/name"},
                     "kpi": {"type": "string"},
-                    "member": {"$ref": "#/$defs/name"},
+                    "member": {
+                        "$ref": "#/$defs/name",
+                        "description": "The member reporting the KPI; omitted for a derived KPI, named alone.",
+                    },
                     "direction": {"enum": [direction.value for direction in MonotoneDirection]},
                 },
             },

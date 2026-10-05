@@ -1,0 +1,34 @@
+# Mock: a composite. Two inner PV arrays, an east and a west face, and no member of its own; its one
+# numeric parameter is tested through a derived KPI named alone (kpi: without member).
+schema_version: 4
+kind: assembly
+name: mock/pv_pair
+description: A mock east-west pair of PV arrays.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: 4000, range: {min: 500, max: 10000}, description: Peak power of each face.}
+
+presets:
+  standard: {}
+
+imports:
+  east:
+    assembly: mock/pv_array
+    parameters: {azimuth_in_degree: 90, facing: east, power_in_watt: {$param: power_in_watt}}
+  west:
+    assembly: mock/pv_array
+    parameters: {azimuth_in_degree: 270, facing: west, power_in_watt: {$param: power_in_watt}}
+
+interface:
+  needs:
+    weather_east: {from: east.weather}
+    weather_west: {from: west.weather}
+  provides:
+    production_east: {from: east.production}
+    production_west: {from: west.production}
+
+tests:
+  bounds: []
+  monotone:
+    - {parameter: power_in_watt, kpi: PV production, direction: increasing}

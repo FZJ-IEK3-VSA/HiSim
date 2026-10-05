@@ -38,10 +38,20 @@ class is one of its partner classes, and a verb decides every other case. In sco
 level, the site entries and every member of every import at any depth, and inside an assembly its
 own members and every member of its inner imports; a port never binds into its own instance.
 
-**What this step does not lower** — circuit ports, carrier needs and fact ports (hisim-lt0b.2),
-observer and actuator selectors and controllable outputs (hisim-lt0b.3), and the ``$fact``,
-``$switch`` and ``$derived`` values — is listed in the import record and refused as a whole with
-``EF-7L``, never ignored.
+**Circuits, carriers and facts** (hisim-lt0b.2). A circuit end binds the one other end of its
+circuit in scope; every member at one end that carries the circuit's placeholder takes a bare name
+of each member at the other end, which the wiring expands through the reader's default connections
+from the owner's class, like any bare name (§3.2, §11.1). A carrier need binds the one provider of
+its carrier: a fuel lowers to a bare name of each consuming member in its provider's meter, which
+the wiring expands through the default feeds the meter declares, electricity to nothing but the
+check that exactly one provider exists (§5); the wiring also checks each consuming output's carrier
+and that the meter feeds exactly the named outputs. A fact need lowers to a
+``sizing_sources`` line naming the provider (§6). ``{$switch: …}`` values are resolved with the
+parameters.
+
+**What the expansion does not lower** — observer and actuator selectors and controllable outputs
+(hisim-lt0b.3), many-reads and fact exports (hisim-lt0b.4), and the ``$fact`` and ``$derived``
+values — is listed in the import record and refused as a whole with ``EF-7L``, never ignored.
 
 **Evaluation order** (D23): ``order:`` on a top-level component or import positions it, a member's
 relative ``order:`` positions it inside its assembly, an import's instances follow their written
@@ -56,9 +66,10 @@ from __future__ import annotations
 
 import string
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.config import AddressStep, ComponentID
+from hisim.config.contributions import declared_facts_of
 from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.library import require_valid
 from hisim.energy_system.assemblies.parameters import (
@@ -67,6 +78,10 @@ from hisim.energy_system.assemblies.parameters import (
     ResolvedParameters,
 )
 from hisim.energy_system.assemblies.record import (
+    CarrierConsumer,
+    CarrierRecord,
+    CircuitEndRecord,
+    CircuitRecord,
     ImportRecord,
     InstanceRecord,
     LoweredKind,
@@ -76,6 +91,7 @@ from hisim.energy_system.assemblies.record import (
     SourceMapEntry,
     short_class_name,
 )
+from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import (
@@ -84,6 +100,8 @@ from hisim.energy_system.errors import (
 )
 from hisim.energy_system.imports_model import (
     BindingVerbs,
+    Carriers,
+    CircuitNaming,
     ImportEntry,
     ObservesPlaceholder,
     ParameterReference,
@@ -93,6 +111,7 @@ from hisim.energy_system.imports_model import (
     PortState,
 )
 from hisim.energy_system.model import (
+    AggregatorFeed,
     AnyInputItem,
     ComponentEntry,
     DefaultInputs,
@@ -158,6 +177,8 @@ class Unit:
     block_path: Tuple[str, ...]
     lowered: Dict[int, List[AnyInputItem]] = field(default_factory=dict)
     notes: Dict[int, str] = field(default_factory=dict)
+    lowered_sizing: Dict[str, SourceReference] = field(default_factory=dict)
+    sizing_notes: Dict[str, str] = field(default_factory=dict)
 
     @property
     def class_path(self) -> str:
@@ -182,6 +203,66 @@ class Landing:
     placeholder: PortPlaceholder
 
 
+@dataclass(eq=False)
+class CircuitEndState:
+    """One end of a hydronic circuit while the expansion binds it (§3.2, §11.1).
+
+    Shared between an inner import's circuit handle and the outer handle that re-exports it, so a
+    binding seen from either is seen from both.
+
+    Attributes:
+        circuit: The circuit's name, its medium.
+        owner: The import path or site component holding the end.
+        port: The circuit port's name at the owner.
+        units: The members at this end.
+        bound_to: The other end, once bound.
+        declined: Whether ``none:`` declined it.
+    """
+
+    circuit: str
+    owner: str
+    port: str
+    units: List[Unit]
+    bound_to: Optional["CircuitEndState"] = None
+    declined: bool = False
+
+    @property
+    def label(self) -> str:
+        """How messages and the record name the end: ``heating.dhw``, ``HeatDistribution.sh``."""
+        return f"{self.owner}.{self.port}"
+
+
+@dataclass(eq=False)
+class Provision:
+    """One provider of a carrier while the expansion binds the needs to it (§5.1).
+
+    Attributes:
+        carrier: The carrier, an ``lt.EnergyBalanceCarrier`` value.
+        owner: The import path or site component providing it.
+        port: The providing port.
+        meter: The member metering a fuel, ``None`` for electricity.
+        landing: Where the consumers' feeds land in the meter, ``None`` for electricity.
+        record: The provider's record.
+    """
+
+    carrier: str
+    owner: str
+    port: str
+    meter: Optional[Unit]
+    landing: Optional["Landing"]
+    record: CarrierRecord
+
+    @property
+    def label(self) -> str:
+        """How messages name the provider: ``gas.connection``."""
+        return f"{self.owner}.{self.port}"
+
+    @property
+    def is_electricity(self) -> bool:
+        """Whether this is the electricity provider, which has no link end."""
+        return self.carrier == Carriers.ELECTRICITY
+
+
 @dataclass
 class Handle:
     """One port of an expanded instance or of a site entry, as its importer sees it.
@@ -194,10 +275,17 @@ class Handle:
         state: Its requirement state, :class:`PortState` ``REQUIRED``, ``OPTIONAL`` or ``INACTIVE``.
         landings: Where a need's items land; resolved through re-exports.
         provider: ``(component, output)`` of a provided output.
+        fact_provider: The component a provided fact comes from.
         own_units: The expanded names inside the owner, which are never its partners.
         chain: The source map of the owner's port.
         record: The port's record in the import record.
         decided: Whether a verb, an internal entry, a re-export or the default rule has decided it.
+        end: A circuit port's end.
+        provision: A carrier provision's provider.
+        carrier: A carrier port's carrier, resolved.
+        consumer_outputs: A carrier need's consuming outputs, as ``(unit, output)``.
+        fact: A fact port's fact, resolved.
+        fact_into: The units a fact need lowers into.
         hint: The candidates and the paste-ready verb lines a refusal of this port prints.
     """
 
@@ -213,11 +301,29 @@ class Handle:
     record: Dict[str, Any] = field(default_factory=dict)
     decided: bool = False
     hint: str = ""
+    end: Optional[CircuitEndState] = None
+    provision: Optional[Provision] = None
+    carrier: Optional[str] = None
+    consumer_outputs: List[Tuple[Unit, str]] = field(default_factory=list)
+    fact: Optional[str] = None
+    fact_into: List[Unit] = field(default_factory=list)
+    fact_provider: Optional[str] = None
 
     @property
     def partner_text(self) -> str:
         """The partner classes as a message lists them."""
         return ", ".join(self.port.partner) or "-"
+
+    @property
+    def partner_label(self) -> str:
+        """What the port binds to, as a message names it: ``partner MockWeather``, ``circuit dhw``."""
+        if self.port.kind == PortKind.CIRCUIT:
+            return f"circuit {self.end.circuit if self.end is not None else self.port.circuit}"
+        if self.port.kind == PortKind.CARRIER:
+            return f"carrier {self.carrier}"
+        if self.port.kind == PortKind.FACT:
+            return f"fact {self.fact}"
+        return f"partner {self.partner_text}"
 
     def source_text(self) -> str:
         """The handle's source map for a message."""
@@ -235,6 +341,41 @@ class Instance:
 
 
 @dataclass
+class Candidate:
+    """One partner a circuit end, a fuel need or a fact need may bind to.
+
+    Attributes:
+        reference: How a verb names it (``heating.dhw``, ``gas``, ``Building``).
+        label: How a message names it.
+        payload: What the lowering takes: the other circuit end's handle, the provider's handle,
+            or the providing component's expanded name.
+    """
+
+    reference: str
+    label: str
+    payload: Any
+
+
+@dataclass
+class CrossRule:
+    """How one port kind finds its candidates, resolves a verb's partner and lowers a binding.
+
+    Attributes:
+        candidates: The partners the default rule chooses from.
+        resolve: A verb's partner reference to the payload, or ``None`` with why it is absent.
+        lower: Lowers the binding to a payload under a verb (``default`` for the default rule).
+        ambiguous: The error a port with several candidates and no verb is refused with.
+        missing: The error, problem and remedy of a required port without a candidate.
+    """
+
+    candidates: List[Candidate]
+    resolve: Callable[[str], Tuple[Optional[Any], str]]
+    lower: Callable[[Any, str], None]
+    ambiguous: EnergySystemErrorId
+    missing: Callable[[], Tuple[EnergySystemErrorId, str, str]]
+
+
+@dataclass
 class Level:
     """One level of binding: the top of a file, or the inside of one assembly instance.
 
@@ -245,12 +386,35 @@ class Level:
         targets: How a verb at this level names a component or an import instance, to the
             units and the handles behind it.
         where_verbs: For a message: where the verbs of this level are written.
+        members: The references that name one component of the level itself — a site entry at the
+            top, a member inside an assembly — rather than an import instance.
+        handles: Every port in scope at this level with the reference its owner is named by: the
+            site entries' ports at the top, and every import instance's.
     """
 
     units: List[Unit]
     references: Dict[str, str]
     targets: Dict[str, Tuple[List[Unit], Dict[str, Handle]]]
     where_verbs: str
+    members: FrozenSet[str] = frozenset()
+    handles: List[Tuple[str, Handle]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Located:
+    """What a verb's partner reference names at one level (:meth:`ImportExpander._locate_target`).
+
+    Attributes:
+        head: How the level names the component or import instance.
+        units: Its units.
+        handles: Its ports.
+        port: The port the reference names after the head, or ``None`` when it names none.
+    """
+
+    head: str
+    units: List[Unit]
+    handles: Dict[str, Handle]
+    port: Optional[Handle]
 
 
 class ImportExpander:
@@ -271,6 +435,7 @@ class ImportExpander:
         self.classes = ClassFacts()
         self.record = ImportRecord()
         self._site_handles_cache: Dict[str, Dict[str, Handle]] = {}
+        self._provisions: List[Tuple[Provision, Handle]] = []
         self._checked: Set[str] = set()
         self._recorded: List[Tuple[InstanceRecord, Mapping[str, Handle]]] = []
 
@@ -331,8 +496,9 @@ class ImportExpander:
                 self._check_verbs_name_ports(entry.verbs, instance.handles, f"imports.{key}")
                 for handle in instance.handles.values():
                     handles.append((entry.verbs, handle))
-        for verbs, handle in handles:
+        for verbs, handle in self._decision_order(handles):
             self._decide(handle, verbs, level, top=True)
+        self._check_provisions()
         self._order_top(site_units, instances)
         for record, instance_handles in self._recorded:
             record.ports = [self._port_record(handle) for handle in instance_handles.values()]
@@ -529,24 +695,32 @@ class ImportExpander:
             reserved=dict(reserved),
         )
         selected, dropped = self._select_variants(assembly, parameters, record, where)
+        selections = {**dict(parameters.resolved), **record.variants}
         states = {name: self._state(port, parameters.resolved) for name, port in model.ports.items()}
         for name, port in model.ports.items():
             if states[name] != PortState.INACTIVE:
                 self._note_unlowered_port(import_path, port)
         units = {
             name: self._member_unit(
-                assembly, template, parameters, path, chain, selected, dropped, f"{where}, {source}"
+                assembly, template, parameters, selections, path, chain, selected, dropped, f"{where}, {source}"
             )
             for name, template in selected.items()
         }
         for name, unit in units.items():
             record.members[unit.name] = {"member": name}
-            display = self._display(selected[name], parameters, assembly, where)
-            if display is not None:
-                record.members[unit.name]["display_name"] = display
+            if unit.identity is not None and unit.identity.display_name is not None:
+                record.members[unit.name]["display_name"] = unit.identity.display_name
         inner: Dict[str, List[Tuple[Optional[str], Instance]]] = {}
         for key, entry in model.imports.items():
-            inner[key] = self._expand_inner_import(assembly, key, entry, parameters, path, chain, stack)
+            inner[key] = self._expand_inner_import(
+                assembly,
+                key,
+                entry,
+                ParameterSubstitution(parameters.resolved, selections=selections),
+                path,
+                chain,
+                stack,
+            )
         all_units: List[Unit] = list(units.values())
         for results in inner.values():
             for _key, instance in results:
@@ -558,7 +732,7 @@ class ImportExpander:
             import_entries=model.imports,
             where_verbs=f"'{assembly.label}'",
         )
-        handles = self._own_handles(assembly, units, inner, states, path, chain)
+        handles = self._own_handles(assembly, units, inner, states, selections, path, chain)
         self._bind_inside(assembly, level, inner, units, import_path)
         self._check_placeholders(assembly, units, where)
         self._order_level(assembly, units, inner, where)
@@ -574,7 +748,7 @@ class ImportExpander:
         assembly: ResolvedAssembly,
         key: str,
         entry: ImportEntry,
-        parameters: ResolvedParameters,
+        substitution: ParameterSubstitution,
         path: Tuple[AddressStep, ...],
         chain: Tuple[SourceLocation, ...],
         stack: Tuple[str, ...],
@@ -582,7 +756,6 @@ class ImportExpander:
         """Expands one inner import of an assembly, its parameters substituted from the outer ones."""
         self._note_import_selectors(f"{self.path_text(path)} → {key}", entry)
         inner_assembly = self.resolver.resolve(entry.assembly, f"{assembly.label}: imports.{key}")
-        substitution = ParameterSubstitution(parameters.resolved)
         results: List[Tuple[Optional[str], Instance]] = []
         for instance_key, preset, given, location in self._instances_of(entry, ("imports", key), assembly.lines):
             results.append(
@@ -639,35 +812,54 @@ class ImportExpander:
             return PortState.INACTIVE
         if port.required_when:
             return PortState.REQUIRED if self._holds(port.required_when, values) else PortState.INACTIVE
-        if port.kind in (PortKind.PROVIDED,) or port.optional:
+        if port.section == "provides" or port.is_provision or port.optional:
             return PortState.OPTIONAL
         return PortState.REQUIRED
 
+    #: The bead that delivers sizing over all providers and fact exports (§6, §13 step 3).
+    MANY_SIZING_STEP = "hisim-lt0b.4 (Many with Sum, fact exports; spec §6, §13 step 3)"
+
     def _note_unlowered_port(self, import_path: str, port: Port) -> None:
-        """Notes an active port this step does not lower."""
-        if not port.kind.lowered_in_step_1a:
+        """Notes an active port, or a part of one, the expansion does not lower yet."""
+        if not port.kind.is_lowered:
             self.not_lowered(f"{import_path}: port {port.name} ({port.kind.value})", port.kind.delivering_step)
         if port.kind == PortKind.PROVIDED and "controllable" in port.raw:
             self.not_lowered(
                 f"{import_path}: port {port.name} (controllable)",
                 "hisim-lt0b.3 (observe and actuate selectors, controller lowering)",
             )
+        if port.kind == PortKind.FACT and port.many:
+            self.not_lowered(f"{import_path}: port {port.name} (fact, many: true)", self.MANY_SIZING_STEP)
+        if port.kind == PortKind.FACT and "export" in port.raw:
+            self.not_lowered(f"{import_path}: port {port.name} (fact export)", self.MANY_SIZING_STEP)
 
     def _member_unit(
         self,
         assembly: ResolvedAssembly,
         template: MemberTemplate,
         parameters: ResolvedParameters,
+        selections: Mapping[str, Any],
         path: Tuple[AddressStep, ...],
         chain: Tuple[SourceLocation, ...],
         selected: Mapping[str, MemberTemplate],
         dropped: FrozenSet[str],
         where: str,
     ) -> Unit:
-        """One member of an instance: parameters substituted, address given (the library check checked the units)."""
+        """One member of an instance: parameters and switches substituted, address given.
+
+        The library check has checked the units of the parameters. The member's identity carries its
+        address and the English display name its ``display:`` template renders over the resolved
+        parameters (§2.4), which reaches the component through its configuration's ``component_id``
+        and from there every KPI source.
+        """
         entry = template.entry
         name = entry.name
-        identity = ComponentID(name=name, path=path, assembly=assembly.path)
+        identity = ComponentID(
+            name=name,
+            path=path,
+            assembly=assembly.path,
+            display_name=self._display(template, parameters, assembly, where),
+        )
         location = f"{assembly.label}: {'.'.join(template.source_path)}"
         for key, value_path in ParameterSubstitution.unlowered_in(
             {"config": dict(entry.config), "arguments": dict(entry.constructor.arguments) if entry.constructor else {}}
@@ -683,7 +875,7 @@ class ImportExpander:
                     "hisim-lt0b.3 (observe and actuate selectors)",
                 )
 
-        substitution = ParameterSubstitution(parameters.resolved)
+        substitution = ParameterSubstitution(parameters.resolved, selections)
         config = substitution.apply(dict(entry.config))
         constructor = entry.constructor
         if constructor is not None:
@@ -716,21 +908,31 @@ class ImportExpander:
     def _display(
         self, template: MemberTemplate, parameters: ResolvedParameters, assembly: ResolvedAssembly, where: str
     ) -> Optional[str]:
-        """The member's English display name from its ``display:`` template (§2.4), or ``None``."""
+        """The member's English display name from its ``display:`` template (§2.4), or ``None``.
+
+        The library check has refused a template naming no parameter or formatting one by a spec
+        its type does not take; what is left is a value that does not fit the spec, ``none`` above
+        all, which is refused naming the value.
+
+        Raises:
+            EnergySystemAssemblyError: ``EF-76`` when the resolved values do not render.
+        """
         if template.display is None:
             return None
-        names = [name for _text, name, _spec, _conversion in string.Formatter().parse(template.display) if name]
-        unknown = [name for name in names if name not in parameters.resolved]
-        if unknown:
-            raise self.error(
-                EnergySystemErrorId.PORT_CONTRACT,
-                f"{assembly.label}: {'.'.join(template.source_path)}.display",
-                f"the display template of '{template.name}' names {', '.join(unknown)}, which "
-                f"{'is' if len(unknown) == 1 else 'are'} no parameter of '{assembly.path}' ({where}).",
-                alternatives=tuple(parameters.resolved),
-                alternatives_label="parameters",
+        try:
+            return template.display.format(**parameters.resolved)
+        except (TypeError, ValueError) as error:
+            values = ", ".join(
+                f"{name}={parameters.resolved[name]!r}"
+                for _text, name, _spec, _conversion in string.Formatter().parse(template.display)
+                if name
             )
-        return template.display.format(**parameters.resolved)
+            raise self.error(
+                EnergySystemErrorId.PARAMETER_INVALID,
+                f"{assembly.label}: {'.'.join(template.source_path)}.display",
+                f"the display template '{template.display}' of '{template.name}' does not render with {values} "
+                f"({where}): {error}.",
+            ) from error
 
     # ------------------------------------------------------------------------------------------- ports
 
@@ -740,13 +942,18 @@ class ImportExpander:
         units: Mapping[str, Unit],
         inner: Mapping[str, List[Tuple[Optional[str], Instance]]],
         states: Mapping[str, PortState],
+        selections: Mapping[str, Any],
         path: Tuple[AddressStep, ...],
         chain: Tuple[SourceLocation, ...],
     ) -> Dict[str, Handle]:
-        """The ports an instance offers its importer, resolved to landings and providers."""
+        """The ports an instance offers its importer, resolved to landings, ends, providers and facts."""
         import_path = self.path_text(path)
         own_units = frozenset(unit.name for unit in units.values()) | frozenset(
             unit.name for results in inner.values() for _key, instance in results for unit in instance.units
+        )
+        substitution = ParameterSubstitution(
+            {name: value for name, value in selections.items() if name in assembly.model.parameters},
+            selections=selections,
         )
         handles: Dict[str, Handle] = {}
         for name, port in assembly.model.ports.items():
@@ -764,6 +971,7 @@ class ImportExpander:
                 own_units=own_units,
                 chain=port_chain,
             )
+            location = f"{assembly.label}: interface.{port.section}.{name}"
             if port.kind == PortKind.NEED:
                 for member in port.into:
                     unit = units.get(member)
@@ -775,7 +983,7 @@ class ImportExpander:
                 if handle.state != PortState.INACTIVE and not handle.landings:
                     raise self.error(
                         EnergySystemErrorId.PORT_CONTRACT,
-                        f"{assembly.label}: interface.{port.section}.{name}",
+                        location,
                         f"the port '{name}' is active, but none of its members {', '.join(port.into)} exists with "
                         f"these parameters or carries a '{{$port: {name}}}' placeholder {handle.source_text()}.",
                     )
@@ -786,7 +994,7 @@ class ImportExpander:
                     if handle.state != PortState.INACTIVE:
                         raise self.error(
                             EnergySystemErrorId.PORT_CONTRACT,
-                            f"{assembly.label}: interface.{port.section}.{name}",
+                            location,
                             f"the provided port '{name}' names the member '{provider_member}', which does not exist "
                             f"with these parameters {handle.source_text()}.",
                         )
@@ -794,52 +1002,261 @@ class ImportExpander:
                     handle.provider = (unit.name, output or "")
                     if handle.state != PortState.INACTIVE:
                         self._note_lowered(handle, LoweredKind.PROVIDED, unit, "", output=output or "")
+            elif port.kind == PortKind.CIRCUIT:
+                self._circuit_handle(handle, [units[member] for member in port.members if member in units], location)
+            elif port.kind == PortKind.CARRIER:
+                self._carrier_handle(handle, assembly, units, substitution.apply(port.carrier), location)
+            elif port.kind == PortKind.FACT:
+                self._fact_handle(handle, units, substitution.apply(port.fact), location)
             elif port.kind == PortKind.REEXPORT:
-                inner_key, inner_port = (port.reexports or ".").split(".", 1)
-                results = inner.get(inner_key)
-                if results is None:
-                    raise self.error(
-                        EnergySystemErrorId.PORT_CONTRACT,
-                        f"{assembly.label}: interface.{port.section}.{name}",
-                        f"the port '{name}' re-exports '{port.reexports}', but '{inner_key}' is no inner import of "
-                        f"'{assembly.path}' {handle.source_text()}.",
-                        alternatives=tuple(inner),
-                        alternatives_label="inner imports",
-                    )
-                for _instance_key, instance in results:
-                    inner_handle = instance.handles.get(inner_port)
-                    if inner_handle is None:
-                        raise self.error(
-                            EnergySystemErrorId.PORT_CONTRACT,
-                            f"{assembly.label}: interface.{port.section}.{name}",
-                            f"the port '{name}' re-exports '{port.reexports}', but the inner import '{inner_key}' "
-                            f"has no port '{inner_port}' {handle.source_text()}.",
-                            alternatives=tuple(instance.handles),
-                            alternatives_label="ports",
-                        )
-                    inner_handle.decided = True
-                    inner_handle.record = {"state": PortState.REEXPORTED, "partner": f"as {import_path}.{name}"}
-                    handle.landings.extend(inner_handle.landings)
-                    handle.provider = handle.provider or inner_handle.provider
-                    handle.port = handle.port.model_copy(
-                        update={
-                            "kind": inner_handle.port.kind,
-                            "partner": inner_handle.port.partner,
-                            "wires": inner_handle.port.wires,
-                            "output": inner_handle.port.output,
-                        }
-                    )
-                    if handle.state != PortState.INACTIVE:
-                        handle.state = (
-                            PortState.INACTIVE
-                            if inner_handle.state == PortState.INACTIVE
-                            else (PortState.OPTIONAL if port.optional else inner_handle.state)
-                        )
+                self._reexport(handle, assembly, inner, import_path, location)
             handles[name] = handle
         return handles
 
+    def _reexport(
+        self,
+        handle: Handle,
+        assembly: ResolvedAssembly,
+        inner: Mapping[str, List[Tuple[Optional[str], Instance]]],
+        import_path: str,
+        location: str,
+    ) -> None:
+        """Resolves a re-exported port to what the one inner port it names resolved to.
+
+        ``from: <inner import>.<port>`` names the port of a single import, ``from: <inner
+        import>[<instance>].<port>`` the port of one instance; the library check has refused a
+        re-export of a multi-instance import that names no instance. The outer port takes the inner
+        port's whole resolved surface and keeps only its own name, place, state and block
+        (:attr:`Port.OUTER_FIELDS`).
+        """
+        port = handle.port
+        name = port.name
+        reference = port.reexport
+        if reference is None:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                location,
+                f"the port '{name}' re-exports {port.reexports!r}, which names no inner port "
+                f"{handle.source_text()}.",
+            )
+        results = [
+            instance
+            for instance_key, instance in inner.get(reference.inner, [])
+            if reference.instance is None or instance_key == reference.instance
+        ]
+        if len(results) != 1:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                location,
+                f"the port '{name}' re-exports '{reference.text}', which names {len(results)} instances of inner "
+                f"imports of '{assembly.path}', not one {handle.source_text()}.",
+                alternatives=tuple(inner),
+                alternatives_label="inner imports",
+            )
+        inner_handle = results[0].handles.get(reference.port)
+        if inner_handle is None:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                location,
+                f"the port '{name}' re-exports '{reference.text}', but the inner import '{reference.inner}' "
+                f"has no port '{reference.port}' {handle.source_text()}.",
+                alternatives=tuple(results[0].handles),
+                alternatives_label="ports",
+            )
+        inner_handle.decided = True
+        inner_handle.record = {"state": PortState.REEXPORTED, "partner": f"as {import_path}.{name}"}
+        handle.landings = list(inner_handle.landings)
+        handle.provider = inner_handle.provider
+        handle.fact_provider = inner_handle.fact_provider
+        handle.end = inner_handle.end
+        handle.provision = inner_handle.provision
+        handle.carrier = inner_handle.carrier
+        handle.consumer_outputs = list(inner_handle.consumer_outputs)
+        handle.fact = inner_handle.fact
+        handle.fact_into = list(inner_handle.fact_into)
+        handle.port = inner_handle.port.model_copy(
+            update={field: getattr(port, field) for field in Port.OUTER_FIELDS}
+        )
+        if handle.state != PortState.INACTIVE:
+            handle.state = (
+                PortState.INACTIVE
+                if inner_handle.state == PortState.INACTIVE
+                else (PortState.OPTIONAL if port.optional else inner_handle.state)
+            )
+        if handle.end is not None:
+            # The end is the inner one, seen from outside under the outer port's name.
+            handle.end.owner, handle.end.port = import_path, name
+
+    def _circuit_handle(self, handle: Handle, members: List[Unit], location: str) -> None:
+        """Gives a circuit port its end: its members and the placeholders their partner items land at."""
+        port = handle.port
+        name = port.name
+        if handle.state != PortState.INACTIVE and not members:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                location,
+                f"the circuit port '{name}' is active, but none of its members {', '.join(port.members)} exists "
+                f"with these parameters {handle.source_text()}.",
+            )
+        for unit in members:
+            positions = unit.placeholder_positions(name)
+            if len(positions) > 1:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    location,
+                    f"'{unit.name}' carries {len(positions)} placeholders for the circuit port '{name}'; a circuit "
+                    f"lands its partner items once {handle.source_text()}.",
+                )
+            for position, placeholder in positions:
+                handle.landings.append(Landing(unit=unit, position=position, placeholder=placeholder))
+        handle.end = CircuitEndState(
+            circuit=port.circuit or "", owner=handle.owner_path, port=name, units=list(members)
+        )
+
+    def _carrier_handle(
+        self,
+        handle: Handle,
+        assembly: Optional[ResolvedAssembly],
+        units: Mapping[str, Unit],
+        carrier: Any,
+        location: str,
+    ) -> None:
+        """Gives a carrier port its carrier, and a need its consuming outputs or a provision its meter (§5.1)."""
+        port = handle.port
+        name = port.name
+        if handle.state == PortState.INACTIVE:
+            return
+        if not Carriers.is_carrier(carrier):
+            raise self.error(
+                EnergySystemErrorId.CARRIER_MISMATCH,
+                location,
+                f"the carrier port '{name}' resolves to the carrier {carrier!r}, which is no energy carrier "
+                f"{handle.source_text()}.",
+                alternatives=Carriers.names(),
+                alternatives_label="carriers (lt.EnergyBalanceCarrier values)",
+                offending_value=str(carrier),
+            )
+        handle.carrier = carrier
+        if port.is_provision:
+            electricity = carrier == Carriers.ELECTRICITY
+            meter = units.get(port.meter) if port.meter is not None else None
+            if electricity and port.meter is not None:
+                raise self.error(
+                    EnergySystemErrorId.CARRIER_PROVIDER,
+                    location,
+                    f"the electricity provision '{name}' names the meter '{port.meter}'; electricity has no link, "
+                    f"so nothing lands in a meter through this port {handle.source_text()}.",
+                    remedy="Drop 'meter:'; the meter's selection is written as observes: (hisim-lt0b.3).",
+                )
+            landing: Optional[Landing] = None
+            if not electricity:
+                if meter is None:
+                    raise self.error(
+                        EnergySystemErrorId.CARRIER_PROVIDER,
+                        location,
+                        f"the provision of '{carrier}' ('{name}') names no meter that exists with these parameters; a "
+                        f"fuel's consumers are fed into its provider's meter {handle.source_text()}.",
+                    )
+                positions = meter.placeholder_positions(name)
+                if len(positions) != 1:
+                    raise self.error(
+                        EnergySystemErrorId.PORT_CONTRACT,
+                        location,
+                        f"the meter '{meter.name}' of the provision '{name}' carries {len(positions)} "
+                        f"'{{$port: {name}}}' placeholders; its consumers' feeds land at exactly one "
+                        f"{handle.source_text()}.",
+                    )
+                landing = Landing(unit=meter, position=positions[0][0], placeholder=positions[0][1])
+            record = CarrierRecord(
+                carrier=carrier, provider=handle.owner_path, port=name, meter=meter.name if meter else None
+            )
+            handle.provision = Provision(
+                carrier=carrier, owner=handle.owner_path, port=name, meter=meter, landing=landing, record=record
+            )
+            self._provisions.append((handle.provision, handle))
+            return
+        for item in port.outputs:
+            if "." in item:
+                member, output = item.split(".", 1)
+            elif assembly is None:
+                member, output = next(iter(units)), item
+            else:
+                provided = assembly.model.ports.get(item)
+                if provided is None or provided.kind != PortKind.PROVIDED:
+                    raise self.error(
+                        EnergySystemErrorId.PORT_CONTRACT,
+                        location,
+                        f"the carrier need '{name}' names '{item}', which is no provided output of "
+                        f"'{assembly.path}' {handle.source_text()}.",
+                    )
+                member, output = provided.output_member or "", provided.output_name or ""
+            unit = units.get(member)
+            if unit is None:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    location,
+                    f"the carrier need '{name}' is active, but its consuming output '{item}' names the member "
+                    f"'{member}', which does not exist with these parameters {handle.source_text()}.",
+                )
+            handle.consumer_outputs.append((unit, output))
+
+    def _fact_handle(self, handle: Handle, units: Mapping[str, Unit], fact: Any, location: str) -> None:
+        """Gives a fact port its fact, and a need the members it lowers into or a provision its provider (§6)."""
+        port = handle.port
+        name = port.name
+        if handle.state == PortState.INACTIVE or port.many or (port.is_provision and not port.members):
+            # A many-read and a fact export are step 3's; the expansion refuses them (EF-7L) at the end.
+            handle.fact = fact if isinstance(fact, str) else None
+            return
+        if not isinstance(fact, str) or not fact:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                location,
+                f"the fact port '{name}' resolves to {fact!r}, which is no fact name {handle.source_text()}.",
+            )
+        handle.fact = fact
+        if port.is_provision:
+            unit = units.get(port.members[0])
+            if unit is None:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    location,
+                    f"the provided fact '{name}' names the member '{port.members[0]}', which does not exist with "
+                    f"these parameters {handle.source_text()}.",
+                )
+            self._require_contribution(handle, unit, fact, location)
+            handle.fact_provider = unit.name
+            return
+        absent = [member for member in port.into if member not in units]
+        if absent:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                location,
+                f"the fact port '{name}' is active, but its member{'s' if len(absent) > 1 else ''} "
+                f"{', '.join(absent)} {'do' if len(absent) > 1 else 'does'} not exist with these parameters "
+                f"{handle.source_text()}.",
+                remedy="Make the port inactive when the member is left out (active_when), or lower it into members "
+                "that exist.",
+            )
+        handle.fact_into = [units[member] for member in port.into]
+
+    def _require_contribution(self, handle: Handle, unit: Unit, fact: str, location: str) -> None:
+        """Refuses a provided fact that the member's class does not declare in ``SIZING_CONTRIBUTIONS``."""
+        config_class = self.classes.config_class(unit.class_path, f"components.{unit.name}", unit.name)
+        declared = declared_facts_of(config_class)
+        if fact not in declared:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                location,
+                f"the provided fact '{handle.port.name}' names '{fact}', which {config_class.__name__} (member "
+                f"{unit.name}) does not declare in its SIZING_CONTRIBUTIONS {handle.source_text()}.",
+                alternatives=declared,
+                alternatives_label=f"facts {config_class.__name__} contributes",
+                offending_value=fact,
+            )
+
     def _site_handles(self, unit: Unit) -> Dict[str, Handle]:
-        """The ports of one site entry: needs whose landing is the entry itself."""
+        """The ports of one site entry: needs and circuit ends at the entry itself, carriers it needs or provides."""
         if unit.name in self._site_handles_cache:
             return self._site_handles_cache[unit.name]
         handles: Dict[str, Handle] = {}
@@ -855,28 +1272,38 @@ class ImportExpander:
                 own_units=frozenset({unit.name}),
                 chain=(self.lines.location("components", unit.name, "ports", name),),
             )
-            if not port.kind.lowered_in_step_1a:
+            location = f"components.{unit.name}.ports.{name}"
+            if not port.kind.is_lowered:
                 self.not_lowered(f"component {unit.name}: port {name} ({port.kind.value})", port.kind.delivering_step)
-            for position, placeholder in unit.placeholder_positions(name):
-                handle.landings.append(Landing(unit=unit, position=position, placeholder=placeholder))
+            if port.kind == PortKind.CIRCUIT:
+                self._circuit_handle(handle, [unit], location)
+            elif port.kind == PortKind.CARRIER:
+                self._carrier_handle(handle, None, {unit.name: unit}, port.carrier, location)
+            else:
+                for position, placeholder in unit.placeholder_positions(name):
+                    handle.landings.append(Landing(unit=unit, position=position, placeholder=placeholder))
             if port.kind == PortKind.NEED and not handle.landings:
                 raise self.error(
                     EnergySystemErrorId.PORT_CONTRACT,
-                    f"components.{unit.name}.ports.{name}",
+                    location,
                     f"the port '{name}' of '{unit.name}' has no '{{$port: {name}}}' placeholder in the entry's "
                     f"inputs, so there is nowhere for its items to land {handle.source_text()}.",
                 )
             handles[name] = handle
         for placed in unit.entry.placeholders:
-            if isinstance(placed.placeholder, PortPlaceholder) and placed.placeholder.port not in unit.entry.ports:
-                raise self.error(
-                    EnergySystemErrorId.PORT_CONTRACT,
-                    f"components.{unit.name}.inputs[{placed.position}]",
-                    f"'{unit.name}' carries a placeholder for the port '{placed.placeholder.port}', which its "
-                    "'ports' block does not declare.",
-                    alternatives=tuple(unit.entry.ports),
-                    alternatives_label="ports",
-                )
+            if isinstance(placed.placeholder, PortPlaceholder):
+                declared = unit.entry.ports.get(placed.placeholder.port)
+                if declared is None or (declared.kind == PortKind.CARRIER and not declared.is_provision):
+                    raise self.error(
+                        EnergySystemErrorId.PORT_CONTRACT,
+                        f"components.{unit.name}.inputs[{placed.position}]",
+                        f"'{unit.name}' carries a placeholder for the port '{placed.placeholder.port}', which its "
+                        "'ports' block does not declare"
+                        + (" as one that lands in its inputs" if declared is not None else "")
+                        + ".",
+                        alternatives=tuple(unit.entry.ports),
+                        alternatives_label="ports",
+                    )
         self._site_handles_cache[unit.name] = handles
         return handles
 
@@ -905,9 +1332,12 @@ class ImportExpander:
         """Builds one binding level: who is in scope and how a verb names each."""
         references: Dict[str, str] = {}
         targets: Dict[str, Tuple[List[Unit], Dict[str, Handle]]] = {}
+        handles: List[Tuple[str, Handle]] = []
         for local, unit in members.items():
             references[unit.name] = local
-            targets[local] = ([unit], self._site_handles_cache.get(unit.name, {}) if unit.identity is None else {})
+            own = self._site_handles_cache.get(unit.name, {}) if unit.identity is None else {}
+            targets[local] = ([unit], own)
+            handles.extend((local, handle) for handle in own.values())
         for key, results in imports.items():
             entry = import_entries[key]
             for instance_key, instance in results:
@@ -915,9 +1345,17 @@ class ImportExpander:
                 for unit in instance.units:
                     references[unit.name] = reference
                 targets[reference] = (instance.units, instance.handles)
+                handles.extend((reference, handle) for handle in instance.handles.values())
             if entry.instances is not None and len(results) == 1:
                 targets.setdefault(key, targets[f"{key}.{results[0][0]}"])
-        return Level(units=units, references=references, targets=targets, where_verbs=where_verbs)
+        return Level(
+            units=units,
+            references=references,
+            targets=targets,
+            where_verbs=where_verbs,
+            members=frozenset(members),
+            handles=handles,
+        )
 
     def _candidates(self, handle: Handle, units: Sequence[Unit]) -> List[Unit]:
         """The units in scope whose class is one of the port's partner classes."""
@@ -936,20 +1374,11 @@ class ImportExpander:
             The partner unit (or ``None``), the provider ``(component, output)`` when the reference
             names a provided port, and a sentence explaining an absent partner.
         """
-        parts = target.split(".")
-        for length in range(len(parts), 0, -1):
-            head = ".".join(parts[:length])
-            if head in level.targets:
-                break
-        else:
-            return None, None, f"'{target}' names no component and no import of {level.where_verbs}"
-        units, handles = level.targets[head]
-        rest = parts[length:]
-        if rest:
-            port_name = rest[0]
-            partner_handle = handles.get(port_name)
-            if partner_handle is None or len(rest) > 1:
-                return None, None, f"'{head}' has no port '{'.'.join(rest)}'"
+        located, absent = self._locate_target(target, level)
+        if located is None:
+            return None, None, absent
+        head, units, partner_handle = located.head, located.units, located.port
+        if partner_handle is not None:
             if partner_handle.port.kind != PortKind.PROVIDED or partner_handle.provider is None:
                 return None, None, f"the port '{target}' provides no output a need can bind to"
             provider_unit = next(unit for unit in units if unit.name == partner_handle.provider[0])
@@ -968,14 +1397,14 @@ class ImportExpander:
             raise self.error(
                 EnergySystemErrorId.PARTNER_WITHOUT_DEFAULT_CONNECTIONS,
                 handle.owner,
-                f"port '{handle.port.name}' (partner {handle.partner_text}) is bound to '{target}', which holds no "
+                f"port '{handle.port.name}' ({handle.partner_label}) is bound to '{target}', which holds no "
                 f"component of that class (it holds {', '.join(unit.name for unit in units)}) {handle.source_text()}.",
                 remedy=handle.hint or None,
             )
         raise self.error(
             EnergySystemErrorId.PORT_AMBIGUOUS,
             handle.owner,
-            f"port '{handle.port.name}' (partner {handle.partner_text}) is bound to '{target}', which holds "
+            f"port '{handle.port.name}' ({handle.partner_label}) is bound to '{target}', which holds "
             f"{len(matching)} components of that class: {', '.join(unit.name for unit in matching)} "
             f"{handle.source_text()}.",
             remedy="Name the partner's provided port instead: bind: {" + handle.port.name + ": " + head + ".<port>}.",
@@ -984,6 +1413,12 @@ class ImportExpander:
     def _paste_lines(self, handle: Handle, candidates: Sequence[Unit], level: Level, optional: bool) -> str:
         """The paste-ready verb lines for a refusal."""
         references = list(dict.fromkeys(level.references.get(unit.name, unit.name) for unit in candidates))
+        return self._paste_references(handle, references, optional)
+
+    @staticmethod
+    def _paste_references(handle: Handle, references: Sequence[str], optional: bool) -> str:
+        """The paste-ready verb lines for a refusal, from the references a verb would write."""
+        references = list(dict.fromkeys(references))
         port = handle.port.name
         if not references:
             references = ["<partner>"]
@@ -1000,10 +1435,12 @@ class ImportExpander:
         self, handle: Handle, verbs: BindingVerbs, level: Level, *, top: bool
     ) -> None:
         """Decides one port by its verb or by the default rule, and lowers it (§3.1, §3.3)."""
-        if handle.decided:
-            return
         port = handle.port
         written = verbs.verb_for(port.name)
+        if handle.decided:
+            if port.kind == PortKind.CIRCUIT and written is not None:
+                self._confirm_circuit_verb(handle, written, level)
+            return
         if handle.state == PortState.INACTIVE:
             if written is not None:
                 raise self.error(
@@ -1019,16 +1456,33 @@ class ImportExpander:
             handle.record = {"state": PortState.INACTIVE}
             handle.decided = True
             return
-        if not port.kind.lowered_in_step_1a or port.kind == PortKind.PROVIDED:
-            if written is not None and port.kind == PortKind.PROVIDED:
+        if port.is_provision:
+            if written is not None:
                 raise self.error(
                     EnergySystemErrorId.PORT_CONTRACT,
                     handle.owner,
-                    f"port '{port.name}' is a provided output; a verb binds a need, and the need's owner binds to "
-                    f"this output ({handle.verb_site} writes '{written[0]}') {handle.source_text()}.",
+                    f"port '{port.name}' is a provided {self._provision_text(port)}; a verb binds a need, and the "
+                    f"need's owner binds to this port ({handle.verb_site} writes '{written[0]}') "
+                    f"{handle.source_text()}.",
                 )
-            handle.record = {"state": PortState.PROVIDED if port.kind == PortKind.PROVIDED else PortState.NOT_LOWERED}
+            handle.record = {"state": PortState.PROVIDED}
             handle.decided = True
+            return
+        if not port.kind.is_lowered or (port.kind == PortKind.FACT and port.many):
+            handle.record = {"state": PortState.NOT_LOWERED}
+            handle.decided = True
+            return
+        if port.kind == PortKind.CIRCUIT:
+            self._decide_cross(handle, written, level, top, self._circuit_rule(handle, level))
+            return
+        if port.kind == PortKind.CARRIER:
+            if handle.carrier == Carriers.ELECTRICITY:
+                self._decide_electricity(handle, written, level, top)
+            else:
+                self._decide_cross(handle, written, level, top, self._fuel_rule(handle, level))
+            return
+        if port.kind == PortKind.FACT:
+            self._decide_cross(handle, written, level, top, self._fact_rule(handle, level))
             return
         candidates = self._candidates(handle, level.units)
         handle.hint = (
@@ -1043,7 +1497,7 @@ class ImportExpander:
                     raise self.error(
                         EnergySystemErrorId.REQUIRED_PORT_DECLINED,
                         handle.owner,
-                        f"port '{port.name}' (partner {handle.partner_text}) is required, yet {handle.verb_site} "
+                        f"port '{port.name}' ({handle.partner_label}) is required, yet {handle.verb_site} "
                         "declines it with 'none:'; candidates: "
                         f"{', '.join(unit.name for unit in candidates) or 'none'} "
                         f"{handle.source_text()}.",
@@ -1067,7 +1521,7 @@ class ImportExpander:
                 raise self.error(
                     EnergySystemErrorId.BOUND_PARTNER_ABSENT,
                     handle.owner,
-                    f"port '{port.name}' (partner {handle.partner_text}) is bound to '{target}', but {absent}; "
+                    f"port '{port.name}' ({handle.partner_label}) is bound to '{target}', but {absent}; "
                     f"candidates: {', '.join(unit.name for unit in candidates) or 'none'} {handle.source_text()}.",
                     remedy=self._paste_lines(handle, candidates, level, optional=handle.state == PortState.OPTIONAL)
                     + (
@@ -1085,7 +1539,7 @@ class ImportExpander:
             raise self.error(
                 EnergySystemErrorId.PORT_AMBIGUOUS,
                 handle.owner,
-                f"port '{port.name}' (partner {handle.partner_text}) has {len(candidates)} candidates "
+                f"port '{port.name}' ({handle.partner_label}) has {len(candidates)} candidates "
                 f"{', '.join(unit.name for unit in candidates)} and no verb {handle.source_text()}.",
                 remedy=self._paste_lines(handle, candidates, level, optional=handle.state == PortState.OPTIONAL),
             )
@@ -1093,7 +1547,7 @@ class ImportExpander:
             raise self.error(
                 EnergySystemErrorId.OPTIONAL_PORT_UNDECIDED,
                 handle.owner,
-                f"optional port '{port.name}' (partner {handle.partner_text}) has 1 candidate {candidates[0].name} "
+                f"optional port '{port.name}' ({handle.partner_label}) has 1 candidate {candidates[0].name} "
                 f"and no verb {handle.source_text()}.",
                 remedy=self._paste_lines(handle, candidates, level, optional=True),
             )
@@ -1101,7 +1555,7 @@ class ImportExpander:
             raise self.error(
                 EnergySystemErrorId.INNER_PORT_UNRESOLVED,
                 handle.owner,
-                f"{handle.state.value} port '{port.name}' (partner {handle.partner_text}) of the inner import is "
+                f"{handle.state.value} port '{port.name}' ({handle.partner_label}) of the inner import is "
                 "neither bound "
                 f"nor re-exported inside {level.where_verbs}; candidates: none {handle.source_text()}.",
                 remedy=(
@@ -1120,7 +1574,7 @@ class ImportExpander:
         raise self.error(
             EnergySystemErrorId.PORT_WITHOUT_PARTNER,
             handle.owner,
-            f"required port '{port.name}' (partner {handle.partner_text}) has no partner in "
+            f"required port '{port.name}' ({handle.partner_label}) has no partner in "
             f"{level.where_verbs}; candidates: none {handle.source_text()}.",
             remedy=self._paste_lines(handle, candidates, level, optional=False)
             + f" naming a component of class {handle.partner_text}, after adding one.",
@@ -1176,26 +1630,753 @@ class ImportExpander:
         handle.decided = True
         self.record.decisions.append(f"{handle.owner_path}.{port.name} -> {partner.name} ({verb})")
 
+    # ------------------------------------------------------------------ circuits, carriers and facts
+
+    @staticmethod
+    def _provision_text(port: Port) -> str:
+        """What a provision provides, for a message."""
+        if port.kind == PortKind.CARRIER:
+            return "carrier"
+        if port.kind == PortKind.FACT:
+            return "fact"
+        return "output"
+
+    @staticmethod
+    def _locate_target(target: str, level: Level) -> Tuple[Optional["Located"], str]:
+        """Locates a verb's partner reference at one level: the component or instance, and the port it names.
+
+        Every verb resolves its partner through this one preamble: the longest prefix of the
+        reference that names a component or an import instance, then at most one port of it.
+
+        Returns:
+            What the reference names, or ``None`` with the sentence explaining why it names nothing.
+        """
+        parts = target.split(".")
+        for length in range(len(parts), 0, -1):
+            head = ".".join(parts[:length])
+            if head in level.targets:
+                units, handles = level.targets[head]
+                rest = parts[length:]
+                if not rest:
+                    return Located(head, units, handles, None), ""
+                port = handles.get(rest[0]) if len(rest) == 1 else None
+                if port is None:
+                    return None, f"'{head}' has no port '{'.'.join(rest)}'"
+                return Located(head, units, handles, port), ""
+        return None, f"'{target}' names no component and no import of {level.where_verbs}"
+
+    def _decide_cross(
+        self, handle: Handle, written: Optional[Tuple[str, Optional[str]]], level: Level, top: bool, rule: "CrossRule"
+    ) -> None:
+        """Decides a circuit end, a fuel need or a fact need by its verb or the default rule (§3.1, §3.3)."""
+        port = handle.port
+        optional = handle.state == PortState.OPTIONAL
+        listed = ", ".join(candidate.label for candidate in rule.candidates) or "none"
+        references = [candidate.reference for candidate in rule.candidates] or ["<partner>"]
+        handle.hint = f"Candidates: {listed}; " + self._paste_references(handle, references, optional) + "."
+        if written is not None:
+            verb, target = written
+            if verb == "none":
+                if handle.state == PortState.REQUIRED:
+                    raise self.error(
+                        EnergySystemErrorId.REQUIRED_PORT_DECLINED,
+                        handle.owner,
+                        f"port '{port.name}' ({handle.partner_label}) is required, yet {handle.verb_site} declines it "
+                        f"with 'none:'; candidates: {listed} {handle.source_text()}.",
+                        remedy=self._paste_references(handle, references, False) + "; a required port cannot be "
+                        "declined.",
+                    )
+                handle.record = {"state": PortState.DECLINED, "verb": "none"}
+                if handle.end is not None:
+                    handle.end.declined = True
+                handle.decided = True
+                return
+            assert target is not None
+            payload, absent = rule.resolve(target)
+            if payload is None:
+                if verb == "optional-bind":
+                    handle.record = {
+                        "state": handle.state,
+                        "verb": "optional-bind",
+                        "partner": f"not bound: partner absent ({absent})",
+                    }
+                    handle.decided = True
+                    return
+                raise self.error(
+                    EnergySystemErrorId.BOUND_PARTNER_ABSENT,
+                    handle.owner,
+                    f"port '{port.name}' ({handle.partner_label}) is bound to '{target}', but {absent}; candidates: "
+                    f"{listed} {handle.source_text()}.",
+                    remedy=self._paste_references(handle, references, optional),
+                )
+            rule.lower(payload, verb)
+            return
+        if len(rule.candidates) == 1 and handle.state == PortState.REQUIRED:
+            rule.lower(rule.candidates[0].payload, "default")
+            return
+        if len(rule.candidates) > 1:
+            raise self.error(
+                rule.ambiguous,
+                handle.owner,
+                f"port '{port.name}' ({handle.partner_label}) has {len(rule.candidates)} candidates {listed} and no "
+                f"verb {handle.source_text()}.",
+                remedy=self._paste_references(handle, references, optional),
+            )
+        if optional and rule.candidates:
+            raise self.error(
+                EnergySystemErrorId.OPTIONAL_PORT_UNDECIDED,
+                handle.owner,
+                f"optional port '{port.name}' ({handle.partner_label}) has 1 candidate {listed} and no verb "
+                f"{handle.source_text()}.",
+                remedy=self._paste_references(handle, references, True),
+            )
+        if not top:
+            self._refuse_unresolved_inner(handle, level, references)
+        if optional:
+            handle.record = {"state": PortState.OPTIONAL, "partner": "not bound: no candidate"}
+            handle.decided = True
+            return
+        error_id, problem, remedy = rule.missing()
+        raise self.error(error_id, handle.owner, f"{problem} {handle.source_text()}.", remedy=remedy)
+
+    def _refuse_unresolved_inner(self, handle: Handle, level: Level, references: Sequence[str]) -> None:
+        """Refuses an inner import's port that nothing inside its importer binds (``EF-7G``, §2.5)."""
+        port = handle.port
+        raise self.error(
+            EnergySystemErrorId.INNER_PORT_UNRESOLVED,
+            handle.owner,
+            f"{handle.state} port '{port.name}' ({handle.partner_label}) of the inner import is neither bound nor "
+            f"re-exported inside {level.where_verbs}; candidates: none {handle.source_text()}.",
+            remedy=(
+                f"Re-export it from the importing assembly's interface (`{port.name}: {{from: "
+                f"{handle.owner_path.split(' → ')[-1].split('[')[0]}.{port.name}}}`), bind it with "
+                + self._paste_references(handle, references, handle.state == PortState.OPTIONAL).replace(
+                    "add to ", "a line on "
+                )
+                + ", or decline it."
+            ),
+        )
+
+    # -------------------------------------------------------------------------------------- circuits
+
+    def _circuit_rule(self, handle: Handle, level: Level) -> "CrossRule":
+        """The default rule, the verb resolution and the lowering of one circuit end (§3.2, §11.1)."""
+        end = handle.end
+        assert end is not None
+        candidates = [
+            Candidate(reference=f"{reference}.{other.port.name}", label=other.end.label, payload=other)
+            for reference, other in level.handles
+            if other is not handle
+            and other.port.kind == PortKind.CIRCUIT
+            and other.end is not None
+            and other.end is not end
+            and not other.decided
+            and other.state != PortState.INACTIVE
+            and other.end.circuit == end.circuit
+            and other.owner_path != handle.owner_path
+            and other.end.bound_to is None
+            and not other.end.declined
+        ]
+        outputs = ", ".join(CircuitNaming.outputs(end.circuit))
+
+        def missing() -> Tuple[EnergySystemErrorId, str, str]:
+            return (
+                EnergySystemErrorId.PORT_WITHOUT_PARTNER,
+                f"required port '{handle.port.name}' (circuit {end.circuit}) has no other end of the circuit "
+                f"{end.circuit} in {level.where_verbs}; candidates: none",
+                f"Add an import or a site entry with a '{end.circuit}' circuit port (its members own or read "
+                f"{outputs}), or decline the port if it is optional.",
+            )
+
+        return CrossRule(
+            candidates=candidates,
+            resolve=lambda target: self._resolve_circuit(handle, target, level),
+            lower=lambda other, verb: self._lower_circuit(handle, other, verb),
+            ambiguous=EnergySystemErrorId.PORT_AMBIGUOUS,
+            missing=missing,
+        )
+
+    def _require_circuit_end(self, handle: Handle, other: Handle, target: str) -> None:
+        """Refuses a bound partner that is no free end of the same circuit (``EF-7N``)."""
+        end = handle.end
+        assert end is not None
+        if other.port.kind != PortKind.CIRCUIT or other.end is None:
+            raise self.error(
+                EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+                handle.owner,
+                f"circuit port '{handle.port.name}' (circuit {end.circuit}) is bound to '{target}', which is no "
+                f"circuit end but a {other.port.kind.value} port {handle.source_text()}.",
+                remedy=handle.hint or None,
+            )
+        if other.end.circuit != end.circuit:
+            raise self.error(
+                EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+                handle.owner,
+                f"circuit port '{handle.port.name}' (circuit {end.circuit}) is bound to '{target}', an end of the "
+                f"circuit {other.end.circuit}; a circuit binds only an end of its own medium, and "
+                f"{', '.join(CircuitNaming.outputs(other.end.circuit))} are not "
+                f"{', '.join(CircuitNaming.outputs(end.circuit))} {handle.source_text()}.",
+                remedy=handle.hint or None,
+            )
+        if other.owner_path == handle.owner_path or other.end is end:
+            raise self.error(
+                EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+                handle.owner,
+                f"circuit port '{handle.port.name}' is bound to '{target}', an end of its own instance; a circuit "
+                f"joins two imports or an import and a site entry {handle.source_text()}.",
+            )
+        if other.end.bound_to is not None and other.end.bound_to is not end:
+            raise self.error(
+                EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+                handle.owner,
+                f"circuit port '{handle.port.name}' (circuit {end.circuit}) is bound to '{target}', whose circuit "
+                f"already joins {other.end.bound_to.label}; a circuit has exactly two ends, and a split is a valve "
+                f"assembly with one circuit per branch {handle.source_text()}.",
+            )
+
+    def _resolve_circuit(self, handle: Handle, target: str, level: Level) -> Tuple[Optional[Handle], str]:
+        """Resolves a verb's partner reference to the other end of a circuit."""
+        end = handle.end
+        assert end is not None
+        located, absent = self._locate_target(target, level)
+        if located is None:
+            return None, absent
+        head, handles, other = located.head, located.handles, located.port
+        if other is not None:
+            self._require_circuit_end(handle, other, target)
+            if other.state == PortState.INACTIVE:
+                return None, f"the port '{target}' is inactive with its parameters"
+            return other, ""
+        ends = [
+            other
+            for other in handles.values()
+            if other.port.kind == PortKind.CIRCUIT and other.state != PortState.INACTIVE
+        ]
+        same = [other for other in ends if other.end is not None and other.end.circuit == end.circuit]
+        if len(same) == 1:
+            self._require_circuit_end(handle, same[0], target)
+            return same[0], ""
+        if not same:
+            if ends:
+                raise self.error(
+                    EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+                    handle.owner,
+                    f"circuit port '{handle.port.name}' (circuit {end.circuit}) is bound to '{target}', whose "
+                    "circuit ends are of other circuits: "
+                    + ", ".join(f"{other.port.name} ({other.end.circuit if other.end else '?'})" for other in ends)
+                    + f"; a circuit binds only an end of its own medium {handle.source_text()}.",
+                    remedy=handle.hint or None,
+                )
+            return None, f"'{head}' has no end of the circuit {end.circuit}"
+        raise self.error(
+            EnergySystemErrorId.PORT_AMBIGUOUS,
+            handle.owner,
+            f"circuit port '{handle.port.name}' (circuit {end.circuit}) is bound to '{target}', which has "
+            f"{len(same)} ends of that circuit: {', '.join(other.port.name for other in same)} "
+            f"{handle.source_text()}.",
+            remedy=self._paste_references(handle, [f"{head}.{other.port.name}" for other in same], False),
+        )
+
+    def _confirm_circuit_verb(self, handle: Handle, written: Tuple[str, Optional[str]], level: Level) -> None:
+        """Checks the verb of a circuit end the other end's verb already bound: both must name each other."""
+        end = handle.end
+        if end is None or end.bound_to is None:
+            return
+        verb, target = written
+        if verb != "none" and target is not None:
+            other, _absent = self._resolve_circuit(handle, target, level)
+            if other is not None and other.end is end.bound_to:
+                return
+        raise self.error(
+            EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+            handle.owner,
+            f"circuit port '{handle.port.name}' (circuit {end.circuit}) is bound to {end.bound_to.label} by that "
+            f"end's verb, yet {handle.verb_site} writes '{verb}{': ' + target if target else ''}' for it "
+            f"{handle.source_text()}.",
+            remedy="Write the binding on one end, or make both name each other.",
+        )
+
+    def _lower_circuit(self, handle: Handle, other: Handle, verb: str) -> None:
+        """Lowers a bound circuit: every placeholder at one end takes a bare name of each member of the other end.
+
+        The file decides the binding — the two ends of one circuit, their members and which members
+        carry the circuit's placeholder. Which member owns and which reads each of the circuit's three
+        outputs the constructed members say: the wiring expands every bare name written here through the
+        reader's default connections from the owner's class and checks the result like any connection —
+        a reader without defaults from that class, an output owned twice (an input fed twice), a load
+        type or unit that differs, a reader left without its circuit inputs (§3.2, §11.1, hydronic
+        spec §3.1). Every item is written into the port-provenance table, so a refusal names the circuit
+        port it came from.
+        """
+        end, other_end = handle.end, other.end
+        assert end is not None and other_end is not None
+        circuit = end.circuit
+        if not handle.landings and not other.landings:
+            raise self.error(
+                EnergySystemErrorId.CIRCUIT_ENDS_DO_NOT_FIT,
+                handle.owner,
+                f"the circuit {circuit} between {end.label} and {other_end.label} has no '{{$port: …}}' placeholder at "
+                f"either end, so no member reads any of {', '.join(CircuitNaming.outputs(circuit))} "
+                f"{handle.source_text()}.",
+                remedy="A member that reads the circuit's outputs carries the circuit port's placeholder.",
+            )
+        lowered: List[str] = []
+        for this_end, this_handle, far_end in ((end, handle, other_end), (other_end, other, end)):
+            for landing in this_handle.landings:
+                unit = landing.unit
+                if landing.position in unit.lowered:
+                    raise self.error(
+                        EnergySystemErrorId.PORT_CONTRACT,
+                        this_handle.owner,
+                        f"the placeholder of '{unit.name}' at inputs[{landing.position}] is filled twice "
+                        f"{this_handle.source_text()}.",
+                    )
+                items: List[AnyInputItem] = [DefaultInputs(source=source.name) for source in far_end.units]
+                unit.lowered[landing.position] = items
+                unit.notes[landing.position] = (
+                    f"circuit {circuit}: port {this_handle.port.name} bound to {far_end.label} ({verb})"
+                )
+                lowered.extend(f"{unit.name}.inputs: {self._item_text(item)}" for item in items)
+                for source in far_end.units:
+                    self._note_lowered(
+                        this_handle,
+                        LoweredKind.CIRCUIT,
+                        unit,
+                        verb,
+                        source,
+                        circuit=circuit,
+                        end=this_end.label,
+                        other_end=far_end.label,
+                    )
+        end.bound_to, other_end.bound_to = other_end, end
+        for this_handle, far_end in ((handle, other_end), (other, end)):
+            this_handle.record = {
+                "state": this_handle.state,
+                "partner": far_end.label,
+                "verb": verb,
+                "lowered_to": tuple(item for item in lowered),
+            }
+            this_handle.decided = True
+        self.record.circuits.append(
+            CircuitRecord(
+                circuit=circuit,
+                ends=(
+                    CircuitEndRecord(end.owner, end.port, tuple(unit.name for unit in end.units)),
+                    CircuitEndRecord(other_end.owner, other_end.port, tuple(unit.name for unit in other_end.units)),
+                ),
+                verb=verb,
+                lowered_to=tuple(lowered),
+            )
+        )
+        self.record.decisions.append(f"{end.label} <-> {other_end.label} (circuit {circuit}, {verb})")
+
+    # -------------------------------------------------------------------------------------- carriers
+
+    def _provisions_at(self, level: Level, handle: Handle) -> List[Tuple[str, Handle]]:
+        """The active carrier provisions in scope of a need, one per provider, outside its own instance."""
+        found: List[Tuple[str, Handle]] = []
+        seen: Set[int] = set()
+        for reference, other in level.handles:
+            provision = other.provision
+            if (
+                provision is None
+                or other.state == PortState.INACTIVE
+                or other.record.get("state") == PortState.REEXPORTED
+                or other.owner_path == handle.owner_path
+                or id(provision) in seen
+            ):
+                continue
+            seen.add(id(provision))
+            found.append((reference, other))
+        return found
+
+    def _fuel_rule(self, handle: Handle, level: Level) -> "CrossRule":
+        """The default rule, the verb resolution and the lowering of one fuel need (§3.2, §5.1)."""
+        carrier = handle.carrier or ""
+        providers = [
+            (reference, other)
+            for reference, other in self._provisions_at(level, handle)
+            if other.provision is not None and other.provision.carrier == carrier
+        ]
+        per_reference: Dict[str, int] = {}
+        for reference, _other in providers:
+            per_reference[reference] = per_reference.get(reference, 0) + 1
+        candidates = [
+            Candidate(
+                reference=reference if per_reference[reference] == 1 else f"{reference}.{other.port.name}",
+                label=other.provision.label if other.provision is not None else other.port.name,
+                payload=other,
+            )
+            for reference, other in providers
+        ]
+
+        def missing() -> Tuple[EnergySystemErrorId, str, str]:
+            return (
+                EnergySystemErrorId.CARRIER_PROVIDER,
+                f"required carrier need '{handle.port.name}' has no provider of {carrier} in {level.where_verbs}; "
+                "candidates: none",
+                f"No provider of {carrier}: add the import of `{Carriers.supply_for(carrier)}` (or a site entry "
+                f"providing {carrier}); the format never adds one (§5.2).",
+            )
+
+        return CrossRule(
+            candidates=candidates,
+            resolve=lambda target: self._resolve_provider(handle, target, level),
+            lower=lambda other, verb: self._lower_carrier(handle, other, verb),
+            ambiguous=EnergySystemErrorId.CARRIER_PROVIDER,
+            missing=missing,
+        )
+
+    def _resolve_provider(self, handle: Handle, target: str, level: Level) -> Tuple[Optional[Handle], str]:
+        """Resolves a verb's partner reference to a provider of the need's carrier."""
+        carrier = handle.carrier
+        located, absent = self._locate_target(target, level)
+        if located is None:
+            return None, absent
+        head, handles, other = located.head, located.handles, located.port
+        if other is not None:
+            if other.port.kind != PortKind.CARRIER or not other.port.is_provision:
+                raise self.error(
+                    EnergySystemErrorId.CARRIER_PROVIDER,
+                    handle.owner,
+                    f"carrier need '{handle.port.name}' (carrier {carrier}) is bound to '{target}', which provides "
+                    f"no carrier {handle.source_text()}.",
+                    remedy=handle.hint or None,
+                )
+            if other.state == PortState.INACTIVE or other.provision is None:
+                return None, f"the port '{target}' is inactive with its parameters"
+            self._require_carrier(handle, other, target)
+            return other, ""
+        provisions = [
+            other for other in handles.values() if other.provision is not None and other.state != PortState.INACTIVE
+        ]
+        same = [other for other in provisions if other.provision is not None and other.provision.carrier == carrier]
+        if len(same) == 1:
+            return same[0], ""
+        if not same:
+            if provisions:
+                self._require_carrier(handle, provisions[0], target)
+            return None, f"'{head}' provides no carrier"
+        raise self.error(
+            EnergySystemErrorId.PORT_AMBIGUOUS,
+            handle.owner,
+            f"carrier need '{handle.port.name}' (carrier {carrier}) is bound to '{target}', which provides it "
+            f"{len(same)} times: {', '.join(other.port.name for other in same)} {handle.source_text()}.",
+            remedy=self._paste_references(handle, [f"{head}.{other.port.name}" for other in same], False),
+        )
+
+    def _require_carrier(self, handle: Handle, other: Handle, target: str) -> None:
+        """Refuses a bound provider of another carrier than the need's (``EF-7Q``)."""
+        provision = other.provision
+        assert provision is not None
+        if provision.carrier != handle.carrier:
+            raise self.error(
+                EnergySystemErrorId.CARRIER_MISMATCH,
+                handle.owner,
+                f"carrier need '{handle.port.name}' (carrier {handle.carrier}) is bound to '{target}', which "
+                f"provides {provision.carrier} {handle.source_text()}.",
+                remedy=handle.hint or None,
+            )
+
+    def _decide_electricity(
+        self, handle: Handle, written: Optional[Tuple[str, Optional[str]]], level: Level, top: bool
+    ) -> None:
+        """Decides an electricity need: no verb, and exactly one electricity provider in scope (§3.2, §4.3)."""
+        port = handle.port
+        if written is not None:
+            raise self.error(
+                EnergySystemErrorId.CARRIER_PROVIDER,
+                handle.owner,
+                f"carrier need '{port.name}' (carrier electricity) carries the verb '{written[0]}', but electricity "
+                f"has no link end: the need only checks that the system has exactly one electricity provider, and "
+                f"no verb binds it (§3.3, §4.3) {handle.source_text()}.",
+                remedy=f"Remove the '{written[0]}' line for '{port.name}' from {handle.verb_site}.",
+            )
+        providers = [
+            (reference, other)
+            for reference, other in self._provisions_at(level, handle)
+            if other.provision is not None and other.provision.is_electricity
+        ]
+        if len(providers) == 1:
+            self._lower_carrier(handle, providers[0][1], "default")
+            return
+        if len(providers) > 1:
+            raise self.error(
+                EnergySystemErrorId.CARRIER_PROVIDER,
+                handle.owner,
+                f"carrier need '{port.name}' (carrier electricity) finds {len(providers)} electricity providers: "
+                f"{', '.join(other.provision.label for _reference, other in providers if other.provision)}; a "
+                f"system has exactly one grid connection {handle.source_text()}.",
+                remedy="Remove all but one electricity provider.",
+            )
+        if not top:
+            self._refuse_unresolved_inner(handle, level, ["<partner>"])
+        if handle.state == PortState.OPTIONAL:
+            handle.record = {"state": PortState.OPTIONAL, "partner": "not bound: no electricity provider"}
+            handle.decided = True
+            return
+        raise self.error(
+            EnergySystemErrorId.CARRIER_PROVIDER,
+            handle.owner,
+            f"required carrier need '{port.name}' has no provider of electricity in {level.where_verbs} "
+            f"{handle.source_text()}.",
+            remedy=(
+                f"Add the import of `{Carriers.supply_for(Carriers.ELECTRICITY)}`; the format never adds one (§5.2)."
+            ),
+        )
+
+    def _lower_carrier(self, handle: Handle, provider: Handle, verb: str) -> None:
+        """Lowers a bound carrier need: the provider's meter observes the consuming outputs (§3.2, §5.1).
+
+        For a fuel the meter takes a bare name of every consuming member, which the wiring expands
+        through the default feeds the meter declares from that member's class — the tags and the
+        weight a recorded twin writes; for electricity nothing is written. Every bare name and every
+        consuming output is written into the port-provenance table: whether an output exists, carries
+        the need's carrier by its energy port, and is exactly what the meter's default feeds from its
+        class observe, the constructed components say, and the wiring stage checks it with the bare
+        names it expands.
+        """
+        provision = provider.provision
+        assert provision is not None
+        carrier = handle.carrier or ""
+        meter = provision.meter
+        outputs: List[str] = []
+        consumers: Dict[str, Unit] = {}
+        for unit, output in handle.consumer_outputs:
+            outputs.append(f"{unit.name}.{output}")
+            self._note_lowered(handle, LoweredKind.FEED, meter, verb, unit, output=output, carrier=carrier)
+            if meter is not None:
+                consumers.setdefault(unit.name, unit)
+        items: List[AnyInputItem] = [DefaultInputs(source=name) for name in consumers]
+        lowered: List[str] = []
+        landing = provision.landing
+        if items and landing is not None:
+            filled = landing.unit.lowered.setdefault(landing.position, [])
+            items = [item for item in items if item not in filled]
+            filled.extend(items)
+            for item in items:
+                self._note_lowered(
+                    handle, LoweredKind.DEFAULT, landing.unit, verb, consumers[item.source], carrier=carrier
+                )
+            note = (
+                f"carrier {carrier}: port {handle.port.name} of {handle.owner_path} bound to {provision.label} ({verb})"
+            )
+            previous = landing.unit.notes.get(landing.position)
+            landing.unit.notes[landing.position] = f"{previous}; {note}" if previous else note
+            lowered = [f"{landing.unit.name}.inputs: {self._item_text(item)}" for item in items]
+        provision.record.consumers.append(
+            CarrierConsumer(
+                owner=handle.owner_path,
+                port=handle.port.name,
+                outputs=tuple(outputs),
+                verb=verb,
+                lowered_to=tuple(lowered),
+            )
+        )
+        handle.record = {
+            "state": handle.state,
+            "partner": provision.label + (f" (meter {meter.name})" if meter is not None else " (no link)"),
+            "verb": verb,
+            "lowered_to": tuple(lowered),
+        }
+        handle.decided = True
+        self.record.decisions.append(f"{handle.owner_path}.{handle.port.name} -> {provision.label} ({carrier}, {verb})")
+
+    def _check_provisions(self) -> None:
+        """Refuses a fuel provider no need is bound to (§5.2), and records every provider's consumers."""
+        seen: Set[int] = set()
+        for provision, handle in self._provisions:
+            if id(provision) in seen:
+                continue
+            seen.add(id(provision))
+            self.record.carriers.append(provision.record)
+            consumers = [f"{consumer.owner}.{consumer.port}" for consumer in provision.record.consumers]
+            handle.record = {**handle.record, "partner": ", ".join(consumers)} if consumers else handle.record
+            if not provision.is_electricity and not consumers:
+                raise self.error(
+                    EnergySystemErrorId.CARRIER_PROVIDER,
+                    handle.owner,
+                    f"the provider of {provision.carrier} {provision.label} has no bound consumer; an idle "
+                    f"connection is refused, never kept (§5.2) {handle.source_text()}.",
+                    remedy=f"Remove the provider, or bind a need of {provision.carrier} to it.",
+                )
+
+    # ----------------------------------------------------------------------------------------- facts
+
+    def _fact_rule(self, handle: Handle, level: Level) -> "CrossRule":
+        """The default rule, the verb resolution and the lowering of one fact need (§3.2, §6)."""
+        fact = handle.fact or ""
+        candidates: List[Candidate] = []
+        for reference in sorted(level.members, key=list(level.targets).index):
+            unit = level.targets[reference][0][0]
+            if unit.name in handle.own_units:
+                continue
+            if fact in declared_facts_of(
+                self.classes.config_class(unit.class_path, f"components.{unit.name}", unit.name)
+            ):
+                candidates.append(Candidate(reference=reference, label=unit.name, payload=unit.name))
+        for reference, other in level.handles:
+            provider = self._fact_provider(other, fact)
+            if (
+                provider is not None
+                and other.owner_path != handle.owner_path
+                and other.record.get("state") != PortState.REEXPORTED
+                and all(candidate.payload != provider for candidate in candidates)
+            ):
+                candidates.append(
+                    Candidate(reference=f"{reference}.{other.port.name}", label=provider, payload=provider)
+                )
+
+        def missing() -> Tuple[EnergySystemErrorId, str, str]:
+            return (
+                EnergySystemErrorId.FACT_NOT_PROVIDED,
+                f"required fact port '{handle.port.name}' finds no provider of the fact {fact} in "
+                f"{level.where_verbs}; candidates: none",
+                f"Add a component whose class contributes {fact} (SIZING_CONTRIBUTIONS), or an import providing it "
+                "through a fact port.",
+            )
+
+        return CrossRule(
+            candidates=candidates,
+            resolve=lambda target: self._resolve_fact(handle, target, level),
+            lower=lambda provider, verb: self._lower_fact(handle, provider, verb),
+            ambiguous=EnergySystemErrorId.SIZING_AMBIGUOUS,
+            missing=missing,
+        )
+
+    @staticmethod
+    def _fact_provider(other: Handle, fact: str) -> Optional[str]:
+        """The component an active provided-fact port offers a fact from, or ``None``."""
+        port = other.port
+        if (
+            port.kind != PortKind.FACT
+            or not port.is_provision
+            or other.state == PortState.INACTIVE
+            or other.fact != fact
+        ):
+            return None
+        return other.fact_provider
+
+    def _resolve_fact(self, handle: Handle, target: str, level: Level) -> Tuple[Optional[str], str]:
+        """Resolves a verb's partner reference to the component providing a fact."""
+        fact = handle.fact or ""
+        located, absent = self._locate_target(target, level)
+        if located is None:
+            return None, absent
+        head, units, handles, other = located.head, located.units, located.handles, located.port
+        if other is not None:
+            if other.state == PortState.INACTIVE:
+                return None, f"the port '{target}' is inactive with its parameters"
+            if (
+                other.port.kind != PortKind.FACT
+                or not other.port.is_provision
+                or other.fact != fact
+                or other.fact_provider is None
+            ):
+                raise self.error(
+                    EnergySystemErrorId.FACT_NOT_PROVIDED,
+                    handle.owner,
+                    f"fact port '{handle.port.name}' (fact {fact}) is bound to '{target}', which provides no fact "
+                    f"{fact} {handle.source_text()}.",
+                    remedy=handle.hint or None,
+                )
+            return other.fact_provider, ""
+        if head in level.members:
+            unit = units[0]
+            config_class = self.classes.config_class(unit.class_path, f"components.{unit.name}", unit.name)
+            declared = declared_facts_of(config_class)
+            if fact not in declared:
+                raise self.error(
+                    EnergySystemErrorId.FACT_NOT_PROVIDED,
+                    handle.owner,
+                    f"fact port '{handle.port.name}' (fact {fact}) is bound to '{target}' ({config_class.__name__}), "
+                    f"which does not contribute {fact} (it contributes {', '.join(declared) or 'no fact'}) "
+                    f"{handle.source_text()}.",
+                    remedy=handle.hint or None,
+                )
+            return unit.name, ""
+        provided = [
+            other
+            for other in handles.values()
+            if other.port.kind == PortKind.FACT
+            and other.port.is_provision
+            and other.fact_provider is not None
+            and other.state != PortState.INACTIVE
+            and other.fact == fact
+        ]
+        if len(provided) == 1:
+            return provided[0].fact_provider, ""
+        if not provided:
+            raise self.error(
+                EnergySystemErrorId.FACT_NOT_PROVIDED,
+                handle.owner,
+                f"fact port '{handle.port.name}' (fact {fact}) is bound to '{target}', which provides no fact {fact} "
+                f"through a port {handle.source_text()}.",
+                remedy=handle.hint or None,
+            )
+        raise self.error(
+            EnergySystemErrorId.PORT_AMBIGUOUS,
+            handle.owner,
+            f"fact port '{handle.port.name}' (fact {fact}) is bound to '{target}', which provides it "
+            f"{len(provided)} times: {', '.join(other.port.name for other in provided)} {handle.source_text()}.",
+            remedy=self._paste_references(handle, [f"{head}.{other.port.name}" for other in provided], False),
+        )
+
+    def _lower_fact(self, handle: Handle, provider: str, verb: str) -> None:
+        """Lowers a bound fact need to a ``sizing_sources`` line on each member it names (§3.2, §6)."""
+        fact = handle.fact or ""
+        lowered: List[str] = []
+        for unit in handle.fact_into:
+            config_class = self.classes.config_class(unit.class_path, f"components.{unit.name}", unit.name)
+            readable = facts_read_by(config_class)
+            if fact not in readable:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    handle.owner,
+                    f"fact port '{handle.port.name}' lowers {fact} into {unit.name}, whose class "
+                    f"{config_class.__name__} reads no such fact {handle.source_text()}.",
+                    alternatives=readable,
+                    alternatives_label=f"facts {config_class.__name__} reads",
+                    offending_value=fact,
+                )
+            if fact in unit.entry.sizing_sources or fact in unit.lowered_sizing:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    handle.owner,
+                    f"fact port '{handle.port.name}' lowers {fact} into {unit.name}, which already names a source "
+                    f"for it {handle.source_text()}.",
+                )
+            unit.lowered_sizing[fact] = SourceReference(component=provider, fact=fact)
+            unit.sizing_notes[fact] = f"port {handle.port.name} bound to {provider} ({verb})"
+            lowered.append(f"{unit.name}.sizing_sources.{fact}: {provider}.{fact}")
+        handle.record = {"state": handle.state, "partner": provider, "verb": verb, "lowered_to": tuple(lowered)}
+        handle.decided = True
+        self.record.decisions.append(f"{handle.owner_path}.{handle.port.name} -> {provider} (fact {fact}, {verb})")
+
     @staticmethod
     def _item_text(item: AnyInputItem) -> str:
         """An input item as the record lists it."""
         if isinstance(item, ExplicitWire):
             return f"{{input: {item.input}, from: {item.source}.{item.output}}}"
+        if isinstance(item, AggregatorFeed):
+            return f"{{from: {item.source}.{item.output}, tags: [{', '.join(item.tags)}], weight: {item.weight}}}"
         return item.source
 
     def _note_lowered(
         self,
         handle: Handle,
         kind: str,
-        member: Unit,
+        member: Optional[Unit],
         verb: str,
         partner: Optional[Unit] = None,
         target: str = "",
         output: str = "",
-        *,
-        bound_output: str = "",
+        **context: Any,
     ) -> None:
-        """Writes one lowered item into the port-provenance table, which a wiring refusal of it reads."""
+        """Writes one lowered item into the port-provenance table, which a wiring refusal of it reads.
+
+        ``context`` carries the fields of a circuit item or a feed (:class:`LoweredPort`).
+        """
         self.record.port_provenance.append(
             LoweredPort(
                 kind=kind,
@@ -1203,16 +2384,35 @@ class ImportExpander:
                 import_path=handle.owner_path,
                 port=handle.port.name,
                 verb=verb,
-                member=member.name,
-                member_class=member.class_path,
+                member=member.name if member is not None else "",
+                member_class=member.class_path if member is not None else "",
                 partner=partner.name if partner is not None else "",
                 partner_class=partner.class_path if partner is not None else "",
                 input=target,
                 output=output,
                 chain=tuple(location.text for location in handle.chain),
-                bound_output=bound_output,
+                **context,
             )
         )
+
+    @staticmethod
+    def _decision_order(handles: Sequence[Tuple[BindingVerbs, Handle]]) -> List[Tuple[BindingVerbs, Handle]]:
+        """The order ports are decided in: every port but the circuit ends as written, then the circuit ends.
+
+        A circuit binds two ends at once, so the ends whose verbs say what they bind go first, the
+        required ends next and the optional ones last: an optional end is never taken by the default
+        rule from a required end that has only it as its candidate.
+        """
+
+        def rank(item: Tuple[BindingVerbs, Handle]) -> int:
+            verbs, handle = item
+            if handle.port.kind != PortKind.CIRCUIT:
+                return 0
+            if verbs.verb_for(handle.port.name) is not None:
+                return 1
+            return 2 if handle.state == PortState.REQUIRED else 3
+
+        return sorted(handles, key=rank)
 
     def _bind_inside(
         self,
@@ -1227,15 +2427,18 @@ class ImportExpander:
         for name, port in model.ports_of(PortKind.INTERNAL).items():
             sender, receiver = port.ends
             self._bind_internal(assembly, name, sender, receiver, level, inner, units, import_path)
+        pending: List[Tuple[BindingVerbs, Handle]] = []
         for key, results in inner.items():
             entry = model.imports[key]
             for _instance_key, instance in results:
                 self._check_verbs_name_ports(entry.verbs, instance.handles, f"{assembly.label}: imports.{key}")
                 for handle in instance.handles.values():
-                    if handle.decided:
+                    if handle.decided and handle.port.kind != PortKind.CIRCUIT:
                         continue
                     handle.verb_site = f"the inner import '{key}' in {assembly.label}"
-                    self._decide(handle, entry.verbs, level, top=False)
+                    pending.append((entry.verbs, handle))
+        for verbs, handle in self._decision_order(pending):
+            self._decide(handle, verbs, level, top=False)
 
     def _bind_internal(
         self,
@@ -1389,9 +2592,10 @@ class ImportExpander:
                     continue
                 port = ports.get(placeholder.port)
                 fits = port is not None and (
-                    (port.kind in (PortKind.NEED, PortKind.FACT) and member in port.into)
+                    (port.kind == PortKind.NEED and member in port.into)
                     or (port.kind == PortKind.INTERNAL and port.ends and port.ends[1] == member)
-                    or port.kind in (PortKind.CIRCUIT, PortKind.CARRIER)
+                    or (port.kind == PortKind.CIRCUIT and member in port.members)
+                    or (port.kind == PortKind.CARRIER and port.is_provision and port.meter == member)
                 )
                 if not fits:
                     raise self.error(
@@ -1526,6 +2730,7 @@ class ImportExpander:
                 inputs.append(rewritten)
                 origins.append(("written", position))
         sizing = {fact: self._rewrite_sizing(unit, fact, value) for fact, value in entry.sizing_sources.items()}
+        sizing.update(unit.lowered_sizing)
         final = entry.model_copy(
             update={
                 "name": unit.name,
@@ -1611,10 +2816,15 @@ class ImportExpander:
         if unit.identity is None:
             return
         for fact in final.sizing_sources:
-            location = unit.lines.location(*unit.block_path, "sizing_sources", fact)
+            if fact in unit.lowered_sizing:
+                location = unit.lines.location(*unit.block_path)
+                note = unit.sizing_notes.get(fact, "")
+            else:
+                location = unit.lines.location(*unit.block_path, "sizing_sources", fact)
+                note = ""
             source_map.add(
                 SourceMapEntry(
-                    unit.name, f"sizing_sources.{fact}", unit.import_path, unit.entry.name, prefix + (location,)
+                    unit.name, f"sizing_sources.{fact}", unit.import_path, unit.entry.name, prefix + (location,), note
                 )
             )
         for key in final.config:

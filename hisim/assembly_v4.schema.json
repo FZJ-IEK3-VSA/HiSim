@@ -1,0 +1,962 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "assembly_v4.schema.json",
+  "title": "HiSim assembly, schema version 4",
+  "description": "A fragment of an energy system in a file of its own (assemblies_spec.md): members, inner imports, parameters, presets, internal variants, an interface of ports and its test contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "name",
+    "tests"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 4
+    },
+    "kind": {
+      "const": "assembly"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "parameters": {
+      "type": "object",
+      "propertyNames": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/name"
+          },
+          {
+            "not": {
+              "enum": [
+                "preset",
+                "parameters",
+                "installation_year",
+                "quote"
+              ]
+            }
+          }
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/parameter"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/constraint"
+      }
+    },
+    "presets": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "imports": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/import"
+      }
+    },
+    "components": {
+      "$ref": "#/$defs/members"
+    },
+    "variants": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/variant"
+      }
+    },
+    "interface": {
+      "$ref": "#/$defs/interface"
+    },
+    "tests": {
+      "$ref": "#/$defs/tests"
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "reference": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+    },
+    "default_inputs": {
+      "$ref": "#/$defs/name"
+    },
+    "explicit_wire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "from"
+      ],
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/name"
+        },
+        "from": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    },
+    "aggregator_feed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "tags"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/source"
+        },
+        "component_type": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "weight": {
+          "type": "integer"
+        },
+        "dispatch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "target_input": {
+              "$ref": "#/$defs/name"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "sizing_sources": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/reference"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/reference"
+            }
+          }
+        ]
+      }
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Evaluation order (assemblies_spec.md \u00a72.3)."
+    },
+    "port_placeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "$port"
+      ],
+      "properties": {
+        "$port": {
+          "$ref": "#/$defs/name"
+        },
+        "wires": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/name"
+          }
+        }
+      }
+    },
+    "observes_placeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "$observes"
+      ],
+      "properties": {
+        "$observes": {
+          "$ref": "#/$defs/name"
+        }
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "into": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "partner": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "wires": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "output": {
+          "$ref": "#/$defs/reference"
+        },
+        "from": {
+          "$ref": "#/$defs/reference"
+        },
+        "circuit": {
+          "$ref": "#/$defs/name"
+        },
+        "member": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "carrier": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "fact": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
+        "many": {
+          "type": "boolean"
+        },
+        "export": {
+          "type": "boolean"
+        },
+        "controllable": {
+          "type": "object"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "required_when": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "active_when": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "internal_port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bind"
+      ],
+      "properties": {
+        "bind": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "observer_port": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "into": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "default": {
+          "type": "string"
+        }
+      }
+    },
+    "instance": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "parameters"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "preset": {
+              "type": [
+                "string",
+                "object"
+              ]
+            },
+            "parameters": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              }
+            },
+            "installation_year": {
+              "type": "integer"
+            },
+            "quote": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "preset",
+                "parameters",
+                "installation_year",
+                "quote"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "installation_year": {
+              "type": "integer"
+            },
+            "quote": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "import": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assembly"
+      ],
+      "properties": {
+        "order": {
+          "$ref": "#/$defs/order"
+        },
+        "assembly": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "preset": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
+        "parameters": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "instances": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/instance"
+          }
+        },
+        "bind": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+          }
+        },
+        "optional-bind": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+          }
+        },
+        "none": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "observes": {
+          "type": "array"
+        },
+        "actuates": {},
+        "installation_year": {
+          "type": "integer"
+        },
+        "quote": {
+          "type": "object"
+        }
+      },
+      "not": {
+        "required": [
+          "instances",
+          "parameters"
+        ]
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "description"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "float",
+            "int",
+            "bool",
+            "enum",
+            "string",
+            "list"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "ANY",
+            "PERCENT",
+            "WATT",
+            "KILOWATT",
+            "KWH_PER_TIMESTEP",
+            "WATT_PER_METER",
+            "WATT_PER_SQUARE_METER",
+            "WATT_HOUR_PER_SQUARE_METER",
+            "METER_PER_SECOND",
+            "METER",
+            "SQUARE_METER",
+            "WATT_HOUR",
+            "KWH",
+            "JOULE",
+            "KILOJOULE",
+            "LITER",
+            "CUBICMETERS",
+            "LITER_PER_TIMESTEP",
+            "CUBICMETERS_PER_SECOND",
+            "KG",
+            "KG_PER_SEC",
+            "CELSIUS",
+            "KELVIN",
+            "DEGREES",
+            "BAR",
+            "PASCAL",
+            "SECONDS",
+            "HOURS",
+            "TIMESTEPS",
+            "YEARS",
+            "EUR_PER_KWH",
+            "EURO",
+            "BINARY"
+          ]
+        },
+        "default": {},
+        "values": {
+          "type": "array",
+          "minItems": 1
+        },
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "min",
+            "max"
+          ],
+          "properties": {
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            }
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "float",
+              "int"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "range"
+        ]
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "exactly_one_of": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "at_most_one_of": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/name"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class"
+      ],
+      "propertyNames": {
+        "enum": [
+          "class",
+          "preset",
+          "constructor",
+          "config",
+          "inputs",
+          "sizing_sources",
+          "order",
+          "display"
+        ]
+      },
+      "properties": {
+        "class": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "preset": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
+        "constructor": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1
+        },
+        "config": {
+          "type": "object"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/default_inputs"
+              },
+              {
+                "$ref": "#/$defs/explicit_wire"
+              },
+              {
+                "$ref": "#/$defs/aggregator_feed"
+              },
+              {
+                "$ref": "#/$defs/port_placeholder"
+              },
+              {
+                "$ref": "#/$defs/observes_placeholder"
+              }
+            ]
+          }
+        },
+        "sizing_sources": {
+          "$ref": "#/$defs/sizing_sources"
+        },
+        "order": {
+          "$ref": "#/$defs/order"
+        },
+        "display": {
+          "type": "string"
+        }
+      }
+    },
+    "members": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/member"
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selected_by",
+        "options"
+      ],
+      "properties": {
+        "selected_by": {
+          "$ref": "#/$defs/name"
+        },
+        "options": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "when"
+            ],
+            "properties": {
+              "when": {
+                "type": "array",
+                "minItems": 1
+              },
+              "components": {
+                "$ref": "#/$defs/members"
+              }
+            }
+          }
+        }
+      }
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "needs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/port"
+          }
+        },
+        "provides": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/port"
+          }
+        },
+        "internal": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/internal_port"
+          }
+        },
+        "observes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/observer_port"
+          }
+        },
+        "actuates": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bounds",
+        "monotone"
+      ],
+      "properties": {
+        "bounds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/bounds"
+          }
+        },
+        "monotone": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/monotone"
+          }
+        },
+        "expect": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expect"
+          }
+        }
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/reference"
+        },
+        "kpi": {
+          "type": "string"
+        },
+        "member": {
+          "$ref": "#/$defs/name"
+        },
+        "unit": {
+          "enum": [
+            "ANY",
+            "PERCENT",
+            "WATT",
+            "KILOWATT",
+            "KWH_PER_TIMESTEP",
+            "WATT_PER_METER",
+            "WATT_PER_SQUARE_METER",
+            "WATT_HOUR_PER_SQUARE_METER",
+            "METER_PER_SECOND",
+            "METER",
+            "SQUARE_METER",
+            "WATT_HOUR",
+            "KWH",
+            "JOULE",
+            "KILOJOULE",
+            "LITER",
+            "CUBICMETERS",
+            "LITER_PER_TIMESTEP",
+            "CUBICMETERS_PER_SECOND",
+            "KG",
+            "KG_PER_SEC",
+            "CELSIUS",
+            "KELVIN",
+            "DEGREES",
+            "BAR",
+            "PASCAL",
+            "SECONDS",
+            "HOURS",
+            "TIMESTEPS",
+            "YEARS",
+            "EUR_PER_KWH",
+            "EURO",
+            "BINARY"
+          ]
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "output",
+            "unit"
+          ]
+        },
+        {
+          "required": [
+            "kpi",
+            "member"
+          ]
+        }
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "min"
+          ]
+        },
+        {
+          "required": [
+            "max"
+          ]
+        }
+      ]
+    },
+    "monotone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parameter",
+        "kpi",
+        "member",
+        "direction"
+      ],
+      "properties": {
+        "parameter": {
+          "$ref": "#/$defs/name"
+        },
+        "kpi": {
+          "type": "string"
+        },
+        "member": {
+          "$ref": "#/$defs/name"
+        },
+        "direction": {
+          "enum": [
+            "increasing",
+            "decreasing",
+            "constant"
+          ]
+        }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset",
+        "kpi",
+        "member"
+      ],
+      "properties": {
+        "preset": {
+          "$ref": "#/$defs/name"
+        },
+        "kpi": {
+          "type": "string"
+        },
+        "member": {
+          "$ref": "#/$defs/name"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "min"
+          ]
+        },
+        {
+          "required": [
+            "max"
+          ]
+        }
+      ]
+    }
+  }
+}

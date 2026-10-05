@@ -212,13 +212,14 @@ class KpiSource:
     def for_component(cls, component_id: "ComponentID", display_config: "DisplayConfig") -> "KpiSource":
         """The source of a component's KPIs: the one place a source is built from a component.
 
-        The path is the identity's own: a ``ComponentID`` that carries a ``path`` of address
-        steps (each with an ``import_key`` and an ``instance``, outermost first) gives each step
-        to the source, and ``import`` and ``instance`` are its first step; one without a path, as
-        every ``ComponentID`` is until assemblies exist, is a site component with ``path`` ``()``.
-        No assembly and no label yet; the member is the component's name and its runtime name is
-        its key. The assemblies work (``assemblies_spec.md`` §2.4) extends this method and
-        nothing else.
+        A component written directly into an energy system has no import, no instance and no
+        assembly; its member is its name and its ``path`` is ``()``. An assembly member (``assemblies_spec.md``
+        §2.4) gives every step of its ``ComponentID.path`` (each with an ``import_key`` and an ``instance``,
+        outermost first) to the source's ``path``, and ``import`` and ``instance`` are its first step, so that
+        "every KPI of import ``pv``" is a filter on a field; ``member`` is its name inside the assembly and
+        ``assembly`` the innermost owning assembly's library path. In both cases the runtime name is the
+        component's key, the serialized address (``pv-east-PVSystem``). ``label`` is the request's own name
+        for a system and stays ``None`` until a request supplies one.
 
         Args:
             component_id: The component's structured identity.
@@ -238,7 +239,7 @@ class KpiSource:
             instance=path[0].instance if path else None,
             path=path,
             member=component_id.name,
-            assembly=None,
+            assembly=getattr(component_id, "assembly", None),
             name=component_id.key,
             display_name=pretty_name if pretty_name else component_id.name,
             label=None,

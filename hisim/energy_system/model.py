@@ -27,6 +27,8 @@ from typing import Annotated, Any, ClassVar, Dict, Literal, Mapping, Optional, T
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from hisim.config import ComponentID
+from hisim.energy_system.imports_model import BindingVerbs, ImportEntry, PlacedPlaceholder, Port
 from hisim.energy_system.names import NameRules
 
 
@@ -246,6 +248,12 @@ class ComponentEntry(BaseModel):
     #: Wire spelling of the ``class_path`` field: ``class`` is a Python keyword.
     CLASS_KEY: ClassVar[str] = "class"
 
+    #: The keys schema version 4 adds to a top-level entry (``assemblies_spec.md`` §2.3, §3.1):
+    #: its evaluation order, the ports an import binds to, and the three binding verbs. A v3
+    #: file refuses them as unknown keys; the expansion of imports consumes them, so no later
+    #: stage ever sees one.
+    V4_ENTRY_KEYS: ClassVar[Tuple[str, ...]] = ("order", "ports", "bind", "optional-bind", "none")
+
     name: str
     class_path: str
     preset: Optional[str] = None
@@ -253,6 +261,15 @@ class ComponentEntry(BaseModel):
     config: Mapping[str, Any] = Field(default_factory=dict)
     inputs: Tuple[AnyInputItem, ...] = ()
     sizing_sources: Mapping[str, AnySizingSource] = Field(default_factory=dict)
+    order: Optional[int] = None
+    ports: Mapping[str, Port] = Field(default_factory=dict)
+    verbs: BindingVerbs = Field(default_factory=BindingVerbs)
+    placeholders: Tuple[PlacedPlaceholder, ...] = ()
+
+    @property
+    def has_v4_extensions(self) -> bool:
+        """Whether the entry uses any key or placeholder schema version 4 adds."""
+        return self.order is not None or bool(self.ports) or not self.verbs.is_empty or bool(self.placeholders)
 
     def sizing_references(self) -> Tuple[Tuple[str, SourceReference], ...]:
         """Flattens ``sizing_sources`` into ``(fact, reference)`` pairs.
@@ -381,11 +398,20 @@ class EnergySystemFile(BaseModel):
     is dropped when the option loses, exactly as a reference into a disabled group is.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
-    #: The one schema version this package reads. A file naming another version is
-    #: rejected rather than interpreted: a format change that mattered got a new number.
+    #: The schema version of a flat file: components, groups and variants, every name an
+    #: identifier. It is what every committed file is written in and what the expansion of
+    #: imports produces.
     SUPPORTED_SCHEMA_VERSION: ClassVar[int] = 3
+
+    #: The schema version of a file that imports assemblies (``assemblies_spec.md`` §2): version 3
+    #: plus ``imports``, and ``order``, ``ports`` and the binding verbs on top-level entries.
+    ASSEMBLIES_SCHEMA_VERSION: ClassVar[int] = 4
+
+    #: Every schema version this package reads. A file naming another version is rejected rather
+    #: than interpreted: a format change that mattered got a new number.
+    SUPPORTED_SCHEMA_VERSIONS: ClassVar[Tuple[int, ...]] = (3, 4)
 
     #: The keys the document may carry, in the canonical order the emitter writes them.
     TOP_LEVEL_KEYS: ClassVar[Tuple[str, ...]] = (
@@ -393,6 +419,7 @@ class EnergySystemFile(BaseModel):
         "name",
         "description",
         "components",
+        "imports",
         "groups",
         "variants",
         "metadata",
@@ -402,9 +429,21 @@ class EnergySystemFile(BaseModel):
     name: str
     description: Optional[str] = None
     components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
+    imports: Mapping[str, ImportEntry] = Field(default_factory=dict)
     groups: Mapping[str, Group] = Field(default_factory=dict)
     variants: Mapping[str, Variant] = Field(default_factory=dict)
     metadata: Optional[Mapping[str, Any]] = None
+    #: The structured address of every component the expansion of imports produced, by its
+    #: expanded name (``assemblies_spec.md`` §2.4). It is the flag that admits the address
+    #: separator ``-`` in exactly those names: an authored name never contains it, and a name
+    #: carrying it that is not listed here is refused. Not written into the file; a realized
+    #: record carries the addresses in its metadata, from which a re-run restores them.
+    addresses: Mapping[str, ComponentID] = Field(default_factory=dict)
+
+    @property
+    def uses_assemblies(self) -> bool:
+        """Whether the file imports anything or any entry uses a key of schema version 4."""
+        return bool(self.imports) or any(entry.has_v4_extensions for entry in self.components.values())
 
     def all_components(self) -> Dict[str, ComponentEntry]:
         """Returns every component of the selected system, wherever it is written, by name.

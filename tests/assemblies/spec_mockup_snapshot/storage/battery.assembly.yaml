@@ -1,0 +1,39 @@
+# Mockup (design, not loadable): energy_systems/assemblies/storage/battery.assembly.yaml
+# A home battery (bslib). It has no L1 controller: the EMS writes its LoadingPowerInput directly (D21), which is why
+# its controllable port names a device input and is REQUIRED — a battery without a controller is refused.
+
+schema_version: 4
+kind: assembly
+name: storage/battery
+description: AC-coupled home battery, sized to the PV arrays it stands beside unless pinned.
+
+parameters:
+  capacity_in_kwh:
+    {type: float, unit: KWH, default: AUTO, description: Usable capacity; AUTO is 1 kWh per kWp of all arrays.}
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, description: Charge/discharge power; AUTO is 0.5 W per Wp of all arrays.}
+  days_to_cover:
+    {type: float, default: none, description: "Request leaf `days_to_cover` († no law reads it; the translator converts it into capacity_in_kwh or reports it)."}
+
+presets:
+  de_twin: {}                                              # the twin's sized_to_pv battery
+
+components:
+  Battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    preset: sized_to_pv                                    # both fields AUTO, advanced_battery_bslib.py:103-121
+    config:
+      custom_battery_capacity_generic_in_kilowatt_hour: {$param: capacity_in_kwh}   # _in_kilowatt_hour: † suffix table entry
+      custom_pv_inverter_power_generic_in_watt: {$param: power_in_watt}
+    # no inputs: LoadingPowerInput is filled by the EMS feed's `dispatch.target_input` (twin :117-123)
+
+interface:
+  needs:
+    pv_peak_power:
+      fact: pv_peak_power_in_watt
+      many: true                                           # D10: Sum over every array, in instance order
+      into: [Battery]                                      # CAPACITY_LAW / INVERTER_POWER_LAW, :58, :65
+  provides:
+    electricity:
+      output: Battery.AcBatteryPowerUsed                   # observed by its tags (BATTERY), never linked
+      controllable: {target_input: LoadingPowerInput}      # required: binds the one controller

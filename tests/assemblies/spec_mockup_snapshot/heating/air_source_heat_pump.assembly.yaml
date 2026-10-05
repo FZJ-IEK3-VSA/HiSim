@@ -1,0 +1,148 @@
+# Mockup (design, not loadable): energy_systems/assemblies/heating/air_source_heat_pump.assembly.yaml
+# Every class, input and output is checked against origin/main 0921f9bd; † marks what does not exist yet.
+#
+# The generator, its two L1 controllers and its buffer vessel (D12 b). Control is hardcoded here (D21, spec §2.5):
+# ControllerSH switches the heat pump on the buffer temperature against the flow temperature the site's
+# HeatDistributionController asks for; ControllerDHW switches it on the cylinder temperature. The EMS reaches neither
+# device: it may only raise the two L1 set points through `ems_modifier`.
+#
+# Reference syntax inside `inputs` (proposed by the dry-run, gap G3): `{$port: <port>}` marks where the port's wires
+# land in this member's input list; the expansion replaces it by the bare partner name (the member class's default
+# connections from the partner's class, spec §3.2) or by the explicit wires the placeholder names, or drops it when the
+# port is inactive or declined. A member name that the selected internal
+# variants do not contain is dropped the same way (as group expansion drops items to disabled components).
+#
+# Evaluation order (spec §2.3, D23): the members carry an explicit relative `order:` because two of them live in
+# internal variants and the sequence interleaves them: ControllerSH 1, ControllerDHW 2, HeatPump 3, Buffer 4 — the
+# twin's order of the four. The importer positions the whole assembly (`order: 6` in the composed file) and never
+# orders inside it.
+
+schema_version: 4
+kind: assembly
+name: heating/air_source_heat_pump
+description: Air-to-water heat pump (hplib) with a parallel space-heating buffer, space heating and optionally DHW.
+
+parameters:
+  thermal_power_in_watt:
+    {type: float, unit: WATT, default: AUTO, description: Rated thermal output; AUTO is the building's heating load.}
+  scop_en14825_w35:
+    {type: float, default: none, description: Datasheet SCOP at W35 (EN 14825); none leaves hplib's generic fit.}
+  scop_en14825_w55:
+    {type: float, default: none, description: Datasheet SCOP at W55 (EN 14825); none leaves hplib's generic fit.}
+  with_buffer:
+    {type: bool, default: true, description: Parallel space-heating buffer between generator and HDS.}
+  buffer_volume_in_liter:
+    {type: float, unit: LITER, default: AUTO, description: Buffer volume; AUTO is 50 l per kW of the heat pump.}
+  serves_dhw:
+    {type: bool, default: true, description: Whether the heat pump also charges a DHW cylinder through `dhw`.}
+  control:
+    {type: enum, values: [traditional, smart], default: traditional,
+     description: "Heating control of the L1 space-heating controller; smart (†) is a preset that does not exist yet."}
+  # `default: none` and `default: AUTO` on a parameter that feeds a field the member's preset already leaves at that
+  # value write NOTHING into the expanded config (gap G9), which is how the twin's HeatPump entry stays one line.
+
+constraints:
+  - {requires: {buffer_volume_in_liter: [with_buffer]}}     # a volume needs a buffer
+
+presets:
+  de_twin: {}                                               # the twin's defaults: buffer, DHW, AUTO power
+  ie_typical: {scop_en14825_w35: 4.1, scop_en14825_w55: 3.2}
+
+components:
+  ControllerSH:
+    order: 1
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    preset: standard                                        # smart: † preset_smart
+    inputs:
+      - {$port: weather}                                    # bare Weather: DailyAverageOutsideTemperature
+      - {$port: flow_temperature}                           # bare HDS controller: HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: ems_modifier}                               # bare EMS: SimpleHotWaterStorageTemperatureModifier :2701
+      - Buffer                                              # WaterTemperatureInput <- WaterTemperatureToHeatGenerator
+  HeatPump:
+    order: 3
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    preset: air_water
+    config:
+      with_domestic_hot_water_preparation: {$param: serves_dhw}
+      set_thermal_output_power_in_watt: {$param: thermal_power_in_watt}
+      standardized_scop_en14825_w35: {$param: scop_en14825_w35}
+      standardized_scop_en14825_w55: {$param: scop_en14825_w55}
+    inputs:
+      - ControllerDHW                                       # OnOffSwitchDHW, ThermalPowerIsConstantForDHW, MaxThermalPowerValueForDHW
+      - ControllerSH                                        # OnOffSwitchSH
+      - {$port: dhw}                                        # TemperatureInputSecondaryDHW (the cylinder's return leg)
+      - Buffer                                              # TemperatureInputSecondarySH
+      - {$port: weather,                                    # explicit wires, the last resort (spec §3.2): the class's
+         wires: {TemperatureAmbient: DailyAverageOutsideTemperatures,       # default connections from Weather are not
+                 TemperatureInputPrimary: DailyAverageOutsideTemperatures}}  # these two; fix the class, not the file
+
+variants:
+  dhw_side:
+    selected_by: serves_dhw
+    options:
+      with_dhw:
+        when: [true]
+        components:
+          ControllerDHW:
+            order: 2                                        # between ControllerSH and HeatPump, as in the twin
+            class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+            preset: standard
+            inputs:
+              - {$port: ems_modifier}                                          # DHWStorageTemperatureModifier :3230
+              - {$port: dhw}                                                   # WaterTemperatureInputFromDHWStorage
+      without_dhw:
+        when: [false]
+        components: {}
+  buffer:
+    selected_by: with_buffer
+    options:
+      parallel:
+        when: [true]
+        components:
+          Buffer:
+            order: 4
+            class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+            preset: buffer
+            config:
+              sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP           # 50 l/kW, simple_water_storage.py:150
+              volume_heating_water_storage_in_liter: {$param: buffer_volume_in_liter}
+            inputs:
+              - {$port: sh}                                         # WaterTemperatureFromHeatDistribution, WaterMassFlowRate...
+              - HeatPump                                            # TemperatureOutputSH, MassFlowOutputSH
+      direct:
+        when: [false]
+        # † no buffer: HeatPump.position_hot_water_storage_in_system becomes NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR,
+        # the heat pump then needs SetHeatingTemperatureSH (more_advanced_heat_pump_hplib.py:932-948) and owns the
+        # pump, and the SITE's HeatDistribution must switch the same enum to grow WaterMassFlowInput
+        # (heat_distribution_system.py:230-243). A parameter of this import changing a site config is gap G8.
+        components: {}
+
+interface:
+  needs:
+    weather:          {into: [HeatPump, ControllerSH], partner: Weather}
+    flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (gap G1)
+    sh:               {circuit: sh, member: Buffer, active_when: {with_buffer: [true]}}
+                      # the naming convention gives the site's HDS pump and return leg, the buffer the supply leg
+    electricity:      {carrier: ELECTRICITY, outputs: [electricity_sh, electricity_dhw]}
+    ems_modifier:     {into: [ControllerSH, ControllerDHW], partner: L2GenericEnergyManagementSystem, optional: true}
+                      # the L1 set-point modifiers (D21); optional-bind: control; unbound = thermostat only
+    heat_load:        {fact: heating_load_in_watt, into: [HeatPump]}
+    design_temperature: {fact: heating_reference_temperature_in_celsius, into: [HeatPump]}
+    room_setpoint:    {fact: set_heating_temperature_in_celsius, into: [ControllerSH]}
+    emitter_type:     {fact: heat_distribution_system_type, into: [ControllerSH]}
+    heating_threshold: {fact: set_heating_threshold_outside_temperature_in_celsius, into: [ControllerSH]}
+  provides:
+    dhw:              {circuit: dhw, member: [HeatPump, ControllerDHW], required_when: {serves_dhw: [true]},
+                       active_when: {serves_dhw: [true]}}           # an active dhw circuit must be bound by one importer
+    electricity_sh:   {output: HeatPump.ElectricalInputPowerSH, controllable: {via: ems_modifier}}   # HEAT_PUMP_BUILDING
+    electricity_dhw:  {output: HeatPump.ElectricalInputPowerDHW, controllable: {via: ems_modifier},  # HEAT_PUMP_DHW
+                       active_when: {serves_dhw: [true]}}
+    # The tags are the observers' own declarations. HeatPump.ElectricalInputPowerForCooling and .ElectricalInputPowerBrinePump
+    # also carry electricity EnergyPorts (:971-994) and are fed to no meter and no EMS in the twin: zero for an
+    # air-source machine that never cools. A ground-source assembly provides the brine pump as a third output.
+    thermal_power:    {fact: maximal_thermal_power_in_watt, export: false}   # read by Buffer only
+    solar_coil:       {circuit: solar_sh, member: Buffer, optional: true, active_when: {with_buffer: [true]}}
+                       # SimpleHotWaterStorage.WaterTemperature/MassFlowRateFromSecondaryHeatGenerator (D20 a)
+  internal:                                                  # receiver's default connections from the sender's class
+    sh_generator_circuit: {bind: [HeatPump, Buffer]}         # the bare names above
+    on_off: {bind: [ControllerSH, HeatPump]}                 # State_SH -> OnOffSwitchSH

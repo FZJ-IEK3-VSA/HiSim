@@ -144,6 +144,35 @@ class ClassBinder:
         return cls._config_class_of(component_class, location, name)
 
     @classmethod
+    def component_class_of(cls, class_path: str, location: str, name: str) -> type:
+        """Imports a dotted component class path, refusing anything that is not a component.
+
+        The public form of the import every entry's binding starts with, for the expansion of
+        imports, which checks an assembly member's class before any entry is bound.
+
+        Args:
+            class_path: The dotted path written under ``class``.
+            location: Key path of the entry, for the message.
+            name: The component's name, for the message.
+
+        Returns:
+            The component class.
+
+        Raises:
+            EnergySystemBindingError: ``EF-10`` as :meth:`_import_component_class` raises it.
+        """
+        return cls._import_component_class(class_path, location, name)
+
+    @classmethod
+    def configuration_class_of(cls, component_class: type, location: str, name: str) -> type:
+        """Returns the configuration dataclass a component class takes (the public form).
+
+        Raises:
+            EnergySystemBindingError: ``EF-10`` when the component annotates none.
+        """
+        return cls._config_class_of(component_class, location, name)
+
+    @classmethod
     def _import_component_class(cls, class_path: str, location: str, name: str) -> type:
         """Imports the dotted class path of one entry and checks that it names a component.
 

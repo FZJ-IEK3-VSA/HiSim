@@ -12,7 +12,10 @@ switched-off component's class never has to import and the off rule cannot leak 
 stage. Structural validation runs before any class is imported, so that a file can be checked
 for shape without HiSim's component tree. Sizing completes before the first component exists, so
 that a contradiction is reported with nothing built. And the connections are checked only after
-construction, because a component's ports come into being inside its constructor.
+construction, because a component's ports come into being inside its constructor: the wiring
+stage checks every connection on the constructed components — the items an expansion of imports
+lowered exactly like the written ones — and a refusal of a lowered item names the port it came
+from.
 
 Two things belong to this module alone. The **simulation parameters** — the period, the
 resolution, the post-processing to run — live in their own file, because the same energy system
@@ -27,7 +30,7 @@ from __future__ import annotations
 
 import datetime
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -41,7 +44,12 @@ from hisim.energy_system.bindings import ClassBindings
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.comments import AnnotatedEmitter, write_record
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
+from hisim.energy_system.assemblies.expansion import expand_imports
+from hisim.energy_system.assemblies.record import ImportRecord, LoweredKind, LoweredPort, PortProvenance
+from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import (
+    EnergySystemAssemblyError,
+    EnergySystemCatalogueError,
     EnergySystemErrorId,
     EnergySystemFormatError,
 )
@@ -51,6 +59,7 @@ from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.parameters_format import ParameterFileWriter, ParameterNormalisation
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import realize, verify_rerun
+from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -205,6 +214,7 @@ class BuiltEnergySystem:
     source_simulation_parameters: str = ""
     path_resolver: Optional[PathResolver] = None
     rerun: bool = False
+    imports: ImportRecord = field(default_factory=ImportRecord)
 
 
 class EnergySystemExecutor:
@@ -237,6 +247,8 @@ class EnergySystemExecutor:
         source_energy_system: str = "",
         source_simulation_parameters: str = "",
         rerun: bool = False,
+        assembly_resolver: Optional[AssemblyResolver] = None,
+        source_lines: Optional[LineIndex] = None,
     ) -> None:
         """Prepares an executor for one loaded energy system.
 
@@ -251,6 +263,9 @@ class EnergySystemExecutor:
             source_simulation_parameters: Path of the parameters file, likewise.
             rerun: Whether the caller declared this to be the re-execution of a record, which
                 is what makes the reproduction guarantee checkable.
+            assembly_resolver: Finds the assemblies the file imports; this machine's search path
+                (``energy_systems/assemblies/``, then ``HISIM_ASSEMBLY_PATH``) when omitted.
+            source_lines: The file's line index, which the source maps of its imports cite.
         """
         self.model = model
         self.simulation_parameters = simulation_parameters
@@ -260,6 +275,8 @@ class EnergySystemExecutor:
         self.source_energy_system = source_energy_system
         self.source_simulation_parameters = source_simulation_parameters
         self.rerun = rerun
+        self.assembly_resolver = assembly_resolver
+        self.source_lines = source_lines
 
     def build(self) -> BuiltEnergySystem:
         """Runs every stage from the loaded file to a wired, registered simulator.
@@ -272,16 +289,28 @@ class EnergySystemExecutor:
                 the earliest stage that can decide it, and nothing is constructed before the
                 sizing of the whole system has succeeded.
         """
-        expanded, expansion = expand_groups(self.model)
-        validate_structure(expanded)
-        bindings = validate_classes(expanded)
-        configured = configure_energy_system(
-            expanded, bindings=bindings, path_resolver=self.path_resolver
-        )
-        wired, wiring_warnings = wire_energy_system(
-            expanded, configured, self.simulation_parameters
-        )
-        simulator = self.register(expanded, wired, expansion)
+        imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines)
+        expanded, expansion = expand_groups(imported)
+        provenance = self.port_provenance(expanded, imports)
+        try:
+            validate_structure(expanded)
+            bindings = validate_classes(expanded)
+            configured = configure_energy_system(
+                expanded, bindings=bindings, path_resolver=self.path_resolver
+            )
+            wired, wiring_warnings = wire_energy_system(
+                expanded,
+                configured,
+                self.simulation_parameters,
+                declared_outputs=[entry.item for entry in provenance if entry.kind == LoweredKind.PROVIDED],
+            )
+            PortProvenance.check_bound_outputs(provenance, wired.wires)
+        except EnergySystemCatalogueError as error:
+            annotated = imports.annotate(error, provenance)
+            if annotated is error:
+                raise
+            raise annotated from error
+        simulator = self.register(expanded, wired, expansion, imports)
         warnings = configured.warnings + wiring_warnings
         for warning in warnings:
             log.warning(warning)
@@ -297,10 +326,39 @@ class EnergySystemExecutor:
             source_simulation_parameters=self.source_simulation_parameters,
             path_resolver=self.path_resolver,
             rerun=self.rerun,
+            imports=imports,
         )
 
+    @staticmethod
+    def port_provenance(model: EnergySystemFile, imports: ImportRecord) -> List[LoweredPort]:
+        """The port-provenance table: what a wiring refusal of a lowered item is restated with.
+
+        A run that expanded imports has it in its import record. A re-run of a realized record
+        expands nothing, so it reads the table the record's metadata carries, and a refusal on a
+        re-run names the port it named on the run. Its provided outputs are the outputs the
+        wiring checks without any item reading them. A file without imports yields an empty table.
+
+        Args:
+            model: The expanded file, whose metadata a re-run's table comes from.
+            imports: What the expansion of imports did.
+
+        Returns:
+            The table, in lowering order.
+
+        Raises:
+            EnergySystemFormatError: ``EF-07`` when a record carries an import record without a
+                well-formed table.
+        """
+        if not imports.is_empty:
+            return list(imports.port_provenance)
+        return PortProvenance.from_metadata(model.metadata)
+
     def register(
-        self, model: EnergySystemFile, wired: WiredSystem, expansion: ExpansionRecord
+        self,
+        model: EnergySystemFile,
+        wired: WiredSystem,
+        expansion: ExpansionRecord,
+        imports: Optional[ImportRecord] = None,
     ) -> sim.Simulator:
         """Creates the simulator and registers every component in file order.
 
@@ -327,9 +385,17 @@ class EnergySystemExecutor:
             wired: The constructed and connected components.
             expansion: What the expansion resolved, for the variant selections that name the
                 run alongside the file's own name.
+            imports: What the expansion of imports did; its final evaluation sequence is the
+                order the components are added in (``assemblies_spec.md`` §2.3, D23). The expanded
+                file already lists its components in that sequence, which is checked here, so the
+                simulator's order and the record's can never disagree.
 
         Returns:
             The simulator holding every component of the system.
+
+        Raises:
+            EnergySystemAssemblyError: ``EF-7K`` when the wired order and the import record's sequence
+                disagree, which would be a defect of the expansion, not of the file.
         """
         simulator: sim.Simulator = sim.Simulator(
             module_directory=self.source_directory,
@@ -340,6 +406,17 @@ class EnergySystemExecutor:
         )
         simulator.scenario_name = self.scenario_name_of(model, expansion)
         simulator.description = model.description or ""
+        if imports is not None and imports.sequence:
+            wired_order = tuple(name for name, _component in wired.components)
+            if wired_order != imports.sequence_names:
+                raise EnergySystemAssemblyError(
+                    EnergySystemErrorId.ORDER_INVALID,
+                    "imports",
+                    f"the components are wired in the order {', '.join(wired_order)}, but the import record's "
+                    f"evaluation sequence is {', '.join(imports.sequence_names)}; the simulator's order and the "
+                    "record's would disagree.",
+                    remedy="This is a defect of the expansion of imports, not of the file; report it.",
+                )
         for _name, component in wired.components:
             simulator.add_component(component, connect_automatically=self.CONNECT_AUTOMATICALLY)
         return simulator
@@ -437,6 +514,9 @@ def build_energy_system(
     path = Path(energy_system_path)
     model = parse_energy_system(path)
     EnergySystemExecutor.check_metadata(model, str(path), rerun)
+    source_lines = (
+        LineIndex.from_text(path.read_text(encoding="utf-8"), path.name) if model.uses_assemblies else None
+    )
     executor = EnergySystemExecutor(
         model=model,
         simulation_parameters=simulation_parameters,
@@ -446,6 +526,7 @@ def build_energy_system(
         source_energy_system=str(path),
         source_simulation_parameters=str(simulation_parameters_path or ""),
         rerun=rerun,
+        source_lines=source_lines,
     )
     return executor.build()
 

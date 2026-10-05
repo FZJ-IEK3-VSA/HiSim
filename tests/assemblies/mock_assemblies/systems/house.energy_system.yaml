@@ -1,0 +1,39 @@
+# Mock: a composed energy system. Three site components, two PV instances, a hot-water package
+# nested three deep that the site's energy manager may modify, and a backup heater whose variant
+# leaves its thermostat out. Every component is placed in the evaluation sequence with order:.
+schema_version: 4
+name: mock_house
+description: A composed mock house for the assemblies tests.
+
+components:
+  Weather:
+    order: 1
+    class: tests.assemblies.mock_components.MockWeather
+    preset: standard
+  Occupancy:
+    order: 2
+    class: tests.assemblies.mock_components.MockOccupancy
+    preset: standard
+  Ems:
+    order: 6
+    class: tests.assemblies.mock_components.MockEms
+    preset: standard
+
+imports:
+  pv:
+    order: 3
+    assembly: mock/pv_array
+    instances:
+      east: {azimuth_in_degree: 90, facing: east}
+      west:
+        installation_year: 2026
+        parameters: {azimuth_in_degree: 270, facing: west, power_in_watt: 3000}
+  hot_water:
+    order: 4
+    assembly: mock/dhw_package
+    preset: standard
+    optional-bind: {ems_modifier: Ems}
+  backup:
+    order: 5
+    assembly: mock/electric_heater
+    parameters: {with_thermostat: false}

@@ -1,0 +1,44 @@
+# Mock: nested (depth 3 from a file). A storage water heater and a small panel of its own; every
+# port of the inner import is re-exported.
+schema_version: 4
+kind: assembly
+name: mock/dhw_package
+description: A mock hot-water package with a booster panel.
+
+parameters:
+  volume_in_liter:
+    {type: float, unit: LITER, default: 200, range: {min: 50, max: 500}, description: Usable tank volume.}
+  panel_power_in_watt:
+    {type: float, unit: WATT, default: 400, range: {min: 100, max: 1000}, description: Booster panel peak power.}
+
+presets:
+  standard: {}
+
+imports:
+  heater:
+    assembly: mock/storage_water_heater
+    parameters: {volume_in_liter: {$param: volume_in_liter}}
+
+components:
+  Panel:
+    class: tests.assemblies.mock_components.MockPVSystem
+    preset: rooftop
+    config:
+      power_in_watt: {$param: panel_power_in_watt}
+    inputs:
+      - {$port: weather}
+
+interface:
+  needs:
+    hot_water_demand: {from: heater.hot_water_demand}
+    ems_modifier: {from: heater.ems_modifier, optional: true}
+    weather: {into: [Panel], partner: MockWeather}
+  provides:
+    electricity: {from: heater.electricity}
+    panel: {output: Panel.ElectricityOutput}
+
+tests:
+  bounds:
+    - {output: Panel.ElectricityOutput, unit: WATT, min: 0, max: 1000}
+  monotone:
+    - {parameter: panel_power_in_watt, kpi: PV production, member: Panel, direction: increasing}

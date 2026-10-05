@@ -137,7 +137,7 @@ class RawDocument:
 
         Raises:
             EnergySystemFormatError: ``EF-02`` for a duplicate key, ``EF-03`` for a document
-                that is not a mapping, ``EF-07`` for text that is not YAML at all.
+                that is not a mapping or text that is not YAML at all.
         """
         return cls._parse(text, origin)
 
@@ -193,11 +193,7 @@ class RawDocument:
             cls._reject_duplicate_keys(node, origin)
             document = yaml.load(text, Loader=StrictYamlLoader)
         except yaml.YAMLError as problem:
-            raise EnergySystemFormatError(
-                EnergySystemErrorId.TOP_LEVEL_SHAPE,
-                origin,
-                f"the document is not valid YAML ({problem}).",
-            ) from problem
+            raise cls.not_yaml(origin, problem) from problem
         if not isinstance(document, dict):
             raise EnergySystemFormatError(
                 EnergySystemErrorId.TOP_LEVEL_SHAPE,
@@ -234,6 +230,19 @@ class RawDocument:
         elif isinstance(node, yaml.SequenceNode):
             for index, child in enumerate(node.value):
                 cls._reject_duplicate_keys(child, f"{location}[{index}]")
+
+    @classmethod
+    def not_yaml(cls, origin: str, problem: yaml.YAMLError) -> EnergySystemFormatError:
+        """Builds the rejection of text that is not YAML at all (``EF-03``), for every reader of a document.
+
+        Returns:
+            The exception, which the caller raises from the parser's error.
+        """
+        return EnergySystemFormatError(
+            EnergySystemErrorId.TOP_LEVEL_SHAPE,
+            origin,
+            f"the document is not valid YAML ({problem}).",
+        )
 
     @classmethod
     def malformed(cls, location: str, value: Any, expected: str) -> EnergySystemFormatError:

@@ -37,6 +37,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
+from hisim.config import ComponentID
 from hisim.config.presets import ConfigBuilder, replace_config
 from hisim.config.report import ResolutionReport
 from hisim.energy_system.bindings import ClassBinding, ClassBindings
@@ -130,15 +131,21 @@ class EntryConfigurator:
     #: name is one of these or ends in one after an underscore.
     PATH_KEY_NOUNS: ClassVar[Tuple[str, ...]] = StructuralValidator.PATH_KEY_NOUNS
 
-    def __init__(self, binding: ClassBinding, resolver: PathResolver) -> None:
+    def __init__(
+        self, binding: ClassBinding, resolver: PathResolver, identity: Optional[ComponentID] = None
+    ) -> None:
         """Prepares the configurator for one entry.
 
         Args:
             binding: The entry resolved against its component and configuration classes.
             resolver: The registry that expands the file's ``${var}`` path references.
+            identity: The structured address of an assembly member, which the expansion of
+                imports recorded for the entry (``assemblies_spec.md`` §2.4); ``None`` for a
+                component written directly into the file, whose identity is its name.
         """
         self.binding = binding
         self.resolver = resolver
+        self.identity = identity
         self.codec = ConfigValueCodec(binding.config_class)
 
     def build(self) -> Tuple[Any, Any]:
@@ -231,11 +238,11 @@ class EntryConfigurator:
         entry = self.binding.entry
         builder, arguments = self._selected_builder()
         if builder is not None:
-            return self._call_builder(builder, arguments)
+            return self._addressed(self._call_builder(builder, arguments))
         payload = self.codec.to_deserializer_payload(
             entry.config, f"components.{entry.name}.config", entry.name
         )
-        payload["component_id"] = {"name": entry.name}
+        payload["component_id"] = self.identity.to_dict() if self.identity is not None else {"name": entry.name}
         try:
             return getattr(self.binding.config_class, "from_dict")(payload)
         except Exception as error:  # pylint: disable=broad-except
@@ -245,6 +252,22 @@ class EntryConfigurator:
                 f"the config block of '{entry.name}' could not be read by "
                 f"{self.binding.config_class.__name__}: {error}.",
             ) from error
+
+    @property
+    def instance_name(self) -> str:
+        """The name a builder is called with: the member's own name for an assembly member.
+
+        A builder puts its ``name`` argument into a ``ComponentID``, whose name is an identifier;
+        an assembly member's entry is keyed by its serialized address (``pv-east-PVSystem``), so it
+        is built under its member name and given its address afterwards (:meth:`_addressed`).
+        """
+        return self.identity.name if self.identity is not None else self.binding.entry.name
+
+    def _addressed(self, config: Any) -> Any:
+        """Gives a built configuration the member's structured address, when the entry has one."""
+        if self.identity is not None:
+            config.component_id = self.identity
+        return config
 
     def _call_builder(self, builder: ConfigBuilder, arguments: Mapping[str, Any]) -> Any:
         """Calls one preset or named constructor with the entry's key as the instance name.
@@ -271,7 +294,7 @@ class EntryConfigurator:
         entry = self.binding.entry
         decoded = self._decode_arguments(builder, arguments)
         try:
-            return builder.build(entry.name, **decoded)
+            return builder.build(self.instance_name, **decoded)
         except Exception as error:  # pylint: disable=broad-except
             raise EnergySystemBindingError(
                 EnergySystemErrorId.UNDECODABLE_VALUE,
@@ -471,7 +494,7 @@ def configure_energy_system(
     configs: List[Any] = []
     origins: List[Any] = []
     for binding in resolved_bindings:
-        origin, config = EntryConfigurator(binding, resolver).build()
+        origin, config = EntryConfigurator(binding, resolver, model.addresses.get(binding.name)).build()
         names.append(binding.name)
         origins.append(origin)
         configs.append(config)

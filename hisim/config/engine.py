@@ -179,10 +179,14 @@ class SizingFactEngine:
     def _instance_name(config: Any) -> str:
         """Returns the config's instance name, which is how providers are addressed.
 
-        Without a name the config can neither be pointed at by a sources mapping nor be
-        blamed in an error message, so a missing one is a :class:`SizingError`.
+        The instance name is the component's serialized address (``ComponentID.address``): its
+        plain name for a component outside every assembly, and ``pv-east-PVSystem`` for an
+        assembly member, whose plain name two instances share. Without a name the config can
+        neither be pointed at by a sources mapping nor be blamed in an error message, so a
+        missing one is a :class:`SizingError`.
         """
-        name = getattr(getattr(config, "component_id", None), "name", None)
+        identity = getattr(config, "component_id", None)
+        name = getattr(identity, "address", None) or getattr(identity, "name", None)
         if not isinstance(name, str) or not name:
             raise SizingError(
                 f"{type(config).__name__} has no component_id.name; sizing addresses "

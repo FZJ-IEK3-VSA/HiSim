@@ -34,6 +34,8 @@ import enum
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.config.sizing import _AutoSize
+from hisim.energy_system.address_table import AddressTable
+from hisim.energy_system.assemblies.record import SourceMap
 from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.configure import EntryConfigurator
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordError
@@ -254,18 +256,38 @@ class RecordRealizer:
         groups = {
             name: self._group(group) for name, group in self.built.model.groups.items()
         }
+        metadata = RunMetadata.collect(
+            RunMetadata.describe_source(self.built.source_energy_system),
+            RunMetadata.describe_source(self.built.source_simulation_parameters),
+        )
+        metadata.update(self.import_metadata())
         record: EnergySystemFile = self.built.model.model_copy(
-            update={
-                "components": components,
-                "groups": groups,
-                "metadata": RunMetadata.collect(
-                    RunMetadata.describe_source(self.built.source_energy_system),
-                    RunMetadata.describe_source(self.built.source_simulation_parameters),
-                ),
-            }
+            update={"components": components, "groups": groups, "metadata": metadata}
         )
         assert_fully_concrete(record)
         return record
+
+    def import_metadata(self) -> Dict[str, Any]:
+        """The import record and the source maps a record of a file with imports carries (§9.1, §9.2).
+
+        A run that expanded imports writes what its expansion did; a re-run of such a record
+        expands nothing, and carries the blocks of the record it was given verbatim, so that its
+        own record reproduces that one. A run of a file without imports writes neither block, so
+        its record is what it always was.
+
+        Returns:
+            ``imports`` and ``source_map``, or nothing.
+        """
+        imports = self.built.imports
+        if not imports.is_empty:
+            return {
+                AddressTable.IMPORTS_KEY: imports.to_document(),
+                SourceMap.METADATA_KEY: imports.source_map.to_document(),
+            }
+        given = self.built.model.metadata or {}
+        return {
+            key: given[key] for key in (AddressTable.IMPORTS_KEY, SourceMap.METADATA_KEY) if key in given
+        }
 
     def entry(self, entry: ComponentEntry) -> ComponentEntry:
         """Rewrites one entry into the statement of what was actually configured.

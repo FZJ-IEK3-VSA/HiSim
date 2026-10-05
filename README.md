@@ -148,7 +148,7 @@ Three more `hisim` commands help when reading or writing such files:
 * `hisim energy-system describe <full.class.Name>` prints what one class can be configured with: its fields, its named
   presets, its named constructors and its sizable fields.
 * `hisim energy-system facts <file>` prints where a file's sized values would come from, without running it.
-* `hisim energy-system schema` writes the JSON Schema that editors bind to (`hisim/energy_system_v3.schema.json`).
+* `hisim energy-system schema` writes the JSON Schemas that editors bind to: `hisim/energy_system_v3.schema.json` and, beside it, the assembly schema `hisim/assembly_v4.schema.json`.
 
 Package Structure
 -----------

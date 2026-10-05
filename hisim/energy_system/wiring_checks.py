@@ -8,7 +8,8 @@ both ends of a connection because both components already exist.
 Five rules, in the order in which their failures are most useful to an author. An explicit wire
 may not reach into a port that feed resolution created, because that port is not in the file the
 author is reading and its name is derived rather than declared. Every wire must name ports that
-exist, which is the check that catches a renamed output and a port a configuration switched off.
+exist, which is the check that catches a renamed output and a port a configuration switched off;
+so must every output the file declares without reading it (an assembly's provided port).
 The two ends of a wire must agree on load type and unit, unless one of them is declared as the
 wildcard that means "whatever the other carries". No input may be fed twice, which the format
 has no way of merging. And no mandatory input may be left open, unless the port itself says its
@@ -31,7 +32,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim.config.channels import PortTypeCompatibility
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError, WrittenItem
 
 
 @dataclass(frozen=True)
@@ -46,7 +47,9 @@ class PlannedWire:
     unit.
 
     ``origin`` records which item produced the wire, so a duplicate-feed message can name the two
-    items that collide even when one of them came from a default expansion.
+    items that collide even when one of them came from a default expansion, and ``item`` is that
+    item as data — the subject of a refusal, which the build looks up in the port-provenance table
+    of the assemblies — or ``None`` for a wire feed resolution derived.
     """
 
     source_name: str
@@ -56,6 +59,7 @@ class PlannedWire:
     target_runtime_name: str
     target_input: str
     origin: str
+    item: Optional[WrittenItem] = None
 
     def describe(self) -> str:
         """Builds the one-line rendering of the wire that messages and the log name it by.
@@ -88,6 +92,7 @@ class WiringChecker:
         written_wire_count: int,
         created_ports: Mapping[str, Sequence[str]],
         system_name: str,
+        declared_outputs: Sequence[WrittenItem] = (),
     ) -> None:
         """Prepares the checker for one planned wiring.
 
@@ -98,12 +103,15 @@ class WiringChecker:
                 the rest were derived by feed resolution and are exempt from the first check.
             created_ports: The ports feed resolution created, keyed by aggregator name.
             system_name: Name of the energy system, used in the message for an open input.
+            declared_outputs: Outputs the file states exist without any item reading them — the
+                outputs of an assembly's provided ports — each a member and an output.
         """
         self.components_by_name = dict(components_by_name)
         self.wires = list(wires)
         self.written_wire_count = written_wire_count
         self.created_ports = {name: list(ports) for name, ports in created_ports.items()}
         self.system_name = system_name
+        self.declared_outputs = tuple(declared_outputs)
 
     def check_all(self) -> None:
         """Runs every connection check, stopping at the first violation.
@@ -155,6 +163,7 @@ class WiringChecker:
                         f"the connection {wire.describe()} names the {side} "
                         f"'{name}.{port}', which the file does not contain: it is created by "
                         "resolving that aggregator's feeds.",
+                        item=wire.item,
                         remedy=(
                             "A written wire may only name a port a component declares itself; "
                             "use the feed's 'dispatch' block for the back-channel."
@@ -164,10 +173,25 @@ class WiringChecker:
     def _check_ports_exist(self) -> None:
         """Verifies that every planned wire names an existing output and an existing input.
 
+        Every declared output is looked up as well: nothing reads it, so no wire would.
+
         Raises:
             EnergySystemWiringError: ``EF-21`` for a missing output, ``EF-22`` for a missing
                 input, each listing the ports the component does declare.
         """
+        for declared in self.declared_outputs:
+            member = self.components_by_name[declared.member]
+            if find_output(member, declared.output) is None:
+                raise EnergySystemWiringError(
+                    EnergySystemErrorId.UNKNOWN_OUTPUT_PORT,
+                    f"components.{declared.member}",
+                    f"the output '{declared.output}' is declared on '{declared.member}' "
+                    f"({member.get_full_classname()}), which does not have it.",
+                    item=declared,
+                    alternatives=[port.field_name for port in member.outputs],
+                    alternatives_label="outputs",
+                    offending_value=declared.output,
+                )
         for wire in self.wires:
             source = self.components_by_name[wire.source_name]
             target = self.components_by_name[wire.target_name]
@@ -178,6 +202,7 @@ class WiringChecker:
                     f"the connection {wire.describe()} names the output '{wire.source_output}', "
                     f"which '{wire.source_name}' ({source.get_full_classname()}) does not "
                     "declare.",
+                    item=wire.item,
                     alternatives=[port.field_name for port in source.outputs],
                     alternatives_label="outputs",
                     offending_value=wire.source_output,
@@ -189,6 +214,7 @@ class WiringChecker:
                     f"the connection {wire.describe()} names the input '{wire.target_input}', "
                     f"which '{wire.target_name}' ({target.get_full_classname()}) does not "
                     "declare.",
+                    item=wire.item,
                     alternatives=[port.field_name for port in target.inputs],
                     alternatives_label="inputs",
                     offending_value=wire.target_input,
@@ -215,6 +241,7 @@ class WiringChecker:
                     f"load type mismatch on the connection {wire.describe()}: the output "
                     f"carries '{output.load_type.name}' but the input expects "
                     f"'{target_input.loadtype.name}'.",
+                    item=wire.item,
                     remedy="Align the two port declarations, or wire a different pair of ports.",
                 )
             if not PortTypeCompatibility.units_agree(output.unit, target_input.unit):
@@ -223,6 +250,7 @@ class WiringChecker:
                     f"components.{wire.target_name}.inputs",
                     f"unit mismatch on the connection {wire.describe()}: the output is in "
                     f"'{output.unit.value}' but the input expects '{target_input.unit.value}'.",
+                    item=wire.item,
                     remedy="Align the two port declarations, or wire a different pair of ports.",
                 )
 
@@ -246,6 +274,7 @@ class WiringChecker:
                     f"components.{wire.target_name}.inputs",
                     f"the input '{wire.target_name}.{wire.target_input}' is fed twice: by "
                     f"{previous.describe()} and by {wire.describe()}.",
+                    item=wire.item,
                     remedy="Every input takes exactly one source; remove one of the two items.",
                 )
             seen[key] = wire

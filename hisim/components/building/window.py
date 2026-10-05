@@ -111,7 +111,7 @@ class Window:
         self,
         sun_azimuth,
         direct_normal_irradiance,
-        direct_horizontal_irradiance,
+        diffuse_horizontal_irradiance,
         global_horizontal_irradiance,
         direct_normal_irradiance_extra,
         apparent_zenith,
@@ -130,17 +130,18 @@ class Window:
         :type sun_azimuth: float
         :param direct_normal_irradiance: Direct normal irradiance from the weather in W/m²
         :type direct_normal_irradiance: float
-        :param direct_horizontal_irradiance: Diffuse horizontal irradiance from the weather in W/m²
-        :type direct_horizontal_irradiance: float
+        :param diffuse_horizontal_irradiance: Diffuse horizontal irradiance from the weather in W/m²
+        :type diffuse_horizontal_irradiance: float
         :param global_horizontal_irradiance: Global horizontal irradiance from the weather in W/m²
         :type global_horizontal_irradiance: float
         :param direct_normal_irradiance_extra: Extraterrestrial normal irradiance in W/m²
         :type direct_normal_irradiance_extra: float
         :param apparent_zenith: Apparent zenith angle of the sun in degrees
         :type apparent_zenith: float
-        :return: Solar gain entering the building through the window in W; 0 when the irradiance on the
-            plane is undefined
+        :return: Solar gain entering the building through the window in W
         :rtype: float
+        :raises ValueError: when the irradiance on the plane is not a finite number,
+            which it is whenever one of the weather values given is not
         """
         if window_azimuth_angle is None:
             window_azimuth_angle = 0
@@ -155,12 +156,17 @@ class Window:
             sun_azimuth,
             direct_normal_irradiance,
             global_horizontal_irradiance,
-            direct_horizontal_irradiance,
+            diffuse_horizontal_irradiance,
             direct_normal_irradiance_extra,
             albedo=self.ALBEDO,
         )
 
-        if math.isnan(poa_irrad["poa_global"]):
-            return 0.0
+        if not math.isfinite(poa_irrad["poa_global"]):
+            raise ValueError(
+                f"The irradiance on a window's plane is {poa_irrad['poa_global']}, not a finite number, "
+                f"from a direct normal {direct_normal_irradiance}, diffuse horizontal "
+                f"{diffuse_horizontal_irradiance} and global horizontal {global_horizontal_irradiance} "
+                f"W/m² at zenith {apparent_zenith}°. A gap in the weather file carries straight through."
+            )
 
         return poa_irrad["poa_global"] * reduction_factor_with_area

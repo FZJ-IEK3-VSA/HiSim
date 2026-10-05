@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from hisim import hisim_main
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
@@ -88,31 +89,18 @@ def test_basic_household_only_heating() -> None:
     kpi_path = result_path / "all_kpis.json"
     assert kpi_path.is_file(), f"all_kpis.json not found in result directory: {result_directory}"
 
-    # Flatten the nested collection to {kpi name: value}; the nesting is by building
-    # object and tag, neither of which this test cares about.
-    values_by_name: dict = {}
-
-    def collect(node: object) -> None:
-        if not isinstance(node, dict):
-            return
-        for key, value in node.items():
-            if isinstance(value, dict) and "value" in value and "unit" in value:
-                values_by_name[key] = value["value"]
-            else:
-                collect(value)
-
-    collect(json.loads(kpi_path.read_text(encoding="utf-8")))
+    # Every KPI is looked up by its name alone, across building objects and tags; the finder fails
+    # by name when the KPI is missing or more than one entry carries it.
+    finder = KpiFinder(json.loads(kpi_path.read_text(encoding="utf-8")))
 
     for name in ExpectedKpis.REQUIRED:
-        assert name in values_by_name, f"KPI '{name}' is missing from {kpi_path}"
-        assert values_by_name[name] is not None, (
+        assert finder.value(name=name) is not None, (
             f"KPI '{name}' has no value -- the energy balance could not be computed, "
             "which usually means the setup is missing a meter."
         )
 
     for name in ExpectedKpis.NOT_COMPUTABLE:
-        assert name in values_by_name, f"KPI '{name}' is missing from {kpi_path}"
-        assert values_by_name[name] is None, (
+        assert finder.value(name=name) is None, (
             f"KPI '{name}' carries a value, but this household has no generation at all, "
             "so the share of its own production that it consumes is undefined."
         )

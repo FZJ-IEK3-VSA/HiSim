@@ -3,7 +3,7 @@
 This module turns a JSON config (``scripts/golden_config.json``) into
 :class:`~hisim.simulationparameters.SimulationParameters`, runs a setup via
 :func:`hisim.hisim_main.main`, reads the resulting ``all_kpis.json``, and
-flattens it into a ``{kpi: value}`` mapping.
+turns it into the golden leaf map (``scripts/golden_kpis.py``, :func:`golden_leaves`).
 
 The pure helpers (``load_config``, ``build_simulation_parameters``,
 ``resolve_setup_path``, ``filter_config``, ``select_pairs``, ``config_hash``,
@@ -36,10 +36,10 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 
 try:  # importable both as ``scripts.runner`` (tests) and ``runner`` (CLI from scripts/)
-    from golden_kpis import flatten  # type: ignore[import-not-found]
+    from golden_kpis import golden_leaves  # type: ignore[import-not-found]
     from golden_horizons import HorizonVocabulary  # type: ignore[import-not-found]
 except ModuleNotFoundError:
-    from scripts.golden_kpis import flatten
+    from scripts.golden_kpis import golden_leaves
     from scripts.golden_horizons import HorizonVocabulary
 
 
@@ -111,6 +111,7 @@ class RunResult:
     setup_id: str
     parameter_set_id: str
     result_directory: str
+    #: The golden leaf map of the run (``scripts.golden_kpis.golden_leaves``): dotted address -> leaf.
     kpis: dict[str, Any]
     error: Optional[str] = None
     #: Wall time of the run in seconds; what ``golden_config.json``'s ``seconds`` weights come from.
@@ -368,10 +369,10 @@ def run_one(
     repo_root: Path,
     mode: str = "python",
 ) -> RunResult:
-    """Run one ``(setup, parameter_set)`` pair and return its flattened KPIs.
+    """Run one ``(setup, parameter_set)`` pair and return its golden KPI leaves.
 
     Builds :class:`SimulationParameters`, resolves the setup, runs it, then reads
-    and flattens ``<result_directory>/all_kpis.json``. With ``mode="python"``
+    turns ``<result_directory>/all_kpis.json`` into golden leaves. With ``mode="python"``
     (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`; with
     ``mode="yaml"`` it runs the recorded ``.energy_system.yaml`` twin through the
     declarative executor. Both receive the *same* built
@@ -407,7 +408,7 @@ def run_one(
                 f"{kpi_path} was not produced — the parameter set must enable both "
                 "COMPUTE_KPIS and WRITE_KPIS_TO_JSON."
             )
-        kpis = flatten(json.loads(kpi_path.read_text()))
+        kpis = golden_leaves(json.loads(kpi_path.read_text()))
         return RunResult(
             setup_id=setup.id,
             parameter_set_id=parameter_set.id,

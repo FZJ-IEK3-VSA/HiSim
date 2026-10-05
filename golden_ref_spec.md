@@ -111,6 +111,11 @@ tests/
 - Add a `filter_setups(config, setup_id)` helper for the `--setup` CI slice.
 
 ### 6.3 `golden_kpis.py` (new, pure/tested)
+> [2026-10-03] Superseded for the stored form: `flatten` became `golden_leaves`, which keys each
+> KPI by its dotted address (`KpiAddress.dotted`) and stores a leaf with its value, unit and
+> address fields; `compare` checks the unit exactly as a failure of its own, and every reader of
+> today's goldens refuses the old flat form. `golden_references/README.md` describes the form.
+
 - `flatten(all_kpis_dict) -> dict[str, float]` — walk
   `{building:{category:{kpi:{"value":…}}}}` to dotted keys; treat `{"value": x}`
   as leaf; skip/stringify non-numeric leaves.
@@ -132,7 +137,8 @@ tests/
   someone retires it deliberately. Such keys are reported as `absent` in the pair's
   summary line, always by name.
 - A stored golden that exists but cannot be merged onto — unreadable, not a JSON
-  object, or not the flat scalar mapping `flatten` produces — fails its pair like a
+  object, or not the leaf form `golden_leaves` produces (since 2026-10-03; the old flat
+  scalar mapping included) — fails its pair like a
   failed run (counted as errored, named with its reason, non-zero exit), rather than
   being silently replaced.
 - `--force-rewrite` dumps the fresh values verbatim, ignoring whatever is on disk:

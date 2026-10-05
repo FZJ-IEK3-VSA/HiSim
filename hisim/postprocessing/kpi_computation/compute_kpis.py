@@ -303,10 +303,13 @@ class KpiGenerator(KpiPreparation):
         table fits the report layout. The table is returned but not persisted on
         the instance.
         """
+        sorted_collection = self.kpi_collection_dict_sorted
+        if sorted_collection is None:
+            raise RuntimeError("The KPI report table is built from the tag-sorted collection, which is not sorted yet.")
         table: List[List[str]] = []
         table.append(["Object", "KPI", "Value", "Unit"])
         for building_object in self.building_objects_in_district_list:
-            for kpi_tag, kpi_entries in self.kpi_collection_dict_sorted[building_object].items():
+            for kpi_tag, kpi_entries in sorted_collection[building_object].items():
                 table.append([f"{building_object}", f"{kpi_tag}", "", ""])
                 table.append(["--------", "--------------------", "", ""])
                 for kpi_name, kpi_entry in kpi_entries.items():

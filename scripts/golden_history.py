@@ -2,19 +2,41 @@
 """Draw how every golden KPI moved across the blesses.
 
 ``golden_references/*.json`` records what the gated fleet produced at the moment of the
-last bless: one flat ``{"BUI1.<component>.<kpi>": number}`` file per ``(setup,
-parameter_set)`` pair. The files are re-blessed whenever an intended change moves a number,
-and since #682 a bless is sticky -- a value the gate would have accepted keeps its stored
-number -- so the git history of that directory is a fairly clean record of which KPI moved
-in which pull request.
+last bless: one file per ``(setup, parameter_set)`` pair, mapping each KPI's dotted address
+to a leaf that carries its value, unit and address fields (``scripts/golden_kpis.py``). The
+files are re-blessed whenever an intended change moves a number, and since #682 a bless is
+sticky -- a value the gate would have accepted keeps its stored number -- so the git history
+of that directory is a fairly clean record of which KPI moved in which pull request.
 
 This script reads that record and draws it. It walks the commits that touched
 ``golden_references/`` on the current branch, loads every golden file at every commit where
-it existed, stitches renamed keys back into one series through
-:mod:`scripts.golden_kpi_renames`, and writes, per pair, a grid of small multiples -- one
-panel per KPI, one marker per commit that touched the pair's file, the y axis being the
-KPI's change against its first recorded value. It also writes one ``moves.csv`` covering
-every pair, which is the greppable answer to "what moved when".
+it existed, stitches renamed keys back into one series (see "Series identity" below), and
+writes, per pair, a grid of small multiples -- one panel per KPI, one marker per commit that
+touched the pair's file, the y axis being the KPI's change against its first recorded value.
+It also writes one ``moves.csv`` covering every pair, which is the greppable answer to "what
+moved when".
+
+Series identity
+---------------
+The walker is the one reader of *historical* golden files, so it reads both forms they have
+had; every reader of today's goldens refuses the old one.
+
+* **Leaf form** (a dict per key, today's): a series is identified by the structured fields
+  ``building``, ``tag``, ``name`` and the source's ``import``, ``instance`` and ``member`` --
+  not by the key, so a later change of the serialized source name (``source.name``, the
+  key's suffix) continues one series without any table entry. The panel is labelled with the
+  key the newest leaf of the series carries. A leaf whose key disagrees with its fields is
+  refused, as everywhere.
+* **Flat form** (a bare value per key, before the goldens carried addresses): a series is
+  identified by its dotted key, after the declared renames of
+  :mod:`scripts.golden_kpi_renames`, as before.
+* **Stitching the two.** A flat key continues a leaf series when it equals the dotted key of
+  a leaf of that series somewhere in the walk, or else when it equals the leaf's bare
+  ``building.tag.name`` (what the flat scheme wrote while a name was unique in its building).
+  This is the one place a key string is compared with an address, and it only reads
+  historical data. A flat key that would continue two different leaf series is refused by
+  name -- declare its successor in ``KPI_RENAMES`` -- and so is a snapshot in which two keys
+  land in one series. A file whose leaves are partly flat and partly dicts is refused.
 
 Conventions
 -----------
@@ -58,7 +80,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import matplotlib
 
@@ -77,13 +99,16 @@ if str(_REPO_ROOT) not in sys.path:
 try:  # run as a script from scripts/ ...
     from golden_check import golden_filename  # type: ignore[import-not-found]
     from golden_kpi_renames import canonical_pair, kpi_renames_for  # type: ignore[import-not-found]
-    from golden_kpis import ABS_TOL, REL_TOL  # type: ignore[import-not-found]
+    from golden_kpis import ABS_TOL, REL_TOL, leaf_address  # type: ignore[import-not-found]
     from runner import load_config, select_pairs  # type: ignore[import-not-found]
 except ModuleNotFoundError:  # ... or imported as scripts.golden_history (tests)
     from scripts.golden_check import golden_filename
     from scripts.golden_kpi_renames import canonical_pair, kpi_renames_for
-    from scripts.golden_kpis import ABS_TOL, REL_TOL
+    from scripts.golden_kpis import ABS_TOL, REL_TOL, leaf_address
     from scripts.runner import load_config, select_pairs
+
+# pylint: disable=wrong-import-order
+from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress  # noqa: E402
 
 GOLDEN_DIR_NAME = "golden_references"
 #: Files in the golden directory that are not a pair's references.
@@ -104,6 +129,16 @@ QUIET_COLOUR = "#b0b0b0"
 MODE_PERCENT = "percent"
 MODE_ABSOLUTE = "absolute"
 MODE_EMPTY = "empty"
+
+#: A series' identity: ``(FLAT_SERIES, key)`` for a flat-form key no leaf continues, or
+#: ``(LEAF_SERIES, building, tag, name, source.import, source.instance, source.member)``.
+SeriesId = Tuple[Optional[str], ...]
+FLAT_SERIES = "flat"
+LEAF_SERIES = "leaf"
+
+
+class HistoryError(ValueError):
+    """A historical golden snapshot the walker cannot turn into series without guessing."""
 
 
 # ---------------------------------------------------------------------------
@@ -323,15 +358,132 @@ def build_panel(kpi: str, values: Sequence[Optional[float]]) -> Panel:
     return Panel(kpi, tuple(values), tuple(plotted), mode, baseline, movement_score(values), moved)
 
 
+def leaf_series_id(address: KpiAddress) -> SeriesId:
+    """The identity of a leaf-form series: building, tag, name and the source's import, instance, member.
+
+    The source's runtime ``name`` (the key's suffix) and its ``assembly`` are left out, so a
+    change of either continues the series.
+
+    Args:
+        address: The leaf's address.
+
+    Returns:
+        The series identity.
+    """
+    source = address.source
+    if source is None:
+        return (LEAF_SERIES, address.building, address.tag, address.name, None, None, None)
+    return (LEAF_SERIES, address.building, address.tag, address.name, source.import_key, source.instance,
+            source.member)
+
+
+def parse_snapshot(
+    contents: Mapping[str, Any], origin: str, renames: Mapping[str, str]
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Tuple[KpiAddress, Any]]]]:
+    """Read one historical golden file in whichever form it was written.
+
+    Args:
+        contents: The parsed file.
+        origin: Which file at which commit, for the error message.
+        renames: The declared flat-form renames of the pair.
+
+    Returns:
+        ``(flat, None)`` for the flat form, ``flat`` being ``key -> value`` with the renames
+        applied; ``(None, leaves)`` for the leaf form, ``leaves`` being ``key -> (address, value)``.
+
+    Raises:
+        HistoryError: If the file mixes bare values and leaves.
+        GoldenFormatError: If a leaf disagrees with its key or is malformed.
+    """
+    leaf_keys = [key for key, value in contents.items() if isinstance(value, dict)]
+    if not leaf_keys:
+        return apply_kpi_renames(contents, renames), None
+    if len(leaf_keys) != len(contents):
+        flat_key = next(key for key, value in contents.items() if not isinstance(value, dict))
+        raise HistoryError(
+            f"{origin}: mixes the flat form (e.g. '{flat_key}') with leaves (e.g. '{leaf_keys[0]}'); "
+            "a golden file is one or the other."
+        )
+    return None, {key: (leaf_address(key, leaf, origin), leaf["value"]) for key, leaf in contents.items()}
+
+
+@dataclass(frozen=True)
+class _Stitching:
+    """Where the flat keys of a pair's history continue: the leaf series of the whole walk.
+
+    Attributes:
+        by_dotted: Each dotted key any leaf carried -> the leaf series that carried it.
+        by_bare: Each bare ``building.tag.name`` of a leaf -> the leaf series it belongs to.
+        labels: Each leaf series -> the key its newest leaf carries.
+    """
+
+    by_dotted: Dict[str, Set[SeriesId]]
+    by_bare: Dict[str, Set[SeriesId]]
+    labels: Dict[SeriesId, str]
+
+    @classmethod
+    def of(cls, leaf_snapshots: Sequence[Dict[str, Tuple[KpiAddress, Any]]]) -> "_Stitching":
+        """Index every leaf of the walk, oldest snapshot first, so the newest key labels a series."""
+        by_dotted: Dict[str, Set[SeriesId]] = {}
+        by_bare: Dict[str, Set[SeriesId]] = {}
+        labels: Dict[SeriesId, str] = {}
+        for leaves in leaf_snapshots:
+            for key, (address, _) in leaves.items():
+                series = leaf_series_id(address)
+                by_dotted.setdefault(key, set()).add(series)
+                # The bare form the flat scheme used: the address without its source.
+                bare = KpiAddress(address.building, address.tag, address.name, None).dotted
+                by_bare.setdefault(bare, set()).add(series)
+                labels[series] = key
+        return cls(by_dotted, by_bare, labels)
+
+    def series_of_flat_key(self, key: str, origin: str) -> SeriesId:
+        """The series a flat-form key belongs to: a leaf series it continues, or its own.
+
+        Raises:
+            HistoryError: If the key would continue two different leaf series.
+        """
+        candidates = self.by_dotted.get(key) or self.by_bare.get(key)
+        if not candidates:
+            return (FLAT_SERIES, key)
+        if len(candidates) > 1:
+            named = ", ".join(sorted(self.labels[series] for series in candidates))
+            raise HistoryError(
+                f"{origin}: the flat key '{key}' would continue {len(candidates)} different KPI series ({named}); "
+                "declare its successor in scripts/golden_kpi_renames.py (KPI_RENAMES)."
+            )
+        return next(iter(candidates))
+
+    def label(self, series: SeriesId) -> str:
+        """The panel label of a series: the newest key of a leaf series, the key of a flat one."""
+        if series[0] == LEAF_SERIES:
+            return self.labels[series]
+        return str(series[1])
+
+
+def _place(normalized: Dict[SeriesId, Any], series: SeriesId, key: str, value: Any,
+           claimed_by: Dict[SeriesId, str], origin: str) -> None:
+    """Put one key's value into its series, refusing a second key landing in the same one."""
+    if series in normalized:
+        raise HistoryError(
+            f"{origin}: the keys '{claimed_by[series]}' and '{key}' would both be one KPI series; "
+            "two measurements of one snapshot are never merged."
+        )
+    normalized[series] = value
+    claimed_by[series] = key
+
+
 def build_pair_history(
     stem: str, snapshots: Sequence[Tuple[Commit, Optional[Mapping[str, Any]]]]
 ) -> PairHistory:
     """Assemble one pair's history from its snapshot at every commit.
 
-    Commits before the file first appeared are dropped, as are commits at which the file is
-    absent (it has never been deleted, but a deletion would be a gap, not a zero) and
-    commits at which the renamed contents are identical to the previous kept snapshot --
-    those did not touch this pair even though they touched the directory.
+    Each snapshot is read in its own form and its keys are assigned to series (see the module
+    docstring, "Series identity"). Commits before the file first appeared are dropped, as are
+    commits at which the file is absent (it has never been deleted, but a deletion would be a
+    gap, not a zero) and commits whose values per series are identical to the previous kept
+    snapshot -- those did not touch this pair even though they touched the directory (a
+    re-bless that only changed the file's form is one of them).
 
     Args:
         stem: The golden filename stem, in its current spelling.
@@ -339,34 +491,52 @@ def build_pair_history(
 
     Returns:
         The pair's history, panels sorted by total movement, largest first.
+
+    Raises:
+        HistoryError: If a snapshot mixes the two forms, a flat key would continue two leaf
+            series, or two keys of one snapshot land in one series.
     """
     renames = kpi_renames_for(stem)
-    kept: List[Tuple[Commit, Dict[str, Any]]] = []
+    parsed: List[Tuple[Commit, str, Optional[Dict[str, Any]], Optional[Dict[str, Tuple[KpiAddress, Any]]]]] = []
     for commit, contents in snapshots:
         if contents is None:
             continue
-        renamed = apply_kpi_renames(contents, renames)
-        if kept and renamed == kept[-1][1]:
-            continue
-        kept.append((commit, renamed))
+        origin = f"{stem} at {commit.short}"
+        flat, leaves = parse_snapshot(contents, origin, renames)
+        parsed.append((commit, origin, flat, leaves))
+    stitching = _Stitching.of([leaves for _, _, _, leaves in parsed if leaves is not None])
 
-    keys: List[str] = []
-    seen = set()
-    for _, contents_at in kept:
-        for key in contents_at:
-            if key not in seen:
-                seen.add(key)
-                keys.append(key)
+    kept: List[Tuple[Commit, Dict[SeriesId, Any]]] = []
+    for commit, origin, flat, leaves in parsed:
+        normalized: Dict[SeriesId, Any] = {}
+        claimed_by: Dict[SeriesId, str] = {}
+        if leaves is not None:
+            for key, (address, value) in leaves.items():
+                _place(normalized, leaf_series_id(address), key, value, claimed_by, origin)
+        else:
+            for key, value in (flat or {}).items():
+                _place(normalized, stitching.series_of_flat_key(key, origin), key, value, claimed_by, origin)
+        if kept and normalized == kept[-1][1]:
+            continue
+        kept.append((commit, normalized))
+
+    order: List[SeriesId] = []
+    seen: Set[SeriesId] = set()
+    for _, values_at in kept:
+        for series in values_at:
+            if series not in seen:
+                seen.add(series)
+                order.append(series)
 
     panels = [
         build_panel(
-            key,
+            stitching.label(series),
             [
-                contents_at[key] if is_number(contents_at.get(key)) else None
-                for _, contents_at in kept
+                values_at[series] if is_number(values_at.get(series)) else None
+                for _, values_at in kept
             ],
         )
-        for key in keys
+        for series in order
     ]
     panels.sort(key=lambda panel: (-panel.score, panel.kpi))
     return PairHistory(stem, tuple(commit for commit, _ in kept), tuple(panels))

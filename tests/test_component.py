@@ -617,7 +617,7 @@ def test_component_name_with_multiple_buildings() -> None:
 
         def __init__(self, config: ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
             super().__init__(
-                name="TestComponent",
+                name=config.component_id.key,
                 my_simulation_parameters=my_simulation_parameters,
                 my_config=config,
                 my_display_config=DisplayConfig(),
@@ -714,6 +714,41 @@ def test_component_base_still_raises_not_implemented_for_state_hooks() -> None:
         component.i_restore_state()
     with pytest.raises(NotImplementedError):
         component.i_prepare_simulation()
+
+
+@pytest.mark.base
+def test_a_component_named_other_than_its_key_is_refused() -> None:
+    """Catches a component whose runtime name and ``ComponentID.key`` differ being constructed.
+
+    The name prefixes every output and result column, the key is what a KPI source, an
+    energy-system file and the economics address the component by; they are one string.
+    """
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = ConfigBase(component_id=ComponentID(name="TestComponent", building="Building1"))
+
+    class _Misnamed(cp.StatelessComponent):
+        """A component that passes its plain name instead of its key."""
+
+        def __init__(self, config: ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
+            super().__init__(
+                name="TestComponent",
+                my_simulation_parameters=my_simulation_parameters,
+                my_config=config,
+                my_display_config=DisplayConfig(),
+            )
+
+        def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+            pass
+
+        def write_to_report(self) -> list[str]:
+            return []
+
+    with pytest.raises(
+        cp.ComponentNameMismatchError,
+        match="Component _Misnamed \\(ConfigBase\\) was constructed with the name 'TestComponent', but its "
+        "config's component_id.key is 'Building1_TestComponent'",
+    ):
+        _Misnamed(config, sim_params)
 
 
 @pytest.mark.base

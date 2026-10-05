@@ -22,6 +22,9 @@ import pytest
 
 from hisim.renovisor.apply import AddedLayer
 from hisim.components.building.building import Building
+from hisim.config import ComponentID, DisplayConfig
+from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiSource, KpiTagEnumClass
 from hisim.renovisor.capabilities import ProbeSet
 from hisim.renovisor.constants import ComfortGrades, GradeScale
 from hisim.renovisor.kpis import (
@@ -63,12 +66,32 @@ def document_of(values: Dict[str, float]) -> KpiDocument:
         {
             "BUI1": {
                 "General": {
-                    name: {"name": name, "unit": "kWh", "value": value}
+                    name: {"name": name, "unit": "kWh", "value": value, "tag": "General"}
                     for name, value in values.items()
                 }
             }
         }
     )
+
+
+def component_entries(component: str, tag: KpiTagEnumClass, units_and_values: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the entries one component reports, keyed and shaped as ``WRITE_KPIS_TO_JSON`` writes them.
+
+    Args:
+        component: The runtime name of the reporting component.
+        tag: The tag the component files its KPIs under.
+        units_and_values: KPI name -> ``(unit, value)``.
+
+    Returns:
+        KPI key -> entry dict, every key qualified with the component's name.
+    """
+    source = KpiSource.for_component(ComponentID(component), DisplayConfig())
+    return {
+        KpiAddress.key_for(name, source): KpiEntry(
+            name=name, unit=unit, value=value, tag=tag, source=source, name_of_source_component=source.name
+        ).to_dict()
+        for name, (unit, value) in units_and_values.items()
+    }
 
 
 def one_day() -> Period:
@@ -289,17 +312,13 @@ def test_a_layer_with_no_element_area_makes_the_whole_figure_missing() -> None:
 
 
 def test_the_kpi_document_finds_an_entry_by_its_plain_name() -> None:
-    """The innermost key is qualified when two components collide; the entry's ``name`` is not."""
+    """The innermost key of a component KPI is qualified with its source; the entry's ``name`` is not."""
     document = KpiDocument(
         {
             "BUI1": {
-                "Electricity Meter": {
-                    "ElectricityMeter: Total energy from grid": {
-                        "name": "Total energy from grid",
-                        "unit": "kWh",
-                        "value": 18.0,
-                    }
-                }
+                "Electricity Meter": component_entries(
+                    "ElectricityMeter", KpiTagEnumClass.ELECTRICITY_METER, {"Total energy from grid": ("kWh", 18.0)}
+                )
             }
         }
     )
@@ -308,11 +327,36 @@ def test_the_kpi_document_finds_an_entry_by_its_plain_name() -> None:
     assert document.number("something else") is None
 
 
+def test_the_kpi_document_refuses_a_name_two_components_report() -> None:
+    """Catches the first of two same-named entries being published as the dwelling's figure."""
+    document = KpiDocument(
+        {
+            "BUI1": {
+                "Electricity Meter": {
+                    **component_entries(
+                        "MeterA", KpiTagEnumClass.ELECTRICITY_METER, {"Total energy from grid": ("kWh", 18.0)}
+                    ),
+                    **component_entries(
+                        "MeterB", KpiTagEnumClass.ELECTRICITY_METER, {"Total energy from grid": ("kWh", 2.0)}
+                    ),
+                }
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match=r"2 KPIs named 'Total energy from grid'.*\(MeterA\).*\(MeterB\)"):
+        document.number("Total energy from grid")
+    with pytest.raises(ValueError, match="2 KPIs named"):
+        document.unit("Total energy from grid")
+    with pytest.raises(ValueError, match="2 KPIs named"):
+        document.has("Total energy from grid")
+
+
 def test_the_kpi_document_reads_a_file_written_by_the_run(tmp_path: Path) -> None:
     """The loader takes a result directory, and an absent file is an absent document."""
     assert KpiDocument.load(tmp_path) is None
     (tmp_path / KpiDocument.FILE_NAME).write_text(
-        json.dumps({"BUI1": {"General": {"x": {"name": "x", "unit": "-", "value": 1.0}}}}),
+        json.dumps({"BUI1": {"General": {"x": {"name": "x", "unit": "-", "value": 1.0, "tag": "General"}}}}),
         encoding="utf-8",
     )
 
@@ -376,17 +420,8 @@ def comfort_document(below: float, above: float, unit: str = Building.DEGREE_HOU
     Returns:
         The document, in the three-level shape HiSim writes.
     """
-    values = {ComfortSources.UNDERHEATING_NAME: below, ComfortSources.OVERHEATING_NAME: above}
-    return KpiDocument(
-        {
-            "BUI1": {
-                "Building": {
-                    name: {"name": name, "unit": unit, "value": value}
-                    for name, value in values.items()
-                }
-            }
-        }
-    )
+    values = {ComfortSources.UNDERHEATING_NAME: (unit, below), ComfortSources.OVERHEATING_NAME: (unit, above)}
+    return KpiDocument({"BUI1": {"Building": component_entries("Building", KpiTagEnumClass.BUILDING, values)}})
 
 
 def nearly_a_year() -> Period:
@@ -457,9 +492,10 @@ class TestComfortGrades:
     @pytest.mark.parametrize("value", [float("nan"), float("inf")])
     def test_a_non_finite_sum_is_absent_with_the_value(self, value: float) -> None:
         """A NaN temperature propagates to the sum; it is named, not graded as the worst or best."""
-        document = KpiDocument(
-            {"BUI1": {"Building": {"x": {"name": ComfortSources.OVERHEATING_NAME, "unit": "°C*h", "value": value}}}}
+        entries = component_entries(
+            "Building", KpiTagEnumClass.BUILDING, {ComfortSources.OVERHEATING_NAME: ("°C*h", value)}
         )
+        document = KpiDocument({"BUI1": {"Building": entries}})
         block = build(document, a_full_year(), layers_of())
 
         assert KpiField.SUMMER_HEAT_PROTECTION.value not in block.values

@@ -398,6 +398,7 @@ class DynamicComponent(Component):
             output_description=output_description,
             source_component_class=source_component_class,
             component_id=self.config.component_id,
+            display_config=self.my_display_config,
         )
         self.outputs.append(myoutput)
         setattr(self, label, myoutput)
@@ -561,6 +562,7 @@ class DynamicComponent(Component):
                 f"channel '{connection.channel.key}'."
             ),
             component_id=self.config.component_id,
+            display_config=self.my_display_config,
         )
         self.outputs.append(created_output)
         setattr(self, label, created_output)

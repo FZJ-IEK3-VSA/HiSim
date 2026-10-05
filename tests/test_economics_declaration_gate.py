@@ -41,11 +41,12 @@ from hisim.economics.facts import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from tests.fake_component_source import NamedComponentSource
 
 pytestmark = pytest.mark.base
 
 
-class UndeclaredDevice:
+class UndeclaredDevice(NamedComponentSource):
     """A component class carrying no cost role — the defect both failure paths must catch.
 
     `UNDECLARED` is spelled out rather than inherited so the stub needs no `Component` base class:
@@ -204,7 +205,7 @@ class TestPreRunCheckRefusesAnUndeclaredFleet:
         assert raised.value.component_classes == (UndeclaredDevice,)
 
 
-class PricedWithoutFacts:
+class PricedWithoutFacts(NamedComponentSource):
     """A PRICED component class nothing can produce facts for — the second §9.1 defect.
 
     It implements no `get_cost_facts` and, living outside `hisim.components`, can have no entry in

@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import json
 from pathlib import Path
-from typing import Any, Sequence, TextIO
+from typing import Any, Mapping, Sequence, TextIO, Tuple
 
 from hisim.cli_exit import ExitCodes
 from hisim.config.introspection import ConfigDescription, ConstructorInfo, FieldInfo
@@ -26,6 +27,7 @@ from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.groups import expand_groups
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.validation import validate_structure
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
 
 
 class Report:
@@ -393,3 +395,46 @@ class FactsRenderer(Report):
         cls._heading("warnings", stream)
         for warning in warnings or ("(none)",):
             cls._item(warning, stream)
+
+
+class KpiAddressRenderer:
+    """Lists the KPIs of a collection, one ``<dotted address> = <value> <unit>`` per line (``hisim kpis list``).
+
+    The dotted form is the one the golden references use, ``<building>.<tag>.<key>``, so the part
+    before `` = `` can be pasted into a golden diff search as it stands. The value is written as
+    JSON (``null`` for a value that was not computed, a quoted string for a descriptive KPI), the
+    unit as the entry carries it, and nothing after the value when the unit is empty. The entries
+    come from
+    :class:`~hisim.postprocessing.kpi_computation.kpi_address.KpiFinder`, which reads each entry's
+    source from the entry and refuses a collection whose keys disagree with their entries.
+    """
+
+    #: The file a result directory holds the KPI collection in.
+    FILE_NAME: str = ALL_KPIS_FILE_NAME
+
+    @classmethod
+    def document_path(cls, path: Path) -> Path:
+        """The ``all_kpis.json`` a caller means: the file itself, or the one in a result directory.
+
+        Raises:
+            FileNotFoundError: If the path is neither such a file nor a directory holding one.
+        """
+        candidate = path / cls.FILE_NAME if path.is_dir() else path
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"No KPI collection at {candidate}: pass a result directory or its {cls.FILE_NAME}."
+            )
+        return candidate
+
+    @classmethod
+    def line(cls, address: Any, entry: Mapping[str, Any]) -> str:
+        """The line of one KPI: ``<dotted address> = <value> <unit>``."""
+        value = json.dumps(entry["value"], ensure_ascii=False)
+        unit = entry.get("unit")
+        return f"{address.dotted} = {value} {unit}" if unit else f"{address.dotted} = {value}"
+
+    @classmethod
+    def render(cls, entries: Sequence[Tuple[Any, Mapping[str, Any]]], stream: TextIO) -> None:
+        """Writes one ``<dotted address> = <value> <unit>`` line per ``(address, entry)``, in collection order."""
+        for address, entry in entries:
+            print(cls.line(address, entry), file=stream)

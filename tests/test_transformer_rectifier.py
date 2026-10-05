@@ -241,14 +241,15 @@ def test_transformer_kpi_entries_integrate_output_and_derive_losses() -> None:
 
     entries = {
         e.name: e
-        for e in transformer.get_component_kpi_entries([foreign, transformer.electricity_output], frame)
+        for e in transformer.component_kpi_entries([foreign, transformer.electricity_output], frame)
     }
 
     assert entries["Electrical energy delivered"].value == pytest.approx(3.333)
     assert entries["Conversion losses"].value == pytest.approx(0.833)
-    assert all(e.name_of_source_component == transformer.component_name for e in entries.values()), (
-        "the source component is the disambiguator a future multi-instance collision fix keys on"
+    assert all(e.source == transformer.kpi_source() for e in entries.values()), (
+        "every entry carries its component's source, the address its key is qualified with"
     )
+    assert all(e.name_of_source_component == transformer.component_name for e in entries.values())
     for entry in entries.values():
         json.dumps(entry.to_dict())  # the webtool writer serializes exactly this; it must not raise
 
@@ -269,7 +270,7 @@ def test_transformer_kpi_entries_refuse_nan_instead_of_understating() -> None:
     frame = pd.DataFrame({0: [100.0, float("nan")]})
 
     with pytest.raises(ValueError, match="NaN"):
-        transformer.get_component_kpi_entries([transformer.electricity_output], frame)
+        transformer.component_kpi_entries([transformer.electricity_output], frame)
 
 
 @pytest.mark.base
@@ -282,7 +283,7 @@ def test_transformer_kpi_entries_refuse_a_missing_output() -> None:
     )
 
     with pytest.raises(ValueError, match="transformer output column"):
-        transformer.get_component_kpi_entries([], pd.DataFrame())
+        transformer.component_kpi_entries([], pd.DataFrame())
 
 
 @pytest.mark.base

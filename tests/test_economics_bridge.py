@@ -67,6 +67,7 @@ from hisim.components import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
+from tests.fake_component_source import NamedComponentSource
 
 # PATH needed to build simulator, PATH is fake
 PATH: str = "../system_setups/household_for_test_economics_bridge.py"
@@ -715,7 +716,7 @@ class TestSharedHelpers:
         assert bridge._power_series("Meter", "C", outputs, frame) is None
 
 
-class Building:
+class Building(NamedComponentSource):
     """Stands in for the building by class name, as `adapter.UsefulHeatSources` looks it up.
 
     It carries the output-name constant the table resolves, and declares itself free of cost so
@@ -730,7 +731,7 @@ class Building:
         self.component_name = component_name
 
 
-class SimpleDHWStorage:
+class SimpleDHWStorage(NamedComponentSource):
     """Stands in for the hot-water tank by class name, with its output-name constant."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

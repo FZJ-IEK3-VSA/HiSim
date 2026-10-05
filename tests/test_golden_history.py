@@ -45,6 +45,7 @@ from scripts.golden_history import (
     resolve_pairs,
     write_moves_csv,
 )
+from scripts.golden_history import HistoryError
 from scripts.golden_kpi_renames import (
     FLEET_WIDE,
     KPI_RENAMES,
@@ -52,6 +53,7 @@ from scripts.golden_kpi_renames import (
     canonical_pair,
     kpi_renames_for,
 )
+from tests.golden_leaf_factory import component, derived, leaf_map
 
 pytestmark = pytest.mark.base
 
@@ -149,6 +151,107 @@ def test_without_the_table_a_rename_would_be_two_half_length_series(
     monkeypatch.setattr("scripts.golden_history.kpi_renames_for", lambda stem: {})
     history = _history([{"a.old": 10.0}, {"a.old": 12.0}, {"a.new": 15.0}])
     assert sorted(panel.kpi for panel in history.panels) == ["a.new", "a.old"]
+
+
+# --------------------------------------------------------------------------- #
+# The two forms: flat keys and address leaves
+# --------------------------------------------------------------------------- #
+#: The bare and the source-qualified flat keys the Building's floor area had before the leaves.
+BARE_FLOOR_AREA = "BUI1.Building.Conditioned floor area"
+QUALIFIED_FLOOR_AREA = "BUI1.Building.Conditioned floor area (Building)"
+
+
+def _floor_area(value: float, source_name: str = "Building", member: str = "Building") -> Dict[str, Any]:
+    """A leaf-form snapshot holding the floor area alone."""
+    return leaf_map(component("Conditioned floor area", source_name, value, unit="m2", member=member))
+
+
+def test_a_bare_flat_key_continues_into_the_leaf_series(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches the format change splitting a KPI whose flat key was its bare ``building.tag.name``."""
+    monkeypatch.setattr("scripts.golden_history.kpi_renames_for", lambda stem: {})
+    history = _history([{BARE_FLOOR_AREA: 100.0}, {BARE_FLOOR_AREA: 110.0}, _floor_area(120.0)])
+    assert [panel.kpi for panel in history.panels] == [QUALIFIED_FLOOR_AREA]
+    assert history.panels[0].values == (100.0, 110.0, 120.0)
+
+
+def test_a_qualified_flat_key_continues_into_the_leaf_series(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches the format change splitting a KPI whose flat key was already its dotted address.
+
+    The bare key, the qualified key (the key-only re-bless of #882) and the leaf are one series;
+    the commits that only changed how the file spells the KPI are not drawn.
+    """
+    monkeypatch.setattr("scripts.golden_history.kpi_renames_for", lambda stem: {})
+    history = _history(
+        [{BARE_FLOOR_AREA: 100.0}, {QUALIFIED_FLOOR_AREA: 100.0}, {QUALIFIED_FLOOR_AREA: 105.0}, _floor_area(105.0)]
+    )
+    assert [panel.kpi for panel in history.panels] == [QUALIFIED_FLOOR_AREA]
+    assert history.panels[0].values == (100.0, 105.0)
+    assert [commit.sha for commit in history.commits] == [_commit(0).sha, _commit(2).sha]
+
+
+def test_a_changed_source_name_continues_one_leaf_series_without_a_table_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catches the leaf series being keyed by the string: the identity is building, tag, name and source."""
+    monkeypatch.setattr("scripts.golden_history.kpi_renames_for", lambda stem: {})
+    history = _history([_floor_area(100.0), _floor_area(110.0, source_name="Building_renamed")])
+    assert [panel.kpi for panel in history.panels] == ["BUI1.Building.Conditioned floor area (Building_renamed)"]
+    assert history.panels[0].values == (100.0, 110.0)
+
+
+def test_a_changed_source_member_is_another_series(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The member is identity: another component under one runtime name is another KPI."""
+    monkeypatch.setattr("scripts.golden_history.kpi_renames_for", lambda stem: {})
+    history = _history([_floor_area(100.0), _floor_area(110.0, member="OtherBuilding")])
+    assert len(history.panels) == 2
+
+
+def test_a_bare_flat_key_two_leaf_series_could_continue_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches the stitching guessing which of two CHPs an old bare key was."""
+    monkeypatch.setattr("scripts.golden_history.kpi_renames_for", lambda stem: {})
+    two_chps = leaf_map(
+        component("Fuel consumed", "CHP1", 0.0, tag="CHP"), component("Fuel consumed", "CHP2", 0.0, tag="CHP")
+    )
+    with pytest.raises(HistoryError, match="would continue 2 different KPI series.*KPI_RENAMES"):
+        _history([{"BUI1.CHP.Fuel consumed": 0.0}, two_chps])
+
+
+def test_a_declared_rename_resolves_an_ambiguous_bare_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The table is applied first, so a declared successor stitches where the bare form could not."""
+    monkeypatch.setattr(
+        "scripts.golden_history.kpi_renames_for",
+        lambda stem: {"BUI1.CHP.Fuel consumed": "BUI1.CHP.Fuel consumed (CHP1)"},
+    )
+    two_chps = leaf_map(
+        component("Fuel consumed", "CHP1", 1.0, tag="CHP"), component("Fuel consumed", "CHP2", 2.0, tag="CHP")
+    )
+    history = _history([{"BUI1.CHP.Fuel consumed": 0.5}, two_chps])
+    values = {panel.kpi: panel.values for panel in history.panels}
+    assert values == {
+        "BUI1.CHP.Fuel consumed (CHP1)": (0.5, 1.0),
+        "BUI1.CHP.Fuel consumed (CHP2)": (None, 2.0),
+    }
+
+
+def test_two_flat_keys_of_one_snapshot_landing_in_one_series_are_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches two measurements of one snapshot being merged into one series."""
+    monkeypatch.setattr("scripts.golden_history.kpi_renames_for", lambda stem: {})
+    with pytest.raises(HistoryError, match="would both be one KPI series"):
+        _history([{BARE_FLOOR_AREA: 1.0, QUALIFIED_FLOOR_AREA: 2.0}, _floor_area(2.0)])
+
+
+def test_a_snapshot_mixing_the_two_forms_is_refused() -> None:
+    """A golden file is flat or leaves, never both."""
+    key, leaf = derived("x", 1.0)
+    with pytest.raises(HistoryError, match="mixes the flat form"):
+        _history([{key: leaf, "BUI1.General.y": 2.0}])
+
+
+def test_a_historical_leaf_whose_key_disagrees_with_its_fields_is_refused() -> None:
+    """The walker checks every leaf like every other reader does (``GoldenFormatError``, a ``ValueError``)."""
+    _, leaf = derived("x", 1.0)
+    with pytest.raises(ValueError, match="which address it as 'BUI1.General.x'"):
+        _history([{"BUI1.General.y": leaf}])
 
 
 # --------------------------------------------------------------------------- #

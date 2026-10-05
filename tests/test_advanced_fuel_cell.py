@@ -287,16 +287,17 @@ def test_chp_kpi_entries_integrate_the_period() -> None:
         }
     )
 
-    entries = {entry.name: entry for entry in chp.get_component_kpi_entries(outputs, frame)}
+    entries = {entry.name: entry for entry in chp.component_kpi_entries(outputs, frame)}
 
     assert entries["Electrical energy produced"].value == pytest.approx(round(3000.0 * 2 * 60 / 3600 / 1000, 3))
     assert entries["Thermal energy produced"].value == pytest.approx(round(4000.0 * 2 * 60 / 3600 / 1000, 3))
     assert entries["Fuel consumed"].value == pytest.approx(round(0.001 * 2 * 60, 6))
     assert entries["Number of activation cycles"].value == 2.0
     assert all(entry.tag is KpiTagEnumClass.CHP for entry in entries.values())
-    assert all(entry.name_of_source_component == chp.component_name for entry in entries.values()), (
-        "the source component is the disambiguator a future multi-CHP collision fix keys on"
+    assert all(entry.source == chp.kpi_source() for entry in entries.values()), (
+        "every entry carries its component's source, the address its key is qualified with"
     )
+    assert all(entry.name_of_source_component == chp.component_name for entry in entries.values())
     for entry in entries.values():
         json.dumps(entry.to_dict())  # the webtool writer serializes exactly this; it must not raise
 
@@ -313,7 +314,7 @@ def test_chp_kpi_entries_refuse_a_missing_output() -> None:
     chp = setup.chp
 
     with pytest.raises(ValueError, match="Electrical energy produced"):
-        chp.get_component_kpi_entries([chp.th_power_channel], pd.DataFrame({0: [4000.0]}))
+        chp.component_kpi_entries([chp.th_power_channel], pd.DataFrame({0: [4000.0]}))
 
 
 @pytest.mark.base
@@ -343,7 +344,7 @@ def test_chp_kpi_entries_refuse_nan_instead_of_understating() -> None:
     )
 
     with pytest.raises(ValueError, match="Electrical energy produced"):
-        chp.get_component_kpi_entries(outputs, frame)
+        chp.component_kpi_entries(outputs, frame)
 
 
 def _build_config(p_el_max: float = 3_000.0, gas_type: str = "Hydrogen") -> advanced_fuel_cell.CHPConfig:

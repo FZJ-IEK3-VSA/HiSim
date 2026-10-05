@@ -82,6 +82,9 @@ rules:
         - /hisim/renovisor/contract/refresh.py
         - /hisim/renovisor/map.py
         - /hisim/renovisor/verify/
+        # The assembly test harness: the isolation systems, their parameters and the report, all
+        # below the output root its caller names (a fresh temporary directory when none is named).
+        - /hisim/energy_system/assemblies/testing/
         - /hisim/hisim_with_profiler.py
         - /hisim/project_code_overview_generator.py
 

@@ -1,0 +1,95 @@
+# The test partners of the mock library (assemblies_spec.md §9.4): the site components the assembly
+# test harness places beside an assembly it runs in isolation, one for every port whose binding changes
+# what the assembly computes. Read by hisim/energy_system/assemblies/testing/partners.py, which documents
+# the format; every partner is a site entry as an energy-system file writes it.
+partners:
+  # --------------------------------------------------------------------------- partners of needs
+  Weather:
+    serves: {partner: MockWeather}
+    component: {class: tests.assemblies.mock_components.MockWeather, preset: standard}
+  Occupancy:
+    serves: {partner: MockOccupancy}
+    component: {class: tests.assemblies.mock_components.MockOccupancy, preset: standard}
+  Ems:
+    serves: {partner: MockEms}
+    component: {class: tests.assemblies.mock_components.MockEms, preset: standard}
+  Controller:
+    serves: {partner: MockController}
+    component: {class: tests.assemblies.mock_components.MockController, preset: standard}
+  Heater:
+    # A heater a thermostat switches, so the tank it heats sees heat on its schedule.
+    serves: {partner: MockHeater}
+    requires: [Controller]
+    component:
+      class: tests.assemblies.mock_components.MockHeater
+      preset: standard
+      inputs: [Controller]
+  Tank:
+    # A tank the residents draw from, heated by the one heater in scope: the assembly's own.
+    serves: {partner: MockTank}
+    requires: [Occupancy]
+    component:
+      class: tests.assemblies.mock_components.MockTank
+      preset: standard
+      inputs: [Occupancy, {$port: heat}]
+      ports:
+        heat: {partner: MockHeater}
+
+  # ------------------------------------------------------------------------ the other circuit ends
+  Cylinder:
+    # The cylinder end of the dhw circuit, for an assembly whose end is a boiler.
+    serves: {circuit: dhw, other_end: [MockBoiler]}
+    requires: [Occupancy]
+    component:
+      class: tests.assemblies.mock_components.MockCylinder
+      preset: standard
+      inputs: [Occupancy, {$port: dhw}]
+      ports:
+        dhw: {circuit: dhw}
+  Boiler:
+    # The boiler end of the dhw circuit, for an assembly whose end is a cylinder.
+    serves: {circuit: dhw, other_end: [MockCylinder]}
+    component:
+      class: tests.assemblies.mock_components.MockBoiler
+      preset: condensing
+      inputs: [{$port: dhw}]
+      ports:
+        dhw: {circuit: dhw}
+
+  # ------------------------------------------------------------------- carriers and their consumers
+  GasMeter:
+    # The natural-gas connection a fuel need binds; its meter observes the consumers' feeds.
+    serves: {carrier: natural_gas}
+    component:
+      class: tests.assemblies.mock_components.MockGasMeter
+      preset: standard
+      inputs: [{$port: gas}]
+      ports:
+        gas: {carrier: natural_gas}
+  GasBoiler:
+    # A consumer of the natural gas an assembly provides: a boiler burning it, charging its own cylinder.
+    serves: {consumes: natural_gas}
+    requires: [GasCylinder]
+    component:
+      class: tests.assemblies.mock_components.MockBoiler
+      preset: condensing
+      inputs: [GasCylinder]
+      ports:
+        fuel: {carrier: natural_gas, outputs: [FuelUse]}
+  GasCylinder:
+    serves: {partner: MockCylinder}
+    requires: [Occupancy, GasBoiler]
+    component:
+      class: tests.assemblies.mock_components.MockCylinder
+      preset: standard
+      inputs: [Occupancy, GasBoiler]
+
+  # ------------------------------------------------------------------------------------------ facts
+  PVArray:
+    # A roof array contributing pv_peak_power_in_watt (5 kWp), the fact a battery is sized from.
+    serves: {fact: pv_peak_power_in_watt}
+    requires: [Weather]
+    component:
+      class: tests.assemblies.mock_components.MockPVSystem
+      preset: rooftop
+      inputs: [Weather]

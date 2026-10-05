@@ -106,11 +106,22 @@ class MockComponent(Component):
         self.ports_in[name] = self.add_input(self.component_name, name, load_type, unit, mandatory)
 
     def output_port(
-        self, name: str, load_type: lt.LoadTypes, unit: lt.Units, energy_port: Optional[EnergyPort] = None
+        self,
+        name: str,
+        load_type: lt.LoadTypes,
+        unit: lt.Units,
+        energy_port: Optional[EnergyPort] = None,
+        postprocessing_flag: Optional[List[Any]] = None,
     ) -> None:
-        """Adds one output (``add_output``), with its energy port where it carries energy."""
+        """Adds one output (``add_output``), with its energy port and post-processing flags where it has them."""
         self.ports_out[name] = self.add_output(
-            self.component_name, name, load_type, unit, energy_port=energy_port, output_description=name
+            self.component_name,
+            name,
+            load_type,
+            unit,
+            postprocessing_flag=postprocessing_flag,
+            energy_port=energy_port,
+            output_description=name,
         )
 
     def defaults_from(self, source_class: str, wires: Dict[str, str]) -> None:
@@ -248,22 +259,38 @@ class MockOccupancy(MockComponent):
 @dataclass_json
 @dataclass
 class MockPVSystemConfig(ConfigBase):
-    """A PV array: its peak power and its orientation, each with its unit."""
+    """A PV array: its peak power — or the share of the roof it covers instead — and its orientation."""
 
     MAIN_CLASS = "tests.assemblies.mock_components.MockPVSystem"
 
+    #: The peak power of the whole roof, which a share of it is taken of.
+    ROOF_PEAK_POWER_IN_WATT: ClassVar[float] = 20000.0
+
     component_id: ComponentID
-    power_in_watt: float = field(default=5000.0, metadata={UNIT: lt.Units.WATT})
+    power_in_watt: Optional[float] = field(default=5000.0, metadata={UNIT: lt.Units.WATT})
+    #: The share of the roof the array covers, the alternative to its peak power; dimensionless.
+    share_of_roof: Optional[float] = field(default=None, metadata={UNIT: lt.Units.ANY})
     azimuth: float = field(default=180.0, metadata={UNIT: lt.Units.DEGREES})
     tilt: float = field(default=30.0, metadata={UNIT: lt.Units.DEGREES})
     #: A field without a declared unit, for the refusal of a fed field without one.
     shading_factor: float = 1.0
 
+    def peak_power_in_watt(self) -> float:
+        """The peak power: the one given, or the share of the roof's; exactly one of the two is set."""
+        if (self.power_in_watt is None) == (self.share_of_roof is None):
+            raise ValueError(
+                f"{self.component_id.name} sets power_in_watt={self.power_in_watt!r} and "
+                f"share_of_roof={self.share_of_roof!r}; exactly one of the two is given."
+            )
+        if self.power_in_watt is not None:
+            return self.power_in_watt
+        return float(self.share_of_roof or 0.0) * self.ROOF_PEAK_POWER_IN_WATT
+
     #: The array's peak power, which a battery beside it is sized from.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(
             facts=("pv_peak_power_in_watt",),
-            compute=lambda config, ctx: {"pv_peak_power_in_watt": config.power_in_watt},
+            compute=lambda config, ctx: {"pv_peak_power_in_watt": config.peak_power_in_watt()},
         ),
     )
 
@@ -286,14 +313,21 @@ class MockPVSystem(MockComponent):
         """Builds the array."""
         super().__init__(my_simulation_parameters, config)
         self.input_port("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
-        self.output_port("ElectricityOutput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        # Flagged as PV production, so the derived KPI "PV production" (General) sums every array.
+        self.output_port(
+            "ElectricityOutput",
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.PV],
+        )
         self.defaults_from("MockWeather", {"TemperatureOutside": "TemperatureOutside"})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Production proportional to power, orientation and temperature."""
         orientation = 1.0 - abs(self.config.azimuth - 180.0) / 360.0
         temperature = self.value(stsv, "TemperatureOutside")
-        self.set(stsv, "ElectricityOutput", self.config.power_in_watt * orientation * max(temperature, 0.0) / 50.0)
+        peak = self.config.peak_power_in_watt()
+        self.set(stsv, "ElectricityOutput", peak * orientation * max(temperature, 0.0) / 50.0)
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> List[KpiEntry]:
         """The energy the array produced, in kWh."""
@@ -340,6 +374,9 @@ class MockTank(MockComponent):
 
     STANDBY_KPI = "Standby heat losses"
 
+    #: The standby loss over the run in kWh (a power in W summed over 15-minute steps).
+    SUM_KPIS = {STANDBY_KPI: ("HeatLoss", KpiAggregation.POWER_IN_KWH)}
+
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockTankConfig) -> None:
         """Builds the tank."""
         super().__init__(my_simulation_parameters, config)
@@ -385,6 +422,9 @@ class MockHeater(MockComponent):
     """
 
     ENERGY_KPI = "Heater energy"
+
+    #: The electricity the heater drew over the run in kWh (a power in W summed over 15-minute steps).
+    SUM_KPIS = {ENERGY_KPI: ("ElectricityInput", KpiAggregation.POWER_IN_KWH)}
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockHeaterConfig) -> None:
         """Builds the heater."""

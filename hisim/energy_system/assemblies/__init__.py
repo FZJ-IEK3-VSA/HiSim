@@ -21,6 +21,8 @@ record are separate questions, and the expansion is the only module that needs a
     - :mod:`.record` — the import record and the source maps.
     - :mod:`.describe` — ``hisim energy-system describe <family>/<name>``.
     - :mod:`.schema` — the JSON Schema of the assembly file.
+    - :mod:`.testing` — the test harness that executes every assembly's test contract (§9.4),
+      and ``hisim energy-system test-assemblies``.
 
 The blocks an energy-system file shares with an assembly — imports, binding verbs, ports and the
 ``{$port: …}`` placeholder — live one level up, in :mod:`hisim.energy_system.imports_model` and

@@ -252,7 +252,7 @@ def test_describe_reads_an_assembly_file_by_its_path() -> None:
 
     assert code == 0
     assert "bounds    PVSystem.ElectricityOutput [WATT]: 0 … 20000" in out.getvalue()
-    assert "at_most_one_of: [power_in_watt, share_of_roof]" in out.getvalue()
+    assert "exactly_one_of: [power_in_watt, share_of_roof]" in out.getvalue()
 
 
 @pytest.mark.base

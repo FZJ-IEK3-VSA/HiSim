@@ -489,6 +489,7 @@ def build_energy_system(
     path_resolver: Optional[PathResolver] = None,
     rerun: bool = False,
     simulation_parameters_path: Any = "",
+    assembly_resolver: Optional[AssemblyResolver] = None,
 ) -> BuiltEnergySystem:
     """Loads an energy-system file and builds everything it describes, without running it.
 
@@ -507,6 +508,9 @@ def build_energy_system(
         simulation_parameters_path: Path of the parameters file, when the caller read them from
             one; a run record names it so that the pair which reproduces the run is written
             down, and nothing else uses it.
+        assembly_resolver: Finds the assemblies the file imports; this machine's search path
+            (``energy_systems/assemblies/``, then ``HISIM_ASSEMBLY_PATH``) when omitted. The
+            assembly test harness hands in the library it tests.
 
     Returns:
         The built system, its simulator registered and wired.
@@ -529,6 +533,7 @@ def build_energy_system(
         source_energy_system=str(path),
         source_simulation_parameters=str(simulation_parameters_path or ""),
         rerun=rerun,
+        assembly_resolver=assembly_resolver,
         source_lines=source_lines,
     )
     return executor.build()
@@ -655,11 +660,23 @@ def run_energy_system(
             rerun=rerun,
             simulation_parameters_path=simulation_parameters_path,
         )
-        write_records(built, built.simulator.get_simulation_parameters().result_directory)
-        log.information(f"Starting the simulation of '{built.model.name}'.")
-        built.simulator.run_all_timesteps()
-        log.information(
-            f"Finished the simulation of '{built.model.name}'; results are in "
-            f"{built.simulator.get_simulation_parameters().result_directory}."
-        )
+        simulate(built)
         return built
+
+
+def simulate(built: BuiltEnergySystem) -> None:
+    """Writes the records of a built system into its result directory and runs every timestep.
+
+    The run half of :func:`run_energy_system`, for a caller that builds the system itself and needs
+    the built system whether or not the run then raises (the assembly test harness).
+
+    Args:
+        built: The built system, inside its calculation.
+    """
+    write_records(built, built.simulator.get_simulation_parameters().result_directory)
+    log.information(f"Starting the simulation of '{built.model.name}'.")
+    built.simulator.run_all_timesteps()
+    log.information(
+        f"Finished the simulation of '{built.model.name}'; results are in "
+        f"{built.simulator.get_simulation_parameters().result_directory}."
+    )

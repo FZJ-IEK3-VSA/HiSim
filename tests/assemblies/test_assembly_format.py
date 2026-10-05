@@ -189,7 +189,7 @@ def test_the_mock_assembly_reads_every_block() -> None:
     assert pv.parameters["share_of_roof"].default is None
     assert pv.parameters["azimuth_in_degree"].range == (0.0, 360.0)
     assert pv.tests is not None and pv.tests.monotone[0].direction == MonotoneDirection.INCREASING
-    assert [constraint.text() for constraint in pv.constraints] == ["at_most_one_of: [power_in_watt, share_of_roof]"]
+    assert [constraint.text() for constraint in pv.constraints] == ["exactly_one_of: [power_in_watt, share_of_roof]"]
 
 
 @pytest.mark.base
@@ -201,6 +201,8 @@ def test_the_mock_assembly_reads_every_block() -> None:
         ("parameters: {p: {type: number, description: x}}", "EF-70"),
         ("interface: {needs: {p: {into: [A]}}}", "EF-70"),
         ("tests: {bounds: [{output: A.B, min: 0}]}", "EF-70"),
+        ("tests: {bounds: [{output: A.B, unit: WATT, min: null}]}", "EF-70 .*a band without an end"),
+        ("tests: {expect: [{preset: p, kpi: k, member: A, max: null}]}", "EF-70 .*a band without an end"),
         ("tests: {monotone: [{parameter: p, kpi: k, member: A, direction: up}]}", "EF-70"),
         ("constraints: [{one_of: [a, b]}]", "EF-70"),
     ],

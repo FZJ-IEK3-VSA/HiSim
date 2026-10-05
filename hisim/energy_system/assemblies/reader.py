@@ -363,8 +363,11 @@ class AssemblyReader:
                 )
         elif "member" not in block:
             raise ImportsReader.shape_error(location, "a bounds entry on a KPI names the 'member' that reports it.")
-        if "min" not in block and "max" not in block:
-            raise ImportsReader.shape_error(location, "a bounds entry states 'min', 'max' or both.")
+        if block.get("min") is None and block.get("max") is None:
+            raise ImportsReader.shape_error(
+                location,
+                "a bounds entry states 'min', 'max' or both, as numbers; a band without an end holds anything.",
+            )
         return BoundsDeclaration(
             output=block.get("output"),
             kpi=RawDocument.string(block.get("kpi"), f"{location}.kpi", required=False),
@@ -401,8 +404,11 @@ class AssemblyReader:
         """One ``expect`` entry."""
         block = RawDocument.mapping(raw, location)
         ImportsReader.check_keys(block, location, ("preset", "kpi", "member", "min", "max"), "an expect entry")
-        if "min" not in block and "max" not in block:
-            raise ImportsReader.shape_error(location, "an expect entry states 'min', 'max' or both.")
+        if block.get("min") is None and block.get("max") is None:
+            raise ImportsReader.shape_error(
+                location,
+                "an expect entry states 'min', 'max' or both, as numbers; a band without an end holds anything.",
+            )
         return ExpectDeclaration(
             preset=RawDocument.string(block.get("preset"), f"{location}.preset", required=True) or "",
             kpi=RawDocument.string(block.get("kpi"), f"{location}.kpi", required=True) or "",

@@ -1,0 +1,49 @@
+# Mock: one PV array, imported once per array as named instances; its peak power or its share of the
+# roof is given, exactly one of them.
+schema_version: 4
+kind: assembly
+name: mock/pv_array
+description: One mock PV array on the roof.
+
+parameters:
+  azimuth_in_degree:
+    {type: float, unit: DEGREES, default: 180, range: {min: 0, max: 360}, description: Orientation; 180 is south.}
+  tilt_in_degree:
+    {type: float, unit: DEGREES, default: 30, range: {min: 0, max: 90}, description: Tilt from horizontal.}
+  power_in_watt:
+    {type: float, unit: WATT, default: 5000, range: {min: 0, max: 20000}, description: Peak power.}
+  share_of_roof:
+    {type: float, unit: ANY, default: none, range: {min: 0, max: 1}, description: Share of the roof; the alternative to the power.}
+  facing:
+    {type: enum, values: [south, east, west], default: south, description: "The roof face, for the display name."}
+
+constraints:
+  - {exactly_one_of: [power_in_watt, share_of_roof]}
+
+components:
+  PVSystem:
+    class: tests.assemblies.mock_components.MockPVSystem
+    preset: rooftop
+    display: "PV array, {facing}, azimuth {azimuth_in_degree:g}"
+    config:
+      azimuth: {$param: azimuth_in_degree}
+      tilt: {$param: tilt_in_degree}
+      power_in_watt: {$param: power_in_watt}
+      share_of_roof: {$param: share_of_roof}
+    inputs:
+      - {$port: weather}
+
+interface:
+  needs:
+    weather: {into: [PVSystem], partner: MockWeather}
+  provides:
+    production: {output: PVSystem.ElectricityOutput}
+
+tests:
+  bounds:
+    - {output: PVSystem.ElectricityOutput, unit: WATT, min: 0, max: 20000}
+    - {kpi: PV production, member: PVSystem, min: 0}
+  monotone:
+    - {parameter: power_in_watt, kpi: PV production, member: PVSystem, direction: increasing}
+  expect:
+    - {kpi: PV production, member: PVSystem, min: 0, max: 100}

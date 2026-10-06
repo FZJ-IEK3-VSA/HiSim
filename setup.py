@@ -59,6 +59,8 @@ setup(
             "subsidy_catalog/*.json",
             # JSON Schema of the energy-system file format, which editors bind to:
             "energy_system_v3.schema.json",
+            # and of the assembly file beside it (assemblies_spec.md §13.1):
+            "assembly_v4.schema.json",
             # JSON Schema of economics_result.json, which the staged evaluator validates every
             # document it writes against and which the frontend binds to:
             "economics/economics_result.schema.json",

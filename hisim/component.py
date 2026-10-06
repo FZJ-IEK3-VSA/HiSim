@@ -93,7 +93,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
                 on the very column name it exists for. Also if ``energy_port`` is given for an
                 output that is neither a power nor an energy.
         """
-        cfg.NameSyntax.require_identifier(object_name, "component")
+        cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component output")
         if energy_port is not None:
             EnergyPort.validate_unit(unit)
@@ -161,7 +161,7 @@ class ComponentInput:  # noqa: too-few-public-methods
                 flow that spelled their names by different rules would be a trap for every
                 reader of both.
         """
-        cfg.NameSyntax.require_identifier(object_name, "component")
+        cfg.NameSyntax.require_component_key(object_name)
         cfg.NameSyntax.require_identifier(field_name, "component input")
         self.fullname: str = object_name + " # " + field_name
         self.component_name: str = object_name
@@ -286,8 +286,9 @@ class Component:
         # The single choke point where a component's runtime name becomes real. Enforcing the
         # identifier rule here catches a name typed in a setup and a name that arrived from a
         # config class's own default alike, which a check on the declarative file's keys would
-        # never see: a defaulted identity is one nobody has to write down.
-        cfg.NameSyntax.require_identifier(name, "component")
+        # never see: a defaulted identity is one nobody has to write down. An assembly member's
+        # name is its serialized address, identifiers joined by '-' (assemblies_spec.md §2.4).
+        cfg.NameSyntax.require_component_key(name)
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []

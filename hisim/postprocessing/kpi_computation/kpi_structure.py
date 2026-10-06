@@ -154,8 +154,9 @@ class KpiSource:
         name: The runtime name, the serialized address (``Component.component_name``, which the
             ``Component`` constructor enforces to be ``ComponentID.key``): the string the KPI key
             is qualified with.
-        display_name: The English default label: the component's ``DisplayConfig.pretty_name``,
-            else its member name. Never an identifier.
+        display_name: The English default label: for an assembly member the display name its
+            ``display:`` template renders (``ComponentID.display_name``), else the component's
+            ``DisplayConfig.pretty_name``, else its member name. Never an identifier.
         label: The request's own name for the system, passed through verbatim; ``None`` today.
     """
 
@@ -212,18 +213,18 @@ class KpiSource:
     def for_component(cls, component_id: "ComponentID", display_config: "DisplayConfig") -> "KpiSource":
         """The source of a component's KPIs: the one place a source is built from a component.
 
-        The path is the identity's own: a ``ComponentID`` that carries a ``path`` of address
-        steps (each with an ``import_key`` and an ``instance``, outermost first) gives each step
-        to the source, and ``import`` and ``instance`` are its first step; one without a path, as
-        every ``ComponentID`` is until assemblies exist, is a site component with ``path`` ``()``.
-        No assembly and no label yet; the member is the component's name and its runtime name is
-        its key. The assemblies work (``assemblies_spec.md`` §2.4) extends this method and
-        nothing else.
+        A component written directly into an energy system has no import, no instance and no
+        assembly; its ``path`` is ``()``. An assembly member (``assemblies_spec.md`` §2.4) gives
+        every step of its ``ComponentID.path`` to the source, ``import`` and ``instance`` are its
+        first step, and ``assembly`` is the owning assembly's library path. In both cases the
+        member is the component's own name and the runtime name its key, the serialized address
+        (``pv-east-PVSystem``). ``label`` stays ``None`` until a request supplies one.
 
         Args:
             component_id: The component's structured identity.
             display_config: How the component is presented; its ``pretty_name`` becomes the
-                ``display_name`` when set.
+                ``display_name`` when set and the identity carries no rendered display name of
+                its own (a member's ``display:`` template, ``assemblies_spec.md`` §2.4).
 
         Returns:
             The component's source.
@@ -238,9 +239,9 @@ class KpiSource:
             instance=path[0].instance if path else None,
             path=path,
             member=component_id.name,
-            assembly=None,
+            assembly=getattr(component_id, "assembly", None),
             name=component_id.key,
-            display_name=pretty_name if pretty_name else component_id.name,
+            display_name=getattr(component_id, "display_name", None) or pretty_name or component_id.name,
             label=None,
         )
 

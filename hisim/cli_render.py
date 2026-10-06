@@ -24,6 +24,7 @@ from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.errors import EnergySystemError
+from hisim.energy_system.assemblies.expansion import expand_imports
 from hisim.energy_system.groups import expand_groups
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.validation import validate_structure
@@ -308,7 +309,7 @@ class FactsRenderer(Report):
             not, the refusal having been written to the report itself.
         """
         authored = parse_energy_system(path)
-        expanded, _ = expand_groups(authored)
+        expanded, _ = expand_groups(expand_imports(authored)[0])
         validate_structure(expanded)
         print(f"{expanded.name} ({path})", file=stream)
         cls._knobs(authored, stream)

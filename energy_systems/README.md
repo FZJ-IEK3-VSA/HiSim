@@ -275,6 +275,58 @@ set is for, as in `one_week_minutely_kpis.simulation.yaml` — and never for the
 needed it, because it is shared from the moment a second setup matches it. The freshness job also
 asserts that no two files here describe the same run, so a duplicate cannot be added by hand.
 
+## Assemblies: importing tested fragments (v1)
+
+An **assembly** is a fragment of an energy system in a file of its own,
+`<family>/<name>.assembly.yaml`: components whose names are local to it, parameters (each with a
+type, a default, a description, and for a number a `unit` of `lt.Units` and a `range`),
+`exactly_one_of` constraints, internal variants a parameter selects (`selected_by`, `when:`), an
+interface of ports, and its test contract (`tests:` with `bounds`, `monotone` and `expect` at the
+defaults). A file of `schema_version: 4` imports assemblies under `imports:`, once or as named
+instances:
+
+```yaml
+imports:
+  pv:     {assembly: pv/array, instances: {east: {azimuth_in_degree: 90}, west: {azimuth_in_degree: 270}}}
+  heater: {assembly: heating/electric_heater, optional-bind: {ems_modifier: Ems}, installation_year: 2025}
+```
+
+Before anything else sees the file, the expansion of imports turns every import into ordinary
+components of one flat version-3 file: the members are named by their structured address,
+`pv-east-PVSystem` (`ComponentID.path`), site entries come first and then each import, in file
+order. A port is how anything crosses an assembly's boundary: a **need** `{into: [Member], partner:
+Class}` binds to the one component of its partner class in the file and lowers to a bare name at
+the member's `{$port: <need>}` placeholder (its default connections from that class) or, with
+`wires:`, to explicit wires; a **provided** output `{output: Member.Output}` is what a need names
+when it must read one output. A site entry declares its own needs under `ports:`. Every port with
+a candidate is decided in the file, with one of three verbs on the import or the site entry:
+`bind: {port: partner}` (the partner must exist), `optional-bind: {port: partner}` (binds if it
+exists), `none: [port]` (declines an optional port). `required_when`/`active_when` switch a port by
+the parameters. What cannot be decided — no partner, several and no verb, a verb on an inactive
+port — is refused with `EF-7A` … `EF-7J`, naming the candidates and a line to paste. The realized
+record of the run carries the import record (assembly and its sha256, parameters as given and as
+resolved, variants, addresses, every port's decision, `installation_year`/`quote`) and the source
+map in its metadata, so `--rerun` reproduces it without any assembly.
+
+Assemblies are found in `energy_systems/assemblies/` and then the directories of
+`HISIM_ASSEMBLY_PATH`; a name found twice is refused. Every imported assembly passes the library
+check first, which lists every problem of a file at once (`EF-75`): documentation, defaults, units
+against the config fields they feed (`sized_field(unit=…)` or `field(metadata={"unit": …})`), a
+parameter that does nothing, variants that do not partition their selector, ports naming missing
+members, the test contract. `hisim energy-system describe <family>/<name>` prints an assembly's
+interface, parameters and contract; `hisim energy-system schema` writes `assembly_v4.schema.json`
+beside the energy-system schema.
+
+**Not in v1** (owner, 2026-10-06, D26): nesting (inner `imports`, `from:` re-exports, `internal:`
+ports), `order:`, presets inside assemblies, `$switch`/`$fact`/`$derived` (`$param` is the one
+value placeholder), `at_most_one_of`/`requires`, fact exports, `priorities` and `actuates`. Each is
+refused by name (`EF-73`): assemblies are flat and file order is the sequence, which the first real
+assemblies need, and a cut feature returns as its own change when a real assembly needs it. Circuit,
+carrier, fact and observer ports, `controllable` and `observes:` are read but lowered in the next
+step; a file using them is refused with `EF-74`. The spec is
+`roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1); the mock library the tests run on
+is `tests/assemblies/mock_assemblies/`.
+
 ## Relation to `system_setups/`
 
 `system_setups/` is untouched and still holds HiSim's Python setups and their JSON twins; those

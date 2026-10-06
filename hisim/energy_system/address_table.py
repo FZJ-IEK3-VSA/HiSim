@@ -1,0 +1,109 @@
+"""The structured addresses of expanded components, as a realized record's metadata states them.
+
+The expansion of imports (``assemblies_spec.md`` §2.3) names every member of every import by the
+serialization of its structured address, ``pv-east-PVSystem``, and keeps the address itself beside
+the file (:attr:`~hisim.energy_system.model.EnergySystemFile.addresses`). A realized record is
+written from the expanded file and must reproduce the run without any assembly, so its metadata
+carries the addresses under ``imports.addresses``; this module is the one place that writes and
+reads that table, so the record's writer and the reader re-running it agree on its shape.
+"""
+
+from __future__ import annotations
+
+from typing import Any, ClassVar, Dict, List, Mapping, Tuple
+
+from hisim.config import AddressStep, ComponentID
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
+
+
+class AddressTable:
+    """Converts between a file's address table and the plain data of a record's metadata."""
+
+    #: The metadata key of the import record.
+    IMPORTS_KEY: ClassVar[str] = "imports"
+
+    #: The key of the address table inside the import record.
+    ADDRESSES_KEY: ClassVar[str] = "addresses"
+
+    #: The keys one entry may carry; ``path`` and ``member`` always.
+    ENTRY_KEYS: ClassVar[Tuple[str, ...]] = ("path", "member", "assembly", "display_name")
+
+    @classmethod
+    def to_document(cls, addresses: Mapping[str, ComponentID]) -> Dict[str, Any]:
+        """The whole table, by expanded name, in the file's order."""
+        table: Dict[str, Any] = {}
+        for name, identity in addresses.items():
+            entry: Dict[str, Any] = {
+                "path": [
+                    {"import": step.import_key, **({"instance": step.instance} if step.instance else {})}
+                    for step in identity.path
+                ],
+                "member": identity.name,
+            }
+            if identity.assembly is not None:
+                entry["assembly"] = identity.assembly
+            if identity.display_name is not None:
+                entry["display_name"] = identity.display_name
+            table[name] = entry
+        return table
+
+    @classmethod
+    def from_metadata(cls, metadata: Mapping[str, Any]) -> Dict[str, ComponentID]:
+        """Reads the table a record's metadata carries; empty when it carries no import record.
+
+        Args:
+            metadata: The ``metadata`` block of a document.
+
+        Returns:
+            Expanded name to structured address.
+
+        Raises:
+            EnergySystemFormatError: ``EF-07`` when the import record carries no address table,
+                or an entry is not exactly what :meth:`to_document` writes, or its address does not
+                serialize to the name it is listed under: the table is generated, so any of these
+                means the record was edited by hand.
+        """
+        record = metadata.get(cls.IMPORTS_KEY)
+        if record is None:
+            return {}
+        location = f"metadata.{cls.IMPORTS_KEY}.{cls.ADDRESSES_KEY}"
+        table = record.get(cls.ADDRESSES_KEY) if isinstance(record, Mapping) else None
+        if not isinstance(table, Mapping):
+            raise cls._malformed(location, "the record carries an import record without its address table.")
+        return {str(name): cls._entry(str(name), entry, f"{location}.{name}") for name, entry in table.items()}
+
+    @classmethod
+    def _entry(cls, name: str, entry: Any, location: str) -> ComponentID:
+        """Reads one entry of the table, refusing anything :meth:`to_document` does not write."""
+        if not isinstance(entry, Mapping) or not {"path", "member"} <= set(entry) <= set(cls.ENTRY_KEYS):
+            raise cls._malformed(location, f"an address is a mapping of {', '.join(cls.ENTRY_KEYS)}; found {entry!r}.")
+        path = entry["path"]
+        if not isinstance(path, list) or not all(
+            isinstance(step, Mapping) and {"import"} <= set(step) <= {"import", "instance"} for step in path
+        ):
+            raise cls._malformed(location, f"a path is a list of {{import, instance}} steps; found {path!r}.")
+        try:
+            steps: List[AddressStep] = [AddressStep(step["import"], step.get("instance")) for step in path]
+            identity = ComponentID(
+                name=entry["member"],
+                path=tuple(steps),
+                assembly=entry.get("assembly"),
+                display_name=entry.get("display_name"),
+            )
+        except (TypeError, ValueError) as error:
+            raise cls._malformed(location, f"the entry {entry!r} is no address: {error}") from error
+        if identity.address != name:
+            raise cls._malformed(
+                location, f"'{name}' is listed with an address that serializes to '{identity.address}'."
+            )
+        return identity
+
+    @classmethod
+    def _malformed(cls, location: str, problem: str) -> EnergySystemFormatError:
+        """The refusal of a hand-edited address table (``EF-07``)."""
+        return EnergySystemFormatError(
+            EnergySystemErrorId.MALFORMED_BLOCK,
+            location,
+            problem,
+            remedy="The table is generated; re-run the authored file that imports the assemblies.",
+        )

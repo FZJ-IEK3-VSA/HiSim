@@ -285,7 +285,8 @@ Rejected (2026-10-02): choosing the carrier by optional connections alone; a mis
 silently, fuel burned and drawn from no provider (the balance accepts a booking toward "nobody the wiring names",
 `hisim/energy_port.py:21-25`). `required_when` is structured, not an expression: a mapping from parameter to the list of
 values for which the port is required, all keys conjunctive (`required_when: {energy_carrier: [natural_gas, lpg,
-heating_oil]}`). `active_when`, same shape, makes an optional or a provided port inactive outside its values.
+heating_oil]}`). `active_when`, same shape, makes an optional or a provided port inactive outside its values. Variants and `active_when` overlap: an author uses a variant when the members differ between the
+cases and `active_when` when only a port's state differs (owner, 2026-10-06).
 
 ### 3.2 What a port lowers to
 

@@ -171,6 +171,7 @@ address's **serialization**: `<import>[-<instance>]-…-<Member>`, e.g. `pv-east
 
 ### 2.5 Nesting
 
+**Not in v1 (D26).** 
 Decided (owner, 2026-10-03, D7): an assembly may import assemblies from the start. The expansion refuses a cycle and a
 depth beyond 4, an implementation safeguard rather than a modelling limit. Naming composes along the path
 (`heating-dhw-Tank`). Every port of an inner import is in exactly one state inside its importer, and the expansion
@@ -253,6 +254,7 @@ through.
 
 ### 2.7 Presets
 
+**Not in v1 (D26).** 
 An assembly may carry `presets:`, named parameter sets that mirror component presets (`preset_<name>(cls, name)`):
 `dhw/storage_water_heater` offers `ie_immersion_120l` (`energy_carrier: electricity, volume_in_liter: 120`), `dhw/combi`
 offers `nl_combiketel`. A preset names only declared parameters and is checked like an import's parameters, constraints
@@ -596,6 +598,7 @@ never binds nothing silently. `describe` prints the members per option.
 
 ## 6. Sizing across assemblies
 
+**v1 carries `Sum(Many)` and the fact ports only; exports and the scoped-provider rule are not in v1 (D26).** 
 The resolver sees the expanded system: every member is an ordinary config under its expanded name, so the engine's
 providers and binding rule apply unchanged (`engine.py:193-225`, `:311-348`). Three cases need the expansion's help:
 
@@ -914,6 +917,44 @@ natural_gas) is required and no provider of natural_gas exists", with the import
 swap, buffer before cylinder (`composed_heatpump_default.energy_system.yaml`); the numbering serves every generator
 twin, and `heatpump_solar_thermal` alone is reordered and re-recorded once (dry run §9.1).
 
+## 13.1 Lean v1 (owner, 2026-10-06)
+
+The five implementation PRs of step 1a to step 3 (#885–#889) explored the full design and came to about 10,300 lines
+of library code, more than HiSim's simulator core. The owner went through every feature and decided what v1 carries;
+the exploration PRs stay as the record, and v1 is built as one new branch from `main` that takes the needed and
+recommended pieces, with this section as its spec. Every cut feature may return as its own PR when a real assembly needs
+it, which is a better test of need than a mockup.
+
+**Kept in v1:** assembly files with components, parameters (unit, description, default, `range`), `exactly_one_of`
+constraints, the test contract (§9.4) and the full library check; import once or as named instances; expansion to one
+flat file with `ComponentID.path` and hyphenated addresses, site entries first then imports, each in file order; need
+ports by partner class with `bind:`, `optional-bind:`, `none:`, `required_when` and `active_when`; wires and provided
+outputs; internal variants `selected_by`; circuit ports; carrier needs and providers with the meter feeds; fact ports
+with `Sum(Many)`; selectors `observes:` as a filter on the observer's dynamic default connections, `controllable`
+(`target_input` / `via`) with the controller class's own weight table (instances in written order); the double-count
+check; source maps on every error; the import record with the binding decisions; `display:` templates; `describe`
+for assemblies; both JSON schemas; the harness rebuilt on pytest (sampler incl. the Latin hypercube tier, isolation
+builder with the partner registry, the bounds/monotone/expect checks; pytest's parametrization, reporting and `xdist`
+shards; the nightly tier a marker run by the golden-year workflow; an external library runs `pytest
+--assembly-library DIR`).
+
+**Cut from v1 (D26):**
+
+| Feature | Decision | What returns it |
+|---|---|---|
+| Nesting: inner imports, re-exports, internal ports, depth and cycle rules (D7) | assemblies are flat; shared sub-structure is duplicated | two real assemblies sharing a sub-structure |
+| `order:` evaluation paths (D23) | the sequence is file order, site entries then imports | a twin whose sequence file order cannot express (then the canonical-order work, not numbering) |
+| Presets inside assemblies (§2.7) | parameters have defaults, importers set values; `expect` is at defaults | a catalogue of typical devices belongs to the RenoVisor, not the fragment format |
+| `$switch`, `$fact`, `$derived` | `$param` is the only placeholder; per-variant values live in the variant options | — |
+| Fact exports and the scoped-provider rule, the fuel-constant check (§6) | a scalar read with two providers is refused as ambiguous and the author writes the `sizing_sources` line | — |
+| Port-provenance table and restated wiring errors | the wiring's own error plus the source map (component and file:line) | — |
+| `at_most_one_of`, `requires` | expressed as an enum parameter selecting a variant | an assembly that needs them |
+| `priorities` reordering, weight derivation, `feed:` overrides (§4.4) | the controller ranks what its class ranks, in the class's order; a second instance follows the first | a tariff controller needing another order |
+| The standalone harness CLI, JSON report, summary, shard machinery | pytest | — |
+
+The sections above that describe a cut feature remain as the design record and are marked "not in v1" where they
+start; §14.1's D7 and D23 are superseded by D26 for v1.
+
 ## 14. Decisions
 
 ### 14.1 Decided
@@ -1013,6 +1054,8 @@ All by the owner on 2026-10-03.
   enum goes away; no fact, no site setting, nothing written twice. Step 4 waits for stages C and D, so the first real
   assemblies never meet the enum. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
   HDS inside the direct assembly (two shapes of the Building's input, D19), a site value checked against the import.
+
+- **D26 — Lean v1 (owner, 2026-10-06):** see §13.1; the cut list there supersedes D7 and D23 for v1.
 
 ### 14.2 Open
 

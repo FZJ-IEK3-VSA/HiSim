@@ -26,7 +26,9 @@ from hisim.components import (
     more_advanced_heat_pump_hplib
 )
 from hisim import utils
-from hisim.config import ComponentID, SizingContext, concrete
+from hisim.config import ComponentID, DisplayConfig, SizingContext, concrete
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -366,33 +368,45 @@ def test_house(
     ) as file:
         jsondata = json.load(file)
 
-    jsondata = jsondata[building_label]
+    finder = KpiFinder(jsondata)
 
     # Get general KPI values
-    total_consumption_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity consumption"].get("value")
-    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
-    electricity_to_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy to grid"].get("value")
-    other_kpi_grid_injection_in_kilowatt_hour = jsondata["General"]["Grid injection of electricity"].get("value")
+    total_consumption_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="General", name="Total electricity consumption"
+    )
+    electricity_from_grid_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Electricity Meter", name="Total energy from grid"
+    )
+    electricity_to_grid_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Electricity Meter", name="Total energy to grid"
+    )
+    other_kpi_grid_injection_in_kilowatt_hour = finder.value(
+        building=building_label, tag="General", name="Grid injection of electricity"
+    )
 
     # Get battery KPI values
-    battery_charging_energy_in_kilowatt_hour = jsondata["Battery"]["Battery charging energy"].get("value")
-    battery_discharging_energy_in_kilowatt_hour = jsondata["Battery"]["Battery discharging energy"].get("value")
-    battery_losses_in_kilowatt_hour = jsondata["Battery"]["Battery losses"].get("value")
+    battery_charging_energy_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Battery", name="Battery charging energy"
+    )
+    battery_discharging_energy_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Battery", name="Battery discharging energy"
+    )
+    battery_losses_in_kilowatt_hour = finder.value(building=building_label, tag="Battery", name="Battery losses")
     print("battery charging energy ", battery_charging_energy_in_kilowatt_hour)
     print("battery discharging energy ", battery_discharging_energy_in_kilowatt_hour)
     print("battery losses ", battery_losses_in_kilowatt_hour)
     print("\n")
 
     # Get total consumptions of components
-    residents_total_consumption_kpi_in_kilowatt_hour = jsondata["Residents"][
-        "Residents' total electricity consumption"
-    ].get("value")
-    space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour = jsondata["Heat Pump For Space Heating"][
-        "Total electrical input energy of SH heat pump"
-    ].get("value")
-    domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour = jsondata["Heat Pump For Domestic Hot Water"][
-        "DHW heat pump total electricity consumption"
-    ].get("value")
+    residents_total_consumption_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Residents", name="Residents' total electricity consumption"
+    )
+    space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Heat Pump For Space Heating", name="Total electrical input energy of SH heat pump"
+    )
+    domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Heat Pump For Domestic Hot Water", name="DHW heat pump total electricity consumption"
+    )
 
     sum_component_total_consumptions_in_kilowatt_hour = (
         residents_total_consumption_kpi_in_kilowatt_hour
@@ -407,15 +421,15 @@ def test_house(
     print("\n")
 
     # Get grid consumptions of components
-    residents_grid_consumption_kpi_in_kilowatt_hour = jsondata["Energy Management System"][
-        "Residents' electricity consumption from grid"
-    ].get("value")
-    space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour = jsondata["Energy Management System"][
-        "Space heating heat pump electricity from grid"
-    ].get("value")
-    domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour = jsondata["Energy Management System"][
-        "Domestic hot water heat pump electricity from grid"
-    ].get("value")
+    residents_grid_consumption_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Energy Management System", name="Residents' electricity consumption from grid"
+    )
+    space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Energy Management System", name="Space heating heat pump electricity from grid"
+    )
+    domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour = finder.value(
+        building=building_label, tag="Energy Management System", name="Domestic hot water heat pump electricity from grid"
+    )
 
     sum_component_grid_consumptions_in_kilowatt_hour = (
         residents_grid_consumption_kpi_in_kilowatt_hour
@@ -618,14 +632,77 @@ def test_the_kpi_block_finds_a_dispatch_port_that_is_not_named_after_a_class() -
         output_description="Target electricity for Occupancy. ",
     )
     assert "UtspLpgConnector" not in dispatch_output.field_name
+    residents_output = _wire_measured_participant(manager, "UTSPConnector", lt.ComponentType.RESIDENTS, 1)
     results = pd.DataFrame({dispatch_output.field_name: [-1000.0, -1000.0]})
 
-    kpi_entries = manager.get_component_kpi_entries(all_outputs=[dispatch_output], postprocessing_results=results)
+    kpi_entries = manager.component_kpi_entries(all_outputs=[dispatch_output], postprocessing_results=results)
 
     assert [entry.name for entry in kpi_entries] == ["Residents' electricity consumption from grid"]
-    assert kpi_entries[0].name_of_source_component == "UtspLpgConnector"
+    expected_source = KpiSource.for_component(residents_output.component_id, DisplayConfig.show("Residents"))
+    assert kpi_entries[0].source == expected_source
+    assert kpi_entries[0].source.display_name == "Residents"
+    assert kpi_entries[0].name_of_source_component == "UTSPConnector"
     assert kpi_entries[0].unit == "kWh"
     assert kpi_entries[0].value == pytest.approx(0.5)
+
+
+def _wire_measured_participant(
+    manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+    participant_name: str,
+    component_type: lt.ComponentType,
+    weight: int,
+) -> cp.ComponentOutput:
+    """Feeds the manager the participant's consumption, as the default connections do.
+
+    The ComponentWrapper resolves the input's source output when the simulator wires the run; the
+    test does that step by hand, since it builds no simulator.
+
+    Returns:
+        The participant's output the manager's input is connected to.
+    """
+    participant_output = cp.ComponentOutput(
+        participant_name,
+        "ElectricalPowerConsumption",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.WATT,
+        output_description="the participant's consumption",
+        component_id=ComponentID(name=participant_name),
+        display_config=DisplayConfig.show("Residents"),
+    )
+    manager.add_component_input_and_connect(
+        source_object_name=participant_name,
+        source_component_output="ElectricalPowerConsumption",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[component_type, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+        source_weight=weight,
+    )
+    manager.inputs[-1].source_output = participant_output
+    return participant_output
+
+
+@pytest.mark.base
+def test_a_grid_share_kpi_names_no_participant_it_cannot_find() -> None:
+    """Catches a dispatch KPI reported for a participant nothing identifies.
+
+    The grid share of a dispatch is reported on behalf of the participant, which the manager finds
+    through the input sharing the dispatch's weight and component type. A dispatch with no such
+    input has no participant to name; it used to be credited to a class name instead, which is no
+    component of the run at all.
+    """
+    manager = _energy_manager()
+    dispatch_output = manager.add_component_output(
+        source_output_name="DispatchForUTSPConnector_",
+        source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=1,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Occupancy. ",
+    )
+    results = pd.DataFrame({dispatch_output.field_name: [-1000.0, -1000.0]})
+
+    with pytest.raises(ValueError, match="pairs with 0 inputs"):
+        manager.component_kpi_entries(all_outputs=[dispatch_output], postprocessing_results=results)
 
 
 def _heat_pump(

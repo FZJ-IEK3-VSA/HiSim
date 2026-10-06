@@ -173,14 +173,15 @@ def test_electrolyzer_kpi_entries_read_the_final_cumulative_values() -> None:
     ]
     frame = pd.DataFrame({0: [7000.0, 8000.0], 1: [1.0, 2.5], 2: [40.0, 90.0], 3: [0.5, 1.25]})
 
-    entries = {e.name: e for e in electrolyzer.get_component_kpi_entries(outputs, frame)}
+    entries = {e.name: e for e in electrolyzer.component_kpi_entries(outputs, frame)}
 
     assert entries["Hydrogen produced"].value == pytest.approx(2.5)
     assert entries["Electrical energy consumed"].value == pytest.approx(90.0)
     assert entries["Operating time"].value == pytest.approx(1.25)
-    assert all(e.name_of_source_component == electrolyzer.component_name for e in entries.values()), (
-        "the source component is the disambiguator a future multi-instance collision fix keys on"
+    assert all(e.source == electrolyzer.kpi_source() for e in entries.values()), (
+        "every entry carries its component's source, the address its key is qualified with"
     )
+    assert all(e.name_of_source_component == electrolyzer.component_name for e in entries.values())
     for entry in entries.values():
         json.dumps(entry.to_dict())  # the webtool writer serializes exactly this; it must not raise
 
@@ -191,7 +192,7 @@ def test_electrolyzer_kpi_entries_refuse_a_missing_output() -> None:
     electrolyzer = _build_electrolyzer()
 
     with pytest.raises(ValueError, match="Hydrogen produced"):
-        electrolyzer.get_component_kpi_entries([electrolyzer.total_energy_consumed], pd.DataFrame({0: [1.0]}))
+        electrolyzer.component_kpi_entries([electrolyzer.total_energy_consumed], pd.DataFrame({0: [1.0]}))
 
 
 @pytest.mark.base
@@ -211,7 +212,7 @@ def test_electrolyzer_kpi_entries_refuse_nan_instead_of_misreading() -> None:
     frame = pd.DataFrame({0: [1.0, float("nan")], 1: [40.0, 90.0], 2: [0.5, 1.25]})
 
     with pytest.raises(ValueError, match="Hydrogen produced"):
-        electrolyzer.get_component_kpi_entries(outputs, frame)
+        electrolyzer.component_kpi_entries(outputs, frame)
 
 
 @pytest.mark.base

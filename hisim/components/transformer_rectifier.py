@@ -297,7 +297,6 @@ class Transformer(StatelessComponent):
                 value=delivered_in_kilowatt_hour,
                 tag=KpiTagEnumClass.TRANSFORMER,
                 description=self.component_name,
-                name_of_source_component=self.component_name,
             ),
             KpiEntry(
                 name="Conversion losses",
@@ -305,7 +304,6 @@ class Transformer(StatelessComponent):
                 value=losses_in_kilowatt_hour,
                 tag=KpiTagEnumClass.TRANSFORMER,
                 description=self.component_name,
-                name_of_source_component=self.component_name,
             ),
         ]
 

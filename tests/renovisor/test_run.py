@@ -23,6 +23,7 @@ from typing import Any, Dict
 
 import pytest
 
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.renovisor.costs import CostField
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.run import Calculation, ExitCode, Outputs
@@ -86,12 +87,7 @@ def run(document: Dict[str, Any], directory: Path, name: str) -> ExitCode:
 def heating_demand(directory: Path) -> float:
     """Return the building's theoretical heating demand out of one run's ``all_kpis.json``."""
     document = json.loads((directory / "results" / "all_kpis.json").read_text(encoding="utf-8"))
-    for block in document.values():
-        for group in block.values():
-            for entry in group.values():
-                if isinstance(entry, dict) and entry.get("name") == "Theoretical heating demand":
-                    return float(entry["value"])
-    raise AssertionError("all_kpis.json carries no theoretical heating demand")
+    return float(KpiFinder(document).value(tag="Building", name="Theoretical heating demand"))
 
 
 @pytest.mark.system_setups

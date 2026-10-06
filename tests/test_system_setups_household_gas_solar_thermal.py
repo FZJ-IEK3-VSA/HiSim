@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from hisim import hisim_main
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
@@ -65,36 +66,26 @@ def test_household_gas_solar_thermal() -> None:
     kpi_path = result_path / "all_kpis.json"
     assert kpi_path.is_file(), f"all_kpis.json not found in {result_directory}"
 
-    values_by_name: dict = {}
-
-    def collect(node: object) -> None:
-        if not isinstance(node, dict):
-            return
-        for key, value in node.items():
-            if isinstance(value, dict) and "value" in value and "unit" in value:
-                values_by_name[key] = value["value"]
-            else:
-                collect(value)
-
-    collect(json.loads(kpi_path.read_text(encoding="utf-8")))
+    # Every KPI is looked up by its name alone, across building objects and tags; the finder fails
+    # by name when the KPI is missing or more than one entry carries it.
+    finder = KpiFinder(json.loads(kpi_path.read_text(encoding="utf-8")))
 
     for name in ElectricityBalance.REQUIRED:
-        assert name in values_by_name, f"KPI '{name}' is missing from {kpi_path}"
-        assert values_by_name[name] is not None, f"KPI '{name}' has no value"
+        assert finder.value(name=name) is not None, f"KPI '{name}' has no value"
 
     for name in ElectricityBalance.NOT_COMPUTABLE:
-        assert values_by_name.get(name) is None, (
+        assert finder.value(name=name) is None, (
             f"KPI '{name}' carries a value, but this household generates no electricity, so the "
             "share of its own production that it consumes is undefined."
         )
 
-    relative_demand = values_by_name["Relative electricity demand from grid"]
+    relative_demand = finder.value(name="Relative electricity demand from grid")
     assert relative_demand <= ElectricityBalance.RELATIVE_DEMAND_CEILING, (
         f"the grid supplied {relative_demand} % of a consumption it cannot exceed -- a source is "
         "very likely fed into the electricity meter twice, by hand and by default connection both."
     )
 
-    assert values_by_name["Total energy from grid"] <= values_by_name["Total electricity consumption"], (
+    assert finder.value(name="Total energy from grid") <= finder.value(name="Total electricity consumption"), (
         "grid import exceeds total consumption, which is the same double-counting seen from the "
         "other side."
     )

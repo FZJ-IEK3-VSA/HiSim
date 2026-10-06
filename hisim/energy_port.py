@@ -27,15 +27,39 @@ declares no ports at all, an environment node or nobody the wiring names.
 A power output (W, kW) is converted to energy with the timestep, an energy output (Wh, kWh, kWh per timestep, J,
 kJ) is taken per step as it is; any other unit is refused when the output is declared
 (:meth:`EnergyPort.validate_unit`).
+
+Hydronic circuits (hydronic coupling spec, ``roadmap/hydronic_coupling_spec.md`` §3.5)
+--------------------------------------------------------------------------------------
+
+A water circuit carries no energy output: it is a mass flow, a supply temperature and a return temperature, and
+its heat is derived from them, ``m c (T_sup - T_ret) dt``. A :class:`HydronicPort` names those three outputs and
+derives the heat with :func:`hisim.hydronics.kilowatt_hours`, the one rule. Both ends of a circuit declare the
+same port, the supply owner with role ``OUT`` and the receiver with role ``IN``, so a circuit balances by
+construction. No component declares one yet and the balance check does not read them yet (spec §9.5, stage E).
+The contract stage E implements:
+
+* A port names no peer. The two ends come from the wiring: the component that reads the circuit's mass-flow
+  output is the other end.
+* **One reader.** A mass-flow output read by more than one component that declares a ``HydronicPort`` on it
+  fails the run: one flow cannot deliver its heat twice, and a split is a valve component with one circuit per
+  branch.
+* **Both ends or neither.** A circuit whose one end declares a ``HydronicPort`` while the other end, a
+  component that declares ports, does not declare the matching one fails the run. A circuit whose other end
+  declares no ports at all is reported as undeclared, as for an :class:`EnergyPort`.
+
+The :class:`EnergyPort` peer pointers remain for the carriers that are not water: fuel, electricity, ambient
+heat and solar.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import ClassVar, Dict, Mapping, Optional
+from typing import ClassVar, Dict, Mapping, Optional, Tuple
 
+from hisim import hydronics
 from hisim import loadtypes as lt
+from hisim.config.names import NameSyntax
 
 
 @dataclass(frozen=True)
@@ -147,3 +171,71 @@ class EnergyPort:
             "environment": None if self.environment is None else self.environment.value,
             "negated": self.negated,
         }
+
+
+class HydronicPortError(ValueError):
+
+    """A hydronic port whose output names or role cannot describe a circuit."""
+
+
+@dataclass(frozen=True)
+class HydronicPort:
+
+    """The three outputs of one water circuit, as one end of it declares them (spec §3.5).
+
+    ``mass_flow`` is the pump owner's output (kg/s), ``supply_temperature`` and ``return_temperature`` the
+    outputs (°C) of the components the water leaves on each leg; each is a name under HiSim's one identifier
+    rule, :meth:`hisim.config.names.NameSyntax.require_identifier`, the rule every output name obeys.
+
+    ``role`` is ``OUT`` for the supply owner and ``IN`` for the receiver; it says on which side of that end's
+    balance the circuit's heat counts and never changes the heat's sign, which is the circuit's own (negative for
+    a cooling circuit, §3.4). :meth:`kilowatt_hours` returns that heat with the §3.4 sign whatever the role, and
+    the balance check (stage E) adds it on the ``IN`` side and subtracts it on the ``OUT`` side. The role is
+    checked at construction to be ``IN`` or ``OUT``, because :class:`~hisim.loadtypes.EnergyRole` also has
+    ``LOSS`` and ``STORED_CHANGE``, which a circuit end cannot be.
+    """
+
+    mass_flow: str
+    supply_temperature: str
+    return_temperature: str
+    role: lt.EnergyRole
+
+    #: The roles a circuit can have at one of its ends.
+    CIRCUIT_ROLES: ClassVar[Tuple[lt.EnergyRole, ...]] = (lt.EnergyRole.IN, lt.EnergyRole.OUT)
+
+    def __post_init__(self) -> None:
+        """Refuse names that are not distinct identifiers and a role other than ``IN`` or ``OUT``.
+
+        Raises:
+            HydronicPortError: If a name breaks HiSim's identifier rule, two names coincide, or the role is not an
+                :class:`~hisim.loadtypes.EnergyRole` ``IN`` or ``OUT``.
+        """
+        names = {
+            "mass_flow": self.mass_flow,
+            "supply_temperature": self.supply_temperature,
+            "return_temperature": self.return_temperature,
+        }
+        for field_name, output_name in names.items():
+            try:
+                NameSyntax.require_identifier(output_name, f"hydronic port {field_name} output")
+            except ValueError as error:
+                raise HydronicPortError(f"A hydronic port's {field_name} must name an output: {error}") from error
+        if len(set(names.values())) != len(names):
+            raise HydronicPortError(
+                f"A hydronic port names three distinct outputs, got mass_flow={self.mass_flow!r}, "
+                f"supply_temperature={self.supply_temperature!r}, return_temperature={self.return_temperature!r}."
+            )
+        if not isinstance(self.role, lt.EnergyRole) or self.role not in self.CIRCUIT_ROLES:
+            raise HydronicPortError(
+                f"A hydronic port's role is EnergyRole.IN (the receiver) or EnergyRole.OUT (the supply owner), "
+                f"got {self.role!r}."
+            )
+
+    @staticmethod
+    def kilowatt_hours(m: float, t_sup: float, t_ret: float, seconds_per_timestep: float) -> float:
+        """The circuit's heat over one step in kWh, ``m c (t_sup - t_ret) dt / 3.6e6``.
+
+        Delegates to :func:`hisim.hydronics.kilowatt_hours`, which refuses a negative or non-finite flow, a
+        non-finite temperature and a step that is not positive.
+        """
+        return hydronics.kilowatt_hours(m, t_sup, t_ret, seconds_per_timestep)

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from hisim.loadtypes import LoadTypes, ComponentType
 from hisim import log
+from hisim.hydronics import WATER_SPECIFIC_HEAT_J_PER_KG_K
 
 """
 Sources for opex techno-economic parameters:
@@ -904,11 +905,14 @@ class PhysicsConfig:
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2000,  # estimated based on values for different woods
             )
         if energy_carrier == LoadTypes.WATER:
+            # The specific heat is the hydronics library's, hisim.hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K, its one
+            # source. The density stays 1000 kg/m3 for now; the storages use 992 (0.992 kg/l at 40 degC, the
+            # library's WATER_DENSITY_KG_PER_M3), and hydronic stage C aligns this value with it.
             return PhysicsConfig(
                 density_in_kg_per_m3=1000,
                 lower_heating_value_in_joule_per_m3=0,
                 higher_heating_value_in_joule_per_m3=0,
-                specific_heat_capacity_in_joule_per_kg_per_kelvin=4180,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=WATER_SPECIFIC_HEAT_J_PER_KG_K,
             )
 
         raise ValueError(f"Energy carrier {energy_carrier} not implemented in PhysicsConfig yet.")

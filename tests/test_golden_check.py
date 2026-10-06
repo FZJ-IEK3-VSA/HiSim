@@ -13,6 +13,7 @@ import pytest
 
 from scripts.golden_check import PORT_NAMED_KPIS, _parse_args, check_modes, golden_filename, main
 from scripts.runner import GoldenConfig, RunResult, run_all, select_pairs
+from tests.golden_leaf_factory import derived, general, leaf_map
 
 pytestmark = pytest.mark.base
 
@@ -77,11 +78,11 @@ def test_pass_when_kpis_match(tmp_path: Path) -> None:
     """Matching fresh and golden KPIs yield rc 0 and a passing report."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0, "b": 2.0})
+    _write_golden(golden_dir, general({"a": 1.0, "b": 2.0}))
 
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
-        repo_root=tmp_path, run_fn=_run_fn({"a": 1.0, "b": 2.0}),
+        repo_root=tmp_path, run_fn=_run_fn(general({"a": 1.0, "b": 2.0})),
     )
     assert rc == 0
     report = _read_report(tmp_path)
@@ -93,11 +94,11 @@ def test_fail_when_kpi_diverges(tmp_path: Path) -> None:
     """A diverged KPI yields rc 1, a failing report, and recorded deviations."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
+    _write_golden(golden_dir, general({"a": 1.0}))
 
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
-        repo_root=tmp_path, run_fn=_run_fn({"a": 2.0}),
+        repo_root=tmp_path, run_fn=_run_fn(general({"a": 2.0})),
     )
     assert rc == 1
     report = _read_report(tmp_path)
@@ -117,8 +118,12 @@ def test_port_named_kpis_are_excluded_from_both_sides_in_yaml_mode(tmp_path: Pat
     """
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0, "EMS.Priority for Input_Battery_AcBatteryPowerUsed_4": 2.0})
-    run_fn = _run_fn({"a": 1.0, "EMS.Priority for battery_power": 2.0})
+    ems = "Energy Management System"
+    _write_golden(
+        golden_dir,
+        leaf_map(derived("a", 1.0), derived("Priority for Input_Battery_AcBatteryPowerUsed_4", 2.0, tag=ems)),
+    )
+    run_fn = _run_fn(leaf_map(derived("a", 1.0), derived("Priority for battery_power", 2.0, tag=ems)))
 
     without_exclusion = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
@@ -154,7 +159,7 @@ def test_run_error_is_failure(tmp_path: Path) -> None:
     """A run that reports an error is surfaced as a ``run_error`` failure."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
+    _write_golden(golden_dir, general({"a": 1.0}))
 
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
@@ -169,11 +174,11 @@ def test_nondeterministic_mismatch_is_advisory_not_failure(tmp_path: Path) -> No
     """A mismatch on a nondeterministic pair is advisory, still passing overall."""
     config_path = _write_config(tmp_path, nondeterministic=True)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
+    _write_golden(golden_dir, general({"a": 1.0}))
 
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
-        repo_root=tmp_path, run_fn=_run_fn({"a": 999.0}),
+        repo_root=tmp_path, run_fn=_run_fn(general({"a": 999.0})),
     )
     assert rc == 0
     report = _read_report(tmp_path)
@@ -186,11 +191,11 @@ def test_advisory_divergence_returns_zero_but_reports_failure(tmp_path: Path) ->
     """In advisory mode a real divergence is recorded but the exit code is forced to 0."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
+    _write_golden(golden_dir, general({"a": 1.0}))
 
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
-        repo_root=tmp_path, run_fn=_run_fn({"a": 2.0}), advisory=True,
+        repo_root=tmp_path, run_fn=_run_fn(general({"a": 2.0})), advisory=True,
     )
     assert rc == 0
     report = _read_report(tmp_path)
@@ -205,7 +210,7 @@ def test_advisory_missing_golden_returns_zero(tmp_path: Path) -> None:
 
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
-        repo_root=tmp_path, run_fn=_run_fn({"a": 1.0}), advisory=True,
+        repo_root=tmp_path, run_fn=_run_fn(general({"a": 1.0})), advisory=True,
     )
     assert rc == 0
     report = _read_report(tmp_path)
@@ -246,7 +251,7 @@ def test_setup_param_filter_narrows_to_one_pair(tmp_path: Path) -> None:
     config_path.write_text(json.dumps(config))
 
     golden_dir = tmp_path / "golden_references"
-    kpis = {"a": 1.0}
+    kpis = general({"a": 1.0})
     _write_golden(golden_dir, kpis)
     (golden_dir / golden_filename("setup_a", "one_day_60s")).write_text(json.dumps(kpis))
     run_fn = _config_aware_run_fn(kpis)
@@ -307,8 +312,8 @@ def test_pairs_that_fail_in_a_parallel_shard_fail_the_check_each_with_its_own_ve
     config_path = tmp_path / "config.json"
     config_path.write_text(json.dumps(config))
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
-    (golden_dir / golden_filename("setup_b", "one_week_60s")).write_text(json.dumps({"a": 1.0}))
+    _write_golden(golden_dir, general({"a": 1.0}))
+    (golden_dir / golden_filename("setup_b", "one_week_60s")).write_text(json.dumps(general({"a": 1.0})))
 
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path, repo_root=REPO_ROOT,
@@ -329,12 +334,12 @@ def test_the_yaml_mode_writes_its_own_report_beside_the_python_one(tmp_path: Pat
     """A job running both modes keeps both reports: the YAML run goes to ``<check_subdir>-yaml``."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
+    _write_golden(golden_dir, general({"a": 1.0}))
     seen: list[str] = []
 
     def run_fn(_config: GoldenConfig, results_root: Path, _repo_root: Path, subdir: str) -> list[RunResult]:
         seen.append(subdir)
-        return [RunResult("setup_a", "one_week_60s", str(results_root / subdir), kpis={"a": 1.0})]
+        return [RunResult("setup_a", "one_week_60s", str(results_root / subdir), kpis=general({"a": 1.0}))]
 
     main(config_path=config_path, golden_dir=golden_dir, results_root=tmp_path, repo_root=tmp_path, run_fn=run_fn)
     main(
@@ -367,9 +372,9 @@ def test_a_divergence_in_either_mode_fails_both_modes_check_and_reports_both(tmp
     """
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
-    kpis = {"python": {"a": 1.0}, "yaml": {"a": 1.0}}
-    kpis[diverging] = {"a": 2.0}
+    _write_golden(golden_dir, general({"a": 1.0}))
+    kpis = {"python": general({"a": 1.0}), "yaml": general({"a": 1.0})}
+    kpis[diverging] = general({"a": 2.0})
     seen: list = []
 
     rc = check_modes(
@@ -389,10 +394,11 @@ def test_both_modes_pass_together(tmp_path: Path) -> None:
     """Both modes matching is exit 0, with both reports written."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
+    _write_golden(golden_dir, general({"a": 1.0}))
     rc = check_modes(
         ["python", "yaml"], config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
-        repo_root=tmp_path, run_modes_fn=_modes_run_fn({"python": {"a": 1.0}, "yaml": {"a": 1.0}}, []),
+        repo_root=tmp_path,
+        run_modes_fn=_modes_run_fn({"python": general({"a": 1.0}), "yaml": general({"a": 1.0})}, []),
     )
     assert rc == 0
     assert (tmp_path / "golden-ref-check-yaml" / "report.txt").read_text().startswith("GOLDEN CHECK OK")
@@ -414,3 +420,74 @@ def test_a_missing_golden_fails_both_modes_before_running(tmp_path: Path) -> Non
 def test_cli_mode_both() -> None:
     """``--mode both`` is the golden-check shard's mode."""
     assert _parse_args(["--mode", "both"]).mode == "both"
+
+
+# --------------------------------------------------------------------------- #
+# The leaf form: units, and goldens the gate refuses to read
+# --------------------------------------------------------------------------- #
+def test_a_changed_unit_fails_as_a_unit_change_of_its_own(tmp_path: Path) -> None:
+    """Catches a unit change passing the gate, or hiding among the value divergences.
+
+    The value is the same on both sides; only the unit moved. The pair fails, the deviation is
+    recorded under ``unit_changes`` (not ``deviations``), and both ``report.txt`` and the summary
+    name it as a unit change.
+    """
+    config_path = _write_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, leaf_map(derived("a", 1.0, unit="kWh")))
+
+    rc = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=_run_fn(leaf_map(derived("a", 1.0, unit="MWh"))),
+    )
+
+    assert rc == 1
+    pair = _read_report(tmp_path)["pairs"][0]
+    assert pair["status"] == "fail"
+    assert not pair["deviations"]
+    assert pair["unit_changes"] == [
+        "setup_a/one_week_60s: KPI 'BUI1.General.a' changed its unit: ref='kWh' got='MWh'"
+    ]
+    text = (tmp_path / "golden-ref-check" / "report.txt").read_text()
+    assert text.splitlines()[0] == "GOLDEN CHECK FAILED (1 pair(s)): 1 with KPI unit changes"
+    assert "    - [unit] setup_a/one_week_60s: KPI 'BUI1.General.a' changed its unit" in text
+
+
+def test_a_golden_in_the_old_flat_form_is_refused_before_running(tmp_path: Path) -> None:
+    """Catches the gate reading a flat ``dotted key -> value`` golden, which has no unit and no source."""
+    config_path = _write_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, {"BUI1.General.a": 1.0})
+
+    def run_fn_must_not_run(*_a, **_k):  # pragma: no cover
+        raise AssertionError("must not run simulations when a golden is unusable")
+
+    rc = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=run_fn_must_not_run,
+    )
+
+    assert rc == 1
+    pair = _read_report(tmp_path)["pairs"][0]
+    assert pair["status"] == "unusable_golden"
+    assert "old flat form" in pair["deviations"][0]
+    assert "golden-update workflow with force_rewrite" in pair["deviations"][0]
+    assert "1 with an unusable golden reference" in (tmp_path / "golden-ref-check" / "report.txt").read_text()
+
+
+def test_a_golden_whose_key_disagrees_with_its_fields_is_refused(tmp_path: Path) -> None:
+    """Catches a hand-edited key (or a hand-edited field) being compared under the wrong address."""
+    config_path = _write_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    _, leaf = derived("a", 1.0)
+    _write_golden(golden_dir, {"BUI1.General.b": leaf})
+
+    rc = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=_run_fn(general({"a": 1.0})),
+    )
+
+    assert rc == 1
+    pair = _read_report(tmp_path)["pairs"][0]
+    assert pair["status"] == "unusable_golden"
+    assert "which address it as 'BUI1.General.a'" in pair["deviations"][0]

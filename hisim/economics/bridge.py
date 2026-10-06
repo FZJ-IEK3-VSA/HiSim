@@ -97,6 +97,7 @@ from hisim.economics.serialization import write_inputs
 from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, LoadTypes, Units
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 
 if TYPE_CHECKING:  # The renderer is imported lazily; only its record type is needed for typing.
     from hisim.economics.report_plots import SkippedPlot
@@ -953,9 +954,14 @@ def build_evaluation_inputs(
     unresolved: List[UnresolvedSubject] = []
     not_installed: List[str] = []
     billing_intervals = _capacity_billing_intervals(wrapped_components)
+    # Every simulated component's address, whatever the branches below make of it: the staged
+    # document's rows say which subject is a HiSim component by it, and only here are the live
+    # components (their ComponentID and DisplayConfig) at hand.
+    component_sources: Dict[str, KpiSource] = {}
     for wrapper in wrapped_components:
         component = wrapper.my_component
         subject = component.component_name
+        component_sources[subject] = component.kpi_source()
         # The energy balance is a physical record, not a cost classification: it is collected for
         # every component, before and independently of the cost-relevance branch below, because a
         # PV system that is FREE_OF_COST or a load profile that is UNDECLARED still moves the
@@ -1088,6 +1094,7 @@ def build_evaluation_inputs(
         # (`> 0` rather than `!= 0`: the per-timestep tolerance admits rounding noise below zero.)
         useful_heat_of_simulated_period_in_kwh=measured_heat if measured_heat > 0 else None,
         useful_heat_of_simulated_period_by_kind_in_kwh=useful_heat_by_kind,
+        component_sources=component_sources,
     )
     context: Optional[EconomicContext] = getattr(simulation_parameters, "economic_context", None)
     if context is not None:

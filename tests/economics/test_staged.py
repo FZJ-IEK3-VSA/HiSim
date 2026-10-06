@@ -27,7 +27,7 @@ from hisim.economics.facts import BillingDeterminants, ExistingAsset, ExistingAs
 from hisim.economics.parameters import EconomicParameters, StatedEnergyPrice
 from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 from hisim.economics.provenance import ParameterOrigin
-from hisim.economics.staged import Stage, StagedEvaluationError, StagedEvaluator
+from hisim.economics.staged import IncrementSubjects, Stage, StagedEvaluationError, StagedEvaluator
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_parameters import EchoOrigin, ParameterKeys, PlanYearBounds, StagedParameters
 from hisim.economics.tariffs import SupplyKind, TariffContract, TariffSupply
@@ -659,11 +659,12 @@ class TestThePlansHeatCostDividesByItsDiscountedHeat:
 class TestAReplacedBufferIsBoughtWhole:
     """renovisorissues #48: anything the stage's register declares replaced is a new purchase.
 
-    The increment rule charges ``(new - old) / new`` of a subject present in both stages and larger
-    in the later one. A heating_system measure does not enlarge the buffer, though: it takes the old
-    vessel out and puts a bigger one in, which the stage's own evaluation already prices -- the full
-    new price, the old one's removal and write-off, the anyway credit. Charging only the increment of
-    that booked a fraction of a replacement and left the rest of the new vessel on the reference.
+    The increment rule buys the size difference of a subject present in both stages and larger in
+    the later one (as a subject of its own since hisim-1y0m). A heating_system measure does not
+    enlarge the buffer, though: it takes the old vessel out and puts a bigger one in, which the
+    stage's own evaluation already prices -- the full new price, the old one's removal and
+    write-off, the anyway credit. Charging only the increment of that booked a fraction of a
+    replacement and left the rest of the new vessel on the reference.
     The rule holds for every replaced device, not the buffer alone (owner decision 2026-09-26, which
     reversed the buffer-only limit of the same day): the increment is only for enlarging a device
     the house keeps.
@@ -718,12 +719,18 @@ class TestAReplacedBufferIsBoughtWhole:
         assert StagedEvaluator(database)._charged_subjects(stages, 1) == {self.BUFFER_SUBJECT: 1.0}
 
     def test_an_enlarged_subject_nothing_replaces_is_still_charged_its_increment(self, database):
-        """E-spec §1.2 item 2 is unchanged where the register declares no replacement."""
+        """Where the register declares no replacement the stage buys the increment, as a subject of its own.
+
+        hisim-1y0m: the 600 added is bought whole as ``SimpleHotWaterStorage#increment_stage1``; the
+        400 the house keeps is not charged. The public answer names the enlarged subject.
+        """
         stages = (self._stage(self.OLD_SIZE, False, 0, "baseline"), self._stage(self.NEW_SIZE, False, 0, "package"))
+        split = StagedEvaluator.split_increments(stages)
         # pylint: disable=protected-access
-        assert StagedEvaluator(database)._charged_subjects(stages, 1) == {
-            self.BUFFER_SUBJECT: pytest.approx((self.NEW_SIZE - self.OLD_SIZE) / self.NEW_SIZE)
+        assert StagedEvaluator(database)._charged_subjects(split, 1) == {
+            IncrementSubjects.name(self.BUFFER_SUBJECT, 1): 1.0
         }
+        assert StagedEvaluator.charged_subjects(stages, 1) == {self.BUFFER_SUBJECT: 1.0}
 
     @staticmethod
     def _pv_stage(size: float, replaced: Optional[bool], label: str) -> Stage:
@@ -763,10 +770,15 @@ class TestAReplacedBufferIsBoughtWhole:
         assert StagedEvaluator(database)._charged_subjects(stages, 1) == {"PVSystem": 1.0}
 
     def test_an_enlarged_kept_array_is_still_charged_its_increment(self, database):
-        """An array the house keeps and enlarges from 4 to 10 kW pays for the 6 kW it adds: 6 / 10."""
+        """An array the house keeps and enlarges from 4 to 10 kW buys the 6 kW it adds, whole (hisim-1y0m)."""
         stages = (self._pv_stage(4.0, False, "baseline"), self._pv_stage(10.0, False, "package"))
+        split = StagedEvaluator.split_increments(stages)
+        assert [(facts.subject, facts.facts.size) for facts in split[1].inputs.cost_facts] == [
+            ("PVSystem", 4.0),
+            (IncrementSubjects.name("PVSystem", 1), 6.0),
+        ]
         # pylint: disable=protected-access
-        assert StagedEvaluator(database)._charged_subjects(stages, 1) == {"PVSystem": pytest.approx(0.6)}
+        assert StagedEvaluator(database)._charged_subjects(split, 1) == {IncrementSubjects.name("PVSystem", 1): 1.0}
 
     def test_a_replacement_an_earlier_stage_made_is_not_bought_again(self, database):
         """Stage 2 still declares stage 1's replacement, which it carries and does not repeat."""

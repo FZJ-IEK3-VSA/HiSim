@@ -242,6 +242,69 @@ class OutputPostprocessingRules(str, enum.Enum):
 
 
 @enum.unique
+class EnergyRole(str, enum.Enum):
+
+    """What an energy port of a component is in that component's energy balance (hisim-9uoo.1).
+
+    The balance a component closes is ``sum(IN) - sum(OUT) - sum(LOSS) - sum(STORED_CHANGE) = 0``
+    over all its ports, per timestep. A port's value is read with its own sign: a negative ``IN``
+    is energy leaving through that port, a negative ``STORED_CHANGE`` is energy the component
+    gave up from its store.
+    """
+
+    #: Energy entering the component (a fuel burnt, heat received, ambient heat drawn).
+    IN = "in"
+    #: Useful energy leaving the component to another component or to a consumer.
+    OUT = "out"
+    #: Energy leaving the component unused, to the environment (a standby loss, a flue loss).
+    LOSS = "loss"
+    #: Increase of the energy the component holds during the step (negative when it discharges).
+    STORED_CHANGE = "stored_change"
+
+
+@enum.unique
+class EnergyBalanceCarrier(str, enum.Enum):
+
+    """The energy carrier an energy port carries, for the balance check and the Sankey (hisim-9uoo.1).
+
+    Distinct from :class:`hisim.economics.carriers.EnergyCarrier`, which names what is *priced* at the
+    system boundary: this one also names the heat inside the house. Heat is split by what it is used
+    for, space heating, domestic hot water and cooling, and a water flow counts by the heat it
+    carries, ``m c dT``, never by its mass. ``AMBIENT_HEAT`` and ``SOLAR`` are what the environment
+    gives a heat pump or a collector; a port of either carrier is linked to the environment node of
+    the same name.
+    """
+
+    ELECTRICITY = "electricity"
+    NATURAL_GAS = "natural_gas"
+    HEATING_OIL = "heating_oil"
+    PELLETS = "pellets"
+    WOOD_CHIPS = "wood_chips"
+    HYDROGEN = "hydrogen"
+    DIESEL = "diesel"
+    DISTRICT_HEAT = "district_heat"
+    SPACE_HEATING_HEAT = "space_heating_heat"
+    DOMESTIC_HOT_WATER_HEAT = "domestic_hot_water_heat"
+    COOLING = "cooling"
+    AMBIENT_HEAT = "ambient_heat"
+    SOLAR = "solar"
+
+
+@enum.unique
+class EnvironmentNode(str, enum.Enum):
+
+    """The environment as the balance and the Sankey see it: where energy comes from or goes to outside the house.
+
+    An ``IN`` port of carrier ``AMBIENT_HEAT`` or ``SOLAR`` comes from the node of that name and a
+    ``LOSS`` port goes ``OUTDOORS``, unless the port names its node itself.
+    """
+
+    AMBIENT_HEAT = "ambient heat"
+    SOLAR = "solar"
+    OUTDOORS = "outdoors"
+
+
+@enum.unique
 class ComponentType(str, enum.Enum):
 
     """Component types for use in dynamic controllers."""

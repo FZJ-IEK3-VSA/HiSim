@@ -63,6 +63,7 @@ from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.loadtypes import ComponentType, Units
+from tests.fake_component_source import NamedComponentSource
 
 pytestmark = pytest.mark.base
 
@@ -128,7 +129,7 @@ class _Config:
         self.__dict__.update(attributes)
 
 
-class FakeHeatPump:
+class FakeHeatPump(NamedComponentSource):
     """A component that adopted the new API (`get_cost_facts`, §9.1).
 
     Represents the target state: the class declares `cost_relevance = PRICED` and returns its own
@@ -163,7 +164,7 @@ class FakeHeatPump:
         )
 
 
-class FakeController:
+class FakeController(NamedComponentSource):
     """A component with no cost declaration at all (must abort the run, never be priced).
 
     §9.2 makes the declaration mandatory, so this stub is a *defect*, not a controller: it has no
@@ -179,7 +180,7 @@ class FakeController:
         self.config = _Config()
 
 
-class FakeFreeOfCostController:
+class FakeFreeOfCostController(NamedComponentSource):
     """A controller that declares `FREE_OF_COST` — the legitimate "costs nothing" answer.
 
     The counterpart to `FakeController`, and the reason the abort above is not simply "controllers
@@ -195,7 +196,7 @@ class FakeFreeOfCostController:
         self.config = _Config()
 
 
-class ElectricityMeter:
+class ElectricityMeter(NamedComponentSource):
     """Class name matters: the adapter's meter table keys on it.
 
     The real electricity meter has not adopted `get_energy_flow_facts()` yet, so the adapter maps
@@ -227,7 +228,7 @@ class ElectricityMeter:
         self.get_energy_flow_facts: Any = None
 
 
-class FuelMeter:
+class FuelMeter(NamedComponentSource):
     """Oil meter; its billing quantity is kilowatt-hours, like every other carrier's (D26).
 
     The config still carries a `heating_value_of_fuel_in_kwh_per_liter`, deliberately set to a
@@ -252,7 +253,7 @@ class FuelMeter:
         self.get_energy_flow_facts: Any = None
 
 
-class GenericBoiler:
+class GenericBoiler(NamedComponentSource):
     """Class name matters: it is in `FactsExtractors.BY_CLASS_NAME`, keyed on exactly this name.
 
     The compatibility extractor picks the boiler's asset class from the fuel in its config, and
@@ -296,7 +297,7 @@ class _CountingFlowHook:
         )
 
 
-class FakeZeroSizedMeteredDevice:
+class FakeZeroSizedMeteredDevice(NamedComponentSource):
     """A device configured at zero size that nevertheless reports boundary energy flows.
 
     The counter-example to `adapter._resolved_or_not_installed`'s claim that a zero-size device
@@ -1026,7 +1027,8 @@ def _device(class_name: str, **constants: str):
     rows name *constants* on that class rather than column names, so a stub needs both halves of
     the contract — and building it with `type()` states that instead of hiding it behind a
     hand-written class whose name happens to match. `component_name` is the only attribute the
-    collector reads off the instance.
+    collector reads off the instance, besides the KPI source the extraction records for every
+    component (:class:`NamedComponentSource`).
 
     Args:
         class_name: The component class name the table is expected to know.
@@ -1037,7 +1039,7 @@ def _device(class_name: str, **constants: str):
     Returns:
         An instance of a freshly made class of that name.
     """
-    return type(class_name, (), {"component_name": class_name, **constants})()
+    return type(class_name, (NamedComponentSource,), {"component_name": class_name, **constants})()
 
 
 class TestDeviceEnergyFlows:

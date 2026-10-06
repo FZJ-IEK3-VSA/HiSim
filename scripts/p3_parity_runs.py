@@ -30,6 +30,7 @@ from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple, cast
 import pandas as pd
 
 from hisim.energy_system.parity import WiringSnapshot
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 
@@ -181,7 +182,7 @@ class ParitySide:
     )
 
     #: The file KPI computation writes, read back from the side's own result directory.
-    KPI_FILENAME: ClassVar[str] = "all_kpis.json"
+    KPI_FILENAME: ClassVar[str] = ALL_KPIS_FILE_NAME
 
     @classmethod
     def python(cls, setup_path: Path, parameters: SimulationParameters) -> RunOutcome:
@@ -325,25 +326,27 @@ class TripleInputs:
 
 
 def flatten_kpis(payload: Any) -> Dict[str, Any]:
-    """Flattens an ``all_kpis.json`` tree the way the permanent golden gate does.
+    """Reads an ``all_kpis.json`` tree into the KPI values the permanent golden gate compares.
 
     The rig compares KPIs against each other rather than against a reference, but it compares the
-    same *set* of numbers the golden gate does, so the flattening is imported from the golden
-    tooling rather than written again. The import is guarded because ``scripts/`` is used both as
-    a package and as a directory on the path.
+    same *set* of numbers the golden gate does, so the leaves are built by the golden tooling
+    (:func:`golden_kpis.golden_leaves`, which resolves every entry by its address) rather than
+    written again, and their values are taken. The import is guarded because ``scripts/`` is used
+    both as a package and as a directory on the path.
 
     Args:
         payload: The parsed ``all_kpis.json``.
 
     Returns:
-        A mapping of dotted KPI name to value.
+        A mapping of dotted KPI address to value.
     """
     try:
-        from golden_kpis import flatten  # type: ignore[import-not-found]  # noqa: PLC0415
+        from golden_kpis import golden_leaves  # type: ignore[import-not-found]  # noqa: PLC0415
     except ModuleNotFoundError:  # pragma: no cover - depends on how scripts/ is on the path
-        from scripts.golden_kpis import flatten  # noqa: PLC0415
+        from scripts.golden_kpis import golden_leaves  # noqa: PLC0415
 
-    return cast(Dict[str, Any], flatten(payload))
+    leaves = cast(Dict[str, Dict[str, Any]], golden_leaves(payload))
+    return {key: leaf["value"] for key, leaf in leaves.items()}
 
 
 @dataclass

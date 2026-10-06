@@ -20,6 +20,7 @@ from hisim.components import (
 from hisim import utils, loadtypes
 from hisim.config import SizingContext
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulator import SimulationParameters
 from hisim import log
 
@@ -153,23 +154,29 @@ def _build_system(
     return my_sim, my_electricity_meter, my_sim.results_data_frame
 
 
-def _load_kpi_summary(result_directory: str) -> dict:
-    """Load the ``BUI1`` KPI summary dict from the simulation result directory."""
+def _load_kpi_summary(result_directory: str) -> KpiFinder:
+    """A finder over the KPI collection written to the simulation result directory."""
     with open(str(Path(result_directory) / "all_kpis.json"), "r", encoding="utf-8") as file:
         jsondata = json.load(file)
 
-    return jsondata["BUI1"]  # type: ignore[no-any-return]
+    return KpiFinder(jsondata)
 
 
-def _assert_kpis_match_simulation(kpis: dict, results_df: pd.DataFrame) -> None:
+def _assert_kpis_match_simulation(kpis: KpiFinder, results_df: pd.DataFrame) -> None:
     """Compare KPI JSON values against the electricity-meter simulation results.
 
     Converts the simulation results from Wh to kWh and checks them against the
     KPI summary with a relative tolerance of 10%.
     """
-    cumulative_consumption_kpi_in_kilowatt_hour = kpis["General"]["Total electricity consumption"].get("value")
-    cumulative_production_kpi_in_kilowatt_hour = kpis["General"]["Total electricity production"].get("value")
-    electricity_from_grid_kpi_in_kilowatt_hour = kpis["Electricity Meter"]["Total energy from grid"].get("value")
+    cumulative_consumption_kpi_in_kilowatt_hour = kpis.value(
+        building="BUI1", tag="General", name="Total electricity consumption"
+    )
+    cumulative_production_kpi_in_kilowatt_hour = kpis.value(
+        building="BUI1", tag="General", name="Total electricity production"
+    )
+    electricity_from_grid_kpi_in_kilowatt_hour = kpis.value(
+        building="BUI1", tag="Electricity Meter", name="Total energy from grid"
+    )
 
     # simulation results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (

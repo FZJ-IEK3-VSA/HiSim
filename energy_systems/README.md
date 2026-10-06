@@ -55,6 +55,40 @@ hisim energy-system run results/.../realized.energy_system.yaml \
     results/.../realized.simulation.yaml --rerun
 ```
 
+### Reading a run's KPIs by address
+
+A run with `COMPUTE_KPIS` and `WRITE_KPIS_TO_JSON` writes `all_kpis.json`, nested building, then
+tag, then key, then entry (`roadmap/kpi_address_spec.md`). A KPI a component reports is always
+keyed `"<name> (<source.name>)"`, whether or not another component reports the same name, and its
+entry carries `source`, the component's structured address; a derived KPI (the General tag, cost
+and district totals) keeps its bare name and says `"source": null`. So a key never changes when a
+neighbour is added. Before and after, for the Building component of a house:
+
+```text
+before: "Conditioned floor area": {"name": "Conditioned floor area", "value": 140.0, ...,
+            "nameOfSourceComponent": "Building"}
+after:  "Conditioned floor area (Building)": {"name": "Conditioned floor area", "value": 140.0, ...,
+            "nameOfSourceComponent": "Building",
+            "source": {"import": null, "instance": null, "path": [], "member": "Building",
+                       "assembly": null, "name": "Building", "display_name": "Building",
+                       "label": null}}
+```
+
+`...` stands for the entry's other fields (`unit`, `description`, `tag`, `valueMin`, `valueMax`).
+`nameOfSourceComponent` is deprecated and kept for one release as the same string as
+`source.name`. Never build or split a key: filter on the fields instead, with
+`hisim.postprocessing.kpi_computation.kpi_address.KpiFinder` (`KpiFinder(json.load(f)).value(name=...,
+source=...)`) or on the command line, which prints the dotted address (`building.tag.key`, the
+golden references' form), its value and its unit per KPI:
+
+```bash
+hisim kpis list results/<run directory> --tag "Electricity Meter"
+# BUI1.Electricity Meter.Total energy from grid (ElectricityMeter) = 3412.7 kWh
+```
+
+The filters are `--building`, `--tag`, `--name`, `--source` (the source's runtime name), `--import`
+and `--instance`.
+
 ## Finding out what to write
 
 ```bash

@@ -44,6 +44,7 @@ from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequ
 
 from hisim import log
 from hisim.economics.calculators.aggregation import aggregate_timeline
+from hisim.economics.calculators.annualization import annualize
 from hisim.economics.calculators.context_resolution import installation_verdict
 from hisim.economics.calculators.energy import (
     StatedPrices,
@@ -65,6 +66,7 @@ from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import (
     EconomicEvaluator,
     EvaluationInputs,
+    SubjectCostFacts,
     effective_price_basis_year,
 )
 from hisim.economics.financing import FinancingPlan
@@ -96,7 +98,7 @@ from hisim.economics.staged_parameters import (
     ParameterProblemCodes,
     PlanYearBounds,
 )
-from hisim.economics.subsidies import SubsidyCatalog
+from hisim.economics.subsidies import PayoutKind, SubsidyCatalog
 from hisim.economics.tariffs import FeedInKind
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
@@ -176,6 +178,23 @@ class StagedCategories:
       §2.1). The REPLACEMENT entries of a subject the stage merely *inherits* are not re-dated:
       the stage's own register already installed them in the right year, and shifting them would
       book them twice.
+    * a ``SUBSIDY`` entry after the stage's own year 0 -- a tax credit's instalments and an
+      operational payment (hisim-staged-tax-credit-placement-nvz7, owner principle 2026-09-27).
+      Both are dated from the stage's start: own year ``y`` is plan year ``from_year + y``, and one
+      falling past the horizon is dropped. A **tax credit** is a share of the cost the stage books,
+      which its evaluation already valued at the stage's price level (``booked_price_levels``), so
+      it is scaled by nothing but the share the stage pays -- never escalated again -- and every
+      instalment is kept, whichever stage is active when it is paid: the credit is owed for money
+      spent, not for the state the house is in. An **operational** payment is a fixed nominal rate
+      per kWh, never escalated, and is earned by the installation the stage bought: it is kept
+      while that installation is in the house and dropped from the year a later stage buys the
+      subject whole again or no longer has it (:attr:`_StageCharges.leaves_house_in`). A later
+      stage that merely keeps the installation books no award of its own, so without this rule
+      the payment would vanish the day an unrelated measure starts. Its amount stays the one the
+      earning stage valued on its own simulated kWh, except in a year whose active stage carries
+      its subject as a piece of an enlarged one: there each piece is paid on its size share of
+      that stage's energy (:meth:`StagedEvaluator._operational_rebasing`, owner decision
+      2026-10-01).
     * everything else — the operating flows of E-spec §1.2 (energy, maintenance, fixed operation,
       feed-in, CO2 price, levy, replacement reserve). All of them are taken from the stage that is
       active in the entry's own year, which is what makes "year y of the plan is year y of
@@ -280,6 +299,16 @@ class _StageCharges:
             measure's main subject and its further subjects (renovisorissues #53). Their year-0
             flows are booked in the stage's year exactly as stated, never escalated
             (:meth:`stage_start_factor`).
+        operational: ``(subject, scheme id)`` -> the carrier paid on, of every OPERATIONAL award
+            of the stage's own evaluation: the SUBSIDY entries after year 0 that are per-kWh
+            payments rather than a tax credit's instalments.
+        operational_rebased: ``(subject, scheme id)`` -> plan year -> the factor an operational
+            payment is booked with in that year, for the years whose active stage carries the
+            subject as a piece of a split one (:meth:`StagedEvaluator._operational_rebasing`);
+            absent where the payment is booked as the stage valued it.
+        leaves_house_in: Subject -> the plan year a later stage buys it whole again or no longer
+            has it, which ends the operational payments the stage's purchase earns; absent for a
+            subject that stays to the horizon.
     """
 
     charged: Dict[str, float]
@@ -287,9 +316,12 @@ class _StageCharges:
     rates: Dict[str, float]
     default_rate: float
     quoted: FrozenSet[str] = frozenset()
+    operational: Mapping[Tuple[str, str], EnergyCarrier] = field(default_factory=dict)
+    operational_rebased: Mapping[Tuple[str, str], Mapping[int, float]] = field(default_factory=dict)
+    leaves_house_in: Mapping[str, int] = field(default_factory=dict)
 
     def share_of(self, subject: str) -> float:
-        """How much of one subject's year-0 figure this stage pays: 1.0, an increment, or none."""
+        """How much of one subject's year-0 figure this stage pays: all of it or none."""
         if subject in self.charged:
             return self.charged[subject]
         return 0.0 if subject in self.carried_over else 1.0
@@ -432,6 +464,35 @@ class InvestmentOverride:
         return None
 
 
+class IncrementSubjects:
+    """The subject a later stage's enlargement of a kept subject is bought as (hisim-1y0m).
+
+    A stage that enlarges something the house keeps -- a 5 kWp array grown to 8 kWp -- buys the
+    increment, 3 kWp, as a purchase of its own: priced as a new unit of that size, escalated to the
+    stage's year, with its own life and replacements, while the unit it enlarges keeps ageing on
+    its own schedule (owner decision 2026-09-28). The engine prices one subject per name, so the
+    increment gets a name of its own, formed here and nowhere else, and the document shows it as a
+    row of its own beside the subject it enlarges, with that subject's measure.
+    """
+
+    #: What separates the enlarged subject from the stage in :attr:`NAME`.
+    SEPARATOR: ClassVar[str] = "#increment_stage"
+
+    #: The increment's subject: the enlarged subject and the stage that bought the increment.
+    NAME: ClassVar[str] = "{subject}" + SEPARATOR + "{stage}"
+
+    @classmethod
+    def name(cls, subject: str, stage: int) -> str:
+        """The subject of the increment stage ``stage`` adds to ``subject``."""
+        return cls.NAME.format(subject=subject, stage=stage)
+
+    @classmethod
+    def base_of(cls, subject: str) -> Optional[str]:
+        """The subject an increment enlarges, or ``None`` for a subject that is no increment."""
+        base, separator, stage = subject.rpartition(cls.SEPARATOR)
+        return base if separator and base and stage.isdigit() else None
+
+
 @dataclass(frozen=True)
 class Stage:
     """One state of the house, the year the plan puts it in, and what got it there.
@@ -479,14 +540,17 @@ class StagedResult:
             ordinary evaluation is.
         comparison: ``results.compare(reference, plan, "reference", "plan")``; deltas are
             plan minus reference, slot-wise, so a negative NPV delta means the plan is cheaper.
-        stages: The stages as they were given, in order.
+        stages: The stages as they were priced, in order: as given, except that a subject a stage
+            enlarges is carried as the unit it had plus one :class:`IncrementSubjects` subject per
+            enlargement (:meth:`StagedEvaluator.split_increments`, hisim-1y0m).
         per_stage: Each stage evaluated alone over the full horizon, in stage order. Stage ``k``'s
             evaluation already carries the merged ageing register of every stage before it. All of
             them, and therefore ``reference`` and ``plan`` too, carry the *same* provenance ledger
             (:attr:`ledger`), so an id means one record wherever in the result it appears.
         charged_subjects_by_stage: Which cost subjects each stage pays for, and at which share of
-            the stage's own year-0 figure — 1.0 for a subject new in the stage, the size increment
-            for one that grew, and absent for a subject carried over unchanged.
+            the stage's own year-0 figure — 1.0 for a subject new in the stage, including the
+            increment of one that grew, which is a subject of its own (:class:`IncrementSubjects`),
+            and absent for a subject carried over unchanged.
         active_stage_by_year: The index of the stage the house is in, one entry per horizon year
             0..T. Computed once while the plan is priced and read back by
             :meth:`stage_of_year`, so the supersession rule (the last stage whose ``from_year``
@@ -861,6 +925,10 @@ class StagedEvaluator:
         self._validate(ordered, parameters)
         basis_year_origin: Optional[EchoOrigin] = None
         self._validate_overrides(ordered, overrides)
+        # An enlargement of a kept subject is bought as its own subject (hisim-1y0m); from here on
+        # every stage carries it so, and a quote for the enlarged subject prices the increment.
+        ordered = self.split_increments(ordered)
+        overrides = self._quotes_on_increments(ordered, overrides)
         if parameters.price_basis_year is None and plan_start_year is not None:
             # Resolved once, here, so every stage's evaluation reads the same basis year and the
             # engine's own fallback to the simulation year never runs inside this plan. The one
@@ -915,8 +983,8 @@ class StagedEvaluator:
             quotes = [override for override in overrides if override.stage == index]
             charged = self._charged_subjects(ordered, index)
             for override in quotes:
-                # The quote is the stage's whole job, so the stage pays all of it -- also where it
-                # only enlarges a subject the stage before already had.
+                # The quote is the stage's whole job, so the stage pays all of it; where the stage
+                # enlarges a subject, the quote already names the increment (`_quotes_on_increments`).
                 charged[override.main_subject] = 1.0
             inputs = self._staged_inputs(ordered, index, charged_by_stage, year_zero)
             inputs, purchases = self._quoted_inputs(inputs, quotes)
@@ -1522,16 +1590,199 @@ class StagedEvaluator:
 
         The public face of the rule, for a caller that has to know before pricing whether a stage
         buys anything for a measure -- the staged command refusing a quote for a measure a stage
-        only carries over.
+        only carries over. Asked of the stages as given: a subject the stage enlarges is listed
+        under its own name, since the stage buys its increment (:class:`IncrementSubjects`).
 
         Args:
-            stages: The plan.
+            stages: The plan, as given.
             index: The stage.
 
         Returns:
             Subject name -> the share of its year-0 flows the stage pays.
         """
-        return cls._charged_subjects(tuple(stages), index)
+        charged = cls._charged_subjects(cls.split_increments(tuple(stages)), index)
+        return {IncrementSubjects.base_of(subject) or subject: share for subject, share in charged.items()}
+
+    @classmethod
+    def split_increments(cls, stages: Sequence[Stage]) -> Tuple[Stage, ...]:
+        """The plan with every enlargement of a kept subject carried as a subject of its own (hisim-1y0m).
+
+        A stage whose subject is larger than the stage before's, under the same asset class, not
+        newly replaced and not grown out of a size of zero (:meth:`_charged_subjects` buys those
+        whole), keeps the unit it had and buys the difference: its cost facts carry the subject at
+        the size it had and one :class:`IncrementSubjects` subject per enlargement, each at its
+        own size. Every later stage that holds the subject at that size carries the same pieces,
+        so each ages on its own schedule; a stage that no longer has the subject, replaces it or
+        shrinks it carries it whole again, as stated, and the increments leave the plan with it. A
+        subject shrunk and later grown again is split again: the regrowth is an increment of the
+        stage that regrows it.
+
+        Each piece is priced as what it is, a purchase of its own stage:
+
+        * The unit a stage enlarges, and every increment an earlier stage bought, keeps the facts
+          it was bought with -- the facts the subject (or the increment) carried in the stage
+          before -- so its replacements, its residual value and its embodied CO2 stay those of
+          the price that stage paid, whatever the enlarging stage states for the whole subject.
+          It is not bought in the enlarging stage, so a ``purchase_cost_override_in_euro`` it
+          carried is dropped.
+        * The new increment takes the enlarging stage's facts at its own size. A database-priced
+          subject is priced by the database's law for that size -- device cost ``specific x
+          size`` (or ``specific x size^exponent``) plus the entry's fixed installation and
+          planning cost, which a separate purchase incurs again. An
+          ``investment_cost_override_in_euro`` or embodied-CO2 override states the whole
+          subject's figure and no law, so the increment takes the stage's per-unit figure --
+          the override divided by the stage's whole size -- times its own size: the price the
+          stage states per unit, not the whole figure less what the earlier unit cost, which
+          would charge the increment for a change in the unit price of the unit bought earlier.
+          ``installation_cost_override_in_euro`` is a fixed cost per purchase, like the
+          database's, and ``purchase_cost_override_in_euro`` states the stage's year-0 purchase,
+          which is the increment alone: both go to the increment whole, and to no other piece.
+
+        Every piece of a split subject says which share of the energy the installation sells it
+        is paid per-kWh subsidies on, its size over the whole subject's
+        (``share_of_energy_sold``, owner decision 2026-10-01), and every increment says
+        ``own_register_entry``: it is bought new in the stage that adds it, and kept on its own
+        register entry after that.
+
+        Args:
+            stages: The plan, as given.
+
+        Returns:
+            The plan with the split cost facts; a stage with nothing split is returned as it was,
+            so a plan without enlargements is the plan as given.
+        """
+        split: List[Stage] = []
+        held: Dict[str, List[SubjectCostFacts]] = {}
+        for index, stage in enumerate(stages):
+            previous = {facts.subject: facts.facts for facts in stages[index - 1].inputs.cost_facts} if index else {}
+            replaced = cls._newly_replaced_classes(tuple(stages), index) if index else frozenset()
+            pieces: Dict[str, List[SubjectCostFacts]] = {}
+            cost_facts: List[SubjectCostFacts] = []
+            for subject_facts in stage.inputs.cost_facts:
+                subject, facts = subject_facts.subject, subject_facts.facts
+                before = previous.get(subject)
+                if before is None or subject not in held or cls._held_whole(before, facts, replaced):
+                    pieces[subject] = [subject_facts]
+                elif facts.size > before.size:
+                    increment = IncrementSubjects.name(subject, index)
+                    pieces[subject] = held[subject] + [cls._increment_facts(subject_facts, increment, before.size)]
+                elif len(held[subject]) > 1:
+                    pieces[subject] = held[subject]
+                else:
+                    pieces[subject] = [subject_facts]
+                cost_facts.extend(cls._piece_facts(subject_facts, pieces[subject]))
+            # What the next stage carries is not bought there: it keeps no stated year-0 purchase.
+            held = {
+                subject: [
+                    SubjectCostFacts(piece.subject, replace(piece.facts, purchase_cost_override_in_euro=None))
+                    for piece in carried
+                ]
+                for subject, carried in pieces.items()
+            }
+            if len(cost_facts) == len(stage.inputs.cost_facts):
+                split.append(stage)
+            else:
+                split.append(replace(stage, inputs=replace(stage.inputs, cost_facts=cost_facts)))
+        return tuple(split)
+
+    @staticmethod
+    def _held_whole(before: ComponentCostFacts, facts: ComponentCostFacts, replaced: FrozenSet[ComponentType]) -> bool:
+        """Whether a subject the stage before also had is one unit again rather than grown pieces.
+
+        Bought whole -- another class, a newly replaced class, grown out of a size of zero
+        (:meth:`_charged_subjects`) -- or shrunk, which leaves nothing an increment could describe.
+        """
+        return (
+            before.asset_class != facts.asset_class
+            or facts.asset_class in replaced
+            or before.size <= 0.0
+            or facts.size < before.size
+        )
+
+    @staticmethod
+    def _increment_facts(subject_facts: SubjectCostFacts, name: str, size_before: float) -> SubjectCostFacts:
+        """The increment one stage buys of a subject it enlarges, priced as :meth:`split_increments` says.
+
+        Args:
+            subject_facts: The enlarging stage's facts for the whole subject.
+            name: The increment's subject (:class:`IncrementSubjects`).
+            size_before: The subject's size in the stage before.
+
+        Returns:
+            The stage's facts at the increment's size, with the stage's whole-subject investment
+            and embodied-CO2 overrides taken per unit of size, and ``own_register_entry`` set.
+        """
+        facts = subject_facts.facts
+        size = facts.size - size_before
+        per_unit = size / facts.size
+        investment = facts.investment_cost_override_in_euro
+        embodied = facts.embodied_co2_override_in_kg
+        return SubjectCostFacts(
+            name,
+            replace(
+                facts,
+                size=size,
+                investment_cost_override_in_euro=investment.scale(per_unit) if investment is not None else None,
+                embodied_co2_override_in_kg=embodied * per_unit if embodied is not None else None,
+                own_register_entry=True,
+            ),
+        )
+
+    @staticmethod
+    def _piece_facts(subject_facts: SubjectCostFacts, pieces: List[SubjectCostFacts]) -> List[SubjectCostFacts]:
+        """One stage's facts for a subject as the pieces it is carried in (:meth:`split_increments`).
+
+        Args:
+            subject_facts: The stage's facts for the whole subject.
+            pieces: The pieces' facts, the unit the first increment enlarged first, each at its
+                own size; the sizes sum to the subject's. The last one is the stage's own
+                increment when the stage enlarges the subject.
+
+        Returns:
+            The facts as given for a subject of one piece, else one facts record per piece, each
+            stating its share of the energy sold.
+        """
+        if len(pieces) == 1:
+            return [subject_facts]
+        whole = subject_facts.facts.size
+        return [
+            SubjectCostFacts(piece.subject, replace(piece.facts, share_of_energy_sold=piece.facts.size / whole))
+            for piece in pieces
+        ]
+
+    @staticmethod
+    def _quotes_on_increments(
+        stages: Tuple[Stage, ...], overrides: Tuple[InvestmentOverride, ...]
+    ) -> Tuple[InvestmentOverride, ...]:
+        """The quotes with every subject a stage enlarges replaced by that stage's increment (hisim-1y0m).
+
+        A quote is the stage's whole job for the measure, and what the stage buys of an enlarged
+        subject is its increment: the quote replaces the increment's price exactly, and the unit
+        it enlarges, bought earlier, is not re-priced.
+
+        Args:
+            stages: The plan, split (:meth:`split_increments`).
+            overrides: The quotes, validated.
+
+        Returns:
+            The quotes, re-pointed where a subject is enlarged in the quote's stage.
+        """
+        resolved: List[InvestmentOverride] = []
+        for override in overrides:
+            subjects = {facts.subject for facts in stages[override.stage].inputs.cost_facts}
+
+            def bought(subject: str, stage: int = override.stage, held: Set[str] = subjects) -> str:
+                increment = IncrementSubjects.name(subject, stage)
+                return increment if increment in held else subject
+
+            resolved.append(
+                replace(
+                    override,
+                    main_subject=bought(override.main_subject),
+                    other_subjects=tuple(bought(subject) for subject in override.other_subjects),
+                )
+            )
+        return tuple(resolved)
 
     # ------------------------------------------------------------------ per-stage inputs
 
@@ -1540,10 +1791,14 @@ class StagedEvaluator:
         """Which subjects stage ``index`` pays for, and at what share of its own year-0 figure.
 
         E-spec §1.2 item 2: a subject is charged when it is present in ``S_k`` and absent from
-        ``S_{k-1}`` under the same asset class, or present in both but larger, in which case only
-        the increment is charged. A subject carried over unchanged is not charged again, and is
-        absent from the returned mapping rather than present with a zero, so "did this stage buy
-        this" is one membership test.
+        ``S_{k-1}`` under the same asset class. A subject carried over unchanged is not charged
+        again, and is absent from the returned mapping rather than present with a zero, so "did
+        this stage buy this" is one membership test. Asked of the split plan
+        (:meth:`split_increments`), where a subject the stage enlarges keeps the size it had and is
+        carried over, and the increment is a subject of its own, new in the stage and charged
+        whole (hisim-1y0m). That holds for every enlargement of a kept subject, also one shrunk in
+        an earlier stage and grown again: the regrowth is the regrowing stage's increment. No
+        subject of the split plan is larger than in the stage before unless it is bought whole.
 
         The increment is only for something the house *keeps* and enlarges. Anything the stage's
         inventory declares *replaced*, where the stage before declared no such replacement
@@ -1566,7 +1821,7 @@ class StagedEvaluator:
 
         Returns:
             Subject name -> the share of that subject's year-0 investment-class flows the stage
-            pays, in ``(0, 1]``.
+            pays: 1.0 for every subject it buys.
         """
         current = {facts.subject: facts.facts for facts in stages[index].inputs.cost_facts}
         if index == 0:
@@ -1585,8 +1840,6 @@ class StagedEvaluator:
                 # out of it is not an enlargement of something that was there — it is the whole
                 # device, bought now, and the stage pays for all of it.
                 charged[subject] = 1.0
-            elif facts.size > before.size:
-                charged[subject] = (facts.size - before.size) / facts.size
         return charged
 
     @classmethod
@@ -1693,7 +1946,7 @@ class StagedEvaluator:
         newly_charged_classes = {
             facts_by_subject[subject].asset_class
             for subject in self._charged_subjects(stages, index)
-            if subject in facts_by_subject
+            if subject in facts_by_subject and not facts_by_subject[subject].own_register_entry
         }
         installed_classes: Set[ComponentType] = set()
         aged: Dict[str, ExistingAsset] = {}
@@ -1714,6 +1967,22 @@ class StagedEvaluator:
                     # (`ComponentCostFacts` allows the zero and means exactly that), and
                     # `ExistingAsset` refuses a size of zero. Nothing was put in the building, so
                     # nothing ages into the next stage's register.
+                    continue
+                if facts.own_register_entry:
+                    # An increment (hisim-1y0m) ages on an entry bound to it, beside the unit it
+                    # enlarged, which it neither hides nor replaces. It leaves with that unit: a
+                    # stage that no longer carries it has replaced, shrunk or removed the subject.
+                    if subject in facts_by_subject:
+                        aged[subject] = ExistingAsset(
+                            asset_class=facts.asset_class,
+                            size=facts.size,
+                            size_unit=facts.size_unit,
+                            installation_year=plan_year_zero + stages[earlier].from_year,
+                            is_functional=True,
+                            installation_year_origin=InstallationYearOrigin.STAGE,
+                            stated_age_in_years=-stages[earlier].from_year,
+                            subject=subject,
+                        )
                     continue
                 installed_classes.add(facts.asset_class)
                 replaced = subject not in facts_by_subject and facts.asset_class in newly_charged_classes
@@ -1803,7 +2072,13 @@ class StagedEvaluator:
         reserve_flows: List[Tuple[int, UncertainValue]] = []
         for index, stage in enumerate(stages):
             quoted = terms.quoted_by_stage[index] if index < len(terms.quoted_by_stage) else frozenset()
-            charges = self._stage_charges(stages, index, charged_by_stage[index], evaluator, parameters, quoted)
+            operational = self._operational_awards(per_stage[index])
+            charges = replace(
+                self._stage_charges(stages, index, charged_by_stage[index], evaluator, parameters, quoted),
+                operational=operational,
+                operational_rebased=self._operational_rebasing(stages, index, operational, active_by_year),
+                leaves_house_in=self._leaving_years(stages, index, charged_by_stage),
+            )
             reserve_flows.extend(
                 self._staged_reserve_flows(per_stage[index], index, stage.from_year, charges, active_by_year)
             )
@@ -1984,6 +2259,9 @@ class StagedEvaluator:
         ``RESIDUAL_VALUE`` are one allocation class in every shipped ruleset
         (:class:`hisim.economics.actors` ``LANDLORD_CATEGORIES``).
 
+        An increment (:class:`IncrementSubjects`) that the stage active at the horizon no longer
+        carries has left the house with the subject it enlarged and earns nothing.
+
         Args:
             placed: The first pass's entries with the stage each came from, in timeline order.
             stages: The plan as given, for the cost facts the service lives come from.
@@ -2010,10 +2288,17 @@ class StagedEvaluator:
             if entry.year > last_install.get(entry.subject, -1):
                 last_install[entry.subject] = entry.year
         price_basis_year = evaluator.price_basis_year(stages[0].inputs)
+        final = stages[self._active_by_year(stages, horizon)[horizon]]
+        in_house = {subject_facts.subject for subject_facts in final.inputs.cost_facts}
         residuals: Dict[str, Tuple[int, CashFlowEntry]] = {}
         for subject in sorted(last_install):
             facts = facts_by_subject.get(subject)
             if facts is None:
+                continue
+            if facts.own_register_entry and subject not in in_house:
+                # An increment a later stage removed again -- by shrinking, replacing or dropping
+                # the subject -- left the house with it; its book value is not written off
+                # separately, so it earns no residual value at the horizon (hisim-1y0m).
                 continue
             year = last_install[subject]
             life, _origin = self._service_life(facts, price_basis_year, parameters)
@@ -2117,7 +2402,11 @@ class StagedEvaluator:
             year_origin: Optional[InstallationYearOrigin] = InstallationYearOrigin.STAGE
             if index == 0 or subject_facts.subject not in charged:
                 kept = installation_verdict(
-                    facts.asset_class, perspective.installation_context, inputs.existing_assets
+                    facts.asset_class,
+                    perspective.installation_context,
+                    inputs.existing_assets,
+                    subject_facts.subject,
+                    facts.own_register_entry,
                 ).kept_asset
                 if kept is not None:
                     year, year_origin = kept.installation_year, kept.installation_year_origin
@@ -2197,8 +2486,10 @@ class StagedEvaluator:
         splice takes the loan out anew (:meth:`_stage_loan`); a replacement of a subject the stage *buys* is
         shifted and escalated with the purchase it follows and then kept only while the stage is
         still the state of the house, so the stage that supersedes it schedules the rest from its
-        own register instead of the two booking the same re-purchase twice; everything else is
-        kept only when the entry's own year belongs to this stage.
+        own register instead of the two booking the same re-purchase twice; a later subsidy
+        payment -- a tax credit's instalment, an operational payment -- is dated from the stage's
+        start (:meth:`_later_subsidy_entry`); everything else is kept only when the entry's own
+        year belongs to this stage.
 
         A shifted replacement that lands exactly on the horizon is dropped, which is the engine's
         own rule for the unshifted ones (``calculators/investment.py``: the observation period ends
@@ -2217,6 +2508,8 @@ class StagedEvaluator:
         """
         if entry.category in StagedCategories.STAGE_START and entry.year == 0:
             return self._stage_start_entry(entry, from_year, charges, horizon)
+        if entry.category is CostCategory.SUBSIDY:
+            return self._later_subsidy_entry(entry, from_year, charges, horizon)
         if entry.category in StagedCategories.OWN_PURCHASE_AGEING and charges.share_of(entry.subject) > 0.0:
             return self._replacement_entry(entry, index, from_year, charges, active_by_year, horizon)
         if 0 <= entry.year <= horizon and active_by_year[entry.year] == index:
@@ -2246,6 +2539,151 @@ class StagedEvaluator:
             return None
         factor = charges.booked_factor(entry, from_year)
         return replace(entry, year=from_year, amount_in_euro=entry.amount_in_euro.scale(factor))
+
+    @staticmethod
+    def _later_subsidy_entry(
+        entry: CashFlowEntry, from_year: int, charges: "_StageCharges", horizon: int
+    ) -> Optional[CashFlowEntry]:
+        """A subsidy the stage's award pays after its own year 0, in its plan year (:class:`StagedCategories`).
+
+        Own year ``y`` is plan year ``from_year + y``; a payment past the horizon is dropped, as
+        the engine drops one past its own. A tax credit's instalment is a share of the cost the
+        stage books and was valued on that cost at the stage's price level already, so only the
+        share the stage pays applies, and it is kept whichever stage is active. An operational
+        payment is a nominal rate per kWh, never escalated, kept while the installation that earns
+        it is in the house (:attr:`_StageCharges.leaves_house_in`), and paid on the piece's share
+        of the energy in a year whose active stage splits its subject
+        (:attr:`_StageCharges.operational_rebased`).
+
+        Args:
+            entry: The stage's own SUBSIDY entry of a year after 0.
+            from_year: The stage's start year.
+            charges: What the stage pays for, and which of its awards are operational.
+            horizon: The last year index of the horizon.
+
+        Returns:
+            The entry in its plan year, or ``None``.
+        """
+        year = entry.year + from_year
+        if year > horizon:
+            return None
+        key = (entry.subject, entry.subsidy_scheme_id or "")
+        if key in charges.operational:
+            if year >= charges.leaves_house_in.get(entry.subject, horizon + 1):
+                return None
+            rebased = charges.operational_rebased.get(key, {})
+            if year in rebased:
+                return replace(entry, year=year, amount_in_euro=entry.amount_in_euro.scale(rebased[year]))
+            return replace(entry, year=year)
+        share = charges.share_of(entry.subject)
+        if share <= 0.0:
+            return None
+        return replace(entry, year=year, amount_in_euro=entry.amount_in_euro.scale(share))
+
+    @staticmethod
+    def _operational_awards(result: LifecycleCostResult) -> Dict[Tuple[str, str], EnergyCarrier]:
+        """``(subject, scheme id)`` -> carrier of every OPERATIONAL award one stage's evaluation booked."""
+        return {
+            (decision.measure_subject, award.scheme_id): award.operational_carrier
+            for decision in result.subsidy_decisions
+            for award in decision.applied
+            if award.payout_kind is PayoutKind.OPERATIONAL and award.operational_carrier is not None
+        }
+
+    @staticmethod
+    def _annual_energy_sold(inputs: EvaluationInputs) -> Dict[EnergyCarrier, float]:
+        """Carrier -> the energy one stage sells a year, as the subsidy application annualizes it."""
+        sold: Dict[EnergyCarrier, float] = {}
+        for determinants in inputs.billing:
+            if determinants.energy_sold_in_kwh:
+                sold[determinants.carrier] = annualize(
+                    determinants.energy_sold_in_kwh, inputs.simulated_period_fraction, guard_zero=True
+                )
+        return sold
+
+    @classmethod
+    def _operational_rebasing(
+        cls,
+        stages: Tuple[Stage, ...],
+        index: int,
+        operational: Mapping[Tuple[str, str], EnergyCarrier],
+        active_by_year: Tuple[int, ...],
+    ) -> Dict[Tuple[str, str], Dict[int, float]]:
+        """How one stage's per-kWh payments are booked in the years a later stage splits their subject.
+
+        Owner decision 2026-10-01 (hisim-1y0m): each piece of a subject a staged plan split -- the
+        unit a later stage enlarges and each increment -- is paid on its size share of the energy
+        the enlarged installation sells (``ComponentCostFacts.share_of_energy_sold``), each at its
+        own scheme's rate and in its own years, so the same kWh is never paid twice. The stage
+        that buys a piece values its payment so already. The unit an earlier stage bought whole
+        was valued on all of that stage's energy, and every piece on the energy of the stage that
+        bought it; in a year whose active stage carries the subject in pieces, each payment is paid
+        on the piece's share of the active stage's energy instead, so the pieces' payments add up
+        to one payment on the whole. In every other year -- the subject whole, or the stage that
+        bought the piece active -- the payment stays what that stage valued.
+
+        Args:
+            stages: The plan, split (:meth:`split_increments`).
+            index: The stage whose payments are asked about.
+            operational: Its operational awards (:meth:`_operational_awards`).
+            active_by_year: Which stage is active in each horizon year.
+
+        Returns:
+            ``(subject, scheme id)`` -> plan year -> the factor on the stage's own amount; only the
+            awards and years that are rebased.
+        """
+
+        def share(stage: int, subject: str) -> Optional[float]:
+            return next(
+                (
+                    subject_facts.facts.share_of_energy_sold
+                    for subject_facts in stages[stage].inputs.cost_facts
+                    if subject_facts.subject == subject
+                ),
+                None,
+            )
+
+        sold = {stage: cls._annual_energy_sold(stages[stage].inputs) for stage in {index, *active_by_year}}
+        rebased: Dict[Tuple[str, str], Dict[int, float]] = {}
+        for (subject, scheme), carrier in operational.items():
+            valued = (share(index, subject) or 1.0) * sold[index].get(carrier, 0.0)
+            if valued <= 0.0:
+                continue
+            factors: Dict[int, float] = {}
+            for year, active in enumerate(active_by_year):
+                piece = share(active, subject) if active > index else None
+                if piece is not None and piece < 1.0:
+                    factors[year] = piece * sold[active].get(carrier, 0.0) / valued
+            if factors:
+                rebased[(subject, scheme)] = factors
+        return rebased
+
+    @staticmethod
+    def _leaving_years(
+        stages: Tuple[Stage, ...], index: int, charged_by_stage: Tuple[Dict[str, float], ...]
+    ) -> Dict[str, int]:
+        """For each of a stage's subjects, the plan year its installation leaves the house, if it does.
+
+        The start year of the first later stage that no longer has the subject or buys it whole
+        again (charges it at 1.0): from then on the stage's purchase is not what runs. A later
+        stage that keeps the subject, or only enlarges it, leaves the installation in place.
+
+        Args:
+            stages: The plan.
+            index: The stage whose purchases are asked about.
+            charged_by_stage: What every stage charges.
+
+        Returns:
+            Subject -> that plan year, for the subjects that leave inside the plan.
+        """
+        leaving: Dict[str, int] = {}
+        for facts in stages[index].inputs.cost_facts:
+            for later in range(index + 1, len(stages)):
+                present = any(other.subject == facts.subject for other in stages[later].inputs.cost_facts)
+                if not present or charged_by_stage[later].get(facts.subject, 0.0) >= 1.0:
+                    leaving[facts.subject] = stages[later].from_year
+                    break
+        return leaving
 
     @staticmethod
     def _is_loan_flow(entry: CashFlowEntry) -> bool:

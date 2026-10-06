@@ -165,10 +165,52 @@ class TabulaTypology:
         BuildingType.OTHER: ("SFH", True),
     }
 
+    #: The typology code -> the kind of building a reader of the mapping report knows it as.
+    NAMES: ClassVar[Dict[str, str]] = {
+        "SFH": "detached house",
+        "TH": "terraced house",
+        "MFH": "multi-family house",
+        "AB": "apartment block",
+    }
+
+    #: The kind of dwelling -> how a sentence of the mapping report names it, article included.
+    PHRASES: ClassVar[Dict[BuildingType, str]] = {
+        BuildingType.DETACHED_SFH: "a detached house",
+        BuildingType.SEMI_DETACHED_SFH: "a semi-detached house",
+        BuildingType.TERRACED_SFH: "a terraced house",
+        BuildingType.BUNGALOW: "a bungalow",
+        BuildingType.APARTMENT: "an apartment",
+        BuildingType.OTHER: "a dwelling of type 'other'",
+    }
+
+    #: The approximated kinds of dwelling whose note also says that the archetype's storeys and shape are kept.
+    KEEPS_THE_ARCHETYPE_SHAPE: ClassVar[Tuple[BuildingType, ...]] = (BuildingType.BUNGALOW, BuildingType.OTHER)
+
     @classmethod
     def of(cls, building_type: BuildingType) -> Tuple[str, bool]:
         """Return the typology of one kind of dwelling and whether that is an approximation."""
         return cls.BY_BUILDING_TYPE[building_type]
+
+    @classmethod
+    def approximation_note(cls, building_type: BuildingType) -> str:
+        """Return the report note for a kind of dwelling simulated as another typology, in words.
+
+        Args:
+            building_type: An approximated kind of dwelling (the second element of :meth:`of` is ``True``).
+
+        Returns:
+            A sentence naming the typology it is simulated as, e.g. "a bungalow has no TABULA typology
+            of its own and is simulated as a detached house (TABULA SFH), with that archetype's storeys
+            and shape".
+        """
+        typology, _ = cls.of(building_type)
+        note = (
+            f"{cls.PHRASES[building_type]} has no TABULA typology of its own and is simulated as a "
+            f"{cls.NAMES[typology]} (TABULA {typology})"
+        )
+        if building_type in cls.KEEPS_THE_ARCHETYPE_SHAPE:
+            note += ", with that archetype's storeys and shape"
+        return note
 
 
 class TabulaIndex:
@@ -331,10 +373,7 @@ class BuildingCodeSelector:
             )
         notes: List[str] = []
         if approximated_typology:
-            notes.append(
-                f"a {building_type.value} has no TABULA typology of its own and is simulated as "
-                f"{typology}"
-            )
+            notes.append(TabulaTypology.approximation_note(building_type))
         band, band_note = cls._band(bands, construction_year, country, typology)
         if band_note is not None:
             notes.append(band_note)

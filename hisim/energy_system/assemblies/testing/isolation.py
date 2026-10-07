@@ -6,7 +6,10 @@ changes what the assembly computes gets a test partner from the registry (:mod:`
 the partners those read: a need its first registered partner class, a circuit end the other end
 registered for its circuit and its members' classes, a carrier need its carrier's provider, a fuel
 the assembly provides a consumer, a fact need a provider of the fact, an observer member a component
-it observes, and a ``controllable: {target_input}`` output the controller ranking it. Optional
+it observes, and a ``controllable: {target_input}`` output the controller ranking it. A sizing fact
+a member's class reads that no member provides and no fact port names crosses the boundary by the
+engine's bare-fact rule, as it does in the system that imports the assembly (§6), so it gets the
+registered provider of that fact as well (:func:`facts_needed`). Optional
 ports are bound like required ones, so the run exercises the whole interface the parameters offer;
 the verb is written out (``bind:`` for a required port, ``optional-bind:`` for an optional one)
 wherever the format has one. A port no partner serves refuses the build by name.
@@ -27,15 +30,19 @@ import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import pandas as pd
 import yaml
 
 from hisim.config import AddressStep, ComponentID
+from hisim.config.contributions import declared_facts_of
+from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.parameters import select
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.testing.partners import ServedKey, TestPartnerRegistry
+from hisim.energy_system.bindings import facts_read_by
+from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import Port, PortKind, PortState
 from hisim.energy_system.model import EnergySystemFile
@@ -83,6 +90,19 @@ def partners_needed(  # pylint: disable=too-many-return-statements  # one return
     return []
 
 
+def facts_needed(port_facts: Sequence[str], members: Mapping[str, MemberTemplate]) -> List[Tuple[ServedKey, ...]]:
+    """The facts the members' classes read that no member provides and no fact port names, each as its alternatives.
+
+    Args:
+        port_facts: The facts the assembly's fact ports name.
+        members: The members present with the sample's parameters.
+    """
+    classes = [ClassBinder.config_class_of(name, member.entry) for name, member in members.items()]
+    provided = {fact for config_class in classes for fact in declared_facts_of(config_class)}
+    read = dict.fromkeys(fact for config_class in classes for fact in facts_read_by(config_class))
+    return [(("fact", fact),) for fact in read if fact not in provided and fact not in port_facts]
+
+
 def isolation_document(
     assembly: ResolvedAssembly, values: Mapping[str, Any], registry: TestPartnerRegistry
 ) -> Dict[str, Any]:
@@ -102,7 +122,7 @@ def isolation_document(
         if state == PortState.INACTIVE:
             continue
         for alternatives in partners_needed(port, classes):
-            partner = registry.find(alternatives, name, assembly.path)
+            partner = registry.find(alternatives, f"the port '{name}'", assembly.path)
             partners.append(partner.name)
             if (
                 port.kind in (PortKind.NEED, PortKind.CIRCUIT, PortKind.FACT)
@@ -110,6 +130,9 @@ def isolation_document(
                 and not port.many
             ):
                 verbs["bind" if state == PortState.REQUIRED else "optional-bind"][name] = partner.name
+    port_facts = [port.fact for port in model.ports.values() if port.kind == PortKind.FACT and port.fact]
+    for alternatives in facts_needed(port_facts, selection.members):
+        partners.append(registry.find(alternatives, f"the fact read '{alternatives[0][1]}'", assembly.path).name)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
     return {

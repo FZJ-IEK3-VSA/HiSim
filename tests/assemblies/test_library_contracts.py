@@ -1,9 +1,10 @@
 """The test contract of every assembly of a library (``assemblies_spec.md`` §9.4, D24; lean v1 §13.1).
 
-The mock library by default; ``pytest --assembly-library DIR`` runs another one, with the test
-partners of its ``test_partners.yaml``. Each assembly gets its library check, and each of its
-samples one isolation run (one day at 900 s, the energy balance and ``i_doublecheck`` on) that one
-test per check kind reads: the run, the energy balance, finiteness, the member contract, every
+The mock library and the real one, ``energy_systems/assemblies/``, by default; ``pytest
+--assembly-library DIR`` runs another one instead, with the test partners of its
+``test_partners.yaml``. Each assembly gets its library check, and each of its samples one
+isolation run (one day at 900 s, the energy balance and ``i_doublecheck`` on) that one test per
+check kind reads: the run, the energy balance, finiteness, the member contract, every
 applicable ``bounds`` entry, and ``expect`` at the defaults. Every ``monotone`` entry sweeps its
 parameter from the samples admitting a sweep, once per distinct point set
 (:func:`~hisim.energy_system.assemblies.testing.checks.evaluate_monotone`). The deterministic
@@ -43,11 +44,15 @@ from hisim.energy_system.assemblies.testing.samples import (
 )
 from tests.assemblies.helpers import Mocks
 
+#: The real library of the repository, whose test contracts run beside the mock library's.
+REAL_LIBRARY = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+
 
 @dataclass(frozen=True)
 class Case:
-    """One sample of one assembly, and its place in the order the run cache needs."""
+    """One sample of one assembly of one library, and its place in the order the run cache needs."""
 
+    library: str
     assembly: str
     sample: Sample
     members: Tuple[str, ...]
@@ -70,6 +75,7 @@ class Case:
 class Sweep:
     """One monotone declaration swept from one base sample."""
 
+    library: str
     assembly: str
     declaration: MonotoneDeclaration
     base: Sample
@@ -78,8 +84,16 @@ class Sweep:
 class ContractLibrary:
     """The assemblies of one library with their samples and sweeps, drawn once per test session and worker."""
 
-    def __init__(self, directory: Path, size: int, seed: int) -> None:
-        """Resolves every assembly the library offers and draws the samples of those its library check accepts."""
+    def __init__(self, directory: Path, size: int, seed: int, first_order: int = 0) -> None:
+        """Resolves every assembly the library offers and draws the samples of those its library check accepts.
+
+        Args:
+            directory: The library directory.
+            size: The Latin hypercube samples per constraint branch.
+            seed: The hypercube's seed.
+            first_order: The order of the library's first case, behind the cases of the libraries before it.
+        """
+        self.directory = str(directory)
         self.resolver = AssemblyResolver([directory])
         self.registry = TestPartnerRegistry.from_directories(self.resolver.directories)
         self.paths = sorted(self.resolver.available())
@@ -96,7 +110,9 @@ class ContractLibrary:
             for sample in deterministic + hypercube:
                 selection = select(assembly.model, assembly.label, sample.values, f"sample {sample.sample_id}")
                 members[sample.sample_id] = tuple(selection.members)
-                self.cases.append(Case(path, sample, members[sample.sample_id], len(self.cases)))
+                self.cases.append(
+                    Case(self.directory, path, sample, members[sample.sample_id], first_order + len(self.cases))
+                )
             for index, declaration in enumerate(assembly.model.tests.monotone if assembly.model.tests else ()):
                 # A hypercube base reaching a deterministic base's sweep is that sweep, run in the PR tier.
                 bases = [
@@ -107,7 +123,7 @@ class ContractLibrary:
                 for base, _ in sweeps(space, bases, declaration):
                     self.sweeps.append(
                         pytest.param(
-                            Sweep(path, declaration, base),
+                            Sweep(self.directory, path, declaration, base),
                             id=f"{path}:{base.sample_id}:monotone[{index}]",
                             marks=pytest.mark.nightly if base.nightly else pytest.mark.base,
                         )
@@ -133,37 +149,56 @@ class ContractLibrary:
 
 
 @functools.lru_cache(maxsize=1)
-def contract_library(directory: str, size: int, seed: int) -> ContractLibrary:
-    """The library under test, once per session and worker."""
-    return ContractLibrary(Path(directory), size, seed)
+def contract_libraries(directories: Tuple[str, ...], size: int, seed: int) -> Dict[str, ContractLibrary]:
+    """The libraries under test by directory, once per session and worker, their cases in one order."""
+    libraries: Dict[str, ContractLibrary] = {}
+    for directory in directories:
+        first = sum(len(library.cases) for library in libraries.values())
+        libraries[directory] = ContractLibrary(Path(directory), size, seed, first)
+    return libraries
 
 
-def library_of(config: pytest.Config) -> ContractLibrary:
-    """The library the options name: ``--assembly-library`` (the mock library), ``--samples``, ``--seed``."""
-    directory = config.getoption("--assembly-library") or str(Mocks.LIBRARY)
-    return contract_library(directory, config.getoption("--samples"), config.getoption("--seed"))
+def libraries_of(config: pytest.Config) -> Dict[str, ContractLibrary]:
+    """The libraries under test: ``--assembly-library``, else the mock and the real one; ``--samples``, ``--seed``."""
+    chosen = config.getoption("--assembly-library")
+    directories = (chosen,) if chosen else (str(Mocks.LIBRARY), str(REAL_LIBRARY))
+    return contract_libraries(directories, config.getoption("--samples"), config.getoption("--seed"))
+
+
+def library_of(config: pytest.Config, directory: str) -> ContractLibrary:
+    """One library under test."""
+    return libraries_of(config)[directory]
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Parametrizes every test over the assemblies, the samples, the declarations or the sweeps it checks."""
-    library = library_of(metafunc.config)
+    libraries = list(libraries_of(metafunc.config).values())
     if "assembly_path" in metafunc.fixturenames:
-        metafunc.parametrize("assembly_path", [pytest.param(path, marks=pytest.mark.base) for path in library.paths])
+        metafunc.parametrize(
+            "library, assembly_path",
+            [
+                pytest.param(library.directory, path, id=path, marks=pytest.mark.base)
+                for library in libraries
+                for path in library.paths
+            ],
+        )
     elif "sweep" in metafunc.fixturenames:
-        metafunc.parametrize("sweep", library.sweeps)
+        metafunc.parametrize("sweep", [sweep for library in libraries for sweep in library.sweeps])
     elif "declaration" in metafunc.fixturenames:
         kind = metafunc.function.__name__.removeprefix("test_")
-        metafunc.parametrize("case, declaration", library.declarations(kind))
+        metafunc.parametrize(
+            "case, declaration", [item for library in libraries for item in library.declarations(kind)]
+        )
     elif "case" in metafunc.fixturenames:
-        metafunc.parametrize("case", [case.param() for case in library.cases])
+        metafunc.parametrize("case", [case.param() for library in libraries for case in library.cases])
 
 
 class RunCache:
     """The isolation run of one sample at a time: made when a test first asks for it, released at the next."""
 
-    def __init__(self, library: ContractLibrary, factory: pytest.TempPathFactory) -> None:
+    def __init__(self, libraries: Mapping[str, ContractLibrary], factory: pytest.TempPathFactory) -> None:
         """Starts empty."""
-        self.library = library
+        self.libraries = libraries
         self.factory = factory
         self.case: Optional[Case] = None
         self.run: Optional[IsolationRun] = None
@@ -173,11 +208,12 @@ class RunCache:
         if self.run is None or self.case != case:
             self.release()
             self.case = case
+            library = self.libraries[case.library]
             self.run = run_isolation(
-                self.library.assembly(case.assembly),
+                library.assembly(case.assembly),
                 case.sample.values,
-                self.library.registry,
-                self.library.resolver,
+                library.registry,
+                library.resolver,
                 self.factory.mktemp(case.label.replace("/", "_").replace(" ", "_")) / "run",
                 case.label,
             )
@@ -193,14 +229,14 @@ class RunCache:
 @pytest.fixture(scope="module", name="runs")
 def fixture_runs(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Iterator[RunCache]:
     """The run cache of the module; the last run is released at its end."""
-    cache = RunCache(library_of(request.config), tmp_path_factory)
+    cache = RunCache(libraries_of(request.config), tmp_path_factory)
     yield cache
     cache.release()
 
 
-def test_library_check(assembly_path: str, request: pytest.FixtureRequest) -> None:
+def test_library_check(library: str, assembly_path: str, request: pytest.FixtureRequest) -> None:
     """The library check accepts the assembly: descriptions, defaults, ranges, units, names, the test contract."""
-    problems = check_assembly(library_of(request.config).assembly(assembly_path))
+    problems = check_assembly(library_of(request.config, library).assembly(assembly_path))
     assert not problems, f"{assembly_path} library check: " + " | ".join(problems)
 
 
@@ -221,7 +257,7 @@ def test_finite(case: Case, runs: RunCache) -> None:
 
 def test_member_contract(case: Case, runs: RunCache, request: pytest.FixtureRequest) -> None:
     """Every energy or temperature output is bounded in its unit, and every named KPI is reported."""
-    tests = library_of(request.config).assembly(case.assembly).model.tests
+    tests = library_of(request.config, case.library).assembly(case.assembly).model.tests
     assert tests is not None
     checks.check_member_contract(runs.get(case), tests)
 
@@ -238,7 +274,7 @@ def test_expect(case: Case, declaration: ExpectDeclaration, runs: RunCache) -> N
 
 def test_monotone(sweep: Sweep, request: pytest.FixtureRequest, tmp_path: Path) -> None:
     """One ``monotone`` entry holds over the sweep of its parameter from one base sample."""
-    library = library_of(request.config)
+    library = library_of(request.config, sweep.library)
     assembly = library.assembly(sweep.assembly)
 
     def run_point(index: int, values: Mapping[str, Any], label: str) -> IsolationRun:

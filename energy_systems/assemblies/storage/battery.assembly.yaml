@@ -1,0 +1,48 @@
+# A home battery (bslib). It has no L1 controller: the energy manager writes its LoadingPowerInput directly (D21),
+# which is why its controllable output names a device input and binds exactly one controller. Its preset leaves
+# capacity and inverter power to the class laws, which sum the peak power of every array (D10, D27): the fact port
+# lists them in instance order, a one-element list beside one array (G7).
+
+schema_version: 4
+kind: assembly
+name: storage/battery
+description: AC-coupled home battery, sized to the PV arrays it stands beside unless pinned.
+
+parameters:
+  capacity_in_kwh:
+    {type: float, unit: KWH, default: AUTO, range: {min: 1, max: 30},
+     description: Usable capacity; AUTO is 1 kWh per kWp of all arrays.}
+     # range: home batteries on the market, 1 to 30 kWh
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, range: {min: 500, max: 15000},
+     description: Charge and discharge power; AUTO is 0.5 W per Wp of all arrays.}
+     # range: 0.5 W per Wp over the PV box, up to a 15 kW hybrid inverter
+
+components:
+  Battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    preset: sized_to_pv
+    config:
+      custom_battery_capacity_generic_in_kilowatt_hour: {$param: capacity_in_kwh}
+      custom_pv_inverter_power_generic_in_watt: {$param: power_in_watt}
+
+interface:
+  needs:
+    pv_peak_power: {fact: pv_peak_power_in_watt, many: true, into: [Battery]}
+  provides:
+    electricity:   {output: Battery.AcBatteryPowerUsed, controllable: {target_input: LoadingPowerInput}}
+
+tests:
+  # One day at 900 s beside a PV array (the fact provider, the test building's whole roof) and the energy manager
+  # charging it. AC and DC power stay within the box's 15 kW inverter, with margin; signed: charging is positive.
+  bounds:
+    - {output: Battery.AcBatteryPowerUsed, unit: WATT, min: -20000, max: 20000}
+    - {output: Battery.DcBatteryPowerUsed, unit: WATT, min: -20000, max: 20000}
+    - {output: Battery.ChargingPower, unit: WATT, min: 0, max: 20000}
+    - {output: Battery.DischargingPower, unit: WATT, min: -20000, max: 0}
+  monotone:
+    - {parameter: capacity_in_kwh, kpi: Battery charging energy, direction: increasing}
+      # a larger battery absorbs at least as much surplus in a day; a derived KPI (no member, spec §9.4)
+  expect:
+    - {kpi: Battery charging energy, min: 2.5, max: 4.5}
+      # 3.5 kWh measured at the defaults (sized to the array) on the test day

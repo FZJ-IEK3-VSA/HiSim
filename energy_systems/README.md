@@ -295,7 +295,9 @@ imports:
 
 Before anything else sees the file, the expansion of imports turns every import into ordinary
 components of one flat version-3 file: the members are named by their structured address,
-`pv-east-PVSystem` (`ComponentID.path`). The sequence in which the simulator adds them is set by an
+`pv-east-PVSystem` (`ComponentID.path`). It writes only overrides, as the recorder does for a twin: a
+parameter substituted into a config field writes no line when it equals the value the member's preset
+gives that field (without a preset: the field's default), nor when it is `AUTO` or `none` (G9, D28). The sequence in which the simulator adds them is set by an
 optional flat integer `order:` on a site entry or an import, and nowhere else: the entries carrying
 one come first, ascending (a number used twice is refused, `EF-7P`), then the others in file order,
 site entries before imports; an import is one block, its instances in written order and its members
@@ -346,8 +348,10 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
   outputs. Electricity has no link and no meter on the provision: the need only requires the one grid
   connection. Two providers of one carrier, a need without one and a fuel provider nobody consumes from
   are refused;
-- a **fact need**, `{fact: pv_peak_power_in_watt, into: [Battery]}`, lowers to a `sizing_sources`
-  line naming the one provider in the file — a site entry whose class contributes the fact, or an
+- a **fact need**, `{fact: pv_peak_power_in_watt, into: [Battery]}`, is written only where the author
+  must choose among providers or sum them (`many`); a scalar read with one provider in the file
+  crosses the boundary by the engine's bare-fact rule and needs no port, as in the twins (D29). It
+  lowers to a `sizing_sources` line naming the one provider in the file — a site entry whose class contributes the fact, or an
   import's provided fact `{fact: pv_peak_power_in_watt, member: PVSystem}`, which must be in that
   class's `SIZING_CONTRIBUTIONS` — and with `many: true` to the list of every provider, site entries
   first, then the imports and instances as written. A law sums such a list with
@@ -407,7 +411,8 @@ hypercube per `exactly_one_of` branch (`--samples` points per branch, an upper b
 dimensions are all discrete, where two points drawing the same values are one sample) — and runs each
 sample once in isolation: the assembly as one import beside a test partner for every active port whose
 binding changes what the assembly computes (optional ports included; a providing port gets none, except
-a consumer for a fuel it provides), one day at 900 s, the energy balance and `i_doublecheck` on. One
+a consumer for a fuel it provides), and beside the provider of every sizing fact its members read from
+the site without a fact port (the engine's bare-fact rule, as in the importing system, D29), one day at 900 s, the energy balance and `i_doublecheck` on. One
 test per check kind reads that run: the run raised nothing (a failure names the innermost raising
 `file.py:line`), the balance closed, every result column is finite, the member contract holds (every
 energy or temperature output of a member has a `bounds` entry in its unit, every KPI named is one the
@@ -423,12 +428,15 @@ parameters while its sample's checks run, and is deleted with the run once they 
 
 ```bash
 pytest -m base tests/assemblies/test_library_contracts.py                  # the deterministic samples (PR gate)
+                                                                           # of the mock and the real library
 pytest -m nightly tests/assemblies/test_library_contracts.py --samples 16 --seed 20261003
 pytest -m nightly -n 4 --dist loadgroup tests/assemblies/test_library_contracts.py   # shards, one run per sample
 pytest tests/assemblies/test_library_contracts.py --assembly-library path/to/library # another library
 ```
 
-`base` is the deterministic tier, run in the PR gate's base shard; `nightly` is the hypercube, run by
+Without `--assembly-library` the harness runs the mock library and the real one,
+`energy_systems/assemblies/` with its `test_partners.yaml`. `base` is the deterministic tier, run in the PR
+gate's base shard; `nightly` is the hypercube, run by
 the `assemblies-nightly` job of `golden-year.yml` (`--samples`, default 16 per branch, and `--seed`,
 default 20261003). `--assembly-library DIR` tests another library: its assemblies and the
 `test_partners.yaml` beside them, which names the site entry standing in for each partner class,
@@ -444,6 +452,15 @@ assemblies, `$switch`/`$fact`/`$derived` (`$param` is the one value placeholder)
 first real assemblies need, and a cut feature returns as its own change when a real assembly needs
 it. The spec is `roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1); the mock library
 the tests run on is `tests/assemblies/mock_assemblies/library/`.
+
+**The real library** (§13 step 4) is `energy_systems/assemblies/`: `heating/air_source_heat_pump`,
+`heating/air_source_heat_pump_space_heating_only` (no DHW: a second assembly, D29),
+`dhw/indirect_cylinder`, `pv/array`, `storage/battery`, `control/ems_self_consumption` and
+`supply/electricity_grid`. `household_heatpump_building_sizer.composed.energy_system.yaml` is the site
+of the heat-pump twin plus six of them (all but the space-heating-only heat pump); `tests/assemblies/test_heatpump_twin_gate.py` expands it,
+renames its members to the twin's names and asserts the twin outside the listed intended differences
+(the battery's one-element `sizing_sources` list, G7, and one neutral swap of the sequence), and runs
+both for one day: every result column and KPI equal.
 
 ## Relation to `system_setups/`
 

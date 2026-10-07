@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
@@ -178,11 +179,17 @@ def test_one_device_each_gives_the_class_defaults_and_a_second_battery_follows_t
 
 
 class FakeComponent:
-    """A constructed component as the selection sees it: a class name and, for an observer, its declared feeds."""
+    """A constructed component as the selection sees it: a class name, its outputs and, for an observer, its feeds."""
 
-    def __init__(self, classname: str, declared: Optional[Dict[str, List[DynamicComponentConnection]]] = None) -> None:
-        """Names the class; an observer also carries its dynamic default connections."""
+    def __init__(
+        self,
+        classname: str,
+        declared: Optional[Dict[str, List[DynamicComponentConnection]]] = None,
+        outputs: Tuple[str, ...] = (),
+    ) -> None:
+        """Names the class and the outputs it was built with; an observer also carries its default feeds."""
         self.classname = classname
+        self.outputs = [SimpleNamespace(field_name=output) for output in outputs]
         setattr(self, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, declared or {})
 
     def get_classname(self) -> str:
@@ -210,7 +217,12 @@ def ranked_by_fake_controller(
     declared: Dict[str, List[DynamicComponentConnection]] = {}
     for declaration in declarations:
         declared.setdefault(declaration.source_class_name, []).append(declaration)
-    components = {name: FakeComponent(classname) for name, classname in participants.items()}
+    components = {
+        name: FakeComponent(
+            classname, outputs=tuple(item.source_component_field_name for item in declared.get(classname, ()))
+        )
+        for name, classname in participants.items()
+    }
     components["Controller"] = FakeComponent("FakeController", declared)
     plan = SelectionPlan(observers=[Observer("Controller", Selection(), "Controller")])
     return [(feed.source, feed.output or "", feed.weight) for feed in plan(components)["Controller"]]
@@ -275,6 +287,15 @@ def test_a_selection_is_the_union_of_its_selectors_matches_in_candidate_order(tm
     )
     model = build(site(WEATHER, OCCUPANCY) + imports("pv: {assembly: mock/pv_array}", grid), tmp_path)
     assert [feed.source for feed in feeds(model, "grid-Meter")] == ["Occupancy", "pv-PVSystem"]
+
+
+@pytest.mark.base
+def test_a_declared_output_the_built_source_does_not_have_is_no_candidate(tmp_path: Path) -> None:
+    """Catches the manager selecting an output its source was built without (EF-21) instead of binding the rest."""
+    occupancy = f"Occupancy: {{class: {MOCKS}.MockOccupancy, preset: standard, config: {{with_electricity: false}}}}"
+    control = "control: {assembly: mock/ems_self_consumption}"
+    model = build(site(WEATHER, occupancy) + imports("pv: {assembly: mock/pv_array}", control), tmp_path)
+    assert [feed.source for feed in feeds(model, "control-EMS")] == ["pv-PVSystem"]
 
 
 @pytest.mark.base

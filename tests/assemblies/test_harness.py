@@ -239,6 +239,34 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
 
 
 @pytest.mark.base
+def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_path: Path) -> None:
+    """A battery whose law reads the arrays' peak power by the bare-fact rule, with no fact port, gets the array."""
+    library = Library(tmp_path)
+    library.add(
+        "sampled/bare_battery",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/bare_battery
+        description: A battery reading its sizing fact from the site without a fact port.
+        components:
+          Battery: {{class: {MOCKS}.MockArrayBattery, preset: sized_to_all_arrays}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    assembly = library.resolver().resolve("sampled/bare_battery", "test")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    document = isolation_document(assembly, {}, registry)
+    assert list(document["components"]) == ["Weather", "PVArray"]
+    with pytest.raises(
+        TestPartnerMissingError,
+        match="the fact read 'pv_peak_power_in_watt' of 'sampled/bare_battery' needs a test partner, the provider of "
+        "the fact pv_peak_power_in_watt",
+    ):
+        isolation_document(assembly, {}, TestPartnerRegistry([], []))
+
+
+@pytest.mark.base
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> None:
     """An empty registry: the array's weather port names MockWeather."""
     assembly, space = mock("mock/pv_array")

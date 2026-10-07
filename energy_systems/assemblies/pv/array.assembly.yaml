@@ -1,0 +1,60 @@
+# One PV array with its inverter; a house with several arrays imports it with one instance per request system id
+# (spec §10.4, #83). The array's size is stated one way, a peak power or a share of the roof's PV potential: AUTO
+# power counts as unstated (spec §2.6), so the default is the twin's array, the whole roof (share 1.0); an importer
+# stating a power unstates the share (D27). The power law reads the roof area and the weather from the site by the
+# engine's bare-fact rule, as in the twin.
+
+schema_version: 4
+kind: assembly
+name: pv/array
+description: One PV array on the roof, with its inverter (pvlib, CEC databases).
+
+parameters:
+  azimuth_in_degree:
+    {type: float, unit: DEGREES, default: 180, range: {min: 0, max: 360}, description: "Orientation; 180 is south."}
+  tilt_in_degree:
+    {type: float, unit: DEGREES, default: 30, range: {min: 0, max: 90}, description: Tilt from horizontal.}
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, range: {min: 500, max: 30000},
+     description: Peak power; AUTO is the roof share times the module density.}
+     # range: a balcony module (0.5 kWp) up to a large single-family roof (30 kWp)
+  share_of_maximum_pv_potential:
+    {type: float, unit: ANY, default: 1.0, range: {min: 0, max: 1},
+     description: "Fraction (0..1) of the roof's PV potential the array covers, the alternative to the power."}
+
+constraints:
+  - {exactly_one_of: [power_in_watt, share_of_maximum_pv_potential]}
+
+components:
+  PVSystem:
+    class: hisim.components.generic_pv_system.PVSystem
+    preset: rooftop
+    config:
+      location: AACHEN                                      # as the twin writes it; documentation only (G11)
+      azimuth: {$param: azimuth_in_degree}
+      tilt: {$param: tilt_in_degree}
+      power_in_watt: {$param: power_in_watt}
+      share_of_maximum_pv_potential: {$param: share_of_maximum_pv_potential}
+    inputs:
+      - {$port: weather}
+
+interface:
+  needs:
+    weather:    {into: [PVSystem], partner: Weather}
+  provides:
+    production: {output: PVSystem.ElectricityOutput}        # observed by its tags, never linked (spec §4.3)
+    peak_power: {fact: pv_peak_power_in_watt, member: PVSystem}   # read by batteries
+
+tests:
+  # One day at 900 s on the test weather (1 January, Aachen). A module's output stays below its peak power except
+  # under rare irradiance above 1000 W/m² and cold cells: 1.1x the box's 30 kWp; at night the inverter draws its
+  # standby power, a few watts (measured -3 W at 9.9 kWp).
+  bounds:
+    - {output: PVSystem.ElectricityOutput, unit: WATT, min: -100, max: 33000}
+    - {output: PVSystem.ElectricityEnergyOutput, unit: WATT_HOUR, min: -25, max: 8250}     # per step: x 0.25 h
+  monotone:
+    - {parameter: power_in_watt, kpi: PV production, direction: increasing}
+      # more peak power, more yield on the same weather; PV production is a derived KPI (no member, spec §9.4)
+  expect:
+    - {kpi: PV production, min: 3, max: 7}
+      # 4.8 kWh measured at the defaults (the whole roof of the test building) on a January day

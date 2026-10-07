@@ -331,7 +331,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         metavar="DIR",
         default=None,
         help="the assembly library whose test contracts tests/assemblies/test_library_contracts.py runs, with its "
-        "test_partners.yaml; the mock library when omitted",
+        "test_partners.yaml; the mock library and the real one (energy_systems/assemblies/) when omitted",
     )
     group.addoption(
         "--samples",

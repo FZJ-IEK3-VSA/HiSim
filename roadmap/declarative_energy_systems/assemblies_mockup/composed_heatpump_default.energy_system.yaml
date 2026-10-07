@@ -1,3 +1,7 @@
+# HISTORICAL since 2026-10-07 (spec §9.3): this directory is the design record, no longer updated. The real library is
+# energy_systems/assemblies/, and the real composed file energy_systems/household_heatpump_building_sizer.composed.
+# energy_system.yaml; D29 replaced the `serves_dhw` variant by two heating assemblies and dropped the scalar fact ports.
+#
 # Mockup (design): the composed base file for the heat-pump generator with DEFAULTS — the site with the twin's site
 # values (D9: Aachen weather, the German single-family-home preset, couple_both_at_work) plus the imports that should
 # reproduce energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml, option `ems_with_battery`.

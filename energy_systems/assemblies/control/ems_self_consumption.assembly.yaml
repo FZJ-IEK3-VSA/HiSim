@@ -1,0 +1,56 @@
+# The L2 energy manager maximising PV self-consumption (D11, D21). It observes the electricity outputs its class
+# declares dynamic default connections from and ranks what its class ranks, at the class's own weights (residents 1,
+# space heating 2, hot water 3, solar thermal 4, battery 6); it actuates only L1 set-point modifiers and a battery's
+# LoadingPowerInput. It outputs the observed flows' sum, TotalElectricityToOrFromGrid, which the grid's meter observes
+# when the `grid` import says so; a meter observing that sum and a flow this manager observes is refused.
+
+schema_version: 4
+kind: assembly
+name: control/ems_self_consumption
+description: Surplus controller maximising PV self-consumption (L2GenericEnergyManagementSystem).
+
+parameters:
+  building_offset_in_celsius:
+    {type: float, unit: CELSIUS, default: 2, range: {min: 0, max: 5},
+     description: Building set point raise on a PV surplus.}
+     # range: no raise up to 5 K, beyond which comfort suffers
+  space_heating_storage_offset_in_celsius:
+    {type: float, unit: CELSIUS, default: 10, range: {min: 0, max: 20},
+     description: Space-heating buffer set point raise on a PV surplus.}
+     # range: no raise up to 20 K, within a buffer's 60-80 °C ceiling
+  dhw_storage_offset_in_celsius:
+    {type: float, unit: CELSIUS, default: 10, range: {min: 0, max: 20},
+     description: DHW cylinder set point raise on a PV surplus.}
+     # range: no raise up to 20 K, within a cylinder's 60-80 °C ceiling
+
+components:
+  EMS:
+    class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+    preset: optimize_own_consumption
+    config:
+      building_indoor_temperature_offset_value: {$param: building_offset_in_celsius}
+      space_heating_water_storage_temperature_offset_value: {$param: space_heating_storage_offset_in_celsius}
+      domestic_hot_water_storage_temperature_offset_value: {$param: dhw_storage_offset_in_celsius}
+
+interface:
+  observes:
+    flows:        {into: [EMS], default: declared}          # every electricity output its class declares; never its own
+  provides:
+    grid_balance: {output: EMS.TotalElectricityToOrFromGrid}
+
+tests:
+  # One day at 900 s beside the residents, the flow its observer selection finds in isolation (at most about 50 kW).
+  # The Dispatch* outputs are named after the feeds the system gives the manager and bounded by no fixed name.
+  bounds:
+    - {output: EMS.TotalElectricityToOrFromGrid, unit: WATT, min: -50000, max: 50000}            # signed grid balance
+    - {output: EMS.TotalElectricityConsumption, unit: WATT, min: 0, max: 50000}
+    - {output: EMS.BuildingIndoorTemperatureModifier, unit: CELSIUS, min: 0, max: 5}             # 0 or the offset
+    - {output: EMS.DomesticHotWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}   # 0 or the offset
+    - {output: EMS.SpaceHeatingWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}  # 0 or the offset
+    - {output: EMS.ElectricityToBuildingFromDistrictEMSOutput, unit: WATT, min: -50000, max: 50000}   # zero outside a district
+  monotone:
+    - {parameter: building_offset_in_celsius, kpi: Self-consumption of electricity, direction: increasing}
+      # a larger raise on surplus shifts at least as much heating into the surplus hours (a derived KPI)
+  expect:
+    - {kpi: Priority for ElectricalPowerConsumptionFromUTSPConnector, member: EMS, min: 0, max: 0}
+      # the residents rank first, at the class's weight 1 (reported zero-based)

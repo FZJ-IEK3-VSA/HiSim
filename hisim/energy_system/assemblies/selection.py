@@ -10,7 +10,8 @@ into the observer's inputs, and a re-run selects nothing.
 
 **Candidates and order.** Every output of every other present component, in file order (site
 entries, then the imports, each instance as written), that the observer declares a feed from, in
-the order it declares them; an observer never matches its own outputs. A selector that matches
+the order it declares them; an observer never matches its own outputs, and a declared output the
+constructed source does not have (a heat pump built without its DHW side) is no candidate. A selector that matches
 nothing is refused (``EF-7S``), as is an observer whose class declares no feeds at all.
 
 **Control** (§4.4, D11, D21, D27). An observer whose class declares a feed at a weight other than
@@ -161,6 +162,7 @@ class SelectionPlan:
             for name, component in components.items()
             if name != observer.component
             for declaration in declared.get(component.get_classname(), ())
+            if declaration.source_component_field_name in {output.field_name for output in component.outputs}
         ]
         listed = ", ".join(f"{feed.source}.{feed.output}" for feed in candidates) or "none"
 

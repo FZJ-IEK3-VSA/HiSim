@@ -14,7 +14,7 @@ from hisim.energy_system.loader import dump_energy_system, parse_energy_system
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
 from hisim.energy_system.source_lines import LineIndex
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiSource
-from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Mocks, expand_text, site
+from tests.assemblies.helpers import EMS, MOCKS, OCCUPANCY, WEATHER, Library, Mocks, expand_text, site
 from tests.assemblies.mock_components import MockPVSystemConfig
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -28,10 +28,17 @@ def expand_house():
     return expand_imports(model, AssemblyResolver([Mocks.LIBRARY]), lines=lines)
 
 
+#: Every committed energy-system file that imports nothing; a composed file is checked by its gate
+#: (``tests/assemblies/test_heatpump_twin_gate.py``).
+FLAT_FILES = [
+    path
+    for path in sorted((REPOSITORY / "energy_systems").rglob("*.energy_system.yaml"))
+    if not parse_energy_system(path).imports
+]
+
+
 @pytest.mark.base
-@pytest.mark.parametrize(
-    "path", sorted((REPOSITORY / "energy_systems").rglob("*.energy_system.yaml")), ids=lambda path: path.name
-)
+@pytest.mark.parametrize("path", FLAT_FILES, ids=lambda path: path.name)
 def test_every_committed_file_expands_to_itself(path: Path) -> None:
     """Catches the expansion touching a file that imports nothing: it must be the very same object."""
     model = parse_energy_system(path)
@@ -159,6 +166,66 @@ def test_parameters_are_substituted_and_the_lowered_items_land_at_their_placehol
 
 
 @pytest.mark.base
+def test_a_parameter_at_its_presets_value_auto_or_none_writes_no_config_line() -> None:
+    """Catches the expansion writing a line the twin has not (G9, D28): a value the preset gives, AUTO or none."""
+    imports = "pv: {assembly: mock/pv_array}\nbattery: {assembly: mock/battery}"
+    flat, _record = expand_text(site(WEATHER, imports=imports))
+    # azimuth 180 and tilt 30 are the rooftop preset's; the share resolves to none; power 5000 is an override.
+    assert flat.components["pv-PVSystem"].config == {"power_in_watt": 5000}
+    # The capacity resolves to AUTO, which leaves the field with its law.
+    assert "capacity_in_kwh" not in flat.components["battery-Battery"].config
+
+
+@pytest.mark.base
+def test_an_override_writes_its_line_and_the_record_keeps_every_parameter() -> None:
+    """Catches G9 dropping an override, or the import record losing the values the expansion did not write."""
+    flat, record = expand_house()
+    assert flat.components["pv-east-PVSystem"].config == {"azimuth": 90, "power_in_watt": 5000}
+    assert flat.components["pv-west-PVSystem"].config == {"azimuth": 270, "power_in_watt": 3000}
+    assert flat.components["tank-Tank"].config == {"volume_in_liter": 200}
+    east = record.instance("pv", "east")
+    assert east.parameters_resolved == {
+        "azimuth_in_degree": 90,
+        "tilt_in_degree": 30,
+        "power_in_watt": 5000,
+        "share_of_roof": None,
+        "facing": "east",
+    }
+
+
+@pytest.mark.base
+def test_a_member_without_a_preset_compares_with_the_field_default(tmp_path: Path) -> None:
+    """Catches G9 comparing a member configured by its own block with anything but its class's field default."""
+    library = Library(tmp_path)
+    library.add(
+        "mock/plain_tank",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: mock/plain_tank
+        description: A tank configured by its own block.
+        parameters:
+          volume_in_liter:
+            {{type: float, unit: LITER, default: 150, range: {{min: 50, max: 500}}, description: Volume.}}
+        components:
+          Tank:
+            class: {MOCKS}.MockTank
+            config: {{volume_in_liter: {{$param: volume_in_liter}}}}
+        tests:
+          bounds: [{{output: Tank.WaterTemperature, unit: CELSIUS, min: 0, max: 100}}]
+          monotone: [{{parameter: volume_in_liter, kpi: Standby heat losses, member: Tank, direction: increasing}}]
+        """,
+    )
+    flat, _record = expand_text(site(WEATHER, imports="tank: {assembly: mock/plain_tank}"), library.resolver())
+    assert flat.components["tank-Tank"].config == {}
+    flat, _record = expand_text(
+        site(WEATHER, imports="tank: {assembly: mock/plain_tank, parameters: {volume_in_liter: 200}}"),
+        library.resolver(),
+    )
+    assert flat.components["tank-Tank"].config == {"volume_in_liter": 200}
+
+
+@pytest.mark.base
 def test_the_import_record_states_what_each_instance_was_given_and_how_each_port_was_decided() -> None:
     """Catches an import record that cannot say which assembly ran, with what, bound to what."""
     _flat, record = expand_house()
@@ -266,8 +333,10 @@ def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults() 
     assert record.instance("pv").parameters_resolved["power_in_watt"] is None
     assert record.instance("pv").parameters_resolved["share_of_roof"] == 0.5
     config = flat.components["pv-PVSystem"].config
-    assert config["power_in_watt"] is None and config["share_of_roof"] == 0.5
-    array = MockPVSystemConfig(component_id=ComponentID(name="PVSystem"), power_in_watt=None, share_of_roof=0.5)
+    # G9: the unstated power writes no line, so the preset's open power stays and the share is read.
+    assert "power_in_watt" not in config and config["share_of_roof"] == 0.5
+    array = MockPVSystemConfig.preset_rooftop("PVSystem")
+    array.share_of_roof = config["share_of_roof"]
     assert array.peak_power_in_watt() == 0.5 * MockPVSystemConfig.ROOF_PEAK_POWER_IN_WATT
 
 

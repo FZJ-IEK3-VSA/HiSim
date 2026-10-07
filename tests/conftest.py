@@ -321,3 +321,24 @@ def _record_result_dir(request: pytest.FixtureRequest) -> Iterator[None]:
     yield
     window.result_dirs.add(_result_dir())
     window.last_test = request.node.nodeid
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """The options of the assembly test contracts, ``tests/assemblies/test_library_contracts.py`` (spec §9.4)."""
+    group = parser.getgroup("assemblies", "assembly test contracts (assemblies_spec.md §9.4)")
+    group.addoption(
+        "--assembly-library",
+        metavar="DIR",
+        default=None,
+        help="the assembly library whose test contracts tests/assemblies/test_library_contracts.py runs, with its "
+        "test_partners.yaml; the mock library when omitted",
+    )
+    group.addoption(
+        "--samples",
+        type=int,
+        default=16,
+        help="the Latin hypercube samples per constraint branch of the nightly tier (default 16)",
+    )
+    group.addoption(
+        "--seed", type=int, default=20261003, help="the seed of the nightly tier's Latin hypercube (default 20261003)"
+    )

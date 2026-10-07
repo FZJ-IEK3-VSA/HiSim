@@ -26,5 +26,6 @@ interface:
 tests:
   bounds:
     - {output: Battery.Capacity, unit: KWH, min: 0, max: 50}
+    - {output: Battery.AcBatteryPowerUsed, unit: WATT, min: -50000, max: 50000}
   monotone:
     - {parameter: capacity_in_kwh, kpi: Battery capacity, member: Battery, direction: increasing}

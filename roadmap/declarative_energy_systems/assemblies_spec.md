@@ -747,13 +747,18 @@ there are no assembly presets, D26), every `range` boundary
 (`min` and `max` of each numeric parameter, the others at their defaults, so every parameter declares a default),
 every `values` entry, every internal variant,
 and a seeded **Latin hypercube sample** of the parameter box (owner, 2026-10-03: `scipy.stats.qmc.LatinHypercube`,
-scrambled, fixed seed): every numeric parameter is a dimension over its `range`, every `values` parameter and every
-internal variant a stratified discrete dimension, and a constraint with alternatives (`exactly_one_of`) splits the box
+scrambled, fixed seed): every numeric parameter is a dimension over its `range` (an `int` parameter's bounds are
+integers, which the library check holds, and every value the harness gives it is the nearest integer within them),
+every `values` parameter and every
+internal variant a stratified discrete dimension, and a constraint with alternatives (`exactly_one_of`; the library
+check refuses a parameter named by two) splits the box
 into one hypercube per branch, so no sample is thrown away for violating a constraint. Sample size and seed are the
-harness's, not the assembly's; the size is recorded with the run.
+harness's, not the assembly's; the size is recorded with the run, and it is an upper bound for a branch whose
+dimensions are all discrete, where two points drawing the same values are one sample.
 
-**Isolation run.** For each sample the harness builds a minimal system: the assembly, plus for each port a test
-partner, optional ports included, and for a carrier the assembly provides a consumer partner; one simulated day at
+**Isolation run.** For each sample the harness builds a minimal system: the assembly, plus a test partner for each
+active port whose binding changes what the assembly computes, optional ports included (a providing port gets none),
+and for a fuel the assembly provides a consumer partner; one simulated day at
 900 s per step (an assembly declares no resolution), the energy-balance check and `i_doublecheck` on. The test
 partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
 consumer or fact, each naming the partners it requires. The run fails on an exception,
@@ -779,7 +784,9 @@ tests:
   the isolation system's single building, where it is unambiguous (decided, owner, 2026-10-04). Device KPIs that are
   derived today (PV production, the battery's three) move into their components before assemblies ship several
   instances of them (§10.4, #83), so each instance reports its own and the building sum stays a derived total.
-- `monotone` is evaluated on every sample as a base point, moving one parameter across its range in a few steps;
+- `monotone` is evaluated on every sample as a base point, moving one parameter across its range in four
+  equidistant steps (an `int` parameter takes the nearest integer of each, so up to four distinct values); bases
+  reaching the same points are one sweep;
   `direction` is `increasing`, `decreasing` or `constant`, within the gate's numeric tolerance. It is the cheap test
   that catches wrong-sign physics.
 - `expect` pins the results at the defaults to a band (v1; per preset in the design, D26), like the goldens do

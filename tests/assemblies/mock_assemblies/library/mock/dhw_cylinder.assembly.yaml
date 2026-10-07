@@ -26,5 +26,6 @@ interface:
 tests:
   bounds:
     - {output: Cylinder.ReturnTemperatureDhw, unit: CELSIUS, min: 0, max: 100}
+    - {output: Cylinder.HeatReceived, unit: WATT, min: 0, max: 20000}
   monotone:
     - {parameter: volume_in_liter, kpi: Cylinder heat received, member: Cylinder, direction: increasing}

@@ -36,9 +36,9 @@ from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress, KpiFind
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 
 # Tolerance policy (spec §7): same-machine output is byte-exact, so a very tight
-# relative tolerance still passes while absorbing sub-ULP cross-platform drift.
-REL_TOL = 1e-9
-ABS_TOL = 0.0
+# relative tolerance still passes while absorbing sub-ULP cross-platform drift. The values live in
+# hisim, which the assembly test harness reads too; the gate's scripts import them from here.
+from hisim.postprocessing.kpi_computation.tolerances import ABS_TOL, REL_TOL
 
 #: The fields of a golden leaf, exactly these and no others.
 LEAF_FIELDS = ("value", "unit", "building", "tag", "name", "source")

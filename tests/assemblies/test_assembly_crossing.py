@@ -23,7 +23,13 @@ from hisim.cli_exit import ExitCodes
 from hisim.energy_system.assemblies.binding import Owner, PortBinder
 from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemCatalogueError, EnergySystemError
+from hisim.energy_system.errors import (
+    EnergySystemAssemblyError,
+    EnergySystemCatalogueError,
+    EnergySystemError,
+    EnergySystemWiringError,
+)
+from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState, Selection
 from hisim.energy_system.model import DefaultInputs, EnergySystemFile, SourceReference
 from hisim.energy_system.wiring_checks import ConsumingOutput
@@ -131,6 +137,22 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
     )
     assert model.components["cylinder-Cylinder"].inputs[1] == DefaultInputs(source="two-Boiler")
     assert model.components["one-Boiler"].inputs == (DefaultInputs(source="tank-Cylinder"),)
+
+
+@pytest.mark.base
+def test_a_joined_circuit_end_bound_to_an_undeclared_name_is_refused_by_name() -> None:
+    """Catches a joined end whose verb names a partner the file does not declare escaping as a KeyError."""
+    message = refusal(
+        SITE
+        + imports(
+            "boiler: {assembly: mock/gas_boiler}",
+            "gas: {assembly: mock/gas_connection}",
+            "cylinder: {assembly: mock/dhw_cylinder, bind: {circuit: wrong}}",
+        )
+    )
+    assert message.startswith("EF-7D at import 'cylinder'")
+    assert "the circuit end 'circuit' is bound to 'wrong' with 'bind:'" in message
+    assert "declares no import or component 'wrong'" in message
 
 
 @pytest.mark.base
@@ -575,6 +597,27 @@ def test_the_boiler_house_runs_a_day_its_meter_reads_the_boilers_fuel_and_its_ba
     fuel = kpis.value(name="Boiler fuel", source="boiler-Boiler")
     assert fuel > 0 and kpis.value(name="Gas consumption", source="gas-Meter") == pytest.approx(fuel, rel=1e-12)
     assert json.loads((result / "balance_report.json").read_text(encoding="utf-8"))["verdict"] == "closes"
+
+
+@pytest.mark.base
+def test_the_record_carries_the_consuming_outputs_and_a_rerun_checks_them_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches a re-run that skips the carrier and meter-feed checks the expanding run made (EF-7M, EF-7N)."""
+    result = run("boiler_house.energy_system.yaml", tmp_path / "run", monkeypatch)
+    monkeypatch.delenv(AssemblyResolver.ENVIRONMENT_VARIABLE)
+    record = yaml.safe_load((result / "realized.energy_system.yaml").read_text(encoding="utf-8"))
+    consuming = record["metadata"]["imports"]["consuming"]
+    assert consuming == [
+        {"consumer": "boiler-Boiler", "output": "FuelUse", "carrier": "natural_gas", "meter": "gas-Meter"}
+    ]
+    parameters = result / "realized.simulation.yaml"
+    run_energy_system(result / "realized.energy_system.yaml", parameters, str(tmp_path / "again"), rerun=True)
+    consuming[0]["carrier"] = "heating_oil"
+    edited = tmp_path / "edited.energy_system.yaml"
+    edited.write_text(yaml.safe_dump(record, sort_keys=False), encoding="utf-8")
+    with pytest.raises(EnergySystemWiringError, match="EF-7M .*consumed as heating_oil"):
+        run_energy_system(edited, parameters, str(tmp_path / "edited"), rerun=True)
 
 
 @pytest.mark.base

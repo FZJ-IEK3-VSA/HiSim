@@ -29,5 +29,7 @@ tests:
   bounds:
     - {output: Boiler.SupplyTemperatureDhw, unit: CELSIUS, min: 0, max: 100}
     - {output: Boiler.FuelUse, unit: WATT_HOUR, min: 0, max: 10000}
+    - {output: Boiler.ThermalPowerDhw, unit: WATT, min: 0, max: 20000}
+    - {output: Boiler.FlueLoss, unit: WATT, min: 0, max: 20000}
   monotone:
     - {parameter: power_in_watt, kpi: Boiler fuel, member: Boiler, direction: increasing}

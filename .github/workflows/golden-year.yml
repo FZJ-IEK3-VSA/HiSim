@@ -67,6 +67,15 @@
 # (golden_check.py --jobs 2, a child process per pair). Same wall time as a job per
 # pair, half the jobs, and one container start, install and cache save per two pairs.
 #
+# THE ASSEMBLY NIGHTLY TIER rides along (assemblies_spec.md §9.4, D24, lean v1 §13.1): the job
+# `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
+# seeded Latin hypercube sample of every assembly's parameter box, under the same gate as the
+# full-year pairs, and its result joins the `golden-year` status. The deterministic samples
+# run in the PR gate's `base` shard. Until the first real assemblies land the library is the
+# mock library under tests/assemblies/mock_assemblies/library. A failed check fails the job,
+# named in pytest's summary; opening a bead for it, as for a golden drift, is the owner's
+# manual step today.
+#
 # EDITING THIS FILE. `workflow_run` always uses the copy of the workflow that is on
 # the default branch, so changes here do nothing on the pull request that makes
 # them. They take effect once merged, on the next pull request.
@@ -292,9 +301,49 @@ jobs:
           mode: report
           scope: ${{ matrix.name }}
 
+  assemblies-nightly:
+    name: assemblies nightly tier
+    # Same gate as the full-year pairs: once per commit, with every prerequisite green.
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # Wall time, CPU time and peak memory for this job; see the action.
+      - name: Start the resource monitor
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: start
+          scope: assemblies-nightly
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      # Every sample is one xdist_group, so loadgroup keeps the checks of one isolation run on
+      # one worker, which makes the run once.
+      - name: Assembly test contracts, nightly tier
+        run: >-
+          python -m pytest -m nightly -n 4 --dist loadgroup tests/assemblies/test_library_contracts.py
+          --samples 16 --seed 20261003
+      # Kept on failure too: a job killed for running out of memory is the one
+      # whose measurement matters most.
+      - name: Report the resource usage
+        if: always()
+        uses: ./.github/actions/resource-monitor
+        with:
+          mode: report
+          scope: assemblies-nightly
+
   summary:
     name: golden-year summary
-    needs: [gate, golden-year]
+    needs: [gate, golden-year, assemblies-nightly]
     if: always()
     runs-on: ubuntu-latest
     env:
@@ -306,7 +355,8 @@ jobs:
           gate="${{ needs.gate.result }}"
           proceed="${{ needs.gate.outputs.proceed }}"
           gy="${{ needs.golden-year.result }}"
-          echo "gate=$gate  proceed=${proceed:-<unset>}  golden-year=$gy"
+          ay="${{ needs.assemblies-nightly.result }}"
+          echo "gate=$gate  proceed=${proceed:-<unset>}  golden-year=$gy  assemblies-nightly=$ay"
           post_status() {
             gh api -X POST "repos/$GH_REPO/statuses/$SHA" \
               -f state="$1" -f context=golden-year -f description="$2" -f target_url="$RUN_URL" \
@@ -346,5 +396,10 @@ jobs:
             echo "::error title=golden-year::Full-year golden KPI check failed."
             exit 1
           fi
-          post_status success "Full-year golden KPI check passed."
-          echo "Full-year golden check passed."
+          if [ "$ay" != "success" ]; then
+            post_status failure "Assembly nightly tier failed — see the assemblies-nightly job."
+            echo "::error title=golden-year::The assembly test contracts (nightly tier) failed a check."
+            exit 1
+          fi
+          post_status success "Full-year golden KPI check and assembly nightly tier passed."
+          echo "Full-year golden check and assembly nightly tier passed."

@@ -24,7 +24,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 from hisim.config import ComponentID
 from hisim.energy_system.address_table import AddressTable
 from hisim.energy_system.assemblies.selection import SelectionPlan
-from hisim.energy_system.errors import EnergySystemCatalogueError
+from hisim.energy_system.errors import EnergySystemCatalogueError, EnergySystemErrorId, EnergySystemFormatError
 from hisim.energy_system.model import ConsumingOutput
 from hisim.energy_system.source_lines import SourceLocation
 
@@ -193,14 +193,18 @@ class ImportRecord:
 
     @property
     def is_empty(self) -> bool:
-        """Whether the expansion did nothing at all."""
-        return not self.instances
+        """Whether the expansion did nothing at all: no import, and no site entry with ports."""
+        return not self.instances and not self.site_ports
 
     def instance(self, import_key: str, instance: Optional[str] = None) -> InstanceRecord:
         """The record of one import (and instance)."""
         return next(
             record for record in self.instances if (record.import_key, record.instance) == (import_key, instance)
         )
+
+    #: The key of the consuming outputs inside the import record, and the keys of one of them.
+    CONSUMING_KEY: ClassVar[str] = "consuming"
+    CONSUMING_FIELDS: ClassVar[Tuple[str, ...]] = ("consumer", "output", "carrier", "meter")
 
     def to_document(self) -> Dict[str, Any]:
         """The record as the plain data a realized record's metadata carries under ``imports``.
@@ -212,9 +216,43 @@ class ImportRecord:
             "instances": [record.to_document() for record in self.instances],
             "site_ports": {name: [port.to_document() for port in ports] for name, ports in self.site_ports.items()},
             "observers": [observer.to_document() for observer in self.selection.observers],
+            self.CONSUMING_KEY: [{key: getattr(item, key) for key in self.CONSUMING_FIELDS} for item in self.consuming],
             AddressTable.ADDRESSES_KEY: AddressTable.to_document(self.addresses),
             self.SEQUENCE_KEY: list(self.sequence),
         }
+
+    @classmethod
+    def consuming_of(cls, metadata: Optional[Mapping[str, Any]]) -> List[ConsumingOutput]:
+        """The consuming outputs a re-run record's import record carries, so its wiring checks them again.
+
+        A re-run expands nothing, so the carrier needs that named these outputs are gone; the record
+        states them, and the wiring repeats the carrier and meter-feed checks (``EF-7M``, ``EF-7N``)
+        exactly as the expanding run made them. A file without an import record has none.
+
+        Raises:
+            EnergySystemFormatError: ``EF-07`` for a list that is not what :meth:`to_document` writes;
+                it is generated, so anything else means the record was edited by hand.
+        """
+        record = (metadata or {}).get(AddressTable.IMPORTS_KEY)
+        if record is None:
+            return []
+        items = record.get(cls.CONSUMING_KEY) if isinstance(record, Mapping) else None
+        location = f"metadata.{AddressTable.IMPORTS_KEY}.{cls.CONSUMING_KEY}"
+        valid = isinstance(items, list) and all(
+            isinstance(item, Mapping)
+            and set(item) == set(cls.CONSUMING_FIELDS)
+            and all(isinstance(item[key], str) for key in cls.CONSUMING_FIELDS[:3])
+            and (item["meter"] is None or isinstance(item["meter"], str))
+            for item in items
+        )
+        if not valid:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.MALFORMED_BLOCK,
+                location,
+                f"the consuming outputs are a list of {{{', '.join(cls.CONSUMING_FIELDS)}}}; found {items!r}.",
+                remedy="The list is generated; re-run the authored file that imports the assemblies.",
+            )
+        return [ConsumingOutput(**{key: item[key] for key in cls.CONSUMING_FIELDS}) for item in items or ()]
 
     def metadata(self, given: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         """Returns the ``imports`` and ``source_map`` blocks a realized record carries (§9.1, §9.2).

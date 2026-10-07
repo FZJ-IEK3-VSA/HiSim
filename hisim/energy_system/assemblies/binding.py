@@ -597,7 +597,9 @@ class PortBinder:
     def _joined(self, owner: Owner, port: Port, state: PortState, written: Optional[Tuple[str, Any]]) -> PortRecord:
         """The record of a circuit end the other end's decision joined; its own verb, if any, must agree."""
         other, lowered = self.joined[(owner.reference, port.name)]
-        if written is not None and (written[0] == "none" or self.resolve(owner, port, written[1])[0] != other):
+        if written is not None and (written[0] == "none" or written[1] not in (other.owner.reference, other.name)):
+            if written[0] != "none":
+                self.resolve(owner, port, written[1])  # a target that is no free end of this circuit says why
             raise self.error(
                 EnergySystemErrorId.CIRCUIT_MISMATCH,
                 owner,

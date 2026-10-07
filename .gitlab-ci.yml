@@ -205,7 +205,7 @@ pytest-others:
     - cd tests
     - |
       markers="not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2"
-      markers="$markers and not utsp and not postprocessingoptions"
+      markers="$markers and not utsp and not postprocessingoptions and not nightly"
       coverage run --parallel-mode --source=../hisim -m pytest \
         -m "$markers" \
         --durations=20 \

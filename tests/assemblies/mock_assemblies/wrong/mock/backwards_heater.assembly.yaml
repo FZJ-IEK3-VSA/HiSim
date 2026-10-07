@@ -1,0 +1,38 @@
+# Mock, deliberately wrong: a heater whose test contract the harness must fail by name. It passes the
+# library check and the member contract — every name resolves, every energy output is bounded, a monotone
+# entry exists — but its monotone declaration has the wrong sign (the heater draws more energy the higher
+# its power, not less) and its bounds band on the thermal power is one the output leaves (the heater runs
+# at its full power, 500 to 6000 W, while the band ends at 1000 W). tests/assemblies/test_harness.py runs
+# it, and `pytest tests/assemblies/test_library_contracts.py --assembly-library
+# tests/assemblies/mock_assemblies/wrong` shows both failures.
+schema_version: 4
+kind: assembly
+name: mock/backwards_heater
+description: A mock electric heater with a wrong test contract.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: 2000, range: {min: 500, max: 6000}, description: Rated power.}
+
+components:
+  Controller:
+    class: tests.assemblies.mock_components.MockController
+    preset: standard
+  Heater:
+    class: tests.assemblies.mock_components.MockHeater
+    preset: standard
+    config:
+      power_in_watt: {$param: power_in_watt}
+    inputs:
+      - Controller
+
+interface:
+  provides:
+    heat: {output: Heater.ThermalPower}
+
+tests:
+  bounds:
+    - {output: Heater.ThermalPower, unit: WATT, min: 0, max: 1000}
+    - {output: Heater.ElectricityInput, unit: WATT, min: 0, max: 6000}
+  monotone:
+    - {parameter: power_in_watt, kpi: Heater energy, member: Heater, direction: decreasing}

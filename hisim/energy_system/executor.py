@@ -297,7 +297,8 @@ class EnergySystemExecutor:
                 expanded,
                 configured,
                 self.simulation_parameters,
-                consuming=imports.consuming,
+                # A re-run of a record expands nothing; its record states the consuming outputs to check.
+                consuming=imports.consuming or ImportRecord.consuming_of(self.model.metadata),
                 selection=imports.selection if imports.selection.observers or imports.selection.controllables else None,
             )
             expanded = self.with_selected_feeds(expanded, wired)
@@ -581,6 +582,7 @@ def run_energy_system(
     simulation_parameters_path: Any,
     result_directory: Optional[str] = None,
     rerun: bool = False,
+    assembly_resolver: Optional[AssemblyResolver] = None,
 ) -> BuiltEnergySystem:
     """Runs one energy-system file over one simulation period and writes its results.
 
@@ -597,6 +599,8 @@ def run_energy_system(
             directory the simulator derives from the system's name, when omitted.
         rerun: Whether a generated run record is being re-run, which is what makes a
             ``metadata`` block acceptable.
+        assembly_resolver: Finds the assemblies the file imports; this machine's search path
+            when omitted (the assembly test harness hands in the library under test).
 
     Returns:
         The built system, after the simulation has finished; its simulator's parameters carry
@@ -621,6 +625,7 @@ def run_energy_system(
             parameters,
             rerun=rerun,
             simulation_parameters_path=simulation_parameters_path,
+            assembly_resolver=assembly_resolver,
         )
         write_records(built, built.simulator.get_simulation_parameters().result_directory)
         log.information(f"Starting the simulation of '{built.model.name}'.")

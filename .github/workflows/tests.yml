@@ -77,7 +77,7 @@ jobs:
             # One test (test_occupancy_scaling_with_local_lpg, 328 s) at 11.5 GB peak: nothing to spread.
             workers: 0
           - name: others
-            marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions"
+            marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions and not nightly"
             allow_empty: "true"
             # 1.9 GB peak, 35 s: two workers are the most the short shard gains from, and they leave the
             # HPC-harness worker-pool tests, which time child processes, cores to spare.

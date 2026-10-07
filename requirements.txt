@@ -39,6 +39,9 @@ pygfunction
 pyloadprofilegenerator
 portalocker
 pydantic
+# Assembly test harness (hisim/energy_system/assemblies/testing): the seeded Latin hypercube sample of an
+# assembly's parameter box (scipy.stats.qmc.LatinHypercube). Several components already use scipy.
+scipy>=1.7
 # Energy-system files (hisim/energy_system): the YAML read and write path. Also the worked-example
 # library, whose converter (tools/convert_worked_examples.py) writes the YAML fixtures that
 # tests/test_worked_examples.py reads (cost-spec-v2 §3.3).

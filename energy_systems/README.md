@@ -385,6 +385,52 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 | `EF-7S`, `EF-7T`, `EF-7U`, `EF-7V` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller; a derived weight reaching another kind's base weight |
 | `EF-4E`, `EF-4G` | (sizing) a sources line of the wrong cardinality; an empty or repeating many list, one fact read once and many-fold |
 
+### Testing an assembly
+
+Every assembly carries its test contract in its own file (`assemblies_spec.md` §9.4, D24), and pytest
+runs it; nothing is written per assembly in Python:
+
+```yaml
+tests:
+  bounds:     # an output in its unit, or a KPI of a member (without a member: the derived KPI of that name)
+    - {output: PVSystem.ElectricityOutput, unit: WATT, min: 0, max: 20000}
+    - {kpi: PV production, member: PVSystem, min: 0}
+  monotone:   # one numeric parameter rises, everything else fixed: the KPI moves one way
+    - {parameter: power_in_watt, kpi: PV production, member: PVSystem, direction: increasing}
+  expect:     # a KPI at the defaults lies in a band
+    - {kpi: PV production, member: PVSystem, min: 0, max: 100}
+```
+
+`tests/assemblies/test_library_contracts.py` draws the samples from the declarations — the defaults,
+the `min` and `max` of every `range`, every allowed value, every internal variant, and a seeded Latin
+hypercube per `exactly_one_of` branch — and runs each sample once in isolation: the assembly as one
+import beside a test partner for every active port (optional ports included), one day at 900 s, the
+energy balance and `i_doublecheck` on. One test per check kind reads that run: the run raised
+nothing, the balance closed, every result column is finite, the member contract holds (every energy
+or temperature output of a member has a `bounds` entry in its unit, every KPI named is one the member
+reports; an energy manager's dispatch outputs, named by what the system gives it to steer, are
+exempt), and every applicable `bounds` entry and, at the defaults, every `expect` entry holds.
+Every `monotone` entry sweeps its parameter across its range in four steps from every sample that
+admits a sweep, within the golden gate's tolerance. A failure is named by assembly, sample, check
+and subject: `mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [0, 20000]: …`;
+the run's directory (under pytest's `tmp_path`) holds its `isolation.energy_system.yaml` and
+parameters, which reproduce it.
+
+```bash
+pytest -m base tests/assemblies/test_library_contracts.py                  # the deterministic samples (PR gate)
+pytest -m nightly tests/assemblies/test_library_contracts.py --samples 16 --seed 20261003
+pytest -m nightly -n 4 --dist loadgroup tests/assemblies/test_library_contracts.py   # shards, one run per sample
+pytest tests/assemblies/test_library_contracts.py --assembly-library path/to/library # another library
+```
+
+`base` is the deterministic tier, run in the PR gate's base shard; `nightly` is the hypercube, run by
+the `assemblies-nightly` job of `golden-year.yml` (`--samples`, default 16 per branch, and `--seed`,
+default 20261003). `--assembly-library DIR` tests another library: its assemblies and the
+`test_partners.yaml` beside them, which names the site entry standing in for each partner class,
+circuit end, carrier provider or consumer, fact provider, observed component and controller
+(`hisim/energy_system/assemblies/testing/partners.py` documents the format; the mock library's file
+is the example). A port no partner serves fails its sample's tests, naming the class it needs.
+
 **Not in v1** (owner, 2026-10-06, D26): nesting (inner `imports`, `from:` re-exports, `internal:`
 ports), `order:` paths and `order:` on an instance or an assembly member, presets inside
 assemblies, `$switch`/`$fact`/`$derived` (`$param` is the one value placeholder),

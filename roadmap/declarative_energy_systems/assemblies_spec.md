@@ -285,7 +285,11 @@ Rejected (2026-10-02): choosing the carrier by optional connections alone; a mis
 silently, fuel burned and drawn from no provider (the balance accepts a booking toward "nobody the wiring names",
 `hisim/energy_port.py:21-25`). `required_when` is structured, not an expression: a mapping from parameter to the list of
 values for which the port is required, all keys conjunctive (`required_when: {energy_carrier: [natural_gas, lpg,
-heating_oil]}`). `active_when`, same shape, makes an optional or a provided port inactive outside its values. Variants and `active_when` overlap: an author uses a variant when the members differ between the
+heating_oil]}`). `active_when`, same shape, makes an optional or a provided port inactive outside its values. **`optional-bind:` names a
+partner the file declares** (an import key or a site entry); the partner may be absent only through a disabled group
+or an unselected variant, and a name nothing declares is refused by name (owner, 2026-10-07: otherwise a typo is
+indistinguishable from a house without that import). A house without an EMS omits both the `control` import and the
+`optional-bind` line. Variants and `active_when` overlap: an author uses a variant when the members differ between the
 cases and `active_when` when only a port's state differs (owner, 2026-10-06).
 
 ### 3.2 What a port lowers to
@@ -944,7 +948,7 @@ shards; the nightly tier a marker run by the golden-year workflow; an external l
 | Feature | Decision | What returns it |
 |---|---|---|
 | Nesting: inner imports, re-exports, internal ports, depth and cycle rules (D7) | assemblies are flat; shared sub-structure is duplicated | two real assemblies sharing a sub-structure |
-| `order:` evaluation paths (D23) | the sequence is file order, site entries then imports | a twin whose sequence file order cannot express (then the canonical-order work, not numbering) |
+| `order:` evaluation paths (D23) | a flat integer `order:` on site entries and imports only, sorted ascending, no nested paths, no per-member order (an import's members stay a block in file order); entries without `order:` follow the ordered ones in file order (revised, owner, 2026-10-07: the twin's sequence interleaves site entries and import members, and the sequence moves results) | — |
 | Presets inside assemblies (§2.7) | parameters have defaults, importers set values; `expect` is at defaults | a catalogue of typical devices belongs to the RenoVisor, not the fragment format |
 | `$switch`, `$fact`, `$derived` | `$param` is the only placeholder; per-variant values live in the variant options | — |
 | Fact exports and the scoped-provider rule, the fuel-constant check (§6) | a scalar read with two providers is refused as ambiguous and the author writes the `sizing_sources` line | — |
@@ -1056,7 +1060,9 @@ All by the owner on 2026-10-03.
   assemblies never meet the enum. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
   HDS inside the direct assembly (two shapes of the Building's input, D19), a site value checked against the import.
 
-- **D26 — Lean v1 (owner, 2026-10-06):** see §13.1; the cut list there supersedes D7 and D23 for v1.
+- **D26 — Lean v1 (owner, 2026-10-06):** see §13.1; the cut list there supersedes D7 and D23 for v1. Revised 2026-10-07
+  after the review of this PR: a flat integer `order:` on site entries and imports returns (the twin's sequence
+  interleaves them and the sequence moves results); `optional-bind:` must name a partner the file declares.
 
 ### 14.2 Open
 

@@ -124,6 +124,15 @@ directory (`results/economics_result.json`, or an absolute path): that directory
 result directory, and a bare file name, which would write into the working directory, is refused
 with exit 2.
 
+Each `--stage` directory carries the stage's `economic_inputs.json` and the `mapping_report.json`
+the translator wrote for it. `staged` reads one thing from the report: its `economics_stage` record
+(`staged_record.EconomicsStageRecord`, schema version 1) — the measures the stage carries out, which
+measure created which cost subject, which subjects are unpriced or costless and why, which reference
+subjects each measure subject replaces, and the translator's measure tables a quote is checked
+against. The format belongs to this package and the translator writes it, so the engine imports
+nothing from `hisim.renovisor`. A report without the record, a record of another schema version or
+stages whose measure tables differ are refused with exit 2 and a `problems.json`.
+
 `staged` is the exception to the paragraph below: its `--parameters` file is **not** an
 `EconomicParameters` record but the `economics_result.json` document's own `parameters` block, so
 a reader can feed a document's assumptions back in unchanged. Every key is optional —
@@ -191,7 +200,7 @@ the key existed is priced.
 `[{"stage": 1, "measure_id": "heating_system", "amount_in_euro": 11800, "source": "installer quote"}]`,
 a total in euro for one measure of one stage, installed, exact. The quote replaces the year-0
 investment — investment, planning and removal, split in the database's proportions — of the
-measure's **main** subject in that stage (`hisim.renovisor.economics.MainSubjects`: the generator
+measure's **main** subject in that stage (the stage record's `MainSubjectRule`, declared by `hisim.renovisor.economics.MainSubjects`: the generator
 for `heating_system`, the subject named by the measure id for an envelope measure, the array, the
 battery, …); the measure's other subjects in that stage (the buffer a `heating_system` installs) are
 bought at zero, keep their lifetimes and their later, database-priced replacements. The engine
@@ -393,7 +402,9 @@ simulation in shadow mode).
 | `validation.py` | Data-file CI: source completeness, coverage matrix, question coverage, staleness (§9.6). |
 | `reporting/` | Human-readable reports (option `LIFECYCLE_COST_REPORT`): plausibility panel, `cost_summary.md`, self-contained `lifecycle_report.html` with inline-SVG charts, told as the building / owner-occupied / rented-out / society chapters plus the comparison block. |
 | `report_plots.py` | Matplotlib PNG companions, same display groups and colors as the HTML. `write_report_plots` writes the report-side set **once per perspective**, as `lifecycle_<chart>_<perspective_id>.png` — `annual_cash_flows`, `investment_waterfall`, `component_costs`, `swimlane` (V9), `liquidity_fan` (V2), `sources_and_uses` (V10), `cost_treemap` (V8), `actor_flows` (V1), `monthly_burden` (V14) — plus the matrix-wide `lifecycle_perspective_costs.png`, which is drawn once. Only with a comparison reference, and only for the perspective that reference names: `lifecycle_payback_curve_<id>.png`, `lifecycle_comparison_bridge_<id>.png` (V4) and `lifecycle_wealth_benchmark_<id>.png` (V13); a reference whose perspective the matrix does not carry skips them rather than substituting another. `write_audit_plots` writes `cost_audit_timeline_heatmap.png` (V6) next to `cost_audit.csv` on **every** cost run, which is why matplotlib is a dependency of the cost path and not only of the report path. A chart whose view has nothing to draw writes no file and returns a `SkippedPlot` (chart, perspective, reason); nothing here logs. The callers report: the bridge logs each skip and writes `lifecycle_plots_not_drawn.txt` beside the images, the CLI prints the same lines. |
-| `__main__.py` | The `evaluate` / `explain` / `report` / `staged` / `validate` CLI. |
+| `staged_record.py` | The economics stage record a stage's mapping report carries (`EconomicsStageRecord`, `StageCatalogue`, `MainSubjectRule`): what `staged` reads about a stage beyond its stored inputs, as plain JSON with a schema version. |
+| `staged_cli.py` | `StagedCli`: the `staged` subcommand — reads the stage directories and their records, resolves parameters and quotes, prices the plan, writes the document and its ledger, and maps every refusal to exit 2 or 3. |
+| `__main__.py` | The `evaluate` / `explain` / `report` / `staged` / `validate` CLI; `staged` dispatches to `staged_cli.py`. |
 
 Related but outside this package: `hisim/components/tariff_provider.py` (the in-simulation
 price signal driven by the same `TariffContract`, §8.3), and the additive hooks on

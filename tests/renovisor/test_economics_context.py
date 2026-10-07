@@ -54,6 +54,7 @@ from hisim.renovisor.economics import (
     DeviceAssets,
     DwellingTypes,
     EconomicContextBuilder,
+    EconomicsStageRecords,
     EnvelopeAssets,
     GeneratorAssets,
     MeasureSubjects,
@@ -1678,8 +1679,8 @@ class TestAnUnpricedEnvelopeRowSaysWhy:
         boiler, so the row's subject is the one the translator named.
         """
         # pylint: disable=import-outside-toplevel
-        from hisim.economics.__main__ import StagedCli
         from hisim.economics.parameters import EconomicParameters
+        from hisim.economics.staged_cli import StagedCli
         from hisim.economics.staged import StagedEvaluator
         from hisim.economics.staged_document import StagedDocument
         from tests.economics.synthetic_stages import (
@@ -1712,7 +1713,7 @@ class TestAnUnpricedEnvelopeRowSaysWhy:
         stage_directory = tmp_path / "stage"
         stage_directory.mkdir()
         (stage_directory / StagedCli.MAPPING_REPORT_FILE_NAME).write_text(
-            json.dumps(translated.report.to_json()), encoding="utf-8"
+            json.dumps(EconomicsStageRecords.completed(translated.report.to_json())), encoding="utf-8"
         )
         mapping = StagedCli.read_mapping([str(stage_directory)])
         assert "external_insulation" in mapping.unpriced
@@ -1946,25 +1947,6 @@ class TestTheReferenceRenewsTheFabric:
         assert plan["insulated"].subjects["envelope_roof"] is None
         assert rows["envelope_roof"]["measure_id"] is None
         assert rows["external_insulation"]["measure_id"] == "external_insulation"
-
-    def test_an_old_report_without_the_field_derives_it_from_the_stored_inputs(self, plan, tmp_path) -> None:
-        """A mapping report written before hisim-ryw1: the translator's rule over the stages' inputs."""
-        # pylint: disable=import-outside-toplevel
-        from hisim.economics.__main__ import StagedCli
-        from hisim.renovisor.report import MappingReport
-
-        directories = []
-        for index, subjects in enumerate(({}, {"external_insulation": "external_insulation"})):
-            directory = tmp_path / f"stage{index}"
-            directory.mkdir()
-            report = {MappingReport.SUBJECTS_FIELD: subjects, MappingReport.UNPRICED_SUBJECTS_FIELD: []}
-            (directory / StagedCli.MAPPING_REPORT_FILE_NAME).write_text(json.dumps(report), encoding="utf-8")
-            directories.append(str(directory))
-
-        mapping = StagedCli.read_mapping(directories, stages=plan["stages"])
-
-        assert mapping.replaces == {"external_insulation": ["envelope_facade"]}
-        assert StagedCli.read_mapping(directories).replaces == {}
 
     def test_an_element_the_database_has_no_life_for_takes_the_engines_fallback(self, monkeypatch) -> None:
         """No entry for the class: the engine's fallback life, marked as such, and the note says so."""

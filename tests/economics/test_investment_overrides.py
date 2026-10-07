@@ -22,19 +22,22 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
-from hisim.economics.__main__ import StagedCli, main
+from hisim.economics.__main__ import main
 from hisim.economics.evaluator import SubjectCostFacts
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.staged import InvestmentOrigin, InvestmentOverride, StagedEvaluator, StagedResult
+from hisim.economics.staged_cli import StagedCli
 from hisim.economics.staged_document import StagedDocument
 from hisim.economics.staged_parameters import ParameterKeys, StagedParameters, StatedQuote
+from hisim.economics.staged_record import MainSubjectError
 from hisim.economics.subsidies import BenefitKind, EligibleCostSpec, LumpSumBenefit, PayoutKind
 from hisim.economics.timeline import CostCategory
 from hisim.loadtypes import ComponentType, Units
-from hisim.renovisor.economics import MainSubjectError, MainSubjects, MeasureSubjects
+from hisim.renovisor.economics import MainSubjects, MeasureSubjects
 from hisim.renovisor.request import CatalogueTable
 
 from tests.economics.synthetic_stages import (
+    StageReports,
     SyntheticPlan,
     always_eligible_catalog,
     always_eligible_scheme,
@@ -970,7 +973,7 @@ def _report_measures(workspace: Path) -> None:
             report[MappingReport.SUBJECTS_FIELD]["change_room_temperature"] = "change_room_temperature"
             report[MappingReport.COSTLESS_SUBJECTS_FIELD] = ["change_room_temperature"]
             report[MappingReport.SUBJECT_NOTES_FIELD] = {"change_room_temperature": "a setting"}
-        path.write_text(json.dumps(report), encoding="utf-8")
+        StageReports.rewrite(path, report)
 
 
 def _run_with(workspace: Path, quotes: List[Dict[str, Any]]) -> int:

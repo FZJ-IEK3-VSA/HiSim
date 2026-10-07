@@ -20,9 +20,10 @@ from typing import Any, Dict, List
 
 import pytest
 
+from hisim.calculation_progress import ProgressLine, ProgressWriter
+from hisim.economics.staged_record import EconomicsStageRecord
 from hisim.renovisor.__main__ import RenovisorCommandLine
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.progress import ProgressLine, ProgressWriter
 from hisim.renovisor.run import Calculation, ExitCode, LifecycleCosts, Outputs
 from hisim.renovisor.simulation import SimulationParameters
 from hisim.simulator import ProgressEvent, SimulationProgress
@@ -157,8 +158,15 @@ class TestExitZero:
             "subject_notes",
             # The reference subjects each measure subject replaces (hisim-ryw1).
             "replaces_subjects",
+            # The same economics keys, the stage's measures and the measure tables, as the plain
+            # record ``python -m hisim.economics staged`` reads (``EconomicsStageRecord``).
+            "economics_stage",
         }
         assert report["fields"] and all("status" in line for line in report["fields"])
+        # The record reads back with the engine's own reader, so a run's directory is a stage.
+        record = EconomicsStageRecord.from_report(report)
+        assert not record.measures
+        assert record.subjects == report["subjects"]
 
 
 class LoopReportingRunner(SilentRunner):

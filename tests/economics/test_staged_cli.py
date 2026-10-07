@@ -6,9 +6,9 @@ less the arithmetic — ``test_staged.py`` owns that — than the contract aroun
 document that validates, exit 2 with a ``problems.json`` for a plan the caller can fix, exit 3
 for an engine failure they cannot, and the four-field ``--stage`` argument the backend builds.
 
-The stages are written to disk as real job directories (``economic_inputs.json`` beside an
-optional ``mapping_report.json``), because reading those directories is half of what the
-subcommand does.
+The stages are written to disk as real job directories (``economic_inputs.json`` beside a
+``mapping_report.json`` with its economics stage record), because reading those directories is half
+of what the subcommand does.
 """
 
 import json
@@ -17,7 +17,8 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hisim.economics.__main__ import StagedCli, main
+from hisim.calculation_progress import ProgressLine
+from hisim.economics.__main__ import main
 from hisim.economics.calculators.energy import StatedPrices
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import effective_price_basis_year
@@ -27,10 +28,13 @@ from hisim.economics.serialization import SerializationFileNames, write_inputs
 from hisim.economics.provenance import ProvenanceLedger
 from hisim.economics.staged import StagedEvaluationError, StagedEvaluator, StagedResult
 from hisim.economics.staged_document import StagedDocument
+from hisim.economics.staged_cli import StagedCli
 from hisim.economics.staged_parameters import ParameterKeys
-from hisim.renovisor.progress import ProgressLine
+from hisim.economics.staged_record import EconomicsStageRecord
+from hisim.renovisor.economics import EconomicContextBuilder
 
 from tests.economics.synthetic_stages import (
+    StageReports,
     SyntheticPlan,
     baseline_stage,
     envelope_stage,
@@ -117,22 +121,19 @@ def fixture_workspace(tmp_path) -> Path:
         _write_stored_parameters(directory, _stored_parameters(STAGE_COUNTRY, database_directory))
     # Every finished job writes a mapping report; the baseline's says that nothing in it came
     # from a measure and that nothing in it is unpriced, which is a statement and not an absence.
-    (tmp_path / "base" / "mapping_report.json").write_text(
-        json.dumps({"subjects": {}, "unpriced_subjects": []}),
-        encoding="utf-8",
+    # The reports carry no measure lines, so the stages carry out no catalogue measure.
+    StageReports.write(tmp_path / "base")
+    StageReports.write(
+        tmp_path / "envelope",
+        subjects={SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation"},
+        unpriced_subjects=[SyntheticPlan.ENVELOPE_SUBJECT],
+        subject_notes={SyntheticPlan.ENVELOPE_SUBJECT: EconomicContextBuilder.UNPRICED_NOTE},
+        replaces_subjects={SyntheticPlan.ENVELOPE_SUBJECT: []},
     )
-    (tmp_path / "envelope" / "mapping_report.json").write_text(
-        json.dumps(
-            {
-                "subjects": {SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation"},
-                "unpriced_subjects": [SyntheticPlan.ENVELOPE_SUBJECT],
-            }
-        ),
-        encoding="utf-8",
-    )
-    (tmp_path / "heat_pump" / "mapping_report.json").write_text(
-        json.dumps({"subjects": {SyntheticPlan.HEAT_PUMP_SUBJECT: "heating_system"}}),
-        encoding="utf-8",
+    StageReports.write(
+        tmp_path / "heat_pump",
+        subjects={SyntheticPlan.HEAT_PUMP_SUBJECT: "heating_system"},
+        replaces_subjects={SyntheticPlan.HEAT_PUMP_SUBJECT: [SyntheticPlan.BOILER_SUBJECT]},
     )
     (tmp_path / "parameters.json").write_text(
         json.dumps(
@@ -630,15 +631,97 @@ class TestTheMappingReportIsRequired:
             workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
         )
 
-    def test_the_reader_takes_the_field_names_from_the_writer(self) -> None:
-        """Two processes, one spelling: a rename in the report drops no stamp silently."""
+    @staticmethod
+    def _run_two_stages(workspace: Path) -> int:
+        """Price the baseline and the envelope stage, the second of which a test has spoiled."""
+        return main(
+            [
+                "staged",
+                "--stage",
+                f"{workspace / 'base'}:0:baseline",
+                "--stage",
+                f"{workspace / 'envelope'}:0:stage 1",
+                "--parameters",
+                str(workspace / "parameters.json"),
+                "--out",
+                str(workspace / "economics_result.json"),
+            ]
+        )
+
+    @staticmethod
+    def _spoil_record(workspace: Path, record: Any) -> None:
+        """Replace the envelope stage's economics stage record; ``None`` removes it."""
+        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        report = json.loads(path.read_text(encoding="utf-8"))
+        if record is None:
+            del report[EconomicsStageRecord.KEY]
+        else:
+            report[EconomicsStageRecord.KEY] = record
+        path.write_text(json.dumps(report), encoding="utf-8")
+
+    def _refusal(self, workspace: Path) -> str:
+        """Run the spoiled plan, check it is refused with a problems.json, and return the message."""
+        assert self._run_two_stages(workspace) == StagedCli.PLAN_REFUSED
+        assert not (workspace / "economics_result.json").exists(), "a refused plan writes no document"
+        problems = json.loads((workspace / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8"))
+        assert [problem["code"] for problem in problems["problems"]] == [StagedCli.PLAN_PROBLEM_CODE]
+        message: str = problems["problems"][0]["message"]
+        assert "--stage #1" in message and str(workspace / "envelope") in message
+        return message
+
+    def test_a_report_without_the_record_is_refused_by_name(self, workspace: Path) -> None:
+        """A report a translator wrote before the record existed: exit 2, saying to translate again."""
+        self._spoil_record(workspace, None)
+        message = self._refusal(workspace)
+        assert EconomicsStageRecord.KEY in message
+        assert "translate the stage again" in message
+
+    def test_a_record_of_another_version_is_refused(self, workspace: Path) -> None:
+        """The engine reads one schema version; another one is not guessed at."""
+        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        record = json.loads(path.read_text(encoding="utf-8"))[EconomicsStageRecord.KEY]
+        self._spoil_record(workspace, {**record, EconomicsStageRecord.SCHEMA_VERSION_KEY: 99})
+        message = self._refusal(workspace)
+        assert "schema version 99" in message
+        assert f"reads version {EconomicsStageRecord.SCHEMA_VERSION}" in message
+
+    def test_a_malformed_record_is_refused_with_the_key_named(self, workspace: Path) -> None:
+        """A record whose measure list is not a list names the key in the refusal."""
+        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        record = json.loads(path.read_text(encoding="utf-8"))[EconomicsStageRecord.KEY]
+        self._spoil_record(workspace, {**record, EconomicsStageRecord.MEASURES_KEY: "external_insulation"})
+        assert "economics_stage.measures" in self._refusal(workspace)
+
+    def test_stages_with_different_measure_tables_are_refused(self, workspace: Path) -> None:
+        """Two translators' tables in one plan: exit 2 with its own code, naming the stage."""
+        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
+        record = json.loads(path.read_text(encoding="utf-8"))[EconomicsStageRecord.KEY]
+        record["catalogue"]["costless_measure_ids"] = []
+        self._spoil_record(workspace, record)
+        assert self._run_two_stages(workspace) == StagedCli.PLAN_REFUSED
+        problems = json.loads((workspace / StagedCli.PROBLEMS_FILE_NAME).read_text(encoding="utf-8"))
+        assert [problem["code"] for problem in problems["problems"]] == [StagedCli.STAGE_CATALOGUE_MISMATCH_CODE]
+        assert "stage #1" in problems["problems"][0]["message"]
+
+    def test_the_record_the_translator_writes_is_the_record_the_engine_reads(self) -> None:
+        """Two processes, one format: the written record reads back to the same record."""
+        # pylint: disable=import-outside-toplevel
+        from hisim.renovisor.economics import EconomicsStageRecords
         from hisim.renovisor.report import MappingReport
 
-        assert StagedCli.SUBJECTS_KEY == MappingReport.SUBJECTS_FIELD
-        assert StagedCli.UNPRICED_KEY == MappingReport.UNPRICED_SUBJECTS_FIELD
-        written = MappingReport().to_json()
-        assert StagedCli.SUBJECTS_KEY in written
-        assert StagedCli.UNPRICED_KEY in written
+        report = {
+            **MappingReport().to_json(),
+            MappingReport.MEASURES_FIELD: [{"id": "heating_system", "status": "used"}],
+            MappingReport.SUBJECTS_FIELD: {"HeatPump": "heating_system", "GenericBoiler": None},
+            MappingReport.REPLACES_SUBJECTS_FIELD: {"HeatPump": ["GenericBoiler"]},
+        }
+        written = json.loads(json.dumps(EconomicsStageRecords.completed(report)))
+
+        read = EconomicsStageRecord.from_report(written)
+        assert read == EconomicsStageRecords.of_report(report)
+        assert read.measures == ("heating_system",)
+        assert read.replaces_subjects == {"HeatPump": ["GenericBoiler"]}
+        assert read.catalogue.main_subjects["heating_system"].asset_classes
 
 
 class TestTheStageMeasuresComeFromTheReport:
@@ -655,12 +738,8 @@ class TestTheStageMeasuresComeFromTheReport:
 
     @staticmethod
     def write_report(directory: Path, measures: List[Dict[str, Any]]) -> None:
-        """Write a mapping report carrying only the measure half under the writer's key."""
-        from hisim.renovisor.report import MappingReport
-
-        (directory / StagedCli.MAPPING_REPORT_FILE_NAME).write_text(
-            json.dumps({MappingReport.MEASURES_FIELD: measures}), encoding="utf-8"
-        )
+        """Write a mapping report whose only non-empty key is the measure half."""
+        StageReports.write(directory, measures=measures)
 
     def test_only_acted_on_measures_are_listed_in_catalogue_order(self, tmp_path: Path) -> None:
         """A not-implemented measure changed nothing, so the timeline must not name it."""
@@ -719,13 +798,6 @@ class TestTheStageMeasuresComeFromTheReport:
         assert "stage 2" in message
         assert StagedCli.MAPPING_REPORT_FILE_NAME in message
 
-    def test_the_reader_takes_the_measures_key_from_the_writer(self) -> None:
-        """The same guard the subjects keys have: one spelling for both processes."""
-        from hisim.renovisor.report import MappingReport
-
-        assert StagedCli.MEASURES_KEY == MappingReport.MEASURES_FIELD
-        assert StagedCli.MEASURES_KEY in MappingReport().to_json()
-
 
 class TestAMeasureWithoutAPricedSubject:
     """A stage's setting or unpriced measure reaches ``by_subject`` through its report (#58)."""
@@ -735,7 +807,7 @@ class TestAMeasureWithoutAPricedSubject:
 
     def _report(self, workspace: Path, declared: bool) -> None:
         """Let the envelope stage also change the set point, declared costless or not."""
-        from hisim.renovisor.report import MappingReport
+        from hisim.renovisor.report import MappingReport  # pylint: disable=import-outside-toplevel
 
         path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
         report = json.loads(path.read_text(encoding="utf-8"))
@@ -750,7 +822,7 @@ class TestAMeasureWithoutAPricedSubject:
             report[MappingReport.SUBJECTS_FIELD][self.MEASURE] = self.MEASURE
             report[MappingReport.COSTLESS_SUBJECTS_FIELD] = [self.MEASURE]
             report[MappingReport.SUBJECT_NOTES_FIELD] = {self.MEASURE: self.NOTE}
-        path.write_text(json.dumps(report), encoding="utf-8")
+        StageReports.rewrite(path, report)
 
     def test_a_declared_setting_gets_its_zero_row_and_note(self, workspace):
         """The report's ``costless_subjects`` and ``subject_notes`` reach the row."""
@@ -768,61 +840,6 @@ class TestAMeasureWithoutAPricedSubject:
         assert main(_arguments(workspace, out)) == StagedCli.ENGINE_FAILED
         assert self.MEASURE in capsys.readouterr().err
         assert not out.exists()
-
-    def test_an_old_report_is_completed_from_the_translators_declarations(self, workspace):
-        """A cached job's report from before #58 carries neither key; the declarations stand in."""
-        from hisim.renovisor.economics import (  # pylint: disable=import-outside-toplevel
-            EconomicContextBuilder,
-            MeasureSubjects,
-        )
-        from hisim.renovisor.report import MappingReport  # pylint: disable=import-outside-toplevel
-
-        lagging = "hot_water_tank_and_pipe_insulation"
-        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
-        report = json.loads(path.read_text(encoding="utf-8"))
-        report[MappingReport.MEASURES_FIELD] = [
-            {"id": "external_insulation", "status": "used"},
-            {"id": lagging, "status": "approximated"},
-            {"id": self.MEASURE, "status": "used"},
-        ]
-        assert MappingReport.COSTLESS_SUBJECTS_FIELD not in report
-        assert MappingReport.SUBJECT_NOTES_FIELD not in report
-        path.write_text(json.dumps(report), encoding="utf-8")
-
-        out = workspace / "economics_result.json"
-        assert main(_arguments(workspace, out)) == 0
-        rows = {row["subject"]: row for row in json.loads(out.read_text(encoding="utf-8"))["plan"]["by_subject"]}
-        setting, lagged = rows[self.MEASURE], rows[lagging]
-        assert (setting["measure_id"], setting["unpriced"]) == (self.MEASURE, False)
-        assert setting["note"] == MeasureSubjects.COSTLESS[self.MEASURE]
-        assert (lagged["measure_id"], lagged["unpriced"]) == (lagging, True)
-        assert lagged["note"] == MeasureSubjects.UNPRICED[lagging]
-        envelope = rows[SyntheticPlan.ENVELOPE_SUBJECT]
-        assert envelope["unpriced"] is True
-        # The report names the unpriced envelope subject without a note; the translator's stands in.
-        assert envelope["note"] == EconomicContextBuilder.UNPRICED_NOTE
-
-    def test_an_old_report_with_an_undeclared_measure_is_still_refused(self, workspace, capsys):
-        """The fallback covers the declared measures only; anything else is still exit 3."""
-        from hisim.renovisor.report import MappingReport  # pylint: disable=import-outside-toplevel
-
-        path = workspace / "envelope" / StagedCli.MAPPING_REPORT_FILE_NAME
-        report = json.loads(path.read_text(encoding="utf-8"))
-        report[MappingReport.MEASURES_FIELD] = [{"id": "battery_system", "status": "approximated"}]
-        path.write_text(json.dumps(report), encoding="utf-8")
-        out = workspace / "economics_result.json"
-        assert main(_arguments(workspace, out)) == StagedCli.ENGINE_FAILED
-        assert "battery_system" in capsys.readouterr().err
-        assert not out.exists()
-
-    def test_the_reader_takes_the_two_keys_from_the_writer(self) -> None:
-        """One spelling for both processes, as for the subjects and unpriced keys."""
-        from hisim.renovisor.report import MappingReport
-
-        written = MappingReport().to_json()
-        assert StagedCli.COSTLESS_KEY == MappingReport.COSTLESS_SUBJECTS_FIELD
-        assert StagedCli.NOTES_KEY == MappingReport.SUBJECT_NOTES_FIELD
-        assert {StagedCli.COSTLESS_KEY, StagedCli.NOTES_KEY} <= set(written)
 
 
 class TestTheCatalogueIsNamedInTheDocument:

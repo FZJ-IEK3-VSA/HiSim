@@ -33,6 +33,7 @@ from hisim.economics.staged_parameters import StagedParameters, StatedQuote
 from hisim.economics.subsidies import PayoutKind, SchemeMaximum, SchemeMaximumNotes, SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
+from hisim.hisim_commit import HiSimCommit
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 
 
@@ -608,12 +609,9 @@ class StagedDocument:
     def _engine(self) -> Dict[str, Any]:
         """Return which code produced the document: the repository commit and the package version.
 
-        The commit comes from `hisim.renovisor.report.HiSimCommit`, which reads a baked `hisim/COMMIT` file or the
-        `HISIM_COMMIT` variable before falling back to git. The import is function-local because `hisim.renovisor`
-        depends on `hisim.economics`, not the reverse.
+        The commit comes from `hisim.hisim_commit.HiSimCommit`, which reads a baked `hisim/COMMIT` file or the
+        `HISIM_COMMIT` variable before falling back to git.
         """
-        from hisim.renovisor.report import HiSimCommit  # pylint: disable=import-outside-toplevel
-
         return {"hisim_commit": HiSimCommit.of(), "economics_version": self.ECONOMICS_VERSION}
 
     def _parameters_block(self) -> Dict[str, Any]:

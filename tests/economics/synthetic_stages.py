@@ -16,7 +16,8 @@ rates a test declares.
 
 import json
 import os
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
@@ -588,3 +589,45 @@ def flows_by_year(timeline_entries) -> Dict[int, float]:
     for entry in timeline_entries:
         totals[entry.year] = totals.get(entry.year, 0.0) + entry.amount_in_euro.best_estimate
     return totals
+
+
+class StageReports:
+    """Writes a synthetic stage's ``mapping_report.json`` the way a RenoVisor run writes it.
+
+    The staged command reads each stage's economics stage record out of its mapping report. The
+    record is built from the report's own keys by the translator's
+    :meth:`~hisim.renovisor.economics.EconomicsStageRecords.completed`, the function a run writes
+    the report with, so a test states the report's keys and gets the record a translator would
+    have written for them.
+
+    Example::
+
+        StageReports.write(directory, subjects={"HeatPump": "heating_system"})
+    """
+
+    @staticmethod
+    def write(directory: Union[str, Path], **keys: Any) -> None:
+        """Write a mapping report into one stage directory: an empty report with the given keys set.
+
+        Args:
+            directory: The stage directory.
+            **keys: Report keys to set, e.g. ``subjects`` or ``measures``; the rest keep the empty
+                report's values.
+        """
+        # pylint: disable=import-outside-toplevel  # renovisor is only needed by the tests that write reports
+        from hisim.renovisor.report import MappingReport
+
+        StageReports.rewrite(Path(directory) / MappingReport.FILE_NAME, {**MappingReport().to_json(), **keys})
+
+    @staticmethod
+    def rewrite(path: Path, report: Dict[str, Any]) -> None:
+        """Write a (changed) mapping report back, with its economics stage record rebuilt from its keys.
+
+        Args:
+            path: The ``mapping_report.json`` to write.
+            report: The report's keys; a record it already carries is replaced.
+        """
+        # pylint: disable=import-outside-toplevel
+        from hisim.renovisor.economics import EconomicsStageRecords
+
+        path.write_text(json.dumps(EconomicsStageRecords.completed(report)), encoding="utf-8")

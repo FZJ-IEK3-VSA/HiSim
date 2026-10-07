@@ -39,7 +39,7 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, 
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.capabilities import Aggregation, Conditions, Probe, ProbeResult, ProbeRunner, value_key
-from hisim.renovisor.report import HiSimCommit
+from hisim.hisim_commit import HiSimCommit
 from hisim.renovisor.request import Problem, Request, RequestError
 from hisim.renovisor.verify.leaves import ABSENT, Change, RequestLeaves, SystemLeaves, edit_sources
 from hisim.renovisor.verify.probes import Completeness, MissingProbe, ProbeBases, VerificationProbe

@@ -54,7 +54,7 @@ from hisim.renovisor.apply import apply
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.costs import CostSchema
 from hisim.renovisor.kpis import KpiSchema
-from hisim.renovisor.report import HiSimCommit
+from hisim.hisim_commit import HiSimCommit
 from hisim.renovisor.request import (
     AccessLevel,
     CatalogueTable,

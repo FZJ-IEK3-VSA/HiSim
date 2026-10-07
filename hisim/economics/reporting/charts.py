@@ -1,16 +1,9 @@
 """Inline-SVG primitives and the per-result charts of the HTML report (cost_spec.md §7.2).
 
-The drawing layer: escaping, `_svg_open`/`_rect`/`_text` primitives, tables and
-`<details>` blocks, and the charts built from them — annual flows, cumulative NPV,
-waterfall, whiskers, stacked subjects, loan and payback, plus the shared builders of the
-visualization set (the column Sankey, the xy line chart, the Gantt strip, the squarified
-treemap, the NPV bridge, the attribution tornado, the monthly-burden stack and the
-cost-of-credit bar). Everything here renders from
-already-computed results; no section layout, and nothing here reads `report_prose`. That
-is what keeps this the bottom module of the package: `scaffold.py` borrows `_esc` and
-`_details` from here, `sections.py` and `sections_charts.py` build on both, and
-`assembly.py` stitches the document together. Split out of the former single-module
-`reporting.py` (PR-3 review); the package `__init__` re-exports everything.
+Holds escaping, the `_svg_open`/`_rect`/`_text` primitives, tables, `<details>` blocks and the charts built from them,
+plus the shared builders of the visualization set (column Sankey, xy lines, Gantt strip, treemap, NPV bridge, tornado,
+monthly burden, cost of credit). It renders already-computed results and is the bottom module of the `reporting`
+package: `scaffold.py`, `sections.py`, `sections_charts.py` and `assembly.py` build on it.
 """
 
 
@@ -40,39 +33,28 @@ from hisim.economics.reporting.summary import _band_str, _fmt
 class _ReportStyle:
     """Inline style constants of the self-contained HTML/SVG output.
 
-    SVG text does not inherit the document's CSS font stack, so every `<text>` element has to
-    carry its own `font-family`; keeping that string here means the charts and the surrounding
-    HTML stay in one typeface. Colours are deliberately *not* here — they are CSS custom
-    properties resolved at render time (`var(--g0)`, `var(--ink-1)`), which is how the inline
-    charts follow light/dark mode.
+    SVG text does not inherit the document's CSS font, so every `<text>` element carries the font family kept here.
+    Colours are not here: they are CSS custom properties (`var(--g0)`) so the charts follow light and dark mode.
     """
 
     SVG_FONT = 'font-family="system-ui, -apple-system, Segoe UI, sans-serif"'
 
 
 def _esc(text: str) -> str:
-    """HTML-escapes any value on its way into the document, attributes included.
+    """HTML-escape a value on its way into the document, attributes included (`quote=True`).
 
-    Every subject name, carrier id, scheme id and rejection reason in the report comes from
-    simulation configs and JSON data files, i.e. from outside this module, and lands inside
-    markup or inside a quoted attribute. Escaping at the single point of insertion (`quote=True`
-    covers the attribute case) is what keeps a component named `A & B` from silently breaking
-    the page. Numbers formatted by `_fmt` cannot contain markup, which is why the numeric paths
-    do not all route through here.
+    Subject names, carrier ids and scheme ids come from configs and data files, so a component named `A & B` must not
+    break the page. Numbers formatted by `_fmt` contain no markup and need no escaping.
     """
     return html.escape(str(text), quote=True)
 
 
 def _svg_open(width: int, height: int) -> List[str]:
-    """Opens a responsive `<svg>` and returns it as the first element of the parts list.
+    """Open a responsive `<svg>` and return it as the first element of a parts list.
 
-    Every chart builder starts from this and appends its marks, so the return type is a list
-    rather than a string: the builders accumulate parts and `"".join` them once at the end,
-    which is both cheaper and easier to read than repeated concatenation. The element carries a
-    `viewBox` in the chart's own user units together with `width="100%"` and a
-    `max-width:{width}px`, so the drawing scales down on a narrow screen without any of the
-    geometry below having to know the viewport, and `role="img"` announces it as a single
-    graphic to assistive technology.
+    Chart builders append their marks to the list and join it once at the end. The element has a `viewBox` in the
+    chart's user units, `width="100%"` and `max-width:{width}px`, so it scales down on narrow screens, and `role="img"`
+    for assistive technology.
     """
     return [
         f'<svg viewBox="0 0 {width} {height}" width="100%" style="max-width:{width}px" '
@@ -81,18 +63,11 @@ def _svg_open(width: int, height: int) -> List[str]:
 
 
 def _rect(x: float, y: float, w: float, h: float, color: str, tooltip: str, rx: float = 0.0) -> str:
-    """A mark with a native tooltip and the 2px surface gap handled by the caller.
+    """Return one SVG `<rect>` mark with a native hover tooltip.
 
-    The workhorse of every bar chart here. `x`/`y` are the mark's **top-left** corner in user
-    units (y grows downward), `color` is normally a CSS variable so the bar re-colours with the
-    theme, and `rx` rounds the corners. The `<title>` child is the tooltip: browsers show it on
-    hover natively, which is how the report gets per-mark values without any script.
-
-    Width and height are floored at 0.1 rather than clamped at 0, so a segment that is real but
-    sub-pixel still renders as a hairline instead of vanishing — a bar chart that silently drops
-    small contributions would be misleading. The visual gap between adjacent bars is *not* done
-    here; callers subtract it from the width or height they pass in, which is why they pass
-    `bar_w - 2` and similar.
+    `x`/`y` are the top-left corner in user units (y grows downward); `color` is normally a CSS variable; `rx` rounds
+    the corners. Width and height are floored at 0.1, so a real sub-pixel segment still shows as a hairline. The gap
+    between adjacent bars is the caller's: it passes e.g. `bar_w - 2`.
     """
     return (
         f'<rect x="{x:.1f}" y="{y:.1f}" width="{max(w, 0.1):.1f}" height="{max(h, 0.1):.1f}" '
@@ -102,13 +77,10 @@ def _rect(x: float, y: float, w: float, h: float, color: str, tooltip: str, rx: 
 
 def _text(x: float, y: float, content: str, size: int = 11, anchor: str = "start",
           color: str = "var(--ink-2)", bold: bool = False) -> str:
-    """One SVG text label, escaped and in the report's typeface.
+    """Return one SVG text label, escaped and in the report's typeface.
 
-    `y` is the glyph **baseline**, not the top of the line box, and `anchor` chooses which end
-    of the string sits at `x` (`start`, `middle` or `end`) — the two facts that explain the
-    otherwise cryptic offsets in the chart builders: row labels are drawn at `left - 8` with
-    `anchor="end"` so they end just before the plot area, and vertically at
-    `row_middle + 4` so a ~11px glyph sits optically centred on its row.
+    `y` is the glyph baseline, and `anchor` (`start`, `middle`, `end`) chooses which end of the string sits at `x`.
+    That is why row labels are drawn at `left - 8` with `anchor="end"` and at `row_middle + 4`.
     """
     weight = ' font-weight="600"' if bold else ""
     return (
@@ -118,20 +90,16 @@ def _text(x: float, y: float, content: str, size: int = 11, anchor: str = "start
 
 
 def _hline(x1: float, x2: float, y: float, color: str = "var(--baseline)", width: float = 1.0) -> str:
-    """A horizontal rule in user units — a chart's zero line, or a whisker between two values.
+    """Return a horizontal line in user units: a chart's zero line or a min-to-max whisker.
 
-    Two unrelated jobs share one primitive because both are a straight segment at a constant y:
-    axis chrome (default colour `--baseline`, hairline) and the min-to-max whisker of the
-    banded charts (caller passes a group colour and a heavier stroke). Both draw something only
-    when `x1 != x2` — a degenerate call renders nothing, which is how `_whisker_svg`'s zero
-    marker came to be invisible; a vertical rule is written out as a `<line>` by the charts that
-    need one.
+    Axis lines use the default `--baseline` colour and a hairline; whiskers pass a group colour and a heavier stroke. A
+    call with `x1 == x2` draws nothing visible; charts that need a vertical rule write their own `<line>`.
     """
     return f'<line x1="{x1:.1f}" y1="{y:.1f}" x2="{x2:.1f}" y2="{y:.1f}" stroke="{color}" stroke-width="{width}"/>'
 
 
 #: One bar of a `_bar_row`: `(x, width, colour, tooltip, corner radius)` in user units. The row's
-#: y and height are not part of it — they follow from the row, which is the point of the helper.
+#: y and height follow from the row.
 _Bar = Tuple[float, float, str, str, float]
 
 
@@ -147,35 +115,26 @@ def _bar_row(
     emphasis: bool = False,
     value_size: int = 10,
 ) -> List[str]:
-    """One row of a horizontal bar chart: label, bars, extra marks, value label.
+    """Return one row of a horizontal bar chart: label, bars, extra marks and value label.
 
-    Five charts in this package draw the same row — a right-aligned label ending just before the
-    plot area, one or more bars inset vertically inside the row, and a figure printed past the end
-    of the bar — and each of them used to hand-write the four offsets that make a row look like a
-    row: the label at `left - 8` on the row's optical centre `y + row_h / 2 + 4`, the bar at
-    `y + inset` with height `row_h - 2 * inset`, the value label on that same centre line. Five
-    copies of those offsets is five chances for one chart to sit a pixel off the others, which is
-    exactly the kind of drift nobody reports and everybody notices.
-
-    Row *height* stays with the caller (`row_h`, and the `y += row_h` after each call), because it
-    is the caller that knows how many rows it has and how tall its canvas must be.
+    The label ends at `left - 8` on the row's optical centre `y + row_h / 2 + 4`; bars span `y + inset` to `y + row_h -
+    inset`; the value label sits on the same centre line. Sharing this keeps the bar charts aligned. The caller owns
+    the row height and advances `y` itself.
 
     Args:
         label: The row's name, drawn right-aligned before the plot area.
         y: Top of the row in user units.
-        row_h: Row height; the label and value sit on `y + row_h / 2 + 4`.
-        left: Left edge of the plot area — the label ends 8 units before it.
-        bars: `(x, width, colour, tooltip, rx)` per bar, drawn in order and inset vertically.
-        marks: Pre-rendered SVG emitted after the bars, for marks that are not bars (the whisker
-            and dot of a banded row).
+        row_h: Row height in user units.
+        left: Left edge of the plot area.
+        bars: `(x, width, colour, tooltip, rx)` per bar, drawn in order.
+        marks: Pre-rendered SVG drawn after the bars, such as the whisker and dot of a banded row.
         value: `(x, text, anchor)` of the figure printed next to the bar, or None for no figure.
-        inset: Vertical gap between the row and its bars, which is what leaves a visible gap
-            between adjacent rows.
-        emphasis: Draws the label and value in the ink colour and bold — a total row.
+        inset: Vertical gap between the row edge and its bars.
+        emphasis: Draws the label and value bold in the ink colour, for a total row.
         value_size: Font size of the value label.
 
     Returns:
-        The row's SVG parts, in drawing order, for the caller to extend its parts list with.
+        The row's SVG parts in drawing order.
     """
     ink = "var(--ink-1)"
     parts = [_text(left - 8, y + row_h / 2 + 4, label, 11, "end", ink if emphasis else "var(--ink-2)", bold=emphasis)]
@@ -193,14 +152,10 @@ def _bar_row(
 
 
 def _table(headers: List[str], rows: List[List[str]]) -> str:
-    """A plain result table; all cell values must already be strings (and escaped).
+    """Return a plain HTML result table; every cell must already be a string.
 
-    Every chart in the report is paired with the table it was drawn from, and this renders them
-    all, so the styling in `_ReportCss` reaches each one. The escaping contract is inverted
-    compared to `_text`: cells are inserted **verbatim**, so a caller can emit `<b>` for a total
-    row or an `<a>` for a source link, and must therefore run any external string through
-    `_esc` itself. Ragged rows are not checked — a row shorter than the headers simply renders
-    with fewer cells.
+    Cells are inserted verbatim, so a caller can emit `<b>` or `<a>` and must escape external strings with `_esc`
+    itself. Rows shorter than the headers render with fewer cells.
     """
     head = "".join(f"<th>{header}</th>" for header in headers)
     body = "".join("<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>" for row in rows)
@@ -208,31 +163,21 @@ def _table(headers: List[str], rows: List[List[str]]) -> str:
 
 
 def _details(summary: str, content: str, open_by_default: bool = False) -> str:
-    """Wraps content in a native collapsible `<details>` block.
+    """Wrap content in a native collapsible `<details>` block.
 
-    The report's answer to being both an overview and a full audit trail: charts and headline
-    tables stay visible, while the underlying detail (the cash-flow table with one row per
-    year × subject × category, the sources registry, the awards table) is one click away and
-    does not have to be paged or paginated. Native `<details>` keeps that behaviour scriptless,
-    printable and searchable. `summary` is inserted verbatim, so callers escape it themselves.
+    Keeps the detail tables (cash flows, sources, awards) one click away without script. `summary` is inserted
+    verbatim, so callers escape it.
     """
     open_attr = " open" if open_by_default else ""
     return f"<details{open_attr}><summary>{summary}</summary>{content}</details>"
 
 
 def _category_table(result: LifecycleCostResult) -> str:
-    """NPV by display group and by raw cost category — the §3.7 result table.
+    """Return the NPV table by display group and by raw cost category (§3.7).
 
-    The table under the timeline chart, and the place where the display grouping is undone
-    again: each of the eight coloured groups is printed in bold with its total, and the raw
-    `CostCategory` members that make it up are indented underneath. That two-level shape is
-    what lets a reviewer move between the chart's vocabulary (eight colours) and the engine's
-    (sixteen-plus categories) without a lookup, and it is where a category landing in an
-    unexpected group would show up.
-
-    Groups and categories whose value is zero in every slot are skipped, so the table shows what
-    this run actually produced rather than the full taxonomy. The group sums come from
-    `views.fold_categories` — presentation supplies only the mapping.
+    A display group is one of the eight coloured groups the charts use; each is printed bold with its total and the raw
+    `CostCategory` members under it. Groups and categories that are zero in every band slot (minimum, best estimate,
+    maximum) are skipped. The sums come from `views.fold_categories`.
     """
     rows = []
     group_npv = views.fold_categories(result.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)
@@ -249,20 +194,14 @@ def _category_table(result: LifecycleCostResult) -> str:
 
 
 def _loan_svg(result: LifecycleCostResult) -> str:
-    """Loan amortization: interest vs. principal per year (§4.4).
+    """Return the loan amortization chart: principal and interest per year (§4.4).
 
-    Shown inside section 3 only when the perspective is financed, and it answers a question the
-    cash-flow chart cannot: of the money leaving the account each year, how much is repayment
-    and how much is the cost of borrowing. An annuity loan has a characteristic shape — constant
-    total, interest falling as principal rises — and a chart that does not have it means the
-    financing plan is not what the reviewer thinks it is. Returns the empty string for an
-    unfinanced perspective, which is the common case, so the caller can concatenate it blindly.
+    Bars stack principal from the baseline with interest on top, so a bar's height is the year's debt service; an
+    annuity loan shows a constant total with interest falling. X-ticks are thinned to every `horizon // 10` years, and
+    the interest segment has a 0.5 px floor so a nearly repaid year stays visible.
 
-    Geometry: bars are principal-first from the baseline upward with interest stacked on top, so
-    the total bar height is the year's debt service. `scale` maps euros to pixels off the peak
-    total year, `bar_w` divides the plot width over the horizon, and the x-axis is labelled
-    every `horizon // 10` years to keep the ticks readable at any horizon. The interest segment
-    gets a `max(..., 0.5)` floor so a nearly-repaid final year still shows a visible sliver.
+    Returns:
+        The `<svg>` element, or the empty string for an unfinanced perspective.
     """
     horizon = result.parameters.observation_period_in_years
     amortization = views.loan_amortization_series(result)
@@ -299,12 +238,9 @@ def _loan_svg(result: LifecycleCostResult) -> str:
 
 
 def _legend_html(groups_present: List[int]) -> str:
-    """Colour chips for exactly the display groups a chart actually drew.
+    """Return the colour chips for the display groups a chart actually drew.
 
-    Takes group indices rather than names so the swatch and the label are read from the same
-    `PresentationStyle` entry the chart coloured its marks with, which is what keeps legend and
-    chart in step. Callers pass only the groups present in the data, so a legend never lists a
-    colour the reader cannot find in the chart above it.
+    Takes group indices, so swatch and label come from the same `PresentationStyle` entry that coloured the marks.
     """
     chips = "".join(
         f'<span class="chip"><span class="swatch" style="background:var(--g{index})"></span>'
@@ -315,17 +251,11 @@ def _legend_html(groups_present: List[int]) -> str:
 
 
 def _annual_flow_svg(result: LifecycleCostResult) -> str:
-    """Stacked bars per year by display group (nominal, negatives below the axis).
+    """Return the annual cash-flow chart: stacked nominal bars per year by display group.
 
-    The centrepiece of section 3 and the chart most likely to expose a modelling mistake at a
-    glance: replacements have to spike at the component lifetimes, the residual-value credit has
-    to appear at the horizon, energy has to grow smoothly at the escalation rate, and year 0 has
-    to carry the investment. Nominal (undiscounted) on purpose — this is the liquidity view, and
-    the discounted counterpart is the curve drawn immediately below it.
-
-    The geometry and the stacking loop are `_StackedYearsFrame` and `_stacked_year_bars`, shared
-    with the monthly-burden chart; this function is the series it stacks, its canvas and the
-    three axis labels that make it an annual chart in euro.
+    Costs stack above the axis and credits below. Replacements should spike at component lifetimes, the residual value
+    appear at the horizon and the investment in year 0. The geometry and stacking are `_StackedYearsFrame` and
+    `_stacked_year_bars`, shared with the monthly-burden chart.
     """
     horizon = result.parameters.observation_period_in_years
     per_year: List[Dict[int, float]] = views.fold_category_matrix(
@@ -350,21 +280,11 @@ def _annual_flow_svg(result: LifecycleCostResult) -> str:
 
 
 def _cumulative_npv_svg(result: LifecycleCostResult) -> str:
-    """Cumulative discounted cost over the horizon, with its min/max uncertainty band.
+    """Return the cumulative discounted cost curve with its min/max band.
 
-    This is where the report ties the year-by-year story to the headline number: the curve's end
-    point is labelled with the NPV band and is, by construction, the same figure the perspective
-    table prints, because both come from the same discounted series in
-    `views.cumulative_discounted_cost_series`. A reviewer's check here is the shape — a steep
-    year-0 step for the investment, a steady operating slope, visible replacement steps — and
-    that the label agrees with the perspectives section.
-
-    It draws nothing itself. The cash curve's lower panel plots this very series through
-    `_xy_lines_svg`, and two renderers of one series are two chances for the same curve to be
-    drawn with two different axes; this one therefore assembles the series and hands them over.
-    The NPV band is passed as the *series label* rather than as a separate annotation, because
-    the generic renderer prints a series' label at its end point — which is exactly where this
-    chart has always carried it.
+    The curve ends at the perspective's NPV, the same figure the perspective table prints, since both come from
+    `views.cumulative_discounted_cost_series`. The drawing is delegated to `_xy_lines_svg`, with the NPV band as the
+    series label printed at the end point.
 
     Args:
         result: The perspective whose discounted cumulative cost is drawn.
@@ -384,23 +304,12 @@ def _cumulative_npv_svg(result: LifecycleCostResult) -> str:
 
 
 def _waterfall_svg(steps: List[Tuple[str, float, str]], total_label: str, net: float) -> str:
-    """Horizontal waterfall: (label, signed value, color-var) steps ending in a net bar.
+    """Return a horizontal waterfall of `(label, signed value, colour variable)` steps ending in a net bar.
 
-    `net` is passed in rather than summed from the steps: it is a *result* figure (the year-0
-    net outflow, the NPV delta), and the steps may legitimately not add up to it — the
-    comparison waterfall drops sub-cent subjects. Summing it here is §7 B8's second half.
-
-    Used by two sections with the same shape of question — section 2 ("how does the year-0 gross
-    become the net outflow") and section 8 ("how does each subject's delta add up to the total
-    NPV delta") — which is why it takes an abstract list of steps and a total label rather than
-    knowing about either. Each step is drawn where the running `cursor` leaves off, so the bars
-    form a staircase and a reader can follow the money left to right; steps are drawn in the
-    order given, and that order is the caller's editorial choice.
-
-    Geometry: one row per step plus a separated total row, `scale` fitted so the sum of the
-    steps' absolute values (or the net, whichever is larger) spans the plot width. A negative
-    step is drawn from `cursor + value` to `cursor`, i.e. leftward, and gets its value label on
-    the left so the text never overlaps the bar.
+    Sections 2 (year-0 gross to net outflow) and 8 (each subject's NPV delta to the total delta) use it. Each step
+    starts where the previous one ended, in the caller's order; a negative step runs leftward with its label on the
+    left. `net` is passed in because it is a result figure and the steps may not add up to it exactly (the comparison
+    drops sub-cent subjects). The scale fits the larger of the summed absolute steps and the net.
     """
     width, row_h, left = 860, 26, 220
     height = (len(steps) + 2) * row_h + 10
@@ -447,20 +356,11 @@ def _waterfall_svg(steps: List[Tuple[str, float, str]], total_label: str, net: f
 
 
 def _whisker_svg(rows: List[Tuple[str, UncertainValue]], unit: str) -> str:
-    """Dot-with-whiskers per row (perspective overview / any banded metric list).
+    """Return a dot-and-whisker chart of labelled banded figures on one axis.
 
-    The report's standard way of showing a list of banded figures: a dot at the BEST_ESTIMATE slot and
-    a bar from LOW to HIGH. It is generic on purpose — sections 6 (perspectives), 6b (payers)
-    and 4 (per-carrier year-1 bills) all reduce to "labelled `UncertainValue`s on a common
-    axis", and giving them one visual form means a reader learns the encoding once. The whiskers
-    are the §3.9 *envelope* of two coherent worlds, not a statistical interval, so overlapping
-    whiskers say nothing about significance.
-
-    Geometry: the axis spans `min(0, smallest minimum)` to the largest maximum, so zero is
-    always on the canvas and rows with credits (negative NPVs) read correctly against it; `to_x`
-    maps value to pixel, labels sit to the right of each maximum, and the numeric band is
-    printed next to the whisker so the chart is readable without hovering. When some row is
-    negative, a vertical rule marks zero across the rows.
+    A dot at the best estimate and a bar from minimum to maximum, used for perspectives, payers and per-carrier bills.
+    The whiskers are the §3.9 envelope of the low and high worlds, not a statistical interval. The axis always includes
+    zero, the band is printed beside each whisker, and a vertical rule marks zero when a row is negative.
     """
     width, row_h, left = 860, 30, 220
     height = len(rows) * row_h + 30
@@ -492,10 +392,8 @@ def _whisker_svg(rows: List[Tuple[str, UncertainValue]], unit: str) -> str:
         )
         y += row_h
     if min_value < 0:
-        # A vertical rule through every row, not a zero-length horizontal one: the marker exists to
-        # say which side of zero a row sits on, and a line whose two x coordinates were identical
-        # drew nothing at all — the axis was invisible in exactly the charts (payer NPVs, per-carrier
-        # bills with a credit) that have negative rows and therefore need it.
+        # A vertical rule through every row marks which side of zero a row sits on; a horizontal
+        # line with identical x coordinates would draw nothing.
         zero_x = to_x(0.0)
         parts.append(
             f'<line x1="{zero_x:.1f}" y1="4" x2="{zero_x:.1f}" y2="{height - 8}" stroke="var(--baseline)"/>'
@@ -505,26 +403,12 @@ def _whisker_svg(rows: List[Tuple[str, UncertainValue]], unit: str) -> str:
 
 
 def _stacked_subject_svg(result: LifecycleCostResult) -> str:
-    """Per-subject diverging stacked bars by display group (§7.4).
+    """Return the per-subject diverging stacked bars by display group (§7.4).
 
-    Costs stack RIGHT of the zero line, credits (residual value, subsidies, feed-in, anyway
-    credit) stack LEFT — never summed onto the cost side. The whisker + dot mark the net NPV
-    band on the same signed axis, so `net = costs - credits` is visible geometry.
-
-    Section 7's chart, and the one that makes the §7.4 reconciliation checkable by eye: the
-    per-subject net markers must add up to the headline NPV of the perspective, and a subject
-    whose credits visibly outweigh its costs (a PV system, say) sits left of zero. Drawing
-    credits as their own stack rather than netting them into the cost bar is the whole point —
-    a component whose gross cost is large and whose subsidy is nearly as large looks very
-    different from one that was cheap to begin with, and a netted bar hides that difference.
-
-    Geometry: `pos_span`/`neg_span` are the widest cost and credit stacks, each additionally
-    widened to cover the net band's maximum/minimum so the whisker can never be drawn off the
-    canvas; the zero line is placed `neg_span * scale` from the left, which is why it moves
-    between runs. Cost and credit rects are the same mark drawn on opposite sides of that line:
-    the credit ones used to be written out inline so they could carry a `class="credit"` hook,
-    which no rule in the shipped stylesheet ever matched — a second copy of `_rect`'s markup kept
-    alive for a hook nobody styled.
+    A subject is one costed item on the timeline, e.g. a heat pump. Costs stack right of the zero line and credits
+    (residual value, subsidies, feed-in, anyway credit) left, never netted; a whisker and dot mark the net NPV band on
+    the same axis, so the net markers add up to the perspective's NPV. The widest cost and credit stacks, widened to
+    cover the net band, set the scale, so the zero line moves between runs.
     """
     breakdowns = list(result.component_breakdowns.values())
     if not breakdowns:
@@ -604,10 +488,10 @@ def _stacked_subject_svg(result: LifecycleCostResult) -> str:
 
 
 def _payback_svg(comparison: VariantComparison) -> str:
-    """The comparison's payback curve per slot; its zero-crossing is the printed payback year.
+    """Return the comparison's payback curve per band slot; its zero crossing is the printed payback year.
 
-    The curve is `comparison.cumulative_discounted_savings_in_euro` (W4.4) — the same array
-    `discounted_payback_years` was derived from, so the drawing and the number cannot disagree.
+    The curve is `comparison.cumulative_discounted_savings_in_euro`, the same array `discounted_payback_years` comes
+    from, so drawing and number agree.
     """
     series = {
         name: comparison.cumulative_discounted_savings_in_euro[slot]
@@ -631,7 +515,7 @@ def _payback_svg(comparison: VariantComparison) -> str:
     styles = {"best_estimate": ("var(--g0)", 2.5, ""), "min": ("var(--g0)", 1.2, ' stroke-dasharray="5 4"'),
               "max": ("var(--g0)", 1.2, ' stroke-dasharray="2 4"')}
     # By world, not optimistic/pessimistic: which world saves most depends on which uncertainty
-    # dominates the savings (renovisorissues #73).
+    # dominates the savings.
     labels = {"best_estimate": "expected", "min": "LOW world", "max": "HIGH world"}
     for slot_name, values in series.items():
         color, stroke_width, dash = styles[slot_name]
@@ -650,24 +534,17 @@ def _payback_svg(comparison: VariantComparison) -> str:
     return "".join(parts)
 
 
-# ------------------------------------------------------- shared chart builders of the V-set (E)
+# ------------------------------------------------------- shared chart builders of the visualization set
 #
-# The charts of the visualization extension reuse a handful of builders rather than each emitting
-# its own SVG: a column Sankey (the actor flows and the statement income diagram), an xy line
-# chart with optional bands (the cash curve, the outstanding balance), a Gantt strip (component
-# lifetimes and the lifecycle overview), a two-sided tornado (uncertainty attribution) and the NPV
-# bridge. Everything they draw comes from `views.py`; the code below is geometry only, in the same
-# y-grows-downward user units as the older charts above, and it lays its rows out with `_bar_row`
-# so a row of a bridge lines up with a row of the component breakdown three sections earlier.
+# Reusable builders: a column Sankey, an xy line chart with bands, a Gantt strip, a centred-axis
+# tornado and the NPV bridge. Their data comes from `views.py`; the code below is geometry only, in
+# y-grows-downward user units, and lays rows out with `_bar_row` so rows line up across charts.
 
 
 class _ChartGeometry:
-    """The pixel frame every chart of the visualization set is drawn in.
+    """The pixel frame (canvas width and margins) every chart of the visualization set is drawn in.
 
-    One place for the canvas width and the margins, because the report stacks a dozen charts and
-    a chart that sets its own plot area does not line up with the one above it. The margins are
-    generous on the left for row labels (a subject name, an actor, a scheme id) and on the right
-    for the value labels the charts print at the end of a line or a ribbon.
+    Shared so stacked charts line up; the left margin holds row labels and the right one value labels.
     """
 
     WIDTH = 860
@@ -682,17 +559,10 @@ class _ChartGeometry:
 
 @dataclass(frozen=True)
 class _StackedYearsFrame:
-    """The plot area of a stacked-by-year bar chart, fitted to the extent it has to hold.
+    """The plot area of a stacked-by-year bar chart, fitted to the extent it must hold.
 
-    The annual cash-flow chart and the monthly-burden chart are the same picture in two units,
-    and this is the half of it that is pure arithmetic: where the zero line lands given how much
-    of the extent is above it and how much below, how many user units a euro is worth, and how
-    wide one year's bar is. Fitting it once is what keeps the two charts comparable — a reader
-    who has learned to read one of them has learned to read the other.
-
-    The zero line sits `max_pos * scale` below the top, which places it wherever the
-    positive/negative split requires instead of at a fixed height, and one shared `scale` covers
-    `max_pos + max_neg` so the two halves stay comparable inside one chart as well.
+    Shared by the annual cash-flow and monthly-burden charts. The zero line sits `max_pos * scale` below the top, and
+    one `scale` covers `max_pos + max_neg`.
     """
 
     width: int
@@ -709,7 +579,7 @@ class _StackedYearsFrame:
         cls, max_pos: float, max_neg: float, horizon: int, height: int, bottom: float,
         width: int = _ChartGeometry.WIDTH, left: float = 70.0, top: float = 16.0,
     ) -> "_StackedYearsFrame":
-        """The frame a chart of this extent, horizon and canvas needs.
+        """Return the frame a chart of this extent, horizon and canvas needs.
 
         Args:
             max_pos: The tallest positive stack, in the chart's own unit.
@@ -741,36 +611,24 @@ def _stacked_year_bars(
     tick_y: float,
     year_marks: Optional[Callable[[int, float], List[str]]] = None,
 ) -> List[str]:
-    """The open `<svg>`, the zero line and one stacked bar per year — for both such charts.
+    """Return the open `<svg>`, the zero line and one stacked bar per year for a stacked-by-year chart.
 
-    Costs and credits have *separate* baselines (`y_pos` growing upward from the zero line,
-    `y_neg` downward) and are never netted, so a year with both shows both, and the groups are
-    stacked in `PresentationStyle.DISPLAY_GROUPS` order so a colour keeps its position in the
-    stack from one chart to the next. X-ticks are thinned by `horizon // 10`, which gives about
-    ten labels at a 100-year horizon and fewer below it — a 20-year run is labelled every other
-    year, a 5-year run every year — because integer division floors the step at 1.
-
-    The two callers had a copy each, and they had already drifted: the annual chart leaves a
-    hairline between stacked segments and the monthly one did not, so the same stack read as
-    seven bands in one chart and as one block in the other. Which of the two is right is a
-    question about the chart, not about the loop, so the hairline is a parameter and the loop is
-    written once.
+    Costs grow upward and credits downward from the zero line, never netted, and groups stack in
+    `PresentationStyle.DISPLAY_GROUPS` order. X-ticks are drawn every `max(1, horizon // 10)` years.
 
     Args:
         per_year: Group index -> amount, one mapping per year, index-aligned with the year axis.
         frame: The fitted plot area.
         horizon: The last year drawn, which sets the tick thinning.
         unit: The unit the tooltips name, e.g. `"EUR"` or `"EUR/month"`.
-        hairline: Whether to shorten each segment by up to 1px so stacked groups stay
-            distinguishable — `bar_h - min(1.0, bar_h * 0.3)`, which never swallows a thin one.
+        hairline: Whether to shorten each segment by `min(1.0, bar_h * 0.3)` so stacked groups stay distinguishable.
         tick_size: Font size of the year ticks.
         tick_y: Baseline the year ticks are printed on.
-        year_marks: Optional extra marks per year, drawn after that year's stack and before its
-            tick; it is handed the year and the left edge of its bar. The monthly chart's
-            whisker on the banded total is the one user.
+        year_marks: Optional extra marks per year, called with the year and the left edge of its bar and drawn after
+            its stack.
 
     Returns:
-        The parts so far, for the caller to append its axis labels and `</svg>` to.
+        The parts so far; the caller appends its axis labels and `</svg>`.
     """
     parts = _svg_open(frame.width, frame.height)
     parts.append(_hline(frame.left, frame.width - 10, frame.zero_y))
@@ -808,28 +666,24 @@ def _net_stub_svg(
     pixels_per_unit: float,
     stub_labels: Optional[Dict[str, str]] = None,
 ) -> List[str]:
-    """The net-position stubs that close a node's deficient face (Q29 R7).
+    """Return the net-position stubs that close a Sankey node's unfilled face.
 
-    Drawn as a short flat band off the face the ribbons do not fill, labelled with the signed
-    amount, and deliberately unlike a ribbon: flat, muted and ending in mid-air rather than at
-    another node, because it is a *position* and not a payment to anybody. A node that receives
-    more than it passes on gets a `+` stub on its right face; one that pays out more than it takes
-    in gets a `-` stub on its left, which is the leftover convention the statement income Sankey
-    uses as well.
+    A stub is a short, flat, muted band ending in mid-air, labelled with a signed amount: it is a position, not a
+    payment. A node that receives more than it passes on gets a `+` stub on its right face; one that pays out more than
+    it takes in gets a `-` stub on its left.
 
     Args:
-        geometry: The layout `presentation_style.sankey_node_boxes` returned; its `net_stubs` are
-            what this draws and its `boxes` decide which of them have a rectangle to hang off.
-        labels: Node label per node key, for the stub's tooltip.
-        node_pixels: The caller's node-to-user-units mapping, so both live in one coordinate
-            system.
+        geometry: The layout `presentation_style.sankey_node_boxes` returned; its `net_stubs` are drawn where `boxes`
+            has a rectangle for them.
+        labels: Node label per node key, for the tooltip.
+        node_pixels: The caller's node-to-user-units mapping.
         plot_w: Width of the plot area in user units.
         plot_h: Height of the plot area in user units.
-        pixels_per_unit: The diagram's one global unit scale, in user units per euro.
-        stub_labels: The caller's own wording per node, overriding the geometric default.
+        pixels_per_unit: The diagram's global scale, in user units per euro.
+        stub_labels: The caller's own wording per node, overriding the default label.
 
     Returns:
-        The stub rectangles and their labels, for the caller to extend its parts list with.
+        The stub rectangles and their labels.
     """
     parts: List[str] = []
     for stub in geometry.net_stubs:
@@ -865,23 +719,18 @@ def _ribbon_title(
     ribbon_tooltips: Optional[List[str]],
     index: int,
 ) -> str:
-    """The hover text of one ribbon: the caller's exact string, else the rounded default (Q28)."""
+    """Return the hover text of one ribbon: the caller's exact string if given, else a rounded default."""
     if ribbon_tooltips is not None and index < len(ribbon_tooltips):
         return ribbon_tooltips[index]
     return f"{labels.get(source, source)} -> {labels.get(target, target)}: {_fmt(amount)}"
 
 
 class _SankeyLabels:
-    """How a Sankey node label and a ribbon are styled, for the amount lines of Q28 R6.
+    """Styling of Sankey node labels and ribbons.
 
-    A node label is drawn beside its rectangle, so two lines of it (the name and the amounts)
-    only fit where the rectangle is at least as tall as the two baselines they occupy. Below that
-    the amount line degrades to the node total alone, and the split stays in the node's tooltip —
-    the Q28 rule that a small node may lose the breakdown but never the number.
-
-    `COST_STYLE` and `CREDIT_STYLE` are here rather than inline in the path because they are the
-    one place the cost/credit distinction is made visible: a ribbon has no sign, so it has to be
-    carried structurally — a credit is outlined, translucent and dashed where a cost is solid.
+    A node label gets a second line with its amounts only where the rectangle is tall enough for two baselines;
+    otherwise it shows the node total and the split stays in the tooltip. A ribbon has no sign, so a credit is drawn
+    outlined, translucent and dashed (`CREDIT_STYLE`) where a cost is solid (`COST_STYLE`).
     """
 
     #: Node height (user units) from which the full "costs X | credits -Y" line is drawn.
@@ -907,43 +756,28 @@ def _sankey_svg(
     ribbon_tooltips: Optional[List[str]] = None,
     stub_labels: Optional[Dict[str, str]] = None,
 ) -> str:
-    """A column Sankey as inline SVG: node rectangles plus one Bezier ribbon per flow.
+    """Return a column Sankey as inline SVG: node rectangles plus one Bezier ribbon per flow.
 
-    The shared renderer of the actor-flow diagram and of the statement income diagram. Node
-    placement comes from `presentation_style.sankey_node_boxes`, the same function the matplotlib
-    companions use, so a node sits in the same place in both outputs. Ribbons leave a node's right
-    face and arrive at the next node's left face in the order given, stacking on each face, so a
-    node rectangle is exactly filled by the ribbons it carries.
-
-    Every ribbon keeps **one width from end to end**, taken from the single global unit scale
-    `sankey_node_boxes` returns (rule 2.7), and the ribbons on a node face stack to tile it
-    exactly. Every flow travels between two *different* columns: since Q23 gave each internal
-    party a column of its own, even an inter-actor transfer such as the §559e levy is an ordinary
-    left-to-right ribbon, and the looping same-column band this used to draw is gone.
+    Used by the actor-flow and statement income diagrams. Node placement comes from
+    `presentation_style.sankey_node_boxes`, shared with the matplotlib companions. Ribbons leave a node's right face
+    and arrive at the next node's left face in the given order, stacking so each face is exactly filled; every ribbon
+    keeps one width end to end, from one global euro scale. Every flow runs between two different columns.
 
     Args:
         columns: Node keys per column, left to right.
-        ribbons: `(source, target, amount, colour, is_credit)` per flow, in drawing order; a
-            credit is drawn in `_SankeyLabels.CREDIT_STYLE`, and the sections that use it carry a
-            legend saying so.
+        ribbons: `(source, target, amount, colour, is_credit)` per flow, in drawing order; a credit is drawn in
+            `_SankeyLabels.CREDIT_STYLE`.
         labels: Visible label per node key; a key without one is labelled with itself.
         height: Canvas height in user units.
-        tooltips: Hover text per node where the visible label is not the whole truth — a subsidy
-            node reads as its friendly scheme name and carries the raw scheme id here (Q20).
-        sublabels: `(full, compact)` amount line under a node's name; the full form is drawn where
-            the node is tall enough for two baselines and the compact one — the node's total —
-            everywhere else, with the full split remaining in the tooltip (Q28 R6).
-        ribbon_tooltips: Replaces the rounded default hover text of the ribbon at the same index
-            with an exact one, which is what makes a ribbon readable to the cent without printing
-            cents on the canvas.
-        stub_labels: The caller's own wording for a net-position stub (Q29 R7). It matters
-            wherever the section already publishes that net under a sign convention of its own —
-            the who-pays-whom chart states costs as positive, so a landlord who *gains* reads
-            "net -88,032 EUR" there, and a stub inventing its own `+` beside that label would
-            contradict the node it closes.
+        tooltips: Hover text per node, e.g. the raw scheme id behind a subsidy node's friendly name.
+        sublabels: `(full, compact)` amount line under a node's name; the full form where the node is tall enough, else
+            the compact total.
+        ribbon_tooltips: Exact hover text replacing the rounded default of the ribbon at the same index.
+        stub_labels: The caller's wording for a node's net-position stub, for sections whose sign convention differs
+            from the default `+`/`-` (the who-pays-whom chart states costs as positive).
 
     Returns:
-        The complete `<svg>` element as one string.
+        The complete `<svg>` element.
     """
     geometry = sankey_node_boxes(columns, [(s, t, a) for s, t, a, _c, _credit in ribbons])
     boxes = geometry.boxes
@@ -952,7 +786,7 @@ def _sankey_svg(
     pixels_per_unit = geometry.unit_scale * plot_h
 
     def node_pixels(node: str) -> Tuple[float, float, float]:
-        """(left x, top y, height) of a node in user units."""
+        """Return (left x, top y, height) of a node in user units."""
         x, y, node_height = boxes[node]
         return (
             _ChartGeometry.LEFT + x * plot_w,
@@ -1002,23 +836,21 @@ def _ribbon_legs_svg(
     is_credit: bool,
     title: str,
 ) -> List[str]:
-    """One flow's Bezier bands: one leg per column gap it travels (Q29 R7).
+    """Return one flow's Bezier bands, one leg per column gap it crosses.
 
-    A ribbon that skips a column is routed through the corridor the layout reserved for it rather
-    than drawn as one long curve across whatever block sits in the way, which is why a flow can
-    be more than one path element. Every leg is emitted at the same `ribbon_h`, so the flow keeps
-    one width from end to end however many legs it took.
+    A flow that skips a column is routed through the corridor the layout reserved for it. Every leg has the same
+    `ribbon_h`, so the flow keeps one width.
 
     Args:
         segments: The legs `sankey_node_boxes` routed this flow through, in travel order.
-        boxes: The layout's node boxes, to skip a leg whose ends were dropped.
+        boxes: The layout's node boxes; a leg whose ends were dropped is skipped.
         node_pixels: The caller's node-to-user-units mapping.
-        ribbon_h: The flow's width in user units — the same for every leg.
-        plot_h: Height of the plot area, which the layout's anchors are a fraction of.
-        plot_w: Width of the plot area, which the node width is a fraction of.
+        ribbon_h: The flow's width in user units.
+        plot_h: Height of the plot area.
+        plot_w: Width of the plot area.
         color: Fill and stroke colour of the band.
         is_credit: Draws the credit style (outlined, translucent, dashed) instead of the cost one.
-        title: The already-escaped hover text, repeated on every leg of the flow.
+        title: The already-escaped hover text, repeated on every leg.
 
     Returns:
         One `<path>` per leg, in travel order.
@@ -1059,23 +891,22 @@ def _sankey_node_label(
     box: Tuple[float, float, float],
     plot_w: float,
 ) -> List[str]:
-    """One node's name, and its amount line where the caller supplied one (Q28 R6).
+    """Return one Sankey node's name and, where supplied, its amount line.
 
-    Split out of `_sankey_svg` because where a label sits is a question of which column the node
-    is in — outside the diagram for the first and the last, above the rectangle in between — and
-    that branch plus the two-line/one-line degradation is the whole of it.
+    The first and last columns are labelled outside the diagram, middle columns above the rectangle; the amount line
+    falls back to its compact form when the node is too short for two lines.
 
     Args:
         node: The node key being labelled.
         labels: Visible label per node key.
         sublabels: `(full, compact)` amount line per node, or None for no amount line.
         index: Index of the node's column.
-        column_count: Number of columns, so the last one can be recognized.
+        column_count: Number of columns.
         box: `(left x, top y, height)` of the node rectangle in user units.
-        plot_w: Width of the plot area, which the node width is a fraction of.
+        plot_w: Width of the plot area.
 
     Returns:
-        The one or two `<text>` elements of this node's label.
+        The one or two `<text>` elements of the label.
     """
     x, y, node_height = box
     label = labels.get(node, node)
@@ -1108,20 +939,16 @@ def _xy_lines_svg(
     annotations: Optional[List[Tuple[float, float, str]]] = None,
     height: int = 230,
 ) -> str:
-    """An xy line chart with optional filled bands — the cash-curve fan, the loan balance.
+    """Return an xy line chart with optional filled bands, e.g. the cash-curve fan or the loan balance.
 
-    Each series is `(label, points, colour, stroke width, dash pattern)`; each band is a pair of
-    point lists filled between them, which is how an uncertainty envelope and the gap between two
-    curves are expressed with one primitive. The axes span everything given, always including
-    zero so the sign of a curve is readable, and the zero line is drawn.
+    The axes span all given points and always include zero, and the zero line is drawn.
 
     Args:
-        series: The lines to draw, each with its own colour, stroke width and dash pattern.
+        series: `(label, points, colour, stroke width, dash pattern)` per line.
         bands: `(lower points, upper points, colour)` polygons filled under the lines.
         x_label: Axis caption printed at the bottom left.
         y_label: Axis caption printed at the top left; omitted when empty.
-        annotations: `(x, y, text)` labels in data units, placed with a small offset — what
-            carries the cash curve's "deepest out-of-pocket" marker.
+        annotations: `(x, y, text)` labels in data units, such as the cash curve's "deepest out-of-pocket" marker.
         height: Canvas height in user units.
 
     Returns:
@@ -1144,11 +971,11 @@ def _xy_lines_svg(
     y_scale = plot_h / max(y_max - y_min, 1e-9)
 
     def to_x(value: float) -> float:
-        """Data x to user units."""
+        """Map data x to user units."""
         return _ChartGeometry.LEFT + (value - x_min) * x_scale
 
     def to_y(value: float) -> float:
-        """Data y to user units, which grow downward."""
+        """Map data y to user units, which grow downward."""
         return _ChartGeometry.TOP + (y_max - value) * y_scale
 
     parts = _svg_open(_ChartGeometry.WIDTH, height)
@@ -1191,15 +1018,10 @@ def _xy_lines_svg(
 def _declutter_labels(
     labels: List[Tuple[float, float, str]], minimum_spacing: float = 11.0
 ) -> List[Tuple[float, float, str]]:
-    """Pushes end-of-line labels apart so none is written on top of another.
+    """Push end-of-line labels apart so none overlaps another.
 
-    A fan of trajectories, or three lines converging at the horizon, ends with all its labels
-    within a few user units of each other, which renders as an unreadable smear. Sorting them by y
-    and enforcing a minimum spacing downward keeps every label present — the alternative, dropping
-    some, would silently hide which line is which.
-
-    The shift is cosmetic and applies to the *label*, never to the line it names; a label that has
-    moved still starts at the line's own end point horizontally, so the association stays visible.
+    Labels are sorted by y and pushed down to a minimum spacing; none is dropped. Only the label moves, not the line it
+    names, and its x is unchanged.
 
     Args:
         labels: `(x, y, text)` of every end-of-line label, in user units.
@@ -1221,20 +1043,18 @@ def _gantt_svg(
     rows: List[Tuple[str, List[Tuple[int, Optional[int], str]], List[Tuple[int, str, Optional[float]]], str]],
     horizon: int,
 ) -> str:
-    """A swimlane/Gantt strip — the component lifetimes and the lifecycle overview.
+    """Return a swimlane (Gantt) strip, used for component lifetimes and the lifecycle overview.
 
-    One row per lane: muted span bars, ticked event markers and vertical gridlines every five
-    years. Rows go through `_bar_row`, so a lane label sits exactly where a subject label does in
-    the bar charts above.
+    One row per lane with muted span bars, event tick marks and gridlines every five years; rows go through `_bar_row`,
+    so lane labels align with the bar charts.
 
     Args:
-        rows: `(lane label, spans, events, colour)` per lane, where a span is `(start year, end
-            year or None for "to the horizon", span label)` and an event is `(year, label, amount
-            in euro or None)`.
-        horizon: Last year of the axis, in years from year 0.
+        rows: `(lane label, spans, events, colour)` per lane; a span is `(start year, end year or None for "to the
+            horizon", label)` and an event is `(year, label, amount in euro or None)`.
+        horizon: Last year of the axis.
 
     Returns:
-        The complete `<svg>` element, or the empty string when there is no lane to draw.
+        The complete `<svg>` element, or the empty string when there is no lane.
     """
     if not rows:
         return ""
@@ -1243,7 +1063,7 @@ def _gantt_svg(
     scale = plot_w / max(horizon, 1)
 
     def to_x(year: float) -> float:
-        """Year to user units."""
+        """Map a year to user units."""
         return _ChartGeometry.LEFT + year * scale
 
     parts = _svg_open(_ChartGeometry.WIDTH, height)
@@ -1274,11 +1094,10 @@ def _gantt_event_marks(
     to_x: Callable[[float], float],
     y: float,
 ) -> List[str]:
-    """The dated tick marks of one Gantt lane, labelled only where they do not collide.
+    """Return the event tick marks of one Gantt lane, labelled only where labels do not collide.
 
-    Every event keeps its marker and its tooltip; only the printed text is dropped for an event
-    within `_ChartGeometry.CLUSTER_YEARS` of the last labelled one, which is what keeps a year 0
-    carrying five awards readable without hiding any of them.
+    Every event keeps its marker and tooltip; the printed label is dropped for an event within
+    `_ChartGeometry.CLUSTER_YEARS` of the last labelled one.
 
     Args:
         events: `(year, label, amount in euro or None)` per event, in any order.
@@ -1307,33 +1126,19 @@ def _gantt_event_marks(
 def _treemap_svg(
     tiles: List[Tuple[str, float, str]], height: int = 240, width: int = _ChartGeometry.WIDTH
 ) -> str:
-    """A squarified treemap — the cost-structure panels, one call per basis.
+    """Return a squarified treemap, used for the cost-structure panels (one call per basis).
 
-    Areas rather than lengths, because the question the cost-structure section answers ("what is
-    this made of") is a composition and reads at a glance in an area encoding. The layout itself
-    is `presentation_style.squarified_layout`, which the matplotlib companion of slice 8 will
-    call as well, so the two panels become one picture drawn twice rather than two pictures of
-    the same numbers.
-
-    A label is printed only where the tile can hold two baselines; every tile carries its full
-    label and its amount as a native tooltip, which is what the inline-SVG variant has over the
-    PNG and why a small tile losing its text loses nothing a reader cannot recover by hovering.
-
-    The box is the caller's, both dimensions of it: this module draws, and how wide a panel is
-    depends on how many of them the section puts side by side, which is a layout decision and
-    therefore the section's. Hardcoding half a column here made that decision twice — once in the
-    flex row of `sections_charts._treemap_section_html` and once in a `// 2 - 20` no reader of
-    this file could account for.
+    The layout is `presentation_style.squarified_layout`, shared with the matplotlib companion. A tile is labelled only
+    where it fits two baselines; every tile carries its label and amount as a tooltip. The caller sets the box size,
+    since how many panels sit side by side is a layout decision.
 
     Args:
-        tiles: `(label, area in euro, colour)` per rectangle, in the order they are laid out;
-            non-positive areas are dropped here, since a treemap cannot draw one.
+        tiles: `(label, area in euro, colour)` per rectangle, in layout order; non-positive areas are dropped.
         height: Canvas height in user units.
-        width: Canvas width in user units; the full chart column unless the caller is placing
-            more than one panel across it.
+        width: Canvas width in user units.
 
     Returns:
-        The complete `<svg>` element, or the empty string when no tile carries a positive area.
+        The complete `<svg>` element, or the empty string when no tile has a positive area.
     """
     drawable = [tile for tile in tiles if tile[1] > 0]
     if not drawable:
@@ -1354,17 +1159,11 @@ def _bridge_svg(
     anchors: Tuple[Tuple[str, UncertainValue], Tuple[str, UncertainValue]],
     steps: List[Tuple[str, float, str]],
 ) -> str:
-    """The NPV bridge: two anchor bars with their bands and the floating deltas between them.
+    """Return the NPV bridge: two anchor bars with their bands and the floating deltas between them.
 
-    A bridge is not the same shape as the report's older waterfall, which starts at zero and
-    walks a staircase of contributions: here the two *anchors* are absolute NPVs and the bars
-    between them float at wherever the running total has got to. The axis is therefore fitted
-    over the whole excursion of that running total (and always includes zero), which is what
-    keeps a large negative first step on the canvas.
-
-    The anchors carry a min/max whisker and are drawn as emphasized rows; the delta bars
-    deliberately carry no whisker, because the band of a difference is not the difference of the
-    bands.
+    The anchors are absolute NPVs drawn from zero with a min/max whisker; each delta bar floats at the running total.
+    The axis covers the whole excursion of the running total and zero. Delta bars carry no whisker, since the band of a
+    difference is not the difference of the bands.
 
     Args:
         anchors: `(label, band)` of the reference and of the variant, in that order.
@@ -1384,11 +1183,11 @@ def _bridge_svg(
     scale = plot_w / max(span_max - span_min, 1e-9)
 
     def to_x(value: float) -> float:
-        """Euro to user units."""
+        """Map euro to user units."""
         return _ChartGeometry.LEFT + (value - span_min) * scale
 
     def anchor_row(label: str, band: UncertainValue, position: float) -> List[str]:
-        """One absolute NPV bar with its band, drawn from the zero line."""
+        """Return one absolute NPV bar with its band, drawn from the zero line."""
         return _bar_row(
             label, position, _ChartGeometry.ROW_HEIGHT, _ChartGeometry.LEFT,
             bars=[(min(to_x(0.0), to_x(band.best_estimate)),
@@ -1442,22 +1241,17 @@ _CentredRow = Tuple[str, List[_Bar], Tuple[float, str, str]]
 
 @dataclass(frozen=True)
 class _CentredAxisFrame:
-    """Where a centred-zero-axis chart puts its axis, its rows and its footnote.
+    """Layout of a chart with a centred zero axis: the axis, the rows and the footnote.
 
-    The two tornadoes of this report — the scenario swings and the uncertainty attribution — are
-    the same drawing with different numbers in it, and they were the same drawing written twice:
-    an axis at the centre of the plot, `_bar_row` rows walking down from a first y, and a
-    footnote under the axis stating what zero *is*. The frame is what the two disagree about,
-    and it is all they disagree about.
+    Shared by the scenario tornado and the uncertainty-attribution tornado.
 
     Attributes:
         left: Left edge of the plot area; row labels end 8 units before it.
-        center: The zero axis, in user units — the caller computes it because it also has to
-            scale its bars against it.
+        center: The zero axis in user units, computed by the caller, which scales its bars against it.
         row_h: Row height, added to `first_y` once per row.
         first_y: Top of the first row.
         inset: Vertical gap between a row and its bars.
-        text_size: Font size of both the per-row value label and the footnote.
+        text_size: Font size of the per-row value label and the footnote.
     """
 
     left: float
@@ -1469,13 +1263,13 @@ class _CentredAxisFrame:
 
 
 def _centred_axis_svg(rows: List[_CentredRow], frame: _CentredAxisFrame, height: int, footer: str) -> str:
-    """A diverging bar chart: a zero axis down the middle, one `_bar_row` per row, a footnote.
+    """Return a diverging bar chart: a zero axis down the middle, one `_bar_row` per row and a footnote.
 
     Args:
         rows: The rows in drawing order, each with its bars already placed against `frame.center`.
-        frame: The geometry the calling chart draws its rows in.
+        frame: The chart's layout.
         height: Canvas height; the axis stops 20 units above it and the footnote sits 6 above.
-        footer: What the axis means — "base: ... EUR/a", "total band ..." — centred under it.
+        footer: What the axis means, e.g. "base: ... EUR/a", centred under it.
 
     Returns:
         The complete `<svg>` element.
@@ -1500,16 +1294,10 @@ def _centred_axis_svg(rows: List[_CentredRow], frame: _CentredAxisFrame, height:
 
 
 def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainValue) -> str:
-    """The uncertainty tornado: each subject's LOW and HIGH deltas around the best-estimate NPV.
+    """Return the uncertainty tornado: each subject's low and high deltas around the best-estimate NPV.
 
-    Bars run left for a negative delta and right for a positive one from a zero axis that *is*
-    the total best-estimate NPV. A mirrored revenue subject can have a positive LOW delta, which
-    puts its whole bar on one side — correct, and the section's prose says so, because it looks
-    like a bug the first time.
-
-    The axis, the row walk and the footnote are `_centred_axis_svg`'s, shared with the scenario
-    tornado; what is left here is the only thing the two charts genuinely disagree about, which
-    is what a row's bars mean.
+    The zero axis is the total best-estimate NPV; bars run left for a negative delta and right for a positive one. A
+    revenue subject can have a positive low delta, putting its whole bar on one side; that is correct.
 
     Args:
         rows: The attribution `views.uncertainty_attribution` returned, in its own order.
@@ -1554,31 +1342,20 @@ def _attribution_tornado_svg(rows: List[views.AttributionRow], total: UncertainV
 
 
 def _monthly_burden_svg(result: LifecycleCostResult, burden: views.MonthlyBurden) -> str:
-    """Stacked monthly bars with a whisker on the total — the household's own unit.
+    """Return the monthly-burden chart: stacked monthly bars per year with a whisker on the total.
 
-    The annual cash-flow chart's geometry in a second unit, through the same
-    `_StackedYearsFrame` and `_stacked_year_bars`: separate baselines above and below zero so a
-    credit is never netted against a cost inside a bar, drawn on the monthly recurring figures of
-    `views.monthly_burden_series` and `views.monthly_burden_by_group`. The whiskers are the
-    min/max band of the monthly *total*, which is this chart's one banded mark: banding every
-    segment of a stack would produce a picture nobody can read.
-
-    The capital events the bars deliberately exclude come back as a dashed overlay segment per
-    year, drawn at that year's recurring total plus the replacement reserve — what the month costs
-    once the sinking fund for the replacements is paid into, which is the figure a bank quotes.
-
-    The burden is the caller's rather than this function's own, because the section prints year 1
-    and the reserve in its caption and decides on the same series whether the chart is worth
-    drawing at all. Deriving it twice was two calls to a validating view for one picture, with
-    nothing but their shared inputs keeping the caption and the bars on the same numbers.
+    Same geometry as the annual cash-flow chart, on the recurring monthly figures of `views.monthly_burden_series` and
+    `views.monthly_burden_by_group`. Only the monthly total is banded. Replacements are capital events and stay out of
+    the bars; a dashed segment per year shows the total plus the monthly replacement reserve (the sinking fund for
+    those replacements).
 
     Args:
         result: The perspective whose recurring burden is drawn.
         burden: Its monthly burden, as the section derived it.
 
     Returns:
-        The complete `<svg>` element, or the empty string when the perspective books no month at
-        all (a horizon of zero years).
+        The complete `<svg>` element, or the empty string when the perspective books no month (a horizon of zero
+            years).
     """
     totals = burden.series
     per_group = views.monthly_burden_by_group(result, PresentationStyle.CATEGORY_TO_GROUP)
@@ -1594,7 +1371,7 @@ def _monthly_burden_svg(result: LifecycleCostResult, burden: views.MonthlyBurden
     frame = _StackedYearsFrame.fitted(max_pos, max_neg, horizon, height=260, bottom=30)
 
     def whisker(year: int, x: float) -> List[str]:
-        """The min/max band of that year's monthly total, or nothing when it is degenerate."""
+        """Return the min/max band of that year's monthly total, or nothing when it is degenerate."""
         band = totals[year]
         if band.is_exact():
             return []
@@ -1624,25 +1401,15 @@ def _replacement_reserve_marks(
     reserve: float,
     frame: _StackedYearsFrame,
 ) -> List[str]:
-    """The dashed reserve overlay of the monthly-burden chart, plus the legend that names it.
+    """Return the dashed replacement-reserve overlay of the monthly-burden chart and its legend.
 
-    Its own function because it is the one part of the chart that is not a bar: a replacement is
-    capital expenditure and leaves the bars for that reason, so the line above them is what the
-    month costs once the sinking fund for those replacements is paid into. Drawn per year rather
-    than as one flat rule, because the recurring total it sits on top of moves with the years.
-
-    Nothing is drawn for an evaluation that books no replacement — a flat line at the bar tops
-    would read as a second, redundant series rather than as "there is no reserve here".
-
-    The overlay starts at the first year that actually draws a bar. It is an overlay *on* the
-    bars — "this month, plus the reserve" — and a segment hanging over the leading years that
-    book no recurring cost at all (year 0 in every run that pays for its hardware once) sits in
-    the margin above nothing, where it reads as a series of its own rather than as a supplement.
+    One segment per year at that year's recurring total plus the reserve, starting at the first year that draws a bar.
+    Nothing is drawn when the reserve is zero.
 
     Args:
         totals: The monthly total per year, index = year.
-        per_year: The stacked amounts per year, index-aligned with `totals`; a year whose values
-            are all zero draws no bar and therefore carries no overlay segment.
+        per_year: The stacked amounts per year, index-aligned with `totals`; a year that is all zero draws no bar and
+            no segment.
         reserve: The constant monthly replacement reserve; zero means no overlay.
         frame: The chart's fitted plot area.
 
@@ -1675,17 +1442,16 @@ def _replacement_reserve_marks(
 
 
 def _cost_of_credit_svg(credit: views.TotalCostOfCredit) -> str:
-    """The loan's companion panel: one stacked bar of principal, interest, fees and the grant.
+    """Return the loan's cost-of-credit panel: one stacked bar of principal, interest and fees, plus the grant.
 
-    The consumer-credit disclosure a loan document carries on its first page — "you borrow 50,000
-    and pay back 63,400" — as a single bar, with the repayment grant on a row of its own below
-    because it is money coming back rather than a smaller cost.
+    Like the disclosure on a loan document ("you borrow 50,000 and pay back 63,400"). The repayment grant sits on its
+    own row below, since it is money coming back.
 
     Args:
         credit: The decomposition `views.total_cost_of_credit` returned.
 
     Returns:
-        The complete `<svg>` element, or the empty string when nothing was actually repaid.
+        The complete `<svg>` element, or the empty string when nothing was repaid.
     """
     segments = [
         ("principal", credit.principal_in_euro - credit.unrepaid_principal_in_euro, "var(--g0)"),

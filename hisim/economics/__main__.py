@@ -1,98 +1,22 @@
-"""CLI of the lifecycle cost engine (cost_spec.md §3.10, §4.6).
+"""Command line of the lifecycle cost engine (cost_spec.md §3.10, §4.6).
 
 Usage::
 
-    python -m hisim.economics evaluate <results_dir> [--scenarios scenarios.json]
-    python -m hisim.economics explain <results_dir> --value "<perspective>/<field-path>"
+    python -m hisim.economics evaluate <results_dir> [--scenarios F] [--parameters F] [--subsidy-catalog DIR]
+    python -m hisim.economics explain <results_dir> --value "<perspective>/<field-path>" [--json]
+    python -m hisim.economics report <results_dir> [--compare DIR] [--scenarios F]
     python -m hisim.economics staged --stage <dir>:<from_year>:<label>[:<job_id>] ... --out <dir>/<file>
     python -m hisim.economics validate
 
-**Why a CLI exists at all.** Three of these four commands are only possible because the evaluator
-is a pure function of `economic_inputs.json` (the seam-1 contract, §4.6): a result directory can be
-re-priced, explained or reported on years after the simulation ran, without HiSim's simulation
-stack, the original system setup or the weather data. The fourth, `validate`, is the data-file CI
-of §9.6 made runnable by hand after a price or catalog edit. None of them can run a simulation, and
-none of them touches legacy cost outputs.
+The evaluator is a pure function of `economic_inputs.json`, so a result directory can be re-priced (`evaluate`), traced
+(`explain`) or reported on (`report`) without the simulation. `staged` prices a multi-year renovation plan out of
+finished jobs (see `StagedCli`); `validate` runs the §9.6 data-file checks. `evaluate`, `explain` and `report` share
+one setup (`_build_context`); without `--parameters` they use the parameters stored in the run's
+`lifecycle_costs.json`, never the engine defaults, and `--subsidy-catalog` overrides the catalog path the parameters
+name.
 
-**One setup block, three commands.** `evaluate`, `explain` and `report` all need the same
-assembly — stored inputs, the caller's `--parameters`, the cost database, the subsidy catalog, the
-D7 resolution check, the applicable perspectives — and it lives exactly once, in
-`_build_context`. That matters for more than tidiness: while each command assembled its own, they
-drifted, and a directory could be explained under different assumptions than the ones it was
-evaluated with. `--parameters` and `--subsidy-catalog` are therefore accepted by all three and mean
-the same thing in each, the flag taking precedence over the path stored in the parameters file.
-
-**The four subcommands and their contracts:**
-
-- ``evaluate <results_dir> [--scenarios F] [--parameters F] [--subsidy-catalog DIR]`` — re-prices
-  the stored inputs. Without ``--scenarios`` it evaluates the applicable perspectives and
-  *overwrites* the directory's `lifecycle_costs.json`, `component_costs.*`,
-  `cash_flow_timeline.csv`, `cost_provenance.json`, `cost_audit.csv` and `cost_audit.json`, then
-  prints how many perspectives it wrote. With ``--scenarios`` it instead evaluates the §4.6 cube
-  and writes `scenario_cube.csv`/`.json`, printing the number of cells. Exit 0 on success.
-- ``explain <results_dir> --value "<perspective>/<field-path>" [--parameters F]
-  [--subsidy-catalog DIR]`` — re-evaluates one perspective and traces one result value back
-  through the provenance ledger to the data entries and sources behind it (§3.10), as text or,
-  with ``--json``, as the machine-readable report. Exit 2 with a message on stderr when the
-  ``--value`` argument has no ``/`` or names an unknown perspective.
-- ``report <results_dir> [--compare DIR] [--scenarios F] [--parameters F]
-  [--subsidy-catalog DIR]`` — writes the human-readable outputs (`cost_summary.md`,
-  `lifecycle_report.html`, the PNG charts) for stored results, adding a variant comparison and/or
-  a scenario section on request. Given a re-pricing flag it re-evaluates instead of rendering the
-  stored numbers, and says so on stdout. Exit 2 when there is nothing to report or the two
-  directories share no perspective.
-- ``staged --stage <dir>:<from_year>:<label>[:<job_id>] ... [--parameters F] [--perspective ID]
-  [--subsidy-catalog DIR] --out <dir>/<file>`` — prices a renovation plan spread over several years out
-  of finished jobs' stored inputs into `economics_result.json` (E-spec §3, §6), and writes
-  `cost_provenance.json` beside it: the one ledger the reference, every stage and the spliced plan
-  recorded into, in an ordinary run's format under the plan's perspective id. Its
-  ``--parameters`` file is **not** an `EconomicParameters` record: it is the document's own
-  `parameters` block, so a reader can feed a document's assumptions back in unchanged. Every key
-  is optional — `horizon_years`, `interest_rate`, `country`, `price_basis_year`,
-  `plan_start_year` (the calendar year of the plan's year 0, 1900–2100; every `calendar_year` of
-  the document is this plus the relative year, and null without it; renovisorissues #57),
-  `perspective_id`, `subsidy_mode` (`full`/`none`), `financing` (`{"kind": "cash"}` or
-  `{"kind": "loan", …}`), `escalation`, `energy_prices` (the year-1 price terms per carrier, the
-  working price all-in with carbon included; renovisorissues #52), `investment_overrides` (the
-  reader's quotes, `[{"stage", "measure_id", "amount_in_euro", "source"}]`, each replacing the
-  year-0 investment of the measure's main subject in that stage, booked as stated and never
-  escalated; renovisorissues #53), and the three that are accepted
-  and ignored, `weather_year` (the year of the stages' weather; `simulation_year` up to schema
-  version 4), `subsidy_catalog` and `origins`. **The country and the price basis year are
-  the stages'**: both are written into every stage's `economic_inputs.json` as facts of the run,
-  a value in the file is only
-  checked against them, and stages that state neither over a file that states neither is a refusal
-  rather than a silent `"DE"` or a basis year re-derived from the weather year — unless the file
-  states `plan_start_year`, which then anchors the price basis year (clamped to the earliest year
-  the country's device data covers; `origins.price_basis_year` says so). Everything the
-  block does not name stays what the stages were priced under. The subsidy catalogue is resolved
-  the way the RenoVisor translator resolves it (step 11 §3): `--subsidy-catalog`, else a path the
-  stages' stored record names, else the shipped `hisim/subsidy_catalog` directory when it holds
-  `<COUNTRY>.json`, else none. Exit 0 with the document, 2 with a `problems.json` naming every
-  offending key at once, 3 for an engine failure.
-- ``validate`` — runs `validation.validate_all` over the shipped data files, printing every warning
-  and every error followed by a count. **Exit 1 when any error was found, 0 otherwise**; warnings
-  never affect the exit code, which is what makes it usable as a CI gate. A failing check means the
-  shipped data is internally inconsistent — an unsourced datapoint, a coverage or question-coverage
-  hole, a malformed tariff contract — and the run that would have used it is not to be trusted.
-
-**Where the assumptions come from.** ``--parameters`` states them; without the flag every
-subcommand reads the parameters the run itself was priced under out of its `lifecycle_costs.json`
-(`_load_parameters`). The engine defaults are never a fallback: a directory with neither the flag
-nor a `lifecycle_costs.json` carrying its parameters is an error naming that file and the flag that
-supplies them instead, because re-pricing an archived study at default assumptions answers a
-question nobody asked. The subsidy catalog those parameters name is loaded for every subcommand,
-`explain` included, through `SubsidyCatalog.load_configured` — a named catalog that cannot be
-resolved is an error (D25), never a quiet fall-through to a run priced without subsidies.
-
-Across all commands, an `UnresolvableSubjectsError` — the fail-fast of decision D7 — is caught in
-`main` and turned into exit code 2 with the same message the postprocessing bridge logs. There are
-no partial cost results and no ``--allow-drops`` escape. Every other `CostDataError` — a cost
-database that will not load, a `--parameters` file that is not there (issue #23) — is caught in
-the same place, and so is the ordinary shape of a bad invocation: an unreadable path, malformed
-JSON, a rejected parameter value. A data or invocation problem is therefore a one-line message and
-an exit code rather than a traceback, and never a silently substituted default. Anything else — a
-genuine programming error — still propagates, because a traceback is the right report for it.
+Errors: an `UnresolvableSubjectsError`, any other `CostDataError`, an unreadable path, malformed JSON and a rejected
+value become exit code 2 with a one-line message on stderr; any other exception propagates as a traceback.
 """
 
 from __future__ import annotations
@@ -179,32 +103,18 @@ if TYPE_CHECKING:  # The renderers are imported lazily, per subcommand; this is 
 
 
 class CliFileNames:
-    """Names of the files the CLI itself writes, as opposed to the export modules.
-
-    Only the scenario cube is written here — every other output is named by `exports`,
-    `input_audit` or the reporting layer — but it is written by two subcommands, so the two names
-    live in one place rather than as literals in both.
-    """
+    """Names of the files the CLI itself writes; only the scenario cube, which two subcommands write."""
 
     SCENARIO_CUBE_CSV = "scenario_cube.csv"
     SCENARIO_CUBE_JSON = "scenario_cube.json"
 
 
 class AuditLayerProbe:
-    """Whether everything `evaluate` writes its audit files with is importable.
+    """Checks that every module `evaluate` needs for its audit files is importable, before anything is written.
 
-    `evaluate` writes `cost_audit.csv`/`.json` alongside the numeric exports, using
-    `hisim.economics.audit`, and it used to reach that lazy import *after* four export files had
-    already been written. An installation without the module — or a stack state in which it had
-    not been merged yet, which is how this was found — therefore left a half-written directory
-    behind that a later `report` would happily render as complete. The probe answers the same
-    question before anything is written, so the subcommand refuses instead of half-succeeding.
-
-    The audit's ledger heatmap is part of that set (owner decision Q9), so the renderer and
-    matplotlib under it are probed too: matplotlib is a dependency of the plain cost path and not
-    only of the report path, and an environment without it must fail the same way — by name,
-    before the first file — rather than four exports in. `bridge._require_plot_layer` makes the
-    same check for the postprocessing path.
+    `evaluate` writes `cost_audit.csv`/`.json` and the ledger heatmap PNG beside the numeric exports, so
+    `hisim.economics.audit`, the renderer and matplotlib are probed first; a missing one refuses the command by name
+    instead of leaving a half-written directory. `bridge._require_plot_layer` does the same for postprocessing.
     """
 
     #: Modules that must be importable for `evaluate` to write a complete export set: the audit
@@ -213,14 +123,12 @@ class AuditLayerProbe:
 
     @classmethod
     def require(cls) -> None:
-        """Raises unless every module the audit outputs need is importable.
+        """Raise unless every module the audit outputs need is importable.
 
-        Uses `importlib.util.find_spec`, so the check costs a path lookup and does not import
-        anything — the lazy imports at the use sites stay where they are.
+        Uses `importlib.util.find_spec`, so nothing is imported.
 
         Raises:
-            CostDataError: If any of them is absent. `main` turns it into exit code 2 with the
-                message on stderr, before any output file exists.
+            CostDataError: If any of them is absent; `main` turns it into exit code 2.
         """
         missing = [name for name in cls.MODULE_NAMES if importlib.util.find_spec(name) is None]
         if not missing:
@@ -234,15 +142,9 @@ class AuditLayerProbe:
 
 @dataclass(frozen=True)
 class EvaluationContext:
-    """Everything one re-pricing invocation needs, assembled once (§4.6).
+    """Everything one re-pricing invocation of `evaluate`, `explain` or `report` needs, assembled once (§4.6).
 
-    `evaluate`, `explain` and `report` all begin the same way — read the stored inputs, load the
-    caller's assumptions and the data files behind them, refuse the run if any subject cannot be
-    priced (D7), work out which perspectives apply — and that block used to be pasted into each of
-    them. The copies had already drifted: one honored `--subsidy-catalog`, one read only the
-    parameters file's path, and `explain` loaded no catalog at all and therefore traced different
-    numbers than the run had published. Holding the assembled state in one record is what makes
-    the three commands agree by construction.
+    One record built by `_build_context`, so the three commands price under the same assumptions and catalog.
 
     Attributes:
         inputs: The stored physical facts of one simulated variant (`economic_inputs.json`).
@@ -262,41 +164,22 @@ class EvaluationContext:
 
 
 def _load_parameters(args: argparse.Namespace, results_dir: Optional[str] = None) -> EconomicParameters:
-    """The economic assumptions for this invocation: `--parameters`, or the run's own.
+    """Return the economic assumptions for this invocation: the `--parameters` file, else the run's own.
 
-    Shared by every subcommand so they all price identically, with a two-step resolution:
-
-    1. ``--parameters <file>`` — the caller states the assumptions, which is what re-pricing an
-       archived study under *new* assumptions means (§4.6).
-    2. otherwise the assumptions the run itself was priced under, read back from its
-       `lifecycle_costs.json` (`serialization.read_stored_parameters`).
-
-    Step 2 is the fix for a defect that made `explain` unusable on a real run: without
-    ``--parameters`` every subcommand priced with `EconomicParameters()`, so a run evaluated at
-    price basis year 2026 with a subsidy catalog was re-evaluated at the default basis year with
-    none — the explained numbers were not the run's, and on data valid from 2026 the invocation
-    died on the D7 resolution check instead. The parameters travel with the artifacts; the CLI now
-    reads them.
-
-    Neither source is allowed to fall back to the engine defaults. A directory holding only
-    `economic_inputs.json` has no stored assumptions, and pricing it silently at the defaults is
-    exactly the failure this function exists to prevent — so it fails, naming the file it looked
-    in and the flag that would supply them. *Passing* a path that does not exist fails for the same
-    reason (issue #23).
+    Without the flag, the parameters the run was priced under are read from its `lifecycle_costs.json`
+    (`serialization.read_stored_parameters`). The engine defaults are never used, since re-pricing an archived study at
+    default assumptions answers a question nobody asked.
 
     Args:
         args: The parsed CLI namespace, for `--parameters`.
-        results_dir: The invocation's result directory. Every caller is a subcommand that has one
-            (`_build_context` passes its `results_dir`); the parameter is optional only so the
-            signature reads the same as the resolution it performs.
+        results_dir: The invocation's result directory.
 
     Returns:
         The caller's parameters, or the ones stored with the run.
 
     Raises:
-        CostDataError: If `--parameters` names a path that is not a readable file, or no path was
-            given and the directory carries no stored parameters. `main` turns both into exit code
-            2 with the message on stderr.
+        CostDataError: If `--parameters` is not a readable file, or no path was given and the directory has no stored
+            parameters.
     """
     if args.parameters:
         if not os.path.isfile(args.parameters):
@@ -320,27 +203,21 @@ def _load_parameters(args: argparse.Namespace, results_dir: Optional[str] = None
 
 
 def _build_context(results_dir: str, args: argparse.Namespace) -> EvaluationContext:
-    """The one setup block behind `evaluate`, `explain` and `report` (§4.6).
+    """Assemble the `EvaluationContext` behind `evaluate`, `explain` and `report` (§4.6).
 
-    Reads the directory's stored inputs, resolves the assumptions and the two data sources, binds
-    an evaluator to them, runs the D7 resolution check and selects the applicable perspectives —
-    in that order, because the resolution check has to see the same database and catalog the
-    evaluation will use.
-
-    The catalog precedence is the one policy decided here: `--subsidy-catalog` wins over
-    `parameters.subsidy_catalog_path`, so an archived assumption set can be re-priced against a
-    different catalog without editing it, and a run configured through the parameters file still
-    loads its catalog when no flag is given.
+    Reads the stored inputs, resolves the assumptions, database and catalog, binds an evaluator, runs the resolution
+    check against that same database and catalog, and selects the applicable perspectives. `--subsidy-catalog` wins
+    over `parameters.subsidy_catalog_path`.
 
     Args:
         results_dir: Directory holding `economic_inputs.json`.
-        args: The parsed CLI namespace; `--parameters` and `--subsidy-catalog` are read from it.
+        args: The parsed CLI namespace; `--parameters` and `--subsidy-catalog` are read.
 
     Returns:
-        The assembled context, ready for `_evaluate_perspectives` or a single `evaluate` call.
+        The assembled context.
 
     Raises:
-        UnresolvableSubjectsError: If any cost subject cannot be priced (D7) — no partial results.
+        UnresolvableSubjectsError: If any cost subject cannot be priced.
         CostDataError: If the parameters file, the database or the catalog cannot be loaded.
     """
     inputs = read_inputs(results_dir)
@@ -362,11 +239,9 @@ def _build_context(results_dir: str, args: argparse.Namespace) -> EvaluationCont
 
 
 def _evaluate_perspectives(context: EvaluationContext) -> EvaluationMatrix:
-    """Evaluates every applicable perspective of the context into one matrix (§7.1).
+    """Evaluate every applicable perspective of the context into one matrix (§7.1).
 
-    The evaluate-all loop, in one place for the same reason as `_build_context`: `evaluate` and the
-    `report` fallback path must produce identical matrices for identical inputs, and a matrix
-    missing a perspective is not visible in any output.
+    Shared by `evaluate` and `report`, so both produce the same matrix for the same inputs.
 
     Args:
         context: The assembled evaluation context.
@@ -381,12 +256,9 @@ def _evaluate_perspectives(context: EvaluationContext) -> EvaluationMatrix:
 
 
 def _write_scenario_cube(context: EvaluationContext, scenarios_path: str, results_dir: str) -> ScenarioCube:
-    """Evaluates the §4.6 scenario cube and writes `scenario_cube.csv`/`.json`.
+    """Evaluate the §4.6 scenario cube and write `scenario_cube.csv`/`.json`.
 
-    Shared by `evaluate --scenarios` and `report --scenarios`, which differ only in what they do
-    with the returned cube: the first prints a cell count, the second renders a report section
-    from it. A cube is a set of fresh evaluations by definition, so this path always runs the
-    engine whether or not the directory holds stored results.
+    Shared by `evaluate --scenarios` and `report --scenarios`. A cube is always freshly evaluated.
 
     Args:
         context: The assembled evaluation context.
@@ -407,25 +279,16 @@ def _write_scenario_cube(context: EvaluationContext, scenarios_path: str, result
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
-    """``evaluate``: re-price a stored result directory, or sweep it (§4.6).
+    """Run `evaluate`: re-price a stored result directory, or evaluate a scenario cube over it (§4.6).
 
-    Reads `economic_inputs.json`, applies the caller's parameters and catalog, runs the D7
-    resolution check and then either evaluates the applicable perspectives — overwriting the
-    directory's export set in place, audit tables and their ledger heatmap PNG included, so a
-    later `report` needs no cost database (W4.5) — or, with ``--scenarios``, evaluates the
-    scenario cube instead and writes only `scenario_cube.csv`/`.json`. The two are exclusive: a
-    scenario run does not refresh the base exports.
-
-    The audit-layer probe runs first, before any file is opened for writing, so a stack state in
-    which `hisim.economics.audit` is not merged yet fails with a message instead of leaving a
-    partly refreshed export set behind.
-
-    This is the command that makes "new interest-rate assumptions" or "an updated subsidy catalog"
-    a second-long operation on an archived study rather than a re-simulation.
+    Without `--scenarios`, evaluates the applicable perspectives and overwrites the directory's `lifecycle_costs.json`,
+    `component_costs.*`, `cash_flow_timeline.csv`, `cost_provenance.json`, `cost_audit.csv`/`.json` and the ledger
+    heatmap, so a later `report` needs no cost database; prints the number of perspectives. With `--scenarios`, writes
+    only `scenario_cube.csv`/`.json` and prints the number of cells. The audit-layer probe runs before any file is
+    written.
 
     Returns:
-        0. Failure surfaces as an exception — `UnresolvableSubjectsError` and every other
-        `CostDataError` become exit 2 in `main`, and so does a malformed scenario file.
+        0; failures are exceptions that `main` turns into exit code 2.
     """
     AuditLayerProbe.require()
     context = _build_context(args.results_dir, args)
@@ -440,9 +303,8 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     write_provenance_ledger(matrix, args.results_dir)
     first = next(iter(matrix.results.values()), None)
     if first is not None:
-        # The audit belongs to the stored evaluation: without it a later `report` could not
-        # render section 1 without reopening the cost database (W4.5). The probe above has
-        # already established that this import will succeed.
+        # The audit belongs to the stored evaluation, so a later `report` can render section 1
+        # without reopening the cost database. The probe above ensured this import succeeds.
         from hisim.economics.audit import (
             build_input_audit,
             write_cost_audit,
@@ -452,33 +314,24 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         audit = build_input_audit(context.inputs, context.database, context.parameters, first)
         write_cost_audit(audit, args.results_dir)
         write_input_audit(audit, args.results_dir)
-        # V6 travels with the audit tables, not with the report (owner decision Q9): the ledger
-        # heatmap answers the audit's question, so it is refreshed exactly when the audit is.
-        # The renderer hands back what it did not draw rather than logging it; the CLI's way of
-        # reporting is to print, so it prints.
+        # The ledger heatmap travels with the audit tables, so it is refreshed exactly when the
+        # audit is. The renderer returns what it did not draw; the CLI prints it.
         _print_plot_skips(write_audit_plots(first, args.results_dir))
     print(f"Re-evaluated {len(matrix.results)} perspectives into {args.results_dir}.")
     return 0
 
 
 def _cmd_explain(args: argparse.Namespace) -> int:
-    """``explain``: trace one result value back to the data entries and sources behind it (§3.10).
+    """Run `explain`: trace one result value back to the data entries and sources behind it (§3.10).
 
-    Takes ``--value "<perspective>/<field-path>"``, re-evaluates that single perspective from the
-    stored inputs and asks the result to explain the named field: which parameters entered it, where
-    each came from (database entry with its `valid_from_year`, config override with its
-    `override_source`, scenario overlay, engine default, legacy shim) and which registry sources
-    back them. This is the on-demand counterpart of the eager `cost_audit.csv`, and the answer to
-    "is this number defensible" for any single number.
-
-    It re-evaluates rather than reading stored results because the provenance ledger is what is being
-    queried, and it is built during evaluation. It builds its context exactly like `evaluate`,
-    subsidy catalog included: while it did not, a catalog-configured run was explained through the
-    since-retired flat shim path, so the trace described numbers the run had never published.
+    Takes `--value "<perspective>/<field-path>"`, re-evaluates that perspective (the provenance ledger is built during
+    evaluation) and prints which parameters entered the value and where each came from: database entry, config
+    override, scenario overlay or engine default, with their sources. `--json` prints the machine-readable report. The
+    context is built exactly as for `evaluate`.
 
     Returns:
-        0 on success; 2 with a message on stderr when ``--value`` is malformed (no ``/``) or names a
-        perspective that is not applicable to this directory.
+        0 on success; 2 with a message on stderr when `--value` has no `/` or names a perspective not applicable to
+            this directory.
     """
     if "/" not in args.value:
         print("--value must have the form '<perspective>/<field-path>'", file=sys.stderr)
@@ -501,13 +354,10 @@ def _cmd_explain(args: argparse.Namespace) -> int:
 def _evaluate_directory(
     results_dir: str, args: argparse.Namespace
 ) -> "Tuple[EvaluationMatrix, Optional[InputAuditReport]]":
-    """The fallback path: re-price a directory's `economic_inputs.json` from scratch.
+    """Re-price a directory's `economic_inputs.json` from scratch, for `report`.
 
-    Used by `report` when a directory holds inputs but no stored evaluation, and when a re-pricing
-    flag makes the stored evaluation the wrong thing to render. It does the full engine run —
-    database, catalog, resolution check, every applicable perspective — plus the input audit, so
-    the caller gets exactly what `read_results` + `read_input_audit` would have returned for a
-    directory that had them.
+    Runs the full engine and the input audit, so the caller gets what `read_results` and `read_input_audit` return for
+    a directory that has stored results.
 
     Args:
         results_dir: Directory holding `economic_inputs.json`.
@@ -534,19 +384,16 @@ def _evaluate_directory(
 
 
 def _repricing_flags(args: argparse.Namespace) -> List[str]:
-    """The flags on this invocation that change the assumptions a result is priced under.
+    """Return the flags on this invocation that change the assumptions a result is priced under.
 
-    `report` renders stored results by default, which is what keeps it a rendering step (W4.5). A
-    caller who passes `--parameters` or `--subsidy-catalog` is asking for something else, and those
-    flags used to be accepted and then ignored: the report came out under the *original*
-    assumptions, and with `--scenarios` it mixed a freshly evaluated cube into a stored base — an
-    internally inconsistent document with nothing in it to say so.
+    `report` renders stored results unless one of these (`--parameters`, `--subsidy-catalog`) is given, in which case
+    it re-evaluates.
 
     Args:
         args: The parsed CLI namespace.
 
     Returns:
-        The names of the re-pricing flags that were given, in flag order; empty when none were.
+        The names of the given re-pricing flags, in flag order; empty when none were given.
     """
     given = (
         (getattr(args, "parameters", None), "--parameters"),
@@ -558,30 +405,16 @@ def _repricing_flags(args: argparse.Namespace) -> List[str]:
 def _load_or_evaluate(
     results_dir: str, args: argparse.Namespace, label: str
 ) -> "Tuple[EvaluationMatrix, Optional[InputAuditReport]]":
-    """Stored results if the directory has them and nothing re-prices them, else a fresh run (W4.5).
+    """Return the directory's stored results, or a fresh evaluation if it has none or a flag re-prices them.
 
-    Reporting is supposed to *render* an evaluation, not perform one — the docstring said so
-    long before the code did. A directory written by `evaluate`, by the postprocessing bridge or
-    by an earlier `report` carries everything the reports need, so it is rendered as it stands.
-
-    Two things send this to the engine instead: a directory holding nothing but
-    `economic_inputs.json`, and a re-pricing flag (`_repricing_flags`), which is a request to
-    render *these* assumptions rather than the stored ones.
-
-    The first of those only gets as far as the engine *with* `--parameters`. An inputs-only
-    directory carries no stored assumptions to price under, and the engine defaults are never a
-    fallback (`_load_parameters`), so without the flag the re-evaluation it announces fails
-    immediately with the message naming both ways to supply them.
-
-    The distinction matters to a reader of the output: rendered stored results show the numbers the
-    original run published, while a re-priced directory shows what today's data and the given
-    parameters say about the same physical facts. The printed line is the only signal of which
-    happened, so both re-pricing paths print one.
+    A directory written by `evaluate`, the postprocessing bridge or an earlier `report` is rendered as it stands. It is
+    re-evaluated when it holds only `economic_inputs.json` (which then needs `--parameters`, since there are no stored
+    assumptions) or when a re-pricing flag (`_repricing_flags`) is given; both cases print a line saying so.
 
     Args:
         results_dir: Directory to load or evaluate.
         args: The parsed CLI namespace, for `--parameters` and `--subsidy-catalog`.
-        label: How to name the directory in the printed message (the caller passes the path).
+        label: How to name the directory in the printed message.
 
     Returns:
         The matrix and the input audit, from storage or from a fresh evaluation.
@@ -601,26 +434,16 @@ def _load_or_evaluate(
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
-    """Writes cost_summary.md, lifecycle_report.html and the PNG charts for stored results.
+    """Run `report`: write cost_summary.md, lifecycle_report.html and the PNG charts for stored results.
 
-    ``report`` is the human-facing command: it renders the plausibility panel and the report
-    sections that follow the money along the calculation chain, from the input audit through the
-    year-0 investment build-up to the perspective and per-component views. It prefers *stored*
-    results and re-prices only when the directory has none or when a re-pricing flag asks it to
-    (`_load_or_evaluate`), which is what keeps reporting a rendering step rather than a second
-    evaluation (W4.5).
-
-    Two optional additions. ``--compare <reference_dir>`` loads a second directory, picks a shared
-    perspective (preferring `brownfield_net`, then `greenfield_net`) and adds the variant-comparison
-    section — delta waterfall, discounted payback band, warm-rent change — plus the payback PNG;
-    it goes through the same load-or-evaluate path, so both sides of a comparison are always priced
-    under the same assumptions. ``--scenarios`` evaluates a §4.6 cube for the scenario section;
-    that branch always needs the engine, since a cube is a set of fresh evaluations by definition,
-    and it also writes `scenario_cube.csv`/`.json`.
+    Renders stored results and re-prices only via `_load_or_evaluate`. `--compare <reference_dir>` loads a second
+    directory the same way, picks a shared perspective (`brownfield_net`, then `greenfield_net`) and adds the variant
+    comparison (delta waterfall, discounted payback band, warm-rent change) and the payback PNG. `--scenarios`
+    evaluates a §4.6 cube for the scenario section and writes `scenario_cube.csv`/`.json`.
 
     Returns:
-        0 on success; 2 with a message on stderr when the directory yields no results, or when the
-        two compared directories share no perspective.
+        0 on success; 2 with a message on stderr when the directory yields no results or the two compared directories
+            share no perspective.
     """
     from hisim.economics.plausibility import run_plausibility_checks
 
@@ -662,11 +485,9 @@ def _cmd_report(args: argparse.Namespace) -> int:
         matrix, plausibility, args.results_dir, audit, comparison, scenario_cube=scenario_cube,
         reference_result=reference_result,
     )
-    # One function owns the PNG set: handing it the comparison's reference makes it write the
-    # payback curve as part of that set, rather than the CLI writing a fifth file beside it under
-    # a name only it knew. The comparison goes with it — this one carries the two directories as
-    # its reference and variant ids, and recomputing it inside the renderer would relabel it with
-    # the defaults.
+    # One function owns the PNG set: given the comparison's reference, it writes the payback
+    # curve as part of that set. The comparison is passed in because it carries the two
+    # directories as reference and variant ids, which recomputing it would lose.
     _print_plot_skips(write_report_plots(matrix, args.results_dir, reference_result, comparison))
     print(
         f"Wrote cost_summary.md, lifecycle_report.html and PNG charts to {args.results_dir} "
@@ -676,13 +497,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
 
 
 def _print_plot_skips(plots: "PlotsWritten") -> None:
-    """Prints one line per chart the renderers did not draw, and nothing when they drew them all.
-
-    The PNG writers return their skips instead of logging them, precisely so each caller can
-    report in its own way: the postprocessing bridge logs them and leaves a file beside the
-    images, and the CLI — whose whole output is stdout — prints them under the command that
-    caused them. A figure missing without a stated reason is indistinguishable from a renderer
-    that crashed and was swallowed, which is the failure this exists to prevent.
+    """Print one line per chart the renderers did not draw; nothing when all were drawn.
 
     Args:
         plots: The `report_plots.PlotsWritten` a writer returned.
@@ -712,33 +527,21 @@ class StageMapping:
 
 
 class StagedCli:
-    """Everything the ``staged`` subcommand decides, in one place (E-spec §6, step 10 §5).
+    """Everything the `staged` subcommand decides, in one place.
 
-    The subcommand prices a renovation plan spread over several years out of the stored
-    ``economic_inputs.json`` of the jobs that simulated each of its states, and writes
-    ``economics_result.json``. It runs no simulation, reads no network and finishes in well under
-    a second for three stages, which is what lets a backend call it synchronously once the jobs it
-    names have finished.
+    `staged` prices a renovation plan spread over several years out of the stored `economic_inputs.json` of the jobs
+    that simulated each state, and writes `economics_result.json`. It runs no simulation and finishes in under a
+    second, so a backend can call it synchronously.
 
-    Its exit contract is the one the backend branches on, and it is deliberately narrower than the
-    other subcommands': **0** with the document, **2** with a ``problems.json`` beside it when the
-    *plan* is refused (a missing input file, years that run backwards, stages priced under
-    different conditions, an unknown perspective, a country with no data, any refused parameter
-    key), and **3** with one line on standard error when the *engine* refuses (an unresolvable
-    cost subject, D7). The difference matters because a 2 is something the caller can fix by
-    sending a different plan and a 3 is not. There is no exit 2 without the file: an unreadable
-    ``--parameters`` file is a refusal like any other rather than a traceback (shared todo B29).
-    The one exception is an ``--out`` without a directory (a bare file name): the document and its
-    ``problems.json`` go to ``--out``'s directory, which is the command's result directory, and the
-    working directory is not one (``hisim.calculation_scope``). It is refused with exit 2 and the
-    reason on standard error, since there is nowhere to write the file.
+    Exit codes: 0 with the document; 2 with a `problems.json` beside `--out` when the plan is refused (missing input,
+    years running backwards, stages priced under different conditions, unknown perspective, country without data,
+    refused parameter key, unreadable `--parameters` file); 3 with one line on stderr when the engine refuses (an
+    unresolvable cost subject). A 2 is fixable by sending a different plan; a 3 is not. An `--out` without a directory
+    is refused with exit 2 and a message only, since there is nowhere to write.
 
-    Its ``--parameters`` file is the document's own ``parameters`` block
-    (:class:`~hisim.economics.staged_parameters.StagedParameters`), not an
-    :class:`~hisim.economics.parameters.EconomicParameters` record: one vocabulary for what goes
-    in and what comes out. Neither the country nor the price basis year is ever defaulted or
-    re-derived — both are the ones the stages were priced with, read from their stored evaluation
-    or from their stored inputs, and a value in the file is only checked against them.
+    The `--parameters` file is the document's own `parameters` block (`staged_parameters.StagedParameters`), not an
+    `EconomicParameters` record. The country and the price basis year are always the stages' own; a value in the file
+    is only checked against them.
 
     Example::
 
@@ -761,9 +564,8 @@ class StagedCli:
 
     #: The perspective a RenoVisor plan is priced under unless the caller names another: existing
     #: assets in the register, subsidies applied where a catalogue says so, cash financing. The
-    #: E-spec calls it `brownfield_owner_subsidized_cash`; that id is an alias of this one and is
-    #: not in the shipped bundle (step 10 §1). Defined once, beside the parameter block that may
-    #: also name it, so the flag and the file cannot default differently.
+    #: id `brownfield_owner_subsidized_cash` is an alias of it and not in the shipped bundle.
+    #: Defined beside the parameter block that may also name it, so both default alike.
     DEFAULT_PERSPECTIVE: ClassVar[str] = StagedParameters.DEFAULT_PERSPECTIVE_ID
 
     #: What the problems document is called, beside the requested output.
@@ -774,11 +576,10 @@ class StagedCli:
 
     @staticmethod
     def out_directory(out: str) -> Optional[str]:
-        """The directory ``--out`` names, absolute, or ``None`` for a bare file name.
+        """Return the absolute directory `--out` names, or None for a bare file name.
 
-        The document, its ledger and a refusal's ``problems.json`` all land there, and it is the
-        directory the command's calculation may write in. A bare file name would make it the
-        working directory, which is nobody's result directory, so it names none.
+        The document, its ledger and a refusal's `problems.json` are written there. A bare file name would mean the
+        working directory, which is not a result directory, so it names none.
         """
         if not os.path.dirname(str(out)):
             return None
@@ -807,9 +608,8 @@ class StagedCli:
     #: the directory the backend already has rather than a path into it.
     RESULTS_SUBDIRECTORY: ClassVar[str] = "results"
 
-    #: Its two keys, taken from the class that writes the file so the two sides of the process
-    #: seam cannot drift: a rename in ``MappingReport.to_json`` would otherwise silently drop
-    #: every measure stamp and every unpriced flag from the document.
+    #: Its two keys, taken from the class that writes the file (``MappingReport.to_json``) so a
+    #: rename on that side cannot silently drop every measure stamp and unpriced flag.
     SUBJECTS_KEY: ClassVar[str] = MappingReport.SUBJECTS_FIELD
 
     #: Its key holding the subjects the translator could not price.
@@ -821,7 +621,7 @@ class StagedCli:
     #: Its key holding the sentence a subject's row carries as its ``note``.
     NOTES_KEY: ClassVar[str] = MappingReport.SUBJECT_NOTES_FIELD
 
-    #: Its key naming the reference subjects each measure subject replaces (hisim-ryw1).
+    #: Its key naming the reference subjects each measure subject replaces.
     REPLACES_KEY: ClassVar[str] = MappingReport.REPLACES_SUBJECTS_FIELD
 
     #: Its key holding the measure lines, taken from the writer for the same reason.
@@ -846,19 +646,18 @@ class StagedCli:
 
     @classmethod
     def parse_stage(cls, argument: str, index: int) -> Tuple[str, int, str, Optional[str]]:
-        """Split one ``--stage`` argument into its directory, year, label and job id.
+        """Split one `--stage` argument into its directory, year, label and job id.
 
         Args:
             argument: The argument as typed.
-            index: Its position among the ``--stage`` flags, so an error names which one.
+            index: Its position among the `--stage` flags, for the error message.
 
         Returns:
-            ``(directory, from_year, label, job_id)``; the job id is None when the argument has
-            only three fields.
+            `(directory, from_year, label, job_id)`; job id is None when the argument has three fields.
 
         Raises:
-            StagedEvaluationError: If the argument has the wrong number of fields or its year is
-                not an integer. Both are exit 2: the caller typed the plan.
+            StagedEvaluationError: If the argument has the wrong number of fields or its year is not an integer (exit
+                2).
         """
         fields = argument.split(cls.SEPARATOR)
         if not cls.MINIMUM_FIELDS <= len(fields) <= cls.MAXIMUM_FIELDS:
@@ -880,20 +679,18 @@ class StagedCli:
 
     @classmethod
     def read_stage(cls, argument: str, index: int) -> Tuple[Stage, str]:
-        """Read one stage's stored inputs out of its job directory.
+        """Read one stage's stored inputs from its job directory.
 
         Args:
-            argument: The ``--stage`` argument.
+            argument: The `--stage` argument.
             index: Its position, for the error messages.
 
         Returns:
-            The stage and the job directory it was read from, the latter because the mapping
-            report and the provenance file live beside the run rather than beside the inputs.
+            The stage, and the job directory it was read from (the mapping report and provenance file live there).
 
         Raises:
-            StagedEvaluationError: If neither the directory nor its ``results`` subdirectory
-                carries an ``economic_inputs.json``, which is a plan naming a job that has not
-                finished rather than an engine fault.
+            StagedEvaluationError: If neither the directory nor its `results` subdirectory has an
+                `economic_inputs.json` (a job that has not finished).
         """
         directory, from_year, label, job_id = cls.parse_stage(argument, index)
         source = cls.inputs_directory(directory)
@@ -920,18 +717,14 @@ class StagedCli:
 
     @classmethod
     def read_stage_measures(cls, directory: str, index: int, argument: str) -> Tuple[str, ...]:
-        """The catalogue measure ids one stage acts on, from its mapping report.
+        """Return the catalogue measure ids one stage acts on, from its mapping report.
 
-        The stage timeline a frontend draws from the document needs to say which measures a
-        stage carried out, and the only place that names them is the stage's own mapping report:
-        its ``measures[]`` entries, filtered to the ids the translation actually acted on --
-        ``used`` or ``approximated``, never ``not_implemented_yet`` -- and ordered by the
-        catalogue, so two plans of the same measures read the same regardless of the order the
-        requests happened to list them in. A stage without a report yields nothing here; the
-        mapping read below refuses it, so a report-less stage never reaches the document.
+        Takes the report's `measures[]` entries the translation acted on (`used` or `approximated`, never
+        `not_implemented_yet`), in catalogue order so the same measures always read the same. A stage without a report
+        yields nothing here; `read_mapping` refuses it.
 
         Args:
-            directory: The ``--stage`` argument's first field.
+            directory: The `--stage` argument's first field.
             index: The stage's position, for the error message.
             argument: The argument as typed, for the error message.
 
@@ -939,7 +732,7 @@ class StagedCli:
             The measure ids, in catalogue order.
 
         Raises:
-            StagedEvaluationError: When the report that is there does not read back as JSON.
+            StagedEvaluationError: If the report exists but is not valid JSON.
         """
         path = cls.mapping_report_path(directory)
         if path is None:
@@ -963,19 +756,16 @@ class StagedCli:
 
     @classmethod
     def inputs_directory(cls, directory: str) -> Optional[str]:
-        """Where one stage's stored inputs are: the directory itself, or its ``results``.
+        """Return where one stage's stored inputs are: the directory itself, or its `results` subdirectory.
 
-        A RenoVisor job directory holds the records, the mapping report and the payload, and puts
-        the simulation's own outputs -- ``economic_inputs.json`` among them -- one level down in
-        ``results/``. Accepting either is what lets the backend pass the job directory it already
-        has instead of a path into it, while a bare directory holding only the stored inputs still
-        works for a hand-run plan.
+        A RenoVisor job directory keeps the simulation outputs, `economic_inputs.json` among them, in `results/`;
+        accepting either lets a backend pass the job directory and a hand-run plan pass a bare inputs directory.
 
         Args:
-            directory: The ``--stage`` argument's first field.
+            directory: The `--stage` argument's first field.
 
         Returns:
-            The directory holding the inputs, or ``None`` when neither candidate does.
+            The directory holding the inputs, or None when neither candidate does.
         """
         for candidate in (directory, os.path.join(directory, cls.RESULTS_SUBDIRECTORY)):
             if os.path.isfile(os.path.join(candidate, cls.INPUTS_FILE_NAME)):
@@ -989,40 +779,27 @@ class StagedCli:
         arguments: Optional[List[str]] = None,
         stages: Optional[Sequence[Stage]] = None,
     ) -> "StageMapping":
-        """The subject-to-measure map and the subjects without a price, over every stage directory.
+        """Return the merged subject-to-measure map and subject flags over every stage directory.
 
-        Every stage directory must carry the translator's ``mapping_report.json``, in itself or
-        beside it: its ``subjects`` map says which catalogue measure created which cost subject
-        and its ``unpriced_subjects`` list says which of them the request carried no price for.
-        Its ``costless_subjects`` and ``subject_notes`` (renovisorissues #58) say which subjects
-        stand for a measure that costs nothing, and why a row has no price or costs nothing; a
-        report written before they existed has neither, and reads as empty.
-        Its ``replaces_subjects`` (hisim-ryw1) names the reference subjects each measure subject
-        replaces; for a report written before it existed the same rule is applied to the stage's
-        stored inputs (:meth:`_replaced_from_inputs`) when ``stages`` are given.
-        Later stages win over earlier ones, because a subject a later stage re-declares is the
-        later stage's.
-
-        A directory without one is refused rather than read as "nothing is unpriced". An unpriced
-        subject reaches the engine with an investment of zero
-        (``hisim/renovisor/economics.py``), and the flag is the only thing that distinguishes that
-        zero from a price of nothing; defaulting it to ``False`` publishes a complete-looking
-        total that understates the plan, which a reader of the document cannot detect.
+        Each stage directory must have the translator's `mapping_report.json`, in itself or its parent: `subjects` says
+        which catalogue measure created which cost subject, `unpriced_subjects` which have no price,
+        `costless_subjects` which stand for a measure that costs nothing, `subject_notes` why, and `replaces_subjects`
+        which reference subjects each measure subject replaces. Keys missing from an older report read as empty;
+        missing `replaces_subjects` is derived from the stored inputs when `stages` are given
+        (`_replaced_from_inputs`). Later stages win. A directory without a report is refused: an unpriced subject
+        reaches the engine with an investment of zero, and only the flag tells that apart from a real price of nothing.
 
         Args:
             directories: The stage directories, in stage order.
-            arguments: The ``--stage`` arguments they came from, for the refusal message; the
-                directories themselves when the caller does not pass them.
-            stages: The stages read from the same directories, in the same order, for the
-                ``replaces_subjects`` of a report that predates it; without them such a report
-                contributes none.
+            arguments: The `--stage` arguments they came from, for the refusal message; the directories when not given.
+            stages: The stages read from the same directories, for deriving `replaces_subjects`; without them an older
+                report contributes none.
 
         Returns:
-            The :class:`StageMapping`.
+            The `StageMapping`.
 
         Raises:
-            StagedEvaluationError: Naming the first directory with no report, which the CLI turns
-                into exit 2 with a ``problems.json``.
+            StagedEvaluationError: Naming the first directory without a report (exit 2 with `problems.json`).
         """
         spelled = arguments if arguments is not None else directories
         measures: Dict[str, Optional[str]] = {}
@@ -1071,17 +848,15 @@ class StagedCli:
     def _replaced_from_inputs(
         stage: Stage, reference: Stage, measures: Mapping[str, Optional[str]]
     ) -> Dict[str, List[str]]:
-        """The ``replaces_subjects`` a report written before hisim-ryw1 would carry.
+        """Derive the `replaces_subjects` for a mapping report that lacks the field.
 
-        The translator's rule (:class:`~hisim.renovisor.economics.ReplacedSubjects`) over what the
-        stage's stored inputs hold: the register the translator wrote, with its
-        ``replaced_by_asset_classes``, the stage's subjects a measure created, and the reference
-        stage's subjects. A reference evaluated before its fabric had subjects names no envelope
-        element, because it holds no such row.
+        Applies the translator's rule (`renovisor.economics.ReplacedSubjects`) to the stage's stored register (with its
+        `replaced_by_asset_classes`), the stage's measure subjects and the reference stage's subjects. A reference
+        without envelope subjects names no envelope element.
 
         Args:
             stage: The stage whose report lacks the field.
-            reference: ``stages[0]``, the do-nothing reference.
+            reference: `stages[0]`, the do-nothing reference.
             measures: The subject-to-measure map merged so far, this stage's report included.
 
         Returns:
@@ -1106,19 +881,14 @@ class StagedCli:
         costless: List[str],
         notes: Dict[str, str],
     ) -> None:
-        """Fill in what a mapping report written before renovisorissues #58 does not say.
+        """Fill in what an older mapping report without `costless_subjects` and `subject_notes` does not say.
 
-        Such a report has no ``costless_subjects`` and no ``subject_notes``, and no subject for a
-        measure the engine prices nothing for, so a cached job that changed the set point or lagged
-        the cylinder would have no row for it and be refused. The translator's own declarations
-        (:class:`~hisim.renovisor.economics.MeasureSubjects`) are what a re-translation would write,
-        so they stand in (owner decision of 2026-09-26): for every declared measure the stage acts
-        on, the measure-named subject, its unpriced or costless flag and its note
-        (:meth:`~hisim.renovisor.economics.MeasureSubjects.declare`). An unpriced subject the report
-        names without a note -- an envelope measure the request carried no price for -- gets the
-        note the translator gives it (:attr:`EconomicContextBuilder.UNPRICED_NOTE`), so no unpriced
-        row is published without one. A measure that is neither declared nor has a subject stays
-        without a row, and the document still refuses it.
+        Such a report also has no subject for a measure the engine prices at nothing (e.g. changing the set point),
+        which the document would refuse. The translator's own declarations
+        (`renovisor.economics.MeasureSubjects.declare`) stand in: for every declared measure the stage acts on, the
+        measure-named subject, its unpriced or costless flag and its note. An unpriced subject without a note gets the
+        translator's `EconomicContextBuilder.UNPRICED_NOTE`. A measure that is neither declared nor has a subject stays
+        without a row.
 
         Args:
             report: One stage's mapping report, as read.
@@ -1138,16 +908,16 @@ class StagedCli:
 
     @classmethod
     def mapping_report_path(cls, directory: str) -> Optional[str]:
-        """Where one stage's mapping report is: in the directory, or in its parent.
+        """Return the path of one stage's mapping report: in the directory, or in its parent.
 
-        A RenoVisor job writes the report beside its records and the simulation's own outputs one
-        level down, so a caller who named the ``results`` subdirectory outright still finds it.
+        A RenoVisor job writes the report beside its records and the simulation outputs one level down, so naming the
+        `results` subdirectory still finds it.
 
         Args:
-            directory: The ``--stage`` argument's first field.
+            directory: The `--stage` argument's first field.
 
         Returns:
-            The path, or ``None`` when neither candidate carries one.
+            The path, or None when neither candidate has one.
         """
         for candidate in (
             os.path.join(directory, cls.MAPPING_REPORT_FILE_NAME),
@@ -1159,16 +929,16 @@ class StagedCli:
 
     @classmethod
     def perspective(cls, requested: Optional[str]) -> Perspective:
-        """The perspective the plan is priced under, by id, from the shipped bundle.
+        """Return the shipped-bundle perspective the plan is priced under, by id.
 
         Args:
-            requested: The ``--perspective`` id, or None for :attr:`DEFAULT_PERSPECTIVE`.
+            requested: The `--perspective` id, or None for `DEFAULT_PERSPECTIVE`.
 
         Returns:
             The perspective.
 
         Raises:
-            StagedEvaluationError: If the bundle has no row with that id, listing the ids it has.
+            StagedEvaluationError: If the bundle has no row with that id; the message lists the ids it has.
         """
         wanted = requested or cls.DEFAULT_PERSPECTIVE
         bundle = load_default_bundle()
@@ -1180,10 +950,8 @@ class StagedCli:
             f"{', '.join(perspective.id for perspective in bundle)}."
         )
 
-    #: Code of the refusal raised when one plan's stages do not agree about the country they
-    #: were priced for — within one stage (its stored evaluation and its stored inputs say
-    #: different things) or across them. A plan is one country's price data, and which country it
-    #: is, is the stages' statement, so a contradiction in it has no answer the CLI could pick.
+    #: Code of the refusal raised when one plan's stages do not agree about the country they were
+    #: priced for, within one stage (stored evaluation versus stored inputs) or across stages.
     STAGE_COUNTRY_MISMATCH_CODE: ClassVar[str] = "stage.country.mismatch"
 
     #: The same, for the price basis year: one plan is one price level.
@@ -1203,26 +971,22 @@ class StagedCli:
         from_evaluation: Optional[Any],
         from_inputs: Optional[Any],
     ) -> Optional[Any]:
-        """One stage's statement of one fact, out of the two files that may carry it.
+        """Return one stage's value of one fact (country or price basis year) from the two files that may state it.
 
-        A finished job states the country it was priced for and the price basis year it priced at
-        twice: in the parameters of its stored evaluation (``lifecycle_costs.json``) and in its
-        stored inputs (``economic_inputs.json``, which carries both since step 13). Which of them
-        a stage directory holds depends on who assembled it — a backend's worker ships the
-        extract and the mapping report and nothing else — so both are read, and a directory
-        carrying both has to say the same thing in each.
+        A finished job states it in its stored evaluation (`lifecycle_costs.json`) and its stored inputs
+        (`economic_inputs.json`); a backend's stage directory may hold only the latter. A directory holding both must
+        state the same value in each.
 
         Args:
-            index: The stage's position, so a refusal names which one.
+            index: The stage's position, for the refusal message.
             directory: The directory the stage's inputs were read from.
-            name: What the fact is called in the message, e.g. ``"country"``.
+            name: What the fact is called in the message, e.g. `"country"`.
             code: The problem code a contradiction is published under.
             from_evaluation: What the stored evaluation says, or None.
             from_inputs: What the stored inputs say, or None.
 
         Returns:
-            The fact, or None when neither file states it (an extract written before the keys
-            existed, and no stored evaluation beside it).
+            The fact, or None when neither file states it.
 
         Raises:
             StagedEvaluationError: If the two files of one stage state different values.
@@ -1243,14 +1007,12 @@ class StagedCli:
     def agreed_across_stages(
         cls, stated: List[Tuple[str, Any]], name: str, code: str
     ) -> Optional[Any]:
-        """The one value the stages state, or a refusal naming every stage that disagrees.
+        """Return the one value the stages state for a fact, or refuse naming every stage that disagrees.
 
-        A plan whose stages were priced for different countries has no single set of price data
-        behind it, and one priced at different basis years has no single price level; pricing
-        either anyway would put figures from two worlds on one axis.
+        Stages priced for different countries or at different price basis years cannot be put on one axis.
 
         Args:
-            stated: ``(directory, value)`` for every stage that states the fact, in stage order.
+            stated: `(directory, value)` for every stage that states the fact, in stage order.
             name: What the fact is called in the message.
             code: The problem code a contradiction is published under.
 
@@ -1275,27 +1037,22 @@ class StagedCli:
     def stored_assumptions(
         cls, directories: List[str]
     ) -> Tuple[Optional[EconomicParameters], Optional[str], Optional[int]]:
-        """What the stages themselves say the plan is priced under, and that they say one thing.
+        """Return what the stages say the plan is priced under, checking that they agree.
 
-        Every stage was simulated and priced by its own job, and a job leaves two statements of
-        what it was priced under: the full parameter record in its ``lifecycle_costs.json``, and —
-        because a backend's stage directory holds only the extract and the mapping report — the
-        country and the resolved price basis year in its ``economic_inputs.json``. The record is
-        the base the ``--parameters`` file overlays; those two are resolved separately, because
-        they are the values a stage always states and the ones the file may never change.
+        The stored parameter record (`lifecycle_costs.json`) is the base the `--parameters` file overlays; the country
+        and the price basis year are resolved separately from both stored files, because the file may never change
+        them.
 
         Args:
             directories: The stage directories, in stage order.
 
         Returns:
-            ``(the first stage's stored parameter record or None, the stages' country or None,
-            the stages' price basis year or None)``. The record is None for stage directories
-            holding no stored evaluation, which is what a backend's worker writes; the two facts
-            then still come out of the stored inputs.
+            `(first stage's stored parameter record or None, the stages' country or None, the stages' price basis year
+                or None)`. The record is None when the directories hold no stored evaluation (as a backend writes
+                them).
 
         Raises:
-            StagedEvaluationError: If one stage contradicts itself or two stages contradict each
-                other about either fact.
+            StagedEvaluationError: If a stage contradicts itself or two stages contradict each other about either fact.
         """
         sources = [cls.inputs_directory(directory) or directory for directory in directories]
         records = [(directory, read_stored_parameters(directory)) for directory in sources]
@@ -1332,23 +1089,18 @@ class StagedCli:
 
     @classmethod
     def read_parameters_file(cls, path: str) -> Any:
-        """Read the ``--parameters`` file, as a refusal rather than as a traceback.
+        """Read the `--parameters` file, refusing a missing or unparsable file like a bad key.
 
-        A file that is not there or is not JSON is the caller's mistake in exactly the way a bad
-        key is, so it leaves the same artifact: exit 2 with a ``problems.json``. Letting the
-        ``OSError`` or ``JSONDecodeError`` escape produced an exit 2 with no file at all, which a
-        backend can only report as a broken engine (shared todo B29).
+        The refusal is exit 2 with a `problems.json`, the same as for a refused key.
 
         Args:
-            path: The ``--parameters`` argument.
+            path: The `--parameters` argument.
 
         Returns:
-            The parsed document, of whatever JSON type it happens to be;
-            :meth:`StagedParameters.from_mapping` refuses one that is not an object.
+            The parsed JSON, of any type; `StagedParameters.from_mapping` refuses one that is not an object.
 
         Raises:
-            StagedEvaluationError: If the file is missing or does not parse, carrying the one
-                problem row that names it.
+            StagedEvaluationError: If the file is missing or does not parse, carrying one problem row that names it.
         """
         def refuse(message: str) -> StagedEvaluationError:
             """Build the refusal, with the one ``parameters.unreadable`` row it carries."""
@@ -1380,25 +1132,22 @@ class StagedCli:
 
     @classmethod
     def parameters(cls, args: argparse.Namespace, directories: List[str]) -> Tuple[StagedParameters, str]:
-        """The parsed ``--parameters`` block and the perspective id the plan is priced under.
+        """Return the parsed `--parameters` block and the perspective id the plan is priced under.
 
-        The whole input contract of the subcommand in one call: the stages' stored assumptions are
-        the base, the ``--parameters`` file states what may be changed
-        (:class:`~hisim.economics.staged_parameters.ParameterKeys`), and ``--perspective`` is
-        reconciled with the file's ``perspective_id``. Every fault is collected and reported at
-        once, because fixing a five-key block one round-trip per key is not a conversation anyone
-        should have with a batch job.
+        The stages' stored assumptions are the base, the file states what may change
+        (`staged_parameters.ParameterKeys`), and `--perspective` is reconciled with the file's `perspective_id`. All
+        faults are collected and reported at once.
 
         Args:
-            args: The parsed namespace, for ``--parameters`` and ``--perspective``.
+            args: The parsed namespace, for `--parameters` and `--perspective`.
             directories: The stage directories, in stage order.
 
         Returns:
-            ``(the parsed parameters, the perspective id)``.
+            `(the parsed parameters, the perspective id)`.
 
         Raises:
-            StagedEvaluationError: If any key is refused, carrying one problem row per offending
-                key, or if the stages disagree about their country.
+            StagedEvaluationError: If any key is refused (one problem row per key), or the stages disagree about their
+                country.
         """
         stored, stored_country, stored_year = cls.stored_assumptions(directories)
         raw: Any = cls.read_parameters_file(args.parameters) if args.parameters else {}
@@ -1422,11 +1171,10 @@ class StagedCli:
 
     @classmethod
     def carried_out_by_stage(cls, stages: List[Stage]) -> List[Tuple[str, ...]]:
-        """The measures each stage carries out itself: the ones new in it, all of stage 0's.
+        """Return the measures each stage carries out itself: all of stage 0's, and only the new ones later.
 
-        A RenoVisor stage's ``measures`` are every measure of its package, so a later stage lists
-        the earlier stages' measures again; only the ones it adds are its own job, and only those
-        can carry a quote for it.
+        A RenoVisor stage lists every measure of its package, including earlier stages'; only the ones it adds are its
+        own and can carry a quote.
 
         Args:
             stages: The plan, in stage order.
@@ -1444,15 +1192,12 @@ class StagedCli:
     def investment_overrides(
         cls, parsed: StagedParameters, stages: List[Stage], mapping: "StageMapping"
     ) -> Tuple[InvestmentOverride, ...]:
-        """The reader's quotes, checked against the stages and resolved to the subjects they price.
+        """Return the reader's investment quotes, checked against the stages and resolved to the subjects they price.
 
-        Each quote must name a stage the plan has, a catalogue measure, one that costs something,
-        and one the stage carries out (:meth:`carried_out_by_stage`) and buys something for: its
-        main subject must be one the stage pays for, not one it carries over. Every such fault is
-        a problem row (exit 2), all at once. The main subject is then resolved by
-        :class:`~hisim.renovisor.economics.MainSubjects` over the subjects the translator stamped
-        with the measure in that stage (renovisorissues #53); a measure whose main subject cannot
-        be determined is an engine failure (exit 3), never a guess.
+        Each quote must name a stage of the plan and a catalogue measure that costs something, that the stage carries
+        out (`carried_out_by_stage`) and whose main subject the stage pays for rather than carries over; every fault is
+        a problem row (exit 2), reported together. The main subject is resolved by `renovisor.economics.MainSubjects`
+        over the subjects the translator assigned to the measure in that stage.
 
         Args:
             parsed: The parsed parameter block.
@@ -1464,7 +1209,7 @@ class StagedCli:
 
         Raises:
             StagedEvaluationError: Carrying one problem row per quote that does not fit the plan.
-            MainSubjectError: When a quote's main subject cannot be determined.
+            MainSubjectError: When a quote's main subject cannot be determined (exit 3).
         """
         quotes = parsed.investment_overrides
         if not quotes:
@@ -1522,19 +1267,17 @@ class StagedCli:
 
     @classmethod
     def write_problems(cls, out_path: str, error: StagedEvaluationError) -> str:
-        """Write the ``problems.json`` a refused plan produces, beside the requested output.
+        """Write the `problems.json` of a refused plan beside the requested output.
 
-        Every exit 2 of this subcommand writes this file, which is what a backend branches on: an
-        exit 2 without it is a broken engine rather than a refused request (shared todo B29). A
-        refusal that carries per-key rows — a parameter block — publishes them verbatim; every
-        other refusal is one row worded from the message.
+        Every exit 2 of `staged` writes this file; a backend reads an exit 2 without it as a broken engine. Per-key
+        rows (from a parameter block) are written verbatim; any other refusal becomes one row from its message.
 
         Args:
-            out_path: The ``--out`` path the caller asked for, which is not written.
-            error: The refusal, as the evaluator or this class raised it.
+            out_path: The `--out` path the caller asked for, which is not written.
+            error: The refusal.
 
         Returns:
-            Where the problems document was written, so the message on stderr can name it.
+            The path of the problems document, for the message on stderr.
         """
         rows: List[Mapping[str, Any]] = list(error.problems) or [
             {"code": cls.PLAN_PROBLEM_CODE, "message": str(error)}
@@ -1549,23 +1292,15 @@ class StagedCli:
 
 
 def _cmd_staged(args: argparse.Namespace) -> int:
-    """``staged``: price a multi-year plan out of finished jobs into ``economics_result.json``.
+    """Run `staged`: price a multi-year plan out of finished jobs into `economics_result.json`.
 
-    The whole subcommand, and the only place its three exit codes are decided. It reads each
-    ``--stage`` argument's directory, resolves the assumptions, the perspective and the optional
-    subsidy catalogue, prices the plan with :class:`~hisim.economics.staged.StagedEvaluator` and
-    writes the document of E-spec §3, validated against its schema before the first byte lands,
-    then the plan's provenance ledger as ``cost_provenance.json`` in the same directory — an
-    artifact of every economics job (``economics-backend-spec.md`` §2.3), and the file the
-    document's ``provenance.cost_provenance`` names. It is written only once the document is, so
-    a document refused by its own schema leaves neither file behind.
+    Reads each `--stage` directory, resolves the assumptions, perspective and optional subsidy catalogue, prices the
+    plan with `staged.StagedEvaluator`, validates the document against its schema and writes it, then writes the plan's
+    provenance ledger as `cost_provenance.json` in the same directory. A document refused by its schema leaves neither
+    file. Prints the progress lines `reading`, `evaluating` and `writing` (`hisim.renovisor.progress`).
 
     Returns:
-        0 on success, 2 for a refused plan (with a ``problems.json`` beside ``--out``), 3 for an
-        engine failure.
-
-    It writes the progress lines of ``reading``, ``evaluating`` and ``writing`` on standard output
-    (:mod:`hisim.renovisor.progress`); there is no time loop, so they carry no days.
+        0 on success, 2 for a refused plan (with a `problems.json` beside `--out`), 3 for an engine failure.
     """
     progress = ProgressWriter()
     progress.enter(Phase.READING)
@@ -1584,12 +1319,9 @@ def _cmd_staged(args: argparse.Namespace) -> int:
         print(f"{error} (problems written to {path})", file=sys.stderr)
         return StagedCli.PLAN_REFUSED
 
-    # Which catalogue a plan is priced under (step 11 §3, item 12): `--subsidy-catalog` wins, then
-    # a path the stages' stored record names, and failing both the shipped directory when it has
-    # this country's file. The last step is what a stage directory holding only the extract needs:
-    # the extract carries no catalogue path and is not meant to, and without the default such a
-    # plan published every subsidy as undetermined while the same plan over full job directories
-    # priced the grants.
+    # Which catalogue a plan is priced under: `--subsidy-catalog` wins, then a path the stages'
+    # stored record names, then the shipped directory if it has this country's file. The last
+    # step serves a stage directory holding only the extract, which names no catalogue.
     catalog_path = getattr(args, "subsidy_catalog", None)
     try:
         catalog = SubsidyCatalog.load_configured(
@@ -1639,8 +1371,8 @@ def _cmd_staged(args: argparse.Namespace) -> int:
     try:
         document.write(Path(args.out))
     except (SubsidyReconciliationError, BandOrderError, MeasureWithoutRowError) as error:
-        # All three are ValueErrors, which `main` would report as a mistyped invocation (exit 2). They
-        # are engine bugs by their own definition, and write() refuses before the file exists.
+        # All three are ValueErrors, which `main` would report as a mistyped invocation (exit 2).
+        # They are engine errors, and write() refuses before the file exists.
         print(str(error), file=sys.stderr)
         return StagedCli.ENGINE_FAILED
     # `write` created the directory; the ledger goes beside the document it explains.
@@ -1653,18 +1385,14 @@ def _cmd_staged(args: argparse.Namespace) -> int:
 
 
 def _cmd_validate(_args: argparse.Namespace) -> int:
-    """``validate``: run the §9.6 data-file CI checks over the shipped data, as a CI gate.
+    """Run `validate`: the §9.6 data-file checks over the shipped `hisim/cost_database/` and `hisim/subsidy_catalog/`.
 
-    Takes no arguments and always checks the shipped `hisim/cost_database/` and
-    `hisim/subsidy_catalog/`. Prints every warning, then every error, then a count line; the same
-    checks run in CI, so this is what to execute after editing a price, adding a source or writing a
-    subsidy scheme, before opening the PR.
+    Prints every warning, every error and a count line. The same checks run in CI; run this after editing a price, a
+    source or a subsidy scheme. An error means the shipped data is inconsistent (e.g. an unsourced datapoint, a
+    coverage hole, a malformed tariff contract, an exclusion naming an unknown scheme).
 
     Returns:
-        0 when there are no errors (warnings alone do not fail it), 1 otherwise. A non-zero exit
-        means the shipped data is internally inconsistent — an unsourced datapoint, a coverage or
-        question-coverage hole, a malformed tariff contract, an exclusion naming a scheme that does
-        not exist — and any run using it would be untrustworthy rather than merely imperfect.
+        0 when there are no errors (warnings do not count), 1 otherwise.
     """
     report = validate_all()
     for warning in report.warnings:
@@ -1676,12 +1404,10 @@ def _cmd_validate(_args: argparse.Namespace) -> int:
 
 
 def _output_directory(args: argparse.Namespace) -> Optional[str]:
-    """Return the directory a subcommand writes into, or ``None`` when it writes nowhere.
+    """Return the directory a subcommand writes into, or None when it writes nowhere.
 
-    ``staged`` writes its document and, on a refusal, ``problems.json`` beside ``--out`` (a bare
-    file name names no directory, and ``staged`` refuses it); the three commands that take a result
-    directory write into it. A result directory that does not exist is not created here: the
-    command reports it as the bad invocation it is.
+    `staged` writes beside `--out` (a bare file name names no directory); the other commands write into their result
+    directory. A missing result directory is not created here; the command reports it.
     """
     if args.command == "staged":
         return StagedCli.out_directory(args.out)
@@ -1692,24 +1418,17 @@ def _output_directory(args: argparse.Namespace) -> Optional[str]:
 
 
 def main(argv=None) -> int:
-    """Entry point.
+    """Parse the arguments, run the matching `_cmd_*` handler and return its exit code.
 
-    Builds the four subparsers (each documented in the module docstring), dispatches to the matching
-    `_cmd_*` handler and returns its exit code. The one piece of behaviour that lives here rather
-    than in a handler is the error contract. `UnresolvableSubjectsError` is caught for *every*
-    subcommand and turned into exit code 2 with the error on stderr — the same message the
-    postprocessing bridge logs — so no entry point can ever emit a partial cost result. Every other
-    `CostDataError` and the ordinary shapes of a bad invocation (`OSError` for an unreadable path,
-    `json.JSONDecodeError` for a malformed file, `ValueError` for a rejected value) are reported the
-    same way, because the module docstring promises a message rather than a traceback for a data or
-    invocation problem. Any other exception type propagates: that is a defect, and a traceback is
-    the right report for it.
+    `UnresolvableSubjectsError`, every other `CostDataError`, `OSError`, `json.JSONDecodeError` and `ValueError` are
+    caught for every subcommand and reported on stderr with exit code 2, so a data or invocation problem is a message,
+    not a traceback, and no partial cost result is emitted. Other exceptions propagate.
 
     Args:
-        argv: Argument list, defaulting to `sys.argv[1:]`; passed explicitly by the CLI tests.
+        argv: Argument list, defaulting to `sys.argv[1:]`.
 
     Returns:
-        The subcommand's exit code, or 2 for an unresolvable subject or a data/invocation problem.
+        The subcommand's exit code, or 2 for an unresolvable subject or a data or invocation problem.
     """
     parser = argparse.ArgumentParser(prog="python -m hisim.economics")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1806,20 +1525,18 @@ def main(argv=None) -> int:
         with CalculationScope.open(label=f"hisim.economics {args.command}", run_directory=_output_directory(args)):
             return int(args.func(args))
     except UnresolvableSubjectsError as err:
-        # D7 (cost-spec-v2 §8): evaluate/explain/report all refuse to produce partial cost
-        # results; the same message the bridge logs goes to stderr with a non-zero exit code.
+        # An unresolvable subject: no partial cost results; the message the bridge logs goes to
+        # stderr with exit code 2.
         print(str(err), file=sys.stderr)
         return 2
     except CostDataError as err:
-        # Everything else the data layer refuses to do — an unloadable database, a missing
-        # `--parameters` file (issue #23). Same channel, same exit code: the caller asked for a
-        # priced result and is told why there is none instead of getting one built on defaults.
+        # Everything else the data layer refuses (an unloadable database, a missing
+        # `--parameters` file): same channel, same exit code, never a result built on defaults.
         print(str(err), file=sys.stderr)
         return 2
     except (OSError, json.JSONDecodeError, ValueError) as err:
-        # The ordinary shapes of a bad invocation: a directory that is not there, a JSON file that
-        # will not parse, a parameter value the record rejects. A traceback would be the wrong
-        # report for any of them — the caller mistyped something, they did not hit a bug.
+        # The ordinary shapes of a bad invocation: a missing directory, a JSON file that will not
+        # parse, a rejected parameter value. The caller mistyped something; no traceback.
         print(f"{type(err).__name__}: {err}", file=sys.stderr)
         return 2
 

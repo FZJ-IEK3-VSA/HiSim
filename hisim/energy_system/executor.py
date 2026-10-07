@@ -299,7 +299,7 @@ class EnergySystemExecutor:
                 self.simulation_parameters,
                 # A re-run of a record expands nothing; its record states the consuming outputs to check.
                 consuming=imports.consuming or ImportRecord.consuming_of(self.model.metadata),
-                selection=imports.selection if imports.selection.observers or imports.selection.controllables else None,
+                selection=imports.selection if imports.selection else None,
             )
             expanded = self.with_selected_feeds(expanded, wired)
         except EnergySystemCatalogueError as error:

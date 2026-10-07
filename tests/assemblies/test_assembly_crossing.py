@@ -31,7 +31,7 @@ from hisim.energy_system.errors import (
 )
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState, Selection
-from hisim.energy_system.model import DefaultInputs, EnergySystemFile, SourceReference
+from hisim.energy_system.model import AggregatorFeed, DefaultInputs, EnergySystemFile, SourceReference
 from hisim.energy_system.wiring_checks import ConsumingOutput
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from tests.assemblies.helpers import (
@@ -46,6 +46,7 @@ from tests.assemblies.helpers import (
     site,
     system_text,
 )
+from tests.assemblies.mock_components import MEASURED
 
 #: The site of most systems here.
 SITE = site(WEATHER, OCCUPANCY)
@@ -227,16 +228,50 @@ def test_a_site_entry_is_a_circuit_end_of_its_own() -> None:
 # ------------------------------------------------------------------------------------------ carriers
 
 
+def gas_feed(source: str, output: str) -> AggregatorFeed:
+    """The mock gas meter's declared feed for one consuming output, written explicitly (D30)."""
+    return AggregatorFeed(source=source, output=output, tags=("GAS_CONSUMPTION_UNCONTROLLED",), weight=MEASURED)
+
+
 @pytest.mark.assemblies
-def test_a_fuel_need_lowers_to_a_bare_name_in_the_providers_meter_and_hands_the_wiring_its_outputs() -> None:
-    """Catches a burner whose gas no meter observes."""
+def test_a_fuel_need_lands_as_the_meters_declared_feed_written_explicitly(tmp_path: Path) -> None:
+    """Catches a burner whose gas no meter observes, or a meter fed the consumer's bare name (D30)."""
     model, record = boiler_house()
 
-    assert model.components["gas-Meter"].inputs == (DefaultInputs(source="boiler-Boiler"),)
+    assert model.components["gas-Meter"].inputs == ()
     assert record.consuming == [ConsumingOutput("boiler-Boiler", "FuelUse", "natural_gas", "gas-Meter")]
+    assert record.selection.landings == record.consuming
     fuel = ports(record, "boiler")["fuel"]
     assert (fuel.decision, fuel.partner) == ("bound", "gas.connection (meter gas-Meter)")
+    assert fuel.lowered_to == ("gas-Meter.inputs: boiler-Boiler.FuelUse (its declared feed)",)
     assert ports(record, "gas")["connection"].partner == "boiler.fuel"
+    built = build_text(system_text("boiler_house.energy_system.yaml"), tmp_path)
+    assert built.model.components["gas-Meter"].inputs == (gas_feed("boiler-Boiler", "FuelUse"),)
+
+
+@pytest.mark.assemblies
+def test_two_named_outputs_land_as_two_feeds_and_an_unnamed_one_is_not_metered(tmp_path: Path) -> None:
+    """Catches a meter that meters every output its class declares instead of the ones the carrier need names."""
+    library = Library(tmp_path)
+    library.add(
+        "test/combi",
+        f"""\
+        schema_version: 4
+        kind: assembly
+        name: test/combi
+        components:
+          Burner: {{class: {MOCKS}.MockCombiBurner, preset: standard}}
+        interface:
+          needs:
+            fuel: {{carrier: natural_gas, outputs: [Burner.FuelSh, Burner.FuelDhw]}}
+        {EMPTY_CONTRACT}""",
+    )
+    text = SITE + imports("gas: {assembly: mock/gas_connection}", "combi: {assembly: test/combi}")
+    built = build_text(text, tmp_path / "results", library.resolver())
+    assert built.model.components["gas-Meter"].inputs == (
+        gas_feed("combi-Burner", "FuelSh"),
+        gas_feed("combi-Burner", "FuelDhw"),
+    )
 
 
 @pytest.mark.assemblies
@@ -280,7 +315,8 @@ def test_site_entries_provide_and_consume_carriers_alike() -> None:
         site(WEATHER, OCCUPANCY, meter)
         + imports("boiler: {assembly: mock/gas_boiler}", "cylinder: {assembly: mock/dhw_cylinder}")
     )
-    assert model.components["Meter"].inputs == (DefaultInputs(source="boiler-Boiler"),)
+    assert model.components["Meter"].inputs == ()
+    assert record.selection.landings == [ConsumingOutput("boiler-Boiler", "FuelUse", "natural_gas", "Meter")]
     assert record.site_ports["Meter"][0].partner == "boiler.fuel"
 
 
@@ -325,13 +361,19 @@ def test_the_reader_refuses_a_provision_of_the_wrong_shape(tmp_path: Path, port:
             "EF-7M",
             "consumed as heating_oil, but its energy port carries natural_gas",
         ),
-        ("[Boiler.FuelUse, Boiler.FlueLoss]", "natural_gas", "EF-7N", "feeds FuelUse of MockBoiler 'boiler-Boiler'"),
+        (
+            "[Boiler.FuelUse, Boiler.FlueLoss]",
+            "natural_gas",
+            "EF-7N",
+            "names the consuming output 'boiler-Boiler.FlueLoss', but the meter 'supply-Meter' (MockGasMeter) declares "
+            "no feed for it; of MockBoiler it declares feeds for FuelUse",
+        ),
     ],
 )
 def test_the_wiring_checks_what_a_carrier_need_states_and_no_wire_shows(
     tmp_path: Path, outputs: str, carrier: str, code: str, fragment: str
 ) -> None:
-    """A consuming output exists, carries the need's carrier, and is exactly what the meter feeds."""
+    """A consuming output exists, carries the need's carrier, and is an output its meter declares a feed for."""
     library = Library(tmp_path)
     library.add(
         "test/burner",

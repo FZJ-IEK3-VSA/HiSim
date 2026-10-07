@@ -37,7 +37,8 @@ from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId, EnergySystemRecordError
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
-from hisim.energy_system.model import AggregatorFeed, DispatchSpec
+from hisim.energy_system.model import AggregatorFeed, ConsumingOutput, DispatchSpec
+from hisim.energy_system.wiring_checks import check_consuming_outputs, meter_feed_of
 
 
 @dataclass
@@ -100,10 +101,22 @@ class Controllable:
 
 @dataclass
 class SelectionPlan:
-    """Every observer and controllable output of one expanded system; the wiring planner calls it."""
+    """Every observer, controllable output and metered consuming output of one expanded system; the wiring calls it.
+
+    A consuming output a carrier need names lands at its provider's meter as the feed the meter's
+    class declares for it, written explicitly (D30, §5.1); the declaration exists only on the
+    constructed meter, so the landing is planned here, beside the observers' selections, and the
+    realized record writes it into the meter's inputs as it writes theirs.
+    """
 
     observers: List[Observer] = field(default_factory=list)
     controllables: List[Controllable] = field(default_factory=list)
+    #: The consuming outputs with a meter, in the order the carrier needs named them.
+    landings: List[ConsumingOutput] = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        """Whether the wiring has anything to select or land."""
+        return bool(self.observers or self.controllables or self.landings)
 
     @staticmethod
     def error(error_id: EnergySystemErrorId, component: str, problem: str, **kwargs: Any) -> EnergySystemAssemblyError:
@@ -122,12 +135,15 @@ class SelectionPlan:
             components: Every constructed component by its name in the file, in file order.
 
         Returns:
-            Each observer's feeds, in candidate order.
+            Each observer's feeds, in candidate order, then each meter's landed feeds, in the order
+            the carrier needs named their outputs.
 
         Raises:
             EnergySystemAssemblyError: ``EF-7S`` for an observer that cannot observe or a selector
                 matching nothing, ``EF-7V`` for a derived weight that ties with another component
                 type's, ``EF-7U`` for a controllable output actuated by none or two.
+            EnergySystemWiringError: ``EF-21``, ``EF-7M`` or ``EF-7N`` for a consuming output that its
+                consumer does not have, that carries another carrier, or that its meter declares no feed for.
         """
         rankers: Dict[Tuple[str, str], List[str]] = {}
         selected: Dict[str, List[AggregatorFeed]] = {}
@@ -149,6 +165,18 @@ class SelectionPlan:
                     + (f", but its need is bound to {item.via_partner}" if item.via_partner else "")
                     + "; a controllable output is actuated by exactly the one controller it binds (D21).",
                 )
+        check_consuming_outputs(components, self.landings)
+        for landing in self.landings:
+            request = meter_feed_of(components, landing)
+            selected[request.consumer] = list(selected.get(request.consumer, [])) + [
+                AggregatorFeed(
+                    source=request.source,
+                    output=request.output,
+                    component_type=request.component_type.name if request.component_type is not None else None,
+                    tags=tuple(tag.name for tag in request.flow_tags),
+                    weight=request.weight,
+                )
+            ]
         return selected
 
     def _select(self, observer: Observer, components: Mapping[str, Any]) -> List[AggregatorFeed]:

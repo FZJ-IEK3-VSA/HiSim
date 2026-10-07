@@ -77,6 +77,20 @@ COMPOSED_TWINS: Mapping[str, ComposedTwin] = MappingProxyType(
                     "grid-ElectricityMeter": "ElectricityMeter",
                 },
             ),
+            ComposedTwin(
+                "household_gas_building_sizer",
+                {
+                    "heating-Boiler": "CondensingGasBoiler",
+                    "heating-Controller": "ModulatingBoilerController",
+                    "heating-Buffer": "SimpleHotWaterStorage",
+                    "dhw-DHWStorage": "DHWStorage",
+                    "gas-GasMeter": "GasMeter",
+                    "pv-pv_system-PVSystem": "PVSystem",
+                    "battery-battery-Battery": "Battery",
+                    "control-EMS": "L2EMSElectricityController",
+                    "grid-ElectricityMeter": "ElectricityMeter",
+                },
+            ),
         )
     }
 )

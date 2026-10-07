@@ -2,7 +2,8 @@
 # contracts (tests/assemblies/test_library_contracts.py) place beside an assembly they run in isolation, one for every
 # port whose binding changes what the assembly computes and every sizing fact its members read from the site. Read by
 # hisim/energy_system/assemblies/testing/partners.py, which documents the format. Every partner is a site entry as an
-# energy-system file writes it, with the twin's presets and values (household_heatpump_building_sizer).
+# energy-system file writes it, with the twins' presets and values (household_heatpump_building_sizer,
+# household_gas_building_sizer).
 partners:
   # ------------------------------------------------------------------------------------------- the site
   Weather:
@@ -60,8 +61,9 @@ partners:
 
   # ----------------------------------------------------------------------------- the DHW cylinder
   DHWStorage:
-    # The other end of a heat pump's dhw circuit, and the cylinder its DHW controller reads.
-    serves: [{circuit: dhw, other_end: [MoreAdvancedHeatPumpHPLib]}, {partner: SimpleDHWStorage}]
+    # The other end of a heat pump's or a boiler's dhw circuit, and the cylinder its DHW controller reads.
+    serves: [{circuit: dhw, other_end: [MoreAdvancedHeatPumpHPLib]}, {circuit: dhw, other_end: [GenericBoiler]},
+             {partner: SimpleDHWStorage}]
     requires: [UTSPConnector]
     component:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
@@ -115,6 +117,57 @@ partners:
       inputs: [{$port: space_heating}, HeatPump]
       ports:
         space_heating: {circuit: space_heating}
+
+  # --------------------------------------------------------------------- natural gas: meter and burner
+  GasMeter:
+    # The natural-gas connection a fuel need binds; its meter observes the consumers' fuel outputs, and copies its
+    # carrier from the burner's energy_carrier fact, as in the twin.
+    serves: {carrier: natural_gas}
+    component:
+      class: hisim.components.gas_meter.GasMeter
+      preset: standard
+      inputs: [{$port: connection}]
+      ports:
+        connection: {carrier: natural_gas}
+  GasBoiler:
+    # A consumer of the natural gas a connection provides: the twin's condensing boiler with its controller, its
+    # buffer and its cylinder; it contributes the energy_carrier fact the meter's carrier is copied from.
+    serves: [{consumes: natural_gas}, {fact: energy_carrier}]
+    requires: [Building, GasBoilerController, GasBuffer, GasCylinder]
+    component:
+      class: hisim.components.generic_boiler.GenericBoiler
+      preset: condensing_gas
+      inputs: [GasBoilerController, GasCylinder, GasBuffer]
+      ports:
+        fuel: {carrier: natural_gas, outputs: [EnergyDemandSh, EnergyDemandDhw]}
+  GasBoilerController:
+    # Reads the buffer and the cylinder, which join with the boiler: it reads them without requiring them.
+    requires: [Weather, HeatDistributionController]
+    component:
+      class: hisim.components.generic_boiler.GenericBoilerController
+      preset: modulating
+      config:
+        set_heating_threshold_outside_temperature_in_celsius: 18.0
+        with_domestic_hot_water_preparation: true
+      inputs: [Weather, HeatDistributionController, GasCylinder, GasBuffer]
+  GasBuffer:
+    # Reads the boiler it joins with, without requiring it back.
+    requires: [HeatDistributionSystem]
+    component:
+      class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+      preset: buffer
+      config:
+        sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
+      inputs: [{$port: space_heating}, GasBoiler]
+      ports:
+        space_heating: {circuit: space_heating}
+  GasCylinder:
+    # The boiler's own cylinder; reads the boiler it joins with, without requiring it back.
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, GasBoiler]
 
   # ------------------------------------------------------------- electricity: arrays, control, grid
   PVArray:

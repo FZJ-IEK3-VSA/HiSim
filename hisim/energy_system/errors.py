@@ -68,7 +68,7 @@ class EnergySystemErrorId(enum.Enum):
     whose components do not stand in the sequence its import record states. Those are raised by the
     expansion of imports, from the files alone. The wiring raises the rest, on the constructed
     components: ``EF-7M`` for a consuming output whose energy port carries another carrier, ``EF-7N``
-    for a meter that would not feed exactly the consuming outputs named, ``EF-7S`` for an observer's
+    for a consuming output named that its meter's class declares no feed for (D30), ``EF-7S`` for an observer's
     selection, ``EF-7T`` for a flow counted twice, ``EF-7U`` for an actuation and ``EF-7V`` for a
     derived weight that reaches another kind's base weight. The letters ``I``
     and ``O`` are skipped, as they read like a one and a zero.

@@ -1,0 +1,73 @@
+# Mockup (design): energy_systems/assemblies/control/ems_self_consumption.assembly.yaml, written in lean v1 syntax
+# (spec §13.1) and read by the lean reader and library check.
+# The L2 controller (D11, D21). It observes electricity flows and actuates ONLY L1 set-point modifiers and the
+# battery's LoadingPowerInput (and an EV's L1 charge target). It ranks what its class ranks, at the class's own
+# weights and in the class's order (residents 1, space heating 2, hot water 3, solar thermal 4, battery 6; a second
+# instance of a kind follows the first); no device declares a weight, and v1 has no priority list (D26). A tariff
+# controller needing another order brings the list back.
+#
+# It OBSERVES the electricity outputs its class declares dynamic default connections from (its own `observes:`
+# selection, spec §4.3) and outputs their sum, TotalElectricityToOrFromGrid. The grid's meter observes that output only
+# when the `grid` import says so (`observes: [{output: TotalElectricityToOrFromGrid}]`); nothing changes implicitly.
+# A meter observing that output and an output this EMS observes is a load error (double count). Twin :100-146.
+
+schema_version: 4
+kind: assembly
+name: control/ems_self_consumption
+description: Surplus controller maximising PV self-consumption (L2GenericEnergyManagementSystem).
+
+parameters:
+  building_offset_in_celsius:
+    {type: float, unit: CELSIUS, default: 2, range: {min: 0, max: 5},
+     description: "Building set point raise on surplus (EMSConfig, controller_l2_energy_management_system.py:54)."}
+     # range: no raise up to 5 K, beyond which comfort suffers
+  space_heating_storage_offset_in_celsius:
+    {type: float, unit: CELSIUS, default: 10, range: {min: 0, max: 20}, description: Buffer set point raise on surplus.}
+     # range: no raise up to 20 K, within a buffer's 60-80 °C ceiling
+  dhw_storage_offset_in_celsius:
+    {type: float, unit: CELSIUS, default: 10, range: {min: 0, max: 20}, description: DHW cylinder set point raise on surplus.}
+     # range: no raise up to 20 K, within a cylinder's 60-80 °C ceiling
+  # The lean stack declares the three EMSConfig fields in °C, the unit of the modifier outputs they become; an offset
+  # is named `_in_celsius` after that unit (decided 2026-10-04). The three equal EMSConfig's defaults and therefore
+  # write nothing into the expanded config (gap G9).
+
+components:
+  EMS:
+    class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+    preset: optimize_own_consumption
+    config:
+      building_indoor_temperature_offset_value: {$param: building_offset_in_celsius}
+      space_heating_water_storage_temperature_offset_value: {$param: space_heating_storage_offset_in_celsius}
+      domestic_hot_water_storage_temperature_offset_value: {$param: dhw_storage_offset_in_celsius}
+    # no inputs: the observed flows follow the entry's own inputs as feeds, sorted by feed resolution
+
+interface:
+  observes:
+    flows:
+      into: [EMS]
+      default: declared                                    # every electricity output the EMS class declares; never its own
+  # The modifier wires need no port here: an L1 that binds `ems_modifier: control` (and the site's
+  # `temperature_modifier`) lowers to its own class's default connections from L2GenericEnergyManagementSystem,
+  # which pick SpaceHeatingWaterStorageTemperatureModifier, DomesticHotWaterStorageTemperatureModifier or
+  # BuildingIndoorTemperatureModifier. Battery / EV targets come out of the feed's dispatch output, at the weight the
+  # class declares for the controllable output's component type.
+  provides:
+    grid_balance: {output: EMS.TotalElectricityToOrFromGrid}   # the sum of what `flows` observes: the double-count check
+
+tests:
+  # One day at 900 s beside the partners its observer selection finds (residents, at most about 50 kW of flows).
+  # The Dispatch* outputs exist per controlled feed, named after the feed (DispatchTo<instance>_<input>); the isolation
+  # run's feeds decide them, so they are bounded by no fixed name here. Signs of the two sums are not checked against
+  # controller_l2_energy_management_system.py, so those bands are symmetric.
+  bounds:
+    - {output: EMS.TotalElectricityToOrFromGrid, unit: WATT, min: -50000, max: 50000}            # signed grid balance
+    - {output: EMS.TotalElectricityConsumption, unit: WATT, min: -50000, max: 50000}             # sign unchecked
+    - {output: EMS.BuildingIndoorTemperatureModifier, unit: CELSIUS, min: 0, max: 5}             # 0 or the offset, at most the box's 5 K
+    - {output: EMS.DomesticHotWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}   # 0 or the offset, at most 20 K
+    - {output: EMS.SpaceHeatingWaterStorageTemperatureModifier, unit: CELSIUS, min: 0, max: 20}  # 0 or the offset, at most 20 K
+    - {output: EMS.ElectricityToBuildingFromDistrictEMSOutput, unit: WATT, min: -50000, max: 50000}   # zero outside a district
+  monotone:
+    - {parameter: building_offset_in_celsius, kpi: Self-consumption of electricity, direction: increasing}
+      # a derived KPI by name (spec §9.4): a larger raise on surplus shifts at least as much heating into the surplus
+      # hours. The EMS's own KPIs are its priorities; what it reports per participant carries that participant's
+      # source, not the EMS's

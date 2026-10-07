@@ -33,6 +33,7 @@ from __future__ import annotations
 import re
 from typing import Any, ClassVar, Dict, Mapping, Pattern, Set, Tuple
 
+from hisim.config import NameSyntax
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
 from hisim.energy_system.model import (
     AggregatorFeed,
@@ -93,12 +94,34 @@ class StructuralValidator:
             EnergySystemFormatError: Naming the offending component, group, variant or key
                 path, and listing the valid alternatives wherever the set of them is closed.
         """
+        self._check_expanded_names()
         self._check_names()
         self._check_variants()
         self._check_configuration_origin()
         self._check_reference_closure()
         self._check_input_shapes()
         self._check_no_absolute_paths()
+
+    def _check_expanded_names(self) -> None:
+        """Rejects a component name with the address separator that no expansion of imports produced.
+
+        The authored grammar never admits ``-``; the expansion of imports names its members by their
+        serialized addresses (``pv-east-PVSystem``) and lists each in the file's address table
+        (``assemblies_spec.md`` §2.4). A hyphenated name not listed there did not come from an
+        expansion.
+
+        Raises:
+            EnergySystemFormatError: ``EF-08`` naming the component.
+        """
+        for name in self.components:
+            identity = self.model.addresses.get(name)
+            if not NameSyntax.is_identifier(name) and (identity is None or identity.address != name):
+                raise EnergySystemFormatError(
+                    EnergySystemErrorId.INVALID_NAME,
+                    f"components.{name}",
+                    f"'{name}' is not a usable component name: only the expansion of imports names a component "
+                    "with the address separator '-', and this name is not one it produced.",
+                )
 
     def _check_names(self) -> None:
         """Rejects a name used twice and a component listed in two groups.

@@ -41,6 +41,9 @@ from hisim.cli_exit import ExitCodes
 from hisim.cli_grouping import GroupingCommands, GroupingPaths
 from hisim.config.introspection import describe_config
 from hisim.cli_render import DescriptionRenderer, FactsRenderer, KpiAddressRenderer
+from hisim.energy_system.assemblies.describe import AssemblyDescription
+from hisim.energy_system.assemblies.resolver import AssemblyResolver
+from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder, export_assembly_schema
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.executor import SimulationParametersReader
@@ -107,7 +110,15 @@ class EnergySystemCommands:
 
     @classmethod
     def describe(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
-        """Prints everything declared about one configuration class."""
+        """Prints everything declared about one configuration class, or about one assembly.
+
+        An argument with a slash (``pv/array``) names an assembly (``assemblies_spec.md`` §9.3),
+        resolved along the library search path; anything else is a dotted class path.
+        """
+        if AssemblyDescription.is_assembly_path(arguments.class_path):
+            resolved = AssemblyResolver.default().resolve(arguments.class_path, "describe")
+            AssemblyDescription.render(resolved, out)
+            return ExitCodes.OK
         try:
             config_class = ClassLookup.resolve(arguments.class_path)
         except ValueError as error:
@@ -126,7 +137,12 @@ class EnergySystemCommands:
     def schema(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
         """Writes the JSON Schema of the format, either to the committed file or to a given path."""
         del error_stream  # every command shares one signature; this one reports nothing separately
-        print(f"Wrote the schema of the energy-system format to {export_schema(arguments.out)}.", file=out)
+        written = export_schema(arguments.out)
+        print(
+            f"Wrote the schema of the energy-system format to {written}, and the schema of the assembly file "
+            f"beside it, {export_assembly_schema(written.parent)}.",
+            file=out,
+        )
         return ExitCodes.OK
 
     @classmethod
@@ -245,15 +261,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verbs = energy_system.add_subparsers(dest="verb")
 
-    describe = verbs.add_parser("describe", help="print what one class can be configured with")
-    describe.add_argument("class_path", metavar="CLASS", help="dotted path of a component or config class")
+    describe = verbs.add_parser("describe", help="print what one class or one assembly offers")
+    describe.add_argument(
+        "class_path",
+        metavar="CLASS_OR_ASSEMBLY",
+        help="dotted path of a component or config class, or an assembly's <family>/<name>",
+    )
 
     facts = verbs.add_parser("facts", help="print where a file's sized values would come from")
     facts.add_argument("energy_system", metavar="ENERGY_SYSTEM", help="the *.energy_system.yaml file")
 
-    schema = verbs.add_parser("schema", help="write the JSON Schema an editor binds to")
+    schema = verbs.add_parser("schema", help="write the JSON Schemas of the energy-system and the assembly file")
     schema.add_argument(
-        "--out", default=None, help=f"where to write it (default: {default_schema_path()})"
+        "--out",
+        default=None,
+        help=f"where to write the energy-system schema (default: {default_schema_path()}); the assembly "
+        f"schema, {AssemblySchemaBuilder.FILENAME}, goes beside it",
     )
 
     record = verbs.add_parser("record", help="write a Python setup out as an energy-system file")

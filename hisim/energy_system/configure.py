@@ -37,6 +37,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
+from hisim.config import ComponentID
 from hisim.config.presets import ConfigBuilder, replace_config
 from hisim.config.report import ResolutionReport
 from hisim.energy_system.bindings import ClassBinding, ClassBindings
@@ -130,15 +131,18 @@ class EntryConfigurator:
     #: name is one of these or ends in one after an underscore.
     PATH_KEY_NOUNS: ClassVar[Tuple[str, ...]] = StructuralValidator.PATH_KEY_NOUNS
 
-    def __init__(self, binding: ClassBinding, resolver: PathResolver) -> None:
+    def __init__(self, binding: ClassBinding, resolver: PathResolver, identity: Optional[ComponentID] = None) -> None:
         """Prepares the configurator for one entry.
 
         Args:
             binding: The entry resolved against its component and configuration classes.
             resolver: The registry that expands the file's ``${var}`` path references.
+            identity: The structured address the expansion of imports gave an assembly member
+                (``assemblies_spec.md`` §2.4); ``None`` for a component whose identity is its name.
         """
         self.binding = binding
         self.resolver = resolver
+        self.identity = identity
         self.codec = ConfigValueCodec(binding.config_class)
 
     def build(self) -> Tuple[Any, Any]:
@@ -231,11 +235,16 @@ class EntryConfigurator:
         entry = self.binding.entry
         builder, arguments = self._selected_builder()
         if builder is not None:
-            return self._call_builder(builder, arguments)
+            config = self._call_builder(builder, arguments)
+            if self.identity is not None:
+                # A builder names its configuration by the member's own name, an identifier; the
+                # member's address is given to it here.
+                config.component_id = self.identity
+            return config
         payload = self.codec.to_deserializer_payload(
             entry.config, f"components.{entry.name}.config", entry.name
         )
-        payload["component_id"] = {"name": entry.name}
+        payload["component_id"] = self.identity.to_dict() if self.identity is not None else {"name": entry.name}
         try:
             return getattr(self.binding.config_class, "from_dict")(payload)
         except Exception as error:  # pylint: disable=broad-except
@@ -271,7 +280,7 @@ class EntryConfigurator:
         entry = self.binding.entry
         decoded = self._decode_arguments(builder, arguments)
         try:
-            return builder.build(entry.name, **decoded)
+            return builder.build(self.identity.name if self.identity is not None else entry.name, **decoded)
         except Exception as error:  # pylint: disable=broad-except
             raise EnergySystemBindingError(
                 EnergySystemErrorId.UNDECODABLE_VALUE,
@@ -471,7 +480,7 @@ def configure_energy_system(
     configs: List[Any] = []
     origins: List[Any] = []
     for binding in resolved_bindings:
-        origin, config = EntryConfigurator(binding, resolver).build()
+        origin, config = EntryConfigurator(binding, resolver, model.addresses.get(binding.name)).build()
         names.append(binding.name)
         origins.append(origin)
         configs.append(config)

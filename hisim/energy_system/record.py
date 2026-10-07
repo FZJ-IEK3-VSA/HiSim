@@ -254,15 +254,14 @@ class RecordRealizer:
         groups = {
             name: self._group(group) for name, group in self.built.model.groups.items()
         }
+        metadata = RunMetadata.collect(
+            RunMetadata.describe_source(self.built.source_energy_system),
+            RunMetadata.describe_source(self.built.source_simulation_parameters),
+        )
+        # The import record and the source map of a file that imported assemblies (§9.1, §9.2).
+        metadata.update(self.built.imports.metadata(self.built.model.metadata))
         record: EnergySystemFile = self.built.model.model_copy(
-            update={
-                "components": components,
-                "groups": groups,
-                "metadata": RunMetadata.collect(
-                    RunMetadata.describe_source(self.built.source_energy_system),
-                    RunMetadata.describe_source(self.built.source_simulation_parameters),
-                ),
-            }
+            update={"components": components, "groups": groups, "metadata": metadata}
         )
         assert_fully_concrete(record)
         return record

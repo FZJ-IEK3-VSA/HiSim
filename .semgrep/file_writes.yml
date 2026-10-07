@@ -78,6 +78,7 @@ rules:
         - /hisim/cli_grouping.py
         - /hisim/energy_system/recording/
         - /hisim/energy_system/schema_export.py
+        - /hisim/energy_system/assemblies/schema.py
         - /hisim/renovisor/capabilities.py
         - /hisim/renovisor/contract/refresh.py
         - /hisim/renovisor/map.py

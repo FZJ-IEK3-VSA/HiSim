@@ -189,12 +189,17 @@ class SizedFieldMetadata:
     #: because a JSON ``null`` must not slip past the AUTO guard into a cache key. The flag
     #: also makes a null fact an answer for this field rather than a refusal (F-12).
     OPTIONAL: ClassVar[str] = "hisim_sizing_optional"
+    #: The field's declared unit, an ``lt.Units`` member (``assemblies_spec.md`` §2.6, D16 b). It is
+    #: the plain key ``"unit"``, so a field that is not sizable declares it the same way,
+    #: ``field(metadata={"unit": lt.Units.LITER})``; an assembly parameter feeding the field is
+    #: checked against it, and a fed field without one is refused.
+    UNIT: ClassVar[str] = "unit"
 
 
 def sized_field(
     *, rule: Any, default: Any = AUTO, value_type: Optional[type] = None,
     reads: Optional[Tuple[Any, ...]] = None, fields: Optional[Tuple[str, ...]] = None,
-    note: Optional[str] = None, optional: bool = False, **field_kwargs: Any,
+    note: Optional[str] = None, optional: bool = False, unit: Any = None, **field_kwargs: Any,
 ) -> Any:
     """Declares a sizable dataclass field: its law and its AUTO wire codec in one place.
 
@@ -223,6 +228,9 @@ def sized_field(
             the construction guard into a cache key. It also decides what a null *fact*
             means for the field: an optional field whose fact the system provides as
             ``None`` resolves to ``None``, where a required field refuses, naming the fact.
+        unit: The field's unit, an ``lt.Units`` member, recorded under
+            :attr:`SizedFieldMetadata.UNIT`; an assembly parameter feeding the field states the same
+            unit (``assemblies_spec.md`` §2.6).
         **field_kwargs: Passed through to ``dataclasses.field`` (respecting an existing
             ``metadata`` mapping by merging into it).
 
@@ -237,10 +245,31 @@ def sized_field(
         metadata[SizedFieldMetadata.VALUE_TYPE] = value_type
     if optional:
         metadata[SizedFieldMetadata.OPTIONAL] = True
+    if unit is not None:
+        metadata[SizedFieldMetadata.UNIT] = unit
     metadata.update(dataclasses_json_config(encoder=_encode_sizable, decoder=_sizable_decoder(value_type)))
     # invalid-field-call is a false positive here: this helper returns the field()
     # descriptor for use inside a dataclass body, exactly like dataclasses_json.config.
     return dataclasses.field(default=default, metadata=metadata, **field_kwargs)  # pylint: disable=invalid-field-call
+
+
+def declared_field_unit(config_class: type, field_name: str) -> Any:
+    """Returns the unit a configuration field declares, or ``None`` when it declares none or does not exist.
+
+    The unit is read from the field's metadata under :attr:`SizedFieldMetadata.UNIT`, which both
+    ``sized_field(unit=...)`` and a plain ``field(metadata={"unit": ...})`` write.
+
+    Args:
+        config_class: The configuration dataclass.
+        field_name: The field.
+
+    Returns:
+        The declared ``lt.Units`` member, or ``None``.
+    """
+    for candidate in dataclasses.fields(config_class):
+        if candidate.name == field_name:
+            return candidate.metadata.get(SizedFieldMetadata.UNIT)
+    return None
 
 
 def field_notes(config_class: type) -> Mapping[str, str]:

@@ -1,0 +1,41 @@
+# Mock: a composed energy system. Four site components, two PV instances, a tank heated over the
+# heater's provided output, and a heater whose thermostat the site's energy manager may raise; the
+# site's monitor reads the imported tank through its own port.
+schema_version: 4
+name: mock_house
+description: A composed mock house for the assemblies tests.
+
+components:
+  Weather:
+    class: tests.assemblies.mock_components.MockWeather
+    preset: standard
+  Occupancy:
+    class: tests.assemblies.mock_components.MockOccupancy
+    preset: standard
+  Ems:
+    class: tests.assemblies.mock_components.MockEms
+    preset: standard
+  Monitor:
+    class: tests.assemblies.mock_components.MockController
+    preset: eco
+    inputs:
+      - {$port: tank}
+      - Ems
+    ports:
+      tank: {partner: MockTank}
+
+imports:
+  pv:
+    assembly: mock/pv_array
+    instances:
+      east: {azimuth_in_degree: 90, facing: east}
+      west: {azimuth_in_degree: 270, facing: west, power_in_watt: 3000, installation_year: 2026}
+  tank:
+    assembly: mock/hot_water_tank
+    parameters: {volume_in_liter: 200}
+    bind: {heat: heater.heat}
+  heater:
+    assembly: mock/electric_heater
+    optional-bind: {ems_modifier: Ems}
+    installation_year: 2025
+    quote: {amount_in_euro: {min: 800, max: 1200}, per: unit, source: mock}

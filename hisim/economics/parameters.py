@@ -1,17 +1,9 @@
-"""Economic parameters of the lifecycle cost evaluation (cost_spec.md §3.2).
+"""Economic parameters of the lifecycle cost evaluation: the assumptions, not the data (cost_spec.md §3.2).
 
-This module owns the *assumptions* half of the engine's inputs: horizon, interest, escalation
-rates, the CO2 scenario, the country and the data-directory paths. It deliberately owns no numbers
-that describe the world — every price, lifetime, emission factor and subsidy rule lives in the
-versioned data files under `hisim/cost_database/` and `hisim/subsidy_catalog/` — and no evaluation
-logic beyond the two textbook factors below.
-
-Its place in the pipeline: one `EconomicParameters` instance is attached to a run (via
-`SimulationParameters.set_economic_parameters`, a RenoVisor request or a scenario axis), reaches the
-evaluator inside `EvaluationInputs`, is stored on every `LifecycleCostResult`, and is written to
-`economic_inputs.json` so a stored result can be re-priced later without re-simulating (§4.6).
-Because scenario axes vary exactly these fields, keeping the type a plain serializable dataclass is
-what makes a full factorial sweep a matter of milliseconds per cell.
+`EconomicParameters` holds horizon, interest, escalation rates, the CO2 scenario, the country and the data paths;
+prices, lifetimes and subsidy rules live in the data files. One instance travels with a run into `EvaluationInputs`,
+onto every `LifecycleCostResult` and into `economic_inputs.json`, so a stored result can be re-priced without
+re-simulating (§4.6). Scenario axes vary these fields.
 """
 
 from __future__ import annotations
@@ -29,26 +21,18 @@ from hisim.loadtypes import ComponentType
 class StatedEnergyPrice:
     """The year-1 price terms a plan states for one carrier, in place of the database's.
 
-    A RenoVisor household knows what it pays for gas or electricity today better than any national
-    average, so a staged plan may state those terms (renovisorissues #52). Each field is optional
-    and replaces only its own half of the flat contract generated from the price entry
-    (`calculators/energy.py`); a field left `None` keeps the database's value.
+    A household often knows its own gas or electricity price better than a national average. Each field is optional and
+    replaces only its half of the flat contract built from the price entry (`calculators/energy.py`); None keeps the
+    database value.
 
-    **What the working price means.** It is the *all-in* year-1 price the reader pays per kWh,
-    carbon included. For a carrier whose price entry declares `co2_price_exposure > 0` the engine
-    books the carbon price as a separate component read off the CO2 price path, so it subtracts
-    that component's year-1 value (exposure x emission factor x CO2 price at the price basis year)
-    from the stated price and bills the rest as the working price: year 1 then costs exactly the
-    stated price, and later years follow the working price's escalation plus the CO2 path. For
-    `ELECTRICITY_FEED_IN` the working price is the feed-in remuneration per kWh sold, which sets
-    the electricity contract's fixed feed-in rate; a feed-in carrier has no standing charge.
-
-    The standing charge replaces the fixed annual charge and escalates with the general rate, as
-    the database's does.
+    The working price is the all-in year-1 price per kWh, carbon included. For a carrier with `co2_price_exposure > 0`
+    the engine books carbon separately from the CO2 price path, so it subtracts that component's year-1 value (exposure
+    x emission factor x CO2 price) and bills the rest as working price: year 1 costs exactly the stated price. For
+    `ELECTRICITY_FEED_IN` the working price is the remuneration per kWh sold, and there is no standing charge. The
+    standing charge replaces the fixed annual charge and escalates with the general rate.
 
     Args:
-        working_price_in_euro_per_kwh: The all-in year-1 working price, or None to keep the
-            database's.
+        working_price_in_euro_per_kwh: The all-in year-1 working price, or None to keep the database's.
         standing_charge_in_euro_per_year: The fixed annual charge, or None to keep the database's.
     """
 
@@ -62,11 +46,11 @@ class StatedEnergyPrice:
     standing_charge_in_euro_per_year: Optional[UncertainValue] = None
 
     def to_json(self) -> Dict[str, Any]:
-        """The stated terms as `economic_inputs.json`-style JSON, one key per stated field.
+        """Return the stated terms as JSON, one key per stated field.
 
         Returns:
-            ``{"working_price_in_euro_per_kwh"?: …, "standing_charge_in_euro_per_year"?: …}``, each
-            value written by `UncertainValue.to_json` (a bare number for an exact figure).
+            ``{"working_price_in_euro_per_kwh"?: …, "standing_charge_in_euro_per_year"?: …}``, each value written by
+                `UncertainValue.to_json` (a bare number for an exact figure).
         """
         raw: Dict[str, Any] = {}
         if self.working_price_in_euro_per_kwh is not None:
@@ -106,23 +90,13 @@ class StatedEnergyPrice:
 
 @dataclass
 class EconomicParameters:
-    """Parameters of the lifecycle cost evaluation (annuity method, VDI 2067 / DIN EN 15459).
+    """Assumptions of the lifecycle cost evaluation (annuity method, VDI 2067 / DIN EN 15459).
 
-    All rates are nominal; results are in nominal euros discounted to year 0. Real-term
-    calculation is possible by supplying real rates consistently.
-
-    Every field is a decision a reviewer may want to challenge, which is why they are gathered in
-    one serializable record rather than spread over call signatures: the record travels with the
-    results, is written to `economic_inputs.json`, and is the object a scenario axis overwrites
-    field by field. The defaults are the engine's documented baseline (20 a horizon, 3 % interest,
-    2 % general escalation, "central" CO2 path, 250 €/t damage cost); `EconomicParameters()` with no
-    arguments is therefore a complete, runnable assumption set.
-
-    Note the two fallback chains encoded in the field pairs: an unset per-carrier or per-asset-class
-    escalation rate falls back to the country's `escalation_defaults_<COUNTRY>.json` file and only
-    then to the corresponding general rate (§3.2/§3.5). `country`, `cost_database_path` and
-    `subsidy_catalog_path` are deliberately excluded from scenario overlays, so a sweep can never
-    silently change which dataset it is reading.
+    All rates are nominal and results are nominal euros discounted to year 0; supply real rates consistently for a real
+    calculation. `EconomicParameters()` is a complete baseline: 20-year horizon, 3 % interest, 2 % general escalation,
+    "central" CO2 path, 250 EUR/t damage cost. An unset per-carrier or per-asset-class escalation rate falls back to
+    the country's `escalation_defaults_<COUNTRY>.json`, then to the general rate (§3.2, §3.5). `country` and the data
+    paths cannot be changed by scenario overlays, so a sweep never switches datasets.
     """
 
     observation_period_in_years: int = 20
@@ -158,27 +132,20 @@ class EconomicParameters:
     anyway_threshold_years: float = 2.0
     # Opt-in for rebilling a load profile under a tariff it was not simulated with (§4.6).
     allow_counterfactual_billing: bool = False
-    # Year-1 price terms a plan states per carrier in place of the database's (renovisorissues
-    # #52); a carrier absent here is priced from `energy_prices_<COUNTRY>.json`. See
-    # `StatedEnergyPrice` for what the working price means (all-in, carbon included).
+    # Year-1 price terms a plan states per carrier in place of the database's; a carrier absent
+    # here is priced from `energy_prices_<COUNTRY>.json`. See `StatedEnergyPrice` for what the
+    # working price means (all-in, carbon included).
     energy_prices: Dict[EnergyCarrier, StatedEnergyPrice] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Basic sanity validation.
+        """Check the conditions that would make discounting or the annuity meaningless, and the stated-price rule.
 
-        Only the two conditions that would make the discounting and annuity formulas meaningless are
-        checked here (a horizon below one year, an interest rate at or below -100 %). Everything else
-        — a negative escalation rate, an unknown CO2 scenario name, a country without data files —
-        is legitimate input or is caught later by the data loaders with a far more informative
-        message.
-
-        The one structural rule of the stated prices is checked here too, because no reading of it
-        is meaningful: the feed-in carrier is a remuneration per kWh sold and has no standing
-        charge to state.
+        Other odd input (a negative escalation rate, an unknown CO2 scenario, a country without data) is legitimate or
+        caught later by the data loaders.
 
         Raises:
-            ValueError: If the observation period is below 1 year, the interest rate is <= -1.0,
-                or a standing charge is stated for `ELECTRICITY_FEED_IN`.
+            ValueError: If the observation period is below 1 year, the interest rate is <= -1.0, or a standing charge
+                is stated for `ELECTRICITY_FEED_IN`.
         """
         if self.observation_period_in_years < 1:
             raise ValueError("observation_period_in_years must be >= 1.")
@@ -192,26 +159,17 @@ class EconomicParameters:
             )
 
     def discount_factor(self, year: int) -> float:
-        """1 / (1 + i)^year at these parameters' interest rate.
+        """Return ``1 / (1 + i)**year`` at this interest rate, via `timeline.discount_factor`.
 
-        Convenience wrapper around the canonical `timeline.discount_factor` (W4.3); the formula
-        itself exists exactly once, there.
-
-        Offered on the parameters because most callers already hold the parameter set and would
-        otherwise repeat `discount_factor(parameters.interest_rate, year)`. `year` counts from the
-        year-0 investment date under the end-of-year convention, so year 0 yields exactly 1.0.
+        Year 0 is the investment date (end-of-year convention), so year 0 yields exactly 1.0.
         """
         return discount_factor(self.interest_rate, year)
 
     def annuity_factor(self) -> float:
-        """Annuity factor over the observation period; 1/T for a zero interest rate.
+        """Return the annuity factor over the horizon, ``i(1+i)^T / ((1+i)^T - 1)``; 1/T for a zero interest rate.
 
-        Converts a net present cost into the equivalent annual cost — the headline KPI of the whole
-        engine (§1.1, §7.3) and the figure that makes systems with different investment/running-cost
-        profiles comparable at all. It is the capital recovery factor of VDI 2067-1 / DIN EN 15459-1,
-        `i(1+i)^T / ((1+i)^T - 1)`, evaluated at this parameter set's interest rate and horizon; the
-        zero-rate branch exists because that expression is 0/0 at i = 0, where the correct limit is
-        simply spreading the NPV evenly over the T years.
+        It turns a net present cost into the equivalent annual cost, the headline KPI (§7.3); it is the capital
+        recovery factor of VDI 2067-1. At i = 0 the formula is 0/0 and the limit spreads the NPV evenly.
         """
         interest = self.interest_rate
         years = self.observation_period_in_years
@@ -220,16 +178,11 @@ class EconomicParameters:
         return interest * (1.0 + interest) ** years / ((1.0 + interest) ** years - 1.0)
 
     def to_dict(self) -> Dict[str, Any]:
-        """The parameter record as a JSON-serializable dict, one key per field.
+        """Return the parameters as a JSON-serializable dict, one key per field.
 
-        Consumed by `LifecycleCostResult.to_json` so the assumptions travel with every stored
-        result (§4.6). Plain `asdict` is sufficient, but note what it does *not* do: the keys of the
-        two rate dicts stay `EnergyCarrier` and `ComponentType` *members* here, not strings. Both
-        enums derive from `str`, so `json.dump` writes each key as its enum *value* ("HeatPump",
-        not "HEAT_PUMP") — which is the spelling `from_dict` has to read back, and the reason that
-        method accepts the member name as well. The stated energy prices are written through
-        `StatedEnergyPrice.to_json`, since `asdict` would spell their bands in field names that
-        `UncertainValue.from_json` does not read.
+        The rate dicts keep their `EnergyCarrier` and `ComponentType` member keys; both enums derive from `str`, so
+        `json.dump` writes each key as its value ("HeatPump"), which :meth:`from_dict` reads back. Stated energy prices
+        are written through `StatedEnergyPrice.to_json`.
         """
         raw = asdict(self)
         raw["energy_prices"] = {carrier: stated.to_json() for carrier, stated in self.energy_prices.items()}
@@ -237,32 +190,21 @@ class EconomicParameters:
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "EconomicParameters":
-        """Rebuilds a parameter record from the mapping :meth:`to_dict` wrote.
+        """Rebuild a parameter record from a mapping such as :meth:`to_dict` wrote or a hand-written parameters file.
 
-        The counterpart of `to_dict`, and the reason a stored evaluation can be re-priced at all:
-        `economic_inputs.json` and a hand-written `--parameters` file both arrive as plain JSON,
-        and the two rate dictionaries key on enums that JSON can only carry as strings. Those keys
-        are converted back here — by member value *or* member name, see `_enum_key`, since the two
-        kinds of file spell them differently; every other field is a scalar that survives the round
-        trip unchanged, and a field the mapping omits keeps its documented default, so a subset is
-        a legitimate input.
-
-        An unknown key is refused rather than ignored: at this level a key that no field claims is
-        a typo in a hand-written assumption file, and silently dropping it would price the run
-        with a default the author believed they had overridden. A rate dict that is present but is
-        not a mapping is refused for the same reason: `"energy_price_escalation_rates": null` used
-        to pass straight through as `None`, and the record then carried `None` where every reader
-        expects a dict.
+        Rate-dict keys are converted back to enum members by value or name (see `_enum_key`). An omitted field keeps
+        its default, so a subset is valid input. An unknown key is refused, because it is most likely a typo in an
+        assumption file that would otherwise silently keep a default.
 
         Args:
-            raw: The mapping to read, as produced by `to_dict` or parsed from JSON.
+            raw: The mapping to read.
 
         Returns:
-            The reconstructed parameter record, validated by `__post_init__`.
+            The parameter record, validated by `__post_init__`.
 
         Raises:
-            ValueError: If the mapping carries a key that is not a field of this class, if a rate
-                dict is present but is not a mapping, or if one of its keys names no enum member.
+            ValueError: If a key is not a field, a rate dict is present but not a mapping, or a rate-dict key names no
+                enum member.
         """
         known = {field_info.name for field_info in fields(cls)}
         values = dict(raw)
@@ -307,20 +249,15 @@ class EconomicParameters:
 
     @staticmethod
     def _enum_key(enum_class: Any, spelling: Any, parameter_name: str) -> Any:
-        """Resolves one rate-dict key onto an enum member, by value or by member name.
+        """Resolve one rate-dict key to an enum member, by value or by member name.
 
-        Both spellings have to work. `to_dict` + `json.dump` writes the enum *value* ("HeatPump"),
-        so that is what a stored `economic_inputs.json` carries; a hand-written `--parameters`
-        file, on the other hand, is almost always typed as the member *name* ("HEAT_PUMP"), which
-        is the spelling the enum is referred to by everywhere else in the code and in the spec.
-        Accepting only the value made the natural hand-written spelling raise a bare
-        `ValueError: 'HEAT_PUMP' is not a valid ComponentType` from inside a dict comprehension,
-        with nothing to say which parameter it came from.
+        A stored `economic_inputs.json` carries the value ("HeatPump"); a hand-written file usually uses the name
+        ("HEAT_PUMP"). Both are accepted.
 
         Args:
             enum_class: `EnergyCarrier` or `ComponentType`.
-            spelling: The key as it was written in the JSON file.
-            parameter_name: Field the dict belongs to, so the error names it.
+            spelling: The key as written in the JSON file.
+            parameter_name: The field the dict belongs to, named in the error.
 
         Returns:
             The matching enum member.

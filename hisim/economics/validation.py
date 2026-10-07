@@ -1,30 +1,10 @@
-"""Data-file CI checks (cost_spec.md §9.6).
+"""Consistency checks for the shipped cost and subsidy data files (cost_spec.md §9.6).
 
-Since prices and schemes are data, the data gets the CI treatment code used to get
-implicitly. These functions are called from tests (`tests/test_economics_data_and_integration.py`)
-and can be run standalone via ``python -m hisim.economics validate``.
-
-**The design question it answers.** Moving every number out of Python into `hisim/cost_database/`
-and `hisim/subsidy_catalog/` bought versioning, sourcing and country-specificity — but it also
-moved a large part of the engine's correctness out of the reach of the type checker, the linter and
-code review. This module is the compensation: the checks that would have been compile errors if the
-numbers were still code. An unsourced datapoint, an asset class with no price in one shipped
-country, a subsidy scheme conditioning on a question nobody asks, a tariff contract whose id does
-not match its file name — each of these produces a perfectly loadable data file and a wrong or
-crashing run, and each is caught here instead.
-
-**Errors versus warnings** is the module's central distinction and is deliberate. An *error* means
-the shipped data is internally inconsistent: it fails CI and must be fixed before merge. A
-*warning* means the data may be out of date or untidy — a source retrieved more than twelve months
-ago, a catalog snapshot older than a year, a registry entry or question referenced by nothing.
-Those are judgement calls for a data reviewer, not gates, because time passing is not a defect.
-
-Its place in the pipeline: this runs *beside* the engine, never inside it. It is invoked from
-the data-file test module in CI (today `tests/test_economics_data_and_integration.py`) and by the
-`validate` CLI subcommand after a data edit; no simulation, no evaluation and no result depends on
-it. The checks it performs are
-those of §9.6: schema validation (by loading through the real loaders), source completeness,
-coverage matrices, tariff-contract integrity, question coverage and staleness.
+Prices and schemes are data, so these checks catch what would be compile errors if the numbers were code: an unsourced
+datapoint, an asset class with no price in a shipped country, a scheme conditioning on a question nobody asks, a tariff
+whose id does not match its file name. An error means the data is inconsistent and fails CI; a warning (an old source,
+an unreferenced entry) is advisory. Runs beside the engine, from the data-file tests and ``python -m hisim.economics
+validate``.
 """
 
 from __future__ import annotations
@@ -52,43 +32,33 @@ from hisim.economics.tariffs import TariffContract
 class ValidationConstants:
     """Requirements the shipped data files are validated against.
 
-    Only the language requirement so far. It lives here rather than inline because it is a policy
-    decision (spec Q31: German and English in v1) that a future country addition will revisit — the
-    §5.7 questionnaire has to be answerable by the people the subsidy applies to, so adding a
-    country with another official language means extending this tuple and the question catalogs
-    together.
+    `REQUIRED_QUESTION_LANGUAGES` lists the languages every question catalog must cover, so the §5.7 questionnaire is
+    answerable by the people a subsidy applies to; a new country with another official language extends it.
     """
 
-    #: Languages the question catalogs must cover (spec Q31: de + en in v1).
+    #: Languages the question catalogs must cover.
     REQUIRED_QUESTION_LANGUAGES = ("de", "en")
 
 
 @dataclass
 class ValidationReport:
-    """Errors fail CI; warnings are advisory (staleness).
+    """Accumulated errors and warnings of a validation run.
 
-    The accumulating result of a validation run, and the reason the checks collect rather than
-    raise: a data reviewer wants *every* problem in the file they just edited, not the first one.
-    Messages are plain strings because their only consumers are a test assertion and the CLI's
-    stdout — nothing branches on their content.
+    Errors fail CI; warnings are advisory. The checks collect rather than raise, so a reviewer sees every problem at
+    once.
     """
 
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
     def merge(self, other: "ValidationReport") -> None:
-        """In-place union.
-
-        How the composite checks assemble their sub-reports (`validate_all` over the catalogs,
-        `validate_cost_database` over the tariff contracts) while keeping the error/warning
-        distinction of each.
-        """
+        """Add another report's errors and warnings to this one, in place."""
         self.errors.extend(other.errors)
         self.warnings.extend(other.warnings)
 
     @property
     def ok(self) -> bool:
-        """No errors. Warnings do not affect it — this is exactly the CI gate and the CLI exit."""
+        """True when there are no errors; warnings do not count. This is the CI gate and the CLI exit status."""
         return not self.errors
 
 
@@ -98,30 +68,19 @@ def validate_cost_database(
     used_carriers: Optional[Set] = None,
     reference_date: Optional[date] = None,
 ) -> ValidationReport:
-    """Schema + source completeness + coverage matrix + staleness for the cost database.
+    """Check the cost database: it loads, its sources and tariffs are valid, every needed price exists (§9.6).
 
-    Runs the §9.6 checks over `hisim/cost_database/`. Schema validation is not re-implemented here:
-    the database is simply *loaded* through `CostDatabase`, whose loaders already reject an
-    unsourced datapoint, an inverted uncertainty band or an unknown enum — so a load failure is
-    reported as a single CI error and the run stops there. On top of that come the checks that need
-    a whole-corpus view: the tariff contracts (which used never to be walked at all, W2.5/B9),
-    orphaned and stale source registry entries as warnings, and the two coverage matrices.
-
-    **The coverage matrix is the counterpart of the legacy "new component must implement
-    get_cost_capex" rule** (§9.6): every asset class any component declares must have a device entry
-    in *every* shipped country, and every carrier any meter bills must have a price entry — so
-    adding a `ComponentType` without cost data fails CI instead of failing a user's run in a country
-    nobody tested. The checks are skipped when the caller passes no declared classes/carriers, which
-    is what lets the CLI run without importing the component zoo.
-
-    Ordering note: the tariff contracts are validated *before* the orphan check, so contract sources
-    count as referenced and do not get reported as orphans.
+    Schema checks happen by loading through `CostDatabase`; a load failure is one error and stops the run. Then come
+    the tariff contracts (validated before the orphan check, so their sources count as referenced), orphaned and stale
+    sources as warnings, and two coverage matrices: every declared asset class needs a device entry in every shipped
+    country, and every used carrier needs a price entry. That way a new `ComponentType` without cost data fails CI
+    rather than a user's run.
 
     Args:
         base_path: Cost database directory; the shipped one by default.
-        declared_asset_classes: `ComponentType`s to demand device entries for. Omit to skip.
-        used_carriers: `EnergyCarrier`s to demand price entries for. Omit to skip.
-        reference_date: "Today" for the 12-month staleness comparison; makes the check testable.
+        declared_asset_classes: `ComponentType`s that must have device entries; omit to skip that check.
+        used_carriers: `EnergyCarrier`s that must have price entries; omit to skip that check.
+        reference_date: "Today" for the 12-month staleness check.
 
     Returns:
         The report; `ok` is False if anything structural is wrong.
@@ -145,8 +104,8 @@ def validate_cost_database(
         except Exception as err:  # pylint: disable=broad-except
             report.errors.append(str(err))
 
-    # W2.5 / §7 B9: the tariff contracts ship inside the cost database but were never validated.
-    # Run before the orphan check so contract sources count as referenced.
+    # The tariff contracts ship inside the cost database. Validate them before the orphan check
+    # so contract sources count as referenced.
     report.merge(validate_tariff_contracts(os.path.join(path, "tariffs"), database.sources))
 
     orphans = database.sources.orphaned_ids()
@@ -175,22 +134,12 @@ def validate_cost_database(
 def validate_tariff_contracts(
     base_path: Optional[str] = None, registry: Optional[SourceRegistry] = None
 ) -> ValidationReport:
-    """Every shipped tariff contract parses, is addressable by its file name and cites sources.
+    """Check that every shipped tariff contract parses, matches its file name and cites registry sources.
 
-    W2.5 / §7 B9: `validate_all` never walked ``cost_database/tariffs/*.json``, so a malformed
-    contract shipped silently and only failed when a simulation happened to reference it.
-
-    Checks per file: the JSON parses through the §8.2 schema (`TariffContract.from_json`, which
-    also enforces mandatory source ids), the contract id matches the file name (contracts are
-    looked up by file name in `load_tariff_contract`), a DYNAMIC contract's `spot_series` exists,
-    and every source id resolves against the cost database's registry.
-
-    **W2.4b: inline sources are an error in catalog files.** ``inline:<citation>`` used to be
-    accepted here with a warning; a shipped data file that cites its source in prose cannot be
-    reviewed, deduplicated or checked for staleness, so a tariff *file* must name registry
-    entries. The convention survives only for contracts built in memory (worked examples, test
-    fixtures, the provider's SYNTHETIC_TEST contract), which no registry can back — see the
-    `tariffs.py` module docstring.
+    Per file: the JSON parses through `TariffContract.from_json` (§8.2 schema, mandatory source ids), the contract id
+    equals the file name (contracts are looked up by file name), a DYNAMIC contract's `spot_series` exists, and every
+    source id resolves against the registry. ``inline:<citation>`` sources are an error in a file; they are allowed
+    only for contracts built in memory (see `tariffs.py`).
     """
     report = ValidationReport()
     path = base_path or TariffContract.DEFAULT_PATH
@@ -243,30 +192,18 @@ def validate_tariff_contracts(
 def validate_subsidy_catalog(
     country: str, base_path: Optional[str] = None, cost_database: Optional[CostDatabase] = None
 ) -> ValidationReport:
-    """Schema, condition grammar, question coverage and staleness for one country catalog.
+    """Check one country's subsidy catalog: it loads, it is coherent, its questions are covered, and it is current.
 
-    Validates one `subsidy_catalog/<COUNTRY>.json` and its question file. As with the cost database,
-    schema and benefit typing are enforced by *loading* the catalog (W2.2), so what remains here are
-    the checks that need the catalog as a whole: snapshot-date staleness, scheme-id uniqueness,
-    `excludes` pointing at schemes that actually exist (an exclusion naming a typo can never fire,
-    which silently over-grants), tax-credit instalment shares summing to 1, and cumulation groups
-    whose members agree on their combined rate cap — they must, because the solver applies the
-    minimum cap declared in a group to every member. Given the cost database, it also checks that a
-    per-unit scheme's ``size_unit`` is the unit the country's device entries price its asset classes
-    in — the unit a measure of that class is sized in — since the solver refuses to price any other.
-
-    **Question coverage (§5.7) is the check that makes the questionnaire complete by construction.**
-    Every context field a shipped scheme's conditions reference must have a question-catalog entry
-    in every required language, or eligibility could depend on something the user was never asked;
-    the reverse direction, a question no scheme reads, is only a warning. Which fields a scheme
-    depends on comes from the single field-vocabulary registry in `subsidies.py` (W2.3), so this
-    module cannot drift from the condition language it validates.
+    The schema is checked by loading. Then: snapshot-date staleness, unique scheme ids, `excludes` that name existing
+    schemes, tax-credit instalment shares summing to 1, cumulation groups agreeing on their rate cap, and (given the
+    cost database) per-unit schemes using the unit the country's device entries price their asset class in. Question
+    coverage (§5.7): every context field a scheme's conditions read needs a question in every required language, or
+    eligibility could depend on something the user was never asked; a question no scheme reads is a warning.
 
     Args:
         country: Catalog country code, i.e. the file stem (`DE`, `AT`).
         base_path: Catalog directory; the shipped one by default.
-        cost_database: The cost database the per-unit schemes' size units are checked against;
-            ``None`` skips that check.
+        cost_database: The database the per-unit size units are checked against; None skips that check.
 
     Returns:
         The report. A catalog that fails to load yields exactly one error and no further checks.
@@ -292,23 +229,18 @@ def validate_subsidy_catalog(
     else:
         report.errors.append(f"Subsidy catalog {country}: catalog_snapshot_date missing.")
 
-    # Cross-scheme coherence (W2.5). Benefit *typing* is enforced at load (W2.2) — a malformed
-    # benefit makes the load above fail — so what is left here are the checks that need the whole
-    # catalog: id uniqueness, `excludes` pointing at real schemes, and cumulation groups whose
-    # members agree on their combined rate cap. (`cumulation_group` is a group *label*, not a
-    # scheme id, so there is nothing to resolve it against; its catalog-level invariant is the
-    # cap coherence below, because the solver applies the minimum cap declared in the group to
-    # all of its members.)
+    # Cross-scheme coherence. Benefit typing is enforced by the load above; what is left needs the
+    # whole catalog: id uniqueness, `excludes` pointing at real schemes, and cumulation groups
+    # whose members agree on their combined rate cap (the solver applies the group's minimum cap
+    # to every member). `cumulation_group` is a label, not a scheme id, so it is not resolved.
     seen: Set[str] = set()
     for scheme in catalog.schemes:
         if scheme.id in seen:
             report.errors.append(f"Subsidy catalog {country}: duplicate scheme id {scheme.id!r}.")
         seen.add(scheme.id)
-    # Friendly display names (Q20). Absence is a warning, not an error, because the field is
-    # optional by design — a catalog written before Q20 still loads and falls back to the id — but
-    # a shipped scheme without one shows a reader `DE_BEG_EM_HP_SPEED_2024` where it should show
-    # "speed bonus", and two schemes sharing a name would make the report ambiguous where the ids
-    # are not.
+    # Display names. The field is optional (the report falls back to the id), so a missing one is
+    # a warning; a shipped scheme without one shows `DE_BEG_EM_HP_SPEED_2024` instead of "speed
+    # bonus", and two schemes sharing a name would make the report ambiguous.
     display_names: Dict[str, str] = {}
     for scheme in catalog.schemes:
         if scheme.display_name is None:
@@ -378,8 +310,8 @@ def validate_subsidy_catalog(
 
     # Question coverage (§5.7, §9.6): every referenced user-answerable field has a question
     # in every required language; orphaned questions are flagged. Which fields a scheme depends
-    # on, and which question a derived field is asked through, come from the one field-vocabulary
-    # registry in `subsidies.py` (W2.3) — this module no longer keeps its own copy.
+    # on, and which question a derived field is asked through, come from the field-vocabulary
+    # registry of the subsidy package.
     asked: Set[str] = set()
     for scheme in catalog.schemes:
         for fieldname in scheme_context_fields(scheme):
@@ -407,24 +339,19 @@ def validate_subsidy_catalog(
 
 
 def validate_all(cost_database_path: Optional[str] = None, subsidy_base_path: Optional[str] = None) -> ValidationReport:
-    """Everything: cost database plus all shipped subsidy catalogs.
+    """Check the cost database and every shipped subsidy catalog.
 
-    The single entry point behind ``python -m hisim.economics validate`` and behind the data-file CI
-    test: it validates the cost database and then discovers the shipped country catalogs from the
-    directory listing — every `*.json` that is not a `questions_*` file and not `sources.json` — so
-    adding a country adds its checks automatically, with no code change (§10.1 Phase 4).
-
-    Note the deliberate gap: no `declared_asset_classes` or `used_carriers` are passed on, so the
-    coverage matrices are *not* checked here. Those need the set of classes and carriers components
-    actually declare, which the CI test supplies explicitly; a green `validate` run therefore means
-    "the shipped data is internally consistent", not "every component can be priced".
+    The entry point of ``python -m hisim.economics validate`` and the data-file CI test. Country catalogs are found by
+    listing the directory (every `*.json` except `questions_*` and `sources.json`), so a new country is checked
+    automatically. The coverage matrices are not checked here, because they need the classes and carriers components
+    declare; a green run means the data is internally consistent, not that every component can be priced.
 
     Args:
         cost_database_path: Cost database directory; the shipped one by default.
         subsidy_base_path: Subsidy catalog directory; the shipped one by default.
 
     Returns:
-        The merged report over everything checked.
+        The merged report.
     """
     report = validate_cost_database(cost_database_path)
     try:

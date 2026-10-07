@@ -1,23 +1,9 @@
-"""Discounting and aggregation: timeline -> KPIs (cost-spec-v2 §2.3).
+"""Discounting and aggregation: from the finished timeline to the KPIs (cost_spec.md §2.3, §3.4, §3.7, §4.3, §7.4).
 
-The §2.3 "discounting/aggregation" calculator, and the only place downstream of allocation.
-It takes the finished, already-allocated timeline and derives every headline figure by
-filtering, discounting and pivoting it — nothing here re-derives cash flows:
-
-* **scoping** — a perspective reports one actor's flows; SYSTEM means all of them. The payer
-  pivot is deliberately taken on the *full* timeline first (all payers must be visible for the
-  §6.5 zero-sum check), everything else on the scoped one;
-* **NPV and EAC** — present value at the interest rate, times the annuity factor (§3.4);
-* **pivots** by category, component and payer;
-* **the liquidity view** — nominal euros per year 0..T, and the year-1 monthly figure (§4.3);
-* **LCOH** — annualized total cost per kWh of annual heat demand;
-* **per-subject breakdowns** — the §7.4 pivot, one `ComponentCostBreakdown` per subject.
-
-The discounting arithmetic itself lives on `CashFlowTimeline` (`npv`, `npv_by`,
-`nominal_annual_series`) and is not duplicated here.
-
-Realizes: cost_spec.md §3.4 (discounting, annuity), §3.7 (evaluation), §4.3 (liquidity view),
-§7.4 (component breakdowns).
+It filters, discounts and pivots the allocated timeline and never creates cash flows: scoping to one actor's flows, NPV
+and EAC (NPV times the annuity factor), pivots by category, component and payer, the nominal liquidity view and year-1
+monthly figure, the cost per kWh of heat, and the per-subject breakdowns. The discounting arithmetic lives on
+`CashFlowTimeline`.
 """
 
 from __future__ import annotations
@@ -39,23 +25,14 @@ from hisim.economics.uncertainty import UncertainValue
 
 @dataclass
 class TimelineAggregation:
-    """Everything `LifecycleCostResult` needs that is derived from the timeline (§3.7).
+    """The KPIs derived from one perspective's timeline, copied onto `LifecycleCostResult` (§3.7).
 
-    A plain transport record between :func:`aggregate_timeline` and `evaluator.evaluate`, which
-    copies its fields onto the published `LifecycleCostResult` one by one. It exists so that the
-    aggregation calculator has a single typed return value instead of a tuple of ten, and so that
-    "which KPIs are derived from the timeline" is answerable by reading one dataclass.
-
-    Units and conventions, since the field names alone do not say: `total_npv_in_euro` and every
-    `npv_by_*` value are euro bands **discounted to year 0** at the run's interest rate, cost
-    positive (lower is better; a negative NPV means the variant nets money);
-    `equivalent_annual_cost_in_euro` is that NPV times the VDI 2067-1 annuity factor, in euro per
-    year, and `monthly_equivalent_cost_in_euro` is that annuity over twelve — an even monthly
-    spread of it, not a monthly annuity (hisim-cyc.6); `annual_cost_series_nominal_in_euro` is
-    **undiscounted** nominal euro indexed by year 0..T (the liquidity view, §4.3), and
-    `monthly_cost_year1_in_euro` is its year-1 element over twelve. All are scoped to `scope_payer`
-    except `npv_by_payer`, which deliberately covers every payer so the §6.5 zero-sum check has
-    both sides.
+    Units: `total_npv_in_euro` and every `npv_by_*` value are euro bands discounted to year 0, cost-positive (a
+    negative NPV means the variant earns money). `equivalent_annual_cost_in_euro` is the NPV times the VDI 2067-1
+    annuity factor, in euro per year; `monthly_equivalent_cost_in_euro` is that over twelve.
+    `annual_cost_series_nominal_in_euro` is undiscounted nominal euro per year 0..T (the liquidity view, §4.3) and
+    `monthly_cost_year1_in_euro` its year-1 element over twelve. All are scoped to `scope_payer` except `npv_by_payer`,
+    which covers every payer for the §6.5 zero-sum check.
     """
 
     #: Months per year: the one divisor behind every monthly figure the engine publishes — the
@@ -80,35 +57,20 @@ class TimelineAggregation:
 def annual_energy_quantities(
     billing: List[BillingDeterminants], simulated_period_fraction: float
 ) -> Dict[str, AnnualEnergyQuantities]:
-    """Per-carrier annualized volumes for the result object (W4.2, §3.6 rule 5).
+    """Return the annualized energy volumes per carrier, for the result object (§3.6 rule 5).
 
-    Keyed by `EnergyCarrier.value`, i.e. by the timeline subject name of the carrier, so a
-    consumer can join a bill against the carrier's cash flows without a second mapping.
-
-    Volumes of the same carrier **add up**: a carrier can be billed by more than one meter, and
-    every other reading of those records sums them — the energy calculator's emissions, the CO2
-    accumulator's per-carrier mass, the cash flows themselves. This used to assign per determinant
-    instead, so with two meters the published quantity was the last one while the published mass
-    was both, and the report's CO2 factors table stated a multiplication that did not come out.
-
-    Annualization uses the `guard_zero` divisor of `calculators/annualization.py`: the two
-    presentation sites this replaces (`reporting.py:231` and `:1189`, both
-    ``max(fraction, 1e-9)``) are guarded, and the engine's own energy calculator has already
-    rejected non-positive fractions by the time a result exists — so the guard only ever
-    differs for fractions in ``(0, 1e-9)``, which no simulation produces (W3.5).
-
-    It exists so that the *physical* context of an evaluation travels with the result: the
-    plausibility panel and the report's year-1 energy bill divide euros by these kWh to show
-    effective prices — the fastest way to catch a unit mix-up — and before W4.2 they had to reach
-    back into `EvaluationInputs` to do it.
+    The plausibility panel and the report divide euros by these kWh to show effective prices, which exposes unit
+    mix-ups. Volumes of the same carrier billed by several meters add up, as every other reading of those records does.
+    The division uses the `guard_zero` divisor of `calculators/annualization.py`.
 
     Args:
-        billing: The run's billing determinants per carrier, over the *simulated period*.
+        billing: The run's billing determinants per carrier over the simulated period.
         simulated_period_fraction: Simulated share of a year, dimensionless.
 
     Returns:
-        Annualized volumes in kWh per year, keyed by `EnergyCarrier.value`. Purely physical: no
-        prices, no discounting, no perspective scoping — the same figures for every perspective.
+        Volumes in kWh per year keyed by `EnergyCarrier.value` (the carrier's timeline subject name); the same for
+            every
+        perspective.
     """
     quantities: Dict[str, AnnualEnergyQuantities] = {}
     for determinants in billing:
@@ -129,27 +91,20 @@ def annual_energy_quantities(
 def annual_energy_attribution(
     attribution: Dict[str, Dict[str, float]], simulated_period_fraction: float
 ) -> Dict[str, Dict[str, float]]:
-    """Per-subject energy attribution, annualized with the carrier totals' own divisor.
+    """Return the per-subject energy attribution in kWh per year, annualized like the carrier totals.
 
-    The per-device counterpart of `annual_energy_quantities`, and it exists as a sibling of that
-    function precisely so the two use one annualization: the household energy balance checks its
-    grid nodes against the metered carrier quantities, and a device column annualized with a
-    different divisor would not agree with the meter it is compared to. Values are carried through
-    unchanged, because annualizing is a scaling, not an interpretation.
+    The household energy balance compares device columns against the metered carrier quantities, so both must use the
+    same divisor.
 
     Args:
-        attribution: Subject -> energy-balance role -> simulated-period kWh, straight off
-            `EvaluationInputs`.
+        attribution: Subject -> energy-balance role -> kWh over the simulated period, from `EvaluationInputs`.
         simulated_period_fraction: Simulated share of a year, dimensionless.
 
     Returns:
-        The same shape in kWh per year. An empty input yields an empty map, which is the state
-        every run without per-component attribution is in and which the chart skips on.
+        The same shape in kWh per year; an empty map when the run has no per-component attribution.
 
     Raises:
-        ValueError: If the extract carries a negative quantity. Annualizing is a positive scaling,
-            so a magnitude that arrives negative leaves negative, and the check belongs where the
-            map changes hands rather than at the chart that would draw it.
+        ValueError: If the map carries a negative quantity.
     """
     validate_energy_attribution(
         attribution, "annual_energy_attribution(EvaluationInputs.energy_attribution_by_subject_in_kwh)"
@@ -171,34 +126,25 @@ def build_breakdowns(
     annuity: float,
     horizon: int,
 ) -> Dict[str, ComponentCostBreakdown]:
-    """The per-subject pivot of the canonical timeline (§7.4 rule 1).
+    """Return one `ComponentCostBreakdown` per subject, pivoted from the scoped timeline (§7.4 rule 1).
 
-    Subjects keep first-appearance order. `investment_gross_in_euro` is the year-0 gross figure
-    *before* support; the support is reported separately, in both units and with the unit in the
-    field name (W3.4): `subsidies_nominal_in_euro` sums the subject's SUBSIDY entries nominally
-    — the unit the §6.4 levy basis deducts — and `subsidies_npv_in_euro` discounts them, so it
-    equals `npv_by_category[SUBSIDY]` mirrored to positive. See `calculators/categories.py` for
-    why the gross and financing category sets differ.
-
-    This is the pivot every per-component frontend view rests on: because each breakdown is built
-    by filtering the *same* scoped timeline, the per-subject NPVs sum exactly to the perspective's
-    total, which is what makes stacked bars add up without a reconciliation step. Carriers appear
-    alongside components — a subject is whatever the timeline says it is — and a subject's
-    `subject_kind` decides whether operational CO2 is attributed to it (carriers) or only embodied
-    CO2 (components).
+    Every breakdown filters the same timeline, so the per-subject NPVs sum exactly to the perspective's total and
+    stacked bars add up. `investment_gross_in_euro` is the year-0 cost before support; `subsidies_nominal_in_euro` sums
+    the subject's SUBSIDY entries undiscounted and `subsidies_npv_in_euro` discounts them. Carriers are subjects too: a
+    carrier gets operational CO2, a component only embodied CO2.
 
     Args:
-        scoped: The timeline already filtered to the perspective's payer scope.
-        facts_by_subject: The declared cost facts per component subject, for the asset class and
-            KPI tag columns; carriers are absent from it and get `None`.
-        co2_result: Finished CO2 accounting, for the per-subject lifecycle mass in kg.
+        scoped: The timeline filtered to the perspective's payer scope.
+        facts_by_subject: Declared cost facts per component subject, for the asset class and KPI tag; carriers get
+            None.
+        co2_result: Finished CO2 accounting, for each subject's lifecycle mass in kg.
         interest: Nominal discount rate as a fraction.
         annuity: The VDI 2067-1 annuity factor for this horizon and rate, in 1/a.
-        horizon: Observation period T in years, for the nominal annual series (T + 1 entries).
+        horizon: Observation period T in years; the nominal annual series has T + 1 entries.
 
     Returns:
-        One `ComponentCostBreakdown` per subject, keyed by subject name, in the timeline's
-        first-appearance order — kept so chart series and CSV rows are stable across runs.
+        The breakdowns keyed by subject name, in the timeline's first-appearance order so charts and CSV rows are
+            stable.
     """
     breakdowns: Dict[str, ComponentCostBreakdown] = {}
     for subject in scoped.subjects():
@@ -245,45 +191,31 @@ def aggregate_timeline(
     parameters: EconomicParameters,
     annual_heat_demand_in_kwh: Optional[float],
 ) -> TimelineAggregation:
-    """Derives the perspective's KPIs from the allocated timeline (§3.7).
+    """Derive the perspective's KPIs from the allocated timeline (§3.7).
 
-    The last step of an evaluation and the only one that discounts: `evaluator.evaluate` calls it
-    after the timeline is complete and the allocation ruleset has assigned payers, and copies the
-    result straight onto `LifecycleCostResult`. Everything it returns is a filter, a discounting
-    or a pivot of one canonical timeline — no cash flow is created or re-derived here — which is
-    the §3.1 principle that makes the published figures reconcile with each other by construction
-    rather than by agreement between separate code paths.
-
-    Two ordering decisions are worth checking. `npv_by_payer` is taken on the **full** timeline
-    before scoping, because it exists to show the other side of the landlord/tenant split and the
-    §6.5 zero-sum check needs every payer; everything else is taken on the scoped timeline via
-    `CashFlowTimeline.scoped_to`, the single definition of scoping that `explain` also uses (§7
-    B4). And LCOH is `NPV x annuity / annual heat demand`, i.e. an equivalent *annual* cost per
-    annual kWh — not an NPV per lifetime kWh.
+    The last step of an evaluation and the only one that discounts. `npv_by_payer` is taken on the full timeline, so
+    both sides of the landlord/tenant split are visible; everything else on the timeline scoped with
+    `CashFlowTimeline.scoped_to`, the same scoping `explain` uses. The cost per kWh of heat is `NPV * annuity / annual
+    heat`, an annual cost per annual kWh.
 
     Args:
-        timeline: The finished, payer-allocated timeline for this perspective.
-        actor_scope: Whose flows the perspective reports; SYSTEM means all of them.
-        facts_by_subject: Declared cost facts per component subject, passed through to
-            :func:`build_breakdowns`.
-        co2_result: Finished CO2 accounting, passed through to :func:`build_breakdowns`.
-        parameters: Economic parameters — supplies the interest rate, the horizon and the annuity
-            factor.
-        annual_heat_demand_in_kwh: Annual useful heat demand for the per-kWh heat figure — for a
-            staged plan the equivalent annual heat of its horizon
-            (`StagedEvaluator._equivalent_annual_heat`), which makes the quotient
-            NPV(costs) / NPV(heat). `None` or zero suppresses it, since a system that delivers no
-            heat has no cost per unit of it.
+        timeline: The finished, payer-allocated timeline.
+        actor_scope: Whose flows the perspective reports; SYSTEM means all.
+        facts_by_subject: Declared cost facts per component subject, passed to :func:`build_breakdowns`.
+        co2_result: Finished CO2 accounting, passed to :func:`build_breakdowns`.
+        parameters: Economic parameters; supply the interest rate, the horizon and the annuity factor.
+        annual_heat_demand_in_kwh: Annual useful heat for the per-kWh figure; for a staged plan the equivalent annual
+            heat of its horizon (`StagedEvaluator._equivalent_annual_heat`). None or zero suppresses the figure.
 
     Returns:
-        A `TimelineAggregation`; see its docstring for the units of each field.
+        A `TimelineAggregation`.
     """
     interest = parameters.interest_rate
     horizon = parameters.observation_period_in_years
     npv_by_payer = dict(timeline.npv_by(interest, lambda entry: entry.payer))
 
     # The perspective reports the scope actor's flows (SYSTEM = everything). One definition of
-    # scoping, on the timeline itself, so `explain` cannot disagree with the KPI (§7 B4).
+    # scoping, on the timeline itself, so `explain` cannot disagree with the KPI.
     scope_actor = actor_scope.to_actor()
     scoped = timeline.scoped_to(scope_actor)
 

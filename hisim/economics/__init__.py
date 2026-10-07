@@ -1,27 +1,11 @@
-"""Lifecycle cost engine (cost_spec.md): parallel successor of the capex/opex calculation.
+"""Lifecycle cost engine (cost_spec.md): the successor of the per-component capex/opex calculation.
 
-Public API surface. The engine is strictly parallel to the legacy cost path until the
-Phase-7 cutover: it never calls ``get_cost_capex``/``get_cost_opex`` and only writes new
-files. See ``cost_spec.md`` and ``cost_module_issues.md`` at the repo root.
-
-The package computes lifecycle costs over a configurable horizon (default 20 years, annuity method
-per VDI 2067-1 / DIN EN 15459-1) from three kinds of input: *facts* declared by components (what am
-I, how big), *energy flows* measured by the meters (what crossed the system boundary), and
-*versioned data files* (prices, lifetimes, subsidy schemes). Everything else — discounting,
-replacements, subsidies, actor splits, uncertainty bands — happens centrally in
-`evaluator.EconomicEvaluator`, which is a pure function of its inputs.
-
-Re-exported here is only what a *caller from outside the package* needs: the declaration types a
-component or meter fills in (`ComponentCostFacts`, `EnergyFlowFacts`, `BillingDeterminants`,
-`CostRelevance`), the brownfield register (`ExistingAsset`, `ExistingAssetRegister`), the assumption
-record (`EconomicParameters`), and the value type every monetary figure uses (`UncertainValue`,
-`Slot`). The engine, timeline, database, subsidy and reporting layers are deliberately *not*
-re-exported — they are imported by module path, which keeps this file's import cost low enough that
-`hisim/component.py` can depend on `economics.facts` without pulling the engine into every
-simulation.
-
-For the package tour — pipeline diagram, perspective model, per-module table and the data-file
-layout — see ``hisim/economics/README.md``.
+It computes lifecycle costs over a configurable horizon (default 20 years, annuity method per VDI 2067-1) from facts
+declared by components, energy flows measured by the meters and versioned data files (prices, lifetimes, subsidy
+schemes). This module re-exports only what a caller outside the package needs: the declaration types, the register of
+existing assets, `EconomicParameters` and `UncertainValue`. The engine and reporting layers are imported by module
+path, so `hisim/component.py` can import `economics.facts` without loading the engine. ``hisim/economics/README.md``
+has the package tour.
 """
 
 from hisim.economics.carriers import EnergyCarrier

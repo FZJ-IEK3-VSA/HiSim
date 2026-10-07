@@ -1,36 +1,9 @@
-"""Subsidy application: turning awards into cash flows (cost-spec-v2 §2.3).
+"""Turn subsidy awards into SUBSIDY cash flows on the timeline (cost_spec.md §2.3, §5).
 
-The §2.3 "subsidy application" calculator — the *orchestration half* of the subsidy machinery.
-The eligibility, amount and cumulation logic lives in `subsidies.py` and is untouched here;
-this module builds the `MeasureForSubsidy` the solver needs, hands it the perspective's
-subsidy-mode filter (§5.5) so the solver only ever optimizes over admitted schemes, and lays the
-resulting support out on the timeline according to its payout kind (§5.3):
-
-* ``UPFRONT_GRANT`` — one negative SUBSIDY entry at year 0;
-* ``TAX_CREDIT_SCHEDULE`` — one entry per scheduled year within the observation period;
-* ``OPERATIONAL`` — a per-kWh payment on the energy *sold*, for the award's duration.
-
-Without a catalog nothing is booked. The phase-1 shim that used to apply instead — the legacy
-flat percentage carried on the device entry (§10.1) — was retired on 2026-09-24 (owner decision on
-the PR #799 review): support with no scheme behind it is support no document can award, so a run
-without a catalog is priced gross on every path.
-
-**W3.4 — how the support total is obtained (fixed 2026-08-12).** This calculator no longer
-returns a running "total upfront support": that figure was incomplete (OPERATIONAL payouts were
-emitted but never accumulated), mixed units (tax-credit schedules entered discounted, upfront
-grants nominal) and was closed before financing emitted its repayment-grant SUBSIDY entry. The
-support figure the §6.4 modernization-levy basis deducts is now derived from the finished
-timeline by :func:`nominal_support_from_entries` — the **nominal sum of every SUBSIDY entry**,
-which is what §559 BGB deducts (subsidies *received*) and is complete by construction.
-
-**B5 — the subsidy mode filters before the solve (fixed 2026-08-12).** The awards used to be
-filtered *after* `solve_cumulation` had optimized over the unrestricted candidate set, so an
-ONLY/EXCLUDE perspective could end up with the leftovers of a combination chosen for schemes it
-does not admit — a non-optimal, and with `excludes` in play even an empty, remainder. The filter
-is now a predicate handed to the solver, so eligibility, cumulation, the undetermined bound and
-the question set all see the same admitted candidate set.
-
-Realizes: cost_spec.md §5 (subsidies), §5.5 (subsidy modes), §6.4 (levy basis).
+Eligibility, amounts and cumulation live in the subsidy package. This module builds the `MeasureForSubsidy` the solver
+needs, passes it the perspective's subsidy-mode filter (§5.5) so the solver only optimizes over admitted schemes, and
+lays each award out by payout kind (§5.3): ``UPFRONT_GRANT`` at year 0, ``TAX_CREDIT_SCHEDULE`` once per scheduled year
+within the horizon, ``OPERATIONAL`` per kWh sold for the award's duration. Without a catalog nothing is booked.
 """
 
 from __future__ import annotations
@@ -59,11 +32,10 @@ from hisim.economics.uncertainty import UncertainValue
 
 @dataclass
 class SubsidyApplicationResult:
-    """Cash flows and the cumulation record.
+    """The SUBSIDY cash flows of one measure and the solver's cumulation record.
 
-    No support *total* is returned on purpose (W3.4): a per-subject running total cannot see the
-    financing repayment grant, which is emitted after every subject has been costed. Callers
-    derive the figure from the finished timeline with :func:`nominal_support_from_entries`.
+    It carries no support total, because the financing repayment grant is emitted later; callers derive the total from
+    the finished timeline with :func:`nominal_support_from_entries`.
     """
 
     entries: List[CashFlowEntry] = field(default_factory=list)
@@ -72,16 +44,12 @@ class SubsidyApplicationResult:
 
 
 def nominal_support_from_entries(entries: Iterable[CashFlowEntry]) -> UncertainValue:
-    """The nominal support carried by the SUBSIDY entries of a timeline, as a positive band.
+    """Return the nominal support carried by the SUBSIDY entries of a timeline, as a positive band.
 
-    **Unit: nominal euros received, undiscounted, summed across years** (W3.4). §559 BGB deducts
-    the subsidies the landlord *receives*, which are nominal amounts, so the §6.4 levy basis
-    deducts exactly this figure. Timeline SUBSIDY entries are negative (revenue-mirrored bands);
-    the returned band is mirrored back, so `minimum` reads "least support" again.
-
-    Deriving the figure here rather than accumulating it while entries are emitted makes it
-    complete by construction — every SUBSIDY entry counts, whichever calculator emitted it —
-    and recoverable from the timeline, which is the property §5.1 asserts.
+    The unit is nominal euros received, undiscounted and summed across years: what §559 BGB deducts, so the §6.4
+    modernization-levy basis uses this figure. SUBSIDY entries are negative and revenue-mirrored (their optimistic slot
+    is the band maximum); the result is mirrored back, so `minimum` reads "least support". Deriving it from the entries
+    makes it complete whichever calculator emitted them.
     """
     signed = UncertainValue.sum(
         entry.amount_in_euro for entry in entries if entry.category == CostCategory.SUBSIDY
@@ -101,51 +69,35 @@ def build_subsidy_flows(
     price_basis_year: int,
     cost_factor: float = 1.0,
 ) -> SubsidyApplicationResult:
-    """Subsidy flows for one measure (§5); the support total is derived from the timeline.
+    """Return the SUBSIDY flows of one measure (§5).
 
-    The bridge between the subsidy *engine* and the timeline. It assembles the measure record the
-    solver needs — the measure's costs split by category (the eligible-cost basis), whether it is
-    an INSTALL or a REPLACE, its VAT rate and the annualized energy it sells — runs the cumulation
-    solver over the schemes the perspective admits, and then lays each resulting award out
-    according to its payout kind. No eligibility rule, cap or cumulation constraint is evaluated
-    here; all of that is `subsidies.py`, which knows nothing about timelines.
-
-    Two things a reviewer should note about *when* things happen. The measure's costs are those of
-    `DeviceCosting`, i.e. gross and before any other support, so eligible-cost caps bind on the
-    figure the legal texts mean. And scheme validity is tested against `price_basis_year`, the
-    economic "today" — a 2015 weather year simulated with 2026 prices is offered 2026 schemes,
-    which is the only reading under which a subsidy result means anything.
+    It builds the measure record the solver needs (costs by category, INSTALL or REPLACE, VAT rate, annualized energy
+    sold), runs the cumulation solver over the schemes the perspective admits and lays each award out by payout kind.
+    The costs are gross, before any other support, so eligible-cost caps bind on the figure the legal texts mean.
+    Scheme validity is tested against `price_basis_year`, the economic "today", not the simulated weather year.
 
     Args:
-        costing: The measure's resolved costing (§3.5, §4.1). Supplies the cost blocks, the facts
-            the eligibility conditions are evaluated against, the VAT rate and whether an asset is
-            being replaced.
-        subsidy_catalog: The country catalog, or `None`, in which case nothing is booked and no
-            decision is made (the §10.1 flat shim is retired).
-        subsidy_context: The applicant/building questionnaire answers the conditions read (§5.7).
-        subsidy_mode: The perspective's mode (NONE / FULL / ONLY / EXCLUDE). Its `admits`
-            predicate is handed to the solver, so filtering happens *before* the optimization
-            (B5), not after.
-        billing: All carriers' billing determinants, read only for `energy_sold_in_kwh`, which
-            OPERATIONAL payouts (per-kWh feed-in-style premiums) are paid on -- the subject's
-            ``share_of_energy_sold`` of it.
-        simulated_period_fraction: Simulated share of a year, used to annualize that sold energy.
-        ledger: Provenance ledger; each applied scheme's own record is interned into it (W2.4).
-        parameters: Economic parameters — supplies the horizon that truncates schedules and the
-            discount factor the solver uses to compare payout timings.
+        costing: The measure's resolved costing (§3.5, §4.1): cost blocks, facts for the eligibility conditions, VAT
+            rate and whether an asset is being replaced.
+        subsidy_catalog: The country catalog, or None, in which case nothing is booked.
+        subsidy_context: The applicant and building answers the conditions read (§5.7).
+        subsidy_mode: The perspective's mode (NONE, FULL, ONLY, EXCLUDE); its `admits` predicate filters schemes before
+            the solver optimizes.
+        billing: All carriers' billing determinants; only `energy_sold_in_kwh` is read, for OPERATIONAL payouts, scaled
+            by the subject's ``share_of_energy_sold``.
+        simulated_period_fraction: Simulated share of a year, which annualizes the sold energy.
+        ledger: Provenance ledger; each applied scheme's record is interned into it.
+        parameters: Economic parameters; supply the horizon that truncates schedules and the discount factor the solver
+            uses to compare payout timings.
         price_basis_year: The economic "today" scheme validity is tested against.
-        cost_factor: The price level of the timeline's year 0 relative to the price basis year
-            for this measure's purchase (:meth:`~hisim.economics.evaluator.YearZeroPriceLevel.purchase`,
-            1.0 for a stated price). The solver sees the cost in year-0 money, so a share of it is
-            a share of the escalated cost and a nominal amount is clamped to the cost of the year
-            it is paid in (renovisorissues #65). 1.0 leaves every figure as it was.
+        cost_factor: Price level of year 0 relative to the price basis year for this purchase
+            (`evaluator.YearZeroPriceLevel.purchase`); 1.0 for a stated price. The solver sees the cost in year-0
+            money.
 
     Returns:
-        A `SubsidyApplicationResult` whose `entries` are revenue-mirrored (negative) SUBSIDY
-        entries in nominal euros of their year, at year 0 for upfront grants, at years 1..N for
-        tax-credit schedules, and for the award's duration for operational payouts — and whose
-        `decision` carries the solver's full audit trail (applied, rejected, undetermined); both are
-        empty without a catalog. Deliberately no support total: see the module docstring (W3.4).
+        The result: negative, revenue-mirrored SUBSIDY entries in nominal euros of their year, and the solver's
+            decision
+        (applied, rejected, undetermined). Both are empty without a catalog.
     """
     params = parameters
     result = SubsidyApplicationResult()
@@ -171,10 +123,10 @@ def build_subsidy_flows(
     energy_sold: Dict[EnergyCarrier, float] = measure.annual_energy_sold_in_kwh
     for determinants in billing:
         if determinants.energy_sold_in_kwh:
-            # W3.5: this site guards the divisor, the energy calculator does not — see
-            # calculators/annualization.py for the (preserved) discrepancy. A piece of a subject a
-            # staged plan split is paid on its size share of what the installation sells
-            # (`ComponentCostFacts.share_of_energy_sold`, hisim-1y0m); 1.0 for every other subject.
+            # This site guards a zero divisor, the energy calculator does not (see
+            # calculators/annualization.py). A piece of a subject a staged plan split is paid on its
+            # size share of what the installation sells (`ComponentCostFacts.share_of_energy_sold`);
+            # 1.0 for every other subject.
             energy_sold[determinants.carrier] = (
                 annualize(determinants.energy_sold_in_kwh, simulated_period_fraction, guard_zero=True)
                 * costing.facts.share_of_energy_sold
@@ -191,8 +143,7 @@ def build_subsidy_flows(
     )
     result.decision = decision
     for award in decision.applied:
-        # W2.4: the scheme's own provenance, minted by the catalog that loaded (and resolved) it —
-        # this used to fabricate an `inline:subsidy scheme <id>` pseudo-source here.
+        # The scheme's own provenance, minted by the catalog that loaded and resolved it.
         scheme = subsidy_catalog.scheme_by_id(award.scheme_id)
         assert scheme is not None, f"award for unknown scheme {award.scheme_id}"
         provenance = subsidy_catalog.provenance_for_scheme(

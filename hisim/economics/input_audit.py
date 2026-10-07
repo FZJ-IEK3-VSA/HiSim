@@ -1,23 +1,10 @@
-"""The resolved-input audit, as data (cost-spec-v2 §2.4, W4.6).
+"""The resolved-input audit as data: which price each declared fact resolved to, from where (cost_spec.md §2.4, §9.5).
 
-"Which price did each declared fact actually resolve to, from where, and what looks wrong about
-it" is one question with two renderings: `cost_audit.csv` (written by `audit.py`) and section 1
-of the HTML report (rendered by `reporting.py`). Before W4.6 each of them answered it for
-itself, and the two override-precedence implementations disagreed — the report dropped an
-override's unit price whenever the asset class had no database entry, which the CSV did not.
-
-The types live here, apart from the function that fills them (`audit.build_input_audit`),
-because the renderers sit on opposite sides of the seam-4 lint: `audit.py` is verification and
-may reach into the cost database, `reporting.py` is presentation and may not. A module that
-holds only the answer — no evaluator, no database, no pandas — is importable from both.
-
-Why the audit matters to a reviewer: it is the fastest way to catch the errors that actually happen.
-Everything downstream of a wrong unit price is arithmetically correct and completely wrong, so a
-table of "this component, this asset class, this size, priced at this unit price from this entry,
-citing these sources, with these subsidies and these caps binding" is where a mis-sized component, a
-kW/m² mix-up or an uncited override is spotted — long before anyone questions an NPV. It is also
-persisted (`cost_audit.json`, alongside the human-facing `cost_audit.csv`), so a report can be
-rebuilt from an archived result directory with no cost database present at all (W4.5).
+Both `cost_audit.csv` (written by `audit.py`) and the input section of the HTML report render these types, so they
+agree on override precedence. A wrong unit price makes everything downstream wrong yet arithmetically correct, so this
+table is where a mis-sized component, a kW/m² mix-up or an uncited override is spotted. The module holds no evaluator
+and no database, so the report layer can import it; it is persisted as `cost_audit.json` so a report can be rebuilt
+without the cost database.
 """
 
 from __future__ import annotations
@@ -35,21 +22,9 @@ from hisim.economics.uncertainty import UncertainValue
 class OriginKind(str, Enum):
     """How a row's unit price was resolved.
 
-    The vocabulary is shared by both renderers; each spells it its own way, which is formatting
-    and therefore theirs to decide.
-
-    Three outcomes are possible and the distinction is the audit's central question: the price came
-    from a per-field config override (OVERRIDE, which wins over the database whether or not a
-    database entry exists), from a cost-database entry (DATABASE), or from nowhere at all
-    (UNRESOLVED — a component the engine could not price, which must be visible rather than silently
-    contributing zero). Deciding this once here is what fixed the pre-W4.6 disagreement in which the
-    HTML report dropped an override's unit price whenever the asset class had no database entry.
-
-    An enum rather than a bag of string constants, so a `cost_audit.json` carrying a fourth,
-    misspelled kind fails on load instead of falling through every renderer's comparisons and being
-    rendered as a blank cell. The member *values* are the strings the file format has always
-    carried, so the change is invisible to any file already written; deriving from `str` keeps the
-    members usable wherever the old constants were.
+    OVERRIDE: a per-field config override, which wins whether or not a database entry exists. DATABASE: a cost-database
+    entry. UNRESOLVED: the engine could not price the component, which must be visible rather than silently zero.
+    Values are the strings stored in `cost_audit.json`, and an unknown spelling fails on load.
     """
 
     ORIGIN_OVERRIDE = "OVERRIDE"
@@ -59,25 +34,16 @@ class OriginKind(str, Enum):
 
 @dataclass(frozen=True)
 class ResolvedInputRow:
-    """One declared fact with everything resolving it produced (§9.5).
+    """One declared cost subject with everything resolving it produced (§9.5).
 
-    Pure data: no string only one of the two renderers could want, no formatting. `origin_kind`
-    settles the precedence once — a config override wins over the database entry whether or not
-    that entry exists — so neither renderer decides it again.
+    It carries the chain from declaration to money: what was declared (subject, asset class, size and unit), how it was
+    priced (origin, override source, database entry, sources, unit price, lifetime) and what that produced (gross
+    investment, subsidies, binding caps). `entry_key` and `source_ids` are filled whenever a database entry was found,
+    also when an override won, so a reader sees what the override replaced.
 
-    One row per declared cost subject, carrying the whole chain from declaration to money: what was
-    declared (subject, asset class, size and its unit), how it was priced (origin kind, override
-    source, database entry key, source ids, unit price and lifetime), and what that produced (gross
-    investment, nominal subsidies, the scheme ids and which caps bound in which slots). `entry_key`
-    and `source_ids` are filled whenever a database entry was found — including when an override
-    won — so a reader can see what the declared price is being compared against.
-
-    Units, since several of these fields are easy to misread: `unit_price_in_euro` is the price as
-    the winning origin states it — the database entry's `specific_investment`, i.e. euro per size
-    unit, or the declared `investment_cost_override_in_euro` when an override won;
-    `investment_gross_in_euro` is the absolute year-0 figure before support; and
-    `subsidies_nominal_in_euro` is nominal, undiscounted, positive support — not the negative
-    timeline amount and not its NPV.
+    Units: `unit_price_in_euro` is the winning origin's price, euro per size unit for DATABASE or the absolute override
+    amount for OVERRIDE; `investment_gross_in_euro` is the year-0 cost before support; `subsidies_nominal_in_euro` is
+    positive, undiscounted support.
     """
 
     subject: str
@@ -100,9 +66,8 @@ class ResolvedInputRow:
     caps_binding_by_scheme: Dict[str, List[str]] = field(default_factory=dict)
     #: The Sowieso share the subject's anyway credit was computed at, or None when the subject
     #: earned no such credit. A credit is `share x like-for-like cost`, so this is the factor
-    #: that turns the counterfactual's price into what is actually credited; printing the credit
-    #: without it is what let a facade that was never insulated be credited with a full
-    #: insulation measure.
+    #: that turns the counterfactual's price into what is actually credited; without it a reader
+    #: cannot see whether a full like-for-like measure was credited.
     anyway_share: Optional[float] = None
     #: The like-for-like cost that share was applied to, in euro. The share alone states a
     #: factor without its base, so the audited credit could not be reproduced from the row; with
@@ -112,12 +77,10 @@ class ResolvedInputRow:
     flags: List[str] = field(default_factory=list)
 
     def to_json(self) -> dict:
-        """Serialization for cost_audit.json.
+        """Return the row as JSON for `cost_audit.json`.
 
-        Writes every field, including the ones only the HTML report renders (`flags`,
-        `caps_binding_by_scheme`), because the stored audit has to be sufficient to rebuild either
-        rendering later. Bands go through `UncertainValue.to_json` and `None` stays `None`, so an
-        unresolved row is distinguishable from a zero-priced one.
+        Every field is written, including those only the HTML report shows, so either rendering can be rebuilt from the
+        file. None stays None, so an unresolved row differs from a zero-priced one.
         """
         return {
             "subject": self.subject,
@@ -141,15 +104,9 @@ class ResolvedInputRow:
 
     @staticmethod
     def from_json(raw: dict) -> "ResolvedInputRow":
-        """Inverse of `to_json`.
+        """Rebuild a row from the JSON :meth:`to_json` wrote.
 
-        Rebuilds a row from a stored `cost_audit.json`, defaulting the collection fields to empty so
-        an audit written by an older version still loads. The mandatory keys are the identity and
-        origin fields; everything a run may legitimately not have produced is optional.
-
-        `origin_kind` goes through `OriginKind`, so a file carrying a spelling no renderer knows
-        fails here instead of reaching the report as a kind that matches none of its comparisons
-        and renders as an empty cell.
+        Collection fields default to empty; the identity and origin fields are mandatory.
 
         Raises:
             KeyError: If a mandatory key is missing.
@@ -179,27 +136,17 @@ class ResolvedInputRow:
 
 
 def price_basis(row: ResolvedInputRow) -> str:
-    """What a row's unit price is measured in, for whichever renderer is printing it.
+    """Return the label saying what a row's unit price is measured in.
 
-    The three unit-price slots hold one number per slot but not one *kind* of number: a DATABASE
-    row states the entry's specific investment, euro per unit of the declared size (EUR/kW, EUR/m²,
-    …), while an OVERRIDE row states an absolute euro amount for the whole subject, which is why
-    the two are never multiplied by the size the same way downstream. Labelling both "EUR/unit" and
-    nothing else made a per-kW figure and a total look like the same quantity in one column, and
-    understating a subject by orders of magnitude is exactly the reading mistake the audit exists to
-    prevent.
-
-    It lives here, next to the row rather than in either renderer, because both of them print the
-    same price: `cost_audit.csv` in its "Price basis" column and section 1 of the HTML report next
-    to the figure. Two spellings of one fact is how the CSV and the report came to disagree about
-    an override before W4.6.
+    Example: a DATABASE row priced in EUR/kW gets a per-kW label, while an OVERRIDE row states an absolute amount for
+    the whole subject. Without the label, a per-kW figure and a total look like the same quantity in one column. Both
+    the CSV "Price basis" column and the HTML report use this.
 
     Args:
-        row: The resolved row whose price is being printed.
+        row: The resolved row whose price is printed.
 
     Returns:
-        The basis as a label, or the empty string for an UNRESOLVED row, which has no price to
-        measure.
+        The label, or the empty string for an UNRESOLVED row.
     """
     if row.origin_kind == OriginKind.ORIGIN_OVERRIDE:
         return "EUR absolute (override)"
@@ -210,18 +157,12 @@ def price_basis(row: ResolvedInputRow) -> str:
 
 @dataclass(frozen=True)
 class InputAuditReport:
-    """The resolved-input audit: its rows, the price basis they resolved at, its sources.
+    """The resolved-input audit: one row per cost subject, the price basis year, and the sources the run cited.
 
-    The complete answer to "what did this evaluation actually read": one row per cost subject, the
-    price basis year everything resolved at, and the §3.10 registry entries the run cited. The basis
-    year is on the report rather than on each row because it is a single decision for the whole
-    evaluation — and a consequential one, since the database falls back to the earliest covered year
-    with a warning when it has no data for the simulated year (see `evaluator.
-    effective_price_basis_year`).
-
-    Built by `audit.build_input_audit` from the inputs, the database and the first result; rendered
-    to `cost_audit.csv` by `audit.py` and to section 1 of the HTML report by `reporting.py`; and
-    persisted as `cost_audit.json` so either rendering can be reproduced offline.
+    The price basis year is one decision for the whole evaluation; the database falls back to its earliest covered
+    year, with a warning, when it has no data for the simulated year (see `evaluator.effective_price_basis_year`).
+    Built by `audit.build_input_audit`, rendered to `cost_audit.csv` and the HTML report, and stored as
+    `cost_audit.json`.
     """
 
     #: Name of the JSON file this report is written to.
@@ -234,12 +175,9 @@ class InputAuditReport:
     sources: List[ResolvedSource] = field(default_factory=list)
 
     def to_json(self) -> dict:
-        """Serialization for cost_audit.json — the machine-readable twin of cost_audit.csv.
+        """Return the report as JSON for `cost_audit.json`, the reload twin of the diffable `cost_audit.csv`.
 
-        The CSV is the review artifact — deliberately diffable, so a price-data PR shows up as a
-        clean textual delta on the golden scenarios (§9.5) — while this JSON is the reload format,
-        carrying the fields the CSV flattens away. Sources are expanded inline rather than left as
-        ids, since a reader of the archived file has no registry to resolve them against.
+        Sources are written out in full, since a reader of the archived file has no registry to resolve ids against.
         """
         return {
             "price_basis_year": self.price_basis_year,
@@ -260,12 +198,10 @@ class InputAuditReport:
 
     @staticmethod
     def from_json(raw: dict) -> "InputAuditReport":
-        """Inverse of `to_json` — reloads the audit without touching the cost database (W4.5).
+        """Rebuild the audit from the JSON :meth:`to_json` wrote, without the cost database.
 
-        That independence is the point: `python -m hisim.economics report <results_dir>` can render
-        the input-audit section of an archived run even if the price files have since moved on, or
-        are not installed at all. Only `price_basis_year` is mandatory; rows and sources default to
-        empty.
+        This lets `python -m hisim.economics report <results_dir>` render an archived run. Only `price_basis_year` is
+        mandatory; rows and sources default to empty.
         """
         return InputAuditReport(
             price_basis_year=raw["price_basis_year"],
@@ -286,18 +222,17 @@ class InputAuditReport:
 
 
 def write_input_audit(audit: InputAuditReport, result_directory: str) -> str:
-    """Writes cost_audit.json next to the CSV, so a report can be rebuilt without the database.
+    """Write `cost_audit.json` into the result directory, so a report can be rebuilt without the database.
 
-    Called by `bridge.py` at the end of a `COMPUTE_LIFECYCLE_COSTS` run and by the `evaluate` CLI
-    command, always alongside `audit.write_cost_audit`, which writes the human-facing CSV from the
-    same object — the two files can therefore never disagree.
+    Called by `bridge.py` and the `evaluate` CLI command alongside `audit.write_cost_audit`, which writes the CSV from
+    the same object.
 
     Args:
         audit: The report to store.
         result_directory: Directory the run's other cost outputs are written to.
 
     Returns:
-        The path written, for logging.
+        The path written.
     """
     path = os.path.join(result_directory, InputAuditReport.FILE_NAME)
     with open(path, "w", encoding="utf-8") as file:
@@ -306,18 +241,15 @@ def write_input_audit(audit: InputAuditReport, result_directory: str) -> str:
 
 
 def read_input_audit(result_directory: str) -> Optional[InputAuditReport]:
-    """Reads cost_audit.json, or None when the directory has none.
+    """Read `cost_audit.json` from a result directory.
 
-    The reload path used by the `report` CLI command on a stored result directory. Returning `None`
-    rather than raising for a missing file is deliberate: result directories produced before the
-    audit was persisted, or by a run that only computed KPIs, are still reportable — the caller
-    simply omits the input-audit section.
+    Used by the `report` CLI command. A missing file is not an error: the caller omits the input-audit section.
 
     Args:
         result_directory: Directory to look in.
 
     Returns:
-        The stored audit, or `None` if the file is absent.
+        The stored audit, or None if the file is absent.
     """
     path = os.path.join(result_directory, InputAuditReport.FILE_NAME)
     if not os.path.isfile(path):

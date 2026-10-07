@@ -1,19 +1,8 @@
-"""Energy carrier enum for pricing (cost_spec.md §3.2).
+"""Energy carriers priced at the system boundary, and the vocabularies of measured flows (cost_spec.md §3.2).
 
-Replaces the ad-hoc use of ``LoadTypes`` for pricing purposes. Simulation I/O keeps using
-``loadtypes.LoadTypes``; only the billing boundary speaks ``EnergyCarrier``.
-
-The separation is deliberate and is what makes "energy is billed only at carrier boundaries, so
-nothing can be double counted by construction" (§3.1) checkable: `LoadTypes` describes what flows
-along a wire or pipe anywhere inside the system, while an `EnergyCarrier` names something that is
-*bought or sold across the system boundary* and therefore has a price entry, an emission factor and
-a tariff contract. A member of this enum is simultaneously the key of an `energy_prices_<COUNTRY>`
-row, the carrier field of `facts.EnergyFlowFacts`/`facts.BillingDeterminants` that meters declare,
-and the subject of the resulting energy cash-flow entries.
-
-The module owns only the vocabulary — no prices, no emission factors, no conversion between carriers
-and `LoadTypes` (the adapter and the meter components make that mapping where they need it). Like
-`uncertainty.py` it is a leaf, imported by facts, catalog entries, tariffs and parameters alike.
+Simulation I/O uses ``loadtypes.LoadTypes`` for what flows anywhere inside the system; an `EnergyCarrier` names what is
+bought or sold across the system boundary and therefore has a price entry, an emission factor and a tariff. Billing
+only at carrier boundaries is what rules out double counting (§3.1). The module is a leaf: it holds only vocabulary.
 """
 
 from __future__ import annotations
@@ -24,22 +13,13 @@ from typing import Dict, FrozenSet
 
 @enum.unique
 class EnergyCarrier(str, enum.Enum):
-    """Carriers priced at the system boundary.
+    """Carriers priced at the system boundary, one per key of the country price files.
 
-    One member per thing a building can buy or sell, and therefore per key of the country price
-    files: adding a carrier means adding price entries for every shipped country, not changing code.
-    Members are `str`-valued so they serialize to their own names in JSON exports and can be used
-    directly as data-file keys.
-
-    ``ELECTRICITY_FEED_IN`` is the one member that is not a purchased commodity: it carries the
-    feed-in remuneration as its "working price", which is what lets exported electricity be priced
-    by exactly the same lookup as imported electricity while keeping the two rates independent
-    (feed-in also has its own escalation rate, nominally fixed for EEG-style contracts). Every
-    member is *billed* per kWh, and the shipped price files quote per kWh throughout (where a
-    source published per liter or per ton, the row's notes record the as-published quote and the
-    heating value it was divided by). A user-supplied file may still quote natively; the price
-    entry's ``quantity_unit`` says how the file quotes it, and the database divides such a quote
-    by the carrier's heating value when it resolves the entry (D26).
+    Adding a carrier means adding price entries for every shipped country. Members are `str`-valued, so they serialize
+    to their names and work directly as data-file keys. ``ELECTRICITY_FEED_IN`` is not a purchased commodity: its
+    "working price" is the feed-in remuneration, so exported electricity is priced by the same lookup as imported
+    electricity with its own rate. Every carrier is billed per kWh; a price entry quoted per liter or per ton (its
+    ``quantity_unit``) is divided by the carrier's heating value when the database resolves it.
     """
 
     ELECTRICITY = "ELECTRICITY"
@@ -55,21 +35,12 @@ class EnergyCarrier(str, enum.Enum):
 
 @enum.unique
 class EnergyFlowRole(str, enum.Enum):
-    """What a measured device flow *is* in the household's energy balance.
+    """The role of a measured device flow in the household electricity balance.
 
-    The vocabulary of the per-subject energy record the extraction fills and the household energy
-    balance draws: not what a device is priced as, but which side of the electricity balance its
-    kilowatt hours sit on. It lives beside `EnergyCarrier` because it is the same kind of thing —
-    a small, serialization-stable vocabulary that both the extraction side and the presentation
-    side have to agree on — and because both sides can import this leaf module without dragging
-    anything along.
-
-    Roles carry **positive magnitudes**; direction is the role, not the sign, which is why the
-    battery has two of them. `GRID_IMPORT`/`GRID_EXPORT` are the meter's own two flows and are
-    the only roles that also correspond to a priced carrier boundary; the rest are internal
-    device flows that no bill is ever computed from. A flow that carries no role is simply not
-    recorded — this enum is deliberately not a total classification of everything a simulation
-    moves.
+    Example: a battery has two roles, one for charging and one for discharging. Roles carry positive magnitudes; the
+    direction is the role, not the sign. `GRID_IMPORT` and `GRID_EXPORT` are the meter's flows and the only roles that
+    sit at a priced carrier boundary; the others are internal device flows no bill is computed from. A flow without a
+    role is not recorded.
     """
 
     PV_GENERATION = "PV_GENERATION"
@@ -85,13 +56,9 @@ class EnergyFlowRole(str, enum.Enum):
 class UsefulHeatKind(str, enum.Enum):
     """What a measured useful heat is spent on: the rooms, or the hot water drawn at the tap.
 
-    The vocabulary of the heat the system-cost-per-unit-of-heat figure divides by
-    (`adapter.UsefulHeatSources`, decision on hisim-4p86). The two kinds are recorded apart in
-    `economic_inputs.json` because the denominator is only whole with both: a run whose building
-    has no hot-water source the table lists divides by the rooms' heat alone, and the split is what
-    lets the engine say so rather than publish a figure per kWh that reads too high. Like
-    `EnergyFlowRole` it lives in this leaf so the extraction and the engine share it without
-    importing each other.
+    The two kinds are the denominator of the system cost per kWh of heat (`adapter.UsefulHeatSources`) and are recorded
+    apart in `economic_inputs.json`. A run with no hot-water source divides by the rooms' heat alone, and the split
+    lets the engine say so instead of publishing a figure that reads too high.
     """
 
     ROOM_HEATING = "ROOM_HEATING"
@@ -107,24 +74,24 @@ _REVENUE_SUBJECT_BY_CARRIER: Dict[str, str] = {
 
 
 def revenue_subject(carrier: str) -> str:
-    """Names the timeline subject a carrier's ``FEED_IN_REVENUE`` entries are booked under.
+    """Return the timeline subject a carrier's ``FEED_IN_REVENUE`` entries are booked under.
 
-    The one place that says where the revenue for sold energy lands: the energy calculator books
-    under it, and every view that reads a carrier's year-1 bill back gathers it through
-    `bill_subjects`, so the booking and the reading cannot drift apart (renovisorissues #47).
+    A subject is the name a timeline entry is booked under (a device, a carrier, or a synthetic label). The energy
+    calculator books under this subject and the views read it back through `bill_subjects`, so the two cannot drift
+    apart.
 
     Args:
-        carrier: An `EnergyCarrier` or its value, as the per-carrier quantities key it.
+        carrier: An `EnergyCarrier` or its value.
 
     Returns:
-        The subject's value; the carrier's own value for every carrier without a separate one.
+        The revenue subject; the carrier's own value for every carrier without a separate one.
     """
     key = carrier.value if isinstance(carrier, EnergyCarrier) else carrier
     return _REVENUE_SUBJECT_BY_CARRIER.get(key, key)
 
 
 def bill_subjects(carrier: str) -> FrozenSet[str]:
-    """Lists every timeline subject a carrier's bill is booked under: its own and its revenue's.
+    """Return every timeline subject a carrier's bill is booked under: its own and its revenue's.
 
     Args:
         carrier: An `EnergyCarrier` or its value.
@@ -137,22 +104,17 @@ def bill_subjects(carrier: str) -> FrozenSet[str]:
 
 
 def validate_energy_attribution(attribution: Dict[str, Dict[str, float]], context: str) -> None:
-    """Refuses a per-subject energy record carrying a negative quantity.
+    """Refuse a per-subject energy record that carries a negative quantity.
 
-    Every value in the attribution map is a **magnitude**: direction is the role, which is exactly
-    why the battery has two of them. A negative number therefore has no meaning the balance can
-    draw — it would shrink the side it sits on and silently move the residual node by twice its
-    size, which reads as a smaller loss rather than as a defect. The check is applied at each of
-    the three places a map can enter the system (the extraction that builds one, the annualization
-    that rescales one, the deserializer that reads one back), because each is reachable without
-    the other two.
+    Every value is a magnitude whose direction is its `EnergyFlowRole`, so a negative number would silently shift the
+    balance. The check runs where a record enters the system: the extraction, the annualization and the deserializer.
 
     Args:
         attribution: Subject -> `EnergyFlowRole` value -> kWh.
-        context: What is being validated, for the message — the field or the function name.
+        context: What is being validated (a field or function name), for the message.
 
     Raises:
-        ValueError: If any quantity is negative, naming every one of them.
+        ValueError: If any quantity is negative; the message names every one of them.
     """
     negative = [
         f"{subject}.{role}={value!r}"

@@ -35,6 +35,7 @@ from hisim.config import (
 )
 from hisim.config.contributions import FactContribution
 from hisim.config.engine import resolve_all
+from hisim.config.sizing import resolve_config
 from hisim.config.report import LookupMode
 
 
@@ -199,7 +200,7 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
     # heating load this line reads has to be the one the same number produces.
     stated = BuildingConfig.preset_german_single_family_home("Building")
     stated.heating_reference_temperature_in_celsius = -7.0
-    heating_load = SizingContext.for_building(stated).heating_load_in_watt
+    heating_load = SizingContext.for_building(stated).one("heating_load_in_watt")
     controller = HeatDistributionControllerConfig.preset_building_derived("HeatDistributionController")
     hds = HeatDistributionConfig.preset_building_derived("HeatDistributionSystem")
     boiler = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
@@ -745,6 +746,66 @@ def test_a_null_provider_of_a_many_read_is_refused():
         ])
 
 
+@dataclass_json
+@dataclass
+class _OptionalSummingConfig(ConfigBase):
+    """Fixture whose one sized field sums every provider and may legitimately hold nothing."""
+
+    component_id: ComponentID
+    total_in_watt: Sizable[Optional[float]] = sized_field(
+        rule=Sum(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT)), optional=True
+    )
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns a dummy classname, as the ConfigBase contract requires."""
+        return "tests.test_sizing_engine._OptionalSummingConfig"
+
+
+@pytest.mark.base
+def test_a_null_provider_of_a_many_read_only_optional_fields_read_resolves_them_to_nothing():
+    """A many read honours nullable as a scalar read does: the optional sum is ``None``, the record names each.
+
+    Failure mode caught: the same switched-off provider answering an optional scalar field with
+    ``None`` but refusing an optional sum.
+    """
+    resolved = _summing("On", "Off").resolve_all([
+        _fixed("On", 1.0),
+        _NullProducerConfig(component_id=ComponentID(name="Off")),
+        _OptionalSummingConfig(component_id=ComponentID(name="Aggregator")),
+    ])
+    assert resolved[2].total_in_watt is None
+    assert resolved[2].sizing_record[0].inputs == (
+        ("On.maximal_thermal_power_in_watt", None),
+        ("Off.maximal_thermal_power_in_watt", None),
+    )
+
+
+@pytest.mark.base
+def test_a_law_reading_one_provider_over_a_many_read_is_refused_by_name():
+    """Catches a scalar law over a many-bound context silently computing on the tuple (a doubled tuple for ``* 2``)."""
+    with pytest.raises(ConfigSizingError) as raised:
+        (Size.PV_PEAK_POWER_IN_WATT * 2).evaluate(SizingContext(pv_peak_power_in_watt=(3000.0, 2000.0)))
+    message = str(raised.value)
+    for name in ("'pv_peak_power_in_watt' is read from one provider", "(3000.0, 2000.0)", "Sum(Many(...))"):
+        assert name in message, f"{name!r} is not in: {message}"
+
+
+@pytest.mark.base
+def test_a_many_read_whose_providers_and_values_differ_in_length_is_refused():
+    """Catches the audit dropping a provider silently when the providers outnumber the values (zip truncation)."""
+    config = _SummingConfig(component_id=ComponentID(name="Aggregator"))
+    with pytest.raises(ConfigSizingError) as raised:
+        resolve_config(
+            config,
+            SizingContext(maximal_thermal_power_in_watt=(3000.0, 2000.0)),
+            {"maximal_thermal_power_in_watt": ("East", "West", "North")},
+        )
+    message = str(raised.value)
+    for name in ("East, West, North", "(3000.0, 2000.0)", "one value per provider"):
+        assert name in message, f"{name!r} is not in: {message}"
+
+
 @pytest.mark.base
 def test_a_many_read_must_be_aggregated_by_sum_and_only_sum():
     """``Many`` alone, ``Many`` under another operator and many-reading functions fail on import."""
@@ -756,6 +817,8 @@ def test_a_many_read_must_be_aggregated_by_sum_and_only_sum():
         Sum(Size.MAXIMAL_THERMAL_POWER_IN_WATT)
     with pytest.raises(SizingError, match=r"Many\(\) wraps one fact term"):
         Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT * 2.0)
+    with pytest.raises(SizingError, match=r"Many\(\) wraps one fact term"):
+        Many(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT))
     with pytest.raises(SizingError, match="aggregated by an expression law"):
         law(lambda ctx: 0.0, reads=(Many(Size.MAXIMAL_THERMAL_POWER_IN_WATT),))
 

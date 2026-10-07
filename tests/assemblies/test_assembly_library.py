@@ -316,6 +316,24 @@ def test_a_provision_whose_member_an_option_drops_is_refused(tmp_path: Path, mem
 
 
 @pytest.mark.base
+def test_an_observer_port_into_a_member_an_active_option_lacks_is_refused(tmp_path: Path) -> None:
+    """Catches an observer port whose member one option leaves out while the port is still active there."""
+    text = VARIANT.replace(
+        "    demand: {into: [Tank], partner: MockOccupancy}\n",
+        "    demand: {into: [Tank], partner: MockOccupancy}\n"
+        "  observes:\n    reading: {into: [Meter], default: declared}\n",
+    ).replace(
+        "Heater: {class: tests.assemblies.mock_components.MockHeater, preset: standard}",
+        "Heater: {class: tests.assemblies.mock_components.MockHeater, preset: standard}\n          "
+        f"Meter: {{class: {Mocks.CLASSES}.MockElectricityMeter, preset: standard}}",
+    )
+    problems = problems_of(tmp_path, text)
+    assert "the port 'reading' names 'Meter', which the option 'off' of the variant 'heating' does not have" in problems
+    switched_off = text.replace("default: declared}", "default: declared, active_when: {heated: [true]}}")
+    assert problems_of(tmp_path / "off", switched_off) == ""
+
+
+@pytest.mark.base
 def test_one_member_name_in_the_options_of_two_variants_is_refused(tmp_path: Path) -> None:
     """Catches two selected options of two variants writing one member, which would make one component of two."""
     text = VARIANT.replace(

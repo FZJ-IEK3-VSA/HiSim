@@ -321,7 +321,7 @@ class ElectricityMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         return dynamic_connections
@@ -346,7 +346,7 @@ class ElectricityMeter(DynamicComponent):
                     lt.ComponentType.PV,
                     lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 ],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         return dynamic_connections
@@ -372,7 +372,7 @@ class ElectricityMeter(DynamicComponent):
                     lt.ComponentType.HEAT_PUMP_BUILDING,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         dynamic_connections.append(
@@ -386,7 +386,7 @@ class ElectricityMeter(DynamicComponent):
                     lt.ComponentType.HEAT_PUMP_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
                 # The DHW electrical power output only exists when the heat pump
                 # has domestic hot water preparation enabled; allow this mandatory
                 # input to remain unconnected when DHW is deactivated.
@@ -415,7 +415,7 @@ class ElectricityMeter(DynamicComponent):
                     lt.ComponentType.ELECTRIC_HEATING_SH,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         dynamic_connections.append(
@@ -429,7 +429,7 @@ class ElectricityMeter(DynamicComponent):
                     lt.ComponentType.ELECTRIC_HEATING_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         return dynamic_connections
@@ -451,7 +451,7 @@ class ElectricityMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.SOLAR_THERMAL_SYSTEM, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         return dynamic_connections
@@ -473,7 +473,7 @@ class ElectricityMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         return dynamic_connections
@@ -506,7 +506,7 @@ class ElectricityMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
         return dynamic_connections

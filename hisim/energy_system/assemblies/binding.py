@@ -48,8 +48,7 @@ from hisim.energy_system.assemblies.selection import Controllable, Observer
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState, Selection
-from hisim.energy_system.model import AnyInputItem, DefaultInputs, ExplicitWire, SourceReference
-from hisim.energy_system.wiring_checks import ConsumingOutput
+from hisim.energy_system.model import AnyInputItem, ConsumingOutput, DefaultInputs, ExplicitWire, SourceReference
 
 
 @dataclass
@@ -502,7 +501,7 @@ class PortBinder:
             if port.wires is not None
             else [DefaultInputs(source=unit.name)]
         )
-        for holder in (owner.units[member] for member in port.into if member in owner.units):
+        for holder in (owner.units[member] for member in port.landing_members if member in owner.units):
             for position in holder.placeholder_positions(port.name):
                 holder.lowered[position] = (items, f"port {port.name} bound to {unit.name} ({verb})")
                 lowered.extend(f"{holder.name}.inputs: {self.item_text(item)}" for item in items)
@@ -510,9 +509,9 @@ class PortBinder:
             raise self.error(
                 EnergySystemErrorId.PORT_CONTRACT,
                 owner,
-                f"the port '{port.name}' is bound, but none of its members {', '.join(port.into)} is present with "
-                f"these parameters and carries a '{{$port: {port.name}}}' placeholder, so its items have nowhere to "
-                "land.",
+                f"the port '{port.name}' is bound, but none of its members {', '.join(port.landing_members)} is "
+                f"present with these parameters and carries a '{{$port: {port.name}}}' placeholder, so its items have "
+                "nowhere to land.",
             )
         return PortRecord(port.name, state.value, "bound", verb, unit.name, tuple(lowered))
 
@@ -527,6 +526,13 @@ class PortBinder:
                     owner,
                     f"the fact port '{port.name}' lowers {fact} into '{unit.name}', which writes a sizing_sources "
                     "line for it already.",
+                )
+            if fact in unit.sizing:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    owner,
+                    f"the fact port '{port.name}' lowers {fact} into '{unit.name}', which another fact port lowered "
+                    f"it into already ({unit.sizing[fact][1]}); a member has one sizing_sources line per fact.",
                 )
             unit.sizing[fact] = (value, f"port {port.name} bound ({verb})")
             text = value.text if isinstance(value, SourceReference) else [item.text for item in value]
@@ -566,8 +572,10 @@ class PortBinder:
             (owner, port, other.owner, other.port),
             (other.owner, other.port, owner, port),
         ):
-            sources = [far_owner.units[member] for member in far_port.members if member in far_owner.units]
-            for unit in (this_owner.units[member] for member in this_port.members if member in this_owner.units):
+            sources = [far_owner.units[member] for member in far_port.landing_members if member in far_owner.units]
+            for unit in (
+                this_owner.units[member] for member in this_port.landing_members if member in this_owner.units
+            ):
                 for position in unit.placeholder_positions(this_port.name):
                     unit.lowered[position] = (
                         [DefaultInputs(source=source.name) for source in sources],
@@ -614,7 +622,17 @@ class PortBinder:
                 remedy=f"Add an import (or a site entry with a 'ports' block) providing {carrier}.",
             )
         provider, provision = providers[0]
-        meter = provider.units[provision.meter or provider.reference] if carrier != "electricity" else None
+        meter: Optional[Unit] = None
+        if provision.is_fuel_provision:
+            meter = provider.units.get(provision.landing_members[0])
+            if meter is None:
+                raise self.error(
+                    EnergySystemErrorId.PORT_CONTRACT,
+                    provider,
+                    f"the provision '{provision.name}' of {carrier} meters at '{provision.landing_members[0]}', which "
+                    f"is not present with these parameters, so the consumers of '{owner.reference}.{port.name}' have "
+                    "no meter to land in.",
+                )
         consumers: Dict[str, Unit] = {}
         for item in port.outputs:
             member, output = item.split(".", 1) if "." in item else (owner.reference, item)
@@ -658,6 +676,13 @@ class PortBinder:
         selection = owner.observes if owner.observes is not None else port.selection
         assert selection is not None
         members = [owner.units[member] for member in port.into if member in owner.units]
+        if not members:
+            raise self.error(
+                EnergySystemErrorId.PORT_CONTRACT,
+                owner,
+                f"the observer port '{port.name}' is active, but none of its members {', '.join(port.into)} is "
+                "present with these parameters, so nothing observes.",
+            )
         for unit in members:
             self.record.selection.observers.append(Observer(unit.name, selection, owner.reference))
         return PortRecord(port.name, "observer", "selected by the wiring", "", ", ".join(unit.name for unit in members))

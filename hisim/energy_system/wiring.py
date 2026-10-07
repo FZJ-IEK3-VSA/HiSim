@@ -231,7 +231,7 @@ class WiringPlanner:
             self.selected[observer] = tuple(feeds)
             for feed in feeds:
                 self._collect_feed(observer, self._feed_from(observer, feed))
-        check_double_count(self.feeds_by_target)
+        check_double_count(self.feeds_by_target, self.resolver.output_name)
         self.written_wire_count = len(self.wires)
         for wire in self.resolver.resolve_all(self.feeds_by_target):
             self.wires.append(self._wire_from_resolution(wire))

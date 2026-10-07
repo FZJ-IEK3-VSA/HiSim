@@ -509,11 +509,24 @@ FactSource = Union[str, Tuple[str, ...]]
 
 
 def _fact_inputs(fact: str, ctx: "SizingContext", fact_sources: Optional[Mapping[str, FactSource]]) -> Tuple[Any, ...]:
-    """The ``(source, value)`` inputs one fact read gives a record entry: one per provider of a many read."""
+    """The ``(source, value)`` inputs one fact read gives a record entry: one per provider of a many read.
+
+    A many read the engine resolved to ``None`` (a null provider, read by optional fields only)
+    records ``None`` for each provider.
+
+    Raises:
+        ConfigSizingError: If a many read's providers and values are not one value per provider.
+    """
     value = getattr(ctx, fact, None)
     provider = fact_sources.get(fact) if fact_sources is not None else None
-    if isinstance(provider, tuple) and isinstance(value, tuple):
-        return tuple((f"{name}.{fact}", item) for name, item in zip(provider, value))
+    if isinstance(provider, tuple):
+        values = (None,) * len(provider) if value is None else value
+        if not isinstance(values, tuple) or len(values) != len(provider):
+            raise ConfigSizingError(
+                f"the many read of '{fact}' names the providers {', '.join(provider)} but carries {value!r}; a many "
+                "read carries one value per provider"
+            )
+        return tuple((f"{name}.{fact}", item) for name, item in zip(provider, values))
     return ((f"{provider}.{fact}" if provider else fact, value),)
 
 

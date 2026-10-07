@@ -314,7 +314,7 @@ def test_house(
 
     # Build Battery
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=concrete(my_photovoltaic_system_config.power_in_watt))
+        SizingContext(pv_peak_power_in_watt=(concrete(my_photovoltaic_system_config.power_in_watt),))
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -780,6 +780,31 @@ def test_a_port_grown_while_wiring_becomes_a_result_column(tmp_path) -> None:
     values = cp.SingleTimeStepValues(len(my_sim.all_outputs))
     values.set_output_value(grown[0], 42.0)
     assert values.values[grown[0].global_index] == 42.0
+
+
+@pytest.mark.base
+def test_a_meter_connected_automatically_beside_the_manager_reads_its_grid_balance_once(tmp_path) -> None:
+    """Catches the meter's declared feed from the manager's balance landing twice, or not at all.
+
+    The real ``ElectricityMeter`` declares a dynamic default connection from the real manager's
+    ``TotalElectricityToOrFromGrid``; with both added with ``connect_automatically=True`` the
+    simulator resolves it to exactly one input of the meter.
+    """
+    my_sim = _simulator(str(tmp_path))
+    my_sim.add_component(_heat_pump("HeatPump"))
+    manager = _energy_manager()
+    my_sim.add_component(manager, connect_automatically=True)
+    meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15),
+        config=electricity_meter.ElectricityMeterConfig.preset_standard("ElectricityMeter"),
+    )
+    my_sim.add_component(meter, connect_automatically=True)
+
+    my_sim.prepare_calculation()
+
+    balance = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.TotalElectricityToOrFromGrid
+    feeds = [item for item in meter.inputs if item.src_field_name == balance]
+    assert [(item.src_object_name, item.src_field_name) for item in feeds] == [(manager.component_name, balance)]
 
 
 @pytest.mark.base

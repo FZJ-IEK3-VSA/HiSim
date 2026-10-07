@@ -359,7 +359,7 @@ def test_for_building_snapshots_the_derived_building_facts():
     default_building = BuildingConfig.preset_german_single_family_home("Building")
     default_building.heating_reference_temperature_in_celsius = -7.0
     ctx = SizingContext.for_building(default_building)
-    assert ctx.heating_load_in_watt is not None and ctx.heating_load_in_watt > 0
+    assert ctx.one("heating_load_in_watt") is not None and ctx.one("heating_load_in_watt") > 0
     assert ctx.heating_reference_temperature_in_celsius is None
     assert ctx.number_of_apartments == 1
     assert ctx.conditioned_floor_area_in_m2 == pytest.approx(121.2)

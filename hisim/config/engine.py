@@ -37,6 +37,7 @@ also recorded in a :class:`~hisim.config.report.ResolutionReport`, readable as
 from __future__ import annotations
 
 import dataclasses
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
@@ -95,6 +96,8 @@ class _Binding:
     candidates: Tuple[str, ...]
     pending: bool = False
     providers: Tuple[str, ...] = ()
+    #: A many read's value of each provider, as read; ``value`` is ``None`` when one of them is.
+    read: Tuple[Any, ...] = ()
 
 
 class SizingFactEngine:
@@ -348,11 +351,11 @@ class SizingFactEngine:
         if cardinality is Cardinality.MANY:
             if mapped is None:
                 chosen = tuple(self._providers.get(fact, {}))
-                return self._bind_many(consumer, fact, chosen, candidates, LookupMode.UNIQUE)
+                return self._bind_many(consumer, fact, chosen, candidates, LookupMode.UNIQUE, nullable)
             if isinstance(mapped, str) or not isinstance(mapped, (list, tuple)):
                 raise self._shape_error(consumer, fact, "a list of", mapped)
             chosen = tuple(self._reference_provider(consumer, fact, entry) for entry in mapped)
-            return self._bind_many(consumer, fact, chosen, candidates, LookupMode.EXPLICIT)
+            return self._bind_many(consumer, fact, chosen, candidates, LookupMode.EXPLICIT, nullable)
         if mapped is None:
             if len(candidates) != 1:
                 raise self._unbindable_error(consumer, fact, candidates)
@@ -402,18 +405,27 @@ class SizingFactEngine:
         return _Binding(provider=provider, value=value, mode=mode, candidates=candidates)
 
     def _bind_many(
-        self, consumer: str, fact: str, chosen: Tuple[str, ...], candidates: Tuple[str, ...], mode: str
+        self,
+        consumer: str,
+        fact: str,
+        chosen: Tuple[str, ...],
+        candidates: Tuple[str, ...],
+        mode: str,
+        nullable: bool = False,
     ) -> _Binding:
         """Collects the providers' values of a many read into a tuple, in the order chosen.
 
         Without a sources entry a many read binds every provider in registration order, which is
-        the order the configs are given in (the file's); an entry binds the list it names.
+        the order the configs are given in (the file's); an entry binds the list it names. A
+        provider that computed ``None`` is refused as for a scalar read, unless only optional
+        fields read the fact (``nullable``, see :meth:`_nullable_facts`): then the whole read is
+        ``None`` and those fields resolve to ``None``, exactly as a scalar read's would.
 
         Raises:
             ConfigSizingError: If the list names no provider or one twice, or a provider computed
-                ``None`` for the fact.
+                ``None`` for a fact a non-optional field reads.
         """
-        repeated = sorted({name for name in chosen if chosen.count(name) > 1})
+        repeated = sorted(name for name, count in Counter(chosen).items() if count > 1)
         if not chosen or repeated:
             raise ConfigSizingError(
                 f"'{fact}' is read many-fold by '{consumer}', and its providers "
@@ -424,11 +436,18 @@ class SizingFactEngine:
             return _Binding(provider=", ".join(chosen), value=None, mode=mode, candidates=candidates, pending=True)
         values = tuple(self._pool[name][fact] for name in chosen)
         for name, value in zip(chosen, values):
-            if value is None:
+            if value is None and not nullable:
                 raise ConfigSizingError(
                     f"'{fact}' provided as null by '{name}' (feature off); '{consumer}' cannot size from it."
                 )
-        return _Binding(provider=", ".join(chosen), value=values, mode=mode, candidates=candidates, providers=chosen)
+        return _Binding(
+            provider=", ".join(chosen),
+            value=None if None in values else values,
+            mode=mode,
+            candidates=candidates,
+            providers=chosen,
+            read=values,
+        )
 
     def _visible_context(
         self, node: _Node
@@ -451,7 +470,7 @@ class SizingFactEngine:
                 continue
             values[fact] = binding.value
             providers[fact] = binding.providers or binding.provider
-            reads = zip(binding.providers, binding.value) if binding.providers else ((binding.provider, binding.value),)
+            reads = zip(binding.providers, binding.read) if binding.providers else ((binding.provider, binding.value),)
             lookups.extend(
                 FactLookupRecord(
                     consumer=node.name, fact=fact, source=source, value=value, mode=binding.mode,

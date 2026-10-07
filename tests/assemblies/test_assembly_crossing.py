@@ -20,9 +20,11 @@ import yaml
 
 from hisim.cli import main
 from hisim.cli_exit import ExitCodes
+from hisim.energy_system.assemblies.binding import Owner, PortBinder
 from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemCatalogueError, EnergySystemError
+from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState, Selection
 from hisim.energy_system.model import DefaultInputs, EnergySystemFile, SourceReference
 from hisim.energy_system.wiring_checks import ConsumingOutput
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
@@ -452,6 +454,82 @@ def test_a_list_into_a_one_provider_law_and_one_provider_into_a_sum_are_refused_
             site(WEATHER) + imports(pv, f"battery: {{assembly: test/{name}}}"), tmp_path / name, library
         )
         assert message.startswith("EF-4E") and fragment in message
+
+
+@pytest.mark.base
+def test_two_fact_ports_lowering_one_fact_into_one_member_are_refused(tmp_path: Path) -> None:
+    """Catches the second fact port silently overwriting the first's sizing_sources line."""
+    library = Library(tmp_path)
+    library.add(
+        "test/twice",
+        f"""\
+        schema_version: 4
+        kind: assembly
+        name: test/twice
+        components:
+          Battery: {{class: {MOCKS}.MockBattery, preset: sized_to_pv}}
+        interface:
+          needs:
+            size_one: {{fact: pv_peak_power_in_watt, into: [Battery]}}
+            size_two: {{fact: pv_peak_power_in_watt, into: [Battery]}}
+        {EMPTY_CONTRACT}""",
+    )
+    pv = "pv: {assembly: mock/pv_array, instances: {east: {}, west: {}}}"
+    battery = "battery: {assembly: test/twice, bind: {size_one: pv.east, size_two: pv.west}}"
+    message = refusal(site(WEATHER) + imports(pv, battery), library)
+    assert message.startswith("EF-7J at import 'battery'")
+    for name in ("'size_two'", "port size_one bound", "pv_peak_power_in_watt", "'battery-Battery'"):
+        assert name in message, f"{name!r} is not in: {message}"
+
+
+@pytest.mark.base
+def test_a_fuel_provision_whose_meter_is_absent_is_refused_by_name() -> None:
+    """Catches the binder raising a KeyError for a fuel provision's meter the selection left out."""
+    provision = Port(name="connection", section="provides", kind=PortKind.CARRIER, carrier="natural_gas", meter="Meter")
+    need = Port(name="gas", section="needs", kind=PortKind.CARRIER, carrier="natural_gas", outputs=("Boiler.FuelUse",))
+    provider = Owner(
+        "gas",
+        "import 'gas'",
+        "the import 'gas'",
+        BindingVerbs(),
+        {},
+        {"connection": provision},
+        {"connection": PortState.PROVIDED},
+    )
+    consumer = Owner(
+        "boiler",
+        "import 'boiler'",
+        "the import 'boiler'",
+        BindingVerbs(),
+        {},
+        {"gas": need},
+        {"gas": PortState.REQUIRED},
+    )
+    with pytest.raises(EnergySystemAssemblyError, match="EF-7J") as raised:
+        PortBinder({}, {"gas": [provider], "boiler": [consumer]}, ImportRecord()).bind()
+    message = str(raised.value)
+    for name in ("import 'gas'", "'connection'", "'Meter'", "boiler.gas"):
+        assert name in message, f"{name!r} is not in: {message}"
+
+
+@pytest.mark.base
+def test_an_active_observer_port_whose_members_are_all_absent_is_refused_by_name() -> None:
+    """Catches an observer port registering no observer, silently, when the selection left out its members."""
+    port = Port(name="reading", section="observes", kind=PortKind.OBSERVER, into=("Meter",), selection=Selection())
+    owner = Owner(
+        "grid",
+        "import 'grid'",
+        "the import 'grid'",
+        BindingVerbs(),
+        {},
+        {"reading": port},
+        {"reading": PortState.REQUIRED},
+    )
+    with pytest.raises(EnergySystemAssemblyError, match="EF-7J") as raised:
+        PortBinder({}, {"grid": [owner]}, ImportRecord()).bind()
+    message = str(raised.value)
+    for name in ("import 'grid'", "observer port 'reading'", "Meter"):
+        assert name in message, f"{name!r} is not in: {message}"
 
 
 @pytest.mark.base

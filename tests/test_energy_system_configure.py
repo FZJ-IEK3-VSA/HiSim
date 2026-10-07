@@ -821,7 +821,8 @@ def test_a_many_read_sums_the_listed_providers_and_an_empty_list_is_refused() ->
     resolved, report = resolve_sizing(configs, {"aggregator": both}, names)
     single = resolve_sizing(configs[:1] + configs[2:], {}, ["left", "aggregator"])[0][1]
 
-    assert resolved[2].total_in_watt == 2 * single.total_in_watt
+    assert single.total_in_watt == 5000.0
+    assert resolved[2].total_in_watt == 10000.0
     assert [(lookup.source, lookup.many) for lookup in report.lookups if lookup.consumer == "aggregator"] == [
         ("left", True),
         ("right", True),

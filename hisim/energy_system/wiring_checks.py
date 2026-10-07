@@ -25,14 +25,15 @@ here to be checked, and never needs to know how a check is written.
 Three checks see more than the wires. Two cover what an assembly's carrier need states and no
 wire shows (``assemblies_spec.md`` §3.3): a consuming output's energy port carries the need's
 carrier, and a provider's meter feeds exactly the consuming outputs named of each consumer
-(:func:`check_consuming_outputs`). The third refuses a flow counted twice: an aggregator reading
-another aggregator's balance and a flow that one observes (:func:`check_double_count`, §4.3).
+(:func:`check_consuming_outputs`). The third refuses a flow counted twice: two aggregators of which
+one reads any output of the other and both observe one flow, a source's output, by its resolved
+name (:func:`check_double_count`, §4.3).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
@@ -40,6 +41,7 @@ from hisim.config.channels import PortTypeCompatibility
 from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
+from hisim.energy_system.model import ConsumingOutput
 
 
 @dataclass(frozen=True)
@@ -356,23 +358,6 @@ def unconsumed_sources(
     )
 
 
-@dataclass(frozen=True)
-class ConsumingOutput:
-    """One output an assembly's carrier need names as consuming its carrier (§3.2, §5.1).
-
-    Attributes:
-        consumer: The consuming component.
-        output: Its output.
-        carrier: The need's ``lt.EnergyBalanceCarrier`` value.
-        meter: The provider's meter its feed lands in, ``None`` for electricity, which has no link.
-    """
-
-    consumer: str
-    output: str
-    carrier: str
-    meter: Optional[str]
-
-
 def check_consuming_outputs(components_by_name: Mapping[str, Component], consuming: Sequence[ConsumingOutput]) -> None:
     """Checks every consuming output against its component and its meter, the two facts no wire shows.
 
@@ -420,17 +405,27 @@ def check_consuming_outputs(components_by_name: Mapping[str, Component], consumi
             )
 
 
-def check_double_count(feeds_by_target: Mapping[str, Sequence[FeedRequest]]) -> None:
-    """Refuses an aggregator reading another aggregator's output and a flow that one observes (§4.3).
+def check_double_count(
+    feeds_by_target: Mapping[str, Sequence[FeedRequest]], output_of: Callable[[FeedRequest], str]
+) -> None:
+    """Refuses two aggregators of which one reads an output of the other while both observe one flow (§4.3).
 
     An energy manager sums what it observes into a balance; a meter reading that balance and one
-    of the flows behind it counts the flow twice. Every planned feed counts: written, expanded from
-    a bare name or selected.
+    of the flows behind it counts the flow twice. The rule as checked is wider than a balance: any
+    output of the other aggregator read, and any flow (a source's output) both observe. Every
+    planned feed counts — written, expanded from a bare name or selected — each by the output it
+    resolves to, so a written feed that leaves its output to the declaration is no way around it.
+
+    Args:
+        feeds_by_target: The planned feeds, by the aggregator they address.
+        output_of: The output a feed resolves to (its own, else its aggregator's one declaration).
 
     Raises:
         EnergySystemWiringError: ``EF-7T`` at the first aggregator counting a flow twice.
     """
-    observed = {name: {(feed.source, feed.output) for feed in feeds} for name, feeds in feeds_by_target.items()}
+    observed = {
+        name: {(feed.source, output_of(feed)) for feed in feeds} for name, feeds in feeds_by_target.items()
+    }
     for name, feeds in feeds_by_target.items():
         for other in sorted({feed.source for feed in feeds} & set(observed) - {name}):
             both = sorted(f"{source}.{output}" for source, output in observed[name] & observed[other])
@@ -438,7 +433,7 @@ def check_double_count(feeds_by_target: Mapping[str, Sequence[FeedRequest]]) -> 
                 raise EnergySystemWiringError(
                     EnergySystemErrorId.DOUBLE_COUNT,
                     f"components.{name}.inputs",
-                    f"'{name}' observes the balance of '{other}' and also {', '.join(both)}, which '{other}' "
-                    "observes: the flow would be counted twice.",
-                    remedy=f"Let '{name}' observe only the balance of '{other}', or only the flows.",
+                    f"'{name}' reads an output of '{other}' and both observe {', '.join(both)}: the flow would be "
+                    "counted twice.",
+                    remedy=f"Let '{name}' read only the output of '{other}', or only the flows.",
                 )

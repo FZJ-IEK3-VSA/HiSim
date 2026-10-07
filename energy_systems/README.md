@@ -280,8 +280,9 @@ asserts that no two files here describe the same run, so a duplicate cannot be a
 An **assembly** is a fragment of an energy system in a file of its own,
 `<family>/<name>.assembly.yaml`: components whose names are local to it, parameters (each with a
 type, a default, a description, and for a number a `unit` of `lt.Units` and a `range`),
-`exactly_one_of` constraints, internal variants a parameter selects (`selected_by`, `when:`), an
-interface of ports, and its test contract (`tests:` with `bounds`, `monotone` and `expect` at the
+`exactly_one_of` constraints (the defaults state exactly one member; an import that writes one member
+unstates the others' defaults, which resolve to `none`, and one writing two is refused, `EF-77`),
+internal variants a parameter selects (`selected_by`, `when:`), an interface of ports, and its test contract (`tests:` with `bounds`, `monotone` and `expect` at the
 defaults). A file of `schema_version: 4` imports assemblies under `imports:`, once or as named
 instances:
 
@@ -331,8 +332,9 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 
 - a **circuit end**, `{circuit: dhw, member: Boiler}` (a site entry writes `ports: {dhw: {circuit:
   dhw}}`), binds the one other end of the same circuit in the file — the circuit name is the medium,
-  `dhw` or `space_heating`, whose outputs are `MassFlow<C>`, `SupplyTemperature<C>` and
-  `ReturnTemperature<C>` — and lowers, in both directions, to a bare name of every member of the other
+  `dhw` or `space_heating`; by convention a `dhw` end's members declare the outputs `MassFlowDhw`,
+  `SupplyTemperatureDhw` and `ReturnTemperatureDhw` (the mock members do), while the `space_heating`
+  outputs are not declared yet — and lowers, in both directions, to a bare name of every member of the other
   end at every member carrying the port's `{$port: dhw}` placeholder; `bind:` decides several ends, an
   end of another circuit is refused;
 - a **carrier need**, `{carrier: natural_gas, outputs: [Boiler.FuelUse]}`, needs the one provider of
@@ -350,17 +352,21 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
   first, then the imports and instances as written. A law sums such a list with
   `Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`; a many read without a line sums every provider in the
   file, a list into a one-provider law or one provider into a sum is refused (`EF-4E`), and an empty
-  or repeating list is `EF-4G`. The battery's class laws are sums; its preset `sized_to_pv` keeps the
-  one-array laws, so every twin is unchanged;
+  or repeating list is `EF-4G`. The battery's class laws are sums and its preset `sized_to_pv` leaves
+  both fields `AUTO`, so a battery is sized to every array; over one array the sum is that array's
+  value, so every twin's numbers are unchanged;
 - an **observer port**, `observes: {reading: {into: [Meter], default: declared}}`, and `observes:` on
   a site entry or an import (replacing its assembly's default): `declared` is every output the
   observer's class declares a dynamic default connection from among the components present —
   HiSim's `connect_automatically` — and a list of selectors (`{component_type: PV}`, `{flow:
   ELECTRICITY_PRODUCTION}`, `{output: TotalElectricityToOrFromGrid}`) filters it. The selection runs in
   the wiring, on the constructed observer, and the realized record writes the selected feeds as
-  ordinary feeds, so `--rerun` selects nothing. A controller — an observer whose class ranks a feed
+  ordinary feeds, so `--rerun` selects nothing. A derived input or dispatch output name carries the
+  source's runtime name with the address separator `-` mapped to `_` (`pv-east-PVSystem` feeds
+  `ElectricityOutputFrompv_east_PVSystem`; `NameSyntax.port_name_part`). A controller — an observer whose class ranks a feed
   below weight 999 — ranks at its class's own weights (`DEFAULT_WEIGHTS`), a second device of one type
-  at the next weight; a provided output names what it actuates, `controllable: {target_input:
+  at the next weight (a derived weight that reaches another type's weight is refused, `EF-7V`: pin the
+  weight on the feed); a provided output names what it actuates, `controllable: {target_input:
   LoadingPowerInput}` or `{via: ems_modifier}`, and is ranked by exactly the one controller it binds.
   A meter reading the energy manager's balance and a flow the manager observes counts it twice and is
   refused, in every file.
@@ -375,7 +381,7 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 | `EF-7G`, `EF-7H`, `EF-7J` | a verb on a port no verb binds, a bound output not read, a port that does not fit its members |
 | `EF-7K`, `EF-7L` | a circuit end of another circuit; a carrier without exactly one provider, or an idle fuel provider |
 | `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a meter not feeding exactly the outputs named |
-| `EF-7S`, `EF-7T`, `EF-7U` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller |
+| `EF-7S`, `EF-7T`, `EF-7U`, `EF-7V` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller; a derived weight reaching another kind's base weight |
 | `EF-4E`, `EF-4G` | (sizing) a sources line of the wrong cardinality; an empty or repeating many list, one fact read once and many-fold |
 
 **Not in v1** (owner, 2026-10-06, D26): nesting (inner `imports`, `from:` re-exports, `internal:`

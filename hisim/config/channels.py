@@ -165,6 +165,11 @@ class DynamicConnectionChannel:
     declaration may be written with plain set or list literals.
     """
 
+    #: The weight of a participant an aggregator only measures and never controls; every other
+    #: weight is a rank. The one spelling of it: a component declaring a feed, the file format
+    #: (``FeedRequest.MONITORED_ONLY_WEIGHT``) and the observers' selection all read this.
+    MONITORED_ONLY_WEIGHT: ClassVar[int] = 999
+
     key: str
     tags: FrozenSet[ConnectionTag]
     load_type: lt.LoadTypes

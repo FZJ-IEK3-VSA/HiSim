@@ -185,7 +185,7 @@ def test_the_sized_to_pv_preset_sizes_both_power_numbers_from_the_pv_peak_power(
     an 11 136.14 W inverter, which is the pair every recorded twin of those setups carries.
     """
     config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=FLEET_PV_PEAK_POWER_IN_WATT)
+        SizingContext(pv_peak_power_in_watt=(FLEET_PV_PEAK_POWER_IN_WATT,))
     )
 
     assert config.custom_battery_capacity_generic_in_kilowatt_hour == 22.27
@@ -204,7 +204,7 @@ def test_the_inverter_law_reads_the_fact_and_not_the_rounded_capacity() -> None:
     into a sibling read fails here with the reason spelled out.
     """
     config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=FLEET_PV_PEAK_POWER_IN_WATT)
+        SizingContext(pv_peak_power_in_watt=(FLEET_PV_PEAK_POWER_IN_WATT,))
     )
 
     from_the_stored_capacity = round(

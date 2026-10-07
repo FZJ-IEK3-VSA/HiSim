@@ -336,13 +336,13 @@ class LibraryChecker:
             for member_name in named:
                 if member_name not in members:
                     self.add(path, f"the port '{name}' names '{member_name}', which is no member.")
-                elif port.kind == PortKind.NEED or port.is_provision:
+                elif port.kind in (PortKind.NEED, PortKind.OBSERVER) or port.is_provision:
                     self._present_where_active(path, port, member_name)
         for member in self.model.all_members():
             for placed in member.entry.placeholders:
                 port_name = placed.placeholder.port
                 target = self.model.ports.get(port_name)
-                if target is None or member.name not in self.landing_members(target):
+                if target is None or member.name not in target.landing_members:
                     self.add(
                         member.source_path + ("inputs", placed.position),
                         f"'{member.name}' carries a placeholder for '{port_name}', which is no need, circuit end or "
@@ -351,7 +351,7 @@ class LibraryChecker:
         for name, port in self.model.ports.items():
             path = ("interface", port.section, name)
             if port.kind == PortKind.NEED or port.is_fuel_provision:
-                for into in self.landing_members(port):
+                for into in port.landing_members:
                     holders = [m for m in self.model.all_members() if m.name == into]
                     if holders and not any(
                         any(p.placeholder.port == name for p in m.entry.placeholders) for m in holders
@@ -374,15 +374,8 @@ class LibraryChecker:
                             f"'{member.name}') does not declare in its SIZING_CONTRIBUTIONS.",
                         )
 
-    @staticmethod
-    def landing_members(port: Port) -> Tuple[str, ...]:
-        """The members a port's lowered items land in, at their ``{$port: …}`` placeholder."""
-        if port.kind in (PortKind.NEED, PortKind.CIRCUIT):
-            return port.into or port.members
-        return (port.meter,) if port.kind == PortKind.CARRIER and port.meter else ()
-
     def _present_where_active(self, path: Tuple[Any, ...], port: Port, member: str) -> None:
-        """A need's or a provision's member exists in every option where the port can be active or provided."""
+        """A need's, an observer port's or a provision's member exists in every option where the port can be active."""
         if member in self.model.components:
             return
         for variant in self.model.variants.values():

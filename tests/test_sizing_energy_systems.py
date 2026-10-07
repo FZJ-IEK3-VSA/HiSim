@@ -179,7 +179,7 @@ def simulation_for_one_timestep(
 
     # Set Battery
     my_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=concrete(my_pv_config.power_in_watt))
+        SizingContext(pv_peak_power_in_watt=(concrete(my_pv_config.power_in_watt),))
     )
 
     # Set DHW Storage

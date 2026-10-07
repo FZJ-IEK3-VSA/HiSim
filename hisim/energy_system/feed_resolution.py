@@ -391,6 +391,14 @@ class DynamicConnectionResolver:
             dispatch=dispatch,
         )
 
+    def output_name(self, feed: FeedRequest) -> str:
+        """The participant output a feed measures: its own, else its aggregator's one declaration for the class.
+
+        Raises:
+            EnergySystemWiringError: ``EF-21`` if the output cannot be derived.
+        """
+        return self._require_output_name(self.components_by_name[feed.consumer], feed)
+
     def _require_output_name(self, target: Any, feed: FeedRequest) -> str:
         """Determines which participant output a feed measures.
 

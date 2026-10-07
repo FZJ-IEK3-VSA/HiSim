@@ -21,7 +21,8 @@ the boiler owns ``MassFlowDhw`` and ``SupplyTemperatureDhw``, the cylinder ``Ret
 each reading the other's by its default connections — and burns natural gas a gas meter observes
 through the default feed its constructor declares; a battery is sized from the arrays' peak power.
 For the selectors an energy manager and an electricity meter declare their feeds as the real ones
-do, the manager at the real controller's weights (``L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS``).
+do, the manager at the real controller's weights (``L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS``);
+a hot-water heater beside the space heaters is ranked at the hot-water weight.
 """
 
 from __future__ import annotations
@@ -441,6 +442,27 @@ class MockHeater(MockComponent):
         power = self.config.power_in_watt * (1.0 if self.value(stsv, "Signal") > 0.5 else 0.0)
         self.set(stsv, "ThermalPower", power)
         self.set(stsv, "ElectricityInput", power)
+
+
+@dataclass_json
+@dataclass
+class MockWaterHeaterConfig(MockHeaterConfig):
+    """An electric hot-water heater."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockWaterHeater"
+
+
+class MockWaterHeater(MockHeater):
+    """The heater on the hot-water side; an energy manager ranks it at the hot-water weight.
+
+    Stands in for an electric hot-water heater in the mock assemblies.
+    """
+
+    def __init__(  # pylint: disable=useless-parent-delegation  # the annotation names the config class
+        self, my_simulation_parameters: SimulationParameters, config: MockWaterHeaterConfig
+    ) -> None:
+        """Builds the heater."""
+        super().__init__(my_simulation_parameters, config)
 
 
 # ---------------------------------------------------------------------------------------- controller
@@ -871,7 +893,7 @@ class MockAggregator(DynamicComponent):
 
 
 #: The weight of a feed an observer only measures.
-MEASURED = 999
+MEASURED = DynamicConnectionChannel.MONITORED_ONLY_WEIGHT
 
 
 @dataclass_json
@@ -978,6 +1000,8 @@ class MockEnergyManager(MockAggregator):
         heating = kinds.ELECTRIC_HEATING_SH
         self.observe(MockHeater, "ElectricityInput", [heating, controlled], EMS_WEIGHTS[heating])
         self.observe(MockBattery, "AcBatteryPowerUsed", [kinds.BATTERY, controlled], EMS_WEIGHTS[kinds.BATTERY])
+        water = kinds.ELECTRIC_HEATING_DHW
+        self.observe(MockWaterHeater, "ElectricityInput", [water, controlled], EMS_WEIGHTS[water])
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Production minus every consumption is the balance; the surplus is every dispatch."""

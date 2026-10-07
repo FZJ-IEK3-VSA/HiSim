@@ -296,7 +296,7 @@ class SignalCollisions:
         return Battery(
             my_simulation_parameters=SimulationParameters.one_day_only(2021, 900),
             config=BatteryConfig.preset_sized_to_pv(name).resolve(
-                SizingContext(pv_peak_power_in_watt=cls.PV_PEAK_POWER_IN_WATT)
+                SizingContext(pv_peak_power_in_watt=(cls.PV_PEAK_POWER_IN_WATT,))
             ),
         )
 

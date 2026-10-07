@@ -99,7 +99,7 @@ def _buffer_volume_in_liter(ctx: SizingContext, own: OwnFields) -> float:
             nothing to size from.
         ValueError: If ``sizing_option`` is not one of the five kinds the table covers.
     """
-    maximal_thermal_power_in_watt = ctx.maximal_thermal_power_in_watt
+    maximal_thermal_power_in_watt: Optional[float] = ctx.one("maximal_thermal_power_in_watt")
     if maximal_thermal_power_in_watt is None:
         raise ConfigSizingError(
             "a buffer vessel is sized from 'maximal_thermal_power_in_watt', which this context "

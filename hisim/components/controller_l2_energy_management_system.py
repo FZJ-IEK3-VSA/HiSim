@@ -144,8 +144,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     #: surplus distribution, lowest first (residents, space heating, hot water, solar thermal, the
     #: home battery). The dynamic default connections below take their weights from here, and a
     #: controller assembly's priority list starts from these values (``assemblies_spec.md`` §4.4):
-    #: the k-th further participant of one kind gets ``default + k``. 999 is never a rank, it marks a
-    #: participant that is only measured.
+    #: the k-th further participant of one kind gets ``default + k``, refused where that reaches another
+    #: kind's weight (D27). 999 (``DynamicConnectionChannel.MONITORED_ONLY_WEIGHT``) is never a rank, it
+    #: marks a participant that is only measured.
     DEFAULT_WEIGHTS: ClassVar[Mapping[lt.ComponentType, int]] = MappingProxyType(
         {
             lt.ComponentType.RESIDENTS: 1,
@@ -398,7 +399,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.PV,
                     lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 ],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
 
@@ -620,7 +621,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         List[ComponentInput],
     ]:
         """Sorts dynamic Inputs and Outputs according to source weights."""
-        inputs = [elem for elem in self.my_component_inputs if elem.source_weight != 999]
+        measured = DynamicConnectionChannel.MONITORED_ONLY_WEIGHT
+        inputs = [elem for elem in self.my_component_inputs if elem.source_weight != measured]
 
         source_tags = [elem.source_tags[0] for elem in inputs]
         source_weights = [elem.source_weight for elem in inputs]

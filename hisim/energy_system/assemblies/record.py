@@ -25,8 +25,8 @@ from hisim.config import ComponentID
 from hisim.energy_system.address_table import AddressTable
 from hisim.energy_system.assemblies.selection import SelectionPlan
 from hisim.energy_system.errors import EnergySystemCatalogueError
+from hisim.energy_system.model import ConsumingOutput
 from hisim.energy_system.source_lines import SourceLocation
-from hisim.energy_system.wiring_checks import ConsumingOutput
 
 
 @dataclass(frozen=True)
@@ -174,7 +174,9 @@ class ImportRecord:
     An expansion that imported nothing produces an empty record, which keeps every consumer free
     of a case distinction, as :class:`~hisim.energy_system.groups.ExpansionRecord` does. Beside
     what it writes, it hands the wiring what only the constructed components decide: the consuming
-    outputs of the carrier needs and the selection plan of the observers.
+    outputs of the carrier needs and the selection plan of the observers. The observers' selected
+    feeds exist once the wiring ran the plan, so the record is written after the wiring; written
+    before, an observer refuses (``EF-60``).
     """
 
     #: The key the sequence is written under in the record's ``imports`` block.
@@ -201,7 +203,11 @@ class ImportRecord:
         )
 
     def to_document(self) -> Dict[str, Any]:
-        """The record as the plain data a realized record's metadata carries under ``imports``."""
+        """The record as the plain data a realized record's metadata carries under ``imports``.
+
+        Raises:
+            EnergySystemRecordError: ``EF-60`` for an observer whose feeds the wiring has not selected yet.
+        """
         return {
             "instances": [record.to_document() for record in self.instances],
             "site_ports": {name: [port.to_document() for port in ports] for name, ports in self.site_ports.items()},

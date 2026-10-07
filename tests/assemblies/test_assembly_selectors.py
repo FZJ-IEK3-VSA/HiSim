@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 import yaml
@@ -25,9 +25,18 @@ from hisim.components.controller_l2_energy_management_system import L2GenericEne
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.config.names import NameSyntax
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
-from hisim.energy_system.errors import EnergySystemError
+from hisim.energy_system.errors import EnergySystemError, EnergySystemRecordError
 from hisim.energy_system.model import AggregatorFeed, DispatchSpec, EnergySystemFile
-from tests.assemblies.helpers import MOCKS, OCCUPANCY, WEATHER, Mocks, build_text, site, system_text
+from hisim.dynamic_component import DynamicComponentConnection
+from hisim.energy_system.assemblies.selection import Observer, SelectionPlan
+from hisim.energy_system.channels import FeedRequest
+from hisim.energy_system.feed_resolution import DynamicConnectionResolver
+from hisim.energy_system.imports_model import Selection
+from tests.assemblies.helpers import MOCKS, OCCUPANCY, WEATHER, Mocks, build_text, expand_text, site, system_text
+from tests.assemblies.mock_components import MockBattery
+
+#: The weight of a feed an observer only measures.
+MEASURED = FeedRequest.MONITORED_ONLY_WEIGHT
 
 #: The grid import whose meter observes the energy manager's balance alone (twin ems_with_battery).
 GRID_ON_BALANCE = "grid: {assembly: mock/electricity_grid, observes: [{output: TotalElectricityToOrFromGrid}]}"
@@ -152,20 +161,106 @@ def test_the_ems_with_battery_shape_writes_exactly_the_twins_feeds(tmp_path: Pat
 
 @pytest.mark.base
 def test_one_device_each_gives_the_class_defaults_and_a_second_battery_follows_the_first(tmp_path: Path) -> None:
-    """The weights are the controller class's own (DEFAULT_WEIGHTS); the k-th further battery gets 6 + k."""
+    """The weights are the controller class's own (DEFAULT_WEIGHTS); the k-th further battery gets default + k."""
     model = build(controlled("battery: {assembly: mock/home_battery, instances: {garage: {}, cellar: {}}}"), tmp_path)
-    ranked = [(feed.source, feed.weight) for feed in feeds(model, "control-EMS") if feed.weight != 999]
+    ranked = [(feed.source, feed.weight) for feed in feeds(model, "control-EMS") if feed.weight != MEASURED]
     defaults = L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS
     assert ranked == [
         ("Occupancy", defaults[lt.ComponentType.RESIDENTS]),
         ("heater-Heater", defaults[lt.ComponentType.ELECTRIC_HEATING_SH]),
-        ("battery-garage-Battery", 6),
-        ("battery-cellar-Battery", 7),
+        ("battery-garage-Battery", defaults[lt.ComponentType.BATTERY]),
+        ("battery-cellar-Battery", defaults[lt.ComponentType.BATTERY] + 1),
     ]
     assert [feed.dispatch for feed in feeds(model, "control-EMS")][-2:] == [
         DispatchSpec(target_input="LoadingPowerInput"),
         DispatchSpec(target_input="LoadingPowerInput"),
     ]
+
+
+class FakeComponent:
+    """A constructed component as the selection sees it: a class name and, for an observer, its declared feeds."""
+
+    def __init__(self, classname: str, declared: Optional[Dict[str, List[DynamicComponentConnection]]] = None) -> None:
+        """Names the class; an observer also carries its dynamic default connections."""
+        self.classname = classname
+        setattr(self, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, declared or {})
+
+    def get_classname(self) -> str:
+        """The class name the observer's declarations are keyed by."""
+        return self.classname
+
+
+def declared_feed(source_class: str, output: str, tags: List[Any], weight: int) -> DynamicComponentConnection:
+    """One dynamic default connection of an observer from a source class's output."""
+    return DynamicComponentConnection(
+        source_component_class=MockBattery,
+        source_class_name=source_class,
+        source_component_field_name=output,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=tags,
+        source_weight=weight,
+    )
+
+
+def ranked_by_fake_controller(
+    declarations: List[DynamicComponentConnection], participants: Dict[str, str]
+) -> List[Tuple[str, str, int]]:
+    """The (source, output, weight) a fake controller selects from fake participants by their class names."""
+    declared: Dict[str, List[DynamicComponentConnection]] = {}
+    for declaration in declarations:
+        declared.setdefault(declaration.source_class_name, []).append(declaration)
+    components = {name: FakeComponent(classname) for name, classname in participants.items()}
+    components["Controller"] = FakeComponent("FakeController", declared)
+    plan = SelectionPlan(observers=[Observer("Controller", Selection(), "Controller")])
+    return [(feed.source, feed.output or "", feed.weight) for feed in plan(components)["Controller"]]
+
+
+@pytest.mark.base
+def test_a_participant_with_two_ranked_feeds_of_one_type_is_one_participant() -> None:
+    """Catches the counter advancing per feed: both feeds of the first device rank at 6, the second device's at 7."""
+    controlled_tags: List[Any] = [lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+    declarations = [
+        declared_feed("Device", "Charge", controlled_tags, 6),
+        declared_feed("Device", "Discharge", controlled_tags, 6),
+    ]
+    assert ranked_by_fake_controller(declarations, {"First": "Device", "Second": "Device"}) == [
+        ("First", "Charge", 6),
+        ("First", "Discharge", 6),
+        ("Second", "Charge", 7),
+        ("Second", "Discharge", 7),
+    ]
+
+
+@pytest.mark.base
+def test_participants_without_a_component_type_each_rank_at_the_declared_weight() -> None:
+    """A feed without a component type counts under its source alone: two such participants keep the declared 5."""
+    declarations = [declared_feed("Gadget", "Draw", [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED], 5)]
+    assert ranked_by_fake_controller(declarations, {"One": "Gadget", "Two": "Gadget"}) == [
+        ("One", "Draw", 5),
+        ("Two", "Draw", 5),
+    ]
+
+
+@pytest.mark.base
+def test_a_derived_weight_reaching_another_types_base_weight_is_refused(tmp_path: Path) -> None:
+    """EF-7V (D27): a second space heater at 2 + 1 = 3 would tie with the hot-water heater's base weight 3."""
+    heaters = [
+        f"{name}: {{class: {MOCKS}.{cls}, preset: standard}}"
+        for name, cls in (("Floor", "MockHeater"), ("Attic", "MockHeater"), ("Water", "MockWaterHeater"))
+    ]
+    message = refusal(
+        site(WEATHER, OCCUPANCY, *heaters) + imports("control: {assembly: mock/ems_self_consumption}"), tmp_path
+    )
+    assert message.startswith("EF-7V at components.control-EMS")
+    for name in (
+        "Attic.ElectricityInput",
+        "participant 2 of ELECTRIC_HEATING_SH",
+        "2 + 1 = 3",
+        "the base weight of ELECTRIC_HEATING_DHW (Water)",
+        "Pin the weight on the feed",
+    ):
+        assert name in message, f"{name!r} is not in: {message}"
 
 
 # ------------------------------------------------------------------------------------ the selection
@@ -247,13 +342,17 @@ def test_the_grid_left_at_its_default_beside_a_controller_counts_the_flows_twice
         tmp_path,
     )
     assert message.startswith("EF-7T at components.grid-Meter.inputs")
-    assert "observes the balance of 'control-EMS' and also Occupancy.ElectricityConsumption" in message
+    assert "'grid-Meter' reads an output of 'control-EMS' and both observe Occupancy.ElectricityConsumption" in message
     assert "[source: grid-Meter (import grid" in message
 
 
 @pytest.mark.base
-def test_the_double_count_check_covers_hand_written_files(tmp_path: Path) -> None:
-    """A flat file whose meter is written to read the manager's balance and a flow the manager reads: EF-7T."""
+@pytest.mark.parametrize("occupancy", ["Occupancy.ElectricityConsumption", "Occupancy"], ids=["output", "no output"])
+def test_the_double_count_check_covers_hand_written_files(tmp_path: Path, occupancy: str) -> None:
+    """A flat file whose meter reads the manager's balance and a flow the manager reads: EF-7T.
+
+    Catches a written feed that leaves its output to the meter's declaration passing as another flow.
+    """
     text = f"""\
 schema_version: 3
 name: written
@@ -274,10 +373,11 @@ components:
     preset: standard
     inputs:
       - {{from: Ems.TotalElectricityToOrFromGrid, tags: [ELECTRICITY_PRODUCTION], weight: 999}}
-      - {{from: Occupancy.ElectricityConsumption, tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED], weight: 999}}
+      - {{from: {occupancy}, tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED], weight: 999}}
 """
     message = refusal(text, tmp_path)
-    assert message.startswith("EF-7T at components.Meter.inputs") and "Occupancy.ElectricityConsumption" in message
+    assert message.startswith("EF-7T at components.Meter.inputs")
+    assert "'Meter' reads an output of 'Ems' and both observe Occupancy.ElectricityConsumption" in message
 
 
 # --------------------------------------------------------------------------------------- actuation
@@ -350,6 +450,17 @@ def test_the_real_meter_declares_its_feed_from_the_real_ems() -> None:
 
 
 @pytest.mark.base
+def test_an_import_record_written_before_the_wiring_selected_its_observers_feeds_is_refused() -> None:
+    """Catches the record silently writing an observer with no feeds when serialized before the wiring."""
+    _, record = expand_text(system_text("ems_house.energy_system.yaml"))
+    with pytest.raises(EnergySystemRecordError, match="EF-60") as raised:
+        record.to_document()
+    message = str(raised.value)
+    for name in ("control-EMS", "before the wiring selected its feeds"):
+        assert name in message, f"{name!r} is not in: {message}"
+
+
+@pytest.mark.base
 def test_the_ems_house_runs_a_day_with_the_balance_closed_and_its_record_reruns_selecting_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
@@ -363,16 +474,27 @@ def test_the_ems_house_runs_a_day_with_the_balance_closed_and_its_record_reruns_
     balance = json.loads((first / "balance_report.json").read_text(encoding="utf-8"))
     assert balance["verdict"] == "closes"
     record = yaml.safe_load((first / "realized.energy_system.yaml").read_text(encoding="utf-8"))
-    assert [item["weight"] for item in record["components"]["control-EMS"]["inputs"]] == [1, 999, 2, 6]
-    observers = record["metadata"]["imports"]["observers"]
-    assert [(item["observer"], item["selection"]) for item in observers] == [
-        ("control-EMS", "declared"),
-        ("grid-Meter", "[{output: TotalElectricityToOrFromGrid}]"),
-    ]
-    assert observers[0]["feeds"][3] == (
-        "battery-Battery.AcBatteryPowerUsed [BATTERY; ELECTRICITY_CONSUMPTION_EMS_CONTROLLED] weight 6, "
-        "dispatch LoadingPowerInput"
+    written = record["components"]["control-EMS"]["inputs"]
+    assert [item["weight"] for item in written] == [feed.weight for feed in EMS_WITH_BATTERY]
+    battery = written[3]
+    assert (
+        battery["from"],
+        battery["component_type"],
+        battery["tags"],
+        battery["weight"],
+        battery["dispatch"]["target_input"],
+    ) == (
+        "battery-Battery.AcBatteryPowerUsed",
+        "BATTERY",
+        ["ELECTRICITY_CONSUMPTION_EMS_CONTROLLED"],
+        L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS[lt.ComponentType.BATTERY],
+        "LoadingPowerInput",
     )
+    observers = record["metadata"]["imports"]["observers"]
+    assert [(item["observer"], item["selection"], len(item["feeds"])) for item in observers] == [
+        ("control-EMS", "declared", len(EMS_WITH_BATTERY)),
+        ("grid-Meter", "[{output: TotalElectricityToOrFromGrid}]", len(GRID_BALANCE)),
+    ]
 
     monkeypatch.delenv(AssemblyResolver.ENVIRONMENT_VARIABLE)
     second = tmp_path / "second"

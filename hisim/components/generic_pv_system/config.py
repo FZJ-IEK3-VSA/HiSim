@@ -73,7 +73,7 @@ def _rooftop_power_in_watt(ctx: SizingContext, own: OwnFields) -> float:
         ValueError: If the module and database pair is not one :attr:`PVSystemConfig.MODULES`
             holds.
     """
-    roof_area_in_m2 = ctx.roof_area_in_m2
+    roof_area_in_m2 = ctx.one("roof_area_in_m2")
     if roof_area_in_m2 is None:
         raise ConfigSizingError(
             "a rooftop array is sized from 'roof_area_in_m2', which this context does not carry. "

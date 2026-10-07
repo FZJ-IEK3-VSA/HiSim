@@ -183,7 +183,7 @@ class _FactTerm(SizingLaw):
     def evaluate(self, ctx: "SizingContext", own: Optional[OwnFieldsView] = None) -> Any:
         """Reads the fact, raising precisely when the context does not carry it."""
         del own
-        value = getattr(ctx, self.field_name)
+        value = ctx.one(self.field_name)
         if value is None:
             raise ConfigSizingError(
                 f"the SizingContext carries no '{self.field_name}', which this law reads"
@@ -221,26 +221,22 @@ class _UnaryLaw(SizingLaw):
         return self.inner.fields_read()
 
 
-class _ManyTerm(_UnaryLaw):
-    """A law input reading *every* provider of one fact, which only its aggregation evaluates.
+class _ManyTerm(_FactTerm):
+    """A fact term reading *every* provider of its fact, which only its aggregation evaluates.
 
-    Written ``Many(Size.PV_PEAK_POWER_IN_WATT)``, it names a fact the engine binds to the list of
-    providers (several PV arrays beside one battery). The term has no value of its own: it stands
-    only inside :func:`Sum`, and :func:`normalize_law` refuses a law in which it stands anywhere else.
+    Written ``Many(Size.PV_PEAK_POWER_IN_WATT)``, it names a fact the engine binds to the tuple of
+    the providers' values (several PV arrays beside one battery). It stands only inside :func:`Sum`,
+    which reads the tuple; :func:`normalize_law` refuses a law in which it stands anywhere else
+    (``_reject_unaggregated_many``), so its inherited one-provider read never sees a tuple.
     """
 
-    def evaluate(self, ctx: "SizingContext", own: Optional[OwnFieldsView] = None) -> Any:
-        """Always raises: a many read has a value only through its aggregation."""
-        del ctx, own
-        raise ConfigSizingError(f"{self.describe()} has no value of its own; aggregate it, Sum({self.describe()})")
-
     def describe(self) -> str:
-        """Renders as ``Many(inner)``."""
-        return f"Many({self.inner.describe()})"
+        """Renders as ``Many(Size.<FACT>)``."""
+        return f"Many({super().describe()})"
 
     def facts_read(self) -> Tuple[Tuple[str, Cardinality], ...]:
-        """Re-labels the wrapped term's facts as many-cardinality reads."""
-        return tuple((fact, Cardinality.MANY) for fact, _ in self.inner.facts_read())
+        """Names its fact at many cardinality."""
+        return ((self.field_name, Cardinality.MANY),)
 
 
 class _SumLaw(_UnaryLaw):
@@ -477,9 +473,9 @@ def Many(term: SizingLaw) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid
     Raises:
         SizingError: If ``term`` is not a single ``Size.*`` fact term.
     """
-    if not isinstance(term, _FactTerm):
+    if not isinstance(term, _FactTerm) or isinstance(term, _ManyTerm):
         raise SizingError(f"Many() wraps one fact term, Many(Size.<FACT>); got {term!r}")
-    return _ManyTerm(term)
+    return _ManyTerm(term.field_name)
 
 
 def Sum(term: SizingLaw) -> SizingLaw:  # noqa: N802  # pylint: disable=invalid-name
@@ -503,7 +499,7 @@ def _reject_unaggregated_many(rule: SizingLaw) -> None:
         SizingError: Naming the stray many read and the spelling that aggregates it.
     """
     inner: Any = rule
-    while isinstance(inner, _UnaryLaw) and not isinstance(inner, (_SumLaw, _ManyTerm)):
+    while isinstance(inner, _UnaryLaw) and not isinstance(inner, _SumLaw):
         inner = inner.inner
     if isinstance(inner, _ManyTerm):
         raise SizingError(

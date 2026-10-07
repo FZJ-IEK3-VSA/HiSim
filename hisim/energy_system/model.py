@@ -23,6 +23,7 @@ reference grammar both of them obey lives one module below, in
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Any, ClassVar, Dict, Literal, Mapping, Optional, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -178,6 +179,23 @@ class DispatchSpec(BaseModel):
 
     target_input: Optional[str] = None
     tags: Tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ConsumingOutput:
+    """One output an assembly's carrier need names as consuming its carrier (§3.2, §5.1).
+
+    Attributes:
+        consumer: The consuming component.
+        output: Its output.
+        carrier: The need's ``lt.EnergyBalanceCarrier`` value.
+        meter: The provider's meter its feed lands in, ``None`` for electricity, which has no link.
+    """
+
+    consumer: str
+    output: str
+    carrier: str
+    meter: Optional[str]
 
 
 class AggregatorFeed(InputItem):

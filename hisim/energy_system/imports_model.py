@@ -324,6 +324,22 @@ class Port(BaseModel):
         return self.kind == PortKind.CARRIER and self.is_provision and self.carrier != "electricity"
 
     @property
+    def landing_members(self) -> Tuple[str, ...]:
+        """The members a port's lowered items land in, at their ``{$port: …}`` placeholder.
+
+        A need's ``into``, a circuit end's members, a fuel provision's meter (a site entry's: the
+        entry, its one member); no other port lands items. The library check and the binding both
+        read this one rule.
+        """
+        if self.kind == PortKind.NEED:
+            return self.into
+        if self.kind == PortKind.CIRCUIT:
+            return self.members
+        if self.is_fuel_provision:
+            return (self.meter,) if self.meter else self.members
+        return ()
+
+    @property
     def output_member(self) -> str:
         """The member half of ``output``."""
         return (self.output or "").split(".", 1)[0]

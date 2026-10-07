@@ -13,10 +13,15 @@ entries, then the imports, each instance as written), that the observer declares
 the order it declares them; an observer never matches its own outputs. A selector that matches
 nothing is refused (``EF-7S``), as is an observer whose class declares no feeds at all.
 
-**Control** (§4.4, D11, D21). An observer whose class declares a feed at a weight other than 999
-ranks it: a controller, the energy manager. Its weights are the class's own (its
-``DEFAULT_WEIGHTS``); the k-th further participant of one component type follows the first in
-written order at ``default + k``. A ranked feed's dispatch is what the observed output states:
+**Control** (§4.4, D11, D21, D27). An observer whose class declares a feed at a weight other than
+the monitored-only weight (``FeedRequest.MONITORED_ONLY_WEIGHT``, 999) ranks it: a controller, the
+energy manager. Its weights are the class's own (its ``DEFAULT_WEIGHTS``, which it declares its
+feeds at); the k-th further participant — a source component — of one component type follows the
+first in written order at ``default + k``, and every ranked feed of one participant shares its
+offset. A feed declared without a component type counts under its source alone, at its declared
+weight. A derived weight (``k > 0``) that reaches the base weight of another component type the
+class ranks, or the monitored-only weight, is refused (``EF-7V``, D27): the two participants would
+tie; the remedy is to pin the weight on a written feed. A ranked feed's dispatch is what the observed output states:
 ``controllable: {target_input: …}`` becomes ``dispatch.target_input``, anything else an empty
 dispatch. A ``target_input`` output is ranked by exactly one controller (none only with ``optional:
 true``); a ``via`` output whose need is bound to a controller is ranked by that one (``EF-7U``).
@@ -25,9 +30,10 @@ true``); a ``via`` output whose need is bound to a controller is ranked by that 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, NoReturn, Optional, Tuple
 
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
+from hisim.energy_system.channels import FeedRequest
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId, EnergySystemRecordError
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, DispatchSpec
@@ -35,15 +41,28 @@ from hisim.energy_system.model import AggregatorFeed, DispatchSpec
 
 @dataclass
 class Observer:
-    """One component observing, with its selection and the record of what it selected."""
+    """One component observing, with its selection and, once the wiring selected them, its feeds."""
 
     component: str
     selection: Selection
     owner: str
-    feeds: List[AggregatorFeed] = field(default_factory=list)
+    #: The selected feeds; ``None`` until the selection plan ran on the constructed components.
+    feeds: Optional[List[AggregatorFeed]] = None
 
     def to_document(self) -> Dict[str, Any]:
-        """The observer as the import record writes it: its selection and every feed it selected."""
+        """The observer as the import record writes it: its selection and every feed it selected.
+
+        Raises:
+            EnergySystemRecordError: ``EF-60`` for an observer whose feeds were never selected: the
+                record of what it observes is written after the wiring, never before.
+        """
+        if self.feeds is None:
+            raise EnergySystemRecordError(
+                EnergySystemErrorId.RECORD_NOT_CONCRETE,
+                f"metadata.imports.observers.{self.component}",
+                f"the observer '{self.component}' ({self.owner}) is written before the wiring selected its feeds; "
+                "the import record is serialized after the wiring.",
+            )
         return {
             "observer": self.component,
             "owner": self.owner,
@@ -85,9 +104,6 @@ class SelectionPlan:
     observers: List[Observer] = field(default_factory=list)
     controllables: List[Controllable] = field(default_factory=list)
 
-    #: The weight of a feed an observer only measures; any other weight is a rank.
-    MEASURED: ClassVar[int] = 999
-
     @staticmethod
     def error(error_id: EnergySystemErrorId, component: str, problem: str, **kwargs: Any) -> EnergySystemAssemblyError:
         """One refusal, located at the observer, so the source map names where it came from."""
@@ -104,13 +120,15 @@ class SelectionPlan:
 
         Raises:
             EnergySystemAssemblyError: ``EF-7S`` for an observer that cannot observe or a selector
-                matching nothing, ``EF-7U`` for a controllable output actuated by none or two.
+                matching nothing, ``EF-7V`` for a derived weight that ties with another component
+                type's, ``EF-7U`` for a controllable output actuated by none or two.
         """
         rankers: Dict[Tuple[str, str], List[str]] = {}
+        selected: Dict[str, List[AggregatorFeed]] = {}
         for observer in self.observers:
-            observer.feeds = self._select(observer, components)
+            observer.feeds = selected[observer.component] = self._select(observer, components)
             for feed in observer.feeds:
-                if feed.weight != self.MEASURED:
+                if feed.weight != FeedRequest.MONITORED_ONLY_WEIGHT:
                     rankers.setdefault((feed.source, feed.output or ""), []).append(observer.component)
         for item in self.controllables:
             ranked_by = rankers.get((item.component, item.output), [])
@@ -125,7 +143,7 @@ class SelectionPlan:
                     + (f", but its need is bound to {item.via_partner}" if item.via_partner else "")
                     + "; a controllable output is actuated by exactly the one controller it binds (D21).",
                 )
-        return {observer.component: observer.feeds for observer in self.observers}
+        return selected
 
     def _select(self, observer: Observer, components: Mapping[str, Any]) -> List[AggregatorFeed]:
         """One observer's feeds: its candidates, filtered by its selection, ranked."""
@@ -168,14 +186,42 @@ class SelectionPlan:
                 f"'{observer.component}' observes nothing: no present component has an output its class declares a "
                 "feed from.",
             )
-        counts: Dict[str, int] = {}
+        return self._rank(observer, chosen, declared)
+
+    def _rank(self, observer: Observer, chosen: List[FeedRequest], declared: Mapping[str, Any]) -> List[AggregatorFeed]:
+        """The chosen feeds as the observer's feeds: each ranked one at its participant's weight, with its dispatch.
+
+        The k-th further participant (source component) of one component type is ranked at
+        ``default + k``; a feed without a component type counts under its source alone.
+
+        Raises:
+            EnergySystemAssemblyError: ``EF-7V`` for a derived weight that reaches another component
+                type's base weight or the monitored-only weight.
+        """
+        measured = FeedRequest.MONITORED_ONLY_WEIGHT
+        #: Each weight the class declares a ranked feed at, to the component types declared at it.
+        bases: Dict[int, List[str]] = {}
+        for declaration in (item for items in declared.values() for item in items):
+            request = DynamicConnectionResolver.feed_from_declaration(declaration, observer.component, "")
+            if request.weight != measured and request.component_type is not None:
+                kinds = bases.setdefault(request.weight, [])
+                if request.component_type.name not in kinds:
+                    kinds.append(request.component_type.name)
+        participants: Dict[Tuple[str, str], List[str]] = {}
         feeds: List[AggregatorFeed] = []
         for feed in chosen:
+            component_type = feed.component_type.name if feed.component_type is not None else None
             weight, dispatch = feed.weight, None
-            if weight != self.MEASURED:
-                kind = feed.component_type.name if feed.component_type is not None else f"{feed.source}.{feed.output}"
-                weight += counts.get(kind, 0)
-                counts[kind] = counts.get(kind, 0) + 1
+            if weight != measured:
+                kind = ("type", component_type) if component_type is not None else ("source", feed.source)
+                ranked = participants.setdefault(kind, [])
+                if feed.source not in ranked:
+                    ranked.append(feed.source)
+                offset = ranked.index(feed.source)
+                weight += offset
+                others = [item for item in bases.get(weight, []) if item != component_type]
+                if (offset and others) or weight >= measured:
+                    self._refuse_collision(observer, feed, offset, weight, others, chosen)
                 target_input = next(
                     (
                         item.target_input
@@ -185,21 +231,44 @@ class SelectionPlan:
                     None,
                 )
                 dispatch = DispatchSpec(target_input=target_input)
-                if weight >= self.MEASURED:
-                    raise self.error(
-                        EnergySystemErrorId.OBSERVER_SELECTION,
-                        observer.component,
-                        f"'{observer.component}' would rank {feed.source}.{feed.output} at {weight}, which marks a "
-                        "measured feed; a class ranks fewer participants of one type.",
-                    )
             feeds.append(
                 AggregatorFeed(
                     source=feed.source,
                     output=feed.output,
-                    component_type=feed.component_type.name if feed.component_type is not None else None,
+                    component_type=component_type,
                     tags=tuple(tag.name for tag in feed.flow_tags),
                     weight=weight,
                     dispatch=dispatch,
                 )
             )
         return feeds
+
+    def _refuse_collision(
+        self,
+        observer: Observer,
+        feed: FeedRequest,
+        offset: int,
+        weight: int,
+        others: List[str],
+        chosen: List[FeedRequest],
+    ) -> NoReturn:
+        """Refuses a derived weight that ties with another component type's base weight (``EF-7V``, D27)."""
+        kind = feed.component_type.name if feed.component_type is not None else feed.source
+        if others:
+            present = [
+                item.source for item in chosen if item.component_type is not None and item.component_type.name in others
+            ]
+            reached = (
+                f"the base weight of {', '.join(others)} ({', '.join(dict.fromkeys(present)) or 'none present'}): "
+                "the two would tie"
+            )
+        else:
+            reached = f"at or above the monitored-only weight {FeedRequest.MONITORED_ONLY_WEIGHT}, which is no rank"
+        raise self.error(
+            EnergySystemErrorId.WEIGHT_COLLISION,
+            observer.component,
+            f"'{observer.component}' would rank {feed.source}.{feed.output}, participant {offset + 1} of {kind}, at "
+            f"{feed.weight} + {offset} = {weight}, which is {reached}. Pin the weight on the feed: "
+            f"write {feed.source}.{feed.output} with its weight among the inputs of '{observer.component}' and leave "
+            "it out of the selection.",
+        )

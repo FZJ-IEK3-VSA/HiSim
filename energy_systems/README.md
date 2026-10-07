@@ -280,8 +280,9 @@ asserts that no two files here describe the same run, so a duplicate cannot be a
 An **assembly** is a fragment of an energy system in a file of its own,
 `<family>/<name>.assembly.yaml`: components whose names are local to it, parameters (each with a
 type, a default, a description, and for a number a `unit` of `lt.Units` and a `range`),
-`exactly_one_of` constraints (the defaults state exactly one member; an import that writes one member
-unstates the others' defaults, which resolve to `none`, and one writing two is refused, `EF-77`),
+`exactly_one_of` constraints (the defaults state exactly one member; an import that states one member
+unstates the others' defaults, which resolve to `none`; a member written as `none` is an explicit
+unstatement; one stating two is refused, `EF-77`),
 internal variants a parameter selects (`selected_by`, `when:`), an interface of ports, and its test contract (`tests:` with `bounds`, `monotone` and `expect` at the
 defaults). A file of `schema_version: 4` imports assemblies under `imports:`, once or as named
 instances:

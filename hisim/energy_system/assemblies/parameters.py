@@ -67,7 +67,8 @@ class ParameterChecks:
     def written_alone(cls, names: Tuple[str, ...], given: Mapping[str, Any], values: Dict[str, Any]) -> Optional[str]:
         """Applies one ``exactly_one_of`` to the values an import writes (D27), or names why it cannot.
 
-        The one member the import writes unstates the others' defaults: they resolve to ``none``.
+        The one member the import states unstates the others' defaults: they resolve to ``none``. A member the
+        import writes as ``none`` (or ``AUTO``/``false``) is an explicit unstatement, not a written member.
 
         Args:
             names: The constraint's members.
@@ -77,10 +78,10 @@ class ParameterChecks:
         Returns:
             ``None``, or the violation when the import writes two or more members.
         """
-        written = [name for name in names if name in given]
+        written = [name for name in names if name in given and cls.is_stated(given[name])]
         if len(written) > 1:
             return (
-                f"the import writes {len(written)} of them ({', '.join(written)}); write one, and the others "
+                f"the import states {len(written)} of them ({', '.join(written)}); state one, and the others "
                 "resolve to none"
             )
         if written:

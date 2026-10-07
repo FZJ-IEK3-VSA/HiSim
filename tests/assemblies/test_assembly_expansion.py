@@ -281,14 +281,14 @@ def test_zero_is_a_stated_value_for_an_exactly_one_of_constraint() -> None:
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    "parameters", ["{power_in_watt: 0, share_of_roof: 0.5}", "{power_in_watt: none, share_of_roof: 0.5}"]
+    "parameters", ["{power_in_watt: 0, share_of_roof: 0.5}", "{power_in_watt: 5000, share_of_roof: 0.5}"]
 )
 def test_an_import_writing_two_members_of_an_exactly_one_of_is_refused(parameters: str) -> None:
-    """Catches two written alternatives (even one of them none) passing, where writing one unstates the other."""
+    """Catches two stated alternatives passing, where stating one unstates the other (0 is stated)."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
         expand_text(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, parameters: {parameters}}}"))
     message = str(refusal.value)
-    for name in ("writes 2 of them (power_in_watt, share_of_roof)", "write one", "import 'pv'"):
+    for name in ("states 2 of them (power_in_watt, share_of_roof)", "state one", "import 'pv'"):
         assert name in message, f"{name!r} is not in: {message}"
 
 

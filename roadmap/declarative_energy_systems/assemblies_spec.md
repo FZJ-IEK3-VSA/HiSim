@@ -262,8 +262,9 @@ comment naming what brings it back, not a declared value.
 [power_in_watt, share_of_maximum_pv_potential]}]`, checked against the parameter declarations and the defaults when
 the assembly is loaded and against the resolved values per import; a parameter at `none`, `AUTO` or `false` counts as
 unstated (`0` is stated). The defaults state exactly one member, so an import writing none passes; **stating one member
-unstates the others' defaults** (decided, owner, 2026-10-07, D27): when the import writes one member, the others
-resolve to `none` whatever their defaults, and an import writing two members is refused (`EF-77`). Not in
+unstates the others' defaults** (decided, owner, 2026-10-07, D27): when the import states one member, the others
+resolve to `none` whatever their defaults; a member written as `none` (or `AUTO`/`false`) is an explicit
+unstatement, not a stated member; an import stating two members is refused (`EF-77`). Not in
 v1 (D26): `{at_most_one_of: […]}` and `{requires: {tilt_in_degree: [azimuth_in_degree]}}`; an assembly expresses them
 as an enum parameter selecting a variant. **Internal
 variants partition their selector:** the `when:` lists must cover every allowed value of the selecting parameter exactly
@@ -1130,7 +1131,7 @@ All by the owner on 2026-10-03.
   interleaves them and the sequence moves results); `optional-bind:` must name a partner the file declares.
 
 - **D27 — Three rules after the review of part 2 (owner, 2026-10-07):** (a) stating one member of an `exactly_one_of`
-  unstates the others' defaults: the import writing one member resolves the others to `none`, writing two is refused
+  unstates the others' defaults: the import stating one member resolves the others to `none` (a written `none` is an unstatement), stating two is refused
   (`EF-77`), and the library check keeps requiring the defaults to state exactly one (§2.6); (b) the battery preset
   leaves its fields `AUTO` to the class laws `Sum(Many(...))`, which size it to every array, and the one-array laws are
   deleted; over one array the numbers are unchanged, the audit's law string changes (§6); (c) a derived weight

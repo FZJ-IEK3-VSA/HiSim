@@ -1,7 +1,7 @@
 # The composed file of the gas twin (assemblies_spec.md §8, §13 step 5): the site with the twin's site values plus the
 # seven imports from energy_systems/assemblies/ that reproduce household_gas_building_sizer.energy_system.yaml, the
 # recorded twin of system_setups/household_gas_building_sizer.py (the option ems_with_battery of its grouped file).
-# tests/assemblies/test_gas_twin_gate.py expands it, renames the members to the twin's names and asserts the twin
+# tests/assemblies/test_twin_gates.py expands it, renames the members to the twin's names and asserts the twin
 # outside the intended differences, and runs both for one day: every result column equal.
 #
 # Site component names are the twin's; a site entry carries a `ports:` block only where an import binds to it, and

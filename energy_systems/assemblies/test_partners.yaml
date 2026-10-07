@@ -3,7 +3,8 @@
 # port whose binding changes what the assembly computes and every sizing fact its members read from the site. Read by
 # hisim/energy_system/assemblies/testing/partners.py, which documents the format. Every partner is a site entry as an
 # energy-system file writes it, with the twins' presets and values (household_heatpump_building_sizer,
-# household_gas_building_sizer).
+# household_gas_building_sizer, household_oil_building_sizer, household_pellets_building_sizer,
+# household_wood_chips_building_sizer, household_hydrogen_boiler_building_sizer).
 partners:
   # ------------------------------------------------------------------------------------------- the site
   Weather:
@@ -121,7 +122,7 @@ partners:
   # --------------------------------------------------------------------- natural gas: meter and burner
   GasMeter:
     # The natural-gas connection a fuel need binds; its meter observes the consumers' fuel outputs, and copies its
-    # carrier from the burner's energy_carrier fact, as in the twin.
+    # carrier from the energy_carrier fact of the one burner beside it, as in the twin.
     serves: {carrier: natural_gas}
     component:
       class: hisim.components.gas_meter.GasMeter
@@ -131,8 +132,10 @@ partners:
         connection: {carrier: natural_gas}
   GasBoiler:
     # A consumer of the natural gas a connection provides: the twin's condensing boiler with its controller, its
-    # buffer and its cylinder; it contributes the energy_carrier fact the meter's carrier is copied from.
-    serves: [{consumes: natural_gas}, {fact: energy_carrier}]
+    # buffer and its cylinder. Its class contributes the energy_carrier fact the meter's carrier is copied from, so
+    # the isolation finds the fact here, beside the meter it binds (isolation.py, facts_of_partners); each fuel's
+    # consumer below does the same for its own meter.
+    serves: {consumes: natural_gas}
     requires: [Building, GasBoilerController, GasBuffer, GasCylinder]
     component:
       class: hisim.components.generic_boiler.GenericBoiler
@@ -168,6 +171,196 @@ partners:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
       inputs: [UTSPConnector, GasBoiler]
+
+  # -------------------------------------------------------------------- heating oil: meter and burner
+  OilMeter:
+    # The oil tank a fuel need binds; its fuel meter copies its carrier from the burner beside it, as in the twin.
+    serves: {carrier: heating_oil}
+    component:
+      class: hisim.components.fuel_meter.FuelMeter
+      preset: standard
+      inputs: [{$port: connection}]
+      ports:
+        connection: {carrier: heating_oil}
+  OilBoiler:
+    # A consumer of the heating oil a supply provides: the boiler of household_oil_building_sizer with its
+    # controller, its buffer and its cylinder; its class contributes the energy_carrier fact the meter copies.
+    serves: {consumes: heating_oil}
+    requires: [Building, OilBoilerController, OilBuffer, OilCylinder]
+    component:
+      class: hisim.components.generic_boiler.GenericBoiler
+      preset: oil
+      inputs: [OilBoilerController, OilCylinder, OilBuffer]
+      ports:
+        fuel: {carrier: heating_oil, outputs: [EnergyDemandSh, EnergyDemandDhw]}
+  OilBoilerController:
+    requires: [Weather, HeatDistributionController]
+    component:
+      class: hisim.components.generic_boiler.GenericBoilerController
+      preset: modulating
+      config:
+        set_heating_threshold_outside_temperature_in_celsius: 18.0
+        with_domestic_hot_water_preparation: true
+      inputs: [Weather, HeatDistributionController, OilCylinder, OilBuffer]
+  OilBuffer:
+    requires: [HeatDistributionSystem]
+    component:
+      class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+      preset: buffer
+      inputs: [{$port: space_heating}, OilBoiler]
+      ports:
+        space_heating: {circuit: space_heating}
+  OilCylinder:
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, OilBoiler]
+
+  # ------------------------------------------------------------------------ pellets: meter and burner
+  PelletMeter:
+    # The pellet store a fuel need binds; its fuel meter copies its carrier from the burner beside it.
+    serves: {carrier: pellets}
+    component:
+      class: hisim.components.fuel_meter.FuelMeter
+      preset: standard
+      inputs: [{$port: connection}]
+      ports:
+        connection: {carrier: pellets}
+  PelletBoiler:
+    # A consumer of the pellets a supply provides: the boiler of household_pellets_building_sizer with its
+    # controller, its buffer and its cylinder; its class contributes the energy_carrier fact the meter copies.
+    serves: {consumes: pellets}
+    requires: [Building, PelletBoilerController, PelletBuffer, PelletCylinder]
+    component:
+      class: hisim.components.generic_boiler.GenericBoiler
+      preset: pellets
+      inputs: [PelletBoilerController, PelletCylinder, PelletBuffer]
+      ports:
+        fuel: {carrier: pellets, outputs: [EnergyDemandSh, EnergyDemandDhw]}
+  PelletBoilerController:
+    requires: [Weather, HeatDistributionController]
+    component:
+      class: hisim.components.generic_boiler.GenericBoilerController
+      preset: on_off
+      config:
+        set_heating_threshold_outside_temperature_in_celsius: 18.0
+        with_domestic_hot_water_preparation: true
+        minimum_runtime_in_seconds: 1800.0
+        minimum_resting_time_in_seconds: 900.0
+      inputs: [Weather, HeatDistributionController, PelletCylinder, PelletBuffer]
+  PelletBuffer:
+    requires: [HeatDistributionSystem]
+    component:
+      class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+      preset: buffer
+      config:
+        sizing_option: SIZE_ACCORDING_TO_PELLET_HEATING
+      inputs: [{$port: space_heating}, PelletBoiler]
+      ports:
+        space_heating: {circuit: space_heating}
+  PelletCylinder:
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, PelletBoiler]
+
+  # --------------------------------------------------------------------- wood chips: meter and burner
+  WoodChipMeter:
+    # The wood-chip store a fuel need binds; its fuel meter copies its carrier from the burner beside it.
+    serves: {carrier: wood_chips}
+    component:
+      class: hisim.components.fuel_meter.FuelMeter
+      preset: standard
+      inputs: [{$port: connection}]
+      ports:
+        connection: {carrier: wood_chips}
+  WoodChipBoiler:
+    # A consumer of the wood chips a supply provides: the boiler of household_wood_chips_building_sizer with its
+    # controller, its buffer and its cylinder; its class contributes the energy_carrier fact the meter copies.
+    serves: {consumes: wood_chips}
+    requires: [Building, WoodChipBoilerController, WoodChipBuffer, WoodChipCylinder]
+    component:
+      class: hisim.components.generic_boiler.GenericBoiler
+      preset: wood_chips
+      inputs: [WoodChipBoilerController, WoodChipCylinder, WoodChipBuffer]
+      ports:
+        fuel: {carrier: wood_chips, outputs: [EnergyDemandSh, EnergyDemandDhw]}
+  WoodChipBoilerController:
+    requires: [Weather, HeatDistributionController]
+    component:
+      class: hisim.components.generic_boiler.GenericBoilerController
+      preset: on_off
+      config:
+        set_heating_threshold_outside_temperature_in_celsius: 18.0
+        with_domestic_hot_water_preparation: true
+        minimum_runtime_in_seconds: 3600.0
+        minimum_resting_time_in_seconds: 1800.0
+      inputs: [Weather, HeatDistributionController, WoodChipCylinder, WoodChipBuffer]
+  WoodChipBuffer:
+    requires: [HeatDistributionSystem]
+    component:
+      class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+      preset: buffer
+      config:
+        sizing_option: SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
+      inputs: [{$port: space_heating}, WoodChipBoiler]
+      ports:
+        space_heating: {circuit: space_heating}
+  WoodChipCylinder:
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, WoodChipBoiler]
+
+  # ----------------------------------------------------------------------- hydrogen: meter and burner
+  HydrogenMeter:
+    # The hydrogen connection a fuel need binds; a gas meter, as in the twin (the fuel meter refuses hydrogen).
+    serves: {carrier: hydrogen}
+    component:
+      class: hisim.components.gas_meter.GasMeter
+      preset: standard
+      inputs: [{$port: connection}]
+      ports:
+        connection: {carrier: hydrogen}
+  HydrogenBoiler:
+    # A consumer of the hydrogen a supply provides: the boiler of household_hydrogen_boiler_building_sizer with its
+    # controller, its buffer and its cylinder; its class contributes the energy_carrier fact the meter copies.
+    serves: {consumes: hydrogen}
+    requires: [Building, HydrogenBoilerController, HydrogenBuffer, HydrogenCylinder]
+    component:
+      class: hisim.components.generic_boiler.GenericBoiler
+      preset: hydrogen
+      inputs: [HydrogenBoilerController, HydrogenCylinder, HydrogenBuffer]
+      ports:
+        fuel: {carrier: hydrogen, outputs: [EnergyDemandSh, EnergyDemandDhw]}
+  HydrogenBoilerController:
+    requires: [Weather, HeatDistributionController]
+    component:
+      class: hisim.components.generic_boiler.GenericBoilerController
+      preset: modulating
+      config:
+        set_heating_threshold_outside_temperature_in_celsius: 18.0
+        with_domestic_hot_water_preparation: true
+      inputs: [Weather, HeatDistributionController, HydrogenCylinder, HydrogenBuffer]
+  HydrogenBuffer:
+    requires: [HeatDistributionSystem]
+    component:
+      class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+      preset: buffer
+      config:
+        sizing_option: SIZE_ACCORDING_TO_GAS_HEATER
+      inputs: [{$port: space_heating}, HydrogenBoiler]
+      ports:
+        space_heating: {circuit: space_heating}
+  HydrogenCylinder:
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, HydrogenBoiler]
 
   # ------------------------------------------------------------- electricity: arrays, control, grid
   PVArray:

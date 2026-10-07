@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Mapping
+from typing import ClassVar, Mapping
 
 from hisim.config.names import NameSyntax
 from hisim.postprocessing.kpi_computation.kpi_address import KpiAddress
@@ -40,12 +40,43 @@ class ComposedTwin:
         rename: Every expanded member address of the composed file to the twin's name.
     """
 
+    #: The members every household twin's composed file imports under the same keys and twin names: the cylinder,
+    #: the array, the battery, the energy manager and the grid meter.
+    HOUSEHOLD_MEMBERS: ClassVar[Mapping[str, str]] = MappingProxyType(
+        {
+            "dhw-DHWStorage": "DHWStorage",
+            "pv-pv_system-PVSystem": "PVSystem",
+            "battery-battery-Battery": "Battery",
+            "control-EMS": "L2EMSElectricityController",
+            "grid-ElectricityMeter": "ElectricityMeter",
+        }
+    )
+
     stem: str
     rename: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Freeze the rename map, so the table cannot be changed through an entry."""
         object.__setattr__(self, "rename", MappingProxyType(dict(self.rename)))
+
+    @classmethod
+    def household(cls, stem: str, generator: Mapping[str, str]) -> "ComposedTwin":
+        """The composed twin of a household setup: its heat generator's and supply's members plus the shared ones.
+
+        Example: ``ComposedTwin.household("household_oil_building_sizer", {"heating-Boiler": "ConventionalOilBoiler",
+        ...})`` maps the boiler, its controller, the buffer and the oil meter as given, and the cylinder, the array,
+        the battery, the energy manager and the grid meter as :attr:`HOUSEHOLD_MEMBERS` does. Every household twin
+        imports those five assemblies under the same keys, so the table states them once.
+
+        Args:
+            stem: The Python setup's stem.
+            generator: The heat generator's members, and its fuel supply's meter where it has one, to the twin's
+                names.
+
+        Returns:
+            The entry, its rename map the union of ``generator`` and :attr:`HOUSEHOLD_MEMBERS`.
+        """
+        return cls(stem, {**generator, **cls.HOUSEHOLD_MEMBERS})
 
     @property
     def twin(self) -> str:
@@ -63,32 +94,58 @@ COMPOSED_TWINS: Mapping[str, ComposedTwin] = MappingProxyType(
     {
         twin.stem: twin
         for twin in (
-            ComposedTwin(
+            ComposedTwin.household(
                 "household_heatpump_building_sizer",
                 {
                     "heating-ControllerDHW": "HeatPumpControllerDHW",
                     "heating-ControllerSH": "MoreAdvancedHeatPumpHPLibControllerSH",
                     "heating-HeatPump": "MoreAdvancedHeatPumpHPLib",
                     "heating-Buffer": "SimpleHotWaterStorage",
-                    "dhw-DHWStorage": "DHWStorage",
-                    "pv-pv_system-PVSystem": "PVSystem",
-                    "battery-battery-Battery": "Battery",
-                    "control-EMS": "L2EMSElectricityController",
-                    "grid-ElectricityMeter": "ElectricityMeter",
                 },
             ),
-            ComposedTwin(
+            ComposedTwin.household(
                 "household_gas_building_sizer",
                 {
                     "heating-Boiler": "CondensingGasBoiler",
                     "heating-Controller": "ModulatingBoilerController",
                     "heating-Buffer": "SimpleHotWaterStorage",
-                    "dhw-DHWStorage": "DHWStorage",
                     "gas-GasMeter": "GasMeter",
-                    "pv-pv_system-PVSystem": "PVSystem",
-                    "battery-battery-Battery": "Battery",
-                    "control-EMS": "L2EMSElectricityController",
-                    "grid-ElectricityMeter": "ElectricityMeter",
+                },
+            ),
+            ComposedTwin.household(
+                "household_oil_building_sizer",
+                {
+                    "heating-Boiler": "ConventionalOilBoiler",
+                    "heating-Controller": "ModulatingBoilerController",
+                    "heating-Buffer": "SimpleHotWaterStorage",
+                    "oil-FuelMeter": "FuelMeter",
+                },
+            ),
+            ComposedTwin.household(
+                "household_pellets_building_sizer",
+                {
+                    "heating-Boiler": "ConventionalPelletBoiler",
+                    "heating-Controller": "PelletBoilerController",
+                    "heating-Buffer": "SimpleHotWaterStorage",
+                    "pellets-FuelMeter": "FuelMeter",
+                },
+            ),
+            ComposedTwin.household(
+                "household_wood_chips_building_sizer",
+                {
+                    "heating-Boiler": "ConventionalWoodChipBoiler",
+                    "heating-Controller": "WoodChipBoilerController",
+                    "heating-Buffer": "SimpleHotWaterStorage",
+                    "wood_chips-FuelMeter": "FuelMeter",
+                },
+            ),
+            ComposedTwin.household(
+                "household_hydrogen_boiler_building_sizer",
+                {
+                    "heating-Boiler": "CondensingHydrogenBoiler",
+                    "heating-Controller": "ModulatingBoilerController",
+                    "heating-Buffer": "SimpleHotWaterStorage",
+                    "hydrogen-GasMeter": "GasMeter",
                 },
             ),
         )

@@ -1,0 +1,37 @@
+# The pellet store (the one provider of pellets) and its meter (spec §5.1): one supply per fuel (owner, 2026-10-07), the
+# shape of supply/gas_connection. The provision names its carrier and its meter, `provides: {connection: {carrier:
+# pellets, meter: FuelMeter}}`: every consuming output a bound consumer's fuel need names lands at the meter's `{$port:
+# connection}` placeholder as the feed the meter's class declares for it (D30), GenericBoiler's EnergyDemandSh and
+# EnergyDemandDhw, whose EnergyPort names pellets.
+#
+# The meter's fuel_loadtype and its two fuel constants stay with its preset's laws, copied from the facts of the one
+# burner in the file, as in household_pellets_building_sizer, which writes no line for them (D28: overrides only).
+
+schema_version: 4
+kind: assembly
+name: supply/pellet_store
+description: Pellet store with its fuel meter.
+
+components:
+  FuelMeter:
+    class: hisim.components.fuel_meter.FuelMeter
+    preset: standard
+    inputs:
+      - {$port: connection}                                 # one feed per consuming output of every bound consumer
+
+interface:
+  provides:
+    connection: {carrier: pellets, meter: FuelMeter}
+
+tests:
+  # One day at 900 s beside the consumer partner of pellets, the twin's pellet boiler sized to the building (a household
+  # boiler burns at most about 40 kW): per-step energies <= 40 kW x 0.25 h = 10 kWh, the day <= 40 kW x 24 h = 960 kWh,
+  # both with a 25 % margin.
+  bounds:
+    - {output: FuelMeter.HeatConsumption, unit: WATT_HOUR, min: 0, max: 12500}
+      # the fuel of the step, which the class labels heating (measured at most 2.1 kWh)
+    - {output: FuelMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1200000}
+  monotone: []                                              # no numeric parameter: nothing to sweep
+  expect:
+    - {kpi: Total energy consumption, member: FuelMeter, min: 175, max: 235}
+      # 203.3 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure

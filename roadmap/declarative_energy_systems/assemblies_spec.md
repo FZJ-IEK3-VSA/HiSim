@@ -553,7 +553,8 @@ A **provider** of a carrier is a supply assembly: the connection (the carrier's 
 subject, §5.2) plus a meter whose `observes:` the importing file writes. `supply/electricity_grid` is the grid
 connection and the `ElectricityMeter`, by default observing every electricity output its class declares (§4.3); an
 electricity need only checks that exactly one exists (§3.2). `supply/gas_connection` (`GasMeter`), `supply/lpg_tank`,
-`supply/oil_tank` (`FuelMeter`) and `supply/district_heating_substation` name their meter on the provision,
+`supply/oil_tank`, `supply/pellet_store`, `supply/wood_chip_store` (`FuelMeter`), `supply/hydrogen_connection`
+(`GasMeter`) and `supply/district_heating_substation` name their meter on the provision,
 `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`, and **every consuming output a bound consumer's
 carrier need names lands at the meter's `{$port: connection}` placeholder as the feed the meter's class declares for
 that output, written explicitly** (`from`, tags, weight, as a twin writes it; never the consumer's bare name) (the
@@ -777,9 +778,11 @@ dimensions are all discrete, where two points drawing the same values are one sa
 **Isolation run.** For each sample the harness builds a minimal system: the assembly, plus a test partner for each
 active port whose binding changes what the assembly computes, optional ports included (a providing port gets none),
 for a fuel the assembly provides a consumer partner, and for every sizing fact a member's class reads that no member
-provides and no fact port names the registered provider of that fact (it crosses by the bare-fact rule, §6, D29;
-`facts_needed` in `testing/isolation.py`); one simulated day at
-900 s per step (an assembly declares no resolution), the energy-balance check and `i_doublecheck` on. The test
+provides, no fact port names and no partner already in the system contributes by its class the registered provider
+of that fact (it crosses by the bare-fact rule, §6, D29; `facts_needed` in `testing/isolation.py`: a fuel meter copies
+its carrier from the consumer partner beside it, and a second provider would make the read ambiguous); one
+simulated day at 900 s per step (an assembly declares no resolution), the energy-balance check and `i_doublecheck`
+on. The test
 partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
 consumer or fact, each naming the partners it requires. The run fails on an exception,
 a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below. The declared parameter box
@@ -1022,9 +1025,21 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    translator redesign (the parameters it writes by component name and field become import parameters); its outputs
    for every existing probe are identical.
    *Condensing gas: done 2026-10-07* — `heating/gas_condensing_boiler`, `supply/gas_connection`,
-   `household_gas_building_sizer.composed.energy_system.yaml` and its gate `tests/assemblies/test_gas_twin_gate.py`
-   (intended differences G7 and the buffer-before-cylinder swap; the gas meter needs no swap, its import is numbered
-   where the twin evaluates it; its feeds land explicitly by D30). The RenoVisor switch is its own PR.
+   `household_gas_building_sizer.composed.energy_system.yaml` and its gate (intended differences G7 and the
+   buffer-before-cylinder swap; the gas meter needs no swap, its import is numbered where the twin evaluates it; its
+   feeds land explicitly by D30). The RenoVisor switch is its own PR.
+   *Oil, pellets, wood chips, hydrogen: done 2026-10-07* — one assembly and one supply per fuel (owner, 2026-10-07):
+   `heating/oil_boiler`, `heating/pellet_boiler`, `heating/wood_chip_boiler`, `heating/hydrogen_boiler`, each the
+   shape of `heating/gas_condensing_boiler` (the boiler at the fuel's preset, the controller at the twin's preset,
+   `modulating` or `on_off` with the twin's minimum runtime and resting time as parameters, the buffer as the twin's),
+   and `supply/oil_tank`, `supply/pellet_store`, `supply/wood_chip_store` (`FuelMeter`) and
+   `supply/hydrogen_connection` (`GasMeter`, as in its twin: the `FuelMeter` refuses hydrogen), each providing its
+   carrier (`heating_oil`, `pellets`, `wood_chips`, `hydrogen`); the composed files
+   `household_{oil,pellets,wood_chips,hydrogen_boiler}_building_sizer.composed.energy_system.yaml`, each a row of
+   `COMPOSED_TWINS` (`hisim/energy_system/assemblies/twins.py`), so the golden gate's `composed` mode runs them too.
+   Every gate, the heat pump's and gas's included, is one module parametrized over that table,
+   `tests/assemblies/test_twin_gates.py`, with the same two intended differences. A test partner's class contributes the facts it provides to its isolation system, so a
+   fuel meter copies its carrier from the consumer partner beside it (§9.4).
 6. **New structure.** #83 request contract and N instances; LPG carrier and `supply/lpg_tank` (#77); DHW assemblies as
    their components land (hisim-epc.21, hisim-lenz); #85 contract; further controllers.
 

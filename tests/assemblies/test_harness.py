@@ -303,6 +303,23 @@ def test_a_fact_read_behind_an_inactive_fact_port_gets_its_registered_provider(t
 
 
 @pytest.mark.assemblies
+def test_a_fact_a_partner_in_the_system_contributes_gets_no_second_provider() -> None:
+    """The oil tank's meter copies its carrier from the oil boiler beside it, never from the gas boiler.
+
+    Every fuel's consumer partner contributes energy_carrier by its class; no partner serves the fact, and a
+    second burner of another fuel would make the meter's read ambiguous.
+    """
+    library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+    resolver = AssemblyResolver([library])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    assembly = resolver.resolve("supply/oil_tank", "test")
+    document = isolation_document(assembly, {}, registry)
+    classes = [entry["class"].rsplit(".", 1)[-1] for entry in document["components"].values()]
+    assert classes.count("GenericBoiler") == 1 and "OilBoiler" in document["components"]
+    assert ("fact", "energy_carrier") not in registry.served
+
+
+@pytest.mark.assemblies
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> None:
     """An empty registry: the array's weather port names MockWeather."""
     assembly, space = mock("mock/pv_array")

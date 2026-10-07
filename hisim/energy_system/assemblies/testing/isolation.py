@@ -9,7 +9,9 @@ the assembly provides a consumer, a fact need a provider of the fact, an observe
 it observes, and a ``controllable: {target_input}`` output the controller ranking it. A sizing fact
 a member's class reads that no member provides and no fact port names crosses the boundary by the
 engine's bare-fact rule, as it does in the system that imports the assembly (§6), so it gets the
-registered provider of that fact as well (:func:`facts_needed`). Optional
+registered provider of that fact as well (:func:`facts_needed`), unless a partner already in the
+system contributes it by its class, as the consumer of a fuel contributes the carrier its meter
+copies: the engine binds the fact there, and a second provider would make the read ambiguous. Optional
 ports are bound like required ones, so the run exercises the whole interface the parameters offer;
 the verb is written out (``bind:`` for a required port, ``optional-bind:`` for an optional one)
 wherever the format has one. A port no partner serves refuses the build by name.
@@ -37,7 +39,7 @@ import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, Collection, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import pandas as pd
 import yaml
@@ -52,7 +54,7 @@ from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import Port, PortKind, PortState
-from hisim.energy_system.model import EnergySystemFile
+from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 
 #: The import key of the assembly under test in its isolation system.
@@ -97,17 +99,36 @@ def partners_needed(  # pylint: disable=too-many-return-statements  # one return
     return []
 
 
-def facts_needed(port_facts: Sequence[str], members: Mapping[str, MemberTemplate]) -> List[Tuple[ServedKey, ...]]:
-    """The facts the members' classes read that no member provides and no fact port names, each as its alternatives.
+def facts_needed(
+    port_facts: Sequence[str], members: Mapping[str, MemberTemplate], partner_facts: Collection[str]
+) -> List[Tuple[ServedKey, ...]]:
+    """The facts the members' classes read that no member, no fact port and no partner present provides.
 
     Args:
         port_facts: The facts the assembly's active fact ports name.
         members: The members present with the sample's parameters.
+        partner_facts: The facts the classes of the partners already in the system contribute.
+
+    Returns:
+        Each fact still to be provided, as its alternatives.
     """
     classes = [ClassBinder.config_class_of(name, member.entry) for name, member in members.items()]
     provided = {fact for config_class in classes for fact in declared_facts_of(config_class)}
     read = dict.fromkeys(fact for config_class in classes for fact in facts_read_by(config_class))
-    return [(("fact", fact),) for fact in read if fact not in provided and fact not in port_facts]
+    return [
+        (("fact", fact),)
+        for fact in read
+        if fact not in provided and fact not in port_facts and fact not in partner_facts
+    ]
+
+
+def facts_of_partners(registry: TestPartnerRegistry, names: Sequence[str]) -> Set[str]:
+    """The sizing facts the classes of the partners and of every partner they require contribute."""
+    facts: Set[str] = set()
+    for name in registry.closure(names):
+        entry = ComponentEntry(name=name, class_path=registry.partners[name].component["class"])
+        facts.update(declared_facts_of(ClassBinder.config_class_of(name, entry)))
+    return facts
 
 
 def isolation_document(
@@ -143,7 +164,7 @@ def isolation_document(
         for port in model.ports.values()
         if port.kind == PortKind.FACT and port.fact and selection.state(port) != PortState.INACTIVE
     ]
-    for alternatives in facts_needed(port_facts, selection.members):
+    for alternatives in facts_needed(port_facts, selection.members, facts_of_partners(registry, partners)):
         partners.append(registry.find(alternatives, f"the fact read '{alternatives[0][1]}'", assembly.path).name)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})

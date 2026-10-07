@@ -1153,8 +1153,8 @@ class GenericBoilerControllerConfig(ConfigBase):
     #: Upper end of the boiler's power band; copied from the boiler this controller regulates.
     maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MAXIMAL_THERMAL_POWER_IN_WATT)
     set_temperature_difference_for_full_power: float = 5.0
-    minimum_runtime_in_seconds: float = 1800
-    minimum_resting_time_in_seconds: float = 1800
+    minimum_runtime_in_seconds: float = field(default=1800, metadata={"unit": lt.Units.SECONDS})
+    minimum_resting_time_in_seconds: float = field(default=1800, metadata={"unit": lt.Units.SECONDS})
     with_domestic_hot_water_preparation: bool = False
     #: If used as secondary heat generator for DHW in hybrid mode.
     secondary_mode: Optional[bool] = False

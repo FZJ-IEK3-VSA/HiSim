@@ -457,18 +457,21 @@ the tests run on is `tests/assemblies/mock_assemblies/library/`.
 
 **The real library** (§13 steps 4 and 5) is `energy_systems/assemblies/`: `heating/air_source_heat_pump`,
 `heating/air_source_heat_pump_space_heating_only` (no DHW: a second assembly, D29),
-`heating/gas_condensing_boiler`, `dhw/indirect_cylinder`, `pv/array`, `storage/battery`,
-`control/ems_self_consumption`, `supply/electricity_grid` and `supply/gas_connection`.
-`household_heatpump_building_sizer.composed.energy_system.yaml` is the site of the heat-pump twin plus six of them
-(the heat pump with DHW, the cylinder, the array, the battery, the energy manager and the grid), and
-`household_gas_building_sizer.composed.energy_system.yaml` the site of the gas twin plus seven (the gas boiler and the
-gas connection in place of the heat pump). `tests/assemblies/test_heatpump_twin_gate.py` and
-`tests/assemblies/test_gas_twin_gate.py`, both on `tests/assemblies/twin_gate.py`, expand each, rename its members to
-the twin's names and assert the twin outside the listed intended differences (the battery's one-element
-`sizing_sources` list, G7, and one neutral swap of the sequence), and run both for one day: every result column and
-KPI equal. The golden gate's `composed` mode runs each composed file for the week and the full year and compares its
-KPIs, renamed through the table `hisim/energy_system/assemblies/twins.py`, with the Python setup's goldens
-(`golden_references/README.md`).
+`heating/gas_condensing_boiler`, `heating/oil_boiler`, `heating/pellet_boiler`, `heating/wood_chip_boiler`,
+`heating/hydrogen_boiler` (one assembly per fuel), `dhw/indirect_cylinder`, `pv/array`, `storage/battery`,
+`control/ems_self_consumption`, `supply/electricity_grid`, `supply/gas_connection`, `supply/oil_tank`,
+`supply/pellet_store`, `supply/wood_chip_store` and `supply/hydrogen_connection` (one supply per fuel; the hydrogen
+connection's meter is a `GasMeter`, as in its twin). `household_heatpump_building_sizer.composed.energy_system.yaml`
+is the site of the heat-pump twin plus six of them (the heat pump with DHW, the cylinder, the array, the battery, the
+energy manager and the grid); the composed files of the gas, oil, pellets, wood-chips and hydrogen-boiler twins
+(`household_<fuel>_building_sizer.composed.energy_system.yaml`) are the same site plus seven (the fuel's boiler and its
+supply in place of the heat pump). The table `hisim/energy_system/assemblies/twins.py` names every composed file, its
+twin and the rename of its members to the twin's names. `tests/assemblies/test_twin_gates.py`, on
+`tests/assemblies/twin_gate.py`, runs one gate per row: it expands the composed file, renames its members and asserts
+the twin outside the listed intended differences (the battery's one-element `sizing_sources` list, G7, and one neutral
+swap of the sequence), and runs both for one day: every result column and KPI equal. The golden gate's `composed`
+mode runs each composed file for the week and the full year and compares its KPIs, renamed through the same table,
+with the Python setup's goldens (`golden_references/README.md`).
 
 ## Relation to `system_setups/`
 

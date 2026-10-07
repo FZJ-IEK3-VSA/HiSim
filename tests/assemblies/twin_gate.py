@@ -17,7 +17,7 @@ Every class, preset, config line, input item, feed tag, weight and dispatch is c
 is not, since feed resolution sorts every observer's feeds (``hisim/energy_system/feed_resolution.py``). Both files
 then run for one day, and every result column and every KPI value is equal under the rename, to the last bit.
 
-A gate module states its :class:`TwinGate` and calls the four checks below from its own tests.
+``tests/assemblies/test_twin_gates.py`` states every gate's :class:`TwinGate` and calls the four checks below.
 """
 
 from __future__ import annotations

@@ -1,13 +1,22 @@
-# Mockup (design, not loadable): energy_systems/assemblies/dhw/storage_water_heater.assembly.yaml
+# Mockup (design): energy_systems/assemblies/dhw/storage_water_heater.assembly.yaml, written in lean v1 syntax
+# (spec §13.1) and read by the lean reader and library check; † marks what HiSim does not have yet.
 # Spec §5.3, pattern 2 (parameter-selected internal variants). Request type `storage_water_heater`.
 # † ImmersionHeater and its L1 thermostat do not exist (hisim-epc.21); LPG is not a carrier yet (spec §5.1).
-# Carrier values are lt.EnergyBalanceCarrier values; † `lpg` has no member (LPG) yet, so an lpg import is refused at its
-# fuel port until the enum is extended in the step that brings the component.
+# Carrier values are lt.EnergyBalanceCarrier values; † `lpg` has no member (LPG) yet, so the lpg fuel port is refused
+# (`fuel_lpg`) by the reader until the enum is extended in the step that brings the component.
 #
-# Control (D21): the heater's L1 thermostat is hardcoded in both options; the EMS may only raise its set point through
-# `ems_modifier`. Gap G5 of the dry-run: the EMS has no DHW modifier for an ELECTRIC_HEATING_DHW consumer today — it
-# raises DomesticHotWaterStorageTemperatureModifier only while a HEAT_PUMP_DHW or HEAT_PUMP feed is ranked
+# Members per variant option (spec §5.3, owner 2026-10-04): the electric option's heater is `Immersion`, the fuel
+# options' is `Burner` (one class, GenericBoiler, in each). A port's `into:` and the contract may name members of any
+# option; only the selected option's members are bound and checked. Per-variant values live in the options (D26: no
+# $switch), so each fuel has its own option with the burner preset of that fuel.
+#
+# Control (D21): the heater's L1 thermostat is hardcoded beside both heaters; the EMS may only raise its set point
+# through `ems_modifier`. Gap G5 of the dry-run: the EMS has no DHW modifier for an ELECTRIC_HEATING_DHW consumer
+# today — it raises DomesticHotWaterStorageTemperatureModifier only while a HEAT_PUMP_DHW or HEAT_PUMP feed is ranked
 # (controller_l2_energy_management_system.py:778-790), so binding `ems_modifier: control` needs that EMS change.
+#
+# † `tank_and_pipe_insulated` (request leaf, measure hot_water_tank_and_pipe_insulation) returns as a parameter when
+# SimpleDHWStorage has a field for the insulation it changes; the standby loss is fixed today.
 
 schema_version: 4
 kind: assembly
@@ -23,25 +32,21 @@ parameters:
     {type: float, unit: LITER, default: AUTO, range: {min: 30, max: 500},
      description: Usable tank volume; AUTO is the class law per apartment.}
      # range: an under-sink 30 l unit up to a 500 l floor-standing one
-  tank_and_pipe_insulated:
-    {type: bool, default: true, description: "Insulation of tank and pipes († no field yet)."}
   heater_power_in_watt:
     {type: float, unit: WATT, default: 3000, range: {min: 1000, max: 10000},
-     description: "Immersion rating or burner input († field of ImmersionHeater)."}
+     description: "Rating of the heater of the selected option: the immersion element († ImmersionHeater) or the burner."}
      # range: a 1 kW immersion element up to a 10 kW gas storage heater burner
-
-presets:
-  ie_immersion_120l: {energy_carrier: electricity, volume_in_liter: 120}
-  gas_storage_150l:  {energy_carrier: natural_gas, volume_in_liter: 150}
 
 components:
   Tank:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
-    config: {volume_heating_water_storage_in_liter: {$param: volume_in_liter}}   # suffix _in_liter = LITER
+    config: {volume_heating_water_storage_in_liter: {$param: volume_in_liter}}   # the lean stack declares LITER here
     inputs:
       - {$port: hot_water_demand}
-      - Heater                                             # WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator
+      - Immersion                                          # WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator
+      - Burner                                             # the same two, from the fuel options' heater
+      - {$port: solar_coil}                                # ...FromSecondaryHeatGenerator, when a collector binds it
   HeaterController:                                        # † L1 thermostat on the tank temperature
     class: hisim.components.immersion_heater.StorageHeaterController
     preset: standard
@@ -56,44 +61,55 @@ variants:
       immersion:
         when: [electricity]
         components:
-          Heater:
+          Immersion:
             class: hisim.components.immersion_heater.ImmersionHeater   # †
             preset: standard
             config: {rated_power_in_watt: {$param: heater_power_in_watt}}
             inputs: [HeaterController, Tank]
-      burner:
-        when: [natural_gas, lpg, heating_oil]
+      gas_burner:
+        when: [natural_gas, lpg]
         components:
-          Heater:
+          Burner:
             # GenericBoiler can run a DHW-only boiler today (generic_boiler.py:198, energy_carrier), and its
             # EnergyDemandDhw is what GasMeter/FuelMeter default-feed on; its own DHW controller would replace
             # HeaterController here, which is why the controller is shared only in this mockup.
+            # † lpg burns as natural gas here, as LPG houses run the gas twin today (translate.py:513); an LPG
+            # preset comes with the LPG carrier.
             class: hisim.components.generic_boiler.GenericBoiler
             preset: condensing_gas
-            config: {energy_carrier: {$param: energy_carrier}}   # carrier name -> LoadTypes in the loader
+            config: {maximal_thermal_power_in_watt: {$param: heater_power_in_watt}}
+            inputs: [HeaterController, Tank]
+      oil_burner:
+        when: [heating_oil]
+        components:
+          Burner:
+            class: hisim.components.generic_boiler.GenericBoiler
+            preset: oil
+            config: {maximal_thermal_power_in_watt: {$param: heater_power_in_watt}}
             inputs: [HeaterController, Tank]
 
 interface:
   needs:
     hot_water_demand: {into: [Tank], partner: [UtspLpgConnector]}
-    electricity: {carrier: electricity, outputs: [heater_electricity], required_when: {energy_carrier: [electricity]}}
-    fuel:        {carrier: {$param: energy_carrier}, outputs: [heater_fuel],
-                  required_when: {energy_carrier: [natural_gas, lpg, heating_oil]}}
+    electricity: {carrier: electricity, outputs: [Immersion.ElectricityInput], required_when: {energy_carrier: [electricity]}}
+    fuel_natural_gas: {carrier: natural_gas, outputs: [Burner.EnergyDemandDhw], required_when: {energy_carrier: [natural_gas]}}
+    fuel_lpg:    {carrier: lpg, outputs: [Burner.EnergyDemandDhw], required_when: {energy_carrier: [lpg]}}   # † carrier
+    fuel_heating_oil: {carrier: heating_oil, outputs: [Burner.EnergyDemandDhw], required_when: {energy_carrier: [heating_oil]}}
+                 # one fuel port per carrier (a carrier is literal in v1); EnergyDemandDhw's EnergyPort carries the
+                 # carrier (EnergyPort.carrier_of_fuel) and the provider's meter observes it
     apartments:  {fact: number_of_apartments, into: [Tank]}
     ems_modifier: {into: [HeaterController], partner: L2GenericEnergyManagementSystem,                    # † L1 input
                    optional: true, active_when: {energy_carrier: [electricity]}}
   provides:
-    heater_electricity: {output: Heater.ElectricityInput, controllable: {via: ems_modifier},              # † tagged
+    heater_electricity: {output: Immersion.ElectricityInput, controllable: {via: ems_modifier},           # † tagged
                          active_when: {energy_carrier: [electricity]}}                       # ELECTRIC_HEATING_DHW
-    heater_fuel:        {output: Heater.EnergyDemandDhw, active_when: {energy_carrier: [natural_gas, lpg, heating_oil]}}
-                        # its EnergyPort carries the carrier (EnergyPort.carrier_of_fuel); the provider's meter observes it
     solar_coil:         {circuit: solar_dhw, member: Tank, optional: true}                               # D20 (a)
 
 tests:
   # One day at 900 s beside the occupancy partner and the provider of the carrier. The heater is at most 10 kW (the
   # box), so per-step energies are at most 10 kW x 0.25 h; the tank's draws follow the occupancy's tapping.
-  # Both options name their heater `Heater`; the immersion heater's outputs beyond ElectricityInput, and every output
-  # of HeaterController, are unknown until those classes exist (†).
+  # The immersion heater's outputs beyond ElectricityInput, and every output of HeaterController, are unknown until
+  # those classes exist (†). Immersion's bounds hold in the electric option, Burner's in the fuel options.
   bounds:
     - {output: Tank.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}            # liquid water
     - {output: Tank.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}   # liquid water
@@ -110,17 +126,17 @@ tests:
     - {output: Tank.ThermalPowerConsumptionDHW, unit: WATT, min: 0, max: 60000}        # step-average tapping, below a shower peak
     - {output: Tank.ThermalPowerFromHeatGenerator, unit: WATT, min: -20000, max: 20000}   # 2x the largest heater
     - {output: Tank.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}   # zero without solar_coil
-    - {output: Heater.ElectricityInput, unit: WATT, min: 0, max: 12000}                # † immersion: its rating, at most 10 kW
-    - {output: Heater.TotalFuelConsumption, unit: WATT, min: 0, max: 15000}            # burner: input at most 10 kW / 0.7 efficiency
-    - {output: Heater.EnergyDemandSh, unit: WATT_HOUR, min: 0, max: 4000}              # burner, DHW only: zero; per-step band as below
-    - {output: Heater.ThermalOutputPowerSh, unit: WATT, min: 0, max: 12000}            # burner, DHW only: zero
-    - {output: Heater.ThermalOutputEnergySh, unit: WATT_HOUR, min: 0, max: 3000}       # burner, DHW only: zero
-    - {output: Heater.WaterOutputTemperatureSh, unit: CELSIUS, min: 0, max: 100}       # liquid water
-    - {output: Heater.WaterOutputTemperatureDhw, unit: CELSIUS, min: 0, max: 100}      # liquid water
-    - {output: Heater.EnergyDemandDhw, unit: WATT_HOUR, min: 0, max: 4000}             # per step: 15 kW fuel x 0.25 h, with margin
-    - {output: Heater.ThermalOutputPowerDhw, unit: WATT, min: 0, max: 12000}           # the box's 10 kW, with margin
-    - {output: Heater.ThermalOutputEnergyDhw, unit: WATT_HOUR, min: 0, max: 3000}      # per step: 12 kW x 0.25 h
-    - {output: Heater.CombustionHeatLoss, unit: WATT, min: 0, max: 5000}               # flue loss, a third of the input at most
+    - {output: Immersion.ElectricityInput, unit: WATT, min: 0, max: 12000}             # † its rating, at most 10 kW
+    - {output: Burner.TotalFuelConsumption, unit: WATT, min: 0, max: 15000}            # input at most 10 kW / 0.7 efficiency
+    - {output: Burner.EnergyDemandSh, unit: WATT_HOUR, min: 0, max: 4000}              # DHW only: zero; per-step band as below
+    - {output: Burner.ThermalOutputPowerSh, unit: WATT, min: 0, max: 12000}            # DHW only: zero
+    - {output: Burner.ThermalOutputEnergySh, unit: WATT_HOUR, min: 0, max: 3000}       # DHW only: zero
+    - {output: Burner.WaterOutputTemperatureSh, unit: CELSIUS, min: 0, max: 100}       # liquid water
+    - {output: Burner.WaterOutputTemperatureDhw, unit: CELSIUS, min: 0, max: 100}      # liquid water
+    - {output: Burner.EnergyDemandDhw, unit: WATT_HOUR, min: 0, max: 4000}             # per step: 15 kW fuel x 0.25 h, with margin
+    - {output: Burner.ThermalOutputPowerDhw, unit: WATT, min: 0, max: 12000}           # the box's 10 kW, with margin
+    - {output: Burner.ThermalOutputEnergyDhw, unit: WATT_HOUR, min: 0, max: 3000}      # per step: 12 kW x 0.25 h
+    - {output: Burner.CombustionHeatLoss, unit: WATT, min: 0, max: 5000}               # flue loss, a third of the input at most
   monotone:
     - {parameter: volume_in_liter, kpi: Standby heat loss of DHW storage, member: Tank, direction: increasing}
       # a larger tank has more surface

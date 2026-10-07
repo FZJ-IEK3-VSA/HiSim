@@ -1,4 +1,5 @@
-# Mockup (design, not loadable): energy_systems/assemblies/cooling/split_unit.assembly.yaml
+# Mockup (design): energy_systems/assemblies/cooling/split_unit.assembly.yaml, written in lean v1 syntax (spec §13.1) and
+# read by the lean reader and library check; † marks what HiSim does not have yet.
 # Request leaf house.air_conditioning (cardinality one) / measure air_conditioners. The components EXIST:
 # hisim.components.simple_air_conditioner.SimpleAirConditioner and its L1 SimpleAirConditionerController
 # (simple_air_conditioner.py:97, :595; twin energy_systems/simple_air_conditioner_household_building_sizer.*).
@@ -17,16 +18,13 @@ parameters:
   power_in_watt:
     {type: float, unit: WATT, default: 2000, range: {min: 1000, max: 7000},
      description: "Rated cooling power (SimpleAirConditionerConfig default; no sizing law)."}
-     # range: single-room split units, 1 to 7 kW cooling
-
-presets:
-  standard: {}
+     # range: single-room split units, 1 to 7 kW cooling. The lean stack declares WATT on nominal_cooling_power_w.
 
 components:
   AirConditioner:
     class: hisim.components.simple_air_conditioner.SimpleAirConditioner
     preset: standard
-    config: {nominal_cooling_power_w: {$param: power_in_watt}}     # suffix `_w` is not in the D16 table: gap G10
+    config: {nominal_cooling_power_w: {$param: power_in_watt}}
     inputs:
       - Controller                                         # ModulatingPowerSignal
       - {$port: zone}                                      # TemperatureIndoorAir
@@ -41,7 +39,7 @@ interface:
   needs:
     weather:     {into: [AirConditioner], partner: Weather}
     zone:        {into: [AirConditioner, Controller], partner: Building}                 # TemperatureIndoorAir
-    electricity: {carrier: electricity, outputs: [electricity_use]}
+    electricity: {carrier: electricity, outputs: [AirConditioner.ElectricalPowerConsumption]}
   provides:
     room_cooling:    {output: AirConditioner.ThermalPowerDelivered}
                      # the Building's default connections from SimpleAirConditioner fill ThermalPowerCooling (†, D19)
@@ -61,5 +59,5 @@ tests:
     - {parameter: power_in_watt, kpi: Thermal energy delivered - cooling, member: AirConditioner, direction: decreasing}
       # the KPI is negative: a larger unit removes at least as much heat on the same day
   expect:
-    - {preset: standard, kpi: Electrical energy consumption, member: AirConditioner, min: 0, max: 48}
-      # kWh in one day: at most 2 kW x 24 h at a COP of at least 1
+    - {kpi: Electrical energy consumption, member: AirConditioner, min: 0, max: 48}
+      # at the defaults; kWh in one day: at most 2 kW x 24 h at a COP of at least 1

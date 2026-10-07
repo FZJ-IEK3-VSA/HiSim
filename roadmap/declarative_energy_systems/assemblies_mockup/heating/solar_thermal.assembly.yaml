@@ -1,4 +1,5 @@
-# Mockup (design, not loadable): energy_systems/assemblies/heating/solar_thermal.assembly.yaml
+# Mockup (design): energy_systems/assemblies/heating/solar_thermal.assembly.yaml, written in lean v1 syntax (spec §13.1) and
+# read by the lean reader and library check; † marks what HiSim does not have yet.
 # Collectors with their L1 pump controller (SolarThermalSystem, SolarThermalSystemController exist,
 # solar_thermal_system.py:219, :939). Today the collector is coupled to ONE SimpleDHWStorage through default connections
 # (its inlet temperature from WaterTemperatureToHeatGenerator, the controller from WaterMeanTemperatureInStorage) and
@@ -15,28 +16,26 @@ parameters:
   supplies:
     {type: enum, values: [dhw_only, dhw_and_space_heating], default: dhw_only, description: Which stores the loop charges.}
   collector_type:
-    {type: enum, values: [flat_plate, evacuated_tube], default: flat_plate,
-     description: "Collector type; evacuated_tube is † (only preset_flat_plate exists)."}
+    {type: enum, values: [flat_plate], default: flat_plate,
+     description: "Collector type, the name of the collector's preset."}
+     # † evacuated_tube (request leaf collector_type) returns as a value with SolarThermalSystemConfig.preset_evacuated_tube
   area_in_m2:
     {type: float, unit: SQUARE_METER, default: 6, range: {min: 2, max: 20}, description: Aperture area.}
-     # range: one small collector (2 m²) up to a combi system for a large house (20 m²)
-  storage_volume_in_liter:
-    {type: float, unit: LITER, default: none, range: {min: 100, max: 1000},
-     description: "A dedicated solar store († not modelled; the coils charge the existing tanks)."}
-     # range: solar cylinders on the market, 100 l to a 1000 l combi store; feeds no field yet
-
-presets:
-  flat_plate_6m2: {}
+     # range: one small collector (2 m²) up to a combi system for a large house (20 m²). The lean stack declares
+     # SQUARE_METER on SolarThermalSystemConfig.area_m2.
+  # † storage_volume_in_liter (request leaf, a dedicated solar store) returns as a parameter when a solar store is
+  #   modelled; the coils charge the existing tanks today.
 
 components:
   Collector:
     class: hisim.components.solar_thermal_system.SolarThermalSystem
-    preset: flat_plate
-    config: {area_m2: {$param: area_in_m2}}                # suffix `_m2` without `_in_`: gap G10
+    preset: {$param: collector_type}
+    config: {area_m2: {$param: area_in_m2}}
     inputs:
       - {$port: weather}
       - Controller                                         # ControlSignal
       - {$port: dhw_coil}                                  # TemperatureCollectorInletDegC
+      - {$port: space_heating_coil}                                   # † the buffer's coil, through a valve assembly
   Controller:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
     preset: standard
@@ -48,9 +47,9 @@ interface:
   needs:
     weather:     {into: [Collector], partner: Weather}
     dhw_coil:    {circuit: solar_dhw, member: [Collector, Controller]}     # the collector owns pump and supply leg
-    sh_coil:     {circuit: solar_sh, member: [Collector], required_when: {supplies: [dhw_and_space_heating]},
+    space_heating_coil:     {circuit: solar_space_heating, member: [Collector], required_when: {supplies: [dhw_and_space_heating]},
                   active_when: {supplies: [dhw_and_space_heating]}}                      # † valve assembly
-    pump_electricity: {carrier: electricity, outputs: [pump_electricity_use]}
+    pump_electricity: {carrier: electricity, outputs: [Collector.ElectricityConsumptionOutput]}
   provides:
     pump_electricity_use: {output: Collector.ElectricityConsumptionOutput}
                   # tagged SOLAR_THERMAL_SYSTEM; the EMS ranks it (weight 4, dispatch {}) from its own declaration but
@@ -72,5 +71,5 @@ tests:
     - {parameter: area_in_m2, kpi: Total thermal energy delivered, member: Collector, direction: increasing}
       # more aperture collects more heat (non-decreasing once the cylinder is full)
   expect:
-    - {preset: flat_plate_6m2, kpi: Total thermal energy delivered, member: Collector, min: 0, max: 40}
-      # kWh in one day: 6 m² x at most 8 kWh/m² of daily irradiation x 0.8
+    - {kpi: Total thermal energy delivered, member: Collector, min: 0, max: 40}
+      # at the defaults; kWh in one day: 6 m² x at most 8 kWh/m² of daily irradiation x 0.8

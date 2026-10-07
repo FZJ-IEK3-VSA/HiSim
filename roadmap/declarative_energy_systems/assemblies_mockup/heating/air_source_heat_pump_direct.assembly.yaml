@@ -1,31 +1,29 @@
-# Mockup (design): energy_systems/assemblies/heating/air_source_heat_pump.assembly.yaml, written in lean v1 syntax
-# (spec §13.1) and read by the lean reader and library check; † marks what HiSim does not have yet. Every class, input
-# and output is checked against origin/main 0921f9bd.
+# Mockup (design): energy_systems/assemblies/heating/air_source_heat_pump_direct.assembly.yaml, written in lean v1
+# syntax (spec §13.1) and read by the lean reader and library check; † marks what HiSim does not have yet. Every
+# class, input and output is checked against origin/main 0921f9bd.
 #
-# The generator, its two L1 controllers and its buffer vessel (D12 b, D25: this is the assembly WITH the buffer; the
-# heat pump feeding the distribution directly is heating/air_source_heat_pump_direct). Control is hardcoded here (D21,
-# spec §2.5): ControllerSH switches the heat pump on the buffer temperature against the flow temperature the site's
-# HeatDistributionController asks for; ControllerDHW switches it on the cylinder temperature. The EMS reaches neither
-# device: it may only raise the two L1 set points through `ems_modifier` and `ems_modifier_dhw`.
+# The generator and its two L1 controllers WITHOUT a buffer vessel (D25): the heat pump feeds the site's distribution
+# directly, so it is the `space_heating` circuit end, owns the loop's pump and publishes MassFlowSpaceHeating. Its
+# sibling with the buffer inside is heating/air_source_heat_pump; there is no `with_buffer` parameter.
 #
-# `{$port: <port>}` inside `inputs` marks where the port's lowered items land (dry run gap G3): the bare partner name
-# (the member class's default connections from the partner's class, spec §3.2) or the explicit wires of the port, or
-# nothing when the port is inactive or declined. A member name that the selected internal variant does not contain is
-# dropped the same way (as group expansion drops items to disabled components).
+# † Who pumps the space-heating loop is today the enum position_hot_water_storage_in_system, set twice: on the heat
+# pump (NO_STORAGE, below) and on the SITE's HeatDistribution (NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR, which grows
+# its WaterMassFlowInput, heat_distribution_system.py:230-243). An import never patches a site field, so this
+# assembly cannot run beside the site's PARALLEL HeatDistribution yet: from hydronic stage D the HDS derives its
+# position from what the other end of its circuit publishes (D25), and the enum goes. Until then this file is design.
+# † With NO_STORAGE the heat pump also needs SetHeatingTemperatureSH (more_advanced_heat_pump_hplib.py:932-948), and
+# ControllerSH has no buffer temperature to read; neither class declares default connections from
+# HeatDistributionController / HeatDistribution for these inputs yet.
 #
-# Evaluation order (revised D26): an import's members stay one block, in the order their lines stand in this file.
-# The variant is written before `components:` so the members expand as ControllerDHW, ControllerSH, HeatPump, Buffer:
-# against the twin's ControllerSH, ControllerDHW, HeatPump, Buffer that exchanges two L1 controllers that read
-# nothing from each other, a neutral swap in D9's sense. The importer positions the whole block with a flat `order:`.
+# Evaluation order (revised D26): the members expand in the order their lines stand in this file, ControllerDHW,
+# ControllerSH, HeatPump; the importer positions the block with a flat `order:`.
 #
-# † `control: traditional | smart` (request leaf temperature_control.type_of_system) returns as an enum parameter
-# selecting ControllerSH's preset (`preset: {$param: control}`) when MoreAdvancedHeatPumpHPLibControllerSpaceHeating
-# has a preset_smart; until then it is not declared (every parameter does something, spec §2.6).
+# † `control: traditional | smart` returns as in heating/air_source_heat_pump, with ControllerSH's preset_smart.
 
 schema_version: 4
 kind: assembly
-name: heating/air_source_heat_pump
-description: Air-to-water heat pump (hplib) with a parallel space-heating buffer, space heating and optionally DHW.
+name: heating/air_source_heat_pump_direct
+description: Air-to-water heat pump (hplib) feeding the space-heating distribution directly, and optionally DHW.
 
 parameters:
   thermal_power_in_watt:
@@ -41,10 +39,6 @@ parameters:
     {type: float, unit: ANY, default: none, range: {min: 2.0, max: 4.5},
      description: Datasheet SCOP at W55 (EN 14825); none leaves hplib's generic fit.}
      # unit ANY, as scop_en14825_w35. Range: W55 SCOPs, about 2.5 to 4, with margin; the box does not tie it below W35
-  buffer_volume_in_liter:
-    {type: float, unit: LITER, default: AUTO, range: {min: 50, max: 1000},
-     description: Buffer volume; AUTO is 50 l per kW of the heat pump.}
-     # range: 50 l/kW over the thermal power range (100 to 1000 l), down to a 50 l separator
   serves_dhw:
     {type: bool, default: true, description: Whether the heat pump also charges a DHW cylinder through `dhw`.}
   # `default: none` and `default: AUTO` on a parameter that feeds a field the member's preset already leaves at that
@@ -75,7 +69,8 @@ components:
       - {$port: weather}                                    # bare Weather: DailyAverageOutsideTemperature
       - {$port: flow_temperature}                           # bare HDS controller: HeatingFlowTemperatureFromHeatDistributionSystem
       - {$port: ems_modifier}                               # bare EMS: SimpleHotWaterStorageTemperatureModifier :2701
-      - Buffer                                              # WaterTemperatureInput <- WaterTemperatureToHeatGenerator
+      # † WaterTemperatureInput: the buffer's temperature in the sibling; here the distribution's return, which the
+      #   class reads from no partner yet (see above)
   HeatPump:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
     preset: air_water
@@ -84,22 +79,14 @@ components:
       set_thermal_output_power_in_watt: {$param: thermal_power_in_watt}
       standardized_scop_en14825_w35: {$param: scop_en14825_w35}
       standardized_scop_en14825_w55: {$param: scop_en14825_w55}
+      position_hot_water_storage_in_system: NO_STORAGE      # the machine pumps the loop († the site's HDS, see above)
     inputs:
       - ControllerDHW                                       # OnOffSwitchDHW, ThermalPowerIsConstantForDHW, MaxThermalPowerValueForDHW
       - ControllerSH                                        # OnOffSwitchSH
       - {$port: dhw}                                        # TemperatureInputSecondaryDHW (the cylinder's return leg)
-      - Buffer                                              # TemperatureInputSecondarySH
+      - {$port: space_heating}                              # TemperatureInputSecondarySH <- the distribution's return
+      - {$port: flow_temperature}                           # † SetHeatingTemperatureSH <- the HDS controller
       - {$port: ambient}                                    # explicit wires, the last resort (spec §3.2): see the port
-  Buffer:
-    class: hisim.components.simple_water_storage.SimpleHotWaterStorage
-    preset: buffer
-    config:
-      sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP                       # 50 l/kW, simple_water_storage.py:150
-      volume_heating_water_storage_in_liter: {$param: buffer_volume_in_liter}
-    inputs:
-      - {$port: space_heating}                                         # WaterTemperatureFromHeatDistribution, WaterMassFlowRate...
-      - HeatPump                                                       # TemperatureOutputSH, MassFlowOutputSH
-      - {$port: solar_coil}                                            # ...FromSecondaryHeatGenerator, when a collector binds it
 
 interface:
   needs:
@@ -108,7 +95,7 @@ interface:
                        wires: {TemperatureAmbient: DailyAverageOutsideTemperatures,
                                TemperatureInputPrimary: DailyAverageOutsideTemperatures}}
                       # the class's default connections from Weather are not these two; fix the class, not the file
-    flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (gap G1)
+    flow_temperature: {into: [ControllerSH, HeatPump], partner: HeatDistributionController}   # a set-point need (gap G1)
     electricity:      {carrier: electricity, outputs: [HeatPump.ElectricalInputPowerSH]}
     electricity_for_dhw:
                       {carrier: electricity, outputs: [HeatPump.ElectricalInputPowerDHW],
@@ -129,8 +116,9 @@ interface:
     emitter_type:     {fact: heat_distribution_system_type, into: [ControllerSH]}
     heating_threshold: {fact: set_heating_threshold_outside_temperature_in_celsius, into: [ControllerSH]}
   provides:
-    space_heating:    {circuit: space_heating, member: Buffer}
-                      # the naming convention gives the site's HDS pump and return leg, the buffer the supply leg
+    space_heating:    {circuit: space_heating, member: HeatPump}
+                      # the heat pump owns the pump and the supply leg, the site's HDS the return leg (naming
+                      # convention); † the HDS's position follows this circuit from hydronic stage D (D25)
     dhw:              {circuit: dhw, member: HeatPump, required_when: {serves_dhw: [true]}}
                       # an active dhw circuit must be bound by one importer
     electricity_space_heating:   {output: HeatPump.ElectricalInputPowerSH, controllable: {via: ems_modifier}}   # HEAT_PUMP_BUILDING
@@ -140,13 +128,12 @@ interface:
     # also carry electricity EnergyPorts (:971-994) and are fed to no meter and no EMS in the twin: zero for an
     # air-source machine that never cools. A ground-source assembly provides the brine pump as a third output.
     thermal_power:    {fact: maximal_thermal_power_in_watt, member: HeatPump}
-                      # read by Buffer (its volume law); a reader outside this assembly with a second provider writes
-                      # its own sizing_sources line (fact exports are not in v1, D26)
-    solar_coil:       {circuit: solar_space_heating, member: Buffer, optional: true}
-                      # SimpleHotWaterStorage.WaterTemperature/MassFlowRateFromSecondaryHeatGenerator (D20 a)
+                      # a reader outside this assembly with a second provider writes its own sizing_sources line
+                      # (fact exports are not in v1, D26)
+    # No solar_space_heating coil: without a vessel there is nothing for a collector to charge on the space-heating side.
 
 tests:
-  # One day at 900 s. Powers are bounded by the largest machine of the box (20 kW rated; hplib's output at a mild
+  # One day at 900 s, beside a test partner at the other end of the space_heating circuit. Powers are bounded by the largest machine of the box (20 kW rated; hplib's output at a mild
   # ambient exceeds the rating, so 2x), per-step energies by power x 0.25 h, the day's cumulative ones by power x 24 h.
   # Water temperatures stay between freezing and boiling, flow temperatures below hplib's 75 °C limit plus margin.
   # ControllerSH and ControllerDHW have no energy-carrying or temperature output (State_SH, StateDHW, ... are ANY).
@@ -156,7 +143,7 @@ tests:
     - {output: HeatPump.ElectricalInputPowerSH, unit: WATT, min: 0, max: 20000}               # 40 kW at a COP >= 2
     - {output: HeatPump.ElectricalInputPowerForCooling, unit: WATT, min: 0, max: 20000}       # zero for this heating-only machine
     - {output: HeatPump.ElectricalInputPowerBrinePump, unit: WATT, min: 0, max: 1000}         # zero for an air source
-    - {output: HeatPump.TemperatureInputSH, unit: CELSIUS, min: 0, max: 90}                   # return from the buffer
+    - {output: HeatPump.TemperatureInputSH, unit: CELSIUS, min: 0, max: 90}                   # return from the distribution
     - {output: HeatPump.TemperatureOutputSH, unit: CELSIUS, min: 0, max: 90}                  # flow, below hplib's limit + margin
     - {output: HeatPump.ThermalPowerInputFromEnvironment, unit: WATT, min: 0, max: 40000}     # ambient heat, below the output
     - {output: HeatPump.ThermalPowerDeliveredForSpaceHeating, unit: WATT, min: 0, max: 40000} # as ThermalOutputPowerSH
@@ -180,24 +167,9 @@ tests:
     - {output: HeatPump.ElectricalEnergyDHW, unit: WATT_HOUR, min: 0, max: 5000}              # per step
     - {output: HeatPump.CumulativeThermalEnergyDHW, unit: WATT_HOUR, min: 0, max: 1000000}    # one day
     - {output: HeatPump.CumulativeElectricalEnergyDHW, unit: WATT_HOUR, min: 0, max: 500000}  # one day
-    - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}    # liquid water
-    - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}       # liquid water
-    - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}   # liquid water
-    - {output: Buffer.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}         # liquid water
-    - {output: Buffer.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 150000}           # 1000 l at 100 °C over 0 °C is 116 kWh
-    - {output: Buffer.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}    # per step, either direction
-    - {output: Buffer.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}   # zero without solar_coil
-    - {output: Buffer.ThermalEnergyFromHeatDistribution, unit: WATT_HOUR, min: -10000, max: 10000}   # per step, either direction
-    - {output: Buffer.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -20000, max: 20000}   # per step: in minus out
-    - {output: Buffer.StandbyHeatLoss, unit: WATT, min: 0, max: 500}                          # a 1000 l tank loses about 100-200 W
-    - {output: Buffer.ThermalPowerConsumptionHeatDistribution, unit: WATT, min: -40000, max: 40000}   # the house's draw; sign unchecked
-    - {output: Buffer.ThermalPowerFromHeatGenerator, unit: WATT, min: -40000, max: 40000}     # either direction, the HP's rating
-    - {output: Buffer.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -40000, max: 40000}   # zero without solar_coil
   monotone:
     - {parameter: scop_en14825_w35, kpi: Total electrical input energy of SH heat pump, member: HeatPump,
        direction: decreasing}                                # a better datasheet SCOP draws less electricity for the same heat
-    - {parameter: buffer_volume_in_liter, kpi: Standby heat loss of Hot water storage, member: Buffer,
-       direction: increasing}                                # a larger vessel has more surface
   expect:
     - {kpi: Seasonal performance factor of SH heat pump, member: HeatPump, min: 1.5, max: 7}
       # at the defaults; one test day, not a season: any plausible daily COP of an air-to-water unit (spec §9.4's

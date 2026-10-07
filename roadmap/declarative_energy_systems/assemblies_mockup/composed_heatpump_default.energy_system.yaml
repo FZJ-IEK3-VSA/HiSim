@@ -1,7 +1,8 @@
-# Mockup (design, not loadable): the composed base file for the heat-pump generator with DEFAULTS — the site with the
-# twin's site values (D9: Aachen weather, the German single-family-home preset, couple_both_at_work) plus the imports
-# that should reproduce energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml, option
-# `ems_with_battery`. Expanded by hand in dry_run_heatpump_twin.md into expanded_heatpump_default.energy_system.yaml.
+# Mockup (design): the composed base file for the heat-pump generator with DEFAULTS — the site with the twin's site
+# values (D9: Aachen weather, the German single-family-home preset, couple_both_at_work) plus the imports that should
+# reproduce energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml, option `ems_with_battery`.
+# Written in lean v1 syntax (spec §13.1); the lean expansion writes the flat file, and dry_run_heatpump_twin.md
+# compares it with the twin by hand.
 #
 # Site component names are the twin's, so the rename map touches only imported members. A site entry carries a
 # `ports:` block only where an import binds to it; `{$port: <port>}` in its `inputs` marks where the bound port's wires
@@ -9,10 +10,12 @@
 # Building, the HDS controller, sizing facts) it finds by class: its members' default connections and the facts the
 # site classes contribute.
 #
-# `order:` (spec §2.3, D23) is the evaluation order within a time step, independent of file position. The numbers
-# reproduce the twin's sequence: Building 1, UTSPConnector 2, Weather 3, pv 4, HeatDistributionController 5, heating 6
-# (members 6.1-6.4 in the assembly's order), dhw 9, HeatDistributionSystem 11, grid 12, battery 13, control 14. The
-# one exchange against the twin, the buffer (6.4) before the DHW cylinder (9), is a neutral swap (dry run §9.1).
+# `order:` (spec §2.3, revised D26) is the evaluation order within a time step, independent of file position: a flat
+# integer on site entries and imports, sorted ascending; an import's members stay one block in their assembly's line
+# order. The numbers reproduce the twin's sequence: Building 1, UTSPConnector 2, Weather 3, pv 4,
+# HeatDistributionController 5, heating 6 (ControllerDHW, ControllerSH, HeatPump, Buffer), dhw 9,
+# HeatDistributionSystem 11, grid 12, battery 13, control 14. The two exchanges against the twin, ControllerDHW before
+# ControllerSH and the buffer before the DHW cylinder, are neutral swaps (dry run §9.1).
 
 schema_version: 4
 name: household_heatpump_building_sizer
@@ -32,8 +35,8 @@ components:
       - {$port: temperature_modifier}
       - UTSPConnector
       - HeatDistributionSystem
-    optional-bind: {temperature_modifier: control}  # G13 resolved: binds if a `control` import exists, else
-                                                    # inert ("not bound: partner absent"); one site, EMS or not
+    optional-bind: {temperature_modifier: control}  # G13 resolved: binds the `control` import this file declares;
+                                                    # a house without an EMS omits the import and this line (§3.1)
     ports:
       temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
   UTSPConnector:
@@ -77,12 +80,13 @@ components:
 
 imports:
   heating:
-    order: 6                                        # the assembly as a whole; its members are 6.1-6.4
-    assembly: heating/air_source_heat_pump          # parameter defaults = the twin (preset de_twin)
-    optional-bind: {ems_modifier: control}          # optional port: intent required (D8 i); a heat pump without
-                                                    # an EMS is a normal house, so inert when `control` is absent;
-                                                    # space_heating, flow_temperature, weather, dhw_temperature (the one
-                                                    # SimpleDHWStorage, dhw's cylinder) bind their one partner;
+    order: 6                                        # the assembly as a whole: its members are one block
+    assembly: heating/air_source_heat_pump          # parameter defaults = the twin (D9)
+    optional-bind: {ems_modifier: control, ems_modifier_dhw: control}
+                                                    # optional ports: intent required (D8 i), naming the `control`
+                                                    # import this file declares (§3.1);
+                                                    # space_heating, flow_temperature, weather, ambient, dhw_temperature
+                                                    # (the one SimpleDHWStorage, dhw's cylinder) bind their one partner;
                                                     # electricity: only the check that one grid connection exists
   dhw:
     order: 9
@@ -106,5 +110,5 @@ imports:
                                                     # meter. Without this line the default (every electricity output
                                                     # the meter declares) would also match the outputs the EMS
                                                     # observes: a load error (double count).
-                                                    # metered_directly: drop `control`, `battery` and this line;
-                                                    # no site or `heating` line changes (spec §4.3).
+                                                    # metered_directly: drop `control`, `battery`, this line and
+                                                    # the optional-bind lines naming `control` (spec §3.1, §4.3).

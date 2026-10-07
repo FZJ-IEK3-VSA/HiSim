@@ -1,4 +1,5 @@
-# Mockup (design, not loadable): energy_systems/assemblies/dhw/indirect_cylinder.assembly.yaml
+# Mockup (design): energy_systems/assemblies/dhw/indirect_cylinder.assembly.yaml, written in lean v1 syntax (spec §13.1) and
+# read by the lean reader and library check; † marks what HiSim does not have yet.
 # Request type `from_space_heating_cylinder` (spec §10.3): a cylinder charged through a coil by the space-heating
 # generator. This is the DHW shape of every heat-pump and boiler twin today: SimpleDHWStorage fed by the generator's
 # DHW outputs and drained by the occupancy (household_heatpump_building_sizer.grouped.energy_system.yaml:75-80).
@@ -18,18 +19,15 @@ parameters:
     {type: float, unit: LITER, default: AUTO, range: {min: 100, max: 1000},
      description: Usable volume; AUTO is the class law per apartment.}
      # range: a flat's 100 l cylinder up to a multi-apartment 1000 l one (the law gives 250 l per apartment)
-  tank_and_pipe_insulated:
-    {type: bool, default: true, description: "Insulation of tank and pipes († no field yet: standby loss is fixed)."}
-
-presets:
-  de_twin: {}
+  # † tank_and_pipe_insulated (request leaf) returns as a parameter when SimpleDHWStorage has a field for the
+  #   insulation it changes; the standby loss is fixed today.
 
 components:
   DHWStorage:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard                                       # volume AUTO: VOLUME_LAW, number_of_apartments
     config:
-      volume_heating_water_storage_in_liter: {$param: volume_in_liter}
+      volume_heating_water_storage_in_liter: {$param: volume_in_liter}   # the lean stack declares LITER here
     inputs:
       - {$port: hot_water_demand}                          # bare UTSPConnector: WaterConsumption
       - {$port: circuit}                                   # bare generator: WaterTemperatureFromHeatGenerator, WaterMassFlowRateFromHeatGenerator

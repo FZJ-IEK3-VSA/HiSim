@@ -46,7 +46,7 @@ serializes a structured address (`pv-east-PVSystem`, assemblies spec §2.4), and
 | `member` | the name inside its assembly, or the plain component name | `Building` | `PVSystem` |
 | `assembly` | library path of the innermost owning assembly; informative, not identity | `null` | `pv/array` |
 | `name` | runtime name = serialized address `<import>[-<instance>]-…-<member>` | `Building` | `pv-east-PVSystem` |
-| `display_name` | English default label from assembly metadata (the assembly's `name:`, an optional per-member `display:` template with parameters); `DisplayConfig` for site components; never an identifier | `Building` | `PV array, east` |
+| `display_name` | English default label (assemblies spec §2.4, decided, owner, 2026-10-04): the member's `display:` template rendered over the import's resolved parameters, else the component's `DisplayConfig.pretty_name`, else the member name; the assembly's name is not prepended (it is the separate field `assembly`); site components use their `DisplayConfig`; never an identifier | `Building` | `PV array, east` |
 | `label` | the request's own name for the system, verbatim (optional, `pv_systems[].label`); wins over `display_name` in the frontend | null | `Garage roof panels` |
 
 HiSim ships no translations (owner, 2026-10-03): `display_name` is the English fallback, `label` is passed through
@@ -128,7 +128,9 @@ address plus value and unit, keyed by the dotted address for readable diffs and 
   history walker (`scripts/golden_history.py`), reads both forms: a new-form series is identified by its
   structured fields, so a later change of the serialized source name is one series without a rename-table
   entry; an old-form series is stitched to a new one where the old key equals the new leaf's dotted key or its
-  bare `building.tag.name`. That comparison reads historical data and is the one place a string is compared.
+  bare `building.tag.name`. An old-form series that matches neither stays a series of its own, keyed by its dotted
+  key: it ends with the last old-form file, and the new leaf starts a new series. That comparison reads historical
+  data and is the one place a string is compared.
 
 ## Finder
 

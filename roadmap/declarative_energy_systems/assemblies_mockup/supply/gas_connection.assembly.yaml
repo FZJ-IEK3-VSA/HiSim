@@ -1,4 +1,5 @@
-# Mockup (design, not loadable): energy_systems/assemblies/supply/gas_connection.assembly.yaml
+# Mockup (design): energy_systems/assemblies/supply/gas_connection.assembly.yaml, written in lean v1 syntax (spec §13.1) and
+# read by the lean reader and library check; † marks what HiSim does not have yet.
 # The natural-gas connection and its meter (spec §5.1). The provision names its carrier and its meter,
 # `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`; every bound consumer's fuel need lowers to the
 # aggregator feeds GasMeter's class declares for the consuming outputs (default feeds from GenericBoiler.EnergyDemandSh
@@ -15,9 +16,6 @@ description: Natural-gas grid connection with its meter.
 
 parameters: {}                                             # a bare connection has no numeric parameter
 
-presets:
-  de_twin: {}
-
 components:
   GasMeter:
     class: hisim.components.gas_meter.GasMeter
@@ -25,7 +23,7 @@ components:
     config:
       gas_loadtype: GAS                                    # pinned, not sized from the energy_carrier fact
     inputs:
-      - {$port: connection}                                # one feed per bound consumer (EnergyDemandSh, EnergyDemandDhw, †cooker)
+      - {$port: connection}                                # one feed per bound consumer (EnergyDemandSh, EnergyDemandDhw, † cooker)
 
 interface:
   provides:

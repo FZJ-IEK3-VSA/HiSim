@@ -1,4 +1,5 @@
-# Mockup (design, not loadable): energy_systems/assemblies/ventilation/mechanical_with_heat_recovery.assembly.yaml
+# Mockup (design): energy_systems/assemblies/ventilation/mechanical_with_heat_recovery.assembly.yaml, written in lean v1 syntax (spec §13.1) and
+# read by the lean reader and library check; † marks what HiSim does not have yet.
 # † No ventilation component; the Building computes its ventilation loss from a fixed air-change rate. Request leaf
 # ventilation.type_of_system (cardinality one; natural ventilation and trickle vents stay site config of the Building).
 # D19: the Building gains ONE named input of this kind (†, `VentilationHeatRecovered`, W, the heat the unit returns
@@ -16,13 +17,10 @@ parameters:
   air_flow_in_m3_per_hour:
     {type: float, default: AUTO, range: {min: 50, max: 500},
      description: "Nominal air flow; AUTO is 0.5 air changes per hour of the zone volume († law)."}
-     # range: a flat (50 m³/h) up to a large house (500 m³/h); no unit: † lt.Units has no m³/h member, added with the class
-  specific_fan_power_in_watt_per_m3_per_hour:
-    {type: float, default: 0.35, range: {min: 0.15, max: 0.8}, description: Fan electricity per unit air flow.}
-     # range: W per m³/h of residential units, about 0.2 to 0.6; no unit († as the air flow); feeds no field
-
-presets:
-  standard: {}
+     # range: a flat (50 m³/h) up to a large house (500 m³/h); no unit: † lt.Units has no m³/h member, added with the
+     # class, so the library check refuses the numeric parameter without one until then
+  # † specific_fan_power_in_watt_per_m3_per_hour (fan electricity per unit air flow) returns as a parameter when the
+  #   ventilation class has the field it feeds; no field reads it in this design.
 
 components:
   Ventilation:
@@ -39,7 +37,7 @@ interface:
   needs:
     weather:     {into: [Ventilation], partner: Weather}
     zone:        {into: [Ventilation], partner: Building}                                # TemperatureIndoorAir
-    electricity: {carrier: electricity, outputs: [electricity_use]}
+    electricity: {carrier: electricity, outputs: [Ventilation.ElectricalPowerConsumption]}
     volume:      {fact: conditioned_floor_area_in_m2, into: [Ventilation]}
   provides:
     air_exchange:    {output: Ventilation.HeatRecovered}   # Building's default connections fill VentilationHeatRecovered (†)

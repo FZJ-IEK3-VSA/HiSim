@@ -1,5 +1,16 @@
-# Mockup (design, not loadable): energy_systems/assemblies/pv/array.assembly.yaml
+# Mockup (design): energy_systems/assemblies/pv/array.assembly.yaml, written in lean v1 syntax (spec §13.1) and read
+# by the lean reader and library check; † marks what HiSim does not have yet.
 # One PV array; a house with several arrays imports it with one instance per request system id (spec §10.4, #83).
+#
+# The array's size is stated one way: a peak power or a share of its mounting surface (spec §10.4), exactly one of
+# them. `power_in_watt: AUTO` counts as unstated (spec §2.6), so the default is the twin's array, the whole of the
+# roof's PV potential (share 1.0); an importer stating a power writes `share_of_maximum_pv_potential: none` beside it.
+# The share mirrors the component field, a fraction: units are never converted, so the RenoVisor translator divides the
+# request's size_in_percent by 100, as hisim/renovisor/translate.py:2036-2037 does today.
+#
+# † Shading losses (request leaf) return as a parameter when PVSystemConfig has a field for them; PVSystem has no
+# shading today. The array's location is the site's (its Weather, through the `weather` need and the weather_identity
+# fact); PVSystemConfig.location is documentation only (pv_system.py:85) and stays at the preset's value.
 
 schema_version: 4
 kind: assembly
@@ -13,56 +24,49 @@ parameters:
   azimuth_in_degree:
     {type: float, unit: DEGREES, default: 180, range: {min: 0, max: 360},
      description: "Orientation, 180 is south; a facade array defaults to its facade's azimuth."}
-     # range: the full circle; feeds PVSystemConfig.azimuth, which declares DEGREES (G10 closed for this field)
+     # range: the full circle. The lean stack declares DEGREES on PVSystemConfig.azimuth.
   tilt_in_degree:
     {type: float, unit: DEGREES, default: 30, range: {min: 0, max: 90},
      description: "Tilt from horizontal; 90 for a facade array."}
-     # range: flat roof to facade
+     # range: flat roof to facade. The lean stack declares DEGREES on PVSystemConfig.tilt.
   power_in_watt:
     {type: float, unit: WATT, default: AUTO, range: {min: 500, max: 30000},
-     description: Peak power; AUTO is the roof share times the module density.}
-     # range: a balcony module (0.5 kWp) up to a large single-family roof (30 kWp)
-  share_of_surface:                                        # † unit ANY: the field declares ANY; a dimensionless unit is to be declared
-    {type: float, unit: ANY, default: 1.0, range: {min: 0.05, max: 1.0},
-     description: "Share of the usable mounting surface (0, 1]; the request's percent is divided by 100 by the translator, never here (D16)."}
-     # range: (0, 1], from a 5 % strip so the share is never zero
-  shading_losses_in_percent:
-    {type: float, unit: PERCENT, default: 0, range: {min: 0, max: 50},
-     description: "Shading losses († no field: PVSystem has no shading)."}
-     # range: unshaded up to a half-shaded roof; feeds no field yet
-  location:
-    {type: string, default: AACHEN, description: "PVSystemConfig.location, documentation only today (pv_system.py:85); a site value repeated here (gap G11). Default = the twin's value (D9)."}
+     description: Peak power; AUTO is the surface share times the module density.}
+     # range: a balcony module (0.5 kWp) up to a large single-family roof (30 kWp). The lean stack declares WATT on
+     # PVSystemConfig.power_in_watt.
+  share_of_maximum_pv_potential:
+    {type: float, unit: ANY, default: 1.0, range: {min: 0, max: 1},
+     description: "Fraction (0..1) of the roof's PV potential the array covers, the alternative to the power; the RenoVisor translator converts the request's size_in_percent by dividing by 100."}
+     # unit ANY: the lean stack declares ANY on PVSystemConfig.share_of_maximum_pv_potential (a fraction)
 
 constraints:
-  - {at_most_one_of: [power_in_watt, share_of_surface]}   # a stated power is never capped; a share is (§10.4)
-
-presets:
-  de_twin: {}                                              # the defaults are the twin's values (D9)
+  - {exactly_one_of: [power_in_watt, share_of_maximum_pv_potential]}   # a stated power is never capped; a share is (§10.4)
 
 components:
   PVSystem:
     class: hisim.components.generic_pv_system.PVSystem
-    preset: rooftop                                        # power AUTO: ROOFTOP_POWER_LAW over roof_area_in_m2
-    display: "PV array, {mounted_on}, azimuth {azimuth_in_degree}°"   # English display_name default (spec §2.4)
+    preset: rooftop                                        # power AUTO: ROOFTOP_POWER_LAW over the surface area
+    display: "PV array, {mounted_on}, azimuth {azimuth_in_degree:g}°"   # English display_name default (spec §2.4)
     config:
-      location: {$param: location}
       azimuth: {$param: azimuth_in_degree}
       tilt: {$param: tilt_in_degree}
       power_in_watt: {$param: power_in_watt}
-      share_of_maximum_pv_potential: {$param: share_of_surface}   # † the law reads roof_area_in_m2 only; a facade array needs the facade area fact (below)
+      share_of_maximum_pv_potential: {$param: share_of_maximum_pv_potential}
     inputs:
       - {$port: weather}                                   # bare Weather: PVSystem's default connections from Weather
 
 interface:
   needs:
-    weather:     {into: [PVSystem], partner: Weather}
-    surface_area: {fact: {$switch: mounted_on, roof: roof_area_in_m2, facade: facade_area_in_m2}, into: [PVSystem]}
-                  # † facade_area_in_m2 is not a sizing contribution of the Building yet; the fact name follows mounted_on
-    weather_id:  {fact: weather_identity, into: [PVSystem]}
+    weather:      {into: [PVSystem], partner: Weather}
+    roof_area:    {fact: roof_area_in_m2, into: [PVSystem], active_when: {mounted_on: [roof]}}
+    facade_area:  {fact: facade_area_in_m2, into: [PVSystem], active_when: {mounted_on: [facade]}}
+                  # † facade_area_in_m2 is not a sizing contribution of the Building yet, and the power law reads
+                  #   roof_area_in_m2 only; the fact a mounted_on value reads is a port per surface (no $switch, D26)
+    weather_id:   {fact: weather_identity, into: [PVSystem]}
   provides:
-    production:  {output: PVSystem.ElectricityOutput}
-                 # observed by its tags, never linked (spec §4.3): each observer's feed is ELECTRICITY_PRODUCTION at 999
-    peak_power:  {fact: pv_peak_power_in_watt, member: PVSystem}   # config.py:181-186; read by batteries
+    production:   {output: PVSystem.ElectricityOutput}
+                  # observed by its tags, never linked (spec §4.3): each observer's feed is ELECTRICITY_PRODUCTION at 999
+    peak_power:   {fact: pv_peak_power_in_watt, member: PVSystem}   # config.py:181-186; read by batteries
 
 tests:
   # One day at 900 s on the test weather. A module's output stays below its peak power except under rare
@@ -71,5 +75,6 @@ tests:
     - {output: PVSystem.ElectricityOutput, unit: WATT, min: 0, max: 33000}             # 1.1 x 30 kWp
     - {output: PVSystem.ElectricityEnergyOutput, unit: WATT_HOUR, min: 0, max: 8250}   # per step: 33 kW x 0.25 h
   monotone:
-    - {parameter: power_in_watt, kpi: PV production, member: PVSystem, direction: increasing}
-      # more peak power, more yield on the same weather
+    - {parameter: power_in_watt, kpi: PV production, direction: increasing}
+      # more peak power, more yield on the same weather. PV production is a derived KPI today (no member: resolved by
+      # name in the isolation system's one building, spec §9.4) until it moves into PVSystem (§10.4)

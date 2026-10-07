@@ -7,7 +7,7 @@ carries exactly that information, spread across the entries that read the facts,
 module's first job is a plain translation: it collects the ``sizing_sources`` blocks into the
 one mapping the kernel expects, inventing nothing and reordering nothing.
 
-Its second job is the return direction. The kernel distinguishes eight failure modes and
+Its second job is the return direction. The kernel distinguishes its failure modes and
 spells the difference between them only in prose, which is right for a Python setup where the
 message is read by whoever wrote the setup, but too coarse for a file: a caller wants to know
 which condition it hit without parsing English, and an author wants to be told which line of
@@ -39,17 +39,17 @@ KernelSourceValue = Union[str, List[str]]
 
 @enum.unique
 class KernelFailure(enum.Enum):
-    """The eight failure modes of the sizing kernel, recognized by their message.
+    """The failure modes of the sizing kernel, recognized by their message.
 
     The kernel raises one exception type for every binding problem and distinguishes the cases
     only in prose, which is right for a Python setup — the message *is* the diagnosis — but too
-    coarse for a file, where a caller wants to know which of the eight it hit without reading
+    coarse for a file, where a caller wants to know which one it hit without reading
     English. Each member pairs the catalogue identifier of the wrapped condition with the
     fragments of the kernel's own message that identify it uniquely.
 
     Recognition is by substring rather than by a code the kernel carries, so the members are
     ordered from the most specific message to the least and matched in that order; the tests
-    provoke all eight through the real kernel, which is what keeps this table honest when a
+    provoke all of them through the real kernel, which is what keeps this table honest when a
     kernel message is reworded.
     """
 
@@ -61,7 +61,7 @@ class KernelFailure(enum.Enum):
     SHAPE_MISMATCH = (EnergySystemErrorId.SIZING_SHAPE_MISMATCH, ("reference(s) of the form",))
     FIELD_CYCLE = (EnergySystemErrorId.SIZING_FIELD_CYCLE, ("via Self",))
     AMBIGUOUS = (EnergySystemErrorId.SIZING_AMBIGUOUS, ("is provided by", "sources="))
-    AMBIGUOUS_MANY = (EnergySystemErrorId.SIZING_AMBIGUOUS, ("is read many-fold by",))
+    MANY_READ = (EnergySystemErrorId.SIZING_MANY_READ, ("is read many-fold by",))
 
     def __init__(self, error_id: EnergySystemErrorId, markers: Tuple[str, ...]) -> None:
         """Stores the identifier and the message fragments of one failure mode.
@@ -96,7 +96,7 @@ class _ConsumerPhrasing(enum.Enum):
     """The ways a sizing-kernel message names the configuration that could not be sized.
 
     The kernel writes for a human reading a traceback, so the consumer appears in prose rather
-    than in a field, and it appears differently depending on which of the eight conditions was
+    than in a field, and it appears differently depending on which condition was
     hit. Collecting the phrasings in one ordered table is what lets the wrapper point an author
     at the right entry of the file instead of at whichever component the message mentions first.
     """
@@ -199,12 +199,6 @@ def resolve_sizing(
     engine = SizingFactEngine(seed=None, sources=sources)
     try:
         resolved = engine.resolve_all(list(configs))
-    except NotImplementedError as error:
-        raise EnergySystemSizingError(
-            EnergySystemErrorId.SIZING_MANY_UNSUPPORTED,
-            "components",
-            f"the sizing kernel cannot evaluate a many-cardinality read yet: {error}",
-        ) from error
     except SizingError as error:
         message = str(error)
         raise EnergySystemSizingError(

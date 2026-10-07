@@ -45,8 +45,9 @@ class FactLookupRecord:
     Recorded only when the consumer actually resolves (speculative sweeps that still
     miss facts are not lookups, they are waiting). ``candidates`` names every config in
     the resolved set that declares the fact, sorted, before the mode picked one of them —
-    with more than one entry the mode is necessarily ``EXPLICIT``, which is what makes a
-    finished run show *why* a multi-provider fact was unambiguous.
+    with more than one entry a scalar read's mode is necessarily ``EXPLICIT``, which is what
+    makes a finished run show *why* a multi-provider fact was unambiguous. A many read
+    (``Sum(Many(Size.X))``) is one lookup per provider it summed, each with ``many`` set.
     """
 
     consumer: str
@@ -55,6 +56,7 @@ class FactLookupRecord:
     value: Any
     mode: str
     candidates: Tuple[str, ...] = ()
+    many: bool = False
 
 
 @dataclass(frozen=True)
@@ -124,7 +126,7 @@ class ResolutionReport:
             candidates = f" of candidates {sorted(lookup.candidates)}" if len(lookup.candidates) > 1 else ""
             lines.append(
                 f"lookup: '{lookup.consumer}' read {lookup.fact}={lookup.value!r}"
-                f" from '{lookup.source}' [{lookup.mode}]{candidates}"
+                f" from '{lookup.source}' [{lookup.mode}]{candidates}{' (one of a many read)' if lookup.many else ''}"
             )
         for producer, fact in self.unconsumed:
             lines.append(f"unconsumed: '{producer}' provided {fact}, which nobody read")
@@ -162,6 +164,7 @@ class ResolutionReport:
                     "value": entry.value,
                     "mode": entry.mode,
                     "candidates": list(entry.candidates),
+                    **({"many": True} if entry.many else {}),
                 }
                 for entry in self.lookups
             ],

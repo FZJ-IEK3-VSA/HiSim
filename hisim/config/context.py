@@ -28,9 +28,14 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Tuple, Union
 
-from hisim.config.laws import _FactTerm
+from hisim.config.laws import ConfigSizingError, _FactTerm
+
+#: A numeric fact: one provider's value, or the tuple of every provider's for a consumer whose law
+#: reads it many-fold (``Sum(Many(...))``, ``assemblies_spec.md`` §6); :meth:`SizingContext.one`
+#: reads it once and refuses the tuple.
+FactValue = Optional[Union[float, Tuple[float, ...]]]
 
 if TYPE_CHECKING:
     from hisim.components.building.config import BuildingConfig
@@ -50,20 +55,20 @@ class SizingContext:
     band) are added by the setup via :meth:`with_facts`.
     """
 
-    heating_load_in_watt: Optional[float] = None
-    heating_reference_temperature_in_celsius: Optional[float] = None
-    number_of_apartments: Optional[float] = None
-    conditioned_floor_area_in_m2: Optional[float] = None
-    water_mass_flow_rate_in_kg_per_second: Optional[float] = None
+    heating_load_in_watt: FactValue = None
+    heating_reference_temperature_in_celsius: FactValue = None
+    number_of_apartments: FactValue = None
+    conditioned_floor_area_in_m2: FactValue = None
+    water_mass_flow_rate_in_kg_per_second: FactValue = None
     heat_distribution_system_type: Optional["HeatDistributionSystemType"] = None
-    number_of_residents: Optional[float] = None
-    maximal_thermal_power_in_watt: Optional[float] = None
-    minimal_thermal_power_in_watt: Optional[float] = None
-    set_heating_temperature_in_celsius: Optional[float] = None
-    set_cooling_temperature_in_celsius: Optional[float] = None
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float] = None
-    roof_area_in_m2: Optional[float] = None
-    pv_peak_power_in_watt: Optional[float] = None
+    number_of_residents: FactValue = None
+    maximal_thermal_power_in_watt: FactValue = None
+    minimal_thermal_power_in_watt: FactValue = None
+    set_heating_temperature_in_celsius: FactValue = None
+    set_cooling_temperature_in_celsius: FactValue = None
+    set_heating_threshold_outside_temperature_in_celsius: FactValue = None
+    roof_area_in_m2: FactValue = None
+    pv_peak_power_in_watt: FactValue = None
 
     # Fuel facts of the heat generator, for the meters that account its consumption. The
     # carrier is the generator's own field; the two constants derive from it and from the
@@ -78,6 +83,21 @@ class SizingContext:
     # includes which upstream the result was computed with. See ``roadmap/pylpg_flakiness.md`` F7.
     weather_identity: Optional[str] = None
     occupancy_identity: Optional[str] = None
+
+    def one(self, fact: str) -> Any:
+        """The value of a fact read from one provider.
+
+        Raises:
+            ConfigSizingError: If the context carries the providers' values of a many read for the
+                fact, which only its sum, ``Sum(Many(...))``, reads.
+        """
+        value = getattr(self, fact)
+        if isinstance(value, tuple):
+            raise ConfigSizingError(
+                f"'{fact}' is read from one provider here, but the context carries the many read {value!r} of it; "
+                "a many read is read by its sum, Sum(Many(...))"
+            )
+        return value
 
     def with_facts(self, **facts: Any) -> "SizingContext":
         """Returns a copy of this context with the given facts added or replaced.

@@ -1,0 +1,24 @@
+# Mock: the controller assembly (assemblies_spec.md §4.3, §4.4). Its energy manager observes the
+# electricity flows its class declares, ranks the ones its class ranks at the class's own weights, and
+# outputs their balance, which a meter may observe instead of the flows (both are refused, EF-7T).
+schema_version: 4
+kind: assembly
+name: mock/ems_self_consumption
+description: A mock surplus controller maximising self-consumption.
+
+components:
+  EMS:
+    class: tests.assemblies.mock_components.MockEnergyManager
+    preset: optimize_own_consumption
+
+interface:
+  observes:
+    flows: {into: [EMS], default: declared}
+  provides:
+    grid_balance: {output: EMS.TotalElectricityToOrFromGrid}
+
+tests:
+  bounds:
+    - {output: EMS.TotalElectricityToOrFromGrid, unit: WATT, min: -20000, max: 20000}
+    - {output: EMS.Modifier, unit: KELVIN, min: 0, max: 5}
+  monotone: []

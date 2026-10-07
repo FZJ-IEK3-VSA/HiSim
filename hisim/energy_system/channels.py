@@ -56,9 +56,9 @@ class FeedRequest:
     existing tag-based runtime lookups grew up on.
     """
 
-    #: Weight reserved for a participant an aggregator only measures and never controls. It is
-    #: the value every legacy default connection of the electricity meter already spells out.
-    MONITORED_ONLY_WEIGHT: ClassVar[int] = 999
+    #: Weight reserved for a participant an aggregator only measures and never controls: the
+    #: class-layer constant every default connection of the electricity meter declares at.
+    MONITORED_ONLY_WEIGHT: ClassVar[int] = DynamicConnectionChannel.MONITORED_ONLY_WEIGHT
 
     consumer: str
     source: str

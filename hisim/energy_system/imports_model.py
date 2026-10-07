@@ -17,7 +17,7 @@ frozen, so an expanded file can never be mutated behind the back of the record t
 from __future__ import annotations
 
 import enum
-from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -99,21 +99,6 @@ class PortPlaceholder(BaseModel):
         return {self.KEY: self.port}
 
 
-class ObservesPlaceholder(BaseModel):
-    """``{$observes: <observer port>}`` in an ``inputs`` list; read in v1, lowered in part 2."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    #: The key that marks the placeholder.
-    KEY: ClassVar[str] = "$observes"
-
-    observer: str
-
-    def to_document(self) -> Dict[str, Any]:
-        """The placeholder as the file writes it."""
-        return {self.KEY: self.observer}
-
-
 class PlacedPlaceholder(BaseModel):
     """A placeholder with the index it was written at in its entry's ``inputs`` list.
 
@@ -125,7 +110,7 @@ class PlacedPlaceholder(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     position: int
-    placeholder: Union[PortPlaceholder, ObservesPlaceholder]
+    placeholder: PortPlaceholder
 
 
 class PortKind(enum.Enum):
@@ -138,10 +123,61 @@ class PortKind(enum.Enum):
     FACT = "fact"
     OBSERVER = "observer"
 
-    @property
-    def lowered_in_v1(self) -> bool:
-        """Whether part 1 lowers ports of this kind; the others are read and refused with ``EF-74``."""
-        return self in (PortKind.NEED, PortKind.PROVIDED)
+
+class Selector(BaseModel):
+    """One selector of an ``observes:`` list (``assemblies_spec.md`` §4.1).
+
+    It matches an output an observer declares a dynamic default connection from, by the runtime
+    tags the meter and the energy manager find their inputs by — ``component_type`` (names of
+    ``lt.ComponentType``) and ``flow`` (names of ``lt.InandOutputType``) — or by the output's name.
+    The keys it writes hold together; each key's list matches any of its values.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The keys a selector may carry, at least one of them.
+    KEYS: ClassVar[Tuple[str, ...]] = ("component_type", "flow", "output")
+
+    component_type: Tuple[str, ...] = ()
+    flow: Tuple[str, ...] = ()
+    output: Tuple[str, ...] = ()
+
+    def matches(self, component_type: Optional[str], flows: Tuple[str, ...], output: str) -> bool:
+        """Whether a declared feed — its component type, flow tags and output — is a match."""
+        return (
+            (not self.component_type or component_type in self.component_type)
+            and (not self.flow or any(flow in flows for flow in self.flow))
+            and (not self.output or output in self.output)
+        )
+
+    def to_document(self) -> Dict[str, Any]:
+        """The selector as the file writes it."""
+        return {key: list(values) for key, values in self.model_dump().items() if values}
+
+    def text(self) -> str:
+        """The selector in flow style, for messages."""
+        return "{" + ", ".join(f"{key}: {', '.join(values)}" for key, values in self.to_document().items()) + "}"
+
+
+class Selection(BaseModel):
+    """What an observer observes: ``declared`` (every output its class declares a feed from) or selectors."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The spelling of the selection of every candidate.
+    DECLARED: ClassVar[str] = "declared"
+
+    selectors: Optional[Tuple[Selector, ...]] = None
+
+    def to_document(self) -> Any:
+        """The selection as the file writes it."""
+        selectors = self.selectors or ()
+        return [selector.to_document() for selector in selectors] if self.selectors is not None else self.DECLARED
+
+    def text(self) -> str:
+        """The selection for messages."""
+        selectors = self.selectors or ()
+        return "[" + ", ".join(item.text() for item in selectors) + "]" if self.selectors is not None else self.DECLARED
 
 
 class PortState(enum.Enum):
@@ -213,18 +249,29 @@ class BindingVerbs(BaseModel):
 
 
 class Port(BaseModel):
-    """One port of an assembly's interface or of a site entry (``assemblies_spec.md`` §3).
+    """One port of an assembly's interface or of a site entry (``assemblies_spec.md`` §3, §13.1).
 
     Attributes:
         name: The port's key.
         section: ``needs``, ``provides``, ``observes`` (an interface) or ``ports`` (a site entry).
         kind: What it is.
-        into: The members a need lowers into; a site entry's need lowers into the entry itself.
+        into: The members a need, a fact need or an observer port lowers into; a site entry's need
+            lowers into the entry itself.
         partner: The partner classes of a need, by class name.
         wires: Explicit wires ``{input: output}`` a need lowers to instead of default connections.
         output: ``Member.Output`` of a provided port.
-        members: Every member a port of a part-2 kind names, for the library check.
-        optional: Whether the need may stay unbound (with a verb saying so).
+        members: Every member the port names: a circuit end's members, a carrier need's consumers,
+            a fuel provision's meter, a provided fact's member, an observer's members.
+        circuit: A circuit end's circuit, its medium (``dhw``, ``space_heating``, §11.1).
+        carrier: A carrier port's ``lt.EnergyBalanceCarrier`` value.
+        outputs: A carrier need's consuming outputs, ``Member.Output`` (a site entry's: ``Output``).
+        meter: The member metering a provided fuel, where its consumers' feeds land.
+        fact: A fact port's sizing fact.
+        many: Whether a fact need reads the fact from every provider in scope (a list, ``Sum``).
+        selection: An observer port's ``default:``.
+        controllable: A provided output's ``controllable:`` block: ``target_input`` or ``via``, and
+            ``optional`` (§4.4).
+        optional: Whether the port may stay unbound (with a verb saying so).
         required_when: Parameter to values for which the port is required; conjunctive.
         active_when: Parameter to values outside which the port is inactive; conjunctive.
         raw: The block as written, which the emitter and the import record repeat.
@@ -240,6 +287,14 @@ class Port(BaseModel):
     wires: Optional[Mapping[str, str]] = None
     output: Optional[str] = None
     members: Tuple[str, ...] = ()
+    circuit: Optional[str] = None
+    carrier: Optional[str] = None
+    outputs: Tuple[str, ...] = ()
+    meter: Optional[str] = None
+    fact: Optional[str] = None
+    many: bool = False
+    selection: Optional[Selection] = None
+    controllable: Mapping[str, Any] = Field(default_factory=dict)
     optional: bool = False
     required_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
     active_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
@@ -255,6 +310,34 @@ class Port(BaseModel):
         if self.kind == PortKind.NEED and (not self.into or not self.partner):
             raise ValueError(f"the need '{self.name}' names no member to lower into or no partner class.")
         return self
+
+    @property
+    def is_provision(self) -> bool:
+        """Whether the port offers something another port binds to: a provided output, fact or carrier."""
+        if self.kind == PortKind.CARRIER:
+            return not self.outputs
+        return self.kind == PortKind.PROVIDED or (self.kind == PortKind.FACT and self.section == "provides")
+
+    @property
+    def is_fuel_provision(self) -> bool:
+        """Whether the port provides a fuel, whose consumers' feeds land in its meter (§5.1)."""
+        return self.kind == PortKind.CARRIER and self.is_provision and self.carrier != "electricity"
+
+    @property
+    def landing_members(self) -> Tuple[str, ...]:
+        """The members a port's lowered items land in, at their ``{$port: …}`` placeholder.
+
+        A need's ``into``, a circuit end's members, a fuel provision's meter (a site entry's: the
+        entry, its one member); no other port lands items. The library check and the binding both
+        read this one rule.
+        """
+        if self.kind == PortKind.NEED:
+            return self.into
+        if self.kind == PortKind.CIRCUIT:
+            return self.members
+        if self.is_fuel_provision:
+            return (self.meter,) if self.meter else self.members
+        return ()
 
     @property
     def output_member(self) -> str:
@@ -301,7 +384,7 @@ class ImportEntry(BaseModel):
         parameters: Parameter values of an import without instances.
         instances: The named instances, or ``None`` for an import of one.
         verbs: The binding verbs written on the import.
-        observes: An ``observes:`` selection, read in v1 and lowered in part 2.
+        observes: The selection replacing the default of its assembly's observer port (§4.1).
         installation_year: The reserved economics field of D18, recorded, never read here.
         quote: The reserved economics field of D22, recorded, never read here.
         order: The flat evaluation order of the import's members, one block (D26 revised, §2.3).
@@ -331,7 +414,7 @@ class ImportEntry(BaseModel):
     parameters: Mapping[str, Any] = Field(default_factory=dict)
     instances: Optional[Mapping[str, InstanceEntry]] = None
     verbs: BindingVerbs = Field(default_factory=BindingVerbs)
-    observes: Optional[Any] = None
+    observes: Optional[Selection] = None
     installation_year: Optional[int] = None
     quote: Optional[Mapping[str, Any]] = None
     order: Optional[int] = None
@@ -347,7 +430,7 @@ class ImportEntry(BaseModel):
             document["instances"] = {name: instance.to_document() for name, instance in self.instances.items()}
         document.update(self.verbs.to_document())
         if self.observes is not None:
-            document["observes"] = self.observes
+            document["observes"] = self.observes.to_document()
         if self.installation_year is not None:
             document["installation_year"] = self.installation_year
         if self.quote is not None:

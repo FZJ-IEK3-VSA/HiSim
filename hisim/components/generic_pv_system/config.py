@@ -7,11 +7,12 @@ inverter's parameters come from, lives in :mod:`hisim.components.generic_pv_syst
 and is imported from there; the package ``__init__`` explains why.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar, Dict, Optional, Tuple
 
 from dataclasses_json import dataclass_json
 
+from hisim import loadtypes as lt
 from hisim.components.generic_pv_system.calculation import PVLibModuleAndInverterEnum
 from hisim.config import (
     ComponentID,
@@ -72,7 +73,7 @@ def _rooftop_power_in_watt(ctx: SizingContext, own: OwnFields) -> float:
         ValueError: If the module and database pair is not one :attr:`PVSystemConfig.MODULES`
             holds.
     """
-    roof_area_in_m2 = ctx.roof_area_in_m2
+    roof_area_in_m2 = ctx.one("roof_area_in_m2")
     if roof_area_in_m2 is None:
         raise ConfigSizingError(
             "a rooftop array is sized from 'roof_area_in_m2', which this context does not carry. "
@@ -140,11 +141,11 @@ class PVSystemConfig(ConfigBase):
     module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
     inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE
     #: Orientation of the array in degrees, 180 being due south.
-    azimuth: float = 180
+    azimuth: float = field(default=180, metadata={"unit": lt.Units.DEGREES})
     #: Inclination of the array against the horizontal, in degrees.
-    tilt: float = 30
+    tilt: float = field(default=30, metadata={"unit": lt.Units.DEGREES})
     #: How much of the roof's potential is built, as a fraction in [0, 1].
-    share_of_maximum_pv_potential: float = 1.0
+    share_of_maximum_pv_potential: float = field(default=1.0, metadata={"unit": lt.Units.ANY})
     load_module_data: bool = False
     source_weight: int = 0
     #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
@@ -164,6 +165,7 @@ class PVSystemConfig(ConfigBase):
     #: the roof area the building contributes. Marked as the capacity field for the cost engine.
     power_in_watt: Sizable[float] = sized_field(
         rule=ROOFTOP_POWER_LAW,
+        unit=lt.Units.WATT,
         metadata={"capacity": True},
         note="usable roof area times the module's power per m², times the share of it that is installed",
     )

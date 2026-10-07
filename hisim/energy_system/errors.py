@@ -59,15 +59,19 @@ class EnergySystemErrorId(enum.Enum):
 
     The ``EF-7x`` band is the assemblies' (``assemblies_spec.md``, lean v1 of §13.1): ``EF-70`` …
     ``EF-72`` for reading and resolving an assembly file, ``EF-73`` for a construct v1 does not
-    have (cut by D26, refused by name), ``EF-74`` for a construct v1 reads but lowers only in part 2
-    of the work, ``EF-75`` for the library check (which lists every problem of a file at once, the
-    unit problems among them under ``EF-78``/``EF-79``), ``EF-76``/``EF-77`` for an import's
-    parameters and constraints, and ``EF-7A`` … ``EF-7H`` for the binding of ports (§3.3), ``EF-7J``
-    for a port that does not fit its assembly's members, ``EF-7P`` for an evaluation order that
-    names one number twice or a record whose components do not stand in the sequence its import
-    record states. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero. All
-    of them are raised by the expansion of imports, from the files alone, before any class is
-    constructed.
+    have (cut by D26, refused by name), ``EF-75`` for the library check (which lists every problem
+    of a file at once, the unit problems among them under ``EF-78``/``EF-79``), ``EF-76``/``EF-77``
+    for an import's parameters and constraints, ``EF-7A`` … ``EF-7H`` for the binding of ports
+    (§3.3), ``EF-7J`` for a port that does not fit its assembly's members, ``EF-7K`` for circuit
+    ends of different circuits, ``EF-7L`` for a carrier without exactly one provider or a provider
+    without a consumer, ``EF-7P`` for an evaluation order that names one number twice or a record
+    whose components do not stand in the sequence its import record states. Those are raised by the
+    expansion of imports, from the files alone. The wiring raises the rest, on the constructed
+    components: ``EF-7M`` for a consuming output whose energy port carries another carrier, ``EF-7N``
+    for a meter that would not feed exactly the consuming outputs named, ``EF-7S`` for an observer's
+    selection, ``EF-7T`` for a flow counted twice, ``EF-7U`` for an actuation and ``EF-7V`` for a
+    derived weight that reaches another kind's base weight. The letters ``I``
+    and ``O`` are skipped, as they read like a one and a zero.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -130,7 +134,7 @@ class EnergySystemErrorId(enum.Enum):
     SIZING_NULL_VALUE = "EF-4D"
     SIZING_SHAPE_MISMATCH = "EF-4E"
     SIZING_FIELD_CYCLE = "EF-4F"
-    SIZING_MANY_UNSUPPORTED = "EF-4G"
+    SIZING_MANY_READ = "EF-4G"
     SIZING_DUPLICATE_NAME = "EF-4H"
     SIZING_FAILED = "EF-4X"
     NESTED_GROUP = "EF-50"
@@ -145,7 +149,6 @@ class EnergySystemErrorId(enum.Enum):
     ASSEMBLY_NOT_FOUND = "EF-71"
     ASSEMBLY_FOUND_TWICE = "EF-72"
     NOT_IN_V1 = "EF-73"
-    LOWERED_IN_PART_2 = "EF-74"
     ASSEMBLY_LIBRARY_CHECK = "EF-75"
     PARAMETER_INVALID = "EF-76"
     CONSTRAINT_VIOLATED = "EF-77"
@@ -160,7 +163,15 @@ class EnergySystemErrorId(enum.Enum):
     UNKNOWN_PORT = "EF-7G"
     BOUND_OUTPUT_NOT_READ = "EF-7H"
     PORT_CONTRACT = "EF-7J"
+    CIRCUIT_MISMATCH = "EF-7K"
+    CARRIER_PROVIDER = "EF-7L"
+    CARRIER_MISMATCH = "EF-7M"
+    METER_FEEDS = "EF-7N"
     ORDER_INVALID = "EF-7P"
+    OBSERVER_SELECTION = "EF-7S"
+    DOUBLE_COUNT = "EF-7T"
+    ACTUATION = "EF-7U"
+    WEIGHT_COLLISION = "EF-7V"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
     RECORDED_NAME_INVALID = "EF-R1"

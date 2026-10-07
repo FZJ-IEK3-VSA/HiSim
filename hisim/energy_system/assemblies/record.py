@@ -5,7 +5,8 @@ file it produces, neither part of the file, so a file without imports stays byte
 
 - the **import record**: per import and instance the assembly path and the sha256 of its file, the
   parameters as given and as resolved, the internal variants selected, the members' addresses,
-  every port's state and binding decision, and the reserved ``installation_year``/``quote``; and the
+  every port's state and binding decision, and the reserved ``installation_year``/``quote``; per
+  observer its selection and every feed the wiring selected, with its weight and dispatch; and the
   final sequence in which the simulator adds the components (D26 revised), which a re-run checks;
 - the **source map**: per produced item — a component, an input item, a sizing line, a config
   value — the import, the instance, the member and the files and lines it came from.
@@ -22,7 +23,9 @@ from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 from hisim.config import ComponentID
 from hisim.energy_system.address_table import AddressTable
+from hisim.energy_system.assemblies.selection import SelectionPlan
 from hisim.energy_system.errors import EnergySystemCatalogueError
+from hisim.energy_system.model import ConsumingOutput
 from hisim.energy_system.source_lines import SourceLocation
 
 
@@ -169,7 +172,11 @@ class ImportRecord:
     """Everything the expansion of imports did to one file, ready to be shown or written.
 
     An expansion that imported nothing produces an empty record, which keeps every consumer free
-    of a case distinction, as :class:`~hisim.energy_system.groups.ExpansionRecord` does.
+    of a case distinction, as :class:`~hisim.energy_system.groups.ExpansionRecord` does. Beside
+    what it writes, it hands the wiring what only the constructed components decide: the consuming
+    outputs of the carrier needs and the selection plan of the observers. The observers' selected
+    feeds exist once the wiring ran the plan, so the record is written after the wiring; written
+    before, an observer refuses (``EF-60``).
     """
 
     #: The key the sequence is written under in the record's ``imports`` block.
@@ -179,6 +186,8 @@ class ImportRecord:
     site_ports: Dict[str, List[PortRecord]] = field(default_factory=dict)
     addresses: Dict[str, ComponentID] = field(default_factory=dict)
     source_map: SourceMap = field(default_factory=SourceMap)
+    consuming: List[ConsumingOutput] = field(default_factory=list)
+    selection: SelectionPlan = field(default_factory=SelectionPlan)
     #: Every live component's name, in the order the simulator adds them.
     sequence: Tuple[str, ...] = ()
 
@@ -194,10 +203,15 @@ class ImportRecord:
         )
 
     def to_document(self) -> Dict[str, Any]:
-        """The record as the plain data a realized record's metadata carries under ``imports``."""
+        """The record as the plain data a realized record's metadata carries under ``imports``.
+
+        Raises:
+            EnergySystemRecordError: ``EF-60`` for an observer whose feeds the wiring has not selected yet.
+        """
         return {
             "instances": [record.to_document() for record in self.instances],
             "site_ports": {name: [port.to_document() for port in ports] for name, ports in self.site_ports.items()},
+            "observers": [observer.to_document() for observer in self.selection.observers],
             AddressTable.ADDRESSES_KEY: AddressTable.to_document(self.addresses),
             self.SEQUENCE_KEY: list(self.sequence),
         }

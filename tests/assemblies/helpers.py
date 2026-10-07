@@ -10,9 +10,11 @@ from hisim.energy_system.assemblies.expansion import expand_imports
 from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.document import RawDocument
+from hisim.energy_system.executor import BuiltEnergySystem, EnergySystemExecutor
 from hisim.energy_system.loader import EnergySystemReader
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.source_lines import LineIndex
+from hisim.simulationparameters import SimulationParameters
 
 
 class Mocks:
@@ -77,3 +79,21 @@ def site(*entries: str, imports: str = "") -> str:
 WEATHER = f"Weather: {{class: {Mocks.CLASSES}.MockWeather, preset: standard}}"
 OCCUPANCY = f"Occupancy: {{class: {Mocks.CLASSES}.MockOccupancy, preset: standard}}"
 EMS = f"Ems: {{class: {Mocks.CLASSES}.MockEms, preset: standard}}"
+
+
+def build_text(text: str, result_directory: Path, resolver: Optional[AssemblyResolver] = None) -> BuiltEnergySystem:
+    """Reads an inline file and builds it — expansion, sizing, construction and wiring — without running it."""
+    model, lines = read_system(text)
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    parameters.result_directory = str(result_directory)
+    return EnergySystemExecutor(
+        model, parameters, assembly_resolver=resolver or AssemblyResolver([Mocks.LIBRARY]), source_lines=lines
+    ).build()
+
+
+def system_text(name: str) -> str:
+    """The text of one committed mock system."""
+    return (Mocks.ROOT / "systems" / name).read_text(encoding="utf-8")
+
+
+MOCKS = Mocks.CLASSES

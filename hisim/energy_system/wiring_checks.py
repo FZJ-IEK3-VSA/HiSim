@@ -21,17 +21,27 @@ in plan order, so that the wire log a run writes down is the order the connectio
 The record of a single planned connection lives here too, next to the code that reads it: the
 planner in :mod:`hisim.energy_system.wiring` produces these records, hands the finished list back
 here to be checked, and never needs to know how a check is written.
+
+Three checks see more than the wires. Two cover what an assembly's carrier need states and no
+wire shows (``assemblies_spec.md`` §3.3): a consuming output's energy port carries the need's
+carrier, and a provider's meter feeds exactly the consuming outputs named of each consumer
+(:func:`check_consuming_outputs`). The third refuses a flow counted twice: two aggregators of which
+one reads any output of the other and both observe one flow, a source's output, by its resolved
+name (:func:`check_double_count`, §4.3).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim.config.channels import PortTypeCompatibility
+from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
+from hisim.energy_system.feed_resolution import DynamicConnectionResolver
+from hisim.energy_system.model import ConsumingOutput
 
 
 @dataclass(frozen=True)
@@ -88,6 +98,7 @@ class WiringChecker:
         written_wire_count: int,
         created_ports: Mapping[str, Sequence[str]],
         system_name: str,
+        consuming: Sequence["ConsumingOutput"] = (),
     ) -> None:
         """Prepares the checker for one planned wiring.
 
@@ -98,12 +109,14 @@ class WiringChecker:
                 the rest were derived by feed resolution and are exempt from the first check.
             created_ports: The ports feed resolution created, keyed by aggregator name.
             system_name: Name of the energy system, used in the message for an open input.
+            consuming: The consuming outputs of the carrier needs an expansion of imports lowered.
         """
         self.components_by_name = dict(components_by_name)
         self.wires = list(wires)
         self.written_wire_count = written_wire_count
         self.created_ports = {name: list(ports) for name, ports in created_ports.items()}
         self.system_name = system_name
+        self.consuming = tuple(consuming)
 
     def check_all(self) -> None:
         """Runs every connection check, stopping at the first violation.
@@ -117,6 +130,7 @@ class WiringChecker:
         self._check_port_types_agree()
         self._check_no_input_is_fed_twice()
         self._check_mandatory_inputs_are_connected()
+        check_consuming_outputs(self.components_by_name, self.consuming)
 
     def apply(self) -> None:
         """Connects every planned wire to its target component.
@@ -342,3 +356,84 @@ def unconsumed_sources(
         "an input item naming it is missing somewhere."
         for name in unread
     )
+
+
+def check_consuming_outputs(components_by_name: Mapping[str, Component], consuming: Sequence[ConsumingOutput]) -> None:
+    """Checks every consuming output against its component and its meter, the two facts no wire shows.
+
+    Raises:
+        EnergySystemWiringError: ``EF-21`` for an output the consumer does not have, ``EF-7M`` for one
+            whose energy port carries another carrier, ``EF-7N`` for a meter whose default feeds from
+            the consumer's class are not exactly the outputs named.
+    """
+    named: Dict[Tuple[str, str], List[str]] = {}
+    for item in consuming:
+        consumer = components_by_name[item.consumer]
+        output = find_output(consumer, item.output)
+        if output is None:
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.UNKNOWN_OUTPUT_PORT,
+                f"components.{item.consumer}",
+                f"the carrier need names the consuming output '{item.consumer}.{item.output}', which "
+                f"{consumer.get_classname()} does not have.",
+                alternatives=[port.field_name for port in consumer.outputs],
+                alternatives_label="outputs",
+            )
+        carrier = output.energy_port.carrier.value if output.energy_port is not None else None
+        if carrier != item.carrier:
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.CARRIER_MISMATCH,
+                f"components.{item.consumer}",
+                f"the output '{item.consumer}.{item.output}' is consumed as {item.carrier}, but "
+                + (f"its energy port carries {carrier}." if carrier else "it declares no energy port."),
+            )
+        if item.meter is not None:
+            named.setdefault((item.meter, item.consumer), []).append(item.output)
+    for (meter_name, consumer_name), outputs in named.items():
+        meter, consumer_class = components_by_name[meter_name], components_by_name[consumer_name].get_classname()
+        fed = [
+            str(feed.source_component_field_name)
+            for feed in DynamicConnectionResolver.default_feeds_of(meter, consumer_class)
+        ]
+        if sorted(fed) != sorted(outputs):
+            raise EnergySystemWiringError(
+                EnergySystemErrorId.METER_FEEDS,
+                f"components.{meter_name}.inputs",
+                f"the meter '{meter_name}' feeds {', '.join(fed) or 'nothing'} of {consumer_class} '{consumer_name}', "
+                f"but the carrier need names {', '.join(outputs)}; it would meter "
+                + ("other outputs than those consumed." if fed else "nothing of it."),
+            )
+
+
+def check_double_count(
+    feeds_by_target: Mapping[str, Sequence[FeedRequest]], output_of: Callable[[FeedRequest], str]
+) -> None:
+    """Refuses two aggregators of which one reads an output of the other while both observe one flow (§4.3).
+
+    An energy manager sums what it observes into a balance; a meter reading that balance and one
+    of the flows behind it counts the flow twice. The rule as checked is wider than a balance: any
+    output of the other aggregator read, and any flow (a source's output) both observe. Every
+    planned feed counts — written, expanded from a bare name or selected — each by the output it
+    resolves to, so a written feed that leaves its output to the declaration is no way around it.
+
+    Args:
+        feeds_by_target: The planned feeds, by the aggregator they address.
+        output_of: The output a feed resolves to (its own, else its aggregator's one declaration).
+
+    Raises:
+        EnergySystemWiringError: ``EF-7T`` at the first aggregator counting a flow twice.
+    """
+    observed = {
+        name: {(feed.source, output_of(feed)) for feed in feeds} for name, feeds in feeds_by_target.items()
+    }
+    for name, feeds in feeds_by_target.items():
+        for other in sorted({feed.source for feed in feeds} & set(observed) - {name}):
+            both = sorted(f"{source}.{output}" for source, output in observed[name] & observed[other])
+            if both:
+                raise EnergySystemWiringError(
+                    EnergySystemErrorId.DOUBLE_COUNT,
+                    f"components.{name}.inputs",
+                    f"'{name}' reads an output of '{other}' and both observe {', '.join(both)}: the flow would be "
+                    "counted twice.",
+                    remedy=f"Let '{name}' read only the output of '{other}', or only the flows.",
+                )

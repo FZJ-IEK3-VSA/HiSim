@@ -6,7 +6,7 @@ import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, DisplayConfig
+from hisim.config import ConfigBase, DisplayConfig, NameSyntax
 from hisim.config.channels import (
     ChannelDeclarationError,
     DynamicConnectionChannel,
@@ -622,7 +622,7 @@ class DynamicComponent(Component):
 
         # Label Input and generate variable
         num_inputs = len(self.inputs)
-        label = f"Input_{source_object_name}_{source_component_output}_{num_inputs}"
+        label = f"Input_{NameSyntax.port_name_part(source_object_name)}_{source_component_output}_{num_inputs}"
         vars(self)[label] = label
 
         log.trace(f"Added component input and connection {label}")
@@ -677,7 +677,8 @@ class DynamicComponent(Component):
                 if source_component_field_name in output_var.display_name:
                     source_component_output = output_var.display_name
 
-                    label = label = f"Input_{component.component_name}_{source_component_output}_{num_inputs}"
+                    participant = NameSyntax.port_name_part(component.component_name)
+                    label = f"Input_{participant}_{source_component_output}_{num_inputs}"
                     vars(self)[label] = label
 
                     # Define Input as Component Input and add it to inputs

@@ -171,6 +171,8 @@ class SizingSourceWriter:
             lookups: The fact lookups of the run's resolution report, in resolution order.
         """
         self.reads: Dict[str, Dict[str, List[str]]] = {}
+        #: ``(consumer, fact)`` of every many read, whose line is a list even of one provider.
+        self.many = {(lookup.consumer, lookup.fact) for lookup in lookups if lookup.many}
         for lookup in lookups:
             providers = self.reads.setdefault(lookup.consumer, {}).setdefault(lookup.fact, [])
             if lookup.source not in providers:
@@ -181,7 +183,8 @@ class SizingSourceWriter:
 
         The author's own lines come first and in their written shape, because a list and a
         scalar mean different things and a record must not turn one into the other. The reads
-        the author did not have to write follow, one line per fact.
+        the author did not have to write follow, one line per fact: a list for a many read, even
+        of one provider, and a single reference otherwise.
 
         Args:
             entry: The component entry as the expanded file carries it.
@@ -194,7 +197,7 @@ class SizingSourceWriter:
             if fact in block:
                 continue
             references = tuple(SourceReference(component=provider, fact=fact) for provider in providers)
-            block[fact] = references[0] if len(references) == 1 else references
+            block[fact] = references if (entry.name, fact) in self.many or len(references) != 1 else references[0]
         return block
 
     def added_facts(self, entry: ComponentEntry) -> Tuple[str, ...]:

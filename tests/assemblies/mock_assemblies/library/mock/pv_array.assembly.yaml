@@ -38,6 +38,7 @@ interface:
     weather: {into: [PVSystem], partner: MockWeather}
   provides:
     production: {output: PVSystem.ElectricityOutput}
+    peak_power: {fact: pv_peak_power_in_watt, member: PVSystem}
 
 tests:
   bounds:

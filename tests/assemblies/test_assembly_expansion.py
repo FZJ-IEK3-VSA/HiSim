@@ -15,6 +15,7 @@ from hisim.energy_system.model import DefaultInputs, ExplicitWire
 from hisim.energy_system.source_lines import LineIndex
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiSource
 from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Mocks, expand_text, site
+from tests.assemblies.mock_components import MockPVSystemConfig
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 HEATER = "heater: {assembly: mock/electric_heater"
@@ -249,12 +250,25 @@ def test_an_enum_value_outside_its_values_is_refused() -> None:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("parameters", ["{share_of_roof: 0.5}", "{power_in_watt: none}"])
-def test_an_exactly_one_of_constraint_is_checked_on_the_resolved_parameters(parameters: str) -> None:
-    """Catches two alternatives both stated, or neither, reaching the component."""
+def test_an_exactly_one_of_constraint_left_with_no_member_stated_is_refused() -> None:
+    """Catches the one written member set to none leaving the component with neither alternative."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
-        expand_text(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, parameters: {parameters}}}"))
-    assert "power_in_watt, share_of_roof" in str(refusal.value)
+        expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {power_in_watt: none}}"))
+    message = str(refusal.value)
+    for name in ("power_in_watt, share_of_roof", "0 are (none)", "import 'pv'"):
+        assert name in message, f"{name!r} is not in: {message}"
+
+
+@pytest.mark.base
+def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults() -> None:
+    """Catches the sibling's default (power 5000 W) still counting when the import writes only the share (D27)."""
+    flat, record = expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {share_of_roof: 0.5}}"))
+    assert record.instance("pv").parameters_resolved["power_in_watt"] is None
+    assert record.instance("pv").parameters_resolved["share_of_roof"] == 0.5
+    config = flat.components["pv-PVSystem"].config
+    assert config["power_in_watt"] is None and config["share_of_roof"] == 0.5
+    array = MockPVSystemConfig(component_id=ComponentID(name="PVSystem"), power_in_watt=None, share_of_roof=0.5)
+    assert array.peak_power_in_watt() == 0.5 * MockPVSystemConfig.ROOF_PEAK_POWER_IN_WATT
 
 
 @pytest.mark.base
@@ -266,13 +280,16 @@ def test_zero_is_a_stated_value_for_an_exactly_one_of_constraint() -> None:
 
 
 @pytest.mark.base
-def test_zero_and_a_share_both_stated_violate_an_exactly_one_of_constraint() -> None:
-    """Catches ``0 == False`` letting a power of 0 and a share of the roof both through as "exactly one"."""
+@pytest.mark.parametrize(
+    "parameters", ["{power_in_watt: 0, share_of_roof: 0.5}", "{power_in_watt: 5000, share_of_roof: 0.5}"]
+)
+def test_an_import_writing_two_members_of_an_exactly_one_of_is_refused(parameters: str) -> None:
+    """Catches two stated alternatives passing, where stating one unstates the other (0 is stated)."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
-        expand_text(
-            site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {power_in_watt: 0, share_of_roof: 0.5}}")
-        )
-    assert "2 are (power_in_watt, share_of_roof)" in str(refusal.value) and "import 'pv'" in str(refusal.value)
+        expand_text(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, parameters: {parameters}}}"))
+    message = str(refusal.value)
+    for name in ("states 2 of them (power_in_watt, share_of_roof)", "state one", "import 'pv'"):
+        assert name in message, f"{name!r} is not in: {message}"
 
 
 @pytest.mark.base

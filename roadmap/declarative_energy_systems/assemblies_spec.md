@@ -126,7 +126,11 @@ their internal ports bound before the assembly is offered to its importer); for 
    sequence (not in v1 (D26): the preset, order paths and derived weights).
 
 Everything downstream — wiring, sizing, simulator, realized record, energy balance, economics — sees ordinary
-components, exactly as nothing downstream knows that a variant existed (`groups.py:30-36`).
+components, exactly as nothing downstream knows that a variant existed (`groups.py:30-36`). A port name the wiring
+derives from a source's runtime name — an aggregator's input `ElectricityOutputFrom<source>`, a dispatch output
+`DispatchTo<source>_<input>`, a dynamic component's input label — maps the address separator `-` to `_`
+(`NameSyntax.port_name_part`, `hisim/config/names.py`): `pv-east-PVSystem` feeds `ElectricityOutputFrompv_east_PVSystem`.
+A name without `-`, every name of the twins, is unchanged.
 
 **Evaluation order** (decided, owner, 2026-10-03, D23, resolving G14; revised for v1 on 2026-10-07, D26). `order:` is
 an optional flat integer on a site entry or an import, nowhere else: no order paths, no `order:` on an assembly member
@@ -257,7 +261,10 @@ comment naming what brings it back, not a declared value.
 **Constraints across parameters** are structured data, not expressions: `constraints: [{exactly_one_of:
 [power_in_watt, share_of_maximum_pv_potential]}]`, checked against the parameter declarations and the defaults when
 the assembly is loaded and against the resolved values per import; a parameter at `none`, `AUTO` or `false` counts as
-unstated. Not in
+unstated (`0` is stated). The defaults state exactly one member, so an import writing none passes; **stating one member
+unstates the others' defaults** (decided, owner, 2026-10-07, D27): when the import states one member, the others
+resolve to `none` whatever their defaults; a member written as `none` (or `AUTO`/`false`) is an explicit
+unstatement, not a stated member; an import stating two members is refused (`EF-77`). Not in
 v1 (D26): `{at_most_one_of: […]}` and `{requires: {tilt_in_degree: [azimuth_in_degree]}}`; an assembly expresses them
 as an enum parameter selecting a variant. **Internal
 variants partition their selector:** the `when:` lists must cover every allowed value of the selecting parameter exactly
@@ -497,8 +504,12 @@ controller is an L1 as well (`ElectricityTargetFromEMS`, the car twin). A **cont
 `control/ems_self_consumption` first, later `control/ems_tariff` and `control/ems_peak_shaving`, each with the EMS as
 member, observing the flows and outputting their grid balance (§4.3). **In v1 (D26)** the controller ranks what its
 class ranks, at the class's own weights (residents 1, space heating 2, hot water 3, solar thermal 4, battery 6), and
-the k-th further instance of a kind gets `default + k` in written order; a `target_input` output is ranked by exactly
-one controller (by none only with `optional: true`), and a weight reaching 999 is a load error.
+the k-th further instance (participant) of a kind gets `default + k` in written order, every ranked feed of one
+participant at its offset, and a feed without a component type at its declared weight; a `target_input` output is ranked
+by exactly one controller (by none only with `optional: true`). **A derived weight that reaches another kind's base
+weight is refused** (decided, owner, 2026-10-07, D27): when `default + k` (`k > 0`) equals the weight the class ranks
+another kind at, or the measured weight 999, the load error (`EF-7V`) names both participants and the weight, and the
+remedy is to pin the weight on a written feed (a second space heater at 2 + 1 would tie with hot water at 3).
 
 **Not in v1 (D26)**, until a tariff controller needs another order: a `priorities` parameter, the ordered list of
 selectors it actuates:
@@ -642,7 +653,11 @@ providers and binding rule apply unchanged (`engine.py:193-225`, `:311-348`). Th
   read, which needs the `Many` aggregation implemented with an explicit `Sum` (`laws.py:228-241` raise today). The
   battery's fact port reads `pv_peak_power_in_watt` with `many: true`; the expansion writes
   `sizing_sources: {pv_peak_power_in_watt: [pv-east-PVSystem, pv-west-PVSystem, …]}` in instance order, which the
-  engine reads in written order (`engine.py:387-399`).
+  engine reads in written order (`engine.py:387-399`). The battery's class laws are these sums and its preset
+  `sized_to_pv` leaves both fields `AUTO` (decided, owner, 2026-10-07, D27): there are no one-array laws. Over one
+  array the sum is that array's value, so every twin's numbers stay and only the law its audit names changes; a
+  hand-built context states the arrays' values as a tuple, `SizingContext(pv_peak_power_in_watt=(p,))`, which a law
+  reading the fact once refuses.
 - **A fact an import makes ambiguous.** Not in v1 (D26): there a scalar read with two providers is refused as ambiguous
   and the author writes the `sizing_sources` line. The design: a burner inside a DHW assembly contributes
   `maximal_thermal_power_in_watt` as the space-heating boiler does, and the buffer's volume law reads that fact
@@ -1114,6 +1129,14 @@ All by the owner on 2026-10-03.
 - **D26 — Lean v1 (owner, 2026-10-06):** see §13.1; the cut list there supersedes D7 and D23 for v1. Revised 2026-10-07
   after the review of this PR: a flat integer `order:` on site entries and imports returns (the twin's sequence
   interleaves them and the sequence moves results); `optional-bind:` must name a partner the file declares.
+
+- **D27 — Three rules after the review of part 2 (owner, 2026-10-07):** (a) stating one member of an `exactly_one_of`
+  unstates the others' defaults: the import stating one member resolves the others to `none` (a written `none` is an unstatement), stating two is refused
+  (`EF-77`), and the library check keeps requiring the defaults to state exactly one (§2.6); (b) the battery preset
+  leaves its fields `AUTO` to the class laws `Sum(Many(...))`, which size it to every array, and the one-array laws are
+  deleted; over one array the numbers are unchanged, the audit's law string changes (§6); (c) a derived weight
+  `default + k` that reaches another kind's base weight in the controller's weights, or 999, is refused (`EF-7V`),
+  naming both participants and the weight; the remedy is a pinned weight on the feed (§4.4).
 
 ### 14.2 Open
 

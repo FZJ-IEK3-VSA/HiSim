@@ -8,7 +8,10 @@ defaulted beyond the declarations: a value that does not fit is a load error nam
 parameter and what would fit.
 
 A parameter is *stated* for a constraint when its resolved value is neither ``none``, nor ``AUTO``,
-nor ``false``; ``0`` is a stated value.
+nor ``false``; ``0`` is a stated value. Stating one member of an ``exactly_one_of`` unstates the
+others' defaults (D27): when the import writes one member, the others resolve to ``none`` whatever
+their defaults; an import writing two members is refused. Written nothing, the defaults stand, and
+the library check has made sure exactly one of them is stated.
 """
 
 from __future__ import annotations
@@ -61,6 +64,31 @@ class ParameterChecks:
         return value is not None and value is not False and value != cls.AUTO_SPELLING
 
     @classmethod
+    def written_alone(cls, names: Tuple[str, ...], given: Mapping[str, Any], values: Dict[str, Any]) -> Optional[str]:
+        """Applies one ``exactly_one_of`` to the values an import writes (D27), or names why it cannot.
+
+        The one member the import states unstates the others' defaults: they resolve to ``none``. A member the
+        import writes as ``none`` (or ``AUTO``/``false``) is an explicit unstatement, not a written member.
+
+        Args:
+            names: The constraint's members.
+            given: The values the import writes.
+            values: The resolved parameter set, updated in place.
+
+        Returns:
+            ``None``, or the violation when the import writes two or more members.
+        """
+        written = [name for name in names if name in given and cls.is_stated(given[name])]
+        if len(written) > 1:
+            return (
+                f"the import states {len(written)} of them ({', '.join(written)}); state one, and the others "
+                "resolve to none"
+            )
+        if written:
+            values.update({name: None for name in names if name not in written})
+        return None
+
+    @classmethod
     def violation(cls, names: Tuple[str, ...], values: Mapping[str, Any]) -> Optional[str]:
         """Names how a resolved parameter set violates one ``exactly_one_of``, or ``None``."""
         stated = [name for name in names if cls.is_stated(values.get(name))]
@@ -91,7 +119,7 @@ class Selection:
         """A port's requirement state for these parameters (§3.1); a site entry's port has none to read."""
         if port.active_when and not self.holds(port.active_when):
             return PortState.INACTIVE
-        if port.section == "provides":
+        if port.is_provision:
             return PortState.PROVIDED
         if port.required_when:
             return PortState.REQUIRED if self.holds(port.required_when) else PortState.INACTIVE
@@ -120,7 +148,8 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
 
     Raises:
         EnergySystemAssemblyError: ``EF-76`` for an unknown parameter, a value that does not fit or a
-            variant selector left at no value, ``EF-77`` for a violated ``exactly_one_of``.
+            variant selector left at no value, ``EF-77`` for a violated ``exactly_one_of`` or one the
+            import writes two members of.
     """
     declarations = assembly.parameters
     values: Dict[str, Any] = {name: declaration.default for name, declaration in declarations.items()}
@@ -145,7 +174,7 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
             )
         values[name] = written
     for names in assembly.exactly_one_of:
-        violation = ParameterChecks.violation(names, values)
+        violation = ParameterChecks.written_alone(names, given, values) or ParameterChecks.violation(names, values)
         if violation is not None:
             raise EnergySystemAssemblyError(
                 EnergySystemErrorId.CONSTRAINT_VIOLATED,

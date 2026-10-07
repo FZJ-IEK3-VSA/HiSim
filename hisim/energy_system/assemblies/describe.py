@@ -87,10 +87,25 @@ class AssemblyDescription:
             text = f"need from {' | '.join(port.partner)} into {', '.join(port.into)}"
             text += f", wires {dict(port.wires)}" if port.wires is not None else ""
         elif port.kind == PortKind.PROVIDED:
-            text = f"provides {port.output}" + (" (controllable: part 2)" if "controllable" in port.raw else "")
+            controllable = ", ".join(f"{key} {value}" for key, value in port.controllable.items())
+            text = f"provides {port.output}" + (f" (controllable: {controllable})" if controllable else "")
+        elif port.kind == PortKind.CIRCUIT:
+            text = f"circuit {port.circuit} end at {', '.join(port.members)}"
+        elif port.kind == PortKind.CARRIER:
+            text = f"carrier {port.carrier}: " + (
+                f"consumes {', '.join(port.outputs)}"
+                if port.outputs
+                else f"provided, metered by {port.meter or 'none'}"
+            )
+        elif port.kind == PortKind.FACT:
+            text = f"fact {port.fact} " + (
+                f"from {port.members[0]}"
+                if port.is_provision
+                else f"into {', '.join(port.into)}" + (", many" if port.many else "")
+            )
         else:
-            text = f"{port.kind.value} port (lowered in part 2)"
-        if port.section == "provides":
+            text = f"observes {port.selection.text() if port.selection else ''} into {', '.join(port.into)}"
+        if port.is_provision:
             state = "provided"
         elif port.required_when:
             state = "required when " + cls._conditions(port.required_when)

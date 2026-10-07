@@ -6,9 +6,10 @@ sends activation/deactivation siganls to components.
 The component with the lowest source weight is activated first.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from typing import Any, List, Tuple, Optional, cast
+from types import MappingProxyType
+from typing import Any, ClassVar, List, Mapping, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -43,12 +44,17 @@ class EMSConfig(ConfigBase):
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     limit_to_shave: float = 0
     # increase building set temperatures for heating when PV surplus is available.
-    # Must be smaller than difference of set_heating_temperature and set_cooling_temperature
-    building_indoor_temperature_offset_value: float = 2
+    # Must be smaller than difference of set_heating_temperature and set_cooling_temperature.
+    # The three offsets are declared in °C, the unit of the modifier outputs they become.
+    building_indoor_temperature_offset_value: float = field(default=2, metadata={"unit": lt.Units.CELSIUS})
     # increase in dhw buffer set temperatures when PV surplus is available for heating
-    domestic_hot_water_storage_temperature_offset_value: float = 10
+    domestic_hot_water_storage_temperature_offset_value: float = field(
+        default=10, metadata={"unit": lt.Units.CELSIUS}
+    )
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
-    space_heating_water_storage_temperature_offset_value: float = 10
+    space_heating_water_storage_temperature_offset_value: float = field(
+        default=10, metadata={"unit": lt.Units.CELSIUS}
+    )
     #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
     #: postprocessing look the device up in the cost database instead.
     device_co2_footprint_in_kg: Optional[float] = None
@@ -133,6 +139,25 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     """
 
     cost_relevance = CostRelevance.PRICED
+
+    #: The weight each kind of participant the controller ranks is fed at by default: its rank in the
+    #: surplus distribution, lowest first (residents, space heating, hot water, solar thermal, the
+    #: home battery). The dynamic default connections below take their weights from here, and a
+    #: controller assembly's priority list starts from these values (``assemblies_spec.md`` §4.4):
+    #: the k-th further participant of one kind gets ``default + k``, refused where that reaches another
+    #: kind's weight (D27). 999 (``DynamicConnectionChannel.MONITORED_ONLY_WEIGHT``) is never a rank, it
+    #: marks a participant that is only measured.
+    DEFAULT_WEIGHTS: ClassVar[Mapping[lt.ComponentType, int]] = MappingProxyType(
+        {
+            lt.ComponentType.RESIDENTS: 1,
+            lt.ComponentType.HEAT_PUMP_BUILDING: 2,
+            lt.ComponentType.ELECTRIC_HEATING_SH: 2,
+            lt.ComponentType.HEAT_PUMP_DHW: 3,
+            lt.ComponentType.ELECTRIC_HEATING_DHW: 3,
+            lt.ComponentType.SOLAR_THERMAL_SYSTEM: 4,
+            lt.ComponentType.BATTERY: 6,
+        }
+    )
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
@@ -374,7 +399,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.PV,
                     lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 ],
-                source_weight=999,
+                source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
             )
         )
 
@@ -399,7 +424,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=1,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.RESIDENTS],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
                     source_tags=[
@@ -434,7 +459,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.HEAT_PUMP_BUILDING,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=2,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.HEAT_PUMP_BUILDING],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOfSH{more_advanced_heat_pump_class_name}_",
                     source_tags=[
@@ -456,7 +481,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.HEAT_PUMP_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=3,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.HEAT_PUMP_DHW],
                 # The DHW electrical power output only exists when the heat pump
                 # has domestic hot water preparation enabled; allow this mandatory
                 # input to remain unconnected when DHW is deactivated.
@@ -493,7 +518,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.ELECTRIC_HEATING_SH,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=2,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.ELECTRIC_HEATING_SH],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
                     source_tags=[
@@ -515,7 +540,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.ELECTRIC_HEATING_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=3,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.ELECTRIC_HEATING_DHW],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
                     source_tags=[
@@ -545,7 +570,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=6,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.BATTERY],
             )
         )
 
@@ -571,7 +596,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.SOLAR_THERMAL_SYSTEM,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=4,
+                source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.SOLAR_THERMAL_SYSTEM],
                 target_output=dynamic_component.DynamicComponentTargetOutput(
                     source_output_name=f"ElectricityToOrFromGridOf{solar_thermal_class_name}_",
                     source_tags=[
@@ -596,7 +621,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         List[ComponentInput],
     ]:
         """Sorts dynamic Inputs and Outputs according to source weights."""
-        inputs = [elem for elem in self.my_component_inputs if elem.source_weight != 999]
+        measured = DynamicConnectionChannel.MONITORED_ONLY_WEIGHT
+        inputs = [elem for elem in self.my_component_inputs if elem.source_weight != measured]
 
         source_tags = [elem.source_tags[0] for elem in inputs]
         source_weights = [elem.source_weight for elem in inputs]

@@ -294,8 +294,13 @@ class EnergySystemExecutor:
                 expanded, bindings=bindings, path_resolver=self.path_resolver
             )
             wired, wiring_warnings = wire_energy_system(
-                expanded, configured, self.simulation_parameters
+                expanded,
+                configured,
+                self.simulation_parameters,
+                consuming=imports.consuming,
+                selection=imports.selection if imports.selection.observers or imports.selection.controllables else None,
             )
+            expanded = self.with_selected_feeds(expanded, wired)
         except EnergySystemCatalogueError as error:
             # A refusal of a component the expansion of imports produced names where it came from.
             imports.source_map.annotate(error)
@@ -318,6 +323,22 @@ class EnergySystemExecutor:
             rerun=self.rerun,
             imports=imports,
         )
+
+    @staticmethod
+    def with_selected_feeds(model: EnergySystemFile, wired: WiredSystem) -> EnergySystemFile:
+        """The file with every observer's selected feeds written after its own inputs, as the record states it.
+
+        A re-run of the realized record reads them as written feeds and selects nothing
+        (``assemblies_spec.md`` §4.2). A file without observers comes back as the same object.
+        """
+        if not wired.selected_feeds:
+            return model
+        components = dict(model.components)
+        for observer, feeds in wired.selected_feeds:
+            components[observer] = components[observer].model_copy(
+                update={"inputs": tuple(components[observer].inputs) + tuple(feeds)}
+            )
+        return model.model_copy(update={"components": components})
 
     def register(
         self, model: EnergySystemFile, wired: WiredSystem, expansion: ExpansionRecord

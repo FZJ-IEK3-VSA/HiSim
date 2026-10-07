@@ -473,7 +473,7 @@ def setup_function(
 
         # Build Battery
         my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-            SizingContext(pv_peak_power_in_watt=concrete(my_photovoltaic_system_config.power_in_watt))
+            SizingContext(pv_peak_power_in_watt=(concrete(my_photovoltaic_system_config.power_in_watt),))
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
             my_simulation_parameters=my_simulation_parameters,

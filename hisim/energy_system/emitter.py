@@ -337,6 +337,8 @@ class EnergySystemEmitter:
         document.update(entry.verbs.to_document())
         if entry.ports:
             document["ports"] = {name: dict(port.raw) for name, port in entry.ports.items()}
+        if entry.observes is not None:
+            document["observes"] = entry.observes.to_document()
         return document
 
     @classmethod

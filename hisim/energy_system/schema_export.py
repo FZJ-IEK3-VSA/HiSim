@@ -40,6 +40,7 @@ import typing
 from pathlib import Path
 from typing import Any, Dict, Sequence
 
+from hisim import loadtypes as lt
 from hisim.config.introspection import ConfigDescription, describe_config
 from hisim.config.presets import constructors_of
 from hisim.energy_system.assemblies.model import AssemblyFile
@@ -205,7 +206,6 @@ class SchemaBuilder:
                     {"$ref": "#/$defs/explicit_wire"},
                     {"$ref": "#/$defs/aggregator_feed"},
                     {"$ref": "#/$defs/port_placeholder"},
-                    {"$ref": "#/$defs/observes_placeholder"},
                 ]
             },
             **self.assembly_definitions(),
@@ -275,8 +275,8 @@ class SchemaBuilder:
     def assembly_definitions(cls) -> Dict[str, Any]:
         """The ``$defs`` schema version 4 adds, which the assembly file's schema shares.
 
-        A port's ``need``/``provided`` keys and the part-2 kinds' spellings (circuit, carrier, fact,
-        observer, ``controllable``) follow :class:`~hisim.energy_system.imports_reader.ImportsReader`;
+        A port's spellings — need, provided output (with ``controllable``), circuit end, carrier,
+        fact, observer — and the selections follow :class:`~hisim.energy_system.imports_reader.ImportsReader`;
         the constructs lean v1 cuts (D26) are not admitted.
         """
         conditions = {
@@ -287,6 +287,21 @@ class SchemaBuilder:
         names = {
             "oneOf": [{"$ref": "#/$defs/name"}, {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}}]
         }
+
+        def one_or_list(item: Dict[str, Any]) -> Dict[str, Any]:
+            return {"oneOf": [item, {"type": "array", "minItems": 1, "items": item}]}
+
+        selector = {
+            "type": "object",
+            "additionalProperties": False,
+            "minProperties": 1,
+            "properties": {
+                "component_type": one_or_list({"enum": list(lt.ComponentType.__members__)}),
+                "flow": one_or_list({"enum": list(lt.InandOutputType.__members__)}),
+                "output": one_or_list({"$ref": "#/$defs/name"}),
+            },
+        }
+        carrier = {"enum": [item.value for item in lt.EnergyBalanceCarrier]}
         port_properties: Dict[str, Any] = {
             "partner": names,
             "into": names,
@@ -297,18 +312,19 @@ class SchemaBuilder:
                 "additionalProperties": False,
                 "properties": {
                     "target_input": {"$ref": "#/$defs/name"},
-                    "via": {"type": "string"},
+                    "via": {"$ref": "#/$defs/name"},
                     "optional": {"type": "boolean"},
                 },
+                "oneOf": [{"required": ["target_input"]}, {"required": ["via"], "not": {"required": ["optional"]}}],
             },
             "circuit": {"$ref": "#/$defs/name"},
             "member": names,
-            "carrier": {"$ref": "#/$defs/string_or_param"},
+            "carrier": carrier,
             "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
             "meter": {"$ref": "#/$defs/name"},
-            "fact": {"$ref": "#/$defs/string_or_param"},
+            "fact": {"$ref": "#/$defs/name"},
             "many": {"type": "boolean"},
-            "default": {"type": "string"},
+            "default": {"$ref": "#/$defs/selection"},
             "optional": {"type": "boolean"},
             "required_when": conditions,
             "active_when": conditions,
@@ -326,21 +342,14 @@ class SchemaBuilder:
             "site_port": {
                 "type": "object",
                 "additionalProperties": False,
-                "properties": {
-                    key: ({"type": "string"} if key == "carrier" else port_properties[key]) for key in site_keys
-                },
+                "properties": {key: port_properties[key] for key in site_keys},
             },
+            "selection": {"oneOf": [{"const": "declared"}, {"type": "array", "minItems": 1, "items": selector}]},
             "port_placeholder": {
                 "type": "object",
                 "additionalProperties": False,
                 "required": ["$port"],
                 "properties": {"$port": {"$ref": "#/$defs/name"}},
-            },
-            "observes_placeholder": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["$observes"],
-                "properties": {"$observes": {"$ref": "#/$defs/name"}},
             },
             "import": {
                 "type": "object",
@@ -358,7 +367,7 @@ class SchemaBuilder:
                         "additionalProperties": {"type": "object", "properties": reserved},
                     },
                     **cls.verb_properties(),
-                    "observes": {"type": "array"},
+                    "observes": {"$ref": "#/$defs/selection"},
                     **reserved,
                 },
             },
@@ -396,6 +405,7 @@ class SchemaBuilder:
                     "description": "What a top-level entry of a version-4 file needs from an import (§3).",
                 },
                 **self.verb_properties(),
+                "observes": {"$ref": "#/$defs/selection"},
                 "order": self.ORDER,
             },
             "allOf": [self._class_branch(component) for component in self.classes],

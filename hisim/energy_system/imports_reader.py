@@ -15,18 +15,20 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple
 
+from hisim import loadtypes as lt
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
 from hisim.energy_system.imports_model import (
     BindingVerbs,
     ImportEntry,
     InstanceEntry,
-    ObservesPlaceholder,
     ParameterReference,
     PlacedPlaceholder,
     Port,
     PortKind,
     PortPlaceholder,
+    Selection,
+    Selector,
 )
 from hisim.energy_system.names import NameRules
 
@@ -51,6 +53,8 @@ class CutConstructs:
         "requires": "requires is not in v1: express it as an enum parameter selecting a variant",
         "priorities": "priorities are not in v1: the controller ranks what its class ranks, in the class's order",
         "actuates": "actuates is not in v1: a controllable output (controllable:) states what a controller drives",
+        "feed": "feed: overrides are not in v1: a feed has the tags and weight its observer's class declares",
+        "required": "required: is not in v1: a selector matching nothing is refused, whatever it says",
     }
 
     @classmethod
@@ -96,7 +100,7 @@ class ImportsReader:
         PortKind.OBSERVER: ("into", "default"),
     }
 
-    #: The kinds each section may hold; a site entry's ``ports`` hold needs and part-2 kinds.
+    #: The kinds each section may hold; a site entry's ``ports`` hold needs, circuit ends and carriers.
     SECTION_KINDS: ClassVar[Mapping[str, Tuple[PortKind, ...]]] = {
         "needs": (PortKind.NEED, PortKind.CIRCUIT, PortKind.CARRIER, PortKind.FACT),
         "provides": (PortKind.PROVIDED, PortKind.CIRCUIT, PortKind.CARRIER, PortKind.FACT),
@@ -104,8 +108,18 @@ class ImportsReader:
         "ports": (PortKind.NEED, PortKind.CIRCUIT, PortKind.CARRIER),
     }
 
-    #: The keys of a provided output's ``controllable`` block (read in v1, lowered in part 2).
+    #: The keys of a provided output's ``controllable`` block (§4.4): one of the first two.
     CONTROLLABLE_KEYS: ClassVar[Tuple[str, ...]] = ("target_input", "via", "optional")
+
+    #: The keys a section allows of a kind; the rest a port of that kind there must not carry.
+    SECTION_KEYS: ClassVar[Mapping[Tuple[str, PortKind], Tuple[str, ...]]] = {
+        ("needs", PortKind.CARRIER): ("carrier", "outputs"),
+        ("provides", PortKind.CARRIER): ("carrier", "meter"),
+        ("ports", PortKind.CARRIER): ("carrier", "outputs"),
+        ("needs", PortKind.FACT): ("fact", "into", "many"),
+        ("provides", PortKind.FACT): ("fact", "member"),
+        ("ports", PortKind.CIRCUIT): ("circuit",),
+    }
 
     @classmethod
     def shape_error(
@@ -205,14 +219,14 @@ class ImportsReader:
             "active_when": cls.conditions(block.get("active_when"), f"{location}.active_when"),
             "raw": block,
         }
+        allowed = cls.SECTION_KEYS.get((section, kind))
+        for key in block:
+            if allowed is not None and key in cls.KIND_KEYS[kind] and key not in allowed:
+                raise cls.shape_error(
+                    f"{location}.{key}", f"a {kind.value} port under '{section}' carries no '{key}'.", allowed=allowed
+                )
         if kind == PortKind.NEED:
             fields["partner"] = cls.names(block.get("partner"), f"{location}.partner", "partner class")
-            if site_entry is not None:
-                if "into" in block:
-                    raise cls.shape_error(f"{location}.into", f"a site entry's port '{name}' lowers into the entry.")
-                fields["into"] = (site_entry,)
-            else:
-                fields["into"] = cls.names(block.get("into"), f"{location}.into", "member")
             if "wires" in block:
                 wires = RawDocument.mapping(block["wires"], f"{location}.wires")
                 for target, source in wires.items():
@@ -223,27 +237,130 @@ class ImportsReader:
             NameRules.split_reference(block.get("output"), f"{location}.output", require_member=True)
             fields["output"] = block["output"]
             if "controllable" in block:
-                controllable = RawDocument.mapping(block["controllable"], f"{location}.controllable")
-                cls.check_keys(controllable, f"{location}.controllable", cls.CONTROLLABLE_KEYS, "a controllable block")
+                fields["controllable"] = cls._controllable(block["controllable"], f"{location}.controllable")
+        elif kind == PortKind.CIRCUIT:
+            fields["circuit"] = NameRules.check_identifier(block.get("circuit"), f"{location}.circuit", "circuit")
+        elif kind == PortKind.CARRIER:
+            carriers = [carrier.value for carrier in lt.EnergyBalanceCarrier]
+            if block.get("carrier") not in carriers:
+                raise cls.shape_error(
+                    f"{location}.carrier",
+                    f"the carrier port '{name}' names {block.get('carrier')!r}, which is no energy carrier.",
+                    allowed=carriers,
+                    offending=str(block.get("carrier")),
+                )
+            fields["carrier"] = block["carrier"]
+            if "outputs" in block or section == "needs":
+                items = block.get("outputs")
+                if not isinstance(items, list) or not items:
+                    raise RawDocument.malformed(f"{location}.outputs", items, "a non-empty list of consuming outputs")
+                for item in items:
+                    if site_entry is not None:
+                        NameRules.check_identifier(item, f"{location}.outputs", "output")
+                    else:
+                        NameRules.split_reference(item, f"{location}.outputs", require_member=True)
+                fields["outputs"] = tuple(items)
+            elif "meter" in block:
+                fields["meter"] = NameRules.check_identifier(block["meter"], f"{location}.meter", "member")
+        elif kind == PortKind.FACT:
+            fields["fact"] = NameRules.check_identifier(block.get("fact"), f"{location}.fact", "fact")
+            many = block.get("many", False)
+            if not isinstance(many, bool):
+                raise RawDocument.malformed(f"{location}.many", many, "true or false")
+            fields["many"] = many
         else:
-            fields["members"] = cls._part_two_members(kind, block, location, site_entry)
+            if block.get("default") is None:
+                raise cls.shape_error(location, f"the observer port '{name}' states its 'default' selection.")
+            fields["selection"] = cls.selection(block["default"], f"{location}.default")
+        cls._members(kind, section, block, location, site_entry, fields)
         return Port(**fields)
 
     @classmethod
-    def _part_two_members(
-        cls, kind: PortKind, block: Mapping[str, Any], location: str, site_entry: Optional[str]
-    ) -> Tuple[str, ...]:
-        """Reads the members a circuit, carrier, fact or observer port names, for the library check."""
+    def _members(
+        cls,
+        kind: PortKind,
+        section: str,
+        block: Mapping[str, Any],
+        location: str,
+        site_entry: Optional[str],
+        fields: Dict[str, Any],
+    ) -> None:
+        """Fills a port's ``into`` and ``members``, and refuses a port without the members its kind needs.
+
+        A site entry's port lowers into the entry, which is its one member; an assembly's port names
+        its members: ``into`` (a need, a fact need, an observer), ``member`` (a circuit end, a provided
+        fact), ``meter`` (a fuel provision), and the members of a carrier need's consuming outputs.
+        """
         if site_entry is not None:
-            return (site_entry,)
-        members: Tuple[str, ...] = ()
-        for key in ("member", "into", "meter"):
-            if key in block and key in cls.KIND_KEYS[kind]:
-                members += cls.names(block[key], f"{location}.{key}", "member")
-        for item in block.get("outputs") or ():
-            member, _output = NameRules.split_reference(item, f"{location}.outputs", require_member=False)
-            members += (member,)
-        return members
+            for key in ("into", "member", "meter"):
+                if key in block:
+                    raise cls.shape_error(f"{location}.{key}", "a site entry's port lowers into the entry itself.")
+            fields["members"] = (site_entry,)
+            if kind == PortKind.NEED:
+                fields["into"] = (site_entry,)
+            return
+        named = {
+            key: cls.names(block[key], f"{location}.{key}", "member") for key in ("member", "meter") if key in block
+        }
+        lands = kind in (PortKind.NEED, PortKind.OBSERVER) or (kind == PortKind.FACT and section == "needs")
+        if lands:
+            fields["into"] = cls.names(block.get("into"), f"{location}.into", "member")
+        if kind == PortKind.CIRCUIT and "member" not in named:
+            raise RawDocument.malformed(f"{location}.member", None, "the member or members at this end of the circuit")
+        if kind == PortKind.FACT and section == "provides" and len(named.get("member", ())) != 1:
+            raise RawDocument.malformed(f"{location}.member", block.get("member"), "the one member providing the fact")
+        if kind == PortKind.CARRIER and section == "provides" and fields["carrier"] != "electricity" and not named:
+            raise cls.shape_error(location, f"the provision of the fuel {fields['carrier']} names its 'meter:'.")
+        if kind == PortKind.CARRIER and fields["carrier"] == "electricity" and "meter" in named:
+            raise cls.shape_error(
+                f"{location}.meter", "electricity has no link: its meter observes (observes:); no feed lands in it."
+            )
+        consumers = tuple(item.split(".", 1)[0] for item in fields.get("outputs", ()))
+        members = fields.get("into", ()) + named.get("member", ()) + named.get("meter", ()) + consumers
+        fields["members"] = tuple(dict.fromkeys(members))
+
+    @classmethod
+    def _controllable(cls, raw: Any, location: str) -> Dict[str, Any]:
+        """Reads ``controllable: {target_input: …}`` or ``{via: <need>}`` (§4.4)."""
+        block = RawDocument.mapping(raw, location)
+        cls.check_keys(block, location, cls.CONTROLLABLE_KEYS, "a controllable block")
+        if ("target_input" in block) == ("via" in block):
+            raise cls.shape_error(location, "a controllable output names exactly one of 'target_input' and 'via'.")
+        key = "target_input" if "target_input" in block else "via"
+        NameRules.check_identifier(block[key], f"{location}.{key}", "input" if key == "target_input" else "need")
+        if "optional" in block and (key == "via" or not isinstance(block["optional"], bool)):
+            raise cls.shape_error(f"{location}.optional", "'optional: true|false' goes with a 'target_input' only.")
+        return dict(block)
+
+    @classmethod
+    def selection(cls, raw: Any, location: str) -> Selection:
+        """Reads a selection: ``declared``, or a non-empty list of selectors (§4.1)."""
+        if raw == Selection.DECLARED:
+            return Selection()
+        if not isinstance(raw, list) or not raw:
+            raise RawDocument.malformed(location, raw, "'declared' or a non-empty list of selectors")
+        vocabularies = {
+            "component_type": tuple(lt.ComponentType.__members__),
+            "flow": tuple(lt.InandOutputType.__members__),
+        }
+        selectors = []
+        for index, item in enumerate(raw):
+            where = f"{location}[{index}]"
+            block = RawDocument.mapping(item, where)
+            cls.check_keys(block, where, Selector.KEYS, "a selector")
+            if not block:
+                raise cls.shape_error(where, "an empty selector selects everything; write 'declared' for that.")
+            values: Dict[str, Tuple[str, ...]] = {}
+            for key, value in block.items():
+                values[key] = cls.names(value, f"{where}.{key}", key.replace("_", " "))
+                vocabulary = vocabularies.get(key)
+                unknown = [name for name in values[key] if vocabulary is not None and name not in vocabulary]
+                if unknown:
+                    raise cls.shape_error(
+                        f"{where}.{key}", f"'{unknown[0]}' is no {key} tag.", allowed=vocabulary, offending=unknown[0]
+                    )
+            selectors.append(Selector(**values))
+        return Selection(selectors=tuple(selectors))
 
     @classmethod
     def ports(cls, raw: Any, location: str, section: str, site_entry: Optional[str] = None) -> Dict[str, Port]:
@@ -298,15 +415,16 @@ class ImportsReader:
         placed = []
         for index, item in enumerate(raw):
             keys = set(item) if isinstance(item, dict) else set()
-            if keys & {PortPlaceholder.KEY, ObservesPlaceholder.KEY}:
-                key = PortPlaceholder.KEY if PortPlaceholder.KEY in keys else ObservesPlaceholder.KEY
-                item_location = f"{location}[{index}]"
-                cls.check_keys(item, item_location, (key,), "a placeholder")
-                name = NameRules.check_identifier(item[key], item_location, "port")
-                placeholder = (
-                    PortPlaceholder(port=name) if key == PortPlaceholder.KEY else ObservesPlaceholder(observer=name)
+            if "$observes" in keys:
+                raise cls.shape_error(
+                    f"{location}[{index}]",
+                    "an observer's selected feeds follow its own inputs; it writes no placeholder.",
                 )
-                placed.append(PlacedPlaceholder(position=index, placeholder=placeholder))
+            if PortPlaceholder.KEY in keys:
+                item_location = f"{location}[{index}]"
+                cls.check_keys(item, item_location, (PortPlaceholder.KEY,), "a placeholder")
+                name = NameRules.check_identifier(item[PortPlaceholder.KEY], item_location, "port")
+                placed.append(PlacedPlaceholder(position=index, placeholder=PortPlaceholder(port=name)))
             else:
                 items.append((index, item))
         return tuple(items), tuple(placed)
@@ -344,7 +462,7 @@ class ImportsReader:
             parameters=parameters,
             instances=instances,
             verbs=cls.verbs(block, location),
-            observes=block.get("observes"),
+            observes=cls.selection(block["observes"], f"{location}.observes") if "observes" in block else None,
             order=cls.order(block, location),
             **cls._reserved(block, location),
         )

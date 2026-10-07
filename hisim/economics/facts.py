@@ -1,28 +1,10 @@
 """Facts that components and meters declare for the cost engine (cost_spec.md §3.3, §3.4, §9.2).
 
-This module is intentionally a leaf: it imports nothing from ``hisim.component`` so the
-component base class can import it without cycles.
-
-That leaf status is a hard architectural constraint, not an accident of the current import graph.
-`hisim/component.py` carries the additive hooks `get_cost_facts`, `get_energy_flow_facts` and the
-`cost_relevance` class attribute, whose type annotations name the classes defined here; if this
-module reached back into `hisim.component` — or into any evaluator, database or timeline module that
-transitively does — importing the simulator would drag in the whole cost engine and the cycle would
-break both. Hence: only `carriers`, `uncertainty`, `loadtypes` and the KPI tag enum are imported,
-and no pricing logic of any kind lives here.
-
-**The design question this module answers**: who knows what. Components know what they *are* — asset
-class, size, technical attributes — and meters know what actually *crossed the system boundary*;
-neither knows, or should know, what anything costs. So the declaration side is reduced to these
-value types (§3.1: "components declare, the engine computes"), and every price, lifetime and
-emission factor comes from the versioned data files instead. A typical component's cost declaration
-shrinks from the ~40 lines of the legacy `get_cost_capex`/`get_cost_opex` pair to about six.
-
-Its place in the pipeline: `bridge.py` collects these objects from a finished simulation (with
-`adapter.py` synthesizing them for components that have not adopted the hooks yet), packs them into
-`EvaluationInputs`, and the evaluator turns each one into cash-flow entries. `ExistingAssetRegister`
-is the one input the simulation cannot produce at all — it describes the building as it was before
-the measure — and is supplied through `bridge.EconomicContext`.
+Components declare what they are (asset class, size, technical attributes) and meters declare what crossed the system
+boundary; prices, lifetimes and emission factors come from the data files. `bridge.py` collects these facts after a
+simulation and the evaluator turns them into cash-flow entries. `ExistingAssetRegister` describes the building before
+the measure and is supplied from outside the simulation. The module imports nothing from ``hisim.component`` or the
+engine, so the component base class can import it without a cycle.
 """
 
 from __future__ import annotations
@@ -41,25 +23,13 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 
 class CostRelevance(str, enum.Enum):
-    """Mandatory class-level declaration of a component's cost role (§9.2).
+    """A component class's mandatory declaration of its cost role (§9.2).
 
-    Declared as a `ClassVar` on every `Component` subclass, this closes the one failure mode the
-    "return None means no costs" default introduces: a *forgotten* `get_cost_facts` implementation
-    would otherwise drop a component from every cost result without any complaint. Because the class
-    must state its role, the completeness check can compare intent against behavior at component
-    registration — an `UNDECLARED` component, or a `PRICED` one whose facts do not build, aborts the
-    run before the timestep loop starts rather than producing a quietly incomplete cost report.
-
-    `UNDECLARED` exists only as the base-class default, so that a component class is loadable
-    before anyone has classified it. It is not a tolerated state and there is no lenient mode: a
-    component that reaches the cost engine still carrying `UNDECLARED` aborts the evaluation
-    (decision D7), and every component in this repository must name its role explicitly. Three
-    things now hold that line together — `adapter.effective_cost_relevance` reports the
-    declaration verbatim and infers nothing,
-    `tests/test_economics_adapter_contract.py::test_every_component_class_declares_cost_relevance`
-    fails on any `Component` subclass in `hisim.components` without a declaration in its own class
-    body, and `simulator.Simulator.check_cost_declarations` aborts a `COMPUTE_LIFECYCLE_COSTS` run
-    before the first timestep if one slipped through anyway.
+    Every `Component` subclass declares it as a `ClassVar`, so a forgotten `get_cost_facts` cannot silently drop a
+    component from the cost results: an `UNDECLARED` component, or a `PRICED` one whose facts do not build, aborts a
+    lifecycle-cost run before the first timestep. `UNDECLARED` is only the base-class default and is never accepted.
+    `adapter.effective_cost_relevance` reports the declaration without inferring anything, and
+    ``tests/test_economics_adapter_contract.py`` requires every component class to declare it in its own body.
     """
 
     UNDECLARED = "UNDECLARED"
@@ -69,22 +39,16 @@ class CostRelevance(str, enum.Enum):
 
 
 class UndeclaredCostRelevanceError(ValueError):
-    """A component in the run declares no `cost_relevance`, so the cost model cannot describe it.
+    """Raised before the run when a component class in a lifecycle-cost run declares no `cost_relevance`.
 
-    Raised by the pre-run completeness check (`simulator.check_cost_declarations`, §9.2) when a
-    lifecycle-cost run is requested and some registered component class still carries the
-    `UNDECLARED` base-class default. It is a `ValueError` because that is what
-    `Simulator.run_all_timesteps` already documents as its refusal type, and it carries the
-    offending classes so a caller can report them rather than re-parse the message.
-
-    The bridge does not raise this: a component that reaches *it* undeclared becomes an
-    `UnresolvedSubject` and fails through the same D7 path as any other undescribable subject.
-    This error exists so that a year-long simulation refuses in the first second instead of
-    running for hours and dying in postprocessing.
+    Raised by `simulator.check_cost_declarations` (§9.2), so a year-long simulation refuses in its first second instead
+    of failing in postprocessing. It carries the offending classes. It is a `ValueError` because
+    `Simulator.run_all_timesteps` documents that as its refusal type. The bridge does not raise it; an undeclared
+    component reaching the bridge becomes an `UnresolvedSubject`.
     """
 
     def __init__(self, component_classes: List[type]) -> None:
-        """Renders one bullet per offending class, in the order the components were registered."""
+        """Build the message with one bullet per offending class, in registration order."""
         self.component_classes: Tuple[type, ...] = tuple(component_classes)
         bullets = "\n".join(f"  - {describe_undeclared_class(cls)}" for cls in self.component_classes)
         super().__init__(
@@ -96,23 +60,15 @@ class UndeclaredCostRelevanceError(ValueError):
 
 
 class UnpriceableComponentError(ValueError):
-    """A component declares `PRICED` but nothing in the code base can say what it is.
+    """Raised before the run when a component declares `PRICED` but no code can describe it.
 
-    Raised by the pre-run completeness check (`simulator.check_cost_declarations`, §9.2) alongside
-    `UndeclaredCostRelevanceError`, and for the same reason: a lifecycle-cost run that cannot
-    describe one of its devices is going to abort in postprocessing on the D7 check, and finding
-    that out after a year-long simulation costs hours for a defect that is visible before the first
-    timestep. The two errors are separate because the fixes are: an undeclared class needs one line
-    naming its role, an unpriceable one needs a `get_cost_facts` hook or an adapter entry plus, in
-    most cases, a `devices_<COUNTRY>.json` row to price it against.
-
-    It is a `ValueError` for the same reason as its sibling — that is what
-    `Simulator.run_all_timesteps` documents as its refusal type — and it carries the offending
-    classes so a caller can report them rather than re-parse the message.
+    Raised by `simulator.check_cost_declarations` (§9.2) next to `UndeclaredCostRelevanceError`. The fix differs: the
+    component needs a `get_cost_facts` hook or an adapter entry, and usually a ``devices_<COUNTRY>.json`` row. It
+    carries the offending classes and is a `ValueError` for the same reason as its sibling.
     """
 
     def __init__(self, component_classes: List[type]) -> None:
-        """Renders one bullet per offending class, in the order the components were registered."""
+        """Build the message with one bullet per offending class, in registration order."""
         self.component_classes: Tuple[type, ...] = tuple(component_classes)
         bullets = "\n".join(f"  - {describe_unpriceable_class(cls)}" for cls in self.component_classes)
         super().__init__(
@@ -125,18 +81,15 @@ class UnpriceableComponentError(ValueError):
 
 
 def describe_undeclared_class(component_class: type) -> str:
-    """One sentence naming an undeclared component class and what its author has to write.
+    """Return one sentence naming an undeclared component class, its module, and what its author must write.
 
-    Shared by the pre-run completeness check and the postprocessing bridge so that both failure
-    paths say the same thing about the same defect, and so the message always carries the module
-    the class lives in — without it the reader of a failed run has to grep for a class name.
+    Shared by the pre-run check and the bridge so both report the defect the same way.
 
     Args:
         component_class: The `Component` subclass that carries no own `cost_relevance`.
 
     Returns:
-        The message, without a trailing newline and without bullet punctuation, so a caller can
-        embed it in a list or use it as an `UnresolvedSubject.reason` unchanged.
+        The message, without trailing newline or bullet, usable as an `UnresolvedSubject.reason`.
     """
     return (
         f"{component_class.__name__} (module {component_class.__module__}) declares no "
@@ -147,18 +100,15 @@ def describe_undeclared_class(component_class: type) -> str:
 
 
 def describe_unpriceable_class(component_class: type) -> str:
-    """One sentence naming a PRICED class with no facts source and what its author has to write.
+    """Return one sentence naming a PRICED class with no facts source, its module, and what its author must write.
 
-    The counterpart of `describe_undeclared_class` for the second half of the §9.1 contract, and
-    shared for the same reason: the pre-run check and the adapter's own refusal should say the same
-    thing about the same defect, and the message has to carry the module the class lives in so the
-    reader of a failed run does not have to grep for a class name.
+    Shared by the pre-run check and the adapter so both report the defect the same way (§9.1).
 
     Args:
         component_class: The `Component` subclass declaring PRICED with no facts source.
 
     Returns:
-        The message, without a trailing newline and without bullet punctuation.
+        The message, without trailing newline or bullet.
     """
     return (
         f"{component_class.__name__} (module {component_class.__module__}) declares "
@@ -170,28 +120,20 @@ def describe_unpriceable_class(component_class: type) -> str:
 
 
 def missing_meter_column_error(component_name: str, field_name: str, role: str) -> CostDataError:
-    """The refusal for a meter output the meter's class declares but the run does not contain.
+    """Return the error for a meter output that the meter's class declares but the run does not contain.
 
-    A meter is the only place a carrier can be billed from (§3.4), so a column it declares and the
-    run does not hold is not a gap the engine may work around: summing what is there and skipping
-    what is not publishes a bill that is quietly missing a flow — an unbilled carrier, a feed-in
-    revenue silently zero, a capacity charge silently dropped. Raising instead makes the meter an
-    unresolved subject in `bridge.build_evaluation_inputs`, and the D7 check refuses to price the
-    rest of the fleet around the hole.
-
-    It lives here rather than in the bridge because both halves of the §3.4 boundary need it and
-    they sit on opposite sides of the wiring: the bridge raises it for a meter it reads through a
-    `MeterSpec`, and a meter that has adopted `get_energy_flow_facts` raises it for itself — and a
-    component may not import the postprocessing bridge that walks it. Two wordings for one defect
-    is how the hook came to report a silent zero where the fallback aborted.
+    A meter is the only place a carrier is billed from (§3.4), so a missing column must not be skipped: the bill would
+    silently lack a flow. The error makes the meter an unresolved subject and the evaluation refuses to price the rest.
+    It lives here so both the bridge (reading via a `MeterSpec`) and a meter implementing `get_energy_flow_facts` raise
+    the same error; a component may not import the bridge.
 
     Args:
-        component_name: The meter instance whose column is missing, named in the message.
+        component_name: The meter instance whose column is missing.
         field_name: The output field name that was looked for.
-        role: What that column carries, in the message's words ("bought energy", "peak power").
+        role: What the column carries, in plain words ("bought energy", "peak power").
 
     Returns:
-        The `CostDataError` to raise; the caller raises it so the traceback points at the lookup.
+        The `CostDataError`; the caller raises it so the traceback points at the lookup.
     """
     return CostDataError(
         f"Meter {component_name}: the {role} column {field_name!r} declared by its class "
@@ -204,11 +146,10 @@ def missing_meter_column_error(component_name: str, field_name: str, role: str) 
 def _coerce_uncertain(
     value: Optional[Union[float, int, UncertainValue]],
 ) -> Optional[UncertainValue]:
-    """Accepts a plain number as an exact band (§3.9).
+    """Turn a plain number into an exact band (§3.9); None stays None.
 
-    Applied to every monetary override field in `__post_init__`, so a component author can write
-    `investment_cost_override_in_euro=4200` and still have the engine see a proper triplet. `None`
-    passes through unchanged, because "no override" and "an override of zero" are different things.
+    Lets a component author write ``investment_cost_override_in_euro=4200``. None means "no override", which differs
+    from an override of zero.
     """
     if value is None or isinstance(value, UncertainValue):
         return value
@@ -217,29 +158,17 @@ def _coerce_uncertain(
 
 @dataclass
 class ComponentCostFacts:
-    """Facts a component declares about itself for cost/emission evaluation. No prices.
+    """Facts a component declares about itself for cost and emission evaluation; never prices.
 
-    The replacement for `get_cost_capex`/`get_cost_opex`: a component says which cost-database row
-    describes it (`asset_class`), how big it is (`size` in `size_unit`) and — only where it genuinely
-    knows better than the database — supplies per-field overrides. Everything monetary is then looked
-    up by the engine, which is what makes prices versioned, sourced, country-specific and
-    scenario-overlayable instead of hard-coded in component modules.
+    The component names its cost-database row (`asset_class`), its size (`size` in `size_unit`), and optionally
+    per-field overrides where it knows better than the database. Each override replaces one field only.
+    `purchase_cost_override_in_euro` prices only the year-0 purchase as a whole (e.g. a reader's quote covering device,
+    installation, planning and removal); later purchases are priced from the database. `override_source` is required
+    when any override is set (strict mode, §9.3) and is recorded in the provenance ledger. `technical_attributes` holds
+    values subsidy conditions read (§5.4), such as an SCOP or a U-value, and must be JSON-serializable.
 
-    Three properties are worth a reviewer's attention. Overrides are **per field**, so quoting a real
-    installer price for the device no longer forces the caller to also invent a lifetime and a
-    maintenance rate. `purchase_cost_override_in_euro` is the one override that prices a single
-    purchase rather than the subject: the year-0 purchase as a whole (a reader's quote, covering
-    device, installation, planning and removal), every later purchase priced as without it.
-    `override_source` is mandatory whenever any override is set (strict mode,
-    §9.3) and lands in the provenance ledger, so an overridden number stays as traceable as a
-    database one. And `technical_attributes` is the free-form channel subsidy eligibility conditions
-    read (§5.4) — an SCOP, a refrigerant, an achieved U-value — which is why it must be
-    JSON-serializable: it is exported and re-read on `evaluate`/`explain` runs.
-
-    Envelope measures (wall insulation, windows, doors, ventilation — §3.2b) use the same type even
-    though they are not simulation components at all: whoever defines the variant wraps their facts
-    in an `evaluator.SubjectCostFacts` and injects them into `EvaluationInputs` directly, sized in m²
-    of the respective element.
+    Envelope measures (insulation, windows, doors, ventilation, §3.2b) use the same type, sized in m², wrapped in
+    `evaluator.SubjectCostFacts` and injected into `EvaluationInputs` directly.
     """
 
     #: Size units the cost database can price against.
@@ -256,46 +185,40 @@ class ComponentCostFacts:
     size_unit: Units  # KILOWATT / KWH / LITER / SQUARE_METER / ANY
     kpi_tag: Optional[KpiTagEnumClass] = None
     count: int = 1
-    # Per-field overrides (no more all-or-nothing). Monetary overrides are UncertainValue
-    # triplets (§3.9); a plain number is accepted and means exact (min = best_estimate = max):
+    # Per-field overrides. Monetary overrides are UncertainValue triplets (§3.9); a plain number is accepted
+    # and means exact (min = best_estimate = max):
     investment_cost_override_in_euro: Optional[UncertainValue] = None
     installation_cost_override_in_euro: Optional[UncertainValue] = None
     lifetime_override_in_years: Optional[float] = None
     maintenance_rate_override: Optional[UncertainValue] = None
     fixed_operation_cost_override_in_euro_per_year: Optional[UncertainValue] = None
     embodied_co2_override_in_kg: Optional[float] = None
-    # The whole year-0 purchase as one stated amount -- device, installation, planning and the
-    # removal of what it replaces -- e.g. a reader's quote for a measure (renovisorissues #53).
-    # Unlike `investment_cost_override_in_euro` it prices that one purchase only: replacements,
-    # maintenance and the lifetime stay what the database (or the other overrides) state.
+    # The whole year-0 purchase as one stated amount (device, installation, planning and removal of what it
+    # replaces), e.g. a reader's quote for a measure. Unlike `investment_cost_override_in_euro` it prices that
+    # one purchase only: replacements, maintenance and the lifetime stay what the database or other overrides say.
     purchase_cost_override_in_euro: Optional[UncertainValue] = None
     # Provenance of the overrides (§3.10). Mandatory whenever any override is set
     # (enforced in strict mode, §9.3); recorded in the provenance ledger.
     override_source: Optional[str] = None
-    # True when `lifetime_override_in_years` is not a lifetime anybody stated but the engine's
-    # fallback, standing in because the cost database has no entry for the class (hisim-ryw1): the
-    # result document then says `engine_fallback` rather than calling it the request's.
+    # True when `lifetime_override_in_years` is the engine's fallback, used because the cost database has no
+    # entry for the class, rather than a stated lifetime; the result document then says `engine_fallback`.
     lifetime_is_engine_fallback: bool = False
-    # True when the subject's price is unknown rather than zero: the investment override is a
-    # placeholder zero because nobody stated a price (an envelope measure without a cost block,
-    # renovisorissues #77). The engine books it at zero, but a fixed-amount grant, which is capped
-    # at the eligible cost, cannot be valued against it (`is_unpriced`).
+    # True when the subject's price is unknown rather than zero: the investment override is a placeholder zero
+    # because nobody stated a price (e.g. an envelope measure without a cost block). The engine books it at
+    # zero, but a fixed-amount grant capped at the eligible cost cannot be valued against it (`is_unpriced`).
     price_is_unknown: bool = False
-    # The asset class whose service life the subject is renewed on, when it is part of another
-    # subject's system rather than a device with a life of its own: the battery's
-    # energy-management controller lives and is renewed with the battery (renovisorissues #77).
-    # The engine reads that class's `service_life_in_years`; `lifetime_override_in_years` still wins.
+    # The asset class whose service life this subject is renewed on, when it is part of another subject's
+    # system rather than a device with a life of its own: the battery's energy-management controller is renewed
+    # with the battery. The engine reads that class's `service_life_in_years`; `lifetime_override_in_years` wins.
     lifetime_of_asset_class: Optional[ComponentType] = None
-    # True for a subject matched only against the register entry bound to its own name
-    # (`ExistingAsset.subject`), and bought new when the register binds none to it, whatever else
-    # the register holds of its class. Only the staged evaluator sets it, for the increment a later
-    # stage adds to a subject the house keeps (hisim-1y0m): a same-class lookup would find the
-    # enlarged asset and call the increment kept. Every other subject ignores bound entries.
+    # True for a subject matched only against the register entry bound to its own name (`ExistingAsset.subject`)
+    # and bought new when no entry is bound to it, whatever else the register holds of its class. Only the
+    # staged evaluator sets it, for the increment a later stage adds to a kept subject: a same-class lookup would
+    # find the enlarged asset and call the increment kept. Every other subject ignores bound entries.
     own_register_entry: bool = False
-    # The share of the house's energy sold that per-kWh (OPERATIONAL) subsidies of this subject are
-    # paid on, in (0, 1]. 1.0 -- the whole -- for every subject but a piece of one a staged plan
-    # split (hisim-1y0m): the unit a later stage enlarges and each increment are paid on their size
-    # share of the energy the enlarged installation sells (owner decision 2026-10-01), so the same
+    # The share of the house's sold energy that per-kWh (OPERATIONAL) subsidies of this subject are paid on, in
+    # (0, 1]. 1.0 for every subject except the pieces of one a staged plan split: the unit a later stage enlarges
+    # and each increment are paid on their size share of the energy the enlarged installation sells, so the same
     # kWh is never paid twice.
     share_of_energy_sold: float = 1.0
     # Technical attributes consumed by subsidy eligibility conditions (§5.4).
@@ -313,27 +236,17 @@ class ComponentCostFacts:
     )
 
     def __post_init__(self) -> None:
-        """Local fail-fast validation (§9.3).
+        """Validate the facts locally and turn plain-number overrides into exact bands (§9.3).
 
-        Runs at declaration time — i.e. while the component is being registered, long before the
-        timestep loop — so a mis-declared fact fails in seconds rather than after an hour of
-        simulation followed by an unusable cost report. It also normalizes the monetary overrides,
-        accepting plain numbers as exact bands. Only *local* consistency is checked here; whether the
-        cost database actually has an entry for this asset class and whether its `per_unit` matches
-        `size_unit` is the pre-run resolution check's job, since that needs the database.
-
-        A size of exactly zero is deliberately *not* an error: a setup that always builds a PV
-        system and then configures it at 0 kWp has said "not installed", which is a statement
-        about the modelled building rather than corrupt data, and `is_not_installed` is how the
-        extraction side recognizes it. Negative and non-finite sizes stay hard errors, because
-        neither can mean anything.
+        Runs when the component is registered, long before the timestep loop. Whether the database has an entry for the
+        asset class is checked later by the pre-run resolution check. A size of exactly zero is allowed and means "not
+        installed" (see `is_not_installed`).
 
         Raises:
-            ValueError: If the asset class is not a `ComponentType`, the size is negative or not
-                finite, the size unit is not priceable, `count` is below 1, the maintenance-rate
-                override is negative in any slot, a non-positive lifetime override was given, the
-                share of energy sold lies outside (0, 1], or the technical attributes are not
-                JSON-serializable.
+            ValueError: If the asset class is not a `ComponentType`, the size is negative or not finite, the size unit
+                is not priceable, `count` is below 1, the maintenance-rate override is negative in any slot, a lifetime
+                override is not positive, the share of energy sold is outside (0, 1], or the technical attributes are
+                not JSON-serializable.
         """
         self.investment_cost_override_in_euro = _coerce_uncertain(self.investment_cost_override_in_euro)
         self.installation_cost_override_in_euro = _coerce_uncertain(self.installation_cost_override_in_euro)
@@ -374,13 +287,10 @@ class ComponentCostFacts:
             raise ValueError("technical_attributes must be JSON-serializable.") from err
 
     def is_not_installed(self) -> bool:
-        """True when the component is configured at zero size, i.e. declared but not built.
+        """Return True when the component is configured at zero size, i.e. declared but not built.
 
-        System setups routinely instantiate a device unconditionally and then size it from a
-        parameter — a building sizer with `share_of_maximum_pv_potential = 0` still constructs a
-        PV system, at 0 kWp. Such a device is absent from the building, not mis-declared, so the
-        extraction side turns this into a skip with a reason rather than pricing a zero-size asset
-        or failing the whole evaluation.
+        Example: a building sizer with ``share_of_maximum_pv_potential = 0`` still constructs a PV system at 0 kWp. The
+        extraction side skips such a component with a reason instead of pricing it.
 
         Returns:
             True when `size` is exactly zero.
@@ -388,13 +298,10 @@ class ComponentCostFacts:
         return self.size == 0.0
 
     def is_unpriced(self) -> bool:
-        """True when nobody stated what the subject costs: its price is unknown, not zero.
+        """Return True when nobody stated what the subject costs, so its price is unknown rather than zero.
 
-        `price_is_unknown` marks the placeholder zero, and a stated purchase price (a reader's
-        quote, `purchase_cost_override_in_euro`) prices the purchase after all, so a quoted subject
-        is not unpriced whatever the flag says. The subsidy engine reads this to leave a fixed
-        amount capped at the eligible cost undecided rather than capped at a zero it does not know
-        (renovisorissues #77).
+        `price_is_unknown` marks a placeholder zero; a stated `purchase_cost_override_in_euro` prices the subject
+        anyway. The subsidy engine leaves a fixed grant capped at the eligible cost undecided for such a subject.
 
         Returns:
             True for a flagged subject without a stated purchase price.
@@ -402,30 +309,25 @@ class ComponentCostFacts:
         return self.price_is_unknown and self.purchase_cost_override_in_euro is None
 
     def has_overrides(self) -> bool:
-        """True if any per-field override is set (then `override_source` is required in strict mode).
+        """Return True if any per-field override is set; strict mode then requires `override_source`.
 
-        Used by the completeness/strictness checks and by the input audit, which flags a row whose
-        price came from an override that cites nothing. :attr:`OVERRIDE_FIELDS` is the authoritative
-        list of override fields; `override_source` and `technical_attributes` are deliberately not in it,
-        because neither replaces a database value.
+        :attr:`OVERRIDE_FIELDS` lists the override fields; `override_source` and `technical_attributes` are not
+        overrides.
         """
         return any(getattr(self, name) is not None for name in self.OVERRIDE_FIELDS)
 
 
 @dataclass(frozen=True)
 class QuotedPurchase:
-    """A purchase the engine holds no cost facts for, priced whole by a stated amount.
+    """A purchase the engine has no cost facts for, priced as a whole by a stated amount.
 
-    A measure HiSim has no price and no asset class for -- lagging a hot-water cylinder -- becomes
-    a cost subject only when somebody states what it costs, e.g. a reader's quote
-    (renovisorissues #53). With no asset class there is no lifetime, no maintenance rate and no
-    subsidy scheme to assess it for, so it is what it says: one INVESTMENT entry in year 0 of the
-    evaluation that buys it, never replaced, never maintained, never written down. It is booked
-    before financing, so a loan covers it like any other year-0 purchase.
+    Example: lagging a hot-water cylinder has no asset class or price in HiSim, so it is a cost subject only when
+    someone states its cost, e.g. a reader's quote. It is one INVESTMENT entry in year 0, never replaced, maintained or
+    written down, and no subsidy is assessed for it. It is booked before financing, so a loan covers it.
 
     Args:
         subject: The cost subject it is booked under (the measure id).
-        amount_in_euro: The stated amount, a band; exact for a quote.
+        amount_in_euro: The stated amount as a band; exact for a quote.
         source: Where the amount comes from, recorded in the provenance ledger (§3.10).
     """
 
@@ -443,21 +345,14 @@ class QuotedPurchase:
 
 @dataclass
 class EnergyFlowFacts:
-    """What a meter measured at a carrier boundary over the simulated period (§3.4).
+    """Energy a meter measured at a carrier boundary over the simulated period (§3.4).
 
-    The billing counterpart of `ComponentCostFacts`: implemented by the meter components
-    (`ElectricityMeter`, `GasMeter`, `FuelMeter`, `HeatingMeter`, the EMS acting as district meter),
-    it reports the integrated energy that actually crossed the system boundary for one carrier. That
-    the *only* quantities that get billed are the ones a meter declares is what makes double counting
-    structurally impossible — an internal flow between two components has no meter and therefore no
-    price — and lets postprocessing warn about a carrier some component consumes but nobody meters.
-
-    Quantities here are exact (`float`, not banded): they are measured by the simulation, not
-    estimated (§3.9). `simulated_cost_in_euro`/`simulated_revenue_in_euro` are the escape hatch for
-    dynamic tariffs, where the meter integrated load × price over the run and that integral is a
-    better year-1 bill than energy × a static average price; when set, the engine uses them instead.
-    Totals cover the *simulated* period, which the evaluator annualizes (with a warning) if it was
-    shorter than a year.
+    Meter components (`ElectricityMeter`, `GasMeter`, `FuelMeter`, `HeatingMeter`, the EMS as district meter) report
+    it. Only metered energy is billed, so an internal flow between components can never be counted twice. Quantities
+    are exact floats, since the simulation measures them (§3.9). `simulated_cost_in_euro` and
+    `simulated_revenue_in_euro` hold the integral of load × price for dynamic tariffs and are used instead of energy ×
+    average price when set. Totals cover the simulated period; the evaluator annualizes a shorter period with a
+    warning.
     """
 
     carrier: EnergyCarrier
@@ -469,7 +364,7 @@ class EnergyFlowFacts:
     simulated_revenue_in_euro: Optional[float] = None
 
     def __post_init__(self) -> None:
-        """Validation: rejects non-finite flows so a NaN cannot propagate into every KPI.
+        """Reject a NaN or infinite energy total so it cannot spread into every KPI.
 
         Raises:
             ValueError: If either energy total is NaN or infinite.
@@ -480,26 +375,18 @@ class EnergyFlowFacts:
 
 @dataclass
 class BillingDeterminants:
-    """Richer billing basis for time-of-use, dynamic and capacity tariffs (§8.4).
+    """Billing basis for flat, time-of-use, dynamic and capacity tariffs (§8.4).
 
-    Supersedes :class:`EnergyFlowFacts` when a non-flat tariff contract is active.
-
-    A flat tariff needs only annual kWh; anything else needs the *shape* of consumption, which only
-    the simulation can supply and which cannot be reconstructed from an annual total afterwards.
-    Hence the extra determinants: per-band energy for time-of-use contracts, the integral of load ×
-    spot price for dynamic supply, per-billing-period and annual peaks for capacity charges, and the
-    unweighted mean spot price. That last one is what lets the §8.5 decomposition separate the pure
-    *volume* effect (how much was consumed) from the *flexibility value* (how well it was timed) —
-    the two escalate at different rates, so they must not be projected as one number.
-
-    `EvaluationInputs` carries only determinants, never raw `EnergyFlowFacts`, so there is exactly
-    one billing path (`tariffs.apply_tariff`); `from_energy_flow` is the lift for callers that hold
-    the simpler record.
+    Besides annual kWh it holds what only the simulation can supply: energy per time-of-use band, the integral of load
+    × spot price, peaks per billing period and per year, and the unweighted mean spot price. The mean spot price lets
+    §8.5 separate the volume effect from the flexibility value, which escalate differently. `EvaluationInputs` carries
+    only determinants, so all billing goes through `tariffs.apply_tariff`; `from_energy_flow` converts a plain
+    `EnergyFlowFacts`.
     """
 
     carrier: EnergyCarrier
-    #: Always kilowatt-hours, for every carrier — including pellets, wood chips and oil, whose
-    #: prices are converted from EUR/t resp. EUR/l to EUR/kWh at resolution instead (D26).
+    #: Always kilowatt-hours, for every carrier, including pellets, wood chips and oil; their prices are
+    #: converted from EUR/t or EUR/l to EUR/kWh when the price is resolved.
     energy_bought_in_kwh: float
     energy_sold_in_kwh: float = 0.0
     energy_bought_per_band_in_kwh: Dict[str, float] = field(default_factory=dict)  # ToU tariffs
@@ -513,12 +400,9 @@ class BillingDeterminants:
 
     @classmethod
     def from_energy_flow(cls, flow: EnergyFlowFacts) -> "BillingDeterminants":
-        """Wraps plain annual flows for flat contracts.
+        """Wrap plain annual flows for a flat contract, leaving the shape-dependent fields empty.
 
-        The determinants a flat two-part tariff needs are exactly the fields `EnergyFlowFacts`
-        already has, so the conversion is a widening with the shape-dependent fields left empty; the
-        resulting bill is identical to a plain price lookup. Any meter that only knows annual totals
-        goes through here so the rest of the engine never has to branch on which record it holds.
+        The resulting bill equals a plain price lookup.
         """
         return cls(
             carrier=flow.carrier,
@@ -530,25 +414,21 @@ class BillingDeterminants:
 
 
 class InstallationYearOrigin(str, enum.Enum):
-    """Where an installation year came from, as ``economics_result.json`` states it (schema 5).
+    """Where an existing asset's installation year came from, as ``economics_result.json`` states it.
 
-    The engine reads an existing asset's age off its installation year -- the replacement it is
-    due, the book value a measure writes off -- and a reader of a replacement in year 2 needs to
-    know whether that year was stated or assumed (renovisorissues #58). The value is the
-    document's spelling, which is why the members are lower-case strings.
+    The engine derives the asset's age from the year (its due replacement, the book value a measure writes off), so a
+    reader needs to know whether the year was stated or assumed. Values are the document's lower-case spelling. The
+    arithmetic never reads the origin.
 
-    ``REQUEST`` is a year the request states. ``MID_LIFE_DEFAULT`` is the mid-life year the
-    RenoVisor translator assumes for an undated device or, since 2026-09-27 (hisim-ryw1), an
-    undated envelope element (price basis year less half its service life, never before the
-    construction year; ``hisim.renovisor.economics.UnknownAge``). ``CONSTRUCTION_YEAR_DEFAULT`` is
-    the construction year an undated envelope element took before that; the translator no longer
-    writes it, and it stays so that a register stored earlier still reads.
-    ``STAGE`` is not a value a request's register states: it is what the document says of a
-    subject a stage of the plan bought, installed in the calendar year that stage starts in -- the
-    plan's year 0 plus the stage's ``from_year`` (hisim-dutz). The staging machinery writes it into
-    the aged register it hands a later stage (``hisim.economics.staged``). Like every origin it is
-    provenance only: the arithmetic never reads it. The age of a stage purchase is stated by the
-    staging machinery itself (:attr:`ExistingAsset.stated_age_in_years`).
+    - ``REQUEST``: the request states the year.
+    - ``MID_LIFE_DEFAULT``: the RenoVisor translator assumed mid-life for an undated device or envelope element (price
+      basis year minus half the service life, never before the construction year;
+      ``hisim.renovisor.economics.UnknownAge``).
+    - ``CONSTRUCTION_YEAR_DEFAULT``: the construction year, used for undated envelope elements in older stored
+      registers; the translator does not write it.
+    - ``STAGE``: bought by an earlier stage of a staged plan, installed in the calendar year that stage starts (plan
+      year 0 plus its ``from_year``). Written by ``hisim.economics.staged``; the age itself is in
+      :attr:`ExistingAsset.stated_age_in_years`.
     """
 
     REQUEST = "request"
@@ -559,26 +439,16 @@ class InstallationYearOrigin(str, enum.Enum):
 
 @dataclass
 class ExistingAsset:
-    """An asset already installed in the building (brownfield register, §4.1).
+    """An asset already installed in the building before any measure (brownfield register, §4.1).
 
-    Describes one device that is already there before any measure — the thing the simulation cannot
-    know, because it models the *result* of the retrofit, not its starting point. From
-    `installation_year` the engine derives age, remaining life and hence the replacement schedule; a
-    kept asset costs no investment but is replaced at `service_life − age`, while a replaced one adds
-    its removal cost, contributes its written-off book value to the reported (but decision-neutral)
-    sunk cost, and may trigger the anyway-cost credit.
+    The simulation models the result of the retrofit, not its starting point, so this is supplied from outside. From
+    `installation_year` the engine derives age and remaining life: a kept asset costs no investment but is replaced at
+    `service_life - age`; a replaced one adds its removal cost, reports its written-off book value as sunk cost
+    (decision-neutral), and may earn the anyway credit (the avoided cost of a replacement that was due anyway).
 
-    Two fields exist purely to feed rules outside the pure cost arithmetic. `is_functional` and
-    `energy_carrier` are read by subsidy eligibility conditions such as BEG's speed bonus for
-    replacing a *functioning fossil* heating system. `replaced_by_asset_classes` is the explicit
-    declaration of which measure supersedes this asset: without it a same-class register entry means
-    "kept", and only with it does a like-for-like replacement (old windows → new windows) get
-    recognized as a replacement with its avoided future cost credited (§3.2b).
-
-    `anyway_share` is how honest that credit is. See its own comment below: crediting 100 % of an
-    insulation measure against a facade that was never insulated was methodologically wrong, and
-    the share is the field that says how much of the new measure the counterfactual would really
-    have bought.
+    `is_functional` and `energy_carrier` feed subsidy conditions such as BEG's bonus for replacing a working fossil
+    heating system. `replaced_by_asset_classes` declares which measure replaces the asset; without it a same-class
+    entry means "kept". `anyway_share` says how much of the new measure the counterfactual would really have bought.
     """
 
     asset_class: ComponentType
@@ -593,44 +463,34 @@ class ExistingAsset:
     # a component with one of these classes is charged full investment + this asset's removal
     # cost, and triggers the sunk-cost / anyway-cost logic of §4.1):
     replaced_by_asset_classes: List[ComponentType] = field(default_factory=list)
-    #: Sowieso-Kosten share: the fraction of the *new* measure's cost that the counterfactual —
-    #: the world in which the renovation does not happen — would truly have spent on this asset.
-    #: `1.0` is a genuine like-for-like replacement: dead windows are replaced by windows, so the
-    #: whole price of the new windows was going to be paid anyway. A **first-time improvement** is
-    #: not like-for-like and must be well below 1: a facade that was never insulated would have
-    #: been *repaired*, not insulated, so only the repair share — scaffolding, render, paint — is a
-    #: cost the building would have caused regardless, and crediting the full insulation price
-    #: against it credits money nobody would ever have spent. The default keeps the historical
-    #: behaviour, so every register written before this field existed is unchanged.
+    #: Anyway-cost ("Sowieso-Kosten") share: the fraction of the new measure's cost that the world without the
+    #: renovation would really have spent on this asset. 1.0 is a genuine like-for-like replacement (dead
+    #: windows replaced by windows). A first-time improvement must be well below 1: a never-insulated facade
+    #: would have been repaired, not insulated, so only the repair share (scaffolding, render, paint) counts.
+    #: The default 1.0 is the full like-for-like credit.
     anyway_share: float = 1.0
-    #: Where `installation_year` came from, which the arithmetic never reads and the result
-    #: document publishes beside the year (schema 5). `None` for a register whose author did not
-    #: say, which is every register written before the field existed.
+    #: Where `installation_year` came from; published beside the year in the result document, never read by
+    #: the arithmetic. None when the register's author did not say.
     installation_year_origin: Optional[InstallationYearOrigin] = None
-    #: The age the engine takes for this asset instead of measuring `installation_year` against
-    #: year 0 of the timeline (`age_in_years`), and unlike that age not floored. `None` for every
-    #: register of a house. Only the staged evaluator states it, for a subject an earlier stage
-    #: bought, because only it knows when the flows about that asset fall (hisim-4uv9): kept, the
-    #: asset's age at plan year 0, negative for a stage starting after it, so its first replacement
-    #: falls one service life after its purchase; replaced, its age in the year the replacing stage
-    #: starts, which is when it is written off and when the anyway-cost test is taken.
+    #: The age the engine uses for this asset instead of measuring `installation_year` against year 0 of the
+    #: timeline (`age_in_years`); not floored. None for every register of a house. Only the staged evaluator
+    #: sets it, for a subject an earlier stage bought: if kept, its age at plan year 0 (negative for a stage
+    #: starting later, so its first replacement falls one service life after purchase); if replaced, its age in
+    #: the year the replacing stage starts, when it is written off and the anyway-cost test is taken.
     stated_age_in_years: Optional[int] = None
-    #: The cost subject this entry is bound to, or `None` for an entry any subject of its class
-    #: matches (every register of a house). Only the staged evaluator binds one: the increment a
-    #: later stage bought for a kept subject, which is matched by that increment's subject alone
-    #: (`ComponentCostFacts.own_register_entry`, hisim-1y0m), so it ages beside the unit it enlarges.
+    #: The cost subject this entry is bound to, or None for an entry any subject of its class matches (every
+    #: register of a house). Only the staged evaluator binds one: the increment a later stage bought for a kept
+    #: subject, matched by that increment's subject alone (`ComponentCostFacts.own_register_entry`), so it ages
+    #: beside the unit it enlarges.
     subject: Optional[str] = None
 
     def __post_init__(self) -> None:
-        """Validation: normalizes the replacement-cost override and rejects impossible inputs.
+        """Normalize the replacement-cost override and reject impossible inputs.
 
         Raises:
-            ValueError: If the size is not finite and greater than zero, if `anyway_share` is
-                outside `(0, 1]` — a share of zero is spelled by not declaring the asset as
-                replaced at all, and a share above one would credit the renovation with more than
-                the measure costs — or if `installation_year_origin` is neither `None` nor an
-                `InstallationYearOrigin` (a bare string would fail only when the document is
-                written).
+            ValueError: If the size is not finite and positive, `anyway_share` is outside (0, 1] (a share of zero means
+                not declaring the asset as replaced), or `installation_year_origin` is neither None nor an
+                `InstallationYearOrigin`.
         """
         self.replacement_cost_override_in_euro = _coerce_uncertain(self.replacement_cost_override_in_euro)
         if self.size <= 0 or not math.isfinite(self.size):
@@ -650,38 +510,29 @@ class ExistingAsset:
             )
 
     def age_in_years(self, reference_year: int) -> int:
-        """Age at the reference (simulation) year, floored at 0.
+        """Return the age at the reference (simulation) year, floored at 0.
 
-        The input to both the remaining-life calculation that schedules the first replacement and the
-        anyway-cost test of §4.1. Flooring at 0 means an asset registered as installed *after* the
-        reference year is treated as brand new rather than producing a negative age that would push
-        its replacement beyond the horizon.
+        Feeds the remaining-life calculation and the anyway-cost test of §4.1. An asset installed after the reference
+        year counts as new rather than getting a negative age.
         """
         return max(0, reference_year - self.installation_year)
 
 
 @dataclass
 class ExistingAssetRegister:
-    """The building's existing system, for BROWNFIELD / STATUS_QUO contexts (§4.1).
+    """The building's existing system, for BROWNFIELD and STATUS_QUO contexts (§4.1).
 
-    A plain list of `ExistingAsset` entries that answers "what was already here". Its presence is
-    also a *switch*: `perspectives.select_applicable` evaluates the brownfield/status-quo/owner/
-    landlord/tenant perspectives when a register is attached and the greenfield ones when it is not,
-    so a caller declares the situation rather than picking perspectives by hand.
-
-    It is supplied from outside the simulation — a `bridge.EconomicContext`, a RenoVisor request, or
-    a system setup — because nothing in a HiSim run knows what the building looked like beforehand.
+    A list of `ExistingAsset` entries. Its presence is a switch: `perspectives.select_applicable` picks the brownfield
+    perspectives when a register is attached and the greenfield ones when not. It comes from a
+    `bridge.EconomicContext`, a RenoVisor request or a system setup.
     """
 
     assets: List[ExistingAsset] = field(default_factory=list)
 
     def find(self, asset_class: ComponentType) -> Optional[ExistingAsset]:
-        """First registered asset of the given class, if any.
+        """Return the first registered asset of the given class, or None.
 
-        The lookup the brownfield logic uses to decide whether a declared component is new, kept or
-        replacing something. First-match semantics means a register listing two assets of one class
-        (two boilers, several window batches) matches only the first — acceptable for the one-of-each
-        systems the register is designed for, but worth knowing before registering duplicates.
+        With two assets of one class (two boilers, several window batches) only the first matches.
         """
         for asset in self.assets:
             if asset.asset_class == asset_class:

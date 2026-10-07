@@ -1,43 +1,11 @@
-"""Scenario analysis: economic sweeps on stored results (cost_spec.md §4.6).
+"""Scenario analysis: economic sweeps over stored evaluation inputs (cost_spec.md §4.6).
 
-Economic-only dimensions are just another call of the pure evaluator on the same facts —
-milliseconds each. Physics-affecting dimensions are *variants*, handled by the existing
-simulation infrastructure; the boundary is enforced via `consumed_tariff_ids`.
-
-**What a scenario may vary, and the two mechanisms for it.** A *parameter axis* addresses an
-`EconomicParameters` field by dotted path — interest rate, escalation rates, CO2 price scenario,
-observation period — and is validated against the dataclass schema at load time, so an unknown
-field is a hard error. A *data overlay* addresses an individual cost-database datapoint by a path
-rooted at the data file stem (`devices_DE.HEAT_PUMP.specific_investment`,
-`energy_prices_DE.NATURAL_GAS.working_price_in_euro_per_kwh`) and is applied on top of the loaded,
-validated dataset on a copy — so "what if heat pumps get 30 % cheaper" is a diffable few-line
-scenario rather than a forked database file, and every overlaid value enters the provenance ledger
-as `SCENARIO_OVERLAY` with its scenario id. The two are distinguished purely by the path's stem
-(`_is_data_overlay_path`) and carried separately on every `Scenario`.
-
-**FACTORIAL vs. ONE_AT_A_TIME.** FACTORIAL expands the cartesian product of all axis levels
-(scenario ids like ``interest=high|electricity_price=low``) — the exhaustive sweep, which is where
-the explosion guards below earn their keep. ONE_AT_A_TIME varies each axis from the base
-individually (ids like ``interest=high``), which is far easier to interpret and is the required
-input shape for a tornado diagram: each bar is one axis moved on its own, so the swings are
-attributable. Both modes always include the base scenario, and both append any hand-written
-`named_scenarios` — explicit storylines that may mix parameter overrides and data overlays.
-
-**The cube.** `ScenarioCube.results` is indexed `[perspective_id][scenario_id]` and each cell is a
-complete `LifecycleCostResult` — not a KPI, the whole result, because a scenario changes every
-figure and not just the headline. Note the third, orthogonal axis that is *inside* every cell: the
-min/best_estimate/max slots of §3.9 vary the cost *data* within one evaluation, while scenarios vary the
-economic *assumptions* across evaluations. The derived analyses read the cube along different
-directions: `tornado_data` takes the base cell as origin and reports each one-at-a-time cell's
-swing against it; `equivalent_annual_cost_spreads` / `robustness_summary` take the extremes across
-all cells (the latter across a *pair* of cubes, i.e. two variants, adding the dominance flags);
-`find_break_even` does not read the cube at all but bisects one axis with fresh evaluations.
-
-Its place in the pipeline: this module never touches a simulation. It runs on stored
-`EvaluationInputs` — from a finished run via `bridge.py` when the setup declared a scenario set, or
-from an archived `economic_inputs.json` via `python -m hisim.economics evaluate --scenarios` — and
-exports `scenario_cube.csv` / `.json`, the latter typed for the webtool, the former shaped so the
-existing `scenario_evaluation` aggregation can consume it alongside cross-run results.
+A scenario changes economic assumptions only, so each one is another call of the pure evaluator on the same stored
+facts, taking milliseconds. Anything that changes the physics is a variant needing a new simulation. A scenario set
+sweeps `EconomicParameters` fields (parameter axes) and individual cost-database datapoints (data overlays, e.g.
+``devices_DE.HEAT_PUMP.specific_investment``). The result is a `ScenarioCube` of full results per perspective and
+scenario, read by the tornado, spread, robustness and break-even analyses and exported as ``scenario_cube.csv`` /
+``.json``.
 """
 
 from __future__ import annotations
@@ -63,19 +31,15 @@ from hisim.loadtypes import ComponentType
 
 
 class ScenarioLimits:
-    """What a scenario set may not do: explode, or sweep a run-level choice (§4.6, Q21).
+    """Limits on a scenario set: the size of a factorial expansion, and fields that may not be swept (§4.6).
 
-    Two unrelated guards, both about keeping a scenario set an *economic* sweep. The thresholds
-    bound a factorial expansion — cheap as one evaluation is, four axes with five levels each is
-    already 625 cells per perspective — with a warning at 1,000 and a hard error at 100,000, so a
-    mistyped axis cannot silently turn into an overnight job. `NON_SWEEPABLE` names the
-    `EconomicParameters` fields that are run-level choices rather than assumptions, each with the
-    explanation the error message carries: swapping a whole dataset is what overlays exist for, and
-    changing the country invalidates the simulated physics context (building stock, weather, codes),
-    which makes it a *variant* requiring a new simulation, not a scenario.
+    Expansion warns at `SCENARIO_WARN_THRESHOLD` (1,000) cells and fails at `SCENARIO_ERROR_THRESHOLD` (100,000), so a
+    mistyped axis cannot become an overnight job. `NON_SWEEPABLE` names run-level `EconomicParameters` fields with the
+    reason given in the error: a whole dataset is swapped with overlays instead, and changing the country changes the
+    simulated context, so it is a variant.
     """
 
-    #: Cube explosion control (spec Q21).
+    #: Cube explosion control.
     SCENARIO_WARN_THRESHOLD = 1_000
     SCENARIO_ERROR_THRESHOLD = 100_000
 
@@ -94,28 +58,19 @@ class ScenarioLimits:
 
 
 class ScenarioDataError(ValueError):
-    """Raised for malformed scenario sets.
+    """Raised for a malformed scenario set or a refused billing-boundary override.
 
-    Covers the load-time rejections (unknown or non-sweepable parameter field, unsupported dotted
-    path, unknown mode, over-large expansion) and the §4.6 billing-boundary refusal. It is a
-    `ValueError` because a scenario set is user-authored data, and the failure is always "this
-    definition cannot mean anything", never an internal error.
+    Covers unknown or non-sweepable fields, unsupported dotted paths, unknown modes, over-large expansions and the §4.6
+    billing-boundary refusal.
     """
 
 
 @dataclass
 class ScenarioAxis:
-    """One swept dimension: an EconomicParameters field or a data-overlay path.
+    """One swept dimension: an `EconomicParameters` field or a cost-database overlay path, with named levels.
 
-    An axis is a name plus a set of named levels, and `is_data_overlay` decides which of the two
-    mechanisms applies it — a parameter override on a copy of `EconomicParameters`, or a datapoint
-    overlay on a copy of the cost database. The flag is derived from the path at parse time
-    (`_is_data_overlay_path`), never declared by the author, so the two vocabularies cannot be
-    mixed up in a data file.
-
-    Levels are named because the names become the scenario ids a reader sees ("cheap", "central",
-    "high"); a level value of `None` means "as shipped", which is how an overlay axis expresses its
-    baseline as an ordinary level.
+    `is_data_overlay` is derived from the path's stem at parse time (`_is_data_overlay_path`), not declared. Level
+    names become the scenario ids a reader sees ("cheap", "high"); a level value of None means "as shipped".
     """
 
     name: str
@@ -126,13 +81,10 @@ class ScenarioAxis:
 
 @dataclass
 class Scenario:
-    """One expanded scenario: parameter overrides plus data overlays.
+    """One expanded scenario: an id plus parameter overrides and data overlays.
 
-    The flat, fully-resolved unit of evaluation — whatever mode produced it, a scenario is just an
-    id and the two override dicts `evaluate_cube` applies before calling the evaluator. Keeping the
-    two kinds apart to the very end is what lets parameter overrides be validated against the
-    dataclass schema and overlays against the database entry schema, and what lets only the latter
-    be recorded as `SCENARIO_OVERLAY` provenance.
+    The two kinds stay separate because parameter overrides are validated against `EconomicParameters` while overlays
+    are validated against the database and recorded as SCENARIO_OVERLAY provenance.
     """
 
     id: str
@@ -142,15 +94,14 @@ class Scenario:
 
 @dataclass
 class ScenarioSet:
-    """A scenario-set definition (data file or RenoVisor request block, §4.6).
+    """A scenario-set definition as authored: base id, expansion mode, axes and named scenarios (§4.6).
 
-    The authored form, as opposed to the expanded `Scenario` list: a base id, an expansion mode, the
-    axes, and any hand-written named scenarios. It is what a user writes in a JSON file, what a
-    system setup attaches through `bridge.EconomicContext.scenario_set`, and what
-    ``--scenarios scenarios.json`` loads on the CLI; `expand()` turns it into the cells of a cube.
+    Loaded from a JSON file (``--scenarios scenarios.json`` on the CLI), attached by a system setup via
+    `bridge.EconomicContext.scenario_set`, or sent in a RenoVisor request. `expand()` turns it into the cells of a
+    cube; axes are validated when the set is loaded.
 
-    Separating definition from expansion is what makes the explosion guard and the axis validation
-    possible at load time, before any evaluation has been paid for.
+    Modes: FACTORIAL evaluates every combination of levels (ids like ``interest=high|electricity_price=low``).
+    ONE_AT_A_TIME moves one axis at a time from the base (ids like ``interest=high``), which a tornado diagram needs.
     """
 
     base_id: str
@@ -160,13 +111,10 @@ class ScenarioSet:
 
     @classmethod
     def from_json(cls, raw: dict) -> "ScenarioSet":
-        """Parses and validates against the EconomicParameters schema (hard error on unknowns).
+        """Parse a scenario set from JSON and validate every path.
 
-        Validation happens here rather than at evaluation time so a typo in an axis name fails
-        immediately and by name, in the spirit of §9's fail-fast rule — a silently ignored axis
-        would produce a full, plausible, meaningless cube. Each axis and each named-scenario
-        override is classified as parameter or data overlay by its path stem; parameter paths are
-        checked against the `EconomicParameters` dataclass and against the non-sweepable list.
+        Each axis and named-scenario override is classified as parameter or data overlay by its path stem; parameter
+        paths are checked against `EconomicParameters` and the non-sweepable list, so a typo fails here by name.
 
         Args:
             raw: The parsed scenario-set JSON (`base`, `mode`, `axes`, `named_scenarios`).
@@ -175,8 +123,8 @@ class ScenarioSet:
             The parsed set, ready to `expand()`.
 
         Raises:
-            ScenarioDataError: On an unknown or non-sweepable parameter field, a dotted path into a
-                non-dict field, or an unknown mode.
+            ScenarioDataError: On an unknown or non-sweepable parameter field, a dotted path into a non-dict field, or
+                an unknown mode.
         """
         axes = []
         for axis_raw in raw.get("axes", []):
@@ -211,21 +159,17 @@ class ScenarioSet:
         return cls(base_id=raw.get("base", "central"), mode=mode, axes=axes, named_scenarios=named)
 
     def expand(self) -> List[Scenario]:
-        """Expands axes per mode plus the named scenarios; always includes the base scenario.
+        """Expand the set into scenarios: the base first, then the axes per mode, then the named scenarios.
 
-        Turns the authored definition into the flat cell list `evaluate_cube` iterates. The base
-        scenario — no overrides at all, id `base_id` — is always first, because every derived
-        analysis measures against it: `tornado_data` and `equivalent_annual_cost_swings` return
-        nothing without it. FACTORIAL produces one cell per combination of levels, with ids joined
-        by ``|``, which is also the marker `tornado_data` uses to skip combination cells; and
-        ONE_AT_A_TIME produces one cell per (axis, level). Levels are sorted by name so a given
-        definition always expands to the same order and the exported cube diffs cleanly.
+        The base scenario (no overrides, id `base_id`) is always included because every derived analysis measures
+        against it. FACTORIAL ids join levels with ``|``, which `tornado_data` uses to skip combination cells. Levels
+        are sorted by name, so the order is stable and exports diff cleanly.
 
         Returns:
-            All scenarios to evaluate: base first, then the expanded axes, then the named ones.
+            All scenarios to evaluate.
 
         Raises:
-            ScenarioDataError: When the expansion exceeds `SCENARIO_ERROR_THRESHOLD` cells. Above
+            ScenarioDataError: When the expansion exceeds `SCENARIO_ERROR_THRESHOLD` cells; above
                 `SCENARIO_WARN_THRESHOLD` it only warns.
         """
         scenarios: List[Scenario] = [Scenario(id=self.base_id)]
@@ -265,31 +209,25 @@ class ScenarioSet:
 
 
 def _is_data_overlay_path(fieldname: str) -> bool:
-    """Whether a dotted path addresses a cost-database datapoint rather than a parameter.
+    """Return whether a dotted path addresses a cost-database datapoint rather than a parameter.
 
-    The one place the two scenario vocabularies are told apart, by the path's stem: a data file name
-    (`devices_DE`, `energy_prices_DE`) means overlay, anything else means `EconomicParameters`.
-    Deciding it by stem rather than by an author-declared flag is what keeps a data file from
-    claiming to overlay a parameter or vice versa.
+    A data file stem (``devices_DE``, ``energy_prices_DE``) means overlay; anything else is an `EconomicParameters`
+    path.
     """
     stem = fieldname.split(".", 1)[0]
     return stem.startswith("devices_") or stem.startswith("energy_prices_")
 
 
 def _validate_parameter_path(fieldname: str, allow_dict_root: bool = False) -> None:
-    """Axes address EconomicParameters fields by dotted path; unknown field = hard error.
+    """Check that a dotted path addresses a sweepable `EconomicParameters` field.
 
-    Enforces three things in order: the field is not one of the run-level choices that must not be
-    swept (`NON_SWEEPABLE`, reported with its explanation), it exists on the `EconomicParameters`
-    dataclass, and a dotted path only reaches into a field that is actually a dict — the two
-    escalation-rate maps, which are keyed by carrier and by asset class respectively.
+    Checks in order: the field is not in `NON_SWEEPABLE` (reported with its reason), it exists on `EconomicParameters`,
+    and a dotted path only reaches into a dict field (the escalation-rate maps keyed by carrier and by asset class).
 
     Args:
         fieldname: The dotted path from the scenario definition.
-        allow_dict_root: Relaxes the last check only. Set for named-scenario overrides, which state
-            whole storylines and may also assign a complete dict to a dict-typed field
-            (`apply_parameter_overrides` merges it key by key); axes stay restricted to the two
-            escalation maps.
+        allow_dict_root: Allows assigning a whole dict to any dict-typed field; set for named-scenario overrides
+            (merged key by key by `apply_parameter_overrides`). Axes stay limited to the two escalation maps.
 
     Raises:
         ScenarioDataError: If the field is non-sweepable, unknown, or reached into illegally.
@@ -310,23 +248,15 @@ def _validate_parameter_path(fieldname: str, allow_dict_root: bool = False) -> N
 
 
 def apply_parameter_overrides(base: EconomicParameters, overrides: Dict[str, Any]) -> EconomicParameters:
-    """Returns a copy of the parameters with dotted-path overrides applied.
+    """Return a copy of the parameters with dotted-path overrides applied.
 
-    Deep-copies first, so a scenario never mutates the caller's parameters and cells stay
-    independent of the order they were evaluated in — a real hazard when one object is reused across
-    hundreds of cube cells. Three assignment shapes are supported: a dotted path setting one key of
-    a dict-typed field, a whole dict merged key by key into a dict-typed field, and a plain
-    attribute assignment.
-
-    The result is re-validated by re-running `EconomicParameters.__post_init__`, because a
-    `setattr` bypasses the constructor: without it a scenario axis could set `interest_rate` to
-    -1.5 or `observation_period_in_years` to 0 and the cube would evaluate a cell whose discounting
-    and annuity formulas are meaningless, silently, rather than the axis being refused where it is
-    declared.
+    Deep-copies first, so cube cells never share state. Supports a dotted path setting one key of a dict field, a whole
+    dict merged key by key into a dict field, and plain attribute assignment. The result is re-validated by re-running
+    `EconomicParameters.__post_init__`, so e.g. a negative interest rate is refused.
 
     Args:
         base: The run's parameters; left untouched.
-        overrides: Dotted path or field name -> value, from one `Scenario`.
+        overrides: Dotted path or field name to value, from one `Scenario`.
 
     Returns:
         A new `EconomicParameters` with the overrides applied.
@@ -354,13 +284,10 @@ def apply_parameter_overrides(base: EconomicParameters, overrides: Dict[str, Any
 
 
 def _coerce_dict_key(fieldname: str, key: str) -> Any:
-    """Turns a JSON string key into the enum the target dict is actually keyed by.
+    """Convert a JSON string key into the enum the target dict is keyed by.
 
-    The escalation-rate maps are keyed by `EnergyCarrier` and `ComponentType`, but JSON only has
-    string keys — without this, an override would insert a string key that no lookup ever finds and
-    the scenario would silently do nothing. `ComponentType` is matched against both the member name
-    and its value, since data files use either spelling; an unrecognized key is passed through
-    unchanged rather than rejected.
+    The escalation-rate maps are keyed by `EnergyCarrier` and `ComponentType`; a plain string key would never be found
+    by a lookup. `ComponentType` matches member name or value. An unrecognized key is passed through unchanged.
     """
     if fieldname == "energy_price_escalation_rates":
         return EnergyCarrier(key)
@@ -372,18 +299,11 @@ def _coerce_dict_key(fieldname: str, key: str) -> Any:
 
 
 def _check_billing_boundary(inputs: EvaluationInputs, scenario: Scenario, params: EconomicParameters) -> None:
-    """An economic scenario overriding a consumed input is rejected by default (§4.6).
+    """Refuse a scenario that changes energy prices a controller already consumed, unless opted in (§4.6).
 
-    The machine-enforced half of the economic/physics boundary. If a controller consumed a tariff's
-    price signal during the run (recorded as `consumed_tariff_ids`, §8.3), then re-billing that load
-    profile under different energy prices is a *counterfactual*: the profile was optimized against
-    prices that the scenario now denies. That may be exactly what a study wants, but it is a
-    semantic choice, so it must be opted into via `allow_counterfactual_billing` rather than
-    happening silently.
-
-    Escalation-rate overrides are deliberately *not* blocked, and the code says so by computing the
-    flag and then discarding it: escalation only projects years beyond the simulated one, and only
-    the year-1 prices were ever consumed.
+    If a controller reacted to a tariff's price signal during the run (`consumed_tariff_ids`, §8.3), re-billing that
+    load profile under other prices is a counterfactual; it requires ``allow_counterfactual_billing``. Escalation-rate
+    overrides are allowed, since escalation only affects years after the simulated one.
 
     Args:
         inputs: The stored inputs, for `consumed_tariff_ids`.
@@ -391,8 +311,8 @@ def _check_billing_boundary(inputs: EvaluationInputs, scenario: Scenario, params
         params: That scenario's parameters, for the opt-in flag.
 
     Raises:
-        ScenarioDataError: When the scenario overlays energy prices on a run whose controller
-            consumed a tariff, without the opt-in.
+        ScenarioDataError: When the scenario overlays energy prices on a run whose controller consumed a tariff,
+            without the opt-in.
     """
     if params.allow_counterfactual_billing or not inputs.consumed_tariff_ids:
         return
@@ -411,13 +331,10 @@ def _check_billing_boundary(inputs: EvaluationInputs, scenario: Scenario, params
 
 @dataclass(frozen=True)
 class KpiSpread:
-    """Min / max / spread of one KPI across all scenarios of one perspective (§4.6).
+    """Minimum, maximum and spread of one KPI across all scenarios of one perspective (§4.6).
 
-    The robustness summary's unit of answer: how much does the headline number move when the
-    economic assumptions move. Note what it is *not* — these extremes are taken across scenarios on
-    the BEST_ESTIMATE slot, so they are orthogonal to the min/best_estimate/max band inside each cell, which
-    expresses cost-*data* uncertainty (§3.9). A wide spread here means "the conclusion depends on
-    the assumptions"; a wide band inside a cell means "the conclusion depends on the price data".
+    Taken on the best-estimate value of each cell, so it measures sensitivity to assumptions; the min/best/max band
+    inside a cell measures cost-data uncertainty (§3.9).
     """
 
     minimum: float
@@ -425,23 +342,16 @@ class KpiSpread:
 
     @property
     def spread(self) -> float:
-        """How far the KPI travels across the scenario set."""
+        """Return how far the KPI travels across the scenario set (maximum minus minimum)."""
         return self.maximum - self.minimum
 
 
 @dataclass
 class ScenarioCube:
-    """`results[perspective][scenario]`, each cell a full LifecycleCostResult (§4.6).
+    """The output of a sweep: `results[perspective_id][scenario_id]`, each cell a full `LifecycleCostResult` (§4.6).
 
-    The output of a sweep and the input of every derived analysis. Cells hold complete results
-    rather than KPIs because a scenario moves every figure — the category pivot, the subsidy
-    decisions, the CO2 result — and pinning the cube to one KPI at build time would force a re-sweep
-    for the next question. `scenarios` keeps the expanded definitions (so an analysis can tell a
-    one-at-a-time cell from a factorial combination) and `base_id` names the cell everything is
-    measured against.
-
-    Consumed by `tornado_data` and `robustness_summary` here, by the report's scenario section
-    through `equivalent_annual_cost_swings` / `_spreads`, and by `export_cube_csv` / `_json`.
+    Cells hold complete results because a scenario moves every figure. `scenarios` keeps the expanded definitions so an
+    analysis can tell a one-at-a-time cell from a factorial one, and `base_id` names the reference cell.
     """
 
     results: Dict[str, Dict[str, LifecycleCostResult]] = field(default_factory=dict)
@@ -449,20 +359,17 @@ class ScenarioCube:
     base_id: str = "central"
 
     def kpi(self, perspective: str, scenario: str, kpi_getter: Callable[[LifecycleCostResult], float]) -> float:
-        """One KPI value from one cell.
+        """Return one KPI value from one cell, read with the given getter.
 
-        The cube's only accessor, deliberately taking a getter rather than a KPI name: which figure
-        an analysis reads is the analysis's business, and this keeps the cube free of a KPI
-        vocabulary of its own. Raises `KeyError` for an unknown perspective or scenario, which is
-        the right behaviour for a cube that should be complete by construction.
+        Raises:
+            KeyError: For an unknown perspective or scenario.
         """
         return kpi_getter(self.results[perspective][scenario])
 
     def equivalent_annual_cost_swings(self, perspective: str) -> Dict[str, float]:
-        """Per-scenario EAC swing vs. the base scenario (BEST_ESTIMATE slot), base included as 0.
+        """Return each scenario's equivalent annual cost minus the base scenario's (best estimate), base included as 0.
 
-        The tornado data of the report's scenario section, which derived it in HTML
-        (`reporting.py:1483-1492`, W4.1). Empty when the perspective has no base cell.
+        Feeds the report's tornado chart. Empty when the perspective has no base cell.
         """
         per_scenario = self.results.get(perspective, {})
         if self.base_id not in per_scenario:
@@ -474,14 +381,9 @@ class ScenarioCube:
         }
 
     def equivalent_annual_cost_spreads(self) -> Dict[str, KpiSpread]:
-        """Min/max/spread of the headline KPI per perspective — the §4.6 robustness summary.
+        """Return the minimum, maximum and spread of the equivalent annual cost per perspective (§4.6).
 
-        Replaces the derivation in `reporting.py:1496-1501` (W4.1).
-
-        Unlike `equivalent_annual_cost_swings` this needs no base cell: it reports the extremes over
-        whatever cells exist, which is the "how far can this number travel at all" question the
-        report's section 9 summarizes. Perspectives with no cells are omitted rather than reported
-        with a degenerate spread.
+        Needs no base cell; perspectives without cells are omitted.
         """
         spreads: Dict[str, KpiSpread] = {}
         for perspective, per_scenario in self.results.items():
@@ -500,27 +402,19 @@ def evaluate_cube(
     database: Optional[CostDatabase] = None,
     subsidy_catalog: Optional[SubsidyCatalog] = None,
 ) -> ScenarioCube:
-    """Evaluates the full scenario cube on stored inputs (§4.6).
+    """Evaluate the full scenario cube on stored inputs (§4.6).
 
-    The sweep itself: for every scenario, apply its parameter overrides to a copy of the parameters,
-    check the billing boundary, build an overlaid copy of the cost database if it has data overlays,
-    and evaluate every applicable perspective with a fresh evaluator. Cells are therefore fully
-    independent — no state carries from one scenario to the next, which is what makes the cube
-    reproducible regardless of iteration order.
-
-    The physical facts never change: `inputs` is the same stored `EvaluationInputs` for every cell,
-    which is the whole reason an economic sweep costs milliseconds per cell and needs no simulation
-    (§4.6). Anything that *would* change the facts is a variant, not a scenario.
+    For each scenario: apply its parameter overrides to a copy, check the billing boundary, build an overlaid database
+    copy if it has data overlays, and evaluate every perspective with a fresh evaluator. Cells are independent and the
+    stored facts are identical for all of them.
 
     Args:
         inputs: The stored evaluator inputs, shared by every cell.
         base_parameters: The parameters scenarios deviate from.
-        perspectives: The perspectives to evaluate per scenario, normally the applicable subset of
-            the default bundle.
+        perspectives: The perspectives to evaluate per scenario, normally the applicable subset of the default bundle.
         scenario_set: The authored definition; expanded here.
-        database: Pre-loaded cost database, to avoid re-reading the data files per call. Loaded from
-            `base_parameters` when omitted.
-        subsidy_catalog: Optional catalog; without it no subsidy is booked, in every cell alike.
+        database: Pre-loaded cost database; loaded from `base_parameters` when omitted.
+        subsidy_catalog: Optional catalog; without it no subsidy is booked in any cell.
 
     Returns:
         The populated cube, indexed `[perspective_id][scenario_id]`.
@@ -549,13 +443,11 @@ def evaluate_cube(
 # ---------------------------------------------------------------------- derived analyses
 
 def default_kpi_getter(result: LifecycleCostResult) -> float:
-    """The headline KPI: equivalent annual cost, BEST_ESTIMATE slot.
+    """Return the headline KPI: equivalent annual cost, best-estimate slot.
 
-    The default every derived analysis here is parameterized with, so a tornado, a spread and a
-    break-even all speak about the same number unless a caller says otherwise. The BEST_ESTIMATE slot is
-    the right default because scenario analysis varies assumptions, not data: comparing a LOW-slot
-    cell against a HIGH-slot one would mix the two uncertainty mechanisms (§4.6). The one place that
-    deliberately does mix them is `robustness_summary`'s slot-aware dominance flag.
+    The default of every analysis here, so a tornado, a spread and a break-even talk about the same number. Scenarios
+    vary assumptions, not data, so the best estimate is used; only `robustness_summary`'s slot-aware flag reads the
+    band.
     """
     return result.equivalent_annual_cost_in_euro.best_estimate
 
@@ -563,20 +455,16 @@ def default_kpi_getter(result: LifecycleCostResult) -> float:
 def tornado_data(
     cube: ScenarioCube, perspective: str, kpi_getter: Callable[[LifecycleCostResult], float] = default_kpi_getter
 ) -> List[Dict[str, Any]]:
-    """Per axis/level swing vs. the base scenario (ONE_AT_A_TIME input, §4.6).
+    """Return each single-axis scenario's KPI swing against the base, for a tornado diagram (§4.6).
 
-    The table behind a tornado diagram: one row per single-axis scenario with its KPI value, the
-    base value and the difference — which, sorted by absolute swing, ranks the assumptions by how
-    much the answer depends on them. That is the question a tornado exists to answer, and it is why
-    the analysis is only meaningful on a ONE_AT_A_TIME set: a swing is attributable to an axis only
-    if nothing else moved with it. Factorial combination cells (ids containing ``|``) and the base
-    cell itself are skipped for exactly that reason, so a factorial cube yields an empty table
-    rather than a misleading one.
+    Sorted by absolute swing, the rows rank assumptions by how much the answer depends on them. A swing is attributable
+    to one axis only in a ONE_AT_A_TIME set, so factorial cells (ids with ``|``) and the base cell are skipped; a
+    factorial cube yields an empty table.
 
     Args:
         cube: The evaluated cube.
         perspective: Which perspective's cells to read.
-        kpi_getter: The figure to swing; equivalent annual cost (BEST_ESTIMATE slot) by default.
+        kpi_getter: The figure to swing; equivalent annual cost (best estimate) by default.
 
     Returns:
         One dict per scenario with `scenario`, `kpi`, `base` and `swing`, in expansion order.
@@ -597,35 +485,23 @@ def robustness_summary(
     perspective: str,
     kpi_getter: Callable[[LifecycleCostResult], float] = default_kpi_getter,
 ) -> Dict[str, Any]:
-    """Min/max/spread of the differential KPI across all scenarios, plus dominance flags (§4.6).
+    """Compare two variants over the same scenario set: KPI deltas, their spread and dominance flags (§4.6).
 
-    Compares two *variants* — two separately simulated buildings, each swept over the same scenario
-    set — and answers the question a study actually wants to publish: does the retrofit win, and
-    does it keep winning when the assumptions move. The deltas are A minus B on a cost KPI, so a
-    negative delta means A is cheaper; `a_dominates_b_in_every_scenario` is therefore True only when
-    A is strictly cheaper in *every* cell, the strongest claim a scenario sweep supports.
-
-    `a_dominates_b_slot_aware` is stronger still and crosses into the other uncertainty mechanism:
-    it requires A's HIGH (most expensive) equivalent annual cost to stay below B's LOW in every
-    scenario, i.e. A wins even when the price data conspires against it (§4.6). Note that this flag
-    always reads the equivalent annual cost, whatever `kpi_getter` is — it is defined on the banded
-    headline KPI, not on an arbitrary figure.
+    Deltas are A minus B on a cost KPI, so negative means A is cheaper. `a_dominates_b_in_every_scenario` is True when
+    A is strictly cheaper in every scenario. `a_dominates_b_slot_aware` is stricter: A's maximum equivalent annual cost
+    stays below B's minimum in every scenario; it always reads the equivalent annual cost, whatever `kpi_getter` is.
 
     Args:
         cube_a: The variant under investigation.
-        cube_b: The reference variant; must have been swept over the same scenario set, since the
-            cells are matched by scenario id.
+        cube_b: The reference variant, swept over the same scenario set (cells are matched by scenario id).
         perspective: Which perspective to compare in.
-        kpi_getter: The figure to difference; equivalent annual cost (BEST_ESTIMATE slot) by default.
+        kpi_getter: The figure to difference; equivalent annual cost (best estimate) by default.
 
     Returns:
         `min_delta`, `max_delta`, `spread`, the two dominance flags, and the per-scenario `deltas`.
 
     Raises:
-        ScenarioDataError: If `cube_a` holds no scenarios. Every figure below is a fold over the
-            per-scenario deltas, so there is nothing to summarize and no honest value to return —
-            an empty sweep is a caller error (a set that expanded to nothing, a cube that was
-            never evaluated) and is named as such instead of surfacing as a bare `min()` failure.
+        ScenarioDataError: If `cube_a` holds no scenarios.
     """
     if not cube_a.scenarios:
         raise ScenarioDataError(
@@ -669,24 +545,14 @@ def find_break_even(
     tolerance: float = 1e-4,
     max_iterations: int = 60,
 ) -> Dict[str, Any]:
-    """Bisection on one EconomicParameters axis for the value where two variants cross (§4.6).
+    """Find by bisection the value of one `EconomicParameters` field at which two variants cost the same (§4.6).
 
-    Runs on the BEST_ESTIMATE slot; the LOW/HIGH crossings are reported as a bracket.
-
-    Answers the inverse of a sweep: instead of "what happens at 5 % interest", "up to which interest
-    rate is the retrofit still worth it" — the parameter value at which the two variants' KPI
-    difference crosses zero. Unlike everything else in this module it does not read a cube; it
-    evaluates both variants afresh at each bisection step, which stays cheap because the evaluator
-    is pure and neither the facts nor the database change between steps.
-
-    The bracket is the honest part of the answer: the LOW and HIGH slots cross at different values,
-    so the reported break-even is a point on the BEST_ESTIMATE slot inside a range implied by the cost-data
-    uncertainty. A sign check on the interval ends detects the "no crossing in range" case, which is
-    reported as such rather than as a spurious root.
+    Example: up to which interest rate is the retrofit still worth it. Both variants are evaluated afresh at each step.
+    The answer is on the best-estimate slot; the minimum and maximum slots cross at other values, reported as a
+    bracket. If the KPI difference has the same sign at both ends of the range, no crossing is reported.
 
     Args:
-        axis_field: Dotted `EconomicParameters` path to bisect on; validated like an axis, so a
-            non-sweepable or unknown field is rejected up front.
+        axis_field: Dotted `EconomicParameters` path to bisect on; validated like an axis.
         search_range: (low, high) bounds of the search.
         inputs_a: Stored inputs of the variant under investigation.
         inputs_b: Stored inputs of the reference variant.
@@ -694,14 +560,13 @@ def find_break_even(
         perspective: The single perspective the comparison is made in.
         database: Pre-loaded cost database; loaded from `base_parameters` when omitted.
         subsidy_catalog: Optional catalog, applied to both variants alike.
-        kpi_getter: The figure to difference; equivalent annual cost (BEST_ESTIMATE slot) by default.
-        tolerance: Absolute width of the interval at which the bisection stops.
-        max_iterations: Hard cap on bisection steps; the midpoint is returned if it is hit.
+        kpi_getter: The figure to difference; equivalent annual cost (best estimate) by default.
+        tolerance: Absolute interval width at which the bisection stops.
+        max_iterations: Cap on bisection steps; the midpoint is returned if it is hit.
 
     Returns:
-        The axis name and range, the BEST_ESTIMATE-slot `break_even` (None if there is no crossing), the
-        LOW/HIGH slot crossings as `bracket_low_slot` / `bracket_high_slot`, and
-        `no_crossing_in_range`.
+        The axis name and range, the best-estimate `break_even` (None without a crossing), the minimum and maximum slot
+            crossings as `bracket_low_slot` / `bracket_high_slot`, and `no_crossing_in_range`.
 
     Raises:
         ScenarioDataError: If `axis_field` is not a sweepable `EconomicParameters` path.
@@ -710,11 +575,10 @@ def find_break_even(
     base_database = database or CostDatabase(base_parameters.cost_database_path)
 
     def delta_at(value: float, slot: str) -> float:
-        """A minus B at one axis value, in one uncertainty slot — the function being rooted.
+        """Return A minus B at one axis value in one slot, the function being rooted.
 
-        The BEST_ESTIMATE slot goes through `kpi_getter` (so a caller can bisect on any figure), while the
-        LOW/HIGH slots read the equivalent annual cost band directly, since that is the only KPI
-        guaranteed to carry a band.
+        The best-estimate slot uses `kpi_getter`; the minimum and maximum slots read the equivalent annual cost band,
+        the only KPI guaranteed to carry a band.
         """
         params = apply_parameter_overrides(base_parameters, {axis_field: value})
         evaluator = EconomicEvaluator(base_database, params, subsidy_catalog)
@@ -728,14 +592,10 @@ def find_break_even(
         )
 
     def bisect(slot: str) -> Optional[float]:
-        """Plain bisection of `delta_at` in one slot; None when the interval ends share a sign.
+        """Bisect `delta_at` in one slot; return None when the range ends have the same sign.
 
-        Bisection rather than a faster root finder because the KPI is only piecewise smooth in most
-        axes — subsidy caps, replacement years and tier tables all introduce kinks — and bisection
-        is the method that cannot be thrown by them as long as the interval brackets a sign change.
-        The halving itself is `numerics.bisect_root`, shared with the loan view's effective-rate
-        solver; the None it returns for a window that brackets no crossing is this function's "no
-        crossing in range".
+        Bisection is used because the KPI has kinks (subsidy caps, replacement years, tier tables). The halving is
+        `numerics.bisect_root`.
         """
         return bisect_root(
             lambda value: delta_at(value, slot),
@@ -758,14 +618,11 @@ def find_break_even(
 # ---------------------------------------------------------------------- exports (§4.6)
 
 class CubeKpis:
-    """The KPIs a scenario cube is exported with (§4.6).
+    """The KPIs a scenario cube is exported with: net present cost, equivalent annual cost and year-1 monthly cost.
 
-    The CSV export is long format, so the set of exported figures is data rather than a column list:
-    three headline KPIs per cell — net present cost, equivalent annual cost and the year-1 monthly
-    cost — each written with its full min/best_estimate/max band. They are deliberately few: the CSV is the
-    interchange format for `scenario_evaluation` and for spreadsheets, while the complete typed
-    results live in `scenario_cube.json`. A getter may return None (the monthly cost does, when a
-    perspective does not define one), in which case the row is simply omitted.
+    Each is written with its full min/best/max band. The CSV is for `scenario_evaluation` and spreadsheets; the full
+    results are in ``scenario_cube.json``. A getter may return None (a perspective without a monthly cost), and that
+    row is omitted.
     """
 
     BY_NAME: Dict[str, Callable[[LifecycleCostResult], Any]] = {
@@ -776,18 +633,16 @@ class CubeKpis:
 
 
 def export_cube_csv(cube: ScenarioCube, path: str, variant: str = "default") -> None:
-    """`scenario_cube.csv` in long format, consumable by scenario_evaluation (§4.6).
+    """Write ``scenario_cube.csv`` in long format, one row per variant, perspective, scenario and KPI (§4.6).
 
-    One row per (variant, perspective, scenario, KPI) with the value's min/best_estimate/max — the shape the
-    existing `scenario_evaluation` cross-run aggregation already consumes, so a scenario sweep and a
-    set of separately simulated variants can be plotted side by side without a converter. The
-    `variant` column is what makes several cubes concatenable into one file.
+    Each row carries the KPI's min/best/max. This is the shape the `scenario_evaluation` cross-run aggregation
+    consumes, so a scenario sweep and separately simulated variants can be plotted together. The `variant` column lets
+    several cubes be concatenated.
 
     Args:
         cube: The evaluated cube.
         path: Full path of the CSV to write.
-        variant: Label for the variant this cube belongs to; only meaningful when several cubes are
-            combined.
+        variant: Label for the variant this cube belongs to.
     """
     with open(path, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
@@ -804,12 +659,9 @@ def export_cube_csv(cube: ScenarioCube, path: str, variant: str = "default") -> 
 
 
 def export_cube_json(cube: ScenarioCube, path: str, variant: str = "default") -> None:
-    """`scenario_cube.json` with the typed cube for the webtool.
+    """Write ``scenario_cube.json``: every cell as a full serialized `LifecycleCostResult`, for the webtool.
 
-    The lossless counterpart of the CSV: every cell serialized as a full `LifecycleCostResult`, so a
-    consumer can pivot, drill into categories or read the subsidy decisions of any scenario without
-    re-running the sweep. `base_scenario` is included because most readings of a cube are relative
-    to it (swings, tornados) and the base cell is not otherwise distinguishable from the rest.
+    Includes `base_scenario`, since most readings of a cube are relative to the base cell.
 
     Args:
         cube: The evaluated cube.

@@ -43,10 +43,17 @@ Execution flow
    pyam-style output preparation for scenario evaluation.
 7. **JSON outputs** -- component configurations, scenario-evaluation configs, and KPIs
    (including the building-sizer format) are written to JSON files.
+8. **Energy balance** -- in every run, whatever the options: every component that declares energy
+   ports must close its balance, and the run fails with
+   :class:`~hisim.postprocessing.energy_balance.EnergyBalanceError` when one does not
+   (:mod:`hisim.postprocessing.energy_balance`). ``EXPORT_ENERGY_BALANCE`` also writes the report
+   and the Sankeys.
 """
 from __future__ import annotations
 import importlib
 import json
+import math
+import numbers
 
 import os
 import pickle
@@ -61,11 +68,13 @@ from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components.weather import Weather
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME, KpiFinder
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
 
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
+    from hisim.postprocessing.energy_balance import EnergyBalanceReport
     from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 
 
@@ -267,6 +276,8 @@ class PostProcessor:
             ValueError: If ``WRITE_COMPONENTS_TO_REPORT``, ``WRITE_ALL_OUTPUTS_TO_REPORT``,
                 or ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while
                 ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``.
+            EnergyBalanceError: In every run, when a declared energy port is not finite, a component's energy
+                balance does not close or the two sides of a transfer disagree (a ``ValueError``).
         """
         # Define the directory name
         log.information("Main post processing function")
@@ -280,6 +291,8 @@ class PostProcessor:
         single_day_plot_selection = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
+        # Collected first, from the result table as the simulator left it; concluded last (below)
+        energy_balance = self.check_energy_balance(ppdt)
 
         # Make plots
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
@@ -488,6 +501,9 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_KPIS_TO_JSON in ppdt.post_processing_options:
             log.information("Write all KPIs to json file.")
             self.write_kpis_to_json_file(ppdt)
+
+        # In every run, last, so every other output is written when a balance that does not close fails the run
+        self.export_sankeys(ppdt, energy_balance)
 
         log.information("Finished main post processing function.")
 
@@ -985,12 +1001,35 @@ class PostProcessor:
         else:
             log.information("Not on Windows. Can't open explorer.")
 
-    def export_sankeys(self):
-        """Exports Sankeys plots.
+    @staticmethod
+    def check_energy_balance(ppdt: PostProcessingDataTransfer) -> "EnergyBalanceReport":
+        """Check every declared component's energy balance and every paired link of the run (in every run).
 
-        ToDo: implement
+        Reads only the declared energy ports (:mod:`hisim.postprocessing.energy_balance`); a run in which no
+        component declares a port has nothing to check. :meth:`export_sankeys` concludes it.
         """
-        pass  # noqa: unnecessary-pass
+        from hisim.postprocessing.energy_balance import EnergyBalanceReport  # pylint: disable=import-outside-toplevel
+
+        return EnergyBalanceReport(
+            results=ppdt.results,
+            all_outputs=ppdt.all_outputs,
+            wrapped_components=ppdt.wrapped_components,
+            seconds_per_timestep=ppdt.simulation_parameters.seconds_per_timestep,
+        )
+
+    @staticmethod
+    def export_sankeys(ppdt: PostProcessingDataTransfer, energy_balance: "EnergyBalanceReport") -> None:
+        """Write the balance report and the Sankeys when asked; fail the run when a balance does not hold.
+
+        ``EXPORT_ENERGY_BALANCE`` writes ``balance_report.json`` and ``energy_sankeys/`` into the result directory;
+        whether it is set or not, a declared port that is not finite, a balance that does not close or a link
+        whose two sides disagree fails the run with
+        :class:`~hisim.postprocessing.energy_balance.EnergyBalanceError`.
+        """
+        write = PostProcessingOptions.EXPORT_ENERGY_BALANCE in ppdt.post_processing_options
+        start = timer()
+        energy_balance.conclude(ppdt.simulation_parameters.result_directory if write else None)
+        log.information(f"Concluding the energy balance took {timer() - start:1.2f}s.")
 
     @utils.measure_execution_time
     def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -1180,7 +1219,7 @@ class PostProcessor:
             # Get KPIs from ppdt
             kpi_collection_dict = ppdt.kpi_collection_dict
 
-            pathname = os.path.join(ppdt.simulation_parameters.result_directory, "all_kpis.json")
+            pathname = os.path.join(ppdt.simulation_parameters.result_directory, ALL_KPIS_FILE_NAME)
             with open(pathname, "w", encoding="utf-8") as outfile:
                 json.dump(kpi_collection_dict, outfile, indent=5)
 
@@ -1197,30 +1236,48 @@ class PostProcessor:
 
         Every field of the sizer JSON that is normalized per square metre divides by the
         "Conditioned floor area" KPI, which only a ``Building`` component produces. A building
-        object whose KPI collection carries no such entry therefore has no Building in the run,
-        and is skipped with one log line instead of writing a file the sizer cannot use.
+        object whose KPI collection carries no such entry, or carries it without a value, has no
+        computed Building in the run, and is skipped with one log line instead of writing a file
+        the sizer cannot use.
         """
 
-        def get_kpi_entries_for_building_sizer(data, target_key):
-            """Get kpi entries for building sizer."""
-            result = None
-            for key1, value1 in data.items():
-                if key1 == target_key:
-                    result = value1["value"]
-                if isinstance(value1, dict):
-                    for key2, value2 in value1.items():
-                        if key2 == target_key:
-                            result = value2["value"]
-            if result is None:
-                raise KeyError(f"No key is matching the target key {target_key}.")
-            return result
+        finder = KpiFinder(ppdt.kpi_collection_dict)
 
-        def building_kpis_were_computed(data) -> bool:
-            """Say whether a Building component contributed its own KPIs to this collection."""
-            try:
-                get_kpi_entries_for_building_sizer(data=data, target_key=BUILDING_OWN_KPI_NAME)
-            except KeyError:
+        def get_kpi_entries_for_building_sizer(building_object: str, kpi_name: str) -> Any:
+            """The value of the one KPI of the building with that name, whichever tag and source.
+
+            Looked up by the entry's own name (:class:`KpiFinder`), never by a key: a component
+            KPI's key carries its source. Several entries of one name in one building raise, naming
+            them, rather than letting whichever came last stand for all of them.
+            """
+            return finder.value(building=building_object, name=kpi_name)
+
+        def building_kpis_were_computed(building_object: str) -> bool:
+            """Say whether a Building component contributed its own KPIs to this collection.
+
+            True when the Building's own KPI exists and its value is not ``None``: a floor area
+            that was not computed cannot normalize anything either. A floor area that was computed
+            but is zero, negative or not finite raises, naming the building and the KPI, instead of
+            reaching the per-m² divisions. Several entries of that name in one building raise
+            (:meth:`KpiFinder.value`). This is the only lenient decision of the writer: every other
+            KPI it reads fails the run by name when it is missing or ambiguous.
+            """
+            if not finder.addresses(building=building_object, name=BUILDING_OWN_KPI_NAME):
                 return False
+            floor_area = finder.value(building=building_object, name=BUILDING_OWN_KPI_NAME)
+            if floor_area is None:
+                return False
+            if isinstance(floor_area, bool) or not isinstance(floor_area, numbers.Real):
+                raise ValueError(
+                    f"Building-sizer KPI JSON for {building_object}: the KPI '{BUILDING_OWN_KPI_NAME}' is "
+                    f"{floor_area!r}, not a number."
+                )
+            if not math.isfinite(floor_area) or floor_area <= 0:
+                raise ValueError(
+                    f"Building-sizer KPI JSON for {building_object}: the KPI '{BUILDING_OWN_KPI_NAME}' is "
+                    f"{floor_area!r} m², but every per-m² field divides by it; a computed floor area must be a "
+                    "positive finite number."
+                )
             return True
 
         kpi_dict = {}
@@ -1230,8 +1287,7 @@ class PostProcessor:
             for building_object in building_objects_in_district_list:
                 # Get KPIs from ppdt
 
-                kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
-                if not building_kpis_were_computed(kpi_collection_dict):
+                if not building_kpis_were_computed(building_object):
                     log.information(
                         f"Skipping the building-sizer KPI JSON for {building_object}: the run has no "
                         "Building component, so there is nothing for the building sizer to consume."
@@ -1239,58 +1295,58 @@ class PostProcessor:
                     continue
                 # conditioned floor area
                 conditioned_floor_area_in_m2 = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key=BUILDING_OWN_KPI_NAME
+                    building_object=building_object, kpi_name=BUILDING_OWN_KPI_NAME
                 )
                 # Total costs
                 annualized_total_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Total costs for simulated period"
+                    building_object=building_object, kpi_name="Total costs for simulated period"
                 )
                 # Investment costs
                 annualized_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period"
+                    building_object=building_object, kpi_name="Investment costs for equipment per simulated period"
                 )
                 annualized_net_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict,
-                    target_key="Investment costs for equipment per simulated period minus subsidies",
+                    building_object=building_object,
+                    kpi_name="Investment costs for equipment per simulated period minus subsidies",
                 )
                 # Total upfront net investment costs
                 total_upfront_net_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Investment costs upfront for equipment period minus subsidies"
+                    building_object=building_object, kpi_name="Investment costs upfront for equipment period minus subsidies"
                 )
                 # Energy costs
                 total_annualized_energy_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Energy grid costs for simulated period"
+                    building_object=building_object, kpi_name="Energy grid costs for simulated period"
                 )
                 annualzed_energy_costs_electricity_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Costs of grid electricity for simulated period"
+                    building_object=building_object, kpi_name="Costs of grid electricity for simulated period"
                 )
                 annualized_energy_costs_gas_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Costs of grid gas for simulated period"
+                    building_object=building_object, kpi_name="Costs of grid gas for simulated period"
                 )
                 annualized_energy_costs_heating_fuels_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Costs of other heating fuels for simulated period"
+                    building_object=building_object, kpi_name="Costs of other heating fuels for simulated period"
                 )
                 # Maintenance costs
                 annualized_maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Maintenance costs for simulated period"
+                    building_object=building_object, kpi_name="Maintenance costs for simulated period"
                 )
                 # CO2 emissions
                 annualized_total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Total CO2 emissions for simulated period"
+                    building_object=building_object, kpi_name="Total CO2 emissions for simulated period"
                 )
                 # CO2 emissions fromd evices
                 annualized_co2_emissions_from_devices_in_kg = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="CO2 footprint for equipment per simulated period"
+                    building_object=building_object, kpi_name="CO2 footprint for equipment per simulated period"
                 )
                 # CO2 emissions from energy consumption
                 annualized_electricity_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="CO2 footprint of grid electricity for simulated period"
+                    building_object=building_object, kpi_name="CO2 footprint of grid electricity for simulated period"
                 )
                 annualized_gas_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="CO2 footprint of grid gas for simulated period"
+                    building_object=building_object, kpi_name="CO2 footprint of grid gas for simulated period"
                 )
                 annualized_heating_fuels_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="CO2 footprint of other heating fuels for simulated period"
+                    building_object=building_object, kpi_name="CO2 footprint of other heating fuels for simulated period"
                 )
                 annualized_energy_co2_emissions_in_kg = (
                     annualized_electricity_co2_emissions_in_kg
@@ -1300,33 +1356,33 @@ class PostProcessor:
 
                 # Other
                 self_sufficiency_rate_electricity_in_percent = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
+                    building_object=building_object, kpi_name="Self-sufficiency rate according to solar htw berlin"
                 )
                 self_sufficiency_rate_all_energy_in_percent = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Total energy self-suffiency rate"
+                    building_object=building_object, kpi_name="Total energy self-suffiency rate"
                 )
                 annualized_purchased_energy_consumption_in_kwh = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Purchased energy consumption for simulated period"
+                    building_object=building_object, kpi_name="Purchased energy consumption for simulated period"
                 )
                 annualized_electricity_to_grid_in_kwh = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Total energy to grid"
+                    building_object=building_object, kpi_name="Total energy to grid"
                 )
                 annualized_electricity_from_grid_in_kwh = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Total energy from grid"
+                    building_object=building_object, kpi_name="Total energy from grid"
                 )
                 minimum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Minimum building indoor air temperature reached"
+                    building_object=building_object, kpi_name="Minimum building indoor air temperature reached"
                 )
                 maximum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Maximum building indoor air temperature reached"
+                    building_object=building_object, kpi_name="Maximum building indoor air temperature reached"
                 )
                 deviation_from_minimum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict,
-                    target_key="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
+                    building_object=building_object,
+                    kpi_name="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
                 )
                 deviation_from_maximum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict,
-                    target_key="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
+                    building_object=building_object,
+                    kpi_name="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
                 )
 
                 # initialize json interface to pass kpi's to building_sizer

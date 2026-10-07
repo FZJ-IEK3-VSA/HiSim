@@ -46,8 +46,17 @@ from hisim.config import (
     sized_field,
 )
 from hisim.components import weather, simple_water_storage, heat_distribution_system
+from hisim.energy_port import EnergyPort
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
+from hisim.loadtypes import (
+    ComponentType,
+    EnergyBalanceCarrier,
+    EnergyRole,
+    InandOutputType,
+    LoadTypes,
+    OutputPostprocessingRules,
+    Units,
+)
 from hisim.components.configuration import (
     PhysicsConfig,
     EmissionFactorsAndCostsForFuelsConfig,
@@ -672,6 +681,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ElectricalInputPowerForCooling = "ElectricalInputPowerForCooling"  # W
     ElectricalInputPowerDHW = "ElectricalInputPowerDHW"  # W
     ElectricalInputPowerTotal = "ElectricalInputPowerTotalHeatpump"  # W
+    #: The brine or well pump's electricity, the part of the total that is neither SH, DHW nor cooling (W).
+    ElectricalInputPowerBrinePump = "ElectricalInputPowerBrinePump"
     COP = "COP"  # -
     EER = "EER"  # -
     HeatPumpOnOffState = "OnOffStateHeatpump"
@@ -691,6 +702,10 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ElectricalEnergySH = "ElectricalEnergySH"  # Wh
     ElectricalEnergyDHW = "ElectricalEnergyDHW"  # Wh
     ThermalPowerFromEnvironment = "ThermalPowerInputFromEnvironment"  # W
+    #: The space-heating part of ThermalOutputPowerSH, its positive part: heat delivered to the circuit (W).
+    ThermalPowerDeliveredForSpaceHeating = "ThermalPowerDeliveredForSpaceHeating"
+    #: The cooling part of ThermalOutputPowerSH, its negative part turned positive: heat drawn from the circuit (W).
+    ThermalPowerDrawnForCooling = "ThermalPowerDrawnForCooling"
     CumulativeThermalEnergyTotal = "CumulativeThermalEnergyTotal"  # Wh
     CumulativeThermalEnergySH = "CumulativeThermalEnergySH"  # Wh
     CumulativeThermalEnergyDHW = "CumulativeThermalEnergyDHW"  # Wh
@@ -948,6 +963,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description="Electricity input power for SH in Watt",
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerSH
+            ),
         )
 
         self.p_el_cooling: ComponentOutput = self.add_output(
@@ -957,6 +975,22 @@ class MoreAdvancedHeatPumpHPLib(Component):
             unit=Units.WATT,
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             output_description="Electricity input power for cooling in Watt",
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerForCooling
+            ),
+        )
+        self.p_el_brine_pump: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalInputPowerBrinePump,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "Electricity of the brine or well pump of a ground- or water-source heat pump in W, part of "
+                "ElectricalInputPowerTotalHeatpump; zero for an air-source heat pump."
+            ),
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerBrinePump
+            ),
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -1036,6 +1070,28 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Thermal Input Power from Environment",
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.AMBIENT_HEAT),
+        )
+        self.thermal_power_delivered_for_space_heating: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalPowerDeliveredForSpaceHeating,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            output_description="Heat delivered to the space-heating circuit in W: ThermalOutputPowerSH when positive.",
+            energy_port=EnergyPort(
+                EnergyRole.OUT, EnergyBalanceCarrier.SPACE_HEATING_HEAT, peer_output=self.MassFlowOutputSH
+            ),
+        )
+        self.thermal_power_drawn_for_cooling: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalPowerDrawnForCooling,
+            load_type=LoadTypes.COOLING,
+            unit=Units.WATT,
+            output_description=(
+                "Heat drawn from the space-heating circuit in cooling mode in W: minus ThermalOutputPowerSH when "
+                "negative. It leaves, with the electricity, to the environment."
+            ),
+            energy_port=EnergyPort(EnergyRole.IN, EnergyBalanceCarrier.COOLING, peer_output=self.MassFlowOutputSH),
         )
 
         self.thermal_energy_hp_sh_channel: ComponentOutput = self.add_output(
@@ -1147,6 +1203,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 unit=Units.WATT,
                 output_description=("Thermal output power dhw Storage in Watt"),
                 postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+                energy_port=EnergyPort(
+                    EnergyRole.OUT, EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT, peer_output=self.MassFlowOutputDHW
+                ),
             )
 
             self.p_el_dhw: ComponentOutput = self.add_output(
@@ -1155,6 +1214,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.ELECTRICITY,
                 unit=Units.WATT,
                 output_description="Electricity input power for DHW in Watt",
+                energy_port=EnergyPort(
+                    EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricalInputPowerDHW
+                ),
             )
 
             self.t_in_dhw: ComponentOutput = self.add_output(
@@ -1833,6 +1895,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         stsv.set_output_value(self.p_th_tot, p_th_tot_in_watt)
         stsv.set_output_value(self.p_el_sh, p_el_sh)
         stsv.set_output_value(self.p_el_cooling, p_el_cooling)
+        # the configured pump power is never None here: the constructor replaces an unset one by 0
+        stsv.set_output_value(self.p_el_brine_pump, p_el_brine_pump or 0.0)
         stsv.set_output_value(self.p_el_tot, p_el_tot_in_watt)
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
@@ -1844,6 +1908,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         stsv.set_output_value(self.time_on_cooling, time_on_cooling)
         stsv.set_output_value(self.time_off, time_off)
         stsv.set_output_value(self.thermal_power_from_environment, thermal_power_from_environment)
+        stsv.set_output_value(self.thermal_power_delivered_for_space_heating, max(p_th_sh, 0.0))
+        stsv.set_output_value(self.thermal_power_drawn_for_cooling, max(-p_th_sh, 0.0))
         stsv.set_output_value(self.thermal_energy_hp_tot_channel, thermal_energy_hp_tot_in_watt_hour)
         stsv.set_output_value(self.thermal_energy_hp_sh_channel, thermal_energy_hp_sh_in_watt_hour)
         stsv.set_output_value(self.electrical_energy_hp_tot_channel, electrical_energy_hp_tot_in_watt_hour)

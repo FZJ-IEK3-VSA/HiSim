@@ -47,11 +47,12 @@ from hisim.economics.facts import ComponentCostFacts
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult, VariantComparison
-from hisim.economics.staged import InvestmentOverride, StagedEvaluator, StagedResult
+from hisim.economics.staged import IncrementSubjects, InvestmentOverride, StagedEvaluator, StagedResult
 from hisim.economics.staged_parameters import StagedParameters, StatedQuote
 from hisim.economics.subsidies import PayoutKind, SchemeMaximum, SchemeMaximumNotes, SubsidyDecision
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 
 
 #: How an awarded amount is found on a timeline: ``(scheme id, subject, stage)``, where the stage
@@ -292,8 +293,9 @@ class StagedDocument:
             every reference row of a subject stage 0 does not carry out, states an empty list.
     """
 
-    #: Version of this document format. Bumped when a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 7
+    #: Version of this document format. Bumped when a consumer would have to change; 8 added the
+    #: required ``source`` of every ``by_subject`` row (``roadmap/kpi_address_spec.md``).
+    SCHEMA_VERSION: ClassVar[int] = 8
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -377,6 +379,13 @@ class StagedDocument:
         self._parameters = parameters
         self._perspective = perspective
         self._measure_ids: Dict[str, Optional[str]] = dict(measure_ids or {})
+        # An increment a later stage bought for a kept subject is that subject's measure too
+        # (hisim-1y0m): its row sits beside the subject it enlarges, under the same measure.
+        for stage in result.stages:
+            for subject_facts in stage.inputs.cost_facts:
+                base = IncrementSubjects.base_of(subject_facts.subject)
+                if base is not None and base in self._measure_ids:
+                    self._measure_ids.setdefault(subject_facts.subject, self._measure_ids[base])
         self._has_measure_map = measure_ids is not None
         self._unpriced: Set[str] = set(unpriced_subjects)
         self._costless: Set[str] = set(costless_subjects)
@@ -386,6 +395,52 @@ class StagedDocument:
         }
         self._catalog_id = subsidy_catalog_id
         self._cost_provenance = cost_provenance
+        self._component_sources = self._sources_of_components(result)
+
+    @staticmethod
+    def _sources_of_components(result: StagedResult) -> Dict[str, KpiSource]:
+        """Subject -> KPI source of every component any stage simulated.
+
+        Raises:
+            ValueError: If a stage's inputs were read from a file written before the sources
+                existed, which would leave every row's ``source`` unknowable; or if two stages give
+                one subject sources that differ in an identity field (``import``, ``instance``,
+                ``path``, ``member``, ``assembly``, ``name``: :attr:`KpiSource.IDENTITY_FIELDS`),
+                which would make one subject two components.
+                ``display_name`` and ``label`` are presentation: a stage that renamed the label of
+                a kept component still prices the same component, and the first stage's
+                presentation stands.
+        """
+        sources: Dict[str, KpiSource] = {}
+        for index, stage in enumerate(result.stages):
+            stage_sources = stage.inputs.component_sources
+            if stage_sources is None:
+                raise ValueError(
+                    f"Stage {index} was read from an economic_inputs.json written before it recorded "
+                    "component_sources, so no by_subject row could say whether its subject is a HiSim "
+                    "component. Re-run that stage's simulation."
+                )
+            for subject, source in stage_sources.items():
+                known = sources.setdefault(subject, source)
+                if known.identity() != source.identity():
+                    raise ValueError(
+                        f"The subject '{subject}' is two components across the stages: {known} and {source}."
+                    )
+        return sources
+
+    def _source_of(self, subject: str) -> Optional[Dict[str, Any]]:
+        """A row's ``source``: the KPI source of the component its subject is, or None.
+
+        A subject is a HiSim component when a stage simulated a component of that name; the
+        increment a later stage bought for a kept component (:class:`IncrementSubjects`) is that
+        component's too. Every other subject -- an envelope element or measure, a carrier, a
+        synthetic subject such as the financing -- has none.
+        """
+        source = self._component_sources.get(subject)
+        if source is None:
+            base = IncrementSubjects.base_of(subject)
+            source = self._component_sources.get(base) if base is not None else None
+        return None if source is None else source.to_dict()
 
     # ------------------------------------------------------------------ the document
 
@@ -879,6 +934,7 @@ class StagedDocument:
                     replacement_years=replacements.get(subject, []),
                     note=self._note(subject, quote),
                     replaces_subjects=self._replaces.get(subject, []) if measure_id is not None else [],
+                    source=self._source_of(subject),
                 )
             )
         rows.extend(self._measure_only_rows(result, staged))
@@ -968,6 +1024,7 @@ class StagedDocument:
                     replacement_years=[],
                     note=self._notes.get(subject),
                     replaces_subjects=self._replaces.get(subject, []) if measure_id is not None else [],
+                    source=self._source_of(subject),
                 )
             )
         return rows
@@ -1074,6 +1131,7 @@ class StagedDocument:
                     replacement_years=[],
                     note=self._notes.get(subject),
                     replaces_subjects=self._replaces.get(subject, []),
+                    source=self._source_of(subject),
                 )
             )
         return rows
@@ -1095,6 +1153,7 @@ class StagedDocument:
         life: Mapping[str, Any],
         replacement_years: List[int],
         note: Optional[str],
+        source: Optional[Dict[str, Any]],
         replaces_subjects: Sequence[str] = (),
     ) -> Dict[str, Any]:
         """One ``by_subject`` row: the one place its key set is written.
@@ -1116,6 +1175,8 @@ class StagedDocument:
             replacement_years: The years its replacements fall in.
             note: Why it has no price or costs nothing, or what a reader's quote made of it; ``None`` otherwise.
             replaces_subjects: The reference subjects its subject replaces; empty for one no measure created.
+            source: The KPI source of the component the subject is (:meth:`_source_of`), or None
+                for a subject that is no HiSim component.
 
         Returns:
             The row, in the key order of the schema.
@@ -1123,6 +1184,7 @@ class StagedDocument:
         zero = UncertainValue.exact(0.0)
         return {
             "subject": subject,
+            "source": source,
             "kind": kind,
             "asset_class": asset_class,
             "measure_id": measure_id,

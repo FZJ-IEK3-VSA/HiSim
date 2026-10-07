@@ -1,76 +1,790 @@
 {
-  "BUI1.Battery.Battery charging energy": 0.0,
-  "BUI1.Battery.Battery discharging energy": 0.0,
-  "BUI1.Battery.Battery losses": 0.0,
-  "BUI1.Building.Building heating load": 7780.752200000001,
-  "BUI1.Building.Conditioned floor area": 121.2,
-  "BUI1.Building.Degree-hours of building indoor air temperature above 26.0 Celsius": 35.7529204469388,
-  "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature": 8.533467398674162,
-  "BUI1.Building.Internal energy gains": 85.6809742543288,
-  "BUI1.Building.Maximum building indoor air temperature reached": 28.11821684771659,
-  "BUI1.Building.Minimum building indoor air temperature reached": 18.0380136853166,
-  "BUI1.Building.Rooftop area": 168.9,
-  "BUI1.Building.Solar energy gains": 12.53202740692353,
-  "BUI1.Building.Specific heating load": 64.19762541254126,
-  "BUI1.Building.Tabula reference energy need for heating": 128.1,
-  "BUI1.Building.Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius": 97.6583648707158,
-  "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius": 46.55215460642512,
-  "BUI1.Building.Theoretical cooling demand": 0.0,
-  "BUI1.Building.Theoretical heating demand": 108.74907889119208,
-  "BUI1.Costs.Costs of grid electricity for simulated period": 65.105818,
-  "BUI1.Costs.Costs of grid gas for simulated period": 0.0,
-  "BUI1.Costs.Costs of other heating fuels for simulated period": 0.0,
-  "BUI1.Costs.Energy grid costs for simulated period": 65.105818,
-  "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": 0.0,
-  "BUI1.Costs.Investment costs for equipment only heatpump per simulated period minus subsidies": 0.0,
-  "BUI1.Costs.Investment costs for equipment per simulated period": 6.19,
-  "BUI1.Costs.Investment costs for equipment per simulated period minus subsidies": 6.19,
-  "BUI1.Costs.Investment costs for equipment without heatpump per simulated period": 6.19,
-  "BUI1.Costs.Investment costs for equipment without heatpump per simulated period minus subsidies": 6.19,
-  "BUI1.Costs.Investment costs upfront for equipment period minus subsidies": 8044.1,
-  "BUI1.Costs.Maintenance costs for simulated period": 1.52,
-  "BUI1.Costs.Maintenance costs only heatpump for simulated period": 0.0,
-  "BUI1.Costs.Maintenance costs without heatpump for simulated period": 1.52,
-  "BUI1.Costs.Total costs for simulated period": 72.81581800000001,
-  "BUI1.Costs.Total costs only heatpump for simulated period": 0.0,
-  "BUI1.Costs.Total costs without heatpump for simulated period": 72.81581800000001,
-  "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid": 91.3357,
-  "BUI1.Electricity Meter.Max power from grid": 6.248372306227134,
-  "BUI1.Electricity Meter.Max power to grid": 4.12790876875468,
-  "BUI1.Electricity Meter.Mean power from grid": 1.326010825147271,
-  "BUI1.Electricity Meter.Mean power to grid": 0.14519580771823345,
-  "BUI1.Electricity Meter.Min power from grid": 0.0,
-  "BUI1.Electricity Meter.Min power to grid": 0.0,
-  "BUI1.Electricity Meter.Opex costs of electricity consumption from grid": 65.105818,
-  "BUI1.Electricity Meter.Total energy from grid": 222.7698186247416,
-  "BUI1.Electricity Meter.Total energy to grid": 24.39289569666322,
-  "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": 0.0,
-  "BUI1.Emissions.CO2 footprint for equipment per simulated period": 2.54,
-  "BUI1.Emissions.CO2 footprint for equipment without heatpump per simulated period": 2.54,
-  "BUI1.Emissions.CO2 footprint of grid electricity for simulated period": 91.3357,
-  "BUI1.Emissions.CO2 footprint of grid gas for simulated period": 0.0,
-  "BUI1.Emissions.CO2 footprint of other heating fuels for simulated period": 0.0,
-  "BUI1.Emissions.Total CO2 emissions for simulated period": 93.87570000000001,
-  "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": 0.0,
-  "BUI1.Emissions.Total CO2 emissions without heatpump for simulated period": 93.87570000000001,
-  "BUI1.General.Grid injection of electricity": 24.39289569666322,
-  "BUI1.General.PV production": 37.0,
-  "BUI1.General.Purchased energy consumption for simulated period": 222.7698186247416,
-  "BUI1.General.Ratio between Building production and total consumption": 0.0,
-  "BUI1.General.Ratio between PV production and total consumption": 15.72460688482788,
-  "BUI1.General.Ratio between Windturbine production and total consumption": 0.0,
-  "BUI1.General.Ratio between total production and total consumption": 15.72460688482788,
-  "BUI1.General.Relative electricity demand from grid": 94.68763280917976,
-  "BUI1.General.Self-consumption of electricity": 12.632434254681778,
-  "BUI1.General.Self-consumption rate according to solar htw berlin": 34.07325487388319,
-  "BUI1.General.Self-consumption rate of electricity": 34.141714201842646,
-  "BUI1.General.Self-sufficiency rate according to solar htw berlin": 5.31236719082024,
-  "BUI1.General.Self-sufficiency rate of electricity": 5.368650341981206,
-  "BUI1.General.Total electricity consumption": 235.3,
-  "BUI1.General.Total electricity production": 37.0,
-  "BUI1.General.Total energy self-suffiency rate": 5.31,
-  "BUI1.General.Windturbine production": 0.0,
-  "BUI1.Residents.Residents' total electricity consumption": 58.53369865986398,
-  "BUI1.Residents.Residents' total warm water consumption": 1820.0,
-  "BUI1.Residents.Residents' total warm water energy consumption": 62.88949333333334
+  "BUI1.Battery.Battery charging energy": {
+    "building": "BUI1",
+    "name": "Battery charging energy",
+    "source": null,
+    "tag": "Battery",
+    "unit": "kWh",
+    "value": 0.0
+  },
+  "BUI1.Battery.Battery discharging energy": {
+    "building": "BUI1",
+    "name": "Battery discharging energy",
+    "source": null,
+    "tag": "Battery",
+    "unit": "kWh",
+    "value": 0.0
+  },
+  "BUI1.Battery.Battery losses": {
+    "building": "BUI1",
+    "name": "Battery losses",
+    "source": null,
+    "tag": "Battery",
+    "unit": "kWh",
+    "value": 0.0
+  },
+  "BUI1.Building.Building heating load (Building)": {
+    "building": "BUI1",
+    "name": "Building heating load",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "W",
+    "value": 7780.752200000001
+  },
+  "BUI1.Building.Conditioned floor area (Building)": {
+    "building": "BUI1",
+    "name": "Conditioned floor area",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "m2",
+    "value": 121.2
+  },
+  "BUI1.Building.Degree-hours of building indoor air temperature above 26.0 Celsius (Building)": {
+    "building": "BUI1",
+    "name": "Degree-hours of building indoor air temperature above 26.0 Celsius",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "\u00b0C*h",
+    "value": 35.96983459057052
+  },
+  "BUI1.Building.Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature (Building)": {
+    "building": "BUI1",
+    "name": "Degree-hours of building indoor air temperature more than 1.0 K below its heating set temperature",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "\u00b0C*h",
+    "value": 8.991140210765924
+  },
+  "BUI1.Building.Internal energy gains (Building)": {
+    "building": "BUI1",
+    "name": "Internal energy gains",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "kWh",
+    "value": 85.6809742543288
+  },
+  "BUI1.Building.Maximum building indoor air temperature reached (Building)": {
+    "building": "BUI1",
+    "name": "Maximum building indoor air temperature reached",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "\u00b0C",
+    "value": 28.108504776695668
+  },
+  "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
+    "building": "BUI1",
+    "name": "Minimum building indoor air temperature reached",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "\u00b0C",
+    "value": 17.949438153134736
+  },
+  "BUI1.Building.Rooftop area (Building)": {
+    "building": "BUI1",
+    "name": "Rooftop area",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "m2",
+    "value": 168.9
+  },
+  "BUI1.Building.Solar energy gains (Building)": {
+    "building": "BUI1",
+    "name": "Solar energy gains",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "kWh",
+    "value": 4.69948940692353
+  },
+  "BUI1.Building.Specific heating load (Building)": {
+    "building": "BUI1",
+    "name": "Specific heating load",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "W/m2",
+    "value": 64.19762541254126
+  },
+  "BUI1.Building.Tabula reference energy need for heating (Building)": {
+    "building": "BUI1",
+    "name": "Tabula reference energy need for heating",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "kWh/m2",
+    "value": 128.1
+  },
+  "BUI1.Building.Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius (Building)": {
+    "building": "BUI1",
+    "name": "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "\u00b0C*h",
+    "value": 98.67040182087108
+  },
+  "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius (Building)": {
+    "building": "BUI1",
+    "name": "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "\u00b0C*h",
+    "value": 46.516827375161995
+  },
+  "BUI1.Building.Theoretical cooling demand (Building)": {
+    "building": "BUI1",
+    "name": "Theoretical cooling demand",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "kWh",
+    "value": 0.0
+  },
+  "BUI1.Building.Theoretical heating demand (Building)": {
+    "building": "BUI1",
+    "name": "Theoretical heating demand",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "Building",
+      "name": "Building",
+      "path": []
+    },
+    "tag": "Building",
+    "unit": "kWh",
+    "value": 109.79262597747743
+  },
+  "BUI1.Costs.Costs of grid electricity for simulated period": {
+    "building": "BUI1",
+    "name": "Costs of grid electricity for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 65.676768
+  },
+  "BUI1.Costs.Costs of grid gas for simulated period": {
+    "building": "BUI1",
+    "name": "Costs of grid gas for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 0.0
+  },
+  "BUI1.Costs.Costs of other heating fuels for simulated period": {
+    "building": "BUI1",
+    "name": "Costs of other heating fuels for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 0.0
+  },
+  "BUI1.Costs.Energy grid costs for simulated period": {
+    "building": "BUI1",
+    "name": "Energy grid costs for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 65.676768
+  },
+  "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
+    "building": "BUI1",
+    "name": "Investment costs for equipment only heatpump per simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 0.0
+  },
+  "BUI1.Costs.Investment costs for equipment only heatpump per simulated period minus subsidies": {
+    "building": "BUI1",
+    "name": "Investment costs for equipment only heatpump per simulated period minus subsidies",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 0.0
+  },
+  "BUI1.Costs.Investment costs for equipment per simulated period": {
+    "building": "BUI1",
+    "name": "Investment costs for equipment per simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 6.19
+  },
+  "BUI1.Costs.Investment costs for equipment per simulated period minus subsidies": {
+    "building": "BUI1",
+    "name": "Investment costs for equipment per simulated period minus subsidies",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 6.19
+  },
+  "BUI1.Costs.Investment costs for equipment without heatpump per simulated period": {
+    "building": "BUI1",
+    "name": "Investment costs for equipment without heatpump per simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 6.19
+  },
+  "BUI1.Costs.Investment costs for equipment without heatpump per simulated period minus subsidies": {
+    "building": "BUI1",
+    "name": "Investment costs for equipment without heatpump per simulated period minus subsidies",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 6.19
+  },
+  "BUI1.Costs.Investment costs upfront for equipment period minus subsidies": {
+    "building": "BUI1",
+    "name": "Investment costs upfront for equipment period minus subsidies",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 8044.1
+  },
+  "BUI1.Costs.Maintenance costs for simulated period": {
+    "building": "BUI1",
+    "name": "Maintenance costs for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 1.52
+  },
+  "BUI1.Costs.Maintenance costs only heatpump for simulated period": {
+    "building": "BUI1",
+    "name": "Maintenance costs only heatpump for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 0.0
+  },
+  "BUI1.Costs.Maintenance costs without heatpump for simulated period": {
+    "building": "BUI1",
+    "name": "Maintenance costs without heatpump for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 1.52
+  },
+  "BUI1.Costs.Total costs for simulated period": {
+    "building": "BUI1",
+    "name": "Total costs for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 73.38676799999999
+  },
+  "BUI1.Costs.Total costs only heatpump for simulated period": {
+    "building": "BUI1",
+    "name": "Total costs only heatpump for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 0.0
+  },
+  "BUI1.Costs.Total costs without heatpump for simulated period": {
+    "building": "BUI1",
+    "name": "Total costs without heatpump for simulated period",
+    "source": null,
+    "tag": "Costs",
+    "unit": "EUR",
+    "value": 73.38676799999999
+  },
+  "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "CO2 footprint of electricity consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kg",
+    "value": 92.11469999999998
+  },
+  "BUI1.Electricity Meter.Max power from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Max power from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 6.248372306227134
+  },
+  "BUI1.Electricity Meter.Max power to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Max power to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 4.12790876875468
+  },
+  "BUI1.Electricity Meter.Mean power from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Mean power from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 1.3373242023360954
+  },
+  "BUI1.Electricity Meter.Mean power to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Mean power to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 0.14518017298505959
+  },
+  "BUI1.Electricity Meter.Min power from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Min power from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 0.0
+  },
+  "BUI1.Electricity Meter.Min power to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Min power to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kW",
+    "value": 0.0
+  },
+  "BUI1.Electricity Meter.Opex costs of electricity consumption from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Opex costs of electricity consumption from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "Euro",
+    "value": 65.676768
+  },
+  "BUI1.Electricity Meter.Total energy from grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Total energy from grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kWh",
+    "value": 224.67046599246402
+  },
+  "BUI1.Electricity Meter.Total energy to grid (ElectricityMeter)": {
+    "building": "BUI1",
+    "name": "Total energy to grid",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "ElectricityMeter",
+      "name": "ElectricityMeter",
+      "path": []
+    },
+    "tag": "Electricity Meter",
+    "unit": "kWh",
+    "value": 24.390269061490013
+  },
+  "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": {
+    "building": "BUI1",
+    "name": "CO2 footprint for equipment only heatpump per simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 0.0
+  },
+  "BUI1.Emissions.CO2 footprint for equipment per simulated period": {
+    "building": "BUI1",
+    "name": "CO2 footprint for equipment per simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 2.54
+  },
+  "BUI1.Emissions.CO2 footprint for equipment without heatpump per simulated period": {
+    "building": "BUI1",
+    "name": "CO2 footprint for equipment without heatpump per simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 2.54
+  },
+  "BUI1.Emissions.CO2 footprint of grid electricity for simulated period": {
+    "building": "BUI1",
+    "name": "CO2 footprint of grid electricity for simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 92.11469999999998
+  },
+  "BUI1.Emissions.CO2 footprint of grid gas for simulated period": {
+    "building": "BUI1",
+    "name": "CO2 footprint of grid gas for simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 0.0
+  },
+  "BUI1.Emissions.CO2 footprint of other heating fuels for simulated period": {
+    "building": "BUI1",
+    "name": "CO2 footprint of other heating fuels for simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 0.0
+  },
+  "BUI1.Emissions.Total CO2 emissions for simulated period": {
+    "building": "BUI1",
+    "name": "Total CO2 emissions for simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 94.65469999999999
+  },
+  "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
+    "building": "BUI1",
+    "name": "Total CO2 emissions only heatpump for simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 0.0
+  },
+  "BUI1.Emissions.Total CO2 emissions without heatpump for simulated period": {
+    "building": "BUI1",
+    "name": "Total CO2 emissions without heatpump for simulated period",
+    "source": null,
+    "tag": "Emissions",
+    "unit": "kg",
+    "value": 94.65469999999999
+  },
+  "BUI1.General.Grid injection of electricity": {
+    "building": "BUI1",
+    "name": "Grid injection of electricity",
+    "source": null,
+    "tag": "General",
+    "unit": "kWh",
+    "value": 24.390269061490006
+  },
+  "BUI1.General.PV production": {
+    "building": "BUI1",
+    "name": "PV production",
+    "source": null,
+    "tag": "General",
+    "unit": "kWh",
+    "value": 37.0
+  },
+  "BUI1.General.Purchased energy consumption for simulated period": {
+    "building": "BUI1",
+    "name": "Purchased energy consumption for simulated period",
+    "source": null,
+    "tag": "General",
+    "unit": "kWh",
+    "value": 224.67046599246402
+  },
+  "BUI1.General.Ratio between Building production and total consumption": {
+    "building": "BUI1",
+    "name": "Ratio between Building production and total consumption",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 0.0
+  },
+  "BUI1.General.Ratio between PV production and total consumption": {
+    "building": "BUI1",
+    "name": "Ratio between PV production and total consumption",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 15.598650927487354
+  },
+  "BUI1.General.Ratio between Windturbine production and total consumption": {
+    "building": "BUI1",
+    "name": "Ratio between Windturbine production and total consumption",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 0.0
+  },
+  "BUI1.General.Ratio between total production and total consumption": {
+    "building": "BUI1",
+    "name": "Ratio between total production and total consumption",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 15.598650927487354
+  },
+  "BUI1.General.Relative electricity demand from grid": {
+    "building": "BUI1",
+    "name": "Relative electricity demand from grid",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 94.73018549747049
+  },
+  "BUI1.General.Self-consumption of electricity": {
+    "building": "BUI1",
+    "name": "Self-consumption of electricity",
+    "source": null,
+    "tag": "General",
+    "unit": "kWh",
+    "value": 12.635060889854993
+  },
+  "BUI1.General.Self-consumption rate according to solar htw berlin": {
+    "building": "BUI1",
+    "name": "Self-consumption rate according to solar htw berlin",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 34.08035388786483
+  },
+  "BUI1.General.Self-consumption rate of electricity": {
+    "building": "BUI1",
+    "name": "Self-consumption rate of electricity",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 34.148813215824305
+  },
+  "BUI1.General.Self-sufficiency rate according to solar htw berlin": {
+    "building": "BUI1",
+    "name": "Self-sufficiency rate according to solar htw berlin",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 5.269814502529513
+  },
+  "BUI1.General.Self-sufficiency rate of electricity": {
+    "building": "BUI1",
+    "name": "Self-sufficiency rate of electricity",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 5.326754169416102
+  },
+  "BUI1.General.Total electricity consumption": {
+    "building": "BUI1",
+    "name": "Total electricity consumption",
+    "source": null,
+    "tag": "General",
+    "unit": "kWh",
+    "value": 237.2
+  },
+  "BUI1.General.Total electricity production": {
+    "building": "BUI1",
+    "name": "Total electricity production",
+    "source": null,
+    "tag": "General",
+    "unit": "kWh",
+    "value": 37.0
+  },
+  "BUI1.General.Total energy self-suffiency rate": {
+    "building": "BUI1",
+    "name": "Total energy self-suffiency rate",
+    "source": null,
+    "tag": "General",
+    "unit": "%",
+    "value": 5.27
+  },
+  "BUI1.General.Windturbine production": {
+    "building": "BUI1",
+    "name": "Windturbine production",
+    "source": null,
+    "tag": "General",
+    "unit": "kWh",
+    "value": 0.0
+  },
+  "BUI1.Residents.Residents' total electricity consumption (UTSPConnector)": {
+    "building": "BUI1",
+    "name": "Residents' total electricity consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "UTSPConnector",
+      "name": "UTSPConnector",
+      "path": []
+    },
+    "tag": "Residents",
+    "unit": "kWh",
+    "value": 58.53369865986398
+  },
+  "BUI1.Residents.Residents' total warm water consumption (UTSPConnector)": {
+    "building": "BUI1",
+    "name": "Residents' total warm water consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "UTSPConnector",
+      "name": "UTSPConnector",
+      "path": []
+    },
+    "tag": "Residents",
+    "unit": "l",
+    "value": 1820.0
+  },
+  "BUI1.Residents.Residents' total warm water energy consumption (UTSPConnector)": {
+    "building": "BUI1",
+    "name": "Residents' total warm water energy consumption",
+    "source": {
+      "assembly": null,
+      "import": null,
+      "instance": null,
+      "member": "UTSPConnector",
+      "name": "UTSPConnector",
+      "path": []
+    },
+    "tag": "Residents",
+    "unit": "kWh",
+    "value": 62.88949333333334
+  }
 }

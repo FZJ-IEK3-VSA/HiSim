@@ -1,0 +1,114 @@
+# Mockup (design): the composed base file for the heat-pump generator with DEFAULTS — the site with the twin's site
+# values (D9: Aachen weather, the German single-family-home preset, couple_both_at_work) plus the imports that should
+# reproduce energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml, option `ems_with_battery`.
+# Written in lean v1 syntax (spec §13.1); the lean expansion writes the flat file, and dry_run_heatpump_twin.md
+# compares it with the twin by hand.
+#
+# Site component names are the twin's, so the rename map touches only imported members. A site entry carries a
+# `ports:` block only where an import binds to it; `{$port: <port>}` in its `inputs` marks where the bound port's wires
+# land (gap G3), as inside an assembly. Everything else an import needs from the site (weather, occupancy, the
+# Building, the HDS controller, sizing facts) it finds by class: its members' default connections and the facts the
+# site classes contribute.
+#
+# `order:` (spec §2.3, revised D26) is the evaluation order within a time step, independent of file position: a flat
+# integer on site entries and imports, sorted ascending; an import's members stay one block in their assembly's line
+# order. The numbers reproduce the twin's sequence: Building 1, UTSPConnector 2, Weather 3, pv 4,
+# HeatDistributionController 5, heating 6 (ControllerDHW, ControllerSH, HeatPump, Buffer), dhw 9,
+# HeatDistributionSystem 11, grid 12, battery 13, control 14. The two exchanges against the twin, ControllerDHW before
+# ControllerSH and the buffer before the DHW cylinder, are neutral swaps (dry run §9.1).
+
+schema_version: 4
+name: household_heatpump_building_sizer
+description: Basic household new system setup.
+
+components:
+  Building:
+    order: 1
+    class: hisim.components.building.building.Building
+    preset: german_single_family_home
+    config:
+      number_of_apartments: 1.0
+      enable_opening_windows: true
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+    inputs:
+      - Weather
+      - {$port: temperature_modifier}
+      - UTSPConnector
+      - HeatDistributionSystem
+    optional-bind: {temperature_modifier: control}  # G13 resolved: binds the `control` import this file declares;
+                                                    # a house without an EMS omits the import and this line (§3.1)
+    ports:
+      temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
+  UTSPConnector:
+    order: 2
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+    config:
+      data_acquisition_mode: USE_LOCAL_LPG
+    # no ports: ElectricalPowerConsumption is observed by its tags (RESIDENTS, ranked rank-only by the EMS's own
+    # declaration), and the DHW tank and the Building read it through their default connections from UtspLpgConnector
+  Weather:
+    order: 3
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      data_source: DWD_TRY
+      heating_reference_temperature_in_celsius: -7.0
+      predictive_control: false
+  HeatDistributionController:
+    order: 5
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: building_derived
+    inputs:
+      - {$port: temperature_modifier}
+      - Weather
+      - Building
+    optional-bind: {temperature_modifier: control}  # as on Building (G13 resolved)
+    ports:
+      temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
+  HeatDistributionSystem:
+    order: 11
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: building_derived
+    inputs:
+      - Building
+      - HeatDistributionController
+      - {$port: space_heating}
+    ports:
+      space_heating: {circuit: space_heating}                             # pump and return leg are the HDS's (naming convention)
+
+imports:
+  heating:
+    order: 6                                        # the assembly as a whole: its members are one block
+    assembly: heating/air_source_heat_pump          # parameter defaults = the twin (D9)
+    optional-bind: {ems_modifier: control, ems_modifier_dhw: control}
+                                                    # optional ports: intent required (D8 i), naming the `control`
+                                                    # import this file declares (§3.1);
+                                                    # space_heating, flow_temperature, weather, ambient, dhw_temperature
+                                                    # (the one SimpleDHWStorage, dhw's cylinder) bind their one partner;
+                                                    # electricity: only the check that one grid connection exists
+  dhw:
+    order: 9
+    assembly: dhw/indirect_cylinder
+    bind: {circuit: heating.dhw}
+  pv:
+    order: 4
+    assembly: pv/array
+    instances: {pv_system: {}}                      # the legacy single object's id (spec §10.4)
+  battery:
+    order: 13
+    assembly: storage/battery
+    instances: {battery: {}}
+  control:
+    order: 14
+    assembly: control/ems_self_consumption          # observes the flows (its default selection), sums them
+  grid:
+    order: 12
+    assembly: supply/electricity_grid
+    observes: [{output: TotalElectricityToOrFromGrid}]   # the EMS's grid balance only: the twin's ems_with_battery
+                                                    # meter. Without this line the default (every electricity output
+                                                    # the meter declares) would also match the outputs the EMS
+                                                    # observes: a load error (double count).
+                                                    # metered_directly: drop `control`, `battery`, this line and
+                                                    # the optional-bind lines naming `control` (spec §3.1, §4.3).

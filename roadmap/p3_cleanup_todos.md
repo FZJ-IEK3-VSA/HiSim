@@ -12,10 +12,7 @@ only in a conversation. Items are removed when done, not ticked and kept.
 
 ## Missing deliverables (code)
 
-- [ ] **Stable KPI addresses.** Keys are still volatile (bare unless a collision exists) and → hisim-b3b.1
-  consumers rebuild key strings by hand. Spec: `roadmap/kpi_address_spec.md`; its own PR after #653
-  is on main.
-
+*Nothing open.*
 
 ## Decision needed (owner)
 

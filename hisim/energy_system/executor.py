@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import datetime
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -36,12 +36,16 @@ import yaml
 from hisim import log
 from hisim import simulator as sim
 from hisim.calculation_scope import CalculationScope
+from hisim.energy_system.assemblies.expansion import expand_imports
+from hisim.energy_system.assemblies.record import ImportRecord
+from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.audit import build_audit, write_audit
 from hisim.energy_system.bindings import ClassBindings
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.comments import AnnotatedEmitter, write_record
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
 from hisim.energy_system.errors import (
+    EnergySystemCatalogueError,
     EnergySystemErrorId,
     EnergySystemFormatError,
 )
@@ -51,6 +55,7 @@ from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.parameters_format import ParameterFileWriter, ParameterNormalisation
 from hisim.energy_system.path_resolver import PathResolver
 from hisim.energy_system.record import realize, verify_rerun
+from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -205,6 +210,7 @@ class BuiltEnergySystem:
     source_simulation_parameters: str = ""
     path_resolver: Optional[PathResolver] = None
     rerun: bool = False
+    imports: ImportRecord = field(default_factory=ImportRecord)
 
 
 class EnergySystemExecutor:
@@ -237,6 +243,8 @@ class EnergySystemExecutor:
         source_energy_system: str = "",
         source_simulation_parameters: str = "",
         rerun: bool = False,
+        assembly_resolver: Optional[AssemblyResolver] = None,
+        source_lines: Optional[LineIndex] = None,
     ) -> None:
         """Prepares an executor for one loaded energy system.
 
@@ -251,6 +259,9 @@ class EnergySystemExecutor:
             source_simulation_parameters: Path of the parameters file, likewise.
             rerun: Whether the caller declared this to be the re-execution of a record, which
                 is what makes the reproduction guarantee checkable.
+            assembly_resolver: Finds the assemblies the file imports; this machine's search path
+                (``energy_systems/assemblies/``, then ``HISIM_ASSEMBLY_PATH``) when omitted.
+            source_lines: The file's line index, which the source maps of its imports cite.
         """
         self.model = model
         self.simulation_parameters = simulation_parameters
@@ -260,6 +271,8 @@ class EnergySystemExecutor:
         self.source_energy_system = source_energy_system
         self.source_simulation_parameters = source_simulation_parameters
         self.rerun = rerun
+        self.assembly_resolver = assembly_resolver
+        self.source_lines = source_lines
 
     def build(self) -> BuiltEnergySystem:
         """Runs every stage from the loaded file to a wired, registered simulator.
@@ -272,15 +285,21 @@ class EnergySystemExecutor:
                 the earliest stage that can decide it, and nothing is constructed before the
                 sizing of the whole system has succeeded.
         """
-        expanded, expansion = expand_groups(self.model)
-        validate_structure(expanded)
-        bindings = validate_classes(expanded)
-        configured = configure_energy_system(
-            expanded, bindings=bindings, path_resolver=self.path_resolver
-        )
-        wired, wiring_warnings = wire_energy_system(
-            expanded, configured, self.simulation_parameters
-        )
+        imported, imports = expand_imports(self.model, self.assembly_resolver, lines=self.source_lines)
+        expanded, expansion = expand_groups(imported)
+        try:
+            validate_structure(expanded)
+            bindings = validate_classes(expanded)
+            configured = configure_energy_system(
+                expanded, bindings=bindings, path_resolver=self.path_resolver
+            )
+            wired, wiring_warnings = wire_energy_system(
+                expanded, configured, self.simulation_parameters
+            )
+        except EnergySystemCatalogueError as error:
+            # A refusal of a component the expansion of imports produced names where it came from.
+            imports.source_map.annotate(error)
+            raise
         simulator = self.register(expanded, wired, expansion)
         warnings = configured.warnings + wiring_warnings
         for warning in warnings:
@@ -297,6 +316,7 @@ class EnergySystemExecutor:
             source_simulation_parameters=self.source_simulation_parameters,
             path_resolver=self.path_resolver,
             rerun=self.rerun,
+            imports=imports,
         )
 
     def register(
@@ -409,6 +429,7 @@ def build_energy_system(
     path_resolver: Optional[PathResolver] = None,
     rerun: bool = False,
     simulation_parameters_path: Any = "",
+    assembly_resolver: Optional[AssemblyResolver] = None,
 ) -> BuiltEnergySystem:
     """Loads an energy-system file and builds everything it describes, without running it.
 
@@ -427,6 +448,8 @@ def build_energy_system(
         simulation_parameters_path: Path of the parameters file, when the caller read them from
             one; a run record names it so that the pair which reproduces the run is written
             down, and nothing else uses it.
+        assembly_resolver: Finds the assemblies the file imports; this machine's search path
+            when omitted.
 
     Returns:
         The built system, its simulator registered and wired.
@@ -437,6 +460,11 @@ def build_energy_system(
     path = Path(energy_system_path)
     model = parse_energy_system(path)
     EnergySystemExecutor.check_metadata(model, str(path), rerun)
+    source_lines = (
+        LineIndex.from_text(path.read_text(encoding="utf-8"), path.name)
+        if model.schema_version == EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION
+        else None
+    )
     executor = EnergySystemExecutor(
         model=model,
         simulation_parameters=simulation_parameters,
@@ -446,6 +474,8 @@ def build_energy_system(
         source_energy_system=str(path),
         source_simulation_parameters=str(simulation_parameters_path or ""),
         rerun=rerun,
+        assembly_resolver=assembly_resolver,
+        source_lines=source_lines,
     )
     return executor.build()
 

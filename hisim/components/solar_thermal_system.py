@@ -30,6 +30,7 @@ from hisim.config import (
 )
 from hisim import loadtypes, log, utils
 from hisim.caching import atomic_cache_write
+from hisim.energy_port import EnergyPort
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -240,6 +241,13 @@ class SolarThermalSystem(Component):
     WaterMassFlowOutput: ClassVar[str] = "WaterMassFlowOutput"
     WaterTemperatureOutput: ClassVar[str] = "WaterTemperatureOutput"
     ElectricityConsumptionOutput: ClassVar[str] = "ElectricityConsumptionOutput"
+    #: The irradiance on the collector plane times the collector area: the solar power the collectors receive (W).
+    SolarPowerOnCollector: ClassVar[str] = "SolarPowerOnCollector"
+    #: The solar power the collectors receive and do not deliver as heat: optical and thermal loss, and all of it
+    #: while the pump stands (W).
+    CollectorHeatLoss: ClassVar[str] = "CollectorHeatLoss"
+    #: The solar pump's electricity, which the model does not add to the fluid: it leaves to outdoors (W).
+    SolarPumpHeatLoss: ClassVar[str] = "SolarPumpHeatLoss"
 
     def __init__(
         self,
@@ -346,6 +354,11 @@ class SolarThermalSystem(Component):
             unit=loadtypes.Units.WATT,
             postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING],
             output_description="Thermal power output [W]",
+            energy_port=EnergyPort(
+                loadtypes.EnergyRole.OUT,
+                loadtypes.EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+                peer_output=self.WaterMassFlowOutput,
+            ),
         )
 
         self.thermal_energy_wh_output_channel: ComponentOutput = self.add_output(
@@ -386,6 +399,38 @@ class SolarThermalSystem(Component):
             unit=loadtypes.Units.WATT,
             output_description="Electricity consumption of the solar pump.",
             postprocessing_flag=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            energy_port=EnergyPort(
+                loadtypes.EnergyRole.IN,
+                loadtypes.EnergyBalanceCarrier.ELECTRICITY,
+                peer_output=self.ElectricityConsumptionOutput,
+            ),
+        )
+        self.solar_power_on_collector_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.SolarPowerOnCollector,
+            load_type=loadtypes.LoadTypes.IRRADIANCE,
+            unit=loadtypes.Units.WATT,
+            output_description="Irradiance on the collector plane (poa_global) times the collector area [W].",
+            energy_port=EnergyPort(loadtypes.EnergyRole.IN, loadtypes.EnergyBalanceCarrier.SOLAR),
+        )
+        self.collector_heat_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CollectorHeatLoss,
+            load_type=loadtypes.LoadTypes.HEATING,
+            unit=loadtypes.Units.WATT,
+            output_description=(
+                "Solar power on the collectors that is not delivered as heat [W]: the optical and thermal loss of "
+                "the efficiency curve, and all of it while the pump stands."
+            ),
+            energy_port=EnergyPort(loadtypes.EnergyRole.LOSS, loadtypes.EnergyBalanceCarrier.SOLAR),
+        )
+        self.solar_pump_heat_loss_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.SolarPumpHeatLoss,
+            load_type=loadtypes.LoadTypes.ELECTRICITY,
+            unit=loadtypes.Units.WATT,
+            output_description="Electricity of the solar pump, which the model does not add to the fluid [W].",
+            energy_port=EnergyPort(loadtypes.EnergyRole.LOSS, loadtypes.EnergyBalanceCarrier.ELECTRICITY),
         )
 
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
@@ -825,6 +870,10 @@ class SolarThermalSystem(Component):
             self.electricity_consumption_output_channel,
             electric_power_demand_solar_pump_w,
         )
+        solar_power_on_collector_w = float(self.plane_of_array_irradiance_w_m2) * self.area_m2
+        stsv.set_output_value(self.solar_power_on_collector_channel, solar_power_on_collector_w)
+        stsv.set_output_value(self.collector_heat_loss_channel, solar_power_on_collector_w - thermal_power_output_w)
+        stsv.set_output_value(self.solar_pump_heat_loss_channel, electric_power_demand_solar_pump_w)
 
 
 @dataclass

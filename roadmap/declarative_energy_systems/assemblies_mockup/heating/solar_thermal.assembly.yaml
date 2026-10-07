@@ -1,0 +1,75 @@
+# Mockup (design): energy_systems/assemblies/heating/solar_thermal.assembly.yaml, written in lean v1 syntax (spec §13.1) and
+# read by the lean reader and library check; † marks what HiSim does not have yet.
+# Collectors with their L1 pump controller (SolarThermalSystem, SolarThermalSystemController exist,
+# solar_thermal_system.py:219, :939). Today the collector is coupled to ONE SimpleDHWStorage through default connections
+# (its inlet temperature from WaterTemperatureToHeatGenerator, the controller from WaterMeanTemperatureInStorage) and
+# charges the tank's primary generator inputs; a coil into the SECONDARY inputs of a DHW tank and of a heating buffer
+# (both classes have them) is hydronic stage C/D work (spec §11.1). `supplies: dhw_and_space_heating` needs a valve
+# assembly with one circuit per branch (spec §11.1), not written here.
+
+schema_version: 4
+kind: assembly
+name: heating/solar_thermal
+description: Solar thermal collectors with their pump controller, charging a DHW tank and optionally the SH buffer.
+
+parameters:
+  supplies:
+    {type: enum, values: [dhw_only, dhw_and_space_heating], default: dhw_only, description: Which stores the loop charges.}
+  collector_type:
+    {type: enum, values: [flat_plate], default: flat_plate,
+     description: "Collector type, the name of the collector's preset."}
+     # † evacuated_tube (request leaf collector_type) returns as a value with SolarThermalSystemConfig.preset_evacuated_tube
+  area_in_m2:
+    {type: float, unit: SQUARE_METER, default: 6, range: {min: 2, max: 20}, description: Aperture area.}
+     # range: one small collector (2 m²) up to a combi system for a large house (20 m²). The lean stack declares
+     # SQUARE_METER on SolarThermalSystemConfig.area_m2.
+  # † storage_volume_in_liter (request leaf, a dedicated solar store) returns as a parameter when a solar store is
+  #   modelled; the coils charge the existing tanks today.
+
+components:
+  Collector:
+    class: hisim.components.solar_thermal_system.SolarThermalSystem
+    preset: {$param: collector_type}
+    config: {area_m2: {$param: area_in_m2}}
+    inputs:
+      - {$port: weather}
+      - Controller                                         # ControlSignal
+      - {$port: dhw_coil}                                  # TemperatureCollectorInletDegC
+      - {$port: space_heating_coil}                                   # † the buffer's coil, through a valve assembly
+  Controller:
+    class: hisim.components.solar_thermal_system.SolarThermalSystemController
+    preset: standard
+    inputs:
+      - Collector                                          # CollectorTemperature, MassFlow
+      - {$port: dhw_coil}                                  # MeanWaterTemperatureInStorage
+
+interface:
+  needs:
+    weather:     {into: [Collector], partner: Weather}
+    dhw_coil:    {circuit: solar_dhw, member: [Collector, Controller]}     # the collector owns pump and supply leg
+    space_heating_coil:     {circuit: solar_space_heating, member: [Collector], required_when: {supplies: [dhw_and_space_heating]},
+                  active_when: {supplies: [dhw_and_space_heating]}}                      # † valve assembly
+    pump_electricity: {carrier: electricity, outputs: [Collector.ElectricityConsumptionOutput]}
+  provides:
+    pump_electricity_use: {output: Collector.ElectricityConsumptionOutput}
+                  # tagged SOLAR_THERMAL_SYSTEM; the EMS ranks it (weight 4, dispatch {}) from its own declaration but
+                  # has no modifier for it, so there is no ems_modifier port (rank-only, dry run G18)
+
+tests:
+  # One day at 900 s on the test weather, beside a DHW cylinder partner at the solar_dhw end. Irradiance on the
+  # collector is at most about 1200 W/m², so over the box's 20 m² at most 24 kW; a flat plate converts at most ~80 %.
+  # Controller's one output (ControlSignalToSolarThermalSystem) is BINARY, no energy or temperature.
+  bounds:
+    - {output: Collector.ThermalPowerOutput, unit: WATT, min: -5000, max: 20000}       # 20 m² x 1000 W/m² x 0.8, small night losses below 0
+    - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: -1250, max: 5000}  # per step: the power band x 0.25 h
+    - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}    # winter night to flat-plate stagnation
+    - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}   # a solar circulation pump is 30-100 W
+    - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}        # 20 m² x 1200 W/m²
+    - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}        # at most the incident power; sign unchecked
+    - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}              # at most the pump's electricity
+  monotone:
+    - {parameter: area_in_m2, kpi: Total thermal energy delivered, member: Collector, direction: increasing}
+      # more aperture collects more heat (non-decreasing once the cylinder is full)
+  expect:
+    - {kpi: Total thermal energy delivered, member: Collector, min: 0, max: 40}
+      # at the defaults; kWh in one day: 6 m² x at most 8 kWh/m² of daily irradiation x 0.8

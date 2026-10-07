@@ -12,10 +12,44 @@ in [`../golden_ref_spec.md`](../golden_ref_spec.md).
 ## What is compared
 
 Each run writes `all_kpis.json` (HiSim's KPI collection, produced when a parameter
-set enables both `COMPUTE_KPIS` and `WRITE_KPIS_TO_JSON`). It is flattened to a
-`{dotted.key: value}` map and stored here as `<setup_id>__<param_id>.json`.
-Comparison is numeric with a tight tolerance (`rel_tol = 1e-9`, `abs_tol = 0`);
-non-numeric KPIs are compared exactly. **Only KPIs are compared** — never plots,
+set enables both `COMPUTE_KPIS` and `WRITE_KPIS_TO_JSON`). Every KPI in it is
+resolved by its address (`KpiFinder`, `hisim/postprocessing/kpi_computation/kpi_address.py`)
+and stored here, in `<setup_id>__<param_id>.json` (keys sorted, two-space indent), as one
+**leaf** keyed by its dotted address (`KpiAddress.dotted`):
+
+```json
+{
+  "BUI1.Building.Conditioned floor area (Building)": {
+    "value": 121.2,
+    "unit": "m2",
+    "building": "BUI1",
+    "tag": "Building",
+    "name": "Conditioned floor area",
+    "source": {"import": null, "instance": null, "path": [], "member": "Building", "assembly": null, "name": "Building"}
+  },
+  "BUI1.General.Self-sufficiency rate of electricity": {
+    "value": 41.2, "unit": "%", "building": "BUI1", "tag": "General",
+    "name": "Self-sufficiency rate of electricity", "source": null
+  }
+}
+```
+
+- `value` is the entry's value (a number, stored as a float; a string; or `null`), `unit` the
+  entry's unit verbatim.
+- `source` holds the five identity fields of the entry's `KpiSource`; its `display_name` and
+  `label` are presentation and stay out. It is `null` for a derived KPI.
+- **Identity rule.** The key is the dotted address the leaf's own fields produce, and every
+  reader checks it: a leaf whose key disagrees with its fields, that lacks or adds a field, or
+  a golden in the old flat form (`{"BUI1.Building.Conditioned floor area": 121.2}`, a bare value
+  per key) is refused by `golden_check.py` (before anything runs) and by `golden_update.py`, with
+  the instruction to re-bless through the `golden-update` workflow with `force_rewrite`, which
+  writes the fresh leaves without reading the old file.
+
+Values are compared numerically with a tight tolerance (`rel_tol = 1e-9`, `abs_tol = 0`);
+non-numeric values exactly. **Unit rule:** the unit is compared exactly, and a changed unit is a
+failure of its own kind — listed as `[unit]` in `report.txt`, under `unit_changes` in
+`report.json`, and counted separately in the summary — whatever the value did. The address
+fields under one key are compared exactly too. **Only KPIs are compared** — never plots,
 PDFs, logs, or raw CSVs (those are non-deterministic and/or platform-dependent).
 
 `manifest.json` is an informational sidecar (git commit, Python, platform, config
@@ -48,8 +82,8 @@ python scripts/golden_check.py --mode both ...               # both, side by sid
 
 Re-runs the pairs, compares KPIs to the goldens here, writes
 `results/golden-ref-check/report.{txt,json}` (`golden-ref-check-yaml/` in YAML mode), and exits non-zero on any deviation,
-missing golden, or run failure. Missing goldens fail **before** running, so they
-never waste compute.
+unit change, missing or unusable golden, or run failure. Missing and unusable goldens fail
+**before** running, so they never waste compute.
 
 In CI this runs as two tiers (see `.github/workflows/`):
 
@@ -78,9 +112,10 @@ It regenerates every pair (week and year) in the CI container and opens a PR wit
 the updated `golden_references/`. Review the per-KPI diff, then merge — that merge
 is the bless. (`scripts/golden_update.py` can be run locally for inspection, but
 locally produced goldens are not the canonical committed ones. A local run is
-sticky like the CI one — every value the gate would still accept stays exactly as
-committed, and nothing is dropped — so add `--force-rewrite` to see the fresh
-values verbatim.)
+sticky like the CI one — every leaf the gate would still accept (value within
+tolerance, unit and address fields equal) stays exactly as committed, a changed unit
+always reaches the diff, and nothing is dropped — so add `--force-rewrite` to see the
+fresh leaves verbatim.)
 
 ## Seeing how the references moved
 
@@ -106,7 +141,15 @@ Non-numeric values (`null`, strings) are skipped and leave a gap. Panels are sor
 with the largest total movement first — the three largest carry their rank — and a
 KPI that never moved is drawn in grey, so the eye lands on the movers.
 
-Renames are stitched back into one series through
+The walker is the one reader of *historical* goldens, so it reads both forms the files have
+had. A leaf-form series is identified by its fields — `building`, `tag`, `name` and the
+source's `import`, `instance`, `member` — so a later change of the serialized source name
+(the key's suffix) continues one series with no table entry. A flat-form series is identified
+by its dotted key; it continues into a leaf series when the flat key equals the leaf's dotted
+key, or its bare `building.tag.name` (the form the old scheme used while a name was unique). A
+flat key that could continue two leaf series is refused by name, as is a file mixing the forms.
+
+Flat-form renames are stitched back into one series through
 [`../scripts/golden_kpi_renames.py`](../scripts/golden_kpi_renames.py). To add one,
 find the commit that renamed the key (diff the key sets of two neighbouring golden
 commits), add the old and new spelling under the pair's stem with that commit and its

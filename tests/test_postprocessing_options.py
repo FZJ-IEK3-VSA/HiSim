@@ -527,6 +527,20 @@ def test_postprocessing_option_lifecycle_cost_report(
     )
 
 
+def test_postprocessing_option_export_energy_balance(
+    postprocessing_option_framework: PostProcessingOptionTestFramework,
+) -> None:
+    """Test that PostProcessingOptions.EXPORT_ENERGY_BALANCE writes the balance report and the Sankeys.
+
+    The baseline setup declares no energy ports, so every component is listed as undeclared and the overall
+    Sankey is empty; the files appear all the same.
+    """
+    postprocessing_option_framework.run(
+        PostProcessingOptions.EXPORT_ENERGY_BALANCE,
+        expected_files=["balance_report.json", "energy_sankeys/energy_sankey.json", "energy_sankeys/overall.html"],
+    )
+
+
 def test_each_postprocessing_option_has_a_named_test() -> None:
     """Guard against adding enum values without adding a dedicated runtime-statistics test."""
 

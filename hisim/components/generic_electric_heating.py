@@ -8,8 +8,9 @@ from typing import ClassVar, List, Optional, Tuple
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from hisim.energy_port import EnergyPort
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
+from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -244,6 +245,7 @@ class ElectricHeating(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Thermal power output for space heating",
+            energy_port=EnergyPort(EnergyRole.OUT, EnergyBalanceCarrier.SPACE_HEATING_HEAT),
         )
         self.thermal_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -259,6 +261,9 @@ class ElectricHeating(Component):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for space heating",
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricOutputShPower
+            ),
         )
         self.electric_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -289,6 +294,11 @@ class ElectricHeating(Component):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT,
             output_description="Thermal power output for domestic hot water.",
+            energy_port=EnergyPort(
+                EnergyRole.OUT,
+                EnergyBalanceCarrier.DOMESTIC_HOT_WATER_HEAT,
+                peer_output=self.WaterOutputDhwMassFlowRate,
+            ),
         )
         self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -304,6 +314,9 @@ class ElectricHeating(Component):
             unit=Units.WATT,
             postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electric power output for domestic hot water",
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.ELECTRICITY, peer_output=self.ElectricOutputDhwPower
+            ),
         )
         self.electric_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,

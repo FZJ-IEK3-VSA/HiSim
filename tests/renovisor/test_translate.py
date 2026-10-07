@@ -1052,3 +1052,23 @@ class TestDeterminism:
         assert system.file_name.startswith("renovisor_")
         assert system.file_name.endswith(".energy_system.yaml")
         assert system.model.name == system.file_name[: -len(".energy_system.yaml")]
+
+
+@pytest.mark.base
+class TestABungalowIsADetachedHouseWithItsShape:
+    """renovisorissues #76 point 4: the storeys are not used, and the report says so in words (hisim-9b0m)."""
+
+    def test_the_report_names_the_typology_and_the_unused_storeys(self) -> None:
+        """building_type reads "detached house"; number_of_storeys is not_implemented_yet with the list's note."""
+        document = baseline(building__building_type="bungalow", building__number_of_storeys=1)
+        system = translate(document)
+
+        building_type = system.report.line("house.building.building_type")
+        assert building_type is not None and building_type.status is ReportStatus.APPROXIMATED
+        assert "simulated as a detached house (TABULA SFH), with that archetype's storeys and shape" in (
+            building_type.note or ""
+        )
+        storeys = system.report.line("house.building.number_of_storeys")
+        assert storeys is not None and storeys.status is ReportStatus.NOT_IMPLEMENTED_YET
+        assert "keeps the shape of its TABULA archetype" in (storeys.note or "")
+        assert "two houses that differ only in their storeys are simulated alike" in (storeys.note or "")

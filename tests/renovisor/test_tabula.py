@@ -103,6 +103,32 @@ class TestTheTypology:
         assert selection.is_approximated()
         assert any("bungalow" in note for note in selection.notes)
 
+    @pytest.mark.parametrize(
+        "building_type, note",
+        [
+            (
+                BuildingType.BUNGALOW,
+                "a bungalow has no TABULA typology of its own and is simulated as a detached house (TABULA SFH), "
+                "with that archetype's storeys and shape",
+            ),
+            (
+                BuildingType.OTHER,
+                "a dwelling of type 'other' has no TABULA typology of its own and is simulated as a detached house "
+                "(TABULA SFH), with that archetype's storeys and shape",
+            ),
+            (
+                BuildingType.SEMI_DETACHED_SFH,
+                "a semi-detached house has no TABULA typology of its own and is simulated as a terraced house "
+                "(TABULA TH)",
+            ),
+        ],
+    )
+    def test_the_approximation_names_the_typology_in_words(
+        self, building_type: BuildingType, note: str
+    ) -> None:
+        """The report names the kind of house, not only the code; only bungalow and other mention the shape."""
+        assert select(building_type, 1990).notes[0] == note
+
 
 @pytest.mark.base
 class TestTheBand:

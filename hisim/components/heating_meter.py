@@ -149,7 +149,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.HeatAvailableInWatt,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatAvailableInWatt} will follow.",
         )
 
@@ -158,7 +157,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.HeatConsumptionInWatt,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatConsumptionInWatt} will follow.",
         )
 
@@ -167,7 +165,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.HeatProductionInWatt,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatProductionInWatt} will follow.",
         )
 
@@ -176,7 +173,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.HeatAvailable,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatAvailable} will follow.",
         )
 
@@ -185,7 +181,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.HeatConsumption,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatConsumption} will follow.",
         )
 
@@ -194,7 +189,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.HeatProduction,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatProduction} will follow.",
         )
 
@@ -203,7 +197,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.CumulativeConsumption,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
         )
 
@@ -212,7 +205,6 @@ class HeatingMeter(DynamicComponent):
             field_name=self.CumulativeProduction,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
 

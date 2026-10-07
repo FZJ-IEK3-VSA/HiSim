@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import json
 from pathlib import Path
-from typing import Any, Sequence, TextIO
+from typing import Any, Mapping, Sequence, TextIO, Tuple
 
 from hisim.cli_exit import ExitCodes
 from hisim.config.introspection import ConfigDescription, ConstructorInfo, FieldInfo
@@ -23,9 +24,12 @@ from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.classes import validate_classes
 from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.errors import EnergySystemError
+from hisim.energy_system.assemblies.expansion import expand_imports
+from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.groups import expand_groups
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.validation import validate_structure
+from hisim.postprocessing.kpi_computation.kpi_address import ALL_KPIS_FILE_NAME
 
 
 class Report:
@@ -306,10 +310,11 @@ class FactsRenderer(Report):
             not, the refusal having been written to the report itself.
         """
         authored = parse_energy_system(path)
-        expanded, _ = expand_groups(authored)
+        flat, imports = expand_imports(authored)
+        expanded, _ = expand_groups(flat)
         validate_structure(expanded)
         print(f"{expanded.name} ({path})", file=stream)
-        cls._knobs(authored, stream)
+        cls._knobs(authored, imports, stream)
         bindings = validate_classes(expanded)
         cls._provided(bindings, stream)
         cls._consumed(bindings, stream)
@@ -325,20 +330,23 @@ class FactsRenderer(Report):
         return ExitCodes.OK
 
     @classmethod
-    def _knobs(cls, authored: Any, stream: TextIO) -> None:
-        """Writes the switches of the authored file: a flag per group, an option per variant.
+    def _knobs(cls, authored: Any, imports: ImportRecord, stream: TextIO) -> None:
+        """Writes the switches of the authored file: a flag per group, an option per variant, an import's knobs.
 
         The authored file is read rather than the expanded one, because expansion is exactly
         what removes the knobs: a switched-off group is gone from it and a variant is resolved
         into the top level. Every option a variant offers is listed after the selected one, so
-        the line says both what is set and what may be set instead.
+        the line says both what is set and what may be set instead. An import's knobs — its
+        parameters as given and as resolved, and the option each internal variant selects — come
+        from the import record the expansion wrote; a file without imports has none.
 
         Args:
             authored: The parsed file, before expansion.
+            imports: The import record of its expansion.
             stream: Where to write the section.
         """
         cls._heading("knobs", stream)
-        if not authored.groups and not authored.variants:
+        if not authored.groups and not authored.variants and imports.is_empty:
             cls._item("(none)", stream)
         for name, group in authored.groups.items():
             cls._item(f"{f'groups.{name}'.ljust(cls.KNOB_WIDTH)}{str(group.enabled).lower()}", stream)
@@ -346,6 +354,13 @@ class FactsRenderer(Report):
             alternatives = ", ".join(option for option in variant.options if option != variant.selected)
             knob = f"variants.{name}".ljust(cls.KNOB_WIDTH)
             cls._item(f"{knob}{variant.selected}  (or {alternatives or '<nothing else>'})", stream)
+        for record in imports.instances:
+            knob = f"imports.{record.import_key}" + (f".{record.instance}" if record.instance is not None else "")
+            cls._item(f"{knob.ljust(cls.KNOB_WIDTH)}{record.assembly}", stream)
+            for label, values in (("given", record.parameters_given), ("resolved", record.parameters_resolved)):
+                cls._detail(label, ", ".join(f"{key}={value!r}" for key, value in values.items()) or "(none)", stream)
+            for variant, option in record.variants.items():
+                cls._detail(f"variant {variant}", option, stream)
 
     @classmethod
     def _provided(cls, bindings: Any, stream: TextIO) -> None:
@@ -393,3 +408,46 @@ class FactsRenderer(Report):
         cls._heading("warnings", stream)
         for warning in warnings or ("(none)",):
             cls._item(warning, stream)
+
+
+class KpiAddressRenderer:
+    """Lists the KPIs of a collection, one ``<dotted address> = <value> <unit>`` per line (``hisim kpis list``).
+
+    The dotted form is the one the golden references use, ``<building>.<tag>.<key>``, so the part
+    before `` = `` can be pasted into a golden diff search as it stands. The value is written as
+    JSON (``null`` for a value that was not computed, a quoted string for a descriptive KPI), the
+    unit as the entry carries it, and nothing after the value when the unit is empty. The entries
+    come from
+    :class:`~hisim.postprocessing.kpi_computation.kpi_address.KpiFinder`, which reads each entry's
+    source from the entry and refuses a collection whose keys disagree with their entries.
+    """
+
+    #: The file a result directory holds the KPI collection in.
+    FILE_NAME: str = ALL_KPIS_FILE_NAME
+
+    @classmethod
+    def document_path(cls, path: Path) -> Path:
+        """The ``all_kpis.json`` a caller means: the file itself, or the one in a result directory.
+
+        Raises:
+            FileNotFoundError: If the path is neither such a file nor a directory holding one.
+        """
+        candidate = path / cls.FILE_NAME if path.is_dir() else path
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"No KPI collection at {candidate}: pass a result directory or its {cls.FILE_NAME}."
+            )
+        return candidate
+
+    @classmethod
+    def line(cls, address: Any, entry: Mapping[str, Any]) -> str:
+        """The line of one KPI: ``<dotted address> = <value> <unit>``."""
+        value = json.dumps(entry["value"], ensure_ascii=False)
+        unit = entry.get("unit")
+        return f"{address.dotted} = {value} {unit}" if unit else f"{address.dotted} = {value}"
+
+    @classmethod
+    def render(cls, entries: Sequence[Tuple[Any, Mapping[str, Any]]], stream: TextIO) -> None:
+        """Writes one ``<dotted address> = <value> <unit>`` line per ``(address, entry)``, in collection order."""
+        for address, entry in entries:
+            print(cls.line(address, entry), file=stream)

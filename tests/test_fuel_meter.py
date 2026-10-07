@@ -30,6 +30,7 @@ from hisim.components import (
 from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim import log
 
 
@@ -264,21 +265,20 @@ def test_house(
     ) as file:
         jsondata = json.load(file)
 
-    jsondata = jsondata["BUI1"]
+    finder = KpiFinder(jsondata)
 
-    heat_consumption_in_kilowatt_hour = jsondata["Fuel Meter"]["Total energy consumption"].get("value")
-    oil_consumption_in_kilowatt_hour = jsondata["Oil Boiler"][
-        f"Total {my_oil_heater.energy_carrier.value} consumption (energy)"
-    ].get("value")
+    heat_consumption_in_kilowatt_hour = finder.value(building="BUI1", tag="Fuel Meter", name="Total energy consumption")
+    oil_consumption_in_kilowatt_hour = finder.value(
+        building="BUI1", tag="Oil Boiler", name=f"Total {my_oil_heater.energy_carrier.value} consumption (energy)"
+    )
 
-    opex_costs_for_heating_in_euro = jsondata["Fuel Meter"]["OPEX - Energy costs"].get("value")
+    opex_costs_for_heating_in_euro = finder.value(building="BUI1", tag="Fuel Meter", name="OPEX - Energy costs")
 
-    # Qualified by its source component: the oil boiler of this setup reports an
-    # "OPEX - CO2 Footprint" of its own, and a KPI name two components share is keyed per
-    # component so neither entry overwrites the other.
-    co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"][
-        f"OPEX - CO2 Footprint ({my_fuel_meter.component_name})"
-    ].get("value")
+    # Filtered by its source component: the oil boiler of this setup reports an
+    # "OPEX - CO2 Footprint" of its own.
+    co2_footprint_due_to_heating_use_in_kg = finder.value(
+        building="BUI1", tag="Fuel Meter", name="OPEX - CO2 Footprint", source=my_fuel_meter.component_name
+    )
 
     # The carrier is a sizable field now, so the log lines read it through ``concrete``.
     fuel_carrier = concrete(my_fuel_meter_config.fuel_loadtype)

@@ -997,7 +997,6 @@ class Electrolyzer(cp.Component):
                 value=found[field],
                 tag=KpiTagEnumClass.ELECTROLYZER,
                 description=self.component_name,
-                name_of_source_component=self.component_name,
             )
             for field, (name, unit, _) in self.CUMULATIVE_TOTALS.items()
         ]

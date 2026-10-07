@@ -283,6 +283,16 @@ reference subjects its subject takes over (`external_insulation` -> `envelope_fa
 -> the reference's boiler), from the mapping report's `replaces_subjects`; a report written before
 the field is completed from the stages' stored registers by the same rule.
 
+Every `by_subject` row carries `source` (schema version 8, `roadmap/kpi_address_spec.md`): for a
+subject that is a HiSim component, the same object its KPI entries carry in `all_kpis.json`
+(`import`, `instance`, `path`, `member`, `assembly`, `name`, `display_name`, `label`; `name` is the subject,
+`path` lists the address steps outermost first and is `[]`, with `import` and `instance` null, for today's
+flat energy-system files), so a reader joins a cost row
+to its component's KPIs on one field set; `null` for every other subject (an envelope element or
+measure, a carrier, financing). The increment a later stage buys for a kept component carries that
+component's source. A stage directory whose `economic_inputs.json` predates the field (it records
+`component_sources`) is refused: re-run that stage.
+
 `comparison.discounted_payback_year` is the range of the three worlds' payback years, taken by value
 (renovisorissues #73): `min` the earliest world, `max` the latest (`null` as soon as one world never
 pays back within the horizon, `null` reading as later than every year), `best` the central world.

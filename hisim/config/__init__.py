@@ -5,7 +5,7 @@ configuration is made of, deliberately separated from the component runtime so t
 dependency direction is unambiguous — ``hisim/component.py`` imports this package, never
 the other way round:
 
-    - :mod:`hisim.config.base` — ``ComponentID``, ``ConfigBase`` and ``DisplayConfig``,
+    - :mod:`hisim.config.base` — ``ComponentID`` (with its ``AddressStep``), ``ConfigBase`` and ``DisplayConfig``,
       the three classes every component configuration is built from.
     - :mod:`hisim.config.names` — ``NameSyntax``: the one identifier grammar a component
       name, an energy-system file key and a reference all obey, kept here because its two
@@ -62,7 +62,7 @@ canonical spelling; the submodules are equally importable for code that prefers 
 fully-qualified path.
 """
 
-from hisim.config.base import ComponentID, ConfigBase, DisplayConfig
+from hisim.config.base import AddressStep, ComponentID, ConfigBase, DisplayConfig
 from hisim.config.names import NameSyntax
 from hisim.config.presets import (
     BuilderKind,
@@ -125,6 +125,7 @@ from hisim.config.introspection import (
 
 __all__ = [
     "AUTO",
+    "AddressStep",
     "BuilderKind",
     "Cardinality",
     "ChannelDeclarationError",

@@ -51,6 +51,15 @@ class NameSyntax:
     #: a location, so any of them means a path was written where a name belongs.
     PATH_CHARACTERS: ClassVar[str] = "/\\"
 
+    #: The separator of a serialized component address (``assemblies_spec.md`` §2.4, D5): an
+    #: assembly member's runtime name joins the import key, the instance key and the member name
+    #: with it, ``pv-east-PVSystem``. No identifier contains it, so an address never collides with
+    #: an authored name.
+    ADDRESS_SEPARATOR: ClassVar[str] = "-"
+
+    #: A runtime component name: identifiers joined by :attr:`ADDRESS_SEPARATOR`.
+    COMPONENT_KEY_PATTERN: ClassVar[Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*$")
+
     @classmethod
     def is_identifier(cls, value: Any) -> TypeGuard[str]:
         """Reports whether ``value`` is a string that satisfies the identifier grammar.
@@ -127,3 +136,24 @@ class NameSyntax:
         problem = cls.explain_violation(value)
         if problem is not None:
             raise ValueError(f"'{value}' is not a usable {role} name: {problem}.")
+
+    @classmethod
+    def require_component_key(cls, value: Any) -> None:
+        """Raises unless ``value`` is a usable runtime component name.
+
+        A runtime name is an identifier, or the serialization of an assembly member's address,
+        identifiers joined by :attr:`ADDRESS_SEPARATOR` (``pv-east-PVSystem``). Only a component's
+        own name may take the second form; every name an author writes stays an identifier.
+
+        Args:
+            value: The candidate runtime name.
+
+        Raises:
+            ValueError: If ``value`` is not a component key; the message names the part that breaks
+                the identifier rule.
+        """
+        if isinstance(value, str) and cls.COMPONENT_KEY_PATTERN.match(value) is not None:
+            return
+        parts = value.split(cls.ADDRESS_SEPARATOR) if isinstance(value, str) else [value]
+        problem = next((cls.explain_violation(part) for part in parts if cls.explain_violation(part)), None)
+        raise ValueError(f"'{value}' is not a usable component name: {problem}.")

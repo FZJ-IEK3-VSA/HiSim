@@ -14,7 +14,9 @@ therefore rejected here, at the one place a name or a reference enters the model
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Optional, Pattern, Tuple
+import contextlib
+import contextvars
+from typing import Any, ClassVar, FrozenSet, Iterator, Optional, Pattern, Tuple
 
 from hisim.config import NameSyntax
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
@@ -43,6 +45,37 @@ class NameRules:
     #: :meth:`NameSyntax.explain_violation`, so the rule and its wording cannot drift.
     REFERENCE_SEPARATOR: ClassVar[str] = "."
 
+    #: The expanded component names (``pv-east-PVSystem``) the document being read may use. Empty
+    #: while an authored file is read, so an authored name with the address separator is refused
+    #: as before; a realized record lists its expansion's addresses in its metadata, and the
+    #: reader admits those names, and only those, while it reads that record (``assemblies_spec.md``
+    #: §2.4).
+    _ADMITTED_EXPANDED_NAMES: ClassVar["contextvars.ContextVar[FrozenSet[str]]"] = contextvars.ContextVar(
+        "admitted_expanded_names", default=frozenset()
+    )
+
+    @classmethod
+    @contextlib.contextmanager
+    def admitting_expanded_names(cls, names: FrozenSet[str]) -> Iterator[None]:
+        """Admits the given expanded component names while the ``with`` block reads a document.
+
+        Args:
+            names: The names a realized record's address table lists.
+
+        Yields:
+            Nothing; the admission ends with the block.
+        """
+        token = cls._ADMITTED_EXPANDED_NAMES.set(frozenset(names))
+        try:
+            yield
+        finally:
+            cls._ADMITTED_EXPANDED_NAMES.reset(token)
+
+    @classmethod
+    def is_admitted_expanded_name(cls, value: Any) -> bool:
+        """Whether ``value`` is an expanded component name the current read admits."""
+        return isinstance(value, str) and value in cls._ADMITTED_EXPANDED_NAMES.get()
+
     @classmethod
     def check_identifier(cls, value: Any, location: str, role: str) -> str:
         """Returns ``value`` unchanged if it is a well-formed name, and raises otherwise.
@@ -64,6 +97,8 @@ class NameRules:
             EnergySystemFormatError: ``EF-08`` if the value is not a string or does not
                 match the identifier pattern.
         """
+        if role == "component" and cls.is_admitted_expanded_name(value):
+            return str(value)
         if not NameSyntax.is_identifier(value):
             # is_identifier is the narrowing type guard; explain_violation names the one rule
             # the value breaks, so the file-side refusal reads exactly like the runtime one.
@@ -107,7 +142,9 @@ class NameRules:
         if len(parts) > 2 or (require_member and len(parts) != 2):
             expected = "'<component>.<fact>'" if require_member else "'<component>' or '<component>.<Output>'"
             raise cls._reference_error(location, value, f"a reference is written {expected}")
-        for part in parts:
+        for index, part in enumerate(parts):
+            if index == 0 and cls.is_admitted_expanded_name(part):
+                continue
             # The shared grammar names the specific mistake — a wildcard, a path, an empty
             # half — so a reference and a runtime name refuse the same string the same way.
             problem = NameSyntax.explain_violation(part)

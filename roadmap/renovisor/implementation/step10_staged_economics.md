@@ -70,9 +70,26 @@ equals `EconomicEvaluator` on that stage, entry for entry" holds by construction
    price, levy, replacement reserve) from the stage active in `y`.
 3. **Investment-class** entries (`INVESTMENT`, `PLANNING`, `REMOVAL`, `SUBSIDY`, `LOAN_*`,
    `ANYWAY_COST_CREDIT`) of stage `k` are taken from stage `k`'s own year-0 entries for the
-   subjects new in `k` (present in `S_k`, absent from `S_{k-1}` under the same asset class, or
-   larger: the increment), moved to `from_year_k` and escalated with the investment escalation
-   rate to that year. Subjects carried over are not charged again. The increment is only for a
+   subjects new in `k` (present in `S_k`, absent from `S_{k-1}` under the same asset class),
+   moved to `from_year_k` and escalated with the investment escalation rate to that year.
+   Subjects carried over are not charged again. A subject that is larger in `S_k` than in
+   `S_{k-1}` is no longer charged a share of its year-0 figure (owner decision 2026-09-28,
+   hisim-1y0m): `StagedEvaluator.split_increments` splits it, before any stage is evaluated, into
+   the unit it was and one subject per enlargement, `<subject>#increment_stage<k>`
+   (`IncrementSubjects`), so the engine still prices one subject per name. The increment is a new
+   purchase of stage `k` at its own size: priced by the database's law for that size (the fixed
+   installation and planning cost again, as a separate purchase), or, for a whole-subject
+   investment or embodied-CO2 override, by stage `k`'s per-unit figure times its size; a stage-`k`
+   installation or purchase override goes to it alone. It carries `own_register_entry`, so it is
+   bought new in `k` and then ages on a register entry bound to its name (`ExistingAsset.subject`)
+   beside the unit it enlarges, with its own life, replacements and residual value. The enlarged
+   unit keeps the facts it was bought with, so its replacements and residual stay at its own
+   price. Every later stage that holds the subject at that size carries the same pieces; one that
+   replaces, shrinks or drops it carries it whole again, and the increment leaves with it (no
+   residual of its own). Every piece states `share_of_energy_sold`, its size over the whole, and
+   per-kWh subsidies pay each piece on that share of the energy sold, at its own scheme's terms
+   (owner decision 2026-10-01). A reader's quote for stage `k`'s measure prices the increment.
+   The increment is only for a
    device the house keeps and enlarges: a subject whose asset class stage `k`'s register newly
    declares replaced is a new purchase, charged whole (owner decision 2026-09-26, renovisorissues
    #48; the same day's buffer-only limit was reversed because it left a same-size replacement of

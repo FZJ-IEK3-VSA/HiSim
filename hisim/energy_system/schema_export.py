@@ -42,6 +42,7 @@ from typing import Any, Dict, Sequence
 
 from hisim.config.introspection import ConfigDescription, describe_config
 from hisim.config.presets import constructors_of
+from hisim.energy_system.assemblies.model import AssemblyFile
 from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
@@ -72,6 +73,12 @@ class SchemaBuilder:
     #: reads line by line rather than as one changed line.
     INDENT: int = 2
 
+    #: Pattern of a verb's partner reference: a name, optionally followed by an instance and a port.
+    PARTNER_PATTERN: str = r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+
+    #: Pattern of an assembly's library path, ``<family>/<name>``.
+    ASSEMBLY_PATTERN: str = AssemblyFile.LIBRARY_PATH_PATTERN.pattern
+
     #: Pattern of a plain name — a component, a group, a fact or a port.
     NAME_PATTERN: str = NameRules.IDENTIFIER_PATTERN.pattern
 
@@ -93,7 +100,7 @@ class SchemaBuilder:
         return {
             "$schema": self.DIALECT,
             "$id": self.FILENAME,
-            "title": f"HiSim energy system, schema version {EnergySystemFile.SUPPORTED_SCHEMA_VERSION}",
+            "title": "HiSim energy system, schema versions 3 and 4",
             "description": (
                 "A declarative description of one simulated household: its components, how each "
                 "is configured, where each takes its inputs from and, where that is ambiguous, "
@@ -103,6 +110,8 @@ class SchemaBuilder:
             "additionalProperties": False,
             "required": ["schema_version", "name"],
             "properties": self._top_level(),
+            "if": {"required": ["imports"]},
+            "then": {"properties": {"schema_version": {"const": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION}}},
             "$defs": self._definitions(),
         }
 
@@ -114,12 +123,18 @@ class SchemaBuilder:
         """
         return {
             "schema_version": {
-                "const": EnergySystemFile.SUPPORTED_SCHEMA_VERSION,
-                "description": "The format version this file is written against.",
+                "enum": list(EnergySystemFile.SUPPORTED_SCHEMA_VERSIONS),
+                "description": "The format version: 3 for a flat file, 4 for a file that imports assemblies.",
             },
             "name": {"type": "string", "description": "The name of the energy system."},
             "description": {"type": "string"},
             "components": {"$ref": "#/$defs/components"},
+            "imports": {
+                "type": "object",
+                "propertyNames": {"$ref": "#/$defs/name"},
+                "additionalProperties": {"$ref": "#/$defs/import"},
+                "description": "Assemblies this file imports (schema version 4, assemblies_spec.md §2.2).",
+            },
             "groups": {
                 "type": "object",
                 "propertyNames": {"$ref": "#/$defs/name"},
@@ -189,8 +204,11 @@ class SchemaBuilder:
                     {"$ref": "#/$defs/default_inputs"},
                     {"$ref": "#/$defs/explicit_wire"},
                     {"$ref": "#/$defs/aggregator_feed"},
+                    {"$ref": "#/$defs/port_placeholder"},
+                    {"$ref": "#/$defs/observes_placeholder"},
                 ]
             },
+            **self.assembly_definitions(),
             "default_inputs": {"$ref": "#/$defs/name"},
             "explicit_wire": {
                 "type": "object",
@@ -232,6 +250,120 @@ class SchemaBuilder:
             },
         }
 
+    #: The flat evaluation order of a top-level entry or an import (``assemblies_spec.md`` §2.3, D26 revised).
+    ORDER: Dict[str, Any] = {
+        "type": "integer",
+        "description": "Version 4: the entries and imports carrying order: come first, ascending; the others follow "
+        "in file order. Only on a top-level entry or an import.",
+    }
+
+    @classmethod
+    def verb_properties(cls) -> Dict[str, Any]:
+        """The three binding verbs (``assemblies_spec.md`` §3.1), on a top-level entry and on an import."""
+        partner_map = {
+            "type": "object",
+            "propertyNames": {"$ref": "#/$defs/name"},
+            "additionalProperties": {"type": "string", "pattern": cls.PARTNER_PATTERN},
+        }
+        return {
+            "bind": partner_map,
+            "optional-bind": partner_map,
+            "none": {"type": "array", "items": {"$ref": "#/$defs/name"}},
+        }
+
+    @classmethod
+    def assembly_definitions(cls) -> Dict[str, Any]:
+        """The ``$defs`` schema version 4 adds, which the assembly file's schema shares.
+
+        A port's ``need``/``provided`` keys and the part-2 kinds' spellings (circuit, carrier, fact,
+        observer, ``controllable``) follow :class:`~hisim.energy_system.imports_reader.ImportsReader`;
+        the constructs lean v1 cuts (D26) are not admitted.
+        """
+        conditions = {
+            "type": "object",
+            "propertyNames": {"$ref": "#/$defs/name"},
+            "additionalProperties": {"type": "array", "minItems": 1},
+        }
+        names = {
+            "oneOf": [{"$ref": "#/$defs/name"}, {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}}]
+        }
+        port_properties: Dict[str, Any] = {
+            "partner": names,
+            "into": names,
+            "wires": {"type": "object", "additionalProperties": {"$ref": "#/$defs/name"}},
+            "output": {"$ref": "#/$defs/reference"},
+            "controllable": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "target_input": {"$ref": "#/$defs/name"},
+                    "via": {"type": "string"},
+                    "optional": {"type": "boolean"},
+                },
+            },
+            "circuit": {"$ref": "#/$defs/name"},
+            "member": names,
+            "carrier": {"$ref": "#/$defs/string_or_param"},
+            "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+            "meter": {"$ref": "#/$defs/name"},
+            "fact": {"$ref": "#/$defs/string_or_param"},
+            "many": {"type": "boolean"},
+            "default": {"type": "string"},
+            "optional": {"type": "boolean"},
+            "required_when": conditions,
+            "active_when": conditions,
+        }
+        site_keys = ("partner", "wires", "circuit", "carrier", "outputs", "optional")
+        reserved = {
+            "installation_year": {"type": "integer", "description": "Recorded for the economics, never read (D18)."},
+            "quote": {"type": "object", "description": "Recorded for the economics, never read (D22)."},
+        }
+        return {
+            "string_or_param": {
+                "oneOf": [{"type": "string"}, {"type": "object", "required": ["$param"], "maxProperties": 1}]
+            },
+            "port": {"type": "object", "additionalProperties": False, "properties": port_properties},
+            "site_port": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    key: ({"type": "string"} if key == "carrier" else port_properties[key]) for key in site_keys
+                },
+            },
+            "port_placeholder": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["$port"],
+                "properties": {"$port": {"$ref": "#/$defs/name"}},
+            },
+            "observes_placeholder": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["$observes"],
+                "properties": {"$observes": {"$ref": "#/$defs/name"}},
+            },
+            "import": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["assembly"],
+                "not": {"required": ["instances", "parameters"]},
+                "properties": {
+                    "assembly": {"type": "string", "pattern": cls.ASSEMBLY_PATTERN},
+                    "order": cls.ORDER,
+                    "parameters": {"type": "object", "propertyNames": {"$ref": "#/$defs/name"}},
+                    "instances": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "propertyNames": {"$ref": "#/$defs/name"},
+                        "additionalProperties": {"type": "object", "properties": reserved},
+                    },
+                    **cls.verb_properties(),
+                    "observes": {"type": "array"},
+                    **reserved,
+                },
+            },
+        }
+
     def _entry(self) -> Dict[str, Any]:
         """Builds the schema of one component entry, class conditionals included.
 
@@ -257,6 +389,14 @@ class SchemaBuilder:
                 "config": {"type": "object"},
                 "inputs": {"type": "array", "items": {"$ref": "#/$defs/input_item"}},
                 "sizing_sources": {"$ref": "#/$defs/sizing_sources"},
+                "ports": {
+                    "type": "object",
+                    "propertyNames": {"$ref": "#/$defs/name"},
+                    "additionalProperties": {"$ref": "#/$defs/site_port"},
+                    "description": "What a top-level entry of a version-4 file needs from an import (§3).",
+                },
+                **self.verb_properties(),
+                "order": self.ORDER,
             },
             "allOf": [self._class_branch(component) for component in self.classes],
         }

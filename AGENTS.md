@@ -80,6 +80,80 @@ Results land in a `results/` subdirectory next to the input file. Use `simple_sy
 
 
 
+## Beads schema: how every bead is sorted
+
+Every bead carries exactly one **kind**, exactly one **area**, a **priority** with the fixed meaning
+below, and a **parent epic**. Labels mark the queues a bead waits in. `scripts/beads_overview.py`
+prints the one-page overview built from these fields. Keep a bead's fields true when its situation
+changes, and never keep a todo list anywhere else.
+
+### Kind (`--type`, exactly one)
+
+| type | use it for |
+|---|---|
+| `bug` | a wrong result, a crash, or a refusal of valid input |
+| `feature` | a new capability a user or a caller can see |
+| `task` | planned engineering work that is neither of the above (wiring, data, a migration) |
+| `chore` | cleanup, refactoring or tooling with no behaviour change |
+| `docs` | documentation only |
+| `question` | a decision someone must take; once taken, retype it to the work it became, or close it |
+| `epic` | a theme that groups work; never worked on directly |
+
+### Area (label, exactly one)
+
+`renovisor`, `economics`, `components`, `energy-systems`, `postprocessing`, `ci`, `data`, `rust`,
+`docs`. Pick the area where the change lands, not the one that reported it.
+
+### Priority (`-p`, a fixed meaning, not a feeling)
+
+| priority | means |
+|---|---|
+| P0 | production is broken: a live calculation fails or cannot run at all |
+| P1 | live results are wrong, or the work is due this week |
+| P2 | next: planned and wanted soon |
+| P3 | backlog: worth doing, no date |
+| P4 | idea or someday (Rust ideas and post-MVP work go here) |
+
+Re-rate a bead when its situation changes, e.g. a P3 bug that reaches production becomes P0.
+
+### Queues (labels, any number)
+
+| label | the bead waits on |
+|---|---|
+| `owner-decision` | the owner (cmf): a choice only they can make. The bead says the options and a recommendation |
+| `external` | someone outside this repository: the contract owner, the backend, the frontend. Name them and link the renovisorissues issue |
+| `needs-triage` | nobody yet: new and not sorted. Sorting it means giving kind, area, priority and parent, then dropping the label |
+
+A bead without a queue label waits on engineering.
+
+### Parent epic
+
+Every bead except an epic has a parent (`--parent <epic>`). Create a child under the epic of its
+theme; open a new epic only for a theme that will hold several beads. `br epic` shows each epic's
+progress.
+
+### Optional
+
+`difficulty:easy|medium|hard` estimates the effort. Link blocking work with dependencies
+(`br dep add`), never with prose.
+
+### Creating a bead
+
+```bash
+br create "<what is wrong or wanted, as a sentence>" -t bug -p 1 --parent hisim-4g9 \
+    -l components -d "<where, how to reproduce, why it matters, the owner's decision if any>"
+```
+
+### Getting the overview
+
+```bash
+python scripts/beads_overview.py   # one page: P0/P1, decisions, waiting, kind x area, epics, gaps
+br ready                           # open and unblocked
+br list -l owner-decision          # the owner's decision queue
+br count --by-priority             # and --by-type, --by-label
+br stale                           # beads nobody touched for a while
+```
+
 <!-- br-agent-instructions-v1 -->
 
 ---

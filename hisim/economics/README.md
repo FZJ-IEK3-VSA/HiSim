@@ -145,7 +145,17 @@ data covers — the one clamp `effective_price_basis_year` applies to the CLI an
 — and `origins.price_basis_year` says `plan_start_year`. The plan's year 0 is `plan_start_year`, else
 the price basis year: every asset the house already has is aged at it (its replacements, the book
 value a measure writes off), and a subject a stage buys counts as installed in year 0 + the stage's
-`from_year`, which is its published `installation_year` (hisim-dutz, hisim-nl6j). `escalation.energy` names a
+`from_year`, which is its published `installation_year` (hisim-dutz, hisim-nl6j). A stage that
+enlarges a subject the house keeps (5 kWp from stage 1, 8 kWp in stage 2) buys the increment as a
+purchase of its own, the subject `<subject>#increment_stage<k>` (`IncrementSubjects`, hisim-1y0m):
+priced as a new unit of that size by the database's law (device cost for 3 kWp plus the entry's
+fixed installation and planning cost; an investment override states no law, so the increment takes
+the stage's per-unit figure times its size), escalated to the stage's year, replaced on its own life,
+and replaced exactly by a reader's quote for the stage's measure; the unit it enlarges keeps ageing
+on its own schedule at the price its own stage paid. Per-kWh subsidies pay each piece on its size
+share of the energy sold (5/8 and 3/8), each at its own scheme's terms; an increment a later stage
+removes again earns no residual value. The document gives the increment a `by_subject` row of its
+own under the enlarged subject's measure. `escalation.energy` names a
 per-carrier rate (`ELECTRICITY_FEED_IN` is refused: its remuneration is fixed for 20 years and
 then follows `escalation.feed_in`). `energy_prices` states what the household pays in year 1
 (renovisorissues #52), per carrier —
@@ -196,7 +206,13 @@ stage books: its principal is the financed share of the stage's booked year-0 ne
 quote as stated, database prices escalated, grants as booked), never the stage's own loan escalated.
 Fixed-amount grants (`LUMP_SUM`, `PER_UNIT`, `TIERED_PER_UNIT`) are booked nominal in their stage's
 year, quoted or not, and so is their `max_amount_in_euro`; share-of-cost grants follow the cost they
-are a share of, and a soft loan's repayment grant follows the principal. A measure HiSim holds no price for
+are a share of, and a soft loan's repayment grant follows the principal. A later stage's award paid
+after its own year 0 is dated from the stage's start: instalment `y` of a tax credit falls in plan
+year `from_year + y`, valued on the cost the stage books (so escalated once, with that cost), and
+every instalment is kept whichever stage is active by then; an `OPERATIONAL` payment is a nominal
+rate per kWh, never escalated, dated the same way and kept while the installation that earns it is
+in the house (until a later stage no longer has the subject or buys it whole again). Payments past
+the horizon are dropped (hisim-staged-tax-credit-placement-nvz7). A measure HiSim holds no price for
 (`hot_water_tank_and_pipe_insulation`) becomes priced: one year-0 purchase, never replaced,
 maintained or written down. A stage the plan does not have
 (`parameters.investment_overrides.stage.unknown`), a measure the stage does not carry out or

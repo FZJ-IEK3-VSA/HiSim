@@ -1,0 +1,100 @@
+# Mockup (design): energy_systems/assemblies/supply/delivered_fuel.assembly.yaml, written in lean v1 syntax
+# (spec §13.1) and read by the lean reader and library check; † marks what HiSim does not have yet.
+# A delivered fuel (oil tank, pellet store, wood-chip bunker, log pile) and its meter (spec §5.1). Each carrier has its
+# own provision, `{carrier: <carrier>, meter: FuelMeter}`, active for that value of `carrier` only (a carrier is
+# literal in v1, and per-variant values live in the variant options, D26); every bound consumer's fuel need lowers to
+# the aggregator feeds FuelMeter's class declares for the consuming outputs, whose EnergyPort names this carrier, and
+# they land at the meter's placeholder of that provision, like the gas meter's.
+# FuelMeter exists; its fuel constants are copied from "the generator" today (fuel_meter.py:61-69,
+# generic_boiler.py:217-259), so a second burner with other constants beside it is refused as an ambiguous fact read
+# (D26: the fuel-constant check of §6 is not in v1).
+# Carriers are lt.EnergyBalanceCarrier values. † lt.EnergyBalanceCarrier has no member for wood logs (WOOD_LOGS), LPG
+# (LPG) or HVO (HVO) yet (spec §5.1), nor LoadTypes: the enums are extended in the step that brings the component, and
+# until then the reader refuses their provisions.
+
+schema_version: 4
+kind: assembly
+name: supply/delivered_fuel
+description: A stored, delivered fuel with its consumption meter.
+
+parameters:
+  carrier:
+    {type: enum, values: [heating_oil, pellets, wood_chips, wood_logs, lpg, hvo], default: heating_oil,
+     description: "The fuel, an lt.EnergyBalanceCarrier value; wood_logs, lpg and hvo are † (no LoadTypes / EnergyBalanceCarrier member)."}
+     # † default heating_oil is a placeholder: the importer always states the carrier (the twins' oil house)
+
+variants:
+  meter:
+    selected_by: carrier
+    options:
+      oil:
+        when: [heating_oil]
+        components:
+          FuelMeter:
+            class: hisim.components.fuel_meter.FuelMeter
+            preset: standard
+            config: {fuel_loadtype: OIL}
+            # heating_value_of_fuel_in_kwh_per_liter / fuel_density_in_kg_per_m3 stay AUTO (laws over the consumer's facts)
+            inputs:
+              - {$port: heating_oil}                       # one feed per bound consumer
+      pellets:
+        when: [pellets]
+        components:
+          FuelMeter:
+            class: hisim.components.fuel_meter.FuelMeter
+            preset: standard
+            config: {fuel_loadtype: PELLETS}
+            inputs:
+              - {$port: pellets}
+      wood_chips:
+        when: [wood_chips]
+        components:
+          FuelMeter:
+            class: hisim.components.fuel_meter.FuelMeter
+            preset: standard
+            config: {fuel_loadtype: WOOD_CHIPS}
+            inputs:
+              - {$port: wood_chips}
+      wood_logs:
+        when: [wood_logs]
+        components:
+          FuelMeter:
+            class: hisim.components.fuel_meter.FuelMeter
+            preset: standard
+            config: {fuel_loadtype: WOOD_LOGS}                 # † no LoadTypes member
+            inputs:
+              - {$port: wood_logs}
+      lpg:
+        when: [lpg]
+        components:
+          FuelMeter:
+            class: hisim.components.fuel_meter.FuelMeter
+            preset: standard
+            config: {fuel_loadtype: LPG}                       # † no LoadTypes member
+            inputs:
+              - {$port: lpg}
+      hvo:
+        when: [hvo]
+        components:
+          FuelMeter:
+            class: hisim.components.fuel_meter.FuelMeter
+            preset: standard
+            config: {fuel_loadtype: HVO}                       # † no LoadTypes member
+            inputs:
+              - {$port: hvo}
+
+interface:
+  provides:                                                # the one provider of the selected carrier
+    heating_oil: {carrier: heating_oil, meter: FuelMeter, active_when: {carrier: [heating_oil]}}
+    pellets:     {carrier: pellets, meter: FuelMeter, active_when: {carrier: [pellets]}}
+    wood_chips:  {carrier: wood_chips, meter: FuelMeter, active_when: {carrier: [wood_chips]}}
+    wood_logs:   {carrier: wood_logs, meter: FuelMeter, active_when: {carrier: [wood_logs]}}     # † carrier
+    lpg:         {carrier: lpg, meter: FuelMeter, active_when: {carrier: [lpg]}}                 # † carrier
+    hvo:         {carrier: hvo, meter: FuelMeter, active_when: {carrier: [hvo]}}                 # † carrier
+
+tests:
+  # One day at 900 s beside the consumer partner of the carrier (a boiler of at most about 40 kW).
+  bounds:
+    - {output: FuelMeter.HeatConsumption, unit: WATT_HOUR, min: 0, max: 15000}               # per step: <= 40 kW x 0.25 h, with margin
+    - {output: FuelMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1500000}      # one day: <= 40 kW x 24 h, with margin
+  monotone: []                                             # no numeric parameter: nothing to sweep

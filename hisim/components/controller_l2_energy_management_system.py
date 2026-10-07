@@ -20,15 +20,8 @@ from hisim.component import ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiSource, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
-from hisim.components import (
-    more_advanced_heat_pump_hplib,
-    loadprofilegenerator_utsp_connector,
-    generic_electric_heating,
-    solar_thermal_system,
-    controller_l1_generic_ev_charge,
-)
 from hisim.economics.facts import CostRelevance
 
 
@@ -296,7 +289,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.TotalElectricityToOrFromGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.TotalElectricityToOrFromGrid} will follow.",
         )
 
@@ -305,7 +297,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.TotalElectricityConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
         )
 
@@ -314,7 +305,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.BuildingIndoorTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.BuildingIndoorTemperatureModifier} will follow.",
         )
 
@@ -323,7 +313,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.DomesticHotWaterStorageTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.DomesticHotWaterStorageTemperatureModifier} will follow.",
         )
 
@@ -332,7 +321,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.SpaceHeatingWaterStorageTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.SpaceHeatingWaterStorageTemperatureModifier} will follow.",
         )
 
@@ -341,7 +329,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.PeakShavingStatus,
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.PeakShavingStatus} will follow.",
         )
 
@@ -350,7 +337,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             field_name=self.ElectricityToBuildingFromDistrictEMSOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
 
@@ -939,52 +925,86 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             return None
         return None
 
+    def dispatch_target_kpi_source(self, field_name: str) -> KpiSource:
+        """The source of the participant one of this controller's dispatch outputs steers.
+
+        The grid-share KPIs are reported on behalf of the participant, so they carry its
+        :class:`KpiSource` and not the manager's. The participant is found the way the dispatch
+        pairs it (:meth:`sort_source_weights_and_components`): the dispatch output and the input
+        that measures the participant share one source weight and one component type. That input
+        is connected to the participant's own output, which carries the participant's identity
+        and display configuration, so the source is built exactly as the participant builds it.
+
+        Args:
+            field_name: The dispatch output's field name.
+
+        Returns:
+            The participant's source.
+
+        Raises:
+            ValueError: If the output is no dispatch output of this controller, if not exactly one
+                input pairs with it, or if that input is not connected to a component's output.
+        """
+        dispatch_entries = [
+            entry for entry in self.my_component_outputs if entry.source_output_field_name == field_name
+        ]
+        if len(dispatch_entries) != 1:
+            raise ValueError(
+                f"{self.component_name}: '{field_name}' is not exactly one dispatch output "
+                f"({len(dispatch_entries)} found), so the participant it steers cannot be named."
+            )
+        dispatch = dispatch_entries[0]
+        component_types = [tag for tag in dispatch.source_tags if isinstance(tag, lt.ComponentType)]
+        paired = [
+            entry
+            for entry in self.my_component_inputs
+            if entry.source_weight == dispatch.source_weight
+            and entry.source_tags
+            and entry.source_tags[0] in component_types
+        ]
+        if len(paired) != 1:
+            raise ValueError(
+                f"{self.component_name}: the dispatch output '{field_name}' (weight "
+                f"{dispatch.source_weight}, {component_types}) pairs with {len(paired)} inputs "
+                f"({[entry.source_component_class for entry in paired]}); exactly one input measuring "
+                "the participant must share its weight and component type, or its KPI cannot name "
+                "the participant it is reported for."
+            )
+        measuring_input: ComponentInput = getattr(self, paired[0].source_component_class)
+        participant_output = measuring_input.source_output
+        if participant_output is None or participant_output.display_config is None:
+            raise ValueError(
+                f"{self.component_name}: the input '{measuring_input.field_name}' that pairs with the "
+                f"dispatch output '{field_name}' is not connected to a component's output "
+                f"(source '{measuring_input.src_object_name}.{measuring_input.src_field_name}'), so "
+                "the participant's identity is unknown."
+            )
+        return KpiSource.for_component(participant_output.component_id, participant_output.display_config)
+
     def get_component_kpi_entries(
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        """Calculates KPIs for the respective component and return all KPI entries as list.
 
-        more_advanced_heat_pump_class_name = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.get_classname()
-        occupancy_class_name = loadprofilegenerator_utsp_connector.UtspLpgConnector.get_classname()
-        electric_heater_class_name = generic_electric_heating.ElectricHeating.get_classname()
-        solar_thermal_system_class_name = solar_thermal_system.SolarThermalSystem.get_classname()
-        electric_car_charger_class_name = controller_l1_generic_ev_charge.L1Controller.get_classname()
-
+        The grid share of each participant's dispatch is reported on behalf of that participant
+        and carries its source (:meth:`dispatch_target_kpi_source`); the priorities are the
+        manager's own.
+        """
         # What each participant draws from the grid, keyed by the component type its electricity
         # target carries — the same key the dispatch itself steers by — and not by the class name
         # one of the two wiring paths happens to spell into the port's name. The value is the KPI's
-        # name and the name of the source component it is reported for.
+        # name; the entry is reported on behalf of the participant, whose source is read off the
+        # input the dispatch is paired with (dispatch_target_kpi_source).
         kpi_by_dispatch_target = {
-            lt.ComponentType.HEAT_PUMP_BUILDING: (
-                "Space heating heat pump electricity from grid",
-                more_advanced_heat_pump_class_name,
-            ),
-            lt.ComponentType.HEAT_PUMP_DHW: (
-                "Domestic hot water heat pump electricity from grid",
-                more_advanced_heat_pump_class_name,
-            ),
-            lt.ComponentType.RESIDENTS: (
-                "Residents' electricity consumption from grid",
-                occupancy_class_name,
-            ),
-            lt.ComponentType.ELECTRIC_HEATING_SH: (
-                "Space heating electric heater electricity from grid",
-                electric_heater_class_name,
-            ),
-            lt.ComponentType.ELECTRIC_HEATING_DHW: (
-                "Domestic hot water electric heater electricity from grid",
-                electric_heater_class_name,
-            ),
-            lt.ComponentType.SOLAR_THERMAL_SYSTEM: (
-                "Domestic hot water solar thermal system electricity from grid",
-                solar_thermal_system_class_name,
-            ),
-            lt.ComponentType.CAR_BATTERY: (
-                "Electric car electricity consumption from grid",
-                electric_car_charger_class_name,
-            ),
+            lt.ComponentType.HEAT_PUMP_BUILDING: "Space heating heat pump electricity from grid",
+            lt.ComponentType.HEAT_PUMP_DHW: "Domestic hot water heat pump electricity from grid",
+            lt.ComponentType.RESIDENTS: "Residents' electricity consumption from grid",
+            lt.ComponentType.ELECTRIC_HEATING_SH: "Space heating electric heater electricity from grid",
+            lt.ComponentType.ELECTRIC_HEATING_DHW: "Domestic hot water electric heater electricity from grid",
+            lt.ComponentType.SOLAR_THERMAL_SYSTEM: "Domestic hot water solar thermal system electricity from grid",
+            lt.ComponentType.CAR_BATTERY: "Electric car electricity consumption from grid",
         }
 
         list_of_kpi_entries: List[KpiEntry] = []
@@ -994,7 +1014,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             dispatch_target = self.dispatch_target_component_type(output.field_name)
             if dispatch_target is None or dispatch_target not in kpi_by_dispatch_target:
                 continue
-            kpi_name, name_of_source_component = kpi_by_dispatch_target[dispatch_target]
+            kpi_name = kpi_by_dispatch_target[dispatch_target]
 
             # A negative dispatch is what the participant had to take from the grid.
             electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
@@ -1013,11 +1033,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     value=electricity_from_grid_in_kilowatt_hour,
                     tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                     description=self.component_name,
-                    name_of_source_component=name_of_source_component,
+                    source=self.dispatch_target_kpi_source(output.field_name),
                 )
             )
 
-        # add all source weights to KPIs
+        # add all source weights to KPIs; these are the manager's own, an input of its own each,
+        # so component_kpi_entries stamps the manager's source on them.
         for index, input_sorted in enumerate(self.inputs_sorted):
             list_of_kpi_entries.append(KpiEntry(
                 name=f"Priority for {input_sorted.field_name}",
@@ -1025,7 +1046,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 value=index,
                 tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                 description=self.component_name,
-                name_of_source_component=input_sorted.component_name,
             ))
 
         return list_of_kpi_entries

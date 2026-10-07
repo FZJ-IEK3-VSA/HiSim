@@ -78,7 +78,7 @@ from hisim.economics.tariffs import TariffContract, contract_to_json, load_tarif
 from hisim.economics.timeline import Actor, CashFlowEntry, CashFlowTimeline, CostCategory, SubjectKind
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType, Units
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource, KpiTagEnumClass
 
 
 class SerializationFileNames:
@@ -134,6 +134,8 @@ def facts_to_json(facts: ComponentCostFacts) -> dict:
         "lifetime_is_engine_fallback": facts.lifetime_is_engine_fallback,
         "price_is_unknown": facts.price_is_unknown,
         "lifetime_of_asset_class": facts.lifetime_of_asset_class.name if facts.lifetime_of_asset_class else None,
+        "own_register_entry": facts.own_register_entry,
+        "share_of_energy_sold": facts.share_of_energy_sold,
         "technical_attributes": facts.technical_attributes,
     }
 
@@ -173,6 +175,9 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
         lifetime_of_asset_class=(
             ComponentType[raw["lifetime_of_asset_class"]] if raw.get("lifetime_of_asset_class") else None
         ),
+        # Both absent in facts written before a staged plan split an enlarged subject (hisim-1y0m).
+        own_register_entry=bool(raw.get("own_register_entry", False)),
+        share_of_energy_sold=float(raw.get("share_of_energy_sold", 1.0)),
         technical_attributes=raw.get("technical_attributes", {}),
     )
 
@@ -244,6 +249,7 @@ def asset_to_json(asset: ExistingAsset) -> dict:
         "installation_year_origin": (
             asset.installation_year_origin.value if asset.installation_year_origin is not None else None
         ),
+        "subject": asset.subject,
     }
 
 
@@ -273,6 +279,8 @@ def asset_from_json(item: dict) -> ExistingAsset:
             if item.get("installation_year_origin")
             else None
         ),
+        # Absent in a register written before an entry could be bound to a subject (hisim-1y0m).
+        subject=item.get("subject"),
     )
 
 
@@ -463,6 +471,13 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
         "heated_floor_area_in_m2": inputs.heated_floor_area_in_m2,
         "living_area_in_m2": inputs.living_area_in_m2,
         "current_cold_rent_in_euro_per_m2_month": inputs.current_cold_rent_in_euro_per_m2_month,
+        # Which subjects are HiSim components, and their KPI source (kpi_address_spec.md); the
+        # staged document's rows carry it. None only for a record read from a file older than it.
+        "component_sources": (
+            None
+            if inputs.component_sources is None
+            else {subject: source.to_dict() for subject, source in inputs.component_sources.items()}
+        ),
     }
 
 
@@ -556,7 +571,38 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
         heated_floor_area_in_m2=raw.get("heated_floor_area_in_m2"),
         living_area_in_m2=raw.get("living_area_in_m2"),
         current_cold_rent_in_euro_per_m2_month=raw.get("current_cold_rent_in_euro_per_m2_month"),
+        component_sources=_component_sources_from_json(raw),
     )
+
+
+def _component_sources_from_json(raw: dict) -> Optional[Dict[str, KpiSource]]:
+    """Reads the subject -> KPI source map of an inputs file.
+
+    Absent from a file written before the field existed: the record then says ``None`` (not
+    known), never an empty map (no component), so a reader that needs the sources -- the staged
+    document's ``by_subject[].source`` -- refuses it instead of calling every subject a
+    non-component.
+
+    Raises:
+        ValueError: If the field is present but not a map of subject to source object, if a source
+            lacks ``name`` or carries a key a source does not have (:meth:`KpiSource.from_json_object`),
+            or if a source's name is not the subject it is filed under.
+    """
+    if "component_sources" not in raw or raw["component_sources"] is None:
+        return None
+    entries = raw["component_sources"]
+    if not isinstance(entries, dict):
+        raise ValueError(f"economic_inputs.json: component_sources is not an object: {entries!r}")
+    sources: Dict[str, KpiSource] = {}
+    for subject, source_raw in entries.items():
+        source = KpiSource.from_json_object(source_raw, f"economic_inputs.json: component_sources['{subject}']")
+        if source.name != subject:
+            raise ValueError(
+                f"economic_inputs.json: component_sources files the source named '{source.name}' under "
+                f"the subject '{subject}'; a component's subject is its runtime name."
+            )
+        sources[subject] = source
+    return sources
 
 
 def write_inputs(

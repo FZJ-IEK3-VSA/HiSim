@@ -723,7 +723,6 @@ class CHP(Component):
                 value=found[name],
                 tag=KpiTagEnumClass.CHP,
                 description=self.component_name,
-                name_of_source_component=self.component_name,
             )
             for name, unit in self.RUN_TOTALS
         ]

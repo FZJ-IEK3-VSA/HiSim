@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Golden KPI regression gate for HiSim.
 
-Re-runs the configured ``(setup, parameter_set)`` pairs, flattens each run's
-``all_kpis.json``, and compares it against the committed golden in
-``golden_references/``. Exits non-zero on any KPI deviation (beyond tolerance),
-missing golden, or run failure. Writes a human-readable ``report.txt`` and a
+Re-runs the configured ``(setup, parameter_set)`` pairs, turns each run's
+``all_kpis.json`` into golden leaves (``scripts/golden_kpis.py``), and compares them
+against the committed golden in ``golden_references/``. Exits non-zero on any KPI
+deviation (a value beyond tolerance, a changed unit — reported as a failure of its
+own kind —, a changed address field, a missing or new KPI), a missing or unusable
+golden (one not in the leaf form, such as the old flat form, which is refused before
+any simulation runs), or a run failure. Writes a human-readable ``report.txt`` and a
 machine-readable ``report.json``. Read-only: never writes golden references
 (that is ``golden_update.py``'s job).
 
@@ -32,7 +35,14 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 try:  # run as a script from scripts/ ...
-    from golden_kpis import ABS_TOL, REL_TOL, compare  # type: ignore[import-not-found]
+    from golden_kpis import (  # type: ignore[import-not-found]
+        ABS_TOL,
+        REL_TOL,
+        UNIT,
+        GoldenFormatError,
+        compare,
+        load_golden,
+    )
     from runner import (  # type: ignore[import-not-found]
         GoldenConfig,
         RunResult,
@@ -44,7 +54,7 @@ try:  # run as a script from scripts/ ...
         select_pairs,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
-    from scripts.golden_kpis import ABS_TOL, REL_TOL, compare
+    from scripts.golden_kpis import ABS_TOL, REL_TOL, UNIT, GoldenFormatError, compare, load_golden
     from scripts.runner import (
         GoldenConfig,
         RunResult,
@@ -84,9 +94,11 @@ class PairReport:
 
     setup_id: str
     parameter_set_id: str
-    status: str  # "pass" | "fail" | "advisory" | "missing_golden" | "run_error"
+    status: str  # "pass" | "fail" | "advisory" | "missing_golden" | "unusable_golden" | "run_error"
     nondeterministic: bool = False
     deviations: list[str] = field(default_factory=list)
+    #: KPIs whose unit changed: a failure of its own kind, kept apart from ``deviations``.
+    unit_changes: list[str] = field(default_factory=list)
     #: Wall time of the pair's run in seconds; the source of ``golden_config.json``'s weights.
     duration_s: Optional[float] = None
 
@@ -104,16 +116,22 @@ class ComparisonReport:
             advisory = sum(1 for p in self.pairs if p.status == "advisory")
             extra = f" ({advisory} advisory)" if advisory else ""
             return f"GOLDEN CHECK OK ({total} pair(s)){extra}"
-        diverged = sum(1 for p in self.pairs if p.status == "fail")
+        diverged = sum(1 for p in self.pairs if p.status == "fail" and p.deviations)
+        unit_changed = sum(1 for p in self.pairs if p.status == "fail" and p.unit_changes)
         errored = sum(1 for p in self.pairs if p.status == "run_error")
         missing = sum(1 for p in self.pairs if p.status == "missing_golden")
+        unusable = sum(1 for p in self.pairs if p.status == "unusable_golden")
         reasons = []
         if errored:
             reasons.append(f"{errored} failed to run")
         if diverged:
             reasons.append(f"{diverged} with KPI divergences")
+        if unit_changed:
+            reasons.append(f"{unit_changed} with KPI unit changes")
         if missing:
             reasons.append(f"{missing} missing a golden reference")
+        if unusable:
+            reasons.append(f"{unusable} with an unusable golden reference")
         return f"GOLDEN CHECK FAILED ({total} pair(s)): {', '.join(reasons)}"
 
 
@@ -133,16 +151,27 @@ def _print_failure_details(report: ComparisonReport, out_dir: Path, advisory: bo
             for line in "".join(pair.deviations).splitlines():
                 print(f"      {line}")
         elif pair.status == "fail":
-            print(f"\n[KPI DIVERGENCE] {name}")
-            print(
-                f"    The simulation ran successfully and the golden reference was found, "
-                f"but {len(pair.deviations)} KPI(s) differ from the golden:"
-            )
-            for dev in pair.deviations:
-                print(f"      - {dev}")
+            if pair.deviations:
+                print(f"\n[KPI DIVERGENCE] {name}")
+                print(
+                    f"    The simulation ran successfully and the golden reference was found, "
+                    f"but {len(pair.deviations)} KPI(s) differ from the golden:"
+                )
+                for dev in pair.deviations:
+                    print(f"      - {dev}")
+            if pair.unit_changes:
+                print(f"\n[KPI UNIT CHANGE] {name}")
+                print(f"    {len(pair.unit_changes)} KPI(s) are reported in another unit than the golden's:")
+                for dev in pair.unit_changes:
+                    print(f"      - {dev}")
         elif pair.status == "missing_golden":
             print(f"\n[MISSING GOLDEN] {name}")
             print("    No golden reference file was found to compare against:")
+            for dev in pair.deviations:
+                print(f"      - {dev}")
+        elif pair.status == "unusable_golden":
+            print(f"\n[UNUSABLE GOLDEN] {name}")
+            print("    The golden reference file cannot be compared against:")
             for dev in pair.deviations:
                 print(f"      - {dev}")
     print(f"\nFull report written to {out_dir / 'report.txt'}")
@@ -163,6 +192,8 @@ def _write_reports(report: ComparisonReport, out_dir: Path) -> None:
         lines.append(f"[{tag}] {pair.setup_id} / {pair.parameter_set_id}{took}{note}")
         for dev in pair.deviations:
             lines.append(f"    - {dev}")
+        for dev in pair.unit_changes:
+            lines.append(f"    - [unit] {dev}")
     (out_dir / "report.txt").write_text("\n".join(lines) + "\n")
 
 
@@ -174,31 +205,43 @@ MODE_IGNORED_KPIS: dict[str, Optional[re.Pattern]] = {"python": None, "yaml": PO
 ModesRunFn = Callable[[GoldenConfig, Path, Path, dict[str, str], int], dict[str, list[RunResult]]]
 
 
-def _missing_goldens(config: GoldenConfig, golden_dir: Path) -> Optional[ComparisonReport]:
-    """Return the failing report of every pair without a committed golden, or ``None`` if none is missing."""
-    missing = [
-        (setup, param)
-        for setup, param in select_pairs(config)
-        if not (golden_dir / golden_filename(setup.id, param.id)).exists()
-    ]
-    if not missing:
-        return None
-    return ComparisonReport(
-        passed=False,
-        pairs=[
-            PairReport(
-                setup_id=setup.id,
-                parameter_set_id=param.id,
-                status="missing_golden",
-                nondeterministic=param.nondeterministic,
-                deviations=[
-                    f"no golden at {golden_dir / golden_filename(setup.id, param.id)} "
-                    "(run golden_update.py / golden-update.yml)"
-                ],
+def _unready_goldens(config: GoldenConfig, golden_dir: Path) -> Optional[ComparisonReport]:
+    """Return the failing report of every pair whose golden is missing or unusable, or ``None``.
+
+    A golden is unusable when :func:`scripts.golden_kpis.load_golden` refuses it: unreadable
+    JSON, or not the leaf form (the old flat ``dotted key -> value`` form included, which is
+    re-blessed rather than read). Checked before any simulation runs, so a reference that cannot
+    be compared against never wastes compute.
+    """
+    unready: list[PairReport] = []
+    for setup, param in select_pairs(config):
+        path = golden_dir / golden_filename(setup.id, param.id)
+        if not path.exists():
+            unready.append(
+                PairReport(
+                    setup_id=setup.id,
+                    parameter_set_id=param.id,
+                    status="missing_golden",
+                    nondeterministic=param.nondeterministic,
+                    deviations=[f"no golden at {path} (run golden_update.py / golden-update.yml)"],
+                )
             )
-            for setup, param in missing
-        ],
-    )
+            continue
+        try:
+            load_golden(path)
+        except GoldenFormatError as exc:
+            unready.append(
+                PairReport(
+                    setup_id=setup.id,
+                    parameter_set_id=param.id,
+                    status="unusable_golden",
+                    nondeterministic=param.nondeterministic,
+                    deviations=[str(exc)],
+                )
+            )
+    if not unready:
+        return None
+    return ComparisonReport(passed=False, pairs=unready)
 
 
 def _evaluate(
@@ -222,13 +265,18 @@ def _evaluate(
             passed = False
             pair_reports.append(
                 PairReport(
-                    result.setup_id, result.parameter_set_id, "run_error", nondet, [result.error], result.duration_s
+                    result.setup_id,
+                    result.parameter_set_id,
+                    "run_error",
+                    nondet,
+                    [result.error],
+                    duration_s=result.duration_s,
                 )
             )
             continue
 
         golden_path = golden_dir / golden_filename(result.setup_id, result.parameter_set_id)
-        ref: dict[str, Any] = json.loads(golden_path.read_text())
+        ref: dict[str, Any] = load_golden(golden_path)
         got = result.kpis
         if ignore_kpis is not None:
             got = {k: v for k, v in got.items() if not ignore_kpis.search(k)}
@@ -237,9 +285,11 @@ def _evaluate(
             ref = filtered_ref
             if excluded:
                 print(f"  ({name}: {excluded} port-named KPI(s) excluded from comparison, C-P3.2)")
-        deviations = compare(name, got, ref, rel_tol=rel_tol, abs_tol=abs_tol)
+        found = compare(name, got, ref, rel_tol=rel_tol, abs_tol=abs_tol)
+        deviations = [str(deviation) for deviation in found if deviation.kind != UNIT]
+        unit_changes = [str(deviation) for deviation in found if deviation.kind == UNIT]
 
-        if not deviations:
+        if not found:
             status = "pass"
         elif nondet:
             status = "advisory"  # compared, but does not fail the gate
@@ -247,7 +297,15 @@ def _evaluate(
             status = "fail"
             passed = False
         pair_reports.append(
-            PairReport(result.setup_id, result.parameter_set_id, status, nondet, deviations, result.duration_s)
+            PairReport(
+                result.setup_id,
+                result.parameter_set_id,
+                status,
+                nondet,
+                deviations,
+                unit_changes,
+                result.duration_s,
+            )
         )
     return ComparisonReport(passed=passed, pairs=pair_reports)
 
@@ -280,8 +338,8 @@ def main(
 
     Returns ``0`` if every compared pair matches (advisory-only mismatches on
     ``nondeterministic`` pairs still pass), ``1`` otherwise. Bails **before**
-    running any simulation if a required golden file is missing, so a missing
-    reference never wastes compute.
+    running any simulation if a required golden file is missing or unusable, so
+    such a reference never wastes compute.
 
     ``ignore_kpis`` drops matching KPI names from both the run and the reference before
     comparing; YAML mode passes :data:`PORT_NAMED_KPIS` for it, and every exclusion is
@@ -302,7 +360,7 @@ def main(
     subdir = config.check_subdir + subdir_suffix
     out_dir = results_root / subdir
 
-    missing = _missing_goldens(config, golden_dir)
+    missing = _unready_goldens(config, golden_dir)
     if missing is not None:
         return _conclude(missing, out_dir, advisory)
     results = run_fn(config, results_root, repo_root, subdir)
@@ -336,7 +394,7 @@ def check_modes(
     config = filter_config(config, setup_id=setup_id, param_id=param_id, pairs=pairs)
     subdirs = {mode: config.check_subdir + MODE_SUFFIX[mode] for mode in modes}
 
-    missing = _missing_goldens(config, golden_dir)
+    missing = _unready_goldens(config, golden_dir)
     if missing is not None:
         return max(_conclude(missing, results_root / subdir, advisory) for subdir in subdirs.values())
     results = run_modes_fn(config, results_root, repo_root, subdirs, jobs)

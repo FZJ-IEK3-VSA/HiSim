@@ -1,39 +1,11 @@
-"""Exports and lifecycle KPIs (cost_spec.md §7.2, §7.3, §7.4).
+"""Result files and lifecycle KPIs written from an evaluated matrix (cost_spec.md §7.2, §7.3, §7.4).
 
-All monetary figures are exported as min/best_estimate/max: triplet objects in JSON, *_min/*_best_estimate/*_max
-column groups in CSV. New KPIs are namespaced per perspective and written to
-`lifecycle_kpis.json` during the parallel phase (legacy KPI files stay byte-identical;
-cost_module_issues.md #6).
-
-**What this module owns**: turning an in-memory `EvaluationMatrix` into the machine-readable files
-a webtool, the RenoVisor uploader, a spreadsheet or an archived-result reader consumes. It is
-result *serialization*, not presentation — the human-facing renderings live in `reporting.py` and
-`report_plots.py`, and the seam-4 import lint treats this module as one of their few permitted
-imports precisely so the report's KPI table and `lifecycle_kpis.json` cannot disagree (they call
-the same `build_lifecycle_kpi_entries`).
-
-**What it deliberately does not own**: any derivation. Every number written here is read off the
-result object or off `views.py`; an export never applies an annuity factor, never re-clamps a
-subsidy, never sums what a view already totals (cost-spec-v2 W4.1 — "exports render, they do not
-derive"). The one arithmetic left in the file is the discount factor applied per timeline row, and
-that is a restatement of the entry's year, not a decision.
-
-**The KPI naming scheme** (§7.3). New KPIs are namespaced by appending the perspective id in
-parentheses to a name that already carries its unit in brackets, e.g.
-``"Equivalent annual cost [EUR/a] (brownfield_net)"``, ``"Net present cost over 20 years [EUR]
-(greenfield_gross)"``, ``"Subsidy BEG EM heat pump (DE_BEG_EM_HP_2024) [EUR]
-(brownfield_net)"`` — the per-award KPI carries both the friendly name and the catalog id, so the
-key stays unique when two schemes share a display name and stays greppable back to the catalog.
-The namespace is what makes nine perspectives coexist in one flat KPI namespace without
-collision, and what lets a consumer pick "the owner's monthly cost" rather than "a monthly cost".
-Every monetary KPI carries its uncertainty band in the additive `KpiEntry.value_min` /
-`value_max` fields, with `value` itself being the BEST_ESTIMATE slot.
-
-**These are NEW files only.** During the parallel phase the legacy KPI names, the legacy CSVs and
-their values are untouched and remain the source of all published numbers; the lifecycle engine
-writes `lifecycle_kpis.json` beside `all_kpis.json` rather than into it, and legacy KPIs stay plain
-scalars. Both merge at the Phase-7 cutover (§10), after the parity evidence supports it — not
-before.
+Turns an `EvaluationMatrix` into the machine-readable files a webtool, the RenoVisor uploader, a spreadsheet or an
+archive reader consumes. Every monetary figure is min/best_estimate/max: triplet objects in JSON,
+`*_min`/`*_best_estimate`/`*_max` columns in CSV. Nothing is derived here; numbers are read from the result or
+`views.py`. KPI names carry their unit in brackets and the perspective id in parentheses, e.g. `"Equivalent annual cost
+[EUR/a] (brownfield_net)"`, so all perspectives share one flat KPI namespace. These files sit beside the legacy
+outputs, which stay unchanged until the cutover (§10).
 """
 
 from __future__ import annotations
@@ -53,9 +25,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagE
 class ExportFileNames:
     """Names of the result files the engine writes next to a simulation's results.
 
-    All five are new files that no legacy code reads or writes (§10.0 rule 3), which is what keeps
-    the parallel phase side-effect free. They are named constants because both the writers here and
-    the readers in `serialization.py` and the CLI address them; the input-side names live in
+    None of them is read or written by legacy code (§10.0 rule 3). The input-side names live in
     `serialization.SerializationFileNames`.
     """
 
@@ -70,14 +40,11 @@ class ExportFileNames:
 
 
 def write_lifecycle_costs_json(matrix: EvaluationMatrix, result_directory: str) -> str:
-    """`lifecycle_costs.json`: the full typed EvaluationMatrix incl. subsidy audit trails.
+    """Write `lifecycle_costs.json`, the full typed `EvaluationMatrix` including subsidy audit trails.
 
-    The primary machine-readable result of a run and the richest of the exports: one entry per
-    perspective with the headline KPIs, every pivot, the per-component breakdowns, the CO2 result
-    and the §5 subsidy decisions, all monetary figures as min/best_estimate/max triplets. It is what the
-    webtool and the RenoVisor uploader consume, and — together with `cash_flow_timeline.csv` — what
-    `serialization.read_results` reads back so a report can be rendered from an archived directory
-    without a cost database (§7.2, W4.5).
+    One entry per perspective with headline KPIs, pivots, per-component breakdowns, the CO2 result and the subsidy
+    decisions. With `cash_flow_timeline.csv` it is what `serialization.read_results` reads back to render a report
+    without a cost database (§7.2).
 
     Returns:
         The path written.
@@ -89,19 +56,12 @@ def write_lifecycle_costs_json(matrix: EvaluationMatrix, result_directory: str) 
 
 
 def write_component_costs(matrix: EvaluationMatrix, result_directory: str) -> List[str]:
-    """`component_costs.json` / `.csv`: per-component breakdowns for the frontend (§7.4).
+    """Write `component_costs.json` and `.csv`, the per-component breakdowns for the frontend (§7.4).
 
-    Answers "what does each component contribute to the total, in this perspective" — the data
-    behind stacked bars per variant and component-level diffs between variants. The JSON is the
-    typed `{perspective: {subject: ComponentCostBreakdown}}` map the webtool and the uploader
-    consume; the CSV is the long format for ad-hoc analysis, one row per
-    (perspective, subject, subject_kind, asset_class, category) with NPV, equivalent annual cost and
-    year-1 nominal cost as min/best_estimate/max column groups, plus lifecycle CO2.
-
-    Two properties a reviewer should rely on: subjects cover components *and* energy carriers (the
-    electricity bill is its own subject rather than smeared over consuming devices, §3.1), and the
-    subject NPVs sum exactly to the perspective total per uncertainty slot — so a stacked chart
-    always reconciles with the headline KPI.
+    The JSON is the `{perspective: {subject: ComponentCostBreakdown}}` map; the CSV has one row per (perspective,
+    subject, subject_kind, asset_class, category) with NPV, equivalent annual cost and year-1 nominal cost as
+    min/best_estimate/max column groups, plus lifecycle CO2. Subjects include energy carriers as well as components,
+    and subject NPVs sum to the perspective total per slot.
 
     Returns:
         The two paths written, JSON first.
@@ -137,8 +97,7 @@ def write_component_costs(matrix: EvaluationMatrix, result_directory: str) -> Li
             ]
         )
         for perspective, result in matrix.results.items():
-            # The annuitized figures come from the view-model, not from an annuity factor
-            # applied here (cost-spec-v2 W4.1: exports render, they do not derive).
+            # The annuitized figures come from the view-model, not from an annuity factor applied here.
             equivalent_annual_costs = views.subject_equivalent_annual_cost_by_category(result)
             for subject, breakdown in result.component_breakdowns.items():
                 year1 = (
@@ -171,18 +130,12 @@ def write_component_costs(matrix: EvaluationMatrix, result_directory: str) -> Li
 
 
 def write_cash_flow_timeline(matrix: EvaluationMatrix, result_directory: str) -> str:
-    """`cash_flow_timeline.csv` in long format with timeline-entry ids for offline explain.
+    """Write `cash_flow_timeline.csv`: one row per timeline entry, nominal and discounted, as min/best_estimate/max.
 
-    The canonical timeline itself, unaggregated: one row per cash-flow entry with its year,
-    category, subject, payer and optional subsidy scheme, in nominal *and* discounted form, each as
-    a min/best_estimate/max triple. Every published figure of a perspective is a filter or pivot of these
-    rows, so this file is where a reviewer goes to check an aggregate by hand, and it is what
-    `serialization.read_cash_flow_timelines` reads back to restore a full result.
-
-    Each row carries `provenance_ids` — the ledger records behind the amount — which is what keeps
-    an exported number explainable offline, from the archived directory alone, with no database and
-    no rerun (§3.10, §7.2). The stored timeline is always the fully allocated one (all payers); a
-    perspective's own scope is restored from its `scope_payer`.
+    Each row has year, category, subject, payer, optional subsidy scheme and `provenance_ids`, so any figure can be
+    checked and explained from the archived directory alone (§3.10, §7.2). The stored timeline is the fully allocated
+    one (all payers); a perspective's scope is restored from its `scope_payer`.
+    `serialization.read_cash_flow_timelines` reads it back.
 
     Returns:
         The path written.
@@ -206,8 +159,7 @@ def write_cash_flow_timeline(matrix: EvaluationMatrix, result_directory: str) ->
                 "discounted_best_estimate",
                 "discounted_max",
                 "provenance_ids",
-                # Appended by W4.5 so the stored timeline reloads faithfully; last column, so
-                # anything reading this file positionally is unaffected.
+                # Last column, so anything reading this file positionally is unaffected.
                 "subject_kind",
             ]
         )
@@ -238,17 +190,13 @@ def write_cash_flow_timeline(matrix: EvaluationMatrix, result_directory: str) ->
 
 
 def write_provenance_ledger(matrix: EvaluationMatrix, result_directory: str) -> Optional[str]:
-    """`cost_provenance.json` (§3.10): one ledger per perspective (they share most records).
+    """Write `cost_provenance.json` with one ledger per perspective (§3.10).
 
-    The record of where every number came from: for each parameter the engine used, its origin
-    (database entry, config override, scenario overlay, engine default, legacy shim), its value per
-    slot and its source ids. Together with the `provenance_ids` on the timeline rows this is what
-    makes any exported figure traceable back to a citation without re-running anything — the eager
-    counterpart of the on-demand `explain` API.
+    The ledger records, for every parameter used, its origin (database entry, config override, scenario overlay, engine
+    default, legacy shim), its value per slot and its source ids.
 
     Returns:
-        The path written, or None when no perspective carried a ledger (in which case no file is
-        created at all, so a reader can tell "no provenance recorded" from "empty provenance").
+        The path written, or None when no perspective carried a ledger; no file is created then.
     """
     return write_provenance_ledgers(
         {
@@ -263,20 +211,18 @@ def write_provenance_ledger(matrix: EvaluationMatrix, result_directory: str) -> 
 def write_provenance_ledgers(
     ledgers: Mapping[str, ProvenanceLedger], result_directory: str
 ) -> Optional[str]:
-    """`cost_provenance.json` from ledgers keyed by perspective id — the file's one format.
+    """Write `cost_provenance.json` from ledgers keyed by perspective id.
 
-    Shared by an ordinary run (`write_provenance_ledger`, one ledger per evaluated perspective) and
-    by the staged evaluator's CLI, which writes the one ledger its reference, every stage and the
-    spliced plan recorded into, under the plan's perspective id. One writer is what keeps a staged
-    job's file readable by everything that reads an ordinary run's
-    (`serialization.read_results`, `ProvenanceLedger.from_json`).
+    Used by ordinary runs (`write_provenance_ledger`) and by the staged evaluator's CLI, which writes its single ledger
+    under the plan's perspective id, so both files read the same way (`serialization.read_results`,
+    `ProvenanceLedger.from_json`).
 
     Args:
-        ledgers: Perspective id -> the ledger the ids of that perspective's entries point into.
+        ledgers: Perspective id -> the ledger that perspective's entry ids point into.
         result_directory: Where the file goes; it must exist.
 
     Returns:
-        The path written, or None when there is no ledger at all (no file is created).
+        The path written, or None when there is no ledger; no file is created then.
     """
     if not ledgers:
         return None
@@ -292,26 +238,14 @@ def write_provenance_ledgers(
 def build_lifecycle_kpi_entries(
     matrix: EvaluationMatrix, comparison: Optional[VariantComparison] = None
 ) -> List[KpiEntry]:
-    """The new namespaced KPI set; every monetary KPI carries its uncertainty band.
+    """Build the namespaced lifecycle KPI list; every monetary KPI carries its band (§7.3).
 
-    Builds the §7.3 KPI list from an evaluated matrix: per perspective the equivalent annual cost,
-    the net present cost over the horizon, the year-1 monthly cost and the system cost per unit of
-    heat, plus one KPI per applied subsidy scheme and the perspective's total support; then the §6.5
-    per-actor net present costs of `actor_kpi_entries` for whichever perspectives allocated flows
-    to a payer; and, when a variant comparison is supplied, the NPV delta, the discounted payback
-    and the warm-rent figures. Each
-    name is suffixed with the perspective id in parentheses — that namespacing is what lets all nine
-    perspectives coexist in one flat KPI space (see the module docstring).
-
-    It exists as a separate function from `write_lifecycle_kpis` so the HTML report's KPI table and
-    `lifecycle_kpis.json` are literally the same list; a KPI can therefore not appear in one and
-    not the other. A KPI whose band is None is omitted entirely rather than published as zero.
-
-    Two entries are deliberately *not* bands and are constructed by hand instead of via `add`: the
-    discounted payback (whose earliest and latest crossing across the three worlds are a range,
-    carried in the description, `VariantComparison.discounted_payback_envelope`) and the
-    warm-rent-neutral flag (a boolean rendered as a string, with the per-slot verdicts in the
-    description).
+    Per perspective: equivalent annual cost, net present cost over the horizon, year-1 monthly cost, system cost per
+    unit of heat, one KPI per applied subsidy scheme and the total support. Then the per-actor net present costs of
+    `actor_kpi_entries` and, with a comparison, the NPV delta, discounted payback and warm-rent figures. The HTML
+    report's KPI table and `lifecycle_kpis.json` both use this list. A KPI whose band is None is omitted, not published
+    as zero. The discounted payback (a range across the three worlds, in the description) and the warm-rent-neutral
+    flag (a boolean string) are not bands.
 
     Args:
         matrix: The evaluated perspectives.
@@ -323,11 +257,9 @@ def build_lifecycle_kpi_entries(
     entries: List[KpiEntry] = []
 
     def add(name: str, unit: str, band, description: Optional[str] = None) -> None:
-        """Appends one banded KPI, or nothing at all when the figure does not exist.
+        """Append one banded KPI, or nothing when the band is None (e.g. no heat demand, hence no heat cost).
 
-        `value` is the BEST_ESTIMATE slot and `value_min`/`value_max` the envelope (§3.9, §7.3). Skipping
-        a None band is the deliberate contract: an absent KPI (no heat demand, hence no LCOH) must
-        not be published as a zero.
+        `value` is the best-estimate slot, `value_min`/`value_max` the envelope (§3.9).
         """
         if band is None:
             return
@@ -359,19 +291,14 @@ def build_lifecycle_kpi_entries(
         )
         for decision in result.subsidy_decisions:
             for award in decision.applied:
-                # The award's *total* (upfront + instalments), not its upfront amount: a
-                # tax-credit schedule has a zero upfront amount and would otherwise be missing
-                # from the KPI set while the SUBSIDY category NPV counts it. Awards with no euro
-                # amount at all (loan terms, an operational rate) still have none and stay out —
-                # `describe_award` is what decides which is which.
+                # The award's total (upfront + instalments): a tax-credit schedule has a zero upfront
+                # amount. Awards with no euro amount (loan terms, an operating rate) stay out;
+                # `describe_award` decides which is which.
                 presentation = views.describe_award(award)
                 if presentation.total_in_euro is not None and presentation.total_in_euro.maximum > 0:
-                    # Q20: the KPI reads as the scheme's friendly name, with the raw catalog id
-                    # beside it. The name alone was neither collision-proof — two schemes may
-                    # carry the same display name, and a catalog with no name at all falls back
-                    # to the id, so two awards could produce one key and silently overwrite each
-                    # other — nor greppable back to the catalog. The id stays in the description
-                    # as well, which is where a machine consumer already looks for it.
+                    # The KPI reads as the scheme's friendly name with the raw catalog id beside it,
+                    # so two schemes with the same display name cannot collide and the key can be
+                    # grepped back to the catalog. The id is also in the description.
                     detail = f"{decision.measure_subject}; scheme {presentation.scheme_id}"
                     add(
                         f"Subsidy {presentation.display_name} ({presentation.scheme_id}) [EUR] "
@@ -383,10 +310,10 @@ def build_lifecycle_kpi_entries(
                             if presentation.payout_note else detail
                         ),
                     )
-        # The total is a view of the result, not a running sum kept while emitting KPIs (W4.1),
-        # and since D2 it is the timeline-based nominal figure — so it is *not* the sum of the
-        # per-scheme "Subsidy <id>" KPIs above wherever support reaches the timeline without an
-        # upfront catalog award (operational support, scheduled payouts, a loan's repayment grant).
+        # The total is read from the result and is the timeline-based nominal figure, so it is not
+        # the sum of the per-scheme "Subsidy <id>" KPIs above wherever support reaches the timeline
+        # without an upfront catalog award (operational support, scheduled payouts, a loan's
+        # repayment grant).
         add(
             f"Total subsidies received [EUR] ({perspective})",
             "EUR",
@@ -434,17 +361,15 @@ def write_lifecycle_kpis(
     result_directory: str,
     comparison: Optional[VariantComparison] = None,
 ) -> str:
-    """Writes `lifecycle_kpis.json` (separate from all_kpis.json during the parallel phase).
+    """Write `lifecycle_kpis.json`: the `build_lifecycle_kpi_entries` list under a "Lifecycle costs" group.
 
-    Serializes `build_lifecycle_kpi_entries` under a single "Lifecycle costs" group, keyed by KPI
-    name. The separate file is the whole point of the parallel phase: legacy KPI names and values
-    stay byte-identical in `all_kpis.json` whether or not this engine runs (§10.0 rule 3), and the
-    two merge only at the Phase-7 cutover, when legacy KPIs also start carrying bands (§7.3).
+    Kept separate from `all_kpis.json` so the legacy KPIs stay byte-identical whether or not this engine runs (§10.0
+    rule 3).
 
     Args:
         matrix: The evaluated perspectives.
         result_directory: Where to write, normally next to the simulation's other results.
-        comparison: Optional variant comparison, which adds the delta/payback/warm-rent KPIs.
+        comparison: Optional variant comparison, which adds the delta, payback and warm-rent KPIs.
 
     Returns:
         The path written.
@@ -460,19 +385,11 @@ def write_lifecycle_kpis(
 
 
 def actor_kpi_entries(matrix: EvaluationMatrix) -> List[KpiEntry]:
-    """Actor-level KPI entries (§6.5) for perspectives with payer allocations.
+    """Return one "Net present cost of <actor> [EUR] (<perspective>)" KPI per allocated payer (§6.5).
 
-    One banded "Net present cost of <actor> [EUR] (<perspective>)" KPI per landlord / tenant /
-    owner-occupier that the perspective's allocation ruleset actually produced, read straight off
-    `npv_by_payer`; an actor with no allocation is skipped rather than reported as zero. The
-    landlord and tenant figures sum with the owner's to the system NPV per slot (the §6 zero-sum
-    invariant), so they can be published side by side without double counting — and because the
-    KPI values are the payer bands verbatim, that invariant survives into the exported numbers.
-
-    Part of `build_lifecycle_kpi_entries`, hence of both `lifecycle_kpis.json` and the report's
-    KPI table. The entries are purely additive: they carry names no other KPI uses (no existing
-    name, value or band changes), and a run whose perspectives allocate nothing to a payer adds
-    none of them.
+    Read from `npv_by_payer` for each landlord, tenant or owner-occupier the allocation produced; an actor without
+    allocation is skipped. Landlord, tenant and owner sum to the system NPV per slot, so they can be published side by
+    side.
     """
     entries: List[KpiEntry] = []
     for perspective, result in matrix.results.items():

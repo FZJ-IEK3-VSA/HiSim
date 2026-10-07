@@ -1,10 +1,8 @@
 """Subsidy catalog schema and parsing (cost_spec.md §5.1-§5.2, §5.6).
 
-Everything that turns a `subsidy_catalog/<COUNTRY>.json` file into typed objects:
-conditions, the benefit-kind hierarchy, eligible-cost specs, `SubsidyScheme`,
-questionnaire entries and the `SubsidyCatalog` loader itself. No evaluation happens
-here — that lives in `assessment` and `solver`. Split out of the former single-module
-`subsidies.py` (PR-3 review); the package `__init__` re-exports everything.
+Turns a `subsidy_catalog/<COUNTRY>.json` file into typed objects: eligibility conditions, the benefit kinds,
+eligible-cost specs, `SubsidyScheme`, questionnaire entries and the `SubsidyCatalog` loader. Nothing is evaluated here;
+that is `assessment` and `solver`.
 """
 
 from __future__ import annotations
@@ -44,11 +42,10 @@ from hisim.economics.subsidies.context import SubsidyContextFields, SubsidyDataE
 
 @dataclass(frozen=True)
 class Condition:
-    """One node of the eligibility predicate tree (§5.3) — inert catalog payload.
+    """One node of a scheme's eligibility condition tree (§5.3), as plain data.
 
-    W2.3: the node carries data only. Parsing it lives in :func:`parse_condition` (data side,
-    called by the catalog loader) and evaluating it in :func:`evaluate_condition` (engine side,
-    below), so the catalog half of this module has no behavior an evaluator could diverge from.
+    A node is either a combinator (``all``, ``any``, ``not``) over children or a leaf comparing one context field with
+    a value. :func:`parse_condition` builds it and :func:`evaluate_condition` evaluates it.
     """
 
     #: The comparison operators a leaf may use, and what each one means.
@@ -72,28 +69,24 @@ class Condition:
 
 
 def parse_condition(raw: dict, scheme_id: str) -> Condition:
-    """Parses and validates a condition node with clear errors (data side).
+    """Parse and validate one condition node of the catalog JSON, recursively.
 
-    Recursively turns the catalog's ``{"all": [...]}`` / ``{"any": [...]}`` / ``{"not": {...}}`` /
-    ``{"field": ..., "op": ..., "value": ...}`` JSON into the inert :class:`Condition` AST, checking
-    as it goes that the operator is one of the nine allowed ones and that the field name is either
-    part of the statically known vocabulary or a ``measure.*`` path (those address arbitrary
-    ``technical_attributes`` keys and can only be checked when a measure is at hand). Validating at
-    load time rather than at solve time is the whole point of the data-only predicate language:
-    there is no Python ``eval`` anywhere, and a mistyped catalog fails with the scheme id in the
-    message instead of quietly never matching.
+    Turns ``{"all": [...]}``, ``{"any": [...]}``, ``{"not": {...}}`` and ``{"field": ..., "op": ..., "value": ...}``
+    into a :class:`Condition` tree. The operator must be one of the nine allowed ones, and the field must be in the
+    known context vocabulary or be a ``measure.*`` path (those address arbitrary ``technical_attributes`` keys and are
+    checked when a measure is at hand). Checking at load time means a mistyped catalog fails with the scheme id instead
+    of quietly never matching.
 
     Args:
         raw: One condition node from the catalog JSON.
-        scheme_id: Owning scheme, used only to make error messages actionable.
+        scheme_id: Owning scheme, used in error messages.
 
     Returns:
-        The parsed node; children are parsed depth-first, so the returned tree is complete.
+        The complete parsed tree.
 
     Raises:
-        SubsidyDataError: On an unknown operator, an unknown field name, a value on an asset-class
-            field that is not a ``ComponentType`` value, or a node that is neither an
-            ``all``/``any``/``not`` combinator nor a leaf.
+        SubsidyDataError: On an unknown operator or field name, a value on an asset-class field that is not a
+            ``ComponentType`` value, or a node that is neither a combinator nor a leaf.
     """
     if "all" in raw:
         return Condition(kind="all", children=tuple(parse_condition(child, scheme_id) for child in raw["all"]))
@@ -117,10 +110,8 @@ def parse_condition(raw: dict, scheme_id: str) -> Condition:
 def _is_asset_class_field(fieldname: str) -> bool:
     """Whether a condition field holds asset classes, compared as ``ComponentType`` values.
 
-    Every such field of the vocabulary is named for it -- ``measure.asset_class``,
-    ``building.existing_heating.asset_class``, ``building.existing_heating.replaced_by_asset_classes``,
-    ``package.installed_asset_classes`` -- so the rule is the name, and a field added under the
-    same convention is checked without being listed here.
+    The rule is the name: every such field ends in ``asset_class`` or ``asset_classes`` (``measure.asset_class``,
+    ``package.installed_asset_classes``, ...), so a new field following the convention is checked without being listed.
     """
     last = fieldname.rsplit(".", 1)[-1]
     return last.endswith("asset_class") or last.endswith("asset_classes")
@@ -129,9 +120,8 @@ def _is_asset_class_field(fieldname: str) -> bool:
 def _check_asset_class_values(value: Any, fieldname: str, scheme_id: str) -> None:
     """Refuse a condition value on an asset-class field that is not a ``ComponentType`` value.
 
-    The context compares these fields as ``ComponentType`` *values* ("HeatPump", "OilHeater"), so a
-    misspelled class in the catalog would never match and the scheme would quietly never apply --
-    or, under ``!=`` or ``not``, always apply. A list value (``in``) is checked item by item.
+    These fields compare ``ComponentType`` values ("HeatPump", "OilHeater"), so a misspelled class would never match,
+    or under ``!=`` or ``not`` would always match. A list value (``in``) is checked item by item.
 
     Raises:
         SubsidyDataError: Naming the scheme, the field and every value that is not a class.
@@ -148,10 +138,9 @@ def _check_asset_class_values(value: Any, fieldname: str, scheme_id: str) -> Non
 
 
 def referenced_fields(condition: Condition) -> List[str]:
-    """All context fields referenced anywhere in the tree, in tree order (§5.7).
+    """Return all context fields referenced anywhere in the tree, in tree order (§5.7).
 
-    Duplicates are kept: a field two schemes' conditions test twice weighs twice in the
-    question-ordering heuristic, which is the established behavior.
+    Duplicates are kept, so a field tested twice weighs twice in the question ordering.
     """
     if condition.kind == "leaf":
         return [condition.fieldname] if condition.fieldname else []
@@ -162,20 +151,14 @@ def referenced_fields(condition: Condition) -> List[str]:
 
 
 class BenefitKind(str, enum.Enum):
-    """Tagged union of benefit kinds (§5.2).
+    """The mechanism a scheme uses to compute its support (§5.2).
 
-    The *mechanism* a scheme uses to compute its support, surveyed from the schemes actually
-    running in the EU (§5.1): a share of the eligible cost, a stackable bonus share, a fixed lump
-    sum, an amount per unit of size, a tiered amount per unit of size with a cap, a multi-year tax
-    credit, a reduced VAT rate, soft-loan terms, or a per-kWh operational payment. The tag selects
-    the typed payload class (:attr:`BenefitTypes.BY_KIND`) that carries the mechanism's parameters,
-    so adding a mechanism means adding a payload type here — adding a *programme* means editing a
-    catalog file only.
-
-    Note the deliberate distinction from :class:`PayoutKind`: a kind here says how much support is
-    computed, a payout kind says when and in what form the money reaches the applicant.
-    ``SHARE_OF_ELIGIBLE_COST`` and ``BONUS_SHARE`` share one payload type and differ only in
-    intent — bonuses are the ones meant to stack on a base rate within a cumulation group.
+    The kinds cover the EU schemes surveyed in §5.1: a share of the eligible cost, a stackable bonus share, a fixed
+    lump sum, an amount per unit of size, a tiered amount per unit with a cap, a multi-year tax credit, a reduced VAT
+    rate, soft-loan terms, and a per-kWh operational payment. Each kind has a typed payload class
+    (:attr:`BenefitTypes.BY_KIND`). :class:`PayoutKind` is separate: it says when and in what form the money arrives.
+    ``SHARE_OF_ELIGIBLE_COST`` and ``BONUS_SHARE`` share a payload and differ only in intent; bonuses stack on a base
+    rate within a cumulation group.
     """
 
     SHARE_OF_ELIGIBLE_COST = "SHARE_OF_ELIGIBLE_COST"
@@ -191,13 +174,10 @@ class BenefitKind(str, enum.Enum):
 
 @dataclass(frozen=True)
 class BenefitField:
-    """One JSON key of a benefit payload: how it is named, converted and defaulted.
+    """One JSON key of a benefit payload: its name, converter and default.
 
-    The declarative description each benefit payload uses to state its JSON surface (its ``SPEC``),
-    so that :meth:`Benefit.parse` can validate any payload generically — required keys present,
-    unknown keys rejected, values convertible — instead of every kind hand-rolling its own parsing.
-    Keeping the mapping declarative is what lets the loader name both the scheme and the offending
-    key in an error message (W2.2).
+    Each payload class lists these in its ``SPEC``, so :meth:`Benefit.parse` can check any payload generically
+    (required keys present, unknown keys refused, values convertible) and name the scheme and key in errors.
     """
 
     key: str  # key in the catalog JSON
@@ -208,12 +188,11 @@ class BenefitField:
 
 
 def _shares(raw: Any) -> Tuple[float, ...]:
-    """Converts a JSON list of annual shares into a tuple of floats.
+    """Convert a JSON list of annual shares into a tuple of floats.
 
-    The converter for :class:`TaxCreditBenefit`'s optional uneven payout schedule. It rejects
-    strings and bytes explicitly because both are iterable and would otherwise be silently
-    accepted character by character; the resulting `TypeError` is turned into a
-    :class:`SubsidyDataError` naming the scheme by :meth:`Benefit.parse`.
+    Used for :class:`TaxCreditBenefit`'s optional uneven payout schedule. Strings and bytes are refused explicitly
+    because they are iterable; :meth:`Benefit.parse` turns the `TypeError` into a :class:`SubsidyDataError` naming the
+    scheme.
     """
     if isinstance(raw, (str, bytes)) or not isinstance(raw, Iterable):
         raise TypeError(f"expected a list of annual shares, got {raw!r}")
@@ -221,17 +200,16 @@ def _shares(raw: Any) -> Tuple[float, ...]:
 
 
 def _optional_float(raw: Any) -> Optional[float]:
-    """Converts a JSON number or ``null`` into an optional float; ``null`` means "not set"."""
+    """Convert a JSON number or ``null`` into an optional float; ``null`` means "not set"."""
     return None if raw is None else float(raw)
 
 
 def _size_unit(raw: Any) -> Units:
-    """Converts a catalogue ``size_unit`` string into the :class:`Units` member it names.
+    """Convert a catalog ``size_unit`` string into its :class:`Units` member.
 
-    The converter for the per-unit benefit kinds. The vocabulary is the one
-    ``ComponentCostFacts.size_unit`` is spelled in (``"kW"``, ``"kWh"``, ``"L"``, ``"m2"``, ``"-"``),
-    restricted to the units the cost database can price against, so a per-unit amount can only
-    name a unit a measure's size can actually be stated in.
+    Used by the per-unit benefit kinds. The spelling is that of ``ComponentCostFacts.size_unit`` (``"kW"``, ``"kWh"``,
+    ``"L"``, ``"m2"``, ``"-"``), limited to units the cost database prices against, so a per-unit amount can only name
+    a unit a measure's size can be stated in.
     """
     if not isinstance(raw, str):
         raise TypeError(f"expected a unit string, got {raw!r}")
@@ -241,10 +219,10 @@ def _size_unit(raw: Any) -> Units:
 
 
 def _check_size_unit(unit: Any) -> None:
-    """Refuses a per-unit benefit's ``size_unit`` that no measure size can be stated in.
+    """Refuse a per-unit benefit's ``size_unit`` that no measure size can be stated in.
 
-    Shared by the JSON converter and the benefits' own ``__post_init__``, so a benefit built in
-    Python is held to the same vocabulary as one read from a catalogue.
+    Shared by the JSON converter and the benefits' ``__post_init__``, so a benefit built in Python meets the same rule
+    as one read from a catalog.
     """
     if unit not in ComponentCostFacts.SUPPORTED_SIZE_UNITS:
         raise SubsidyDataError(
@@ -254,11 +232,9 @@ def _check_size_unit(unit: Any) -> None:
 
 
 def _checked_size(size: float, kind: str) -> float:
-    """The measure size a per-unit benefit prices, refusing one that is not a finite number.
+    """Return the measure size a per-unit benefit prices, refusing one that is not a finite number.
 
-    A NaN size would otherwise fall through every comparison of the band arithmetic and price as
-    zero, which is a silent wrong answer rather than an error. ``ComponentCostFacts`` already
-    refuses a non-finite size at declaration; this is the benefit's own guard for any other caller.
+    A NaN size would slip through every comparison and price as zero instead of failing.
     """
     if not math.isfinite(size):
         raise SubsidyDataError(f"{kind} benefit cannot price a measure size of {size!r}; a size is a finite number.")
@@ -269,10 +245,9 @@ def _checked_size(size: float, kind: str) -> float:
 class Tier:
     """One band of a :class:`TieredPerUnitBenefit`: an amount per unit, paid up to a size.
 
-    ``up_to`` is the size at which the band ends, in the benefit's ``size_unit``; the band starts
-    where the previous one ended (0 for the first). ``None`` is an open band that runs to any size,
-    and only the last band may be open. A band checks its own domain; the ordering of the bands is
-    the benefit's check.
+    ``up_to`` is where the band ends, in the benefit's ``size_unit``; the band starts where the previous one ended (0
+    for the first). ``None`` is an open band that runs to any size, allowed only last. A band checks its own values;
+    the benefit checks the band order.
     """
 
     up_to: Optional[float]
@@ -282,7 +257,7 @@ class Tier:
     KEYS: ClassVar[Tuple[str, str]] = ("up_to", "amount_per_unit")
 
     def __post_init__(self) -> None:
-        """Refuses a negative or non-finite amount, and a bound that is not a finite positive size."""
+        """Refuse a negative or non-finite amount, and a bound that is not a finite positive size."""
         if not math.isfinite(self.amount_per_unit) or self.amount_per_unit < 0:
             raise SubsidyDataError(
                 f"Tier pays {self.amount_per_unit} per unit; an amount cannot be negative and must be finite."
@@ -294,11 +269,10 @@ class Tier:
 
 
 def _tiers(raw: Any) -> Tuple[Tier, ...]:
-    """Converts the catalogue's list of tier objects into :class:`Tier` values.
+    """Convert the catalog's list of tier objects into :class:`Tier` values.
 
-    The converter for :class:`TieredPerUnitBenefit`. Like :func:`_shares` it rejects strings and
-    bytes, which are iterable, and it refuses a tier object with a missing or unknown key, so a
-    misspelled ``amount_per_unit`` fails the load instead of being read as nothing.
+    Strings and bytes are refused because they are iterable, and a tier object with a missing or unknown key is
+    refused, so a misspelled ``amount_per_unit`` fails the load.
     """
     if isinstance(raw, (str, bytes)) or not isinstance(raw, Iterable):
         raise TypeError(f"expected a list of tier objects, got {raw!r}")
@@ -312,15 +286,11 @@ def _tiers(raw: Any) -> Tuple[Tier, ...]:
 
 @dataclass(frozen=True)
 class Benefit:
-    """Typed benefit payload of a scheme (§5.2, W2.2).
+    """Typed benefit payload of a scheme (§5.2).
 
-    The catalog JSON format is unchanged — ``benefit: {"kind": ..., <parameters>}`` — but the
-    loader parses that dict into one of the frozen subclasses below, so a misspelled or missing
-    parameter fails at load time naming the scheme and the key, instead of surfacing as a
-    ``KeyError`` deep inside the cumulation solver.
-
-    Subclasses declare their JSON surface in :attr:`SPEC`; :attr:`BenefitTypes.BY_KIND` maps each
-    :class:`BenefitKind` to the payload type that implements it.
+    The catalog states ``benefit: {"kind": ..., <parameters>}``; the loader parses it into one of the frozen subclasses
+    below, so a missing or misspelled parameter fails at load time naming the scheme and the key. Subclasses declare
+    their JSON keys in :attr:`SPEC`; :attr:`BenefitTypes.BY_KIND` maps each :class:`BenefitKind` to its subclass.
     """
 
     #: The payload's JSON keys, in documentation order.
@@ -328,23 +298,22 @@ class Benefit:
 
     @classmethod
     def parse(cls, raw: Dict[str, Any], scheme_id: str, kind: "BenefitKind") -> "Benefit":
-        """Builds the payload from the catalog dict, rejecting missing/unknown/unparsable keys.
+        """Build the payload from the catalog dict, refusing missing, unknown or unconvertible keys.
 
-        The generic loader for every benefit kind, driven by the subclass's :attr:`SPEC`. Rejecting
-        *unknown* keys as hard as missing ones is deliberate: a typo in a catalog would otherwise be
-        dropped silently and the scheme would pay out at a default rate nobody intended.
+        Unknown keys are refused as hard as missing ones, because a typo would otherwise be dropped and the scheme
+        would pay at an unintended default.
 
         Args:
-            raw: The ``benefit`` object from the catalog with its ``kind`` key already removed.
+            raw: The catalog's ``benefit`` object without its ``kind`` key.
             scheme_id: Owning scheme, for error messages.
-            kind: The declared benefit kind, likewise only used in error messages.
+            kind: The declared benefit kind, for error messages.
 
         Returns:
-            An instance of the concrete payload class this was called on.
+            An instance of the payload class this was called on.
 
         Raises:
-            SubsidyDataError: If a mandatory key is missing, an unknown key is present, or a value
-                does not convert; the message always names the scheme and the key.
+            SubsidyDataError: If a mandatory key is missing, an unknown key is present, or a value does not convert;
+                the message names the scheme and the key.
         """
         values: Dict[str, Any] = {}
         for spec in cls.SPEC:
@@ -377,15 +346,11 @@ class Benefit:
             raise SubsidyDataError(f"Scheme {scheme_id}: {err}") from err
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """Rough upper bound of the support this benefit could unlock, for question ordering.
+        """Return a rough upper bound of the support this benefit could unlock, for ordering questions (§5.7).
 
-        The single definition of the *simplified* valuation (§5.7 pruning power): undiscounted, on
-        the gross measure cost, and not clamped to the eligible-cost basis or bounded by the
-        solver's caps (combined rate, overall state-aid share). A cap the benefit itself states is
-        part of its value, though: a TIERED_PER_UNIT benefit's estimate never exceeds its
-        ``cap_in_euro``. The exact, per-slot, capped valuation lives in the cumulation solver
-        (:func:`_combination_awards`); both read the same typed fields, so the two can no longer
-        drift apart on key names or defaults.
+        Undiscounted, on the gross measure cost, not clamped to the eligible cost and not bounded by the solver's caps;
+        a cap the benefit itself states (a TIERED_PER_UNIT ``cap_in_euro``) does apply. The exact per-slot valuation is
+        the solver's (:func:`_combination_awards`).
         """
         del gross_cost_in_euro, measure_size  # unvalued kinds (loans, VAT, operational support)
         return 0.0
@@ -393,14 +358,12 @@ class Benefit:
 
 @dataclass(frozen=True)
 class ShareBenefit(Benefit):
-    """A share of the eligible cost — base rate (SHARE_OF_ELIGIBLE_COST) or bonus (BONUS_SHARE).
+    """A share of the eligible cost: a base rate (SHARE_OF_ELIGIBLE_COST) or a bonus (BONUS_SHARE).
 
-    The workhorse mechanism of the EU programmes surveyed in §5.1 (BEG EM: 30 % base plus speed,
-    income and efficiency bonuses). It is the only payload the cumulation solver stacks: schemes
-    sharing a ``cumulation_group`` have their rates added and then scaled back to the group's
-    ``combined_rate_cap`` (§5.4), which is why base rate and bonus need no structural distinction
-    here. The rate applies to the *eligible* cost basis of its own scheme — categories, VAT basis,
-    proration and cap are per scheme, so two stacked schemes may compute on different bases.
+    The common mechanism of the EU programmes (BEG EM: 30 % base plus speed, income and efficiency bonuses). It is the
+    only payload the solver stacks: schemes in one ``cumulation_group`` have their rates added and scaled back to the
+    group's ``combined_rate_cap`` (§5.4). The rate applies to its own scheme's eligible cost, so two stacked schemes
+    may compute on different bases.
     """
 
     rate: float  # fraction of the eligible cost basis, e.g. 0.30
@@ -408,20 +371,17 @@ class ShareBenefit(Benefit):
     SPEC: ClassVar[Tuple[BenefitField, ...]] = (BenefitField("rate", "rate", float),)
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """Rate on the gross cost."""
+        """Return the rate times the gross cost."""
         del measure_size
         return gross_cost_in_euro * self.rate
 
 
 @dataclass(frozen=True)
 class LumpSumBenefit(Benefit):
-    """A fixed amount, clamped to the eligible cost basis when the scheme declares one.
+    """A fixed amount, clamped to the eligible cost when the scheme declares cost categories.
 
-    Models the fixed-grant programmes of §5.1 — Austria's "Raus aus Öl und Gas" boiler-replacement
-    grant, income-banded MaPrimeRénov' amounts — where the support does not scale with what the
-    measure cost. The amount is *exact* in all three uncertainty slots (a statutory number has no
-    band), which is why a lump sum can be the binding constraint in one slot and not another once
-    the overall cap scales it; see :func:`_scaled_to_cap`.
+    Models fixed grants such as Austria's "Raus aus Öl und Gas" boiler-replacement grant, where the support does not
+    scale with the price. The amount is exact in all three band slots, since a statutory number has no band.
     """
 
     amount: float  # euro, year-0 nominal, exact in all slots
@@ -429,22 +389,19 @@ class LumpSumBenefit(Benefit):
     SPEC: ClassVar[Tuple[BenefitField, ...]] = (BenefitField("amount", "amount", float),)
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """The amount itself."""
+        """Return the amount itself."""
         del gross_cost_in_euro, measure_size
         return self.amount
 
 
 @dataclass(frozen=True)
 class PerUnitBenefit(Benefit):
-    """An amount per unit of measure size (EUR/kW, EUR/m², ...), in a unit the catalogue states.
+    """An amount per unit of measure size (EUR/kW, EUR/m², ...), in a unit the catalog states.
 
-    Covers €/m² insulation grants and €/kWp PV programmes (§5.1). The amount is multiplied by
-    ``ComponentCostFacts.size``, and ``size_unit`` says which unit that size must be in — spelled
-    as ``ComponentCostFacts.size_unit`` spells it (``"kW"``, ``"m2"``, ...). The solver refuses to
-    price a measure sized in any other unit, so an amount per kWp can never be multiplied by a size
-    in m²; ``validate`` checks the unit against the cost database's entries for the scheme's asset
-    classes before any run. Like a lump sum the result is exact in all slots and clamped to the
-    eligible-cost basis.
+    Covers EUR/m² insulation grants and EUR/kWp PV programmes (§5.1). The amount is multiplied by
+    ``ComponentCostFacts.size``, which must be in ``size_unit`` (spelled as ``ComponentCostFacts.size_unit``, e.g.
+    ``"kW"``, ``"m2"``); the solver refuses a measure sized in another unit, and ``validate`` checks the unit against
+    the cost database before any run. The result is exact in all slots and clamped to the eligible cost.
     """
 
     amount: float  # euro per unit of `ComponentCostFacts.size`, in `size_unit`
@@ -456,17 +413,17 @@ class PerUnitBenefit(Benefit):
     )
 
     def __post_init__(self) -> None:
-        """Refuses a unit no measure is sized in."""
+        """Refuse a unit no measure is sized in."""
         _check_size_unit(self.size_unit)
 
     def amount_for(self, size: float) -> float:
-        """The benefit for a measure of this size: the amount times the size.
+        """Return the benefit for a measure of this size: the amount times the size.
 
         Args:
             size: The measure's size, in :attr:`size_unit`.
 
         Returns:
-            The amount in euro, before the solver's clamp to the eligible basis.
+            The amount in euro, before the solver's clamp to the eligible cost.
 
         Raises:
             SubsidyDataError: If the size is not a finite number.
@@ -474,7 +431,7 @@ class PerUnitBenefit(Benefit):
         return self.amount * _checked_size(size, "Per-unit")
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """Amount times measure size."""
+        """Return the amount times the measure size."""
         del gross_cost_in_euro
         return self.amount_for(measure_size)
 
@@ -483,13 +440,10 @@ class PerUnitBenefit(Benefit):
 class TieredPerUnitBenefit(Benefit):
     """An amount per unit of measure size that changes by band, with an optional overall cap.
 
-    The pro-rata grants a flat :class:`PerUnitBenefit` cannot express: SEAI's solar PV grant pays
-    700 EUR per kWp up to 2 kWp, 200 EUR per further kWp up to 4 kWp, and at most 1,800 EUR, so a
-    2.5 kWp array receives 2 x 700 + 0.5 x 200 = 1,500 EUR. Each band pays its own rate on the part
-    of the size that falls inside it; the sum is then capped at ``cap_in_euro``. The size is
-    ``ComponentCostFacts.size`` and must be in ``size_unit``, as for :class:`PerUnitBenefit` (``"kW"``,
-    i.e. kWp, for PV). Like every fixed-amount kind the result is exact in all slots and clamped to
-    the eligible-cost basis by the solver.
+    Example: SEAI's solar PV grant pays 700 EUR per kWp up to 2 kWp, 200 EUR per further kWp up to 4 kWp, and at most
+    1,800 EUR, so a 2.5 kWp array receives 2 x 700 + 0.5 x 200 = 1,500 EUR. Each band pays its rate on the part of the
+    size inside it; the sum is capped at ``cap_in_euro``. The size must be in ``size_unit``, as for
+    :class:`PerUnitBenefit`. The result is exact in all slots and clamped to the eligible cost by the solver.
     """
 
     tiers: Tuple[Tier, ...]  # ascending by up_to; only the last may be open (up_to None)
@@ -503,14 +457,12 @@ class TieredPerUnitBenefit(Benefit):
     )
 
     def __post_init__(self) -> None:
-        """Validates the bands and the cap, so that every band can pay something.
+        """Validate the bands and the cap so that every band can pay something.
 
-        The bands: present, ascending, open only at the end (each band checks its own amount and
-        bound, see :class:`Tier`). The cap: finite and above zero — a cap of 0 would be a scheme
-        that silently pays nothing. A closed last band needs a cap, so that what the benefit pays
-        beyond its last bound is stated rather than implied. And with more than one band, a cap
-        at or below the first band's full value is refused, since no later band could then pay.
-        A single closed band with a binding cap is fine: that is a flat rate with a ceiling.
+        The bands must exist, ascend, and be open only at the end. The cap must be finite and above zero. A closed last
+        band needs a cap, so what is paid beyond it is stated. With more than one band, a cap at or below the first
+        band's full value is refused, since no later band could pay; a single closed band with a binding cap (a flat
+        rate with a ceiling) is fine.
         """
         object.__setattr__(self, "tiers", tuple(self.tiers))
         if not self.tiers:
@@ -557,10 +509,10 @@ class TieredPerUnitBenefit(Benefit):
                 )
 
     def amount_for(self, size: float) -> float:
-        """The benefit for a measure of this size: each band's rate on its share, then the cap.
+        """Return the benefit for a measure of this size: each band's rate on its part of the size, then the cap.
 
         Args:
-            size: The measure's size, in :attr:`size_unit`; a negative size is read as zero.
+            size: The measure's size, in :attr:`size_unit`; a negative size counts as zero.
 
         Returns:
             The amount in euro, never above ``cap_in_euro``.
@@ -581,21 +533,18 @@ class TieredPerUnitBenefit(Benefit):
         return total if self.cap_in_euro is None else min(total, self.cap_in_euro)
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """The tiered amount for the measure's size, capped by the benefit's own cap."""
+        """Return the tiered amount for the measure's size, capped by the benefit's own cap."""
         del gross_cost_in_euro
         return self.amount_for(measure_size)
 
 
 @dataclass(frozen=True)
 class TaxCreditBenefit(Benefit):
-    """A share of the eligible cost, paid out over `years` (optionally unevenly).
+    """A share of the eligible cost paid out over `years` instalments, optionally unevenly.
 
-    Models income-tax deduction programmes — Italy's Ecobonus over ten installments, Germany's
-    §35c EStG (shipped as 20 % over three unevenly split years) — where the *timing* of the payout
-    materially changes the NPV and is therefore not a detail: the solver discounts each installment
-    before comparing combinations. Unlike the share kinds this one does not stack additively in a
-    cumulation group; §35c is expressed as mutually exclusive with the grant programmes via
-    ``excludes``.
+    Models income-tax deductions such as Italy's Ecobonus over ten instalments or Germany's §35c EStG (shipped as 20 %
+    over three unevenly split years). The solver discounts each instalment, since timing changes the value. It does not
+    stack in a cumulation group; §35c is made exclusive with the grant programmes through ``excludes``.
     """
 
     rate: float  # fraction of the eligible cost basis, spread over `years`
@@ -609,7 +558,7 @@ class TaxCreditBenefit(Benefit):
     )
 
     def __post_init__(self) -> None:
-        """Validates the payout schedule (§5.2): whole years, shares summing to 1."""
+        """Validate the payout schedule (§5.2): whole years, shares summing to 1."""
         if self.years < 1:
             raise SubsidyDataError(f"Tax credit benefit needs years >= 1, got {self.years}.")
         if self.annual_shares:
@@ -624,19 +573,17 @@ class TaxCreditBenefit(Benefit):
                 )
 
     def schedule_shares(self) -> Tuple[float, ...]:
-        """Per-year shares of the total credit; even split unless the catalog says otherwise.
+        """Return the per-year shares of the total credit, evenly split unless the catalog states shares.
 
-        Returns one share per installment year, in order, always summing to 1 (enforced in
-        :meth:`__post_init__`). The cumulation solver multiplies the total credit by these to build
-        the award's ``schedule_amounts``, which land on the timeline in years 1..N — so this is the
-        function that decides how much of a tax credit survives discounting.
+        One share per instalment year, in order, summing to 1. The solver multiplies the total credit by them to build
+        the award's ``schedule_amounts``, booked in years 1..N.
         """
         if self.annual_shares:
             return self.annual_shares
         return tuple(1.0 / self.years for _ in range(self.years))
 
     def value_estimate(self, gross_cost_in_euro: float, measure_size: float) -> float:
-        """Rate on the gross cost (undiscounted, like the other kinds)."""
+        """Return the rate times the gross cost, undiscounted like the other kinds."""
         del measure_size
         return gross_cost_in_euro * self.rate
 
@@ -645,9 +592,8 @@ class TaxCreditBenefit(Benefit):
 class ReducedVatBenefit(Benefit):
     """A reduced VAT rate on the measure.
 
-    **Unwired (§7 B7):** the resulting `PayoutKind.VAT_REDUCTION` award has no consumer anywhere
-    in the engine — no VAT netting reads `reduced_vat_rate`. The kind is typed here so a catalog
-    entry is at least well-formed; wiring it (or deleting it) is a separate fix-or-freeze call.
+    The resulting `PayoutKind.VAT_REDUCTION` award has no consumer in the engine: no VAT netting reads
+    `reduced_vat_rate`. The kind exists so a catalog entry is well-formed.
     """
 
     vat_rate: float
@@ -659,13 +605,11 @@ class ReducedVatBenefit(Benefit):
 class LoanTermsBenefit(Benefit):
     """Soft-loan terms: interest rate, term and an optional repayment grant (Tilgungszuschuss).
 
-    A subsidized loan is not a cash grant but an *override of the financing plan* (§4.4): the award
-    carries these terms, ``calculators/financing_application.py`` substitutes them into the
-    :class:`~hisim.economics.financing.FinancingPlan`, and the benefit shows up as the interest the
-    applicant does not pay. The optional repayment grant is the one part that is genuine support in
-    year 0 — note §7 B3: the solver values it on the gross measure cost while financing applies it
-    to the loan principal, which disagree whenever less than the full cost is financed (masked
-    today because the shipped KfW rate is 0.0).
+    A subsidized loan overrides the financing plan (§4.4): ``calculators/financing_application.py`` substitutes these
+    terms into the :class:`~hisim.economics.financing.FinancingPlan`, and the benefit shows as interest not paid. The
+    repayment grant is the part paid as support. The solver values it on the gross measure cost, while the financing
+    applies it to the loan principal; the two differ when less than the full cost is financed (the shipped KfW rate is
+    0.0).
     """
 
     interest_rate: float  # nominal annual rate of the subsidized loan
@@ -681,14 +625,11 @@ class LoanTermsBenefit(Benefit):
 
 @dataclass(frozen=True)
 class OperationalBenefit(Benefit):
-    """A per-kWh payment on one carrier for a number of years (feed-in style support).
+    """A per-kWh payment on one carrier for a number of years, such as feed-in remuneration.
 
-    The one benefit kind whose value depends on the *simulation* rather than on the investment:
-    EEG-style feed-in remuneration and heat-generation premiums are paid per kWh actually sold (or,
-    where no sold energy is recorded, bought — see :func:`_support_value`), so the engine can only
-    value it once the meters have reported. Payments run for ``duration_years`` from year 1 and are
-    truncated by the observation horizon when the flows are laid out; the rate is nominal and does
-    not escalate, matching the fixed-for-20-years EEG contract convention (§8.5).
+    Its value depends on the simulation: it is paid per kWh sold or, where no sold energy is recorded, bought (see
+    :func:`_support_value`). Payments run for ``duration_years`` from year 1, cut at the observation horizon; the rate
+    is nominal and does not escalate, as in fixed-term EEG contracts (§8.5).
     """
 
     rate_per_kwh: float  # euro per kWh of the named carrier, nominal, fixed for the duration
@@ -703,12 +644,10 @@ class OperationalBenefit(Benefit):
 
 
 class BenefitTypes:
-    """The benefit payload type of each kind — the single dispatch table used by loader and engine.
+    """The payload class of each benefit kind, the one dispatch table for loader and engine.
 
-    One table serves both directions: :func:`parse_benefit` uses it to pick the payload class for a
-    catalog entry, and :meth:`SubsidyScheme.__post_init__` uses it to verify that a scheme built in
-    Python pairs its declared kind with the matching payload. Having exactly one mapping is what
-    lets the rest of the module narrow a payload by ``isinstance`` without defensive re-checks.
+    :func:`parse_benefit` uses it to pick the class for a catalog entry, and :meth:`SubsidyScheme.__post_init__` uses
+    it to check a scheme built in Python.
     """
 
     BY_KIND: Dict[BenefitKind, type] = {
@@ -725,12 +664,10 @@ class BenefitTypes:
 
 
 def parse_benefit(raw: Dict[str, Any], scheme_id: str) -> Tuple[BenefitKind, Benefit]:
-    """Parses a catalog `benefit` object into its kind and typed payload (§5.2).
+    """Parse a catalog `benefit` object into its kind and typed payload (§5.2).
 
-    The entry point the catalog loader uses for the ``benefit`` block: it reads the ``kind`` tag,
-    looks the payload class up in :attr:`BenefitTypes.BY_KIND` and delegates the remaining keys to
-    :meth:`Benefit.parse`. The pair it returns is stored on the scheme as-is, so from here on the
-    engine works with typed fields and never with raw dictionary lookups (W2.2).
+    Reads the ``kind`` tag, looks up the payload class in :attr:`BenefitTypes.BY_KIND` and hands the remaining keys to
+    :meth:`Benefit.parse`.
 
     Args:
         raw: The catalog's ``benefit`` object, including its ``kind`` key.
@@ -756,20 +693,17 @@ def parse_benefit(raw: Dict[str, Any], scheme_id: str) -> Tuple[BenefitKind, Ben
 
 
 class PayoutKind(str, enum.Enum):
-    """How benefits map to timeline entries (§5.2).
+    """When and in what form a scheme's support arrives on the timeline (§5.2).
 
-    The second half of the benefit model: :class:`BenefitKind` says how much support is computed,
-    this says *when and in what form* it arrives, which is what the timeline needs. The separation
-    matters because the two are not in bijection — the same 30 % share can be paid as a year-0
-    grant in one country and as a multi-year tax deduction in another, and NPV distinguishes them
-    sharply. A scheme declares its payout in the catalog's ``payout.kind`` and defaults to
-    ``UPFRONT_GRANT``; ``calculators/subsidy_application.py`` is the sole interpreter.
+    :class:`BenefitKind` says how much support is computed; this says how it is paid, which matters because the same 30
+    % share may be a year-0 grant in one country and a multi-year tax deduction in another. A scheme declares it in
+    ``payout.kind`` (default ``UPFRONT_GRANT``); ``calculators/subsidy_application.py`` interprets it:
 
-    The mapping it implements: ``UPFRONT_GRANT`` → one negative SUBSIDY entry at year 0;
-    ``TAX_CREDIT_SCHEDULE`` → one entry per scheduled year 1..N, truncated at the horizon;
-    ``OPERATIONAL`` → one entry per year of the award's duration, valued on the annualized energy;
-    ``LOAN_TERMS`` → no entry of its own, it overrides the financing plan (§4.4);
-    ``VAT_REDUCTION`` → typed but deliberately unwired, see :class:`ReducedVatBenefit` (§7 B7).
+    - ``UPFRONT_GRANT``: one negative SUBSIDY entry at year 0.
+    - ``TAX_CREDIT_SCHEDULE``: one entry per scheduled year 1..N, cut at the horizon.
+    - ``OPERATIONAL``: one entry per year of the award's duration, valued on the annualized energy.
+    - ``LOAN_TERMS``: no entry of its own; it overrides the financing plan (§4.4).
+    - ``VAT_REDUCTION``: typed but not booked (see :class:`ReducedVatBenefit`).
     """
 
     UPFRONT_GRANT = "UPFRONT_GRANT"
@@ -781,15 +715,13 @@ class PayoutKind(str, enum.Enum):
 
 @dataclass
 class EligibleCostSpec:
-    """Which cost categories count, capped and prorated how (§5.2).
+    """Which cost categories count toward a scheme's eligible cost, and how it is capped and prorated (§5.2).
 
-    Defines a scheme's *cost basis* — the euro figure its rate, lump sum or credit is computed on —
-    and it is per scheme, not per measure: two schemes stacking on the same heat pump may count
-    different categories or cap at different ceilings. Four dials, all data: which timeline
-    categories count (investment, planning, removal by default — the removal of the old boiler is
-    fundable, its maintenance is not), whether the basis is gross or net of VAT, whether mixed-use
-    buildings are prorated down to their residential share, and a per-dwelling-unit ceiling.
-    :func:`_eligible_cost_basis` is the one place that applies all four, in that order.
+    The eligible cost is the euro figure a scheme's rate, lump sum or credit is computed on; it is per scheme, so two
+    schemes on the same heat pump may count different categories. The settings are: the counted timeline categories
+    (investment, planning and removal by default), whether the basis is gross or net of VAT, whether mixed-use
+    buildings are prorated to their residential share, and a per-dwelling-unit ceiling. :func:`_eligible_cost_basis`
+    applies them in that order.
     """
 
     categories: List[CostCategory] = field(
@@ -800,19 +732,16 @@ class EligibleCostSpec:
     proration: str = "NONE"  # NONE | RESIDENTIAL_SHARE
 
     def cap_for_units(self, dwelling_units: int) -> Optional[float]:
-        """Total eligible-cost cap; tier list, last value repeated for further units.
+        """Return the building-wide eligible-cost cap for a number of dwelling units.
 
-        Programmes cap the eligible cost per dwelling unit in descending tiers — the shipped BEG
-        entry is 30 k€ for the first unit, 15 k€ for the next five and 8 k€ for every further one —
-        so the building-wide ceiling is the tiered sum, not a flat multiple. Repeating the last
-        tier for all remaining units is the standard "and further units" clause of those directives.
+        Programmes cap per unit in descending tiers; the shipped BEG entry is 30 kEUR for the first unit, 15 kEUR for
+        the next five and 8 kEUR for every further one. The last tier repeats for all remaining units.
 
         Args:
             dwelling_units: Number of dwelling units in the building; values below 1 count as 1.
 
         Returns:
-            The total cap in euro, or ``None`` when the scheme declares no cap at all — which the
-            caller must distinguish from a cap of 0.
+            The total cap in euro, or ``None`` when the scheme declares no cap (distinct from a cap of 0).
         """
         if not self.cap_per_dwelling_unit_in_euro:
             return None
@@ -825,19 +754,12 @@ class EligibleCostSpec:
 
 @dataclass
 class SubsidyScheme:
-    """One scheme of the catalog (§5.2).
+    """One funding programme of the catalog (§5.2).
 
-    The in-memory image of one funding programme: where and when it applies, what it applies to,
-    who qualifies, what it pays, on which cost basis, and how it interacts with other schemes.
-    Everything a reviewer needs to check a euro amount against the directive is on this object,
-    including the mandatory ``legal_basis`` and ``url`` — a scheme is a STATUTE-kind source in the
-    sense of §3.10, which is why an unsourced one is refused at load time.
-
-    Schemes are inert: they are read by :meth:`SubsidyCatalog.candidate_schemes` (jurisdiction and
-    validity pre-filter), by :func:`assess_schemes` (eligibility) and by the cumulation solver
-    (stacking, exclusions, valuation). Note that ``cumulation_group`` is a free-text *label*, not a
-    reference to anything, whereas every id in ``excludes`` must name a real scheme — the data-file
-    CI checks the latter.
+    States where and when it applies, to which asset classes and measure kinds, who qualifies, what it pays, on which
+    cost basis and how it combines with other schemes. ``legal_basis`` and ``url`` are mandatory, so every amount can
+    be checked against the directive (§3.10). ``cumulation_group`` is a free-text label; every id in ``excludes`` must
+    name a real scheme, which the data-file checks verify.
     """
 
     id: str
@@ -851,35 +773,29 @@ class SubsidyScheme:
     measure_kinds: List[str]  # INSTALL | REPLACE
     eligibility: Condition
     benefit_kind: BenefitKind
-    benefit: Benefit  # typed, kind-specific parameters (W2.2)
+    benefit: Benefit  # typed, kind-specific parameters
     eligible_cost: EligibleCostSpec
     cumulation_group: Optional[str]  # label; schemes sharing it stack additively (share kinds)
     combined_rate_cap: Optional[float]  # cap on the group's summed rate, e.g. 0.70
     excludes: List[str]  # scheme ids this one cannot be combined with (symmetric in effect)
     payout_kind: PayoutKind
-    source_ids: Tuple[str, ...] = ()  # registry ids; mandatory for catalog-loaded schemes (W2.4)
-    #: Human-readable name for the report ("BEG EM heat pump — base grant (30 %)", owner decision
-    #: Q20). Optional in the schema so a catalog written before Q20 still loads; every renderer
-    #: reads :attr:`label`, which falls back to the id, and `validate` warns about a scheme that
-    #: ships without one.
+    source_ids: Tuple[str, ...] = ()  # registry ids; mandatory for catalog-loaded schemes
+    #: Human-readable name for the report ("BEG EM heat pump — base grant (30 %)"). Optional in
+    #: the schema; every renderer reads :attr:`label`, which falls back to the id, and `validate`
+    #: warns about a scheme that ships without one.
     display_name: Optional[str] = None
 
     @property
     def label(self) -> str:
-        """The name a reader sees, with the scheme id as the fallback (Q20).
+        """Return the name a reader sees: the display name, or the scheme id when the catalog declares none.
 
-        The one place the fallback lives, so a catalog that predates ``display_name`` degrades to
-        exactly the old behaviour — an id on screen — instead of an empty cell. Renderers put this
-        in the visible text and keep :attr:`id` in a tooltip or a trailing parenthesis, because
-        the id is what a reviewer needs to grep the catalog and the audit trail with.
-
-        Returns:
-            The display name, or the scheme id when the catalog declares none.
+        Renderers show this and keep :attr:`id` in a tooltip or parenthesis, since the id is what a reviewer greps the
+        catalog for.
         """
         return self.display_name or self.id
 
     def __post_init__(self) -> None:
-        """Keeps `benefit_kind` and the typed payload in sync (W2.2)."""
+        """Check that `benefit_kind` matches the typed payload class."""
         expected = BenefitTypes.BY_KIND[self.benefit_kind]
         if not isinstance(self.benefit, expected):
             raise SubsidyDataError(
@@ -888,23 +804,20 @@ class SubsidyScheme:
             )
 
     def applies_to(self, asset_class: ComponentType, measure_kind: str) -> bool:
-        """Whether the scheme covers the measure at all.
+        """Whether the scheme covers this asset class and measure kind at all.
 
-        The cheapest of the pre-filters: a scheme only enters the candidate set for an asset class
-        it names and a measure kind (INSTALL / REPLACE) it funds. The distinction matters because
-        several programmes — the BEG speed bonus is the obvious one — exist precisely to reward
-        *replacing* a working fossil system and must not pay for a new-build installation.
+        The cheapest pre-filter. The measure kind (INSTALL or REPLACE) matters because some programmes, such as the BEG
+        speed bonus, reward replacing a working fossil system and must not pay for a new installation.
         """
         return asset_class in self.asset_classes and measure_kind in self.measure_kinds
 
 
 def scheme_context_fields(scheme: SubsidyScheme) -> List[str]:
-    """Every context field a scheme depends on (§5.7) — the one definition of that set.
+    """Return every context field a scheme depends on (§5.7).
 
-    Two sources: the eligibility conditions, and the eligible-cost spec, which needs the
-    residential share when it prorates and the dwelling-unit count when it caps per unit.
-    Question derivation and question-coverage validation both read this, so a new implied
-    dependency is added once.
+    Two sources: the eligibility conditions, and the eligible-cost spec, which needs the residential share when it
+    prorates and the dwelling-unit count when it caps per unit. Question derivation and the coverage check both read
+    this.
     """
     names = list(referenced_fields(scheme.eligibility))
     if scheme.eligible_cost.proration == "RESIDENTIAL_SHARE":
@@ -918,11 +831,9 @@ def scheme_context_fields(scheme: SubsidyScheme) -> List[str]:
 class QuestionEntry:
     """One localized question of the questionnaire catalog (§5.7).
 
-    The presentation half of a context field: how to ask a user for it, in every supported
-    language, with the answer options and the help text that explains why it matters. Entries live
-    in ``subsidy_catalog/questions_<COUNTRY>.json`` keyed by the context field they fill, and the
-    data-file CI (§9.6) fails if any field referenced by a shipped scheme has no entry — that check
-    is what keeps the questionnaire complete by construction rather than by review.
+    How to ask a user for one context field, in every supported language, with answer options and help text. Entries
+    live in ``subsidy_catalog/questions_<COUNTRY>.json`` keyed by the field they fill; the data-file checks (§9.6) fail
+    if a field used by a shipped scheme has no entry.
     """
 
     fieldname: str  # the context field this answer fills, e.g. "building.heritage_status"
@@ -936,13 +847,10 @@ class QuestionEntry:
 
 @dataclass
 class Question:
-    """A question to ask, with the schemes that made it necessary ("asked because").
+    """A question to ask, with the schemes that made it necessary.
 
-    What :func:`required_questions` returns: a catalog entry plus the derived justification for
-    asking it. ``asked_because`` lets a frontend show *why* a question appears and can never go
-    stale relative to the catalog, since it is computed from the conditions rather than curated;
-    ``pruning_power_in_euro`` is the ordering key that puts the most consequential question first,
-    so a user who stops answering early has still answered the questions that mattered most.
+    Returned by :func:`required_questions`. ``asked_because`` lists the scheme ids, so a frontend can say why the
+    question appears; ``pruning_power_in_euro`` is the ordering key that puts the question gating the most money first.
     """
 
     entry: QuestionEntry
@@ -952,22 +860,17 @@ class Question:
 
 
 class SubsidyCatalog:
-    """One country catalog plus the question catalog and source registry.
+    """One country's subsidy catalog with its questions and cited sources.
 
-    The loaded, validated content of ``subsidy_catalog/<COUNTRY>.json`` and its companion
-    ``questions_<COUNTRY>.json``: every scheme of that jurisdiction, the localized questionnaire
-    entries, the country-level state-aid ceiling and the ``sources.json`` entries the schemes cite.
-    It is the sole entry point to catalog data — the engine below never opens a file — and is
-    attached to an evaluation through ``EconomicParameters.subsidy_catalog_path``; where no path is
-    set, no catalog is loaded at all and no subsidy is booked (the §10.1 legacy flat shim that used
-    to apply instead was retired on 2026-09-24).
-
-    A catalog can also be built in Python (tests, worked examples), in which case it carries no
-    registry and its schemes record ``IN_MEMORY_DEFINITION`` provenance rather than citing sources.
+    The loaded, validated content of ``subsidy_catalog/<COUNTRY>.json`` and ``questions_<COUNTRY>.json``: the schemes,
+    the localized questions, the country-level state-aid ceiling and the ``sources.json`` entries the schemes cite. It
+    is the only reader of catalog files. A run uses one when ``EconomicParameters.subsidy_catalog_path`` is set;
+    without a path no subsidy is booked. A catalog built in Python (tests, worked examples) carries no registry, and
+    its schemes record ``IN_MEMORY_DEFINITION`` provenance.
     """
 
-    #: Default on-disk location of the shipped subsidy catalogs — `hisim/subsidy_catalog`,
-    #: three levels up from this file now that `subsidies` is a package.
+    #: Default on-disk location of the shipped subsidy catalogs: `hisim/subsidy_catalog`,
+    #: three levels up from this file.
     DEFAULT_PATH: ClassVar[str] = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "subsidy_catalog"
     )
@@ -982,11 +885,10 @@ class SubsidyCatalog:
         country: str,
         sources: Optional[Dict[str, SourceEntry]] = None,
     ) -> None:
-        """Built by :meth:`load`.
+        """Store the loaded catalog content; use :meth:`load` to read one from disk.
 
-        `sources` are the registry entries the loader resolved this catalog's `source_ids`
-        against (W2.4). A catalog built in Python (tests, worked examples) passes none: its
-        schemes then mint `IN_MEMORY_DEFINITION` provenance instead of citing registry ids.
+        `sources` are the registry entries the loader resolved the schemes' `source_ids` against; a catalog built in
+        Python passes none.
         """
         self.schemes = schemes
         self.questions = questions
@@ -994,35 +896,28 @@ class SubsidyCatalog:
         self.overall_cap_share = overall_cap_share
         self.base_path = base_path
         self.country = country
-        #: Resolved `sources.json` entries by id — the resolution `load` used to be thrown away
-        #: (W2.4), which is why the evaluator had to fabricate `inline:` ids.
+        #: Resolved `sources.json` entries by id, kept for the provenance ledger.
         self.sources: Dict[str, SourceEntry] = dict(sources or {})
 
     @classmethod
     def load(cls, country: str, base_path: Optional[str] = None) -> "SubsidyCatalog":
-        """Loads and validates `<base_path>/<COUNTRY>.json` plus `questions_<COUNTRY>.json`.
+        """Load and validate `<base_path>/<COUNTRY>.json` plus `questions_<COUNTRY>.json`.
 
-        Everything the catalog schema can be checked for statically is checked here, so that a
-        malformed programme is a load error naming the scheme rather than a wrong euro amount much
-        later: ``legal_basis``, ``url``, ``benefit`` and ``source_ids`` are mandatory, the benefit
-        payload is parsed into its typed form (§5.2, W2.2), the eligibility tree is parsed and its
-        field names checked against the context vocabulary (§5.3), and every cited source id is
-        resolved against ``sources.json`` and kept for the provenance ledger (W2.4). The question
-        file is optional at this level — its *completeness* is a CI check (§9.6), not a load error,
-        so a catalog under development still loads.
+        Everything statically checkable is checked here, so a malformed programme is a load error naming the scheme:
+        ``legal_basis``, ``url``, ``benefit`` and ``source_ids`` are mandatory, the benefit payload is parsed (§5.2),
+        condition field names are checked against the context vocabulary (§5.3), and cited source ids are resolved
+        against ``sources.json``. The question file is optional here; its completeness is a data-file check (§9.6).
 
         Args:
             country: ISO country code selecting both file names.
-            base_path: Directory holding the catalog; defaults to the shipped
-                :attr:`DEFAULT_PATH`.
+            base_path: Directory holding the catalog; defaults to :attr:`DEFAULT_PATH`.
 
         Returns:
-            The loaded catalog, with resolved source entries attached.
+            The loaded catalog with resolved source entries.
 
         Raises:
-            SubsidyDataError: If no catalog file exists for the country, or any scheme violates the
-                schema (missing mandatory field, unknown benefit kind or asset class, unparsable
-                condition, no source ids).
+            SubsidyDataError: If no catalog file exists for the country, or a scheme violates the schema (missing
+                mandatory field, unknown benefit kind or asset class, unparsable condition, no source ids).
         """
         base = base_path or SubsidyCatalog.DEFAULT_PATH
         catalog_path = os.path.join(base, f"{country}.json")
@@ -1113,27 +1008,14 @@ class SubsidyCatalog:
 
     @classmethod
     def resolve_base_path(cls, configured_path: str) -> str:
-        """Turns a configured catalog path into the one directory that exists, or refuses.
+        """Resolve a configured catalog path to the one existing directory it names, or refuse.
 
-        A `subsidy_catalog_path` is written into `EconomicParameters` by a system setup, a scenario
-        file or a RenoVisor request, and is then read back by a CLI invocation whose working
-        directory is nobody's business — so resolving a relative path against the current directory
-        alone makes the same parameter file work from the repository root and fail from anywhere
-        else. Three roots are therefore tried: the current working directory (an absolute path is
-        used as given), the repository/installation root that contains the `hisim` package, and the
-        package's own data directory, so that both `hisim/subsidy_catalog` and `subsidy_catalog`
-        resolve to the shipped catalog wherever the command runs.
-
-        **Ambiguity is refused, not resolved by order.** The three roots used to be tried in
-        sequence with the first hit winning, which made the answer depend on where the command was
-        started: a directory named `subsidy_catalog/` in whatever the caller's cwd happened to be —
-        a scratch copy, an unrelated project's data — silently shadowed the shipped catalog, and
-        the run reported catalog-priced subsidies from a catalog nobody had chosen. Candidates are
-        now deduplicated by `realpath` (cwd and installation root routinely coincide, and so do a
-        path and a symlink to it) and *all* the surviving existing ones are counted: exactly one is
-        the answer, more than one is an error naming each of them. The fix a user needs is always
-        the same, and the message says it — make the configured path absolute, which names the
-        directory rather than describing where to look for it.
+        A relative path is tried against three roots: the current directory, the repository or installation root
+        containing the `hisim` package, and the package's data directory, so both `hisim/subsidy_catalog` and
+        `subsidy_catalog` find the shipped catalog wherever the command runs. An absolute path is used as given.
+        Candidates are deduplicated by `realpath`; if more than one distinct directory exists, the path is ambiguous
+        and refused, since a stray `subsidy_catalog/` in the working directory must not silently shadow the shipped
+        one. The error message tells the user to make the path absolute.
 
         Args:
             configured_path: The non-empty path a parameter set names.
@@ -1142,11 +1024,8 @@ class SubsidyCatalog:
             The single existing directory to load the catalog from.
 
         Raises:
-            CostDataError: If no candidate exists, or if more than one does. Named catalog data
-                that cannot be found — or that could be one of two different directories — is a
-                fail-fast condition (D25): the alternative is a full result priced with no
-                subsidy at all, or by the wrong catalog, under a catalog the caller believed was
-                active.
+            CostDataError: If no candidate exists or more than one does; pricing with no catalog or the wrong one would
+                be worse than failing.
         """
         package_directory = os.path.dirname(cls.DEFAULT_PATH)
         install_root = os.path.dirname(package_directory)
@@ -1180,13 +1059,11 @@ class SubsidyCatalog:
 
     @classmethod
     def shipped_catalog_file(cls, country: str, directory: Optional[str] = None) -> Optional[str]:
-        """The ``<COUNTRY>.json`` a catalogue directory holds, or None when it holds none.
+        """Return the ``<COUNTRY>.json`` a catalog directory holds, or None when it holds none.
 
-        The one place "does this country have a catalogue?" is answered, so the RenoVisor
-        translator and the staged CLI cannot disagree about it (step 11 §3, item 12). A country
-        the shipped directory has no file for gets no catalogue at all, the run prices as
-        ``subsidy_mode NONE``, and the result document says so with undetermined rows rather than
-        with zeroes.
+        The one place that answers "does this country have a catalog?", shared by the RenoVisor translator and the
+        staged CLI. A country without a file gets no catalog, the run prices as subsidy mode NONE, and the result
+        document shows undetermined rows rather than zeroes.
 
         Example::
 
@@ -1197,7 +1074,7 @@ class SubsidyCatalog:
             directory: Where to look; :attr:`DEFAULT_PATH`, the shipped directory, when omitted.
 
         Returns:
-            The absolute path of the country's catalogue file, or None.
+            The absolute path of the country's catalog file, or None.
         """
         base = directory if directory is not None else cls.DEFAULT_PATH
         candidate = os.path.join(base, f"{country.upper()}.json")
@@ -1207,20 +1084,12 @@ class SubsidyCatalog:
     def configured_or_shipped_path(
         cls, country: str, configured_path: Optional[str], override_path: Optional[str] = None
     ) -> Optional[str]:
-        """Which directory a run loads its catalogue from when nobody named one.
+        """Return the directory a run loads its catalog from, falling back to the shipped one for the country.
 
-        The path resolution of :meth:`load_configured` with the step 11 §3 default in front of
-        it: a path the caller or the parameters name wins, and when neither does, the shipped
-        directory is used **if it has this country's file**. Without that last step a caller
-        holding only a stage extract — which carries no catalogue path, and is not meant to — ran
-        with no catalogue at all and published a plan with every subsidy undetermined, while the
-        same plan over a full job directory (whose stored record names the shipped directory)
-        priced the grants.
-
-        It is separate from :meth:`load_configured` on purpose: that method is what the
-        postprocessing bridge and the ``evaluate``/``explain``/``report`` subcommands call, where
-        "no path named" has always meant "no catalogue", and changing it would silently re-price
-        archived studies.
+        A path the caller or the parameters name wins; when neither names one, the shipped directory is used if it has
+        this country's file. Without the fallback, a caller holding only a stage extract (which carries no catalog
+        path) would price every subsidy as undetermined. :meth:`load_configured` deliberately has no such fallback:
+        there "no path" means "no catalog", and changing that would re-price archived studies.
 
         Args:
             country: The country the run is priced for.
@@ -1240,19 +1109,12 @@ class SubsidyCatalog:
     def load_configured(
         cls, country: str, configured_path: Optional[str], override_path: Optional[str] = None
     ) -> Optional["SubsidyCatalog"]:
-        """The catalog a parameter set asks for: loaded, or None when it asks for none.
+        """Return the catalog a parameter set asks for, or None when it asks for none.
 
-        The single entry point every caller that holds `EconomicParameters` uses — the CLI's
-        subcommands and the postprocessing bridge — so the two cases stay apart everywhere. Naming
-        no catalog is a legitimate parameter set: the country may have none yet, and the run then
-        books no subsidy at all (the §10.1 legacy flat shim that priced support from the device
-        entries was retired on 2026-09-24). Naming one that cannot be read is not, and raises
-        rather than falling through to a run without subsidies.
-
-        Every failure leaves here as a `CostDataError`, whatever the loader raised, because both
-        callers need the same one: the bridge's failure has to reach `postprocessing_main` as the
-        typed cost error it propagates (anything else is logged and the run finishes without cost
-        files), and the CLI turns exactly that type into exit code 2.
+        Used by the CLI subcommands and the postprocessing bridge. Naming no catalog is valid (the country may have
+        none) and the run books no subsidy. Naming one that cannot be read raises. Every failure is converted to
+        `CostDataError`, because the bridge must propagate a typed cost error to `postprocessing_main` and the CLI
+        turns that type into exit code 2.
 
         Args:
             country: ISO country code selecting the catalog file.
@@ -1263,8 +1125,7 @@ class SubsidyCatalog:
             The loaded catalog, or None when neither a path nor an override was given.
 
         Raises:
-            CostDataError: If a path was given but does not resolve, or the catalog it names is
-                missing or malformed.
+            CostDataError: If a path was given but does not resolve, or the catalog it names is missing or malformed.
         """
         path = override_path or configured_path
         if not path:
@@ -1281,49 +1142,40 @@ class SubsidyCatalog:
                 "quietly be priced without any instead."
             ) from err
 
-    # ------------------------------------------------------------------ provenance (§3.10, W2.4)
+    # ------------------------------------------------------------------ provenance (§3.10)
 
     def scheme_by_id(self, scheme_id: str) -> Optional[SubsidyScheme]:
-        """The scheme with that id, or None (awards carry ids, not scheme objects).
+        """Return the scheme with that id, or None.
 
-        A :class:`SubsidyAward` deliberately references its scheme by id so that decisions stay
-        serializable into the audit trail; this is how a consumer gets back to the scheme's legal
-        basis, most importantly ``calculators/subsidy_application.py`` when it mints an award's
-        provenance record.
+        Awards reference schemes by id so decisions stay serializable; this is how a consumer such as
+        ``calculators/subsidy_application.py`` gets back to a scheme's legal basis.
         """
         return next((scheme for scheme in self.schemes if scheme.id == scheme_id), None)
 
     def resolved_sources(self, scheme: SubsidyScheme) -> List[SourceEntry]:
-        """Registry entries backing one scheme — empty for in-memory catalogs.
+        """Return the ``sources.json`` entries backing one scheme, skipping ids the registry lacks.
 
-        Returns the ``sources.json`` entries this catalog resolved for the scheme's ``source_ids``
-        at load time, skipping any id the registry did not contain. An empty result is meaningful
-        rather than an error: it identifies a scheme defined in Python, which has no registry
-        behind it and is recorded as :attr:`ParameterOrigin.IN_MEMORY_DEFINITION`.
+        An empty list identifies a scheme defined in Python, recorded as :attr:`ParameterOrigin.IN_MEMORY_DEFINITION`.
         """
         return [self.sources[source_id] for source_id in scheme.source_ids if source_id in self.sources]
 
     def source_resolver(self) -> Dict[str, ResolvedSource]:
-        """The catalog's registry entries in the report representation (§3.10).
+        """Return the catalog's registry entries in the report representation (§3.10).
 
-        Hands the subsidy registry to the result object, which merges it with the cost database's
-        registry — the two id spaces are disjoint — so that a subsidy flow explained through the
-        provenance ledger resolves to a real citation instead of a bare id. Consumed by the
-        "sources used" table of the report and by the ``explain`` CLI.
+        The result object merges them with the cost database's registry (the id spaces are disjoint), so a subsidy flow
+        explained through the provenance ledger resolves to a citation. Read by the report's "sources used" table and
+        the ``explain`` CLI.
         """
         return {source_id: entry.to_resolved() for source_id, entry in self.sources.items()}
 
     def provenance_for_scheme(
         self, scheme: SubsidyScheme, ledger: ProvenanceLedger, value: Any
     ) -> int:
-        """Records the ledger entry backing one award of `scheme` (W2.4).
+        """Record the provenance-ledger entry backing one award of `scheme` and return its id.
 
-        A catalog-loaded scheme cites the registry ids its `sources.json` resolution produced at
-        load time, so `explain` reaches the legal text a subsidy came from; the scheme's own
-        `legal_basis` and `url` — which are scheme *fields*, not registry entries — ride along in
-        `detail`. A scheme defined in Python (tests, worked examples) has no registry behind it
-        and is recorded as :attr:`ParameterOrigin.IN_MEMORY_DEFINITION`, which is honest about
-        having no source, instead of the `inline:` pseudo-ids this replaced.
+        A catalog-loaded scheme cites the registry ids resolved at load time, with its `legal_basis` and `url` in
+        `detail`, so `explain` reaches the legal text. A scheme defined in Python is recorded as
+        :attr:`ParameterOrigin.IN_MEMORY_DEFINITION`.
         """
         detail = f"{scheme.legal_basis} <{scheme.url}>"
         if scheme.source_ids:
@@ -1351,17 +1203,13 @@ class SubsidyCatalog:
     def candidate_schemes(
         self, asset_class: ComponentType, measure_kind: str, region: Optional[str], year: int
     ) -> List[SubsidyScheme]:
-        """Pre-filter by jurisdiction, asset class and validity (§5.7).
+        """Return the schemes that could apply to one measure, by jurisdiction, asset class and validity (§5.7).
 
-        The first stage of every subsidy computation: it narrows the whole catalog to the schemes
-        that *could* apply to one measure before any context is looked at, which keeps the
-        exponential cumulation solver working on a handful of schemes and keeps the question
-        derivation from asking about programmes the case can never reach. A scheme with no region
-        is nationwide and matches any applicant; a regional scheme matches only its own region, and
-        an applicant who did not state a region is offered regional schemes too (the eligibility
-        conditions can still reject them). Validity is tested on the *year* parsed from the ISO
-        dates against the price basis year, i.e. against the economic "today" rather than the
-        possibly historical weather year of the simulation.
+        The first stage of every subsidy computation; it keeps the exponential solver and the question derivation on a
+        handful of schemes. A scheme with no region is nationwide; a regional scheme matches only its region, and an
+        applicant who stated no region is offered regional schemes too (conditions may still reject them). Validity
+        compares the years of the ISO dates with the price basis year, the economic "today", not the weather year of
+        the simulation.
 
         Args:
             asset_class: The measure's asset class.
@@ -1370,8 +1218,7 @@ class SubsidyCatalog:
             year: The year scheme validity is tested against.
 
         Returns:
-            The candidate schemes, in catalog file order — which is also the order the cumulation
-            solver enumerates them in and therefore its tie-break order.
+            The candidate schemes in catalog file order, which is also the solver's tie-break order.
         """
         result = []
         for scheme in self.schemes:
@@ -1388,22 +1235,11 @@ class SubsidyCatalog:
 
 
 def _component_type(name: str, scheme_id: str) -> ComponentType:
-    """Resolves a catalog asset-class string to its `ComponentType`, by enum name or value.
+    """Resolve a catalog asset-class string to its `ComponentType`, by enum name or value.
 
-    Accepting both spellings keeps catalog files readable while tolerating the enum's value
-    strings; anything else is a data error rather than a silently unfunded asset class, which is
-    why it raises instead of returning None (a scheme that quietly applies to nothing would look
-    exactly like a scheme whose conditions failed).
+    Anything else raises, because a scheme that quietly applies to nothing would look like one whose conditions failed.
     """
     for member in ComponentType:
         if name in (member.name, member.value):
             return member
     raise SubsidyDataError(f"Scheme {scheme_id}: unknown asset class {name!r}.")
-
-
-# =========================================================================== engine
-# Everything below consumes the catalog data above: the applicant/building context conditions
-# resolve against, the condition evaluator, the eligibility assessment and the cumulation
-# solver. Nothing above this line reads a context or evaluates anything (§2.5: the data half
-# becomes `economics/data/`, this half `economics/engine/`; the cut is prepared, the physical
-# move is deliberately left to the package split so imports churn once, not twice).

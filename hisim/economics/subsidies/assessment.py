@@ -1,11 +1,8 @@
-"""Per-scheme eligibility assessment and the questionnaire derivation (cost_spec.md §5.3-§5.5, §5.7).
+"""Per-scheme eligibility assessment and questionnaire derivation (cost_spec.md §5.3-§5.5, §5.7).
 
-`SubsidyContext` carries the answers, `evaluate_condition`/`describe_condition` judge and
-explain each condition (D25: an INELIGIBLE scheme names the conditions that failed),
-`assess_schemes` produces one `SchemeAssessment` per scheme, and `required_questions`
-derives what a half-filled context still needs to ask. The award/cumulation math lives
-in `solver`. Split out of the former single-module `subsidies.py` (PR-3 review); the
-package `__init__` re-exports everything.
+`SubsidyContext` carries the answers; `evaluate_condition` and `describe_condition` judge and explain each condition;
+`assess_schemes` gives one `SchemeAssessment` per scheme; `required_questions` derives what a partly filled context
+still needs to ask. The award arithmetic lives in `solver`.
 """
 
 from __future__ import annotations
@@ -46,18 +43,12 @@ from hisim.economics.subsidies.context import (
 
 @dataclass
 class SubsidyContext:
-    """Full context conditions resolve against: applicant.*, building.*, measure.*.
+    """The answers conditions resolve against: the ``applicant.*``, ``building.*`` and ``package.*`` roots.
 
-    The complete set of answers one case supplies — the applicant profile and the building facts —
-    which the caller attaches to a run through ``bridge.EconomicContext`` and which round-trips
-    through ``economic_inputs.json`` so a stored result can be re-priced without re-simulating.
-    The third root, ``measure.*``, is deliberately not stored here: it is the cost facts of the
-    measure currently being assessed and is passed in per call, since one context is evaluated
-    against many measures.
-
-    The context is answered *partially* by design: every unanswered field makes the conditions
-    that touch it undetermined rather than false (§5.7), which is what turns the questionnaire into
-    progressive disclosure instead of a mandatory form.
+    The caller attaches it to a run through ``bridge.EconomicContext``, and its answers round-trip through
+    ``economic_inputs.json`` so a stored result can be re-priced without re-simulating. The ``measure.*`` root is not
+    stored here: it is the cost facts of the measure being assessed, passed per call. Any field may stay unanswered;
+    conditions touching it are then UNDETERMINED rather than false (§5.7).
     """
 
     applicant: ApplicantProfile = field(default_factory=ApplicantProfile)
@@ -67,33 +58,23 @@ class SubsidyContext:
     package: SubsidyPackageContext = field(default_factory=SubsidyPackageContext)
 
     def resolve_field(self, dotted: str, measure: Optional[ComponentCostFacts]) -> Tuple[bool, Any]:
-        """Resolves a condition field; returns (known, value).
+        """Resolve a dotted condition field to ``(known, value)``.
 
-        Unknown fields raise, unanswered (None) values return ``(False, None)`` — the tri-state
-        input (§5.7).
-
-        The single place a dotted condition path becomes a value, and therefore the place the
-        three-valued logic *originates*: a `False` in the first element means "this case has not
-        told us", and it propagates through :func:`evaluate_condition` as UNDETERMINED rather than
-        as a failed condition. Two failure modes are kept strictly apart — an unanswered field is
-        normal and expected, whereas a path the context does not have at all is a catalog defect
-        and raises. Walking stops at the first ``None`` on the path, so a building with no existing
-        heating registered makes ``building.existing_heating.energy_carrier`` — the field the BEG
-        speed bonus tests — unanswered instead of raising, and dictionary hops (the
-        ``measure.technical_attributes.*`` case) treat a missing key the same way. Enum values are
-        unwrapped to their ``.value`` so catalog conditions compare against plain JSON strings.
+        This is where the three-valued logic starts: ``known`` False means the case has not answered, which
+        :func:`evaluate_condition` turns into UNDETERMINED. Walking stops at the first ``None`` on the path, so
+        ``building.existing_heating.energy_carrier`` with no existing heating is unanswered, not an error; a missing
+        key under ``measure.technical_attributes.*`` is treated the same way. Enum values are unwrapped to ``.value``
+        so conditions compare against plain JSON strings.
 
         Args:
-            dotted: The condition's field path, rooted at applicant, building or measure.
-            measure: Cost facts of the measure under assessment; ``None`` makes every
-                ``measure.*`` path unanswered, which is how :func:`required_questions` resolves
-                fields without a measure at hand.
+            dotted: The field path, rooted at ``applicant``, ``building``, ``package`` or ``measure``.
+            measure: Cost facts of the measure under assessment; ``None`` makes every ``measure.*`` path unanswered.
 
         Returns:
-            ``(known, value)`` — ``known`` is False exactly when the value is unanswered.
+            ``(known, value)``; ``known`` is False exactly when the value is unanswered.
 
         Raises:
-            SubsidyDataError: On an unknown root or an attribute the context object does not have.
+            SubsidyDataError: On an unknown root or an attribute the context object does not have (a catalog defect).
         """
         parts = dotted.split(".")
         root, rest = parts[0], parts[1:]
@@ -128,30 +109,21 @@ class SubsidyContext:
 def evaluate_condition(  # pylint: disable=too-many-return-statements
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> Tuple[Optional[bool], List[str]]:
-    """Tri-state evaluation: (True/False/None, missing_fields). None = undetermined (§5.7).
+    """Evaluate a condition tree to True, False or None (undetermined) plus the fields that would settle it (§5.7).
 
-    W2.3: the evaluator of the inert :class:`Condition` AST, engine side. Semantics unchanged —
-    a leaf whose field is unanswered (or whose comparison raises `TypeError` on a mistyped
-    answer) is undetermined and reports the field; `all` short-circuits on a definite False,
-    `any` on a definite True; `not` propagates undetermined.
-
-    This tri-state is the heart of §5.7 and the reason eligibility is not a plain boolean: treating
-    "not asked yet" as "does not qualify" would quietly deny support, and treating it as "qualifies"
-    would promise money that may not exist. The `all`/`any` short-circuits mean the missing-field
-    list is deliberately *empty whenever the verdict is definite* — a scheme ruled out by the one
-    answered condition needs no further questions, even if other branches were undetermined. The
-    ``exists`` operator is the one leaf that is never undetermined: it tests answeredness itself
-    and returns a definite verdict either way (its ``value`` is ignored).
+    A leaf whose field is unanswered, or whose comparison raises `TypeError` on a mistyped answer, is undetermined and
+    reports its field. ``all`` short-circuits on a definite False, ``any`` on a definite True, and ``not`` keeps
+    undetermined. The ``exists`` operator tests answeredness itself and is never undetermined. Treating "not asked yet"
+    as false would quietly deny support, and treating it as true would promise money that may not exist.
 
     Args:
-        condition: The parsed eligibility tree, or any subtree of it.
-        context: The applicant/building answers available for this case.
+        condition: The parsed eligibility tree, or any subtree.
+        context: The applicant and building answers.
         measure: Cost facts backing the ``measure.*`` paths; ``None`` makes them unanswered.
 
     Returns:
-        ``(verdict, missing_fields)`` with verdict True/False/None (None = undetermined), and the
-        field names whose answers would settle an undetermined verdict. The list may contain
-        duplicates; callers deduplicate for reporting.
+        ``(verdict, missing_fields)``. The field list is empty whenever the verdict is definite and may contain
+            duplicates otherwise.
     """
     if condition.kind == "leaf":
         assert condition.fieldname is not None and condition.op is not None
@@ -187,21 +159,18 @@ def evaluate_condition(  # pylint: disable=too-many-return-statements
 def describe_condition(
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> str:
-    """Renders one condition node as the text an audit trail shows (§5.4, issue #22).
+    """Render one condition node as the single line an audit trail shows (§5.4).
 
-    A leaf becomes ``field op value (actual: answer)`` — the comparison the catalog asked for
-    next to the answer this case gave, which is what makes a rejection checkable without opening
-    the catalog file. Combinators are rendered structurally (``all of``, ``any of``, ``not``) so a
-    nested condition stays readable as one line. Unanswered fields print as ``unanswered`` rather
-    than ``None``, keeping the §5.7 distinction visible in prose too.
+    A leaf becomes ``field op value (actual: answer)``, so a rejection can be checked without opening the catalog;
+    unanswered fields print as ``unanswered``. Combinators render as ``all of``, ``any of`` and ``not``.
 
     Args:
-        condition: The node to render; any subtree of a scheme's eligibility predicate.
+        condition: Any node of a scheme's eligibility tree.
         context: The case's answers, read only to fill in the ``actual`` part.
-        measure: Cost facts backing ``measure.*`` paths, as in :func:`evaluate_condition`.
+        measure: Cost facts backing ``measure.*`` paths.
 
     Returns:
-        A single-line description; never empty, so it can always be embedded in a reason.
+        A non-empty, single-line description.
     """
     if condition.kind == "leaf":
         known, value = context.resolve_field(condition.fieldname or "", measure)
@@ -218,28 +187,19 @@ def describe_condition(
 def failed_condition_descriptions(
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> List[str]:
-    """The leaves responsible for a definite ``False`` verdict, described (§5.4, issue #22).
+    """Describe the condition leaves responsible for a definite ``False`` verdict (§5.4).
 
-    Every INELIGIBLE scheme used to carry the same fixed string, so the audit trail could say that
-    a scheme was ruled out but never why — the §5.4 weakening this closes. The walk mirrors
-    :func:`evaluate_condition` exactly, which is what keeps the explanation and the verdict from
-    drifting: it descends only into subtrees that are themselves definitely False.
-
-    The three combinators are described the way they actually fail. An ``all`` fails through
-    *every* failing child, so all of them are named — a case may miss two criteria at once and
-    fixing one would not help. An ``any`` fails only when nothing in it holds, which is one fact
-    about the group rather than several about its members, so it is reported as a single
-    ``none of: …`` line. A ``not`` fails because its child *does* hold, and is reported honestly
-    as such instead of pretending the child failed.
+    The walk mirrors :func:`evaluate_condition` and descends only into subtrees that are definitely False, so the
+    explanation matches the verdict. A failing ``all`` names every failing child, since fixing one may not be enough. A
+    failing ``any`` is reported as one ``none of: ...`` line. A failing ``not`` is reported as its child holding.
 
     Args:
-        condition: The scheme's eligibility predicate, or any subtree.
-        context: The applicant/building answers the verdict was reached with.
+        condition: The scheme's eligibility tree, or any subtree.
+        context: The applicant and building answers.
         measure: The measure under assessment, backing ``measure.*`` paths.
 
     Returns:
-        One description per responsible condition, in tree order; empty when this subtree is not
-        definitely False (an undetermined or satisfied branch explains nothing).
+        One description per responsible condition, in tree order; empty when the subtree is not definitely False.
     """
     verdict, _ = evaluate_condition(condition, context, measure)
     if verdict is not False:
@@ -262,13 +222,10 @@ def failed_condition_descriptions(
 def ineligibility_reason(
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> str:
-    """The `rejected_reason` of an INELIGIBLE scheme: which condition(s) it failed (issue #22).
+    """Return the `rejected_reason` of an INELIGIBLE scheme, naming the condition(s) it failed.
 
-    Wraps :func:`failed_condition_descriptions` into the one string that lands in the decision
-    record, in `cost_summary.md` and in the report's subsidy section. The generic fallback is kept
-    for the case that no leaf can be blamed — an empty ``all`` node, or a tree whose verdict and
-    explanation disagree — so this function always yields a usable reason rather than an empty
-    one.
+    The string lands in the decision record, in `cost_summary.md` and in the report's subsidy section. When no leaf can
+    be blamed (an empty ``all`` node, for example) a generic reason is returned, so the result is never empty.
     """
     descriptions = failed_condition_descriptions(condition, context, measure)
     if not descriptions:
@@ -277,12 +234,10 @@ def ineligibility_reason(
 
 
 class EligibilityStatus(str, enum.Enum):
-    """Tri-state eligibility (§5.7).
+    """Tri-state eligibility of a scheme (§5.7).
 
-    The verdict of :func:`evaluate_condition` lifted to the scheme level. UNDETERMINED is the
-    member that carries the design: it separates "this case does not qualify" from "we have not
-    asked enough to tell", so the solver can award only what is certain while the decision still
-    reports what the unanswered questions might unlock. Only ELIGIBLE schemes are ever awarded.
+    UNDETERMINED separates "does not qualify" from "not asked enough to tell": the solver awards only ELIGIBLE schemes,
+    while the decision still reports what unanswered questions might unlock.
     """
 
     ELIGIBLE = "ELIGIBLE"
@@ -292,19 +247,15 @@ class EligibilityStatus(str, enum.Enum):
 
 @dataclass
 class MeasureForSubsidy:
-    """What the evaluator hands the subsidy engine per subsidized measure.
+    """One subsidized measure as the subsidy engine receives it from the evaluator.
 
-    The request object of the whole engine: one funded thing (a heat pump, a wall insulation), its
-    cost split into the categories a scheme may count, and the technical facts its conditions test.
-    It is assembled by ``calculators/subsidy_application.py`` from the resolved device costing, and
-    it is the boundary that keeps this module free of timelines — the costs arrive as year-0 gross
-    bands, and nothing here knows how or when they will be booked.
+    A measure is one funded thing (a heat pump, a wall insulation): its year-0 cost split into categories a scheme may
+    count, and the technical facts its conditions test. ``calculators/subsidy_application.py`` builds it from the
+    resolved device costing; nothing here knows how or when costs are booked.
 
-    Units, since they are not visible in the field names: ``cost_by_category`` is in euro at year 0,
-    gross of VAT and before any support, per uncertainty slot; ``vat_rate`` is the fraction used to
-    strip VAT when a scheme's basis is NET; the two energy dictionaries are annual kWh per carrier
-    (already annualized from a possibly shorter simulated period) and are read only by OPERATIONAL
-    benefits.
+    Units: ``cost_by_category`` is euro at year 0, gross of VAT and before support, per band slot (minimum, best
+    estimate, maximum); ``vat_rate`` is the fraction that strips VAT when a scheme's basis is NET; the two energy
+    dictionaries are annual kWh per carrier and are read only by operational benefits.
     """
 
     subject: str  # the cost subject / component this measure belongs to
@@ -323,10 +274,8 @@ class MeasureForSubsidy:
 class SchemeAssessment:
     """Eligibility verdict for one scheme applied to one measure.
 
-    The intermediate record between :func:`assess_schemes` and the cumulation solver: it keeps the
-    scheme together with *why* it got its verdict, so that the eventual audit trail can report a
-    rejection or an open question rather than just an absence. Only ELIGIBLE assessments feed the
-    optimization; INELIGIBLE and UNDETERMINED ones are carried into the :class:`SubsidyDecision`.
+    Keeps the scheme together with why it got its verdict. Only ELIGIBLE assessments feed the cumulation solver;
+    INELIGIBLE and UNDETERMINED ones go into the :class:`SubsidyDecision` audit trail.
     """
 
     scheme: SubsidyScheme
@@ -337,23 +286,13 @@ class SchemeAssessment:
 
 @dataclass
 class SubsidyAward:
-    """One awarded benefit, ready to be materialized as timeline entries.
+    """One scheme's support for one measure, valued in all three band slots but not yet placed on the timeline.
 
-    The solver's output unit: one scheme's support for one measure, already valued in all three
-    uncertainty slots but not yet placed in time or signed. Which fields carry meaning depends
-    entirely on ``payout_kind`` — the record is a flat union rather than a class hierarchy because
-    it has to serialize into the audit trail — and the consumer that reads them is
-    ``calculators/subsidy_application.py`` (grants, schedules, operational payments) together with
-    ``calculators/financing_application.py`` (loan terms).
-
-    All amounts are in **nominal euro, positive, undiscounted, gross of any mirroring**: the sign
-    flip to a revenue-type cash flow happens when the entry is booked (`as_revenue`), not here.
-
-    ``display_name`` is carried on the award rather than looked up when a report is rendered
-    (Q20): a report is regularly built from a serialized result, in a process that never loaded a
-    catalog, so the friendly name has to travel with the award or it is not available where it is
-    read. It is empty exactly when the scheme had none, and :attr:`label` then falls back to the
-    id.
+    Which fields matter depends on ``payout_kind``; the record is a flat union so it serializes into the audit trail.
+    ``calculators/subsidy_application.py`` and ``calculators/financing_application.py`` (loan terms) turn it into
+    timeline entries. All amounts are nominal euro, positive and undiscounted; the sign flip to revenue happens when
+    the entry is booked. ``display_name`` travels with the award because reports are often built from a serialized
+    result in a process that never loaded a catalog; it is empty when the scheme had none.
     """
 
     scheme_id: str
@@ -374,7 +313,7 @@ class SubsidyAward:
     # For VAT_REDUCTION:
     reduced_vat_rate: Optional[float] = None
     caps_binding_per_slot: Dict[str, bool] = field(default_factory=dict)
-    #: The scheme's friendly name at the time of the award (Q20); empty when it had none.
+    #: The scheme's friendly name at the time of the award; empty when it had none.
     display_name: str = ""
     #: The rate this award was computed at, as a fraction, for the two percentage forms (a share
     #: of eligible cost and a tax credit); None for lump sums, per-unit amounts, loan terms and
@@ -392,7 +331,7 @@ class SubsidyAward:
     #: set to whatever makes ``eligible_basis_in_euro.scale(benefit_rate)`` equal the capped
     #: ``upfront_amount`` in that slot, and this field keeps the rate it had before. The cap ratio
     #: is a per-slot figure (`solver._overall_cap_ratios`), so where the three ratios differ the
-    #: LOW and HIGH slots of the product no longer reproduce their own amounts — the best-estimate
+    #: LOW and HIGH slots of the product do not reproduce their own amounts — the best-estimate
     #: slot is the one the caption prints, and the one this pair describes.
     benefit_rate_before_overall_cap: Optional[float] = None
     #: The eligible-cost basis the rate was applied to, after proration and after the
@@ -404,28 +343,16 @@ class SubsidyAward:
 
     @property
     def label(self) -> str:
-        """The award's name for a reader — the scheme's display name, or its id (Q20).
-
-        Returns:
-            The display name captured at award time, or the scheme id when it had none.
-        """
+        """Return the award's name for a reader: the scheme's display name, or its id when it had none."""
         return self.display_name or self.scheme_id
 
 
 class SubsidySchemeLabels:
-    """The names of the support sources a timeline can carry that no catalog scheme covers (Q20).
+    """Labels for support sources on a timeline that no catalog scheme covers.
 
-    Two ids reach the report without ever having been a `SubsidyScheme`: the §10.1 legacy flat
-    share, which was subsidy data carried in the *device* catalog for countries that had no
-    subsidy catalog, and the fallback for a support entry that names no scheme at all. Both
-    used to be printed raw — a reader of the Irish report saw a node called `LEGACY_FLAT` — and
-    both deserve an honest label rather than an invented programme name: what the legacy shim
-    modelled is a flat percentage with no scheme behind it, and the label says exactly that.
-
-    The shim that wrote ``LEGACY_FLAT_ID`` onto a timeline entry was retired on 2026-09-24, so a
-    new evaluation never carries it; the id and its label stay because a result archived before
-    then still does, and the views name its node when such a result is re-read. `views`
-    re-exports nothing; it imports the names from here.
+    ``LEGACY_FLAT_ID`` marks the flat support share once carried in the device catalog for countries without a subsidy
+    catalog. New evaluations do not write it, but archived results may carry it, and the views name its node when such
+    a result is re-read. ``UNATTRIBUTED`` labels a support entry that names no scheme.
     """
 
     LEGACY_FLAT_ID = "LEGACY_FLAT"
@@ -435,15 +362,14 @@ class SubsidySchemeLabels:
 
 @dataclass(frozen=True)
 class SchemeMaximum:
-    """The most one scheme can pay for one measure, whatever the verdict (renovisorissues #54).
+    """The most one scheme can pay for one measure, whatever its eligibility verdict.
 
-    What a reader weighs an open question against ("up to EUR X"): the scheme valued alone for the
-    measure as the house and the plan state it, by the same arithmetic an award is valued with
-    (:func:`~hisim.economics.subsidies.solver.scheme_maximum`). ``None`` where the catalogue states
-    no amount the scheme is limited to, and ``note`` then says why.
+    Gives the reader the "up to EUR X" to weigh an open question against: the scheme valued alone for the measure, by
+    the same arithmetic as an award (:func:`~hisim.economics.subsidies.solver.scheme_maximum`).
 
     Attributes:
-        amount_in_euro: Positive nominal euro in the measure's year 0, per slot, or None.
+        amount_in_euro: Positive nominal euro in the measure's year 0, per slot; None where the catalog states no
+            limiting amount.
         note: Why there is no amount; None when there is one.
     """
 
@@ -453,25 +379,14 @@ class SchemeMaximum:
 
 @dataclass
 class SubsidyDecision:
-    """Fully reported outcome of the cumulation solver (§5.4) — the audit trail.
+    """The full outcome of the cumulation solver for one measure, as an audit trail (§5.4).
 
-    Everything the solver did for one measure, not only what it awarded: which schemes applied,
-    which were rejected and why, which stayed undetermined and on which unanswered fields, how much
-    those could still unlock, and whether a *different* combination would have won in the LOW or
-    HIGH world. §5.4 calls this audit trail a research deliverable in its own right and
-    non-negotiable for trust in the results — a subsidy figure that cannot be traced back to named
-    schemes is not reviewable.
-
-    Produced by :func:`solve_cumulation`, carried on the subsidy application result, and surfaced
-    to users in three places: the subsidy decision cards of the HTML report, the ``cost_audit.csv``
-    row of the measure, and the exported JSON via :meth:`to_json`.
-
-    ``discounted_support_in_euro`` is the solver's own objective value for the combination it
-    chose — the present value of everything the applied awards pay, on the BEST_ESTIMATE slot, as
-    computed by ``solver._support_value``. It is reported because it is the number the choice was
-    actually made on: without it a reader can see *which* schemes won but not by how much, and any
-    consumer wanting the figure would have to re-add the awards under its own discounting
-    convention, which is how two "support NPVs" that disagree get into a report.
+    Cumulation is combining several schemes for one measure under their stacking rules. The decision records which
+    schemes applied, which were rejected and why, which stayed undetermined on which fields, how much those could still
+    unlock, and whether a different combination would have won in the LOW or HIGH band slot. It is shown in the
+    report's subsidy cards, in ``cost_audit.csv`` and in the exported JSON. ``discounted_support_in_euro`` is the
+    solver's objective value for the chosen combination: the present value of the applied awards on the best-estimate
+    slot, as ``solver._support_value`` computes it.
     """
 
     measure_subject: str
@@ -486,19 +401,16 @@ class SubsidyDecision:
     # The solver's objective value for `applied`, on the BEST_ESTIMATE slot (see class doc):
     discounted_support_in_euro: float = 0.0
     #: Scheme id -> the most that scheme can pay for this measure on its own, for every scheme
-    #: assessed -- applied, rejected and undetermined alike (renovisorissues #54). Not part of
-    #: `to_json`: it is read by the staged economics document, and the archived decision format
-    #: stays as it was.
+    #: assessed (applied, rejected and undetermined). Read by the staged economics document;
+    #: not written by `to_json`.
     maximum_by_scheme: Dict[str, SchemeMaximum] = field(default_factory=dict)
 
     def to_json(self) -> dict:
-        """Serializes the audit trail.
+        """Serialize the audit trail for the result JSON.
 
-        The exported form of the decision, embedded under ``subsidy_decisions`` in the result JSON
-        (``results.py``) and from there in ``lifecycle_costs.json``. Every award field is written
-        out regardless of payout kind — including the ones that are meaningless for that kind — so
-        the export schema is stable and a reader can diff two runs field by field; amounts keep
-        their min/best_estimate/max band.
+        Written under ``subsidy_decisions`` in the result JSON and ``lifecycle_costs.json``. Every award field is
+        written regardless of payout kind, so the schema is stable and two runs diff field by field.
+        ``maximum_by_scheme`` is not written.
         """
         return {
             "measure_subject": self.measure_subject,
@@ -517,7 +429,7 @@ class SubsidyDecision:
                     "loan_repayment_grant_share": award.loan_repayment_grant_share,
                     "reduced_vat_rate": award.reduced_vat_rate,
                     "caps_binding_per_slot": award.caps_binding_per_slot,
-                    # Q26 F8: the arithmetic behind the amount, so a report rendered from a
+                    # The arithmetic behind the amount, so a report rendered from a
                     # stored result can show `rate x basis = amount` and the cap verdict.
                     "benefit_rate": award.benefit_rate,
                     "benefit_rate_before_group_cap": award.benefit_rate_before_group_cap,
@@ -546,29 +458,22 @@ def assess_schemes(
     year: int,
     admits: Optional[Callable[[str], bool]] = None,
 ) -> List[SchemeAssessment]:
-    """Tri-state eligibility for all candidate schemes of one measure.
+    """Assess every candidate scheme of one measure as ELIGIBLE, INELIGIBLE or UNDETERMINED.
 
-    `admits` is the perspective's subsidy-mode filter (§5.5, §7 B5): a scheme it rejects is not
-    assessed at all, so it can neither enter the cumulation solver nor the undetermined bound.
-
-    The step between the jurisdictional pre-filter and the cumulation solver: every candidate is
-    evaluated against the case's answers and classified ELIGIBLE / INELIGIBLE / UNDETERMINED, with
-    the missing fields recorded for the last group. It returns *all three* classes rather than only
-    the winners, because the rejected and undetermined ones are what the audit trail (§5.4) and the
-    questionnaire (§5.7) are built from.
+    All three classes are returned because the rejected and undetermined ones feed the audit trail (§5.4) and the
+    questionnaire (§5.7). A scheme that `admits` rejects is not assessed at all, so it enters neither the solver nor
+    the undetermined bound.
 
     Args:
         catalog: The country catalog to draw candidates from.
-        measure: The measure being assessed; its asset class and kind drive the pre-filter and its
-            facts back the ``measure.*`` condition paths.
-        context: The applicant/building answers.
+        measure: The measure; its asset class and kind select candidates, and its facts back the ``measure.*`` paths.
+        context: The applicant and building answers.
         year: The year scheme validity is tested against (the price basis year in production).
-        admits: Optional predicate on scheme ids; ``None`` admits everything.
+        admits: The perspective's subsidy-mode filter on scheme ids (§5.5); ``None`` admits everything.
 
     Returns:
-        One assessment per admitted candidate, in catalog order. A rejection names the condition
-        leaf (or leaves) responsible for it — see :func:`ineligibility_reason` — so the §5.4 audit
-        trail says *why* a scheme was ruled out and not merely that it was.
+        One assessment per admitted candidate, in catalog order; a rejection names the responsible condition(s)
+            (:func:`ineligibility_reason`).
     """
     assessments = []
     for scheme in catalog.candidate_schemes(
@@ -603,45 +508,24 @@ def required_questions(
     year: int,
     admits: Optional[Callable[[str], bool]] = None,
 ) -> List[Question]:
-    """Computes the minimal question set for the candidate schemes (§5.7).
+    """Compute the minimal question set for the candidate schemes, most valuable first (§5.7).
 
-    Collects every context field referenced by the eligibility conditions of candidate
-    schemes, drops already-answered/derivable ones, and orders by pruning power. `admits` is
-    the same subsidy-mode filter the solver takes (§7 B5): a question is only worth asking for
-    a scheme the perspective would actually award.
-
-    This is the "ask exactly the questions that matter for *your* case" half of §5.7, and it is
-    computed rather than curated: because conditions are data over a statically enumerable
-    vocabulary, the question set is derived from the catalog and can never go stale relative to it.
-    Fields are collected via :func:`scheme_context_fields`, so implied dependencies count too — a
-    scheme that prorates by residential share or caps per dwelling unit asks for those even though
-    no condition names them. ``measure.*`` fields are never asked: they come from the simulation and
-    the cost facts. Derived fields are replaced by the user-answerable ones behind them
-    (:func:`question_targets`), and a field with no catalog entry is skipped here and reported by
-    the question-coverage CI instead (§9.6).
-
-    Ordering is by *pruning power*: each candidate scheme's simplified, uncapped, undiscounted
-    support estimate (:meth:`Benefit.value_estimate`) is attributed to every field it depends on, so
-    the questions that gate the most money come first and a user who abandons the form early has
-    still answered the ones that matter. The estimate is deliberately cruder than the solver's
-    valuation — it only has to rank.
-
-    Who renders the result: nothing inside HiSim. The list is designed for a frontend questionnaire,
-    which §5.7 plans to reach through an additive RenoVisor endpoint (§10.1 Phase 4) so the UI needs
-    no scheme knowledge of its own; today the function's in-tree consumers are the tests and, for
-    coverage checking, ``validation.py``.
+    Collects every context field the candidate schemes depend on (:func:`scheme_context_fields`, so implied fields such
+    as residential share or dwelling units count), drops answered ones and ``measure.*`` fields, and replaces derived
+    fields by the questions behind them (:func:`question_targets`). A field with no catalog question is skipped here;
+    the coverage check in ``validation.py`` reports it (§9.6). Ordering is by pruning power: each scheme's rough
+    uncapped support estimate (:meth:`Benefit.value_estimate`) is credited to every field it depends on, so the
+    questions that gate the most money come first. The list is meant for a frontend questionnaire.
 
     Args:
         catalog: The country catalog whose schemes and question entries are used.
-        planned_measures: The measures the case intends to carry out — they select the candidate
-            schemes and supply the cost/size the pruning estimate is scaled on.
+        planned_measures: The measures the case intends to carry out; they select candidates and scale the estimate.
         context: The answers already given; anything resolvable is not asked again.
         year: The year scheme validity is tested against.
-        admits: Optional scheme-id predicate implementing the perspective's subsidy mode.
+        admits: The perspective's subsidy-mode filter on scheme ids.
 
     Returns:
-        The questions to ask, highest pruning power first, each carrying the deduplicated, sorted
-        ids of the schemes that made it necessary.
+        The questions, highest pruning power first, each with the sorted ids of the schemes that need it.
     """
     field_to_schemes: Dict[str, List[str]] = {}
     scheme_support: Dict[str, float] = {}

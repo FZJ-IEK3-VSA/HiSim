@@ -1,22 +1,10 @@
 """Assembly of the HTML lifecycle report (cost_spec.md §7.2).
 
-The remaining sections (perspectives, actors, scenarios, KPIs, components, checks,
-variant comparison), the four chapter builders the document is told as (owner decision Q24) and
-the two entry points `build_lifecycle_report_html` and `write_lifecycle_report` that stitch them
-into the final self-contained document. Split out of the former single-module `reporting.py`
-(PR-3 review); the package `__init__` re-exports everything.
-
-**Chapters, not one list.** The report used to be one flat sequence that told three stories at
-once — the perspective-free cost of the technology, the owner-occupier's, the landlord and
-tenant's, the macroeconomic one — with each section picking a perspective of its own. It is now
-`_building_chapter_html` plus one builder per story, each rendering its sections on the
-perspectives `views.story_perspectives` classified into it and opening them through a
-chapter-scoped `scaffold._ChapterContext`, so anchors are chapter-prefixed and a section name
-appearing in two chapters is explained once. A chapter whose perspectives this run has none of is
-skipped — named with its reason under the document's table of contents, never logged and never
-rendered empty — and so is a section a chapter has no perspective for: the three financing
-sections are offered by the two chapters whose story can borrow, the owner's and the rented one,
-and drawn by whichever of them does.
+Holds the remaining sections (perspectives, actors, scenarios, KPIs, components, checks, variant comparison), the
+chapter builders and the entry points `build_lifecycle_report_html` and `write_lifecycle_report`. The report is told as
+chapters: the building on the gross basis, then one chapter per story (owner-occupied, rented, society), each rendering
+the perspectives `views.story_perspectives` assigns to it through a chapter-scoped `scaffold._ChapterContext`. A
+chapter or section with nothing to show is skipped and named with its reason under the table of contents.
 """
 
 
@@ -111,27 +99,21 @@ from hisim.economics.reporting.sections_charts import (
 
 
 def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The perspectives section: equivalent annual cost across them, with bands and the table.
+    """Render the perspectives section: equivalent annual cost across perspectives, with bands, and a table.
 
-    Answers "is the perspective model itself behaving?" All perspectives on one axis make the
-    orderings that must hold visible without arithmetic: a gross view sits above its net
-    counterpart, operating-only below brownfield, and the macroeconomic row differs from the
-    financial one only by transfers and CO2 damage. A violation of any of those points at the
-    engine or the perspective bundle, not at the input data — which is why this section sits
-    after the ones that validate inputs.
-
-    The table beneath carries the four headline KPIs per perspective (NPV, equivalent annual
-    cost, monthly cost in year 1, system cost per unit of heat), each as a band, so a reader can pick
-    the unit they think in. The sunk-cost column is added only when some perspective wrote off
-    residual book value, and is marked "(info)": §4.1 reports it but keeps it out of the
-    decision KPIs.
+    Putting all perspectives on one axis makes the expected orderings visible: a gross view above its net counterpart,
+    operating-only below brownfield, the macroeconomic row differing from the financial one only by transfers and CO2
+    damage. A violation points at the engine or the perspective bundle. The table gives NPV, equivalent annual cost,
+    monthly cost in year 1 and system cost per unit of heat per perspective, as bands. A sunk-cost column marked
+    "(info)" appears only when some perspective wrote off residual book value, since §4.1 keeps it out of the decision
+    KPIs.
 
     Args:
         matrix: Every evaluated perspective; one whisker row and one table row each.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, always non-empty for a matrix with at least one perspective.
+        The section; non-empty for a matrix with at least one perspective.
     """
     rows = [
         (perspective_id, result.equivalent_annual_cost_in_euro)
@@ -169,30 +151,19 @@ def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext
 
 
 def _actor_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Who pays what: payer NPVs per allocated perspective (§6.5).
+    """Render who pays what: payer NPVs per allocated perspective (§6.5).
 
-    Answers "does the landlord/tenant split move money between actors without creating or
-    destroying any?" Each allocated perspective gets payer whiskers plus a payer × cost-group
-    table, under a header printing `views.payer_npv_total` — the sum the individual bars must
-    add up to, which is the §6.5 zero-sum invariant in visual form. The cost-group table is the
-    interesting half for a reviewer of the DE_2024 ruleset: it shows *which* blocks landed with
-    whom, so an apportionable operating cost booked to the wrong side is visible as a group in
-    the wrong row rather than as a total that is merely surprising.
-
-    The unallocated SYSTEM payer is filtered out of the rows (it is the residue, not an actor),
-    and perspectives that were never allocated are skipped entirely — recognized by having fewer
-    than two real payers. The SYSTEM entry used to be part of that test, so a perspective with
-    exactly one real payer and no residue was drawn as a split: one whisker under a header
-    stating that the payer NPVs sum to the system NPV, which they trivially do when there is one
-    of them. The section disappears when no perspective in the matrix is allocated, which is the
-    case for a plain owner-occupier run.
+    Each allocated perspective gets payer whiskers and a payer x cost-group table under a header printing
+    `views.payer_npv_total`, the sum the payer bars must add up to (the zero-sum check of §6.5). The table shows which
+    cost groups landed with whom, so an operating cost booked to the wrong party shows up as a group in the wrong row.
+    The unallocated SYSTEM payer is left out of the rows, and perspectives with fewer than two real payers are skipped.
 
     Args:
         matrix: Every evaluated perspective; the unallocated ones are skipped.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, or the empty string when no perspective in the matrix is allocated.
+        The section, or the empty string when no perspective is allocated (e.g. a plain owner-occupier run).
     """
     blocks = []
     for perspective_id, result in matrix.results.items():
@@ -235,20 +206,13 @@ def _actor_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> s
 
 
 def _tornado_svg(rows: List[Tuple[str, float]], base_value: float) -> str:
-    """Diverging bars: per-scenario swing of the headline KPI vs. the base scenario.
+    """Draw diverging bars of each scenario's swing in the headline KPI against the base scenario.
 
-    The standard sensitivity picture: each scenario's equivalent annual cost minus the base
-    scenario's, sorted by absolute magnitude so the assumptions the result is most sensitive to
-    come first. Colour carries the direction (red for more expensive, aqua for cheaper) rather
-    than the identity of the scenario, because the reader's question here is "which way and how
-    far", not "which series is which".
-
-    Geometry: a centred zero axis with the plot half-width scaled to the largest absolute swing,
-    so the widest bar always fills its side; the base value is printed under the axis so the
-    swings can be read as absolutes. The axis, the row walk and the footnote are
-    `charts._centred_axis_svg`'s, shared with the uncertainty tornado, which is the same drawing
-    with different numbers in it. Sorting happens here and only affects display — the swings
-    themselves come from `ScenarioCube.equivalent_annual_cost_swings`.
+    Each bar is a scenario's equivalent annual cost minus the base scenario's, sorted by absolute size so the most
+    sensitive assumptions come first. Colour shows the direction (red more expensive, aqua cheaper). The zero axis is
+    centred and scaled to the largest swing, and the base value is printed under it. The axis and footnote come from
+    `charts._centred_axis_svg`, shared with the uncertainty tornado; the swings come from
+    `ScenarioCube.equivalent_annual_cost_swings`.
     """
     if not rows:
         return ""
@@ -278,16 +242,10 @@ def _tornado_svg(rows: List[Tuple[str, float]], base_value: float) -> str:
 
 
 class SwingFormat:
-    """How a scenario's swing is printed, so a small one does not read as no swing at all (R2).
+    """How a scenario's swing is printed, so a small swing does not read as no swing.
 
-    The swing column used to print whole euro, which turned a 0.42 EUR/a effect into `+0` — the
-    same cell an axis that genuinely moved nothing gets, and the one cell the footnote below the
-    table then explains as inert. A row cannot be allowed to round into a claim about itself.
-
-    Above `WHOLE_EURO_FROM` the cents are noise beside a four- or five-figure swing and whole euro
-    is what a reader wants; below it the magnitude *is* the finding, so three significant digits
-    are printed instead. Exactly zero still prints as `+0`, which is the only value the
-    zero-swing footnote is ever attached to.
+    At or above `WHOLE_EURO_FROM` whole euro are printed; below it, three significant digits, so a 0.42 EUR/a effect
+    does not print as `+0`. Exactly zero prints as `+0`, the only value the zero-swing footnote is attached to.
     """
 
     #: At and above this magnitude a swing prints as whole euro, below it to three significant
@@ -297,7 +255,7 @@ class SwingFormat:
 
 
 def _swing_text(value: float) -> str:
-    """One swing cell: whole euro for a large swing, three significant digits for a small one."""
+    """Format one swing cell: whole euro for a large swing, three significant digits for a small one."""
     if abs(value) >= SwingFormat.WHOLE_EURO_FROM:
         return f"{value:+,.0f}"
     return f"{value:+,.3g}"
@@ -306,10 +264,9 @@ def _swing_text(value: float) -> str:
 def _assumption_cell(
     assumptions: Dict[str, Tuple[views.ScenarioAssumption, ...]], scenario_id: str
 ) -> str:
-    """What one scenario row changed, with both values, as the table prints it (Q26 F1).
+    """Format what one scenario row changed, with both values, as the table prints it.
 
-    The base cell changed nothing, and says so: an empty assumption cell beside a `+0` swing is
-    the same unreadable row the whole column exists to remove.
+    The base row says it changed nothing rather than leaving the cell empty.
     """
     changed = assumptions.get(scenario_id)
     if not changed:
@@ -318,14 +275,10 @@ def _assumption_cell(
 
 
 class ScenarioAssumptionFormat:
-    """The wording of the "and what the central case had" half of a scenario row (Q26 F1).
+    """The wording of the "what the central case had" half of a scenario row.
 
-    Every central-case phrasing shares one shape, `(central case: ...)`, and the token that makes
-    it one shape is defined here rather than at each of the four branches that end in it. The
-    shape is not decoration: a swept field whose central value is itself named `central` — which
-    `co2_price_scenario` is, by default, in every run — read `(central central)`, where the first
-    word is the label and the second is the value and nothing on the page said which was which.
-    Naming the label makes the colon do that work.
+    Every phrasing has the shape `(central case: ...)`. The label matters because a field whose central value is itself
+    named `central` (such as `co2_price_scenario`) would otherwise read `(central central)`.
     """
 
     #: Opens the central-case half of every label; one of the phrasings below follows it.
@@ -340,12 +293,10 @@ class ScenarioAssumptionFormat:
 
 
 def _one_assumption_text(item: views.ScenarioAssumption) -> str:
-    """One changed field: `<field> <scenario value> (central case: <central value>)` (Q26 F1).
+    """Format one changed field as `<field> <scenario value> (central case: <central value>)`.
 
-    The view returns the numbers and their kind; the digits are decided here, by the same
-    `_value_by_kind` the assumptions table spells its own values with. A band overlay states the
-    band in the report's house shape — best_estimate first, min and max in brackets — and the
-    documented whole-dict override names its key beside the field rather than printing a dict.
+    Digits are chosen by the same `_value_by_kind` the assumptions table uses. A band overlay is shown best estimate
+    first with min and max in brackets, and a whole-dict override names its key beside the field.
     """
     name = f"{item.field_name} {item.key}" if item.key else item.field_name
     value = _value_by_kind(item.kind, item.scenario_value)
@@ -357,7 +308,7 @@ def _one_assumption_text(item: views.ScenarioAssumption) -> str:
 
 
 def _central_value_text(item: views.ScenarioAssumption) -> str:
-    """What the central case had, or why it has nothing to state (Q26 F1)."""
+    """Return what the central case had, or why it has nothing to state."""
     if item.central_case is views.CentralCase.AS_SHIPPED:
         return ScenarioAssumptionFormat.AS_SHIPPED
     if item.central_case is views.CentralCase.NOT_RECORDED:
@@ -373,40 +324,22 @@ def _scenario_section_html(
     matrix: EvaluationMatrix,
     context: _ChapterContext,
 ) -> str:
-    """The scenarios section: a tornado of the headline KPI plus the full table (§4.6).
+    """Render the scenarios section: a tornado of the headline KPI and the full scenario table (§4.6).
 
-    Answers "how much of the conclusion survives the assumptions?" The tornado ranks the
-    scenarios by how far they move the headline KPI, the all-scenarios table gives NPV, EAC and
-    swing for each, and the robustness summary reports min/max/spread per perspective — the
-    figure that says whether a ranking between two options holds across the whole scenario set
-    or only under the base assumptions.
-
-    The authored prose states the distinction reviewers most often miss: scenario axes and
-    uncertainty bands are two *orthogonal* mechanisms (§4.6). A scenario varies rates and
-    datapoints deliberately; the min/best_estimate/max band varies the cost data within each
-    scenario. They must not be read as one interval, and the report never combines them.
-
-    Every row names the assumption it changed and both of its values (Q26 F1), because a row
-    labelled `interest=high` beside a swing is a number without a cause; and a row whose swing is
-    *exactly* zero carries a footnote saying why the axis was inert here (Q27 R2), because a `+0`
-    otherwise reads either as a broken cube or as the finding "this does not matter", and it is
-    neither. Both come from `views`, which derives them from the cube's own expanded definitions
-    and the base cell's timeline rather than from any table of known axis names.
-
-    `scenario_cube` arrives as a `views.ScenarioCubeView` — presentation may render a cube but may
-    not import the module that builds one (the seam-4 import rule), so the protocol names exactly
-    the attributes read here and in the two caption views. Typing it is what makes a rename on the
-    real cube a type error at that one description instead of an `AttributeError` inside a
-    rendered report.
+    The tornado ranks scenarios by how far they move the headline KPI; the table gives NPV, equivalent annual cost and
+    swing per scenario; the robustness summary gives min, max and spread per perspective. Scenario axes and uncertainty
+    bands are independent mechanisms (§4.6): a scenario varies rates deliberately, the band varies cost data within
+    each scenario, and the report never combines them. Every row names the assumption it changed and both values, and a
+    row whose swing is exactly zero carries a footnote saying why the axis was inert; both come from `views`. The cube
+    is typed as `views.ScenarioCubeView`, because presentation may not import the module that builds one.
 
     Args:
         scenario_cube: The evaluated cube, or None when the run computed none.
-        matrix: Every evaluated perspective; the first is the one the tornado is drawn for.
-        context: The chapter this section is being rendered into.
+        matrix: Every evaluated perspective; the tornado is drawn for the first.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, or the empty string when no cube was computed or the cube has no base
-        result for the reference perspective.
+        The section, or the empty string when there is no cube or it has no base result for the reference perspective.
     """
     if scenario_cube is None or not scenario_cube.results:
         return ""
@@ -422,10 +355,10 @@ def _scenario_section_html(
         for scenario_id, swing in swings.items()
         if scenario_id != scenario_cube.base_id
     ]
-    # Q26 F1: what each scenario actually changed, with both values — read from the cube's own
+    # What each scenario changed, with both values, read from the cube's own
     # expanded definitions, never from a table of names in this file.
     assumptions = views.scenario_assumptions(scenario_cube, base)
-    # Q27 R2: a row that did not move at all states why, from the base cell's own timeline.
+    # A row that did not move at all states why, from the base cell's own timeline.
     zero_swing = views.zero_swing_notes(scenario_cube, base, swings)
     markers = {scenario_id: index for index, scenario_id in enumerate(zero_swing, start=1)}
     table_rows = "".join(
@@ -465,22 +398,15 @@ def _scenario_section_html(
 
 
 def _kpi_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The KPIs section: the namespaced lifecycle KPI set (§7.3) as a table with bands.
+    """Render the KPIs section: the published lifecycle KPI set (§7.3) as a table with bands.
 
-    Answers "what exactly will downstream consumers see?" — the section prints the published KPI
-    set verbatim, so the reviewer who has just followed the calculation chain can confirm that
-    what leaves the engine matches what they were shown. It is last for that reason: it is the
-    output contract, not a step in the derivation.
-
-    The entries come from `exports.build_lifecycle_kpi_entries`, i.e. the same function that
-    writes `lifecycle_kpis.json`, which is what makes it impossible for the table and the file to
-    disagree; that import is one of the explicitly allowed presentation→engine-output imports.
-    `value` is the BEST_ESTIMATE slot and the band column is min | max, both stated in the caption
-    because a KPI name alone does not say which slot it carries.
+    Shows what downstream consumers see, so it is the output contract rather than a step in the derivation. The entries
+    come from `exports.build_lifecycle_kpi_entries`, the function that writes `lifecycle_kpis.json`, so table and file
+    agree. `value` is the BEST_ESTIMATE slot and the band column is min | max.
 
     Args:
         matrix: Every evaluated perspective; the KPI set is built from all of them.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
         The section, or the empty string when the matrix publishes no KPI entry.
@@ -511,33 +437,20 @@ def _kpi_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str
 
 
 def _levelized_heat_cost_caption(matrix: EvaluationMatrix) -> str:
-    """The heat-cost figure written out as its own division, attribution set included (Q26 F6).
+    """Write out the heat-cost figure as its division, including what the numerator covers.
 
-    The published system cost per unit of heat is a quotient of two figures the report shows
-    nowhere else in that form, and readers reliably assume a third thing about the numerator: that
-    it is the heating-attributable share of the cost. It is not. The engine divides the
-    perspective's *entire* NPV — every subject it books, the PV system and the battery included —
-    by the annual heat demand, so the figure answers "what does this whole installation cost per
-    kWh of heat delivered". Saying that plainly is the point of the caption; the KPI's name says
-    it too since Q27 R1, but a name cannot carry the attribution set.
-
-    The caption leads with the division as it is actually computed — equivalent annual cost over
-    annual heat demand (Q27 R4) — and gives the discounted-sum form, the one the LCOH literature
-    states, as the equivalent second reading. Both are exact; leading with the annual form means
-    the first two numbers a reader sees are two the report already published.
-
-    **One caption per published figure.** The KPI table publishes the figure once per perspective,
-    and each of them divides a different NPV over a different set of booked subjects, so a caption
-    written for the first perspective explained one row and mis-described the rest. It now states
-    the division of every perspective that publishes one, and collapses to a single sentence only
-    when they are genuinely the same division.
+    The system cost per unit of heat divides the perspective's entire NPV (every booked subject, PV and battery
+    included) by the annual heat demand, so it is not the heating-related share readers tend to assume. The caption
+    leads with the computed form, equivalent annual cost over annual heat demand, and gives the discounted-sum form of
+    the LCOH literature as the equivalent second reading. Each perspective that publishes the figure divides a
+    different NPV, so each gets its own line; the caption collapses to one sentence only when all divisions are the
+    same.
 
     Args:
         matrix: Every evaluated perspective; each that publishes the figure is explained.
 
     Returns:
-        The caption, or the empty string when no perspective publishes such a figure (no heat
-        demand was declared).
+        The caption, or the empty string when no perspective publishes the figure (no heat demand declared).
     """
     derivations = views.levelized_heat_cost_derivations(matrix)
     if not derivations:
@@ -559,12 +472,9 @@ def _levelized_heat_cost_caption(matrix: EvaluationMatrix) -> str:
 
 
 def _derivation_sentence(derivation: views.LevelizedHeatCostDerivation) -> str:
-    """One perspective's division, spelled out in full — the caption when there is only one.
+    """Write one perspective's division as a full sentence, used when there is only one.
 
-    Every perspective of the matrix states the same division here, so it is written as a sentence
-    rather than as a list item: the annual form first (the two numbers the report already
-    published), the discounted-sum form the LCOH literature states as the exact equivalent, and
-    then what the numerator does and does not cover.
+    The annual form first, then the equivalent discounted-sum form, then what the numerator covers.
     """
     inferred = _inferred_demand_note(derivation)
     return (
@@ -582,10 +492,9 @@ def _derivation_sentence(derivation: views.LevelizedHeatCostDerivation) -> str:
 
 
 def _derivation_division(derivation: views.LevelizedHeatCostDerivation) -> str:
-    """One perspective's division as a list line: both forms of it, and nothing said twice.
+    """Write one perspective's division as a list line: both forms and nothing else.
 
-    The prose the sentence above carries — what the numerator covers, why — is stated once above
-    the list when the perspectives are listed, so a line is the arithmetic alone.
+    What the numerator covers is stated once above the list.
     """
     return (
         f"{_fmt(derivation.equivalent_annual_cost_in_euro)} EUR/a &divide; "
@@ -598,23 +507,19 @@ def _derivation_division(derivation: views.LevelizedHeatCostDerivation) -> str:
 
 
 def _namely_clause(derivation: views.LevelizedHeatCostDerivation) -> str:
-    """The subjects the numerator covers, continuing the sentence that named the attribution set.
-
-    A perspective whose scoped timeline is empty books no subject, and "namely ." is not a
-    statement — the clause is dropped rather than printed with nothing after it, in both forms.
-    """
+    """Return the clause naming the subjects the numerator covers, or an empty string when there are none."""
     subjects = ", ".join(derivation.attributed_subjects)
     return f", namely {_esc(subjects)}." if subjects else "."
 
 
 def _subjects_counted_clause(derivation: views.LevelizedHeatCostDerivation) -> str:
-    """The same subjects, ending a list line whose sentence about attribution is above the list."""
+    """Return the subjects the numerator covers, ending a list line."""
     subjects = ", ".join(derivation.attributed_subjects)
     return f" Subjects counted: {_esc(subjects)}." if subjects else ""
 
 
 def _inferred_demand_note(derivation: views.LevelizedHeatCostDerivation) -> str:
-    """Says where the denominator came from when it was not recorded but divided back out (F6)."""
+    """Return a note on where the heat demand came from when it was not recorded but derived back from the result."""
     if not derivation.demand_inferred_from_published:
         return ""
     return (
@@ -624,27 +529,20 @@ def _inferred_demand_note(derivation: views.LevelizedHeatCostDerivation) -> str:
 
 
 def _components_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The component breakdown: per-subject stacked NPV bars per perspective (§7.4).
+    """Render the component breakdown: per-subject stacked NPV bars per perspective (§7.4).
 
-    Answers "which component actually drives the result, and does the sum of the parts equal the
-    whole?" The diverging stacks put each subject's cost blocks right of zero and its credits
-    (residual value, subsidies, feed-in, anyway credit) left, with a marker at the net NPV band,
-    so `net = costs - credits` is geometry rather than a claim. The §7.4 reconciliation — the
-    subject nets summing to the headline — is checked automatically in the plausibility panel;
-    this is where a reader sees *why* it holds or which subject is responsible when it does not.
-
-    One collapsible block per perspective, the first open, each with a legend restricted to the
-    groups that perspective's breakdowns contain and a table repeating the same subjects with
-    NPV, equivalent annual cost, year-0 investment, support and lifecycle CO2. Keeping the
-    credits unnetted is deliberate: an expensive component with an equally large subsidy looks
-    nothing like a cheap one, and a netted bar would hide the difference.
+    Each subject's cost blocks go right of zero and its credits (residual value, subsidies, feed-in, anyway credit)
+    left, with a marker at the net NPV band, so `net = costs - credits` is visible; credits are not netted, so an
+    expensive component with a large subsidy looks different from a cheap one. One collapsible block per perspective
+    (the first open), each with a legend of its own groups and a table of NPV, equivalent annual cost, year-0
+    investment, support and lifecycle CO2 per subject.
 
     Args:
         matrix: Every evaluated perspective; one block each.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, always non-empty for a matrix with at least one perspective.
+        The section; non-empty for a matrix with at least one perspective.
     """
     blocks = []
     for index, (perspective_id, result) in enumerate(matrix.results.items()):
@@ -682,32 +580,19 @@ def _components_section_html(matrix: EvaluationMatrix, context: _ChapterContext)
 
 
 def _checks_section_html(plausibility: PlausibilityReport, context: _ChapterContext) -> str:
-    """The plausibility panel.
+    """Render the plausibility panel, with the count of flagged checks in its heading.
 
-    Answers, before anything else is read, "is there a reason not to trust the rest of this
-    report?" It opens the analysis because a reviewer's time is better spent on the automated
-    verdict than on rediscovering a unit mix-up by inspection, and the heading carries the count
-    of flagged checks so that verdict is visible without scrolling. WARN means a magnitude left a
-    deliberately generous range (usually a unit or a rate stored as an absolute); FAIL means a
-    structural invariant is broken and the numbers below contradict each other.
-
-    Rendering only — the checks themselves, their thresholds and their order are decided in
-    `plausibility.py` from `cost_database/plausibility_checks.json`, and the same rows are
-    re-used for the markdown table and for `bridge.py`'s log warnings (the bridge arrives with
-    stack part 8/8). The reader hint in the Note column is the one part that lives on this side,
-    since "what usually causes this" is editorial rather than computed.
-
-    The status is written into a CSS class as well as into the cell, so it is escaped on both
-    paths even though `PlausibilityCheck` now refuses anything but PASS/WARN/FAIL: an unescaped
-    value interpolated into a quoted attribute is a markup injection waiting for the day the
-    constraint is relaxed, and escaping the three legal spellings costs nothing.
+    WARN means a magnitude left a generous expected range (often a unit or a rate stored as an absolute); FAIL means a
+    structural invariant is broken. The checks, thresholds and order come from `plausibility.py` and
+    `cost_database/plausibility_checks.json`; only the reader hint in the Note column is decided here. The status is
+    escaped in both the CSS class and the cell.
 
     Args:
-        plausibility: The report whose findings are rendered as the panel's rows.
-        context: The chapter this section is being rendered into.
+        plausibility: The report whose findings become the panel's rows.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, always non-empty; the verdict is in the heading.
+        The section; never empty.
     """
     checks = render_plausibility_findings(plausibility)
     rows = "".join(
@@ -727,33 +612,21 @@ def _checks_section_html(plausibility: PlausibilityReport, context: _ChapterCont
 
 
 def _comparison_section_html(comparison: VariantComparison, context: _ChapterContext) -> str:
-    """The comparison section (§D): delta waterfall by subject + discounted payback curve.
+    """Render the comparison section: delta waterfall by subject and discounted payback curve.
 
-    Answers the only question that is actually a decision: "is the variant worth it compared to
-    the reference, and when does it pay back?" The waterfall attributes the total NPV delta to
-    the subjects that caused it — a heat pump adding investment, an energy bill giving it back —
-    so a reader can see whether a favourable total rests on one component or on many. Its net
-    bar is `comparison.npv_delta_in_euro`, read from the result rather than summed from the
-    steps, which is the second half of the §7 B8 fix.
-
-    Below it, the discounted payback is given three ways: as text for the three slots (with
-    `None` meaning "never within the horizon", a real and common answer), as the cumulative
-    discounted savings curve whose zero-crossing *is* that year, and — when the comparison
-    carries a tenancy — as the warm-rent change per month with its per-slot neutrality verdict,
-    which is the §6 question of whether the modernization is neutral for the tenant.
-
-    Subjects whose delta is below half a cent are dropped from the waterfall as float noise;
-    the delta table below it lists every subject, so nothing is hidden.
-
-    The NPV bridge beside it answers the same question decomposed by *cost group* rather than by
-    subject, which is why the two are separate sections rather than two charts in one.
+    The waterfall attributes the total NPV delta to the subjects that caused it; its net bar is
+    `comparison.npv_delta_in_euro`, read from the result rather than summed. Below it the discounted payback is given
+    as text per slot (`None` meaning never within the horizon), as the cumulative discounted savings curve, and, when
+    the comparison carries a tenancy, as the warm-rent change per month with its per-slot neutrality verdict (§6).
+    Subjects with a delta below half a cent are left out of the waterfall but listed in the table. The NPV bridge, a
+    separate section, splits the same delta by cost group.
 
     Args:
-        comparison: The variant-vs-reference comparison to state.
-        context: The chapter this section is being rendered into.
+        comparison: The variant-vs-reference comparison to show.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, always non-empty for a comparison that was computed at all.
+        The section; never empty.
     """
     steps: List[Tuple[str, float, str]] = []
     for subject, delta in sorted(comparison.npv_delta_by_subject.items(), key=lambda item: item[1].best_estimate):
@@ -797,57 +670,34 @@ def build_lifecycle_report_html(
     scenario_cube: Optional[views.ScenarioCubeView] = None,
     reference_result: Optional[LifecycleCostResult] = None,
 ) -> str:
-    """The self-contained HTML report, told as the chapters of `ReportChapters` (Q24).
+    """Build the self-contained HTML lifecycle report.
 
-    The module's main entry point and the assembly of everything above: a header stating the
-    run's parameters, a two-level table of contents, then the story the report tells — the
-    building on the gross basis, the owner-occupied chapter, the rented-out chapter, the society
-    chapter and, when there is a reference variant, the comparison block — and a footer telling
-    the reader how to trace any figure back to its sources with
-    `python -m hisim.economics explain`. Within a chapter the sections run along the calculation
-    chain, each placed where a mistake made upstream of it first becomes visible, which is why
-    the contents are a navigation aid rather than the structure itself.
+    The document has a header with the run's parameters, a two-level table of contents, the building chapter on the
+    gross basis, the owner-occupied, rented and society chapters, the comparison block when there is a reference
+    variant, and a footer pointing to `python -m hisim.economics explain`. `views.story_perspectives` assigns
+    perspectives to chapters by what they book. Sections run along the calculation chain. Sections with nothing to show
+    return the empty string and are named under the contents. When every band is degenerate the header explains why
+    there are no whiskers.
 
-    Which perspectives belong to which chapter is decided by `views.story_perspectives`, from
-    what each result *books* rather than from what it is called, and a chapter whose story this
-    run has none of is skipped rather than drawn empty — named under the contents with its
-    reason, like every other omission: an owner-occupied house has no landlord, and a run without
-    a macroeconomic perspective has no society chapter.
-
-    The returned document is a **single file with no external references** — stylesheet inlined
-    from `_ReportCss`, charts as inline SVG, tooltips native, no script and no font, image or
-    CDN request — so it survives being mailed, archived beside the results or opened offline.
-    Sections that have nothing to show return the empty string and vanish rather than rendering
-    an empty box, which is why the lists are concatenated blindly; each of them says so under the
-    table of contents, so a gap in the page is never left to the reader to interpret. When every
-    band is degenerate
-    the header carries the `_degenerate_note` explanation, so missing whiskers read as a
-    property of the price data rather than as a broken feature.
-
-    Rendering is deterministic given the inputs except for the generation date, which is why the
-    golden test normalizes exactly that and byte-compares the rest.
+    The output has no external references (inlined stylesheet, inline SVG, no script, font or network request), so it
+    works offline. It is deterministic except for the generation date, which the golden test normalizes.
 
     Args:
-        matrix: Evaluated perspectives; the first is the reference used for the single-result
-            sections of the building chapter (investment, energy bill, CO2, assumptions) and for
-            the scenario section's base.
-        plausibility: The panel rendered as the plausibility section.
-        audit: Optional resolved-input audit; the input-audit section is omitted without it.
-        comparison: Optional variant-vs-reference comparison; adds the comparison chapter, and is
-            handed to the one story chapter that owns its perspective (see `_comparison_for`).
-        scenario_cube: Optional evaluated cube, seen through `views.ScenarioCubeView`; adds the
-            scenarios section to the building chapter.
-        reference_result: The comparison's baseline result. Needed by the two sections that
-            decompose a comparison rather than restating it — the NPV bridge, which splits it by
-            cost group, and the bank benchmark, which needs the per-year differential flows —
-            because a `VariantComparison` publishes neither. Without it both are omitted and the
-            omission is named under the contents like every other.
+        matrix: Evaluated perspectives; the first is the reference for the single-result sections of the building
+            chapter and for the scenario base.
+        plausibility: The plausibility panel.
+        audit: Optional resolved-input audit; without it the input-audit section is omitted.
+        comparison: Optional variant comparison; adds the comparison chapter and is handed to the story chapter that
+            owns its perspective (`_comparison_for`).
+        scenario_cube: Optional evaluated cube; adds the scenarios section to the building chapter.
+        reference_result: The comparison's baseline result, needed by the NPV bridge and the bank benchmark; without it
+            both are omitted and named under the contents.
 
     Returns:
-        The complete HTML document as one string.
+        The complete HTML document.
 
     Raises:
-        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
+        ValueError: If the matrix holds no evaluated perspective.
     """
     reference = _reference_result(matrix)
     params = reference.parameters
@@ -896,31 +746,25 @@ def _building_chapter_html(
     scenario_cube: Optional[views.ScenarioCubeView],
     context: _ChapterContext,
 ) -> str:
-    """The common part: what the technology costs, before asking whose money it is (rule 2.8).
+    """Render the building chapter: what the technology costs before asking whose money it is.
 
-    Everything on the gross / perspective-free basis, in the order the numbers are built in —
-    inputs, then what they add up to, then the flows over the years, then the physics and the
-    emissions, then where the uncertainty sits, and finally the perspectives table as the bridge
-    into the story chapters. The sections that need *a* perspective take the matrix's first, which
-    is the reference view of the run.
-
-    Scenarios sits here rather than in a story chapter: the spec's chapter table does not assign
-    it, and a sensitivity sweep over the base perspective is a statement about the priced inputs,
-    not about a party.
+    Everything on the gross basis, in the order the numbers are built: inputs, totals, flows over the years, physics
+    and emissions, uncertainty, scenarios, and the perspectives table leading into the story chapters. Sections that
+    need one perspective take the matrix's first.
 
     Args:
-        matrix: Every evaluated perspective; the matrix-shaped sections show all of them.
-        plausibility: The panel for the plausibility section.
+        matrix: Every evaluated perspective.
+        plausibility: The plausibility panel.
         audit: Optional input audit; without it the audit section is omitted.
         comparison: Optional variant comparison, for the overview's payback milestone.
         scenario_cube: Optional scenario cube for the scenarios section.
-        context: The building chapter's own context; **mutated** as explanations are recorded.
+        context: The building chapter's context; mutated as explanations are recorded.
 
     Returns:
-        The chapter's sections, concatenated in page order.
+        The chapter's sections in page order.
 
     Raises:
-        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
+        ValueError: If the matrix holds no evaluated perspective.
     """
     reference = _reference_result(matrix)
     attributed = _first_result_where(matrix, views.has_energy_balance) or reference
@@ -928,11 +772,11 @@ def _building_chapter_html(
         # The primer first: discounting, the three worlds and the sign rule, stated once for
         # every section that follows.
         _how_to_read_section_html(context),
-        # The one-page overview a renovation report starts with (Q1) opens the analysis.
+        # The one-page overview a renovation report starts with opens the analysis.
         _lifecycle_overview_section_html(reference, comparison, context),
         _checks_section_html(plausibility, context),
         _audit_section_html(audit, context) if audit is not None else "",
-        # Q26 F2: the causes, directly after the audit of what was priced and before the first
+        # The causes, directly after the audit of what was priced and before the first
         # figure that is computed from them.
         _assumptions_section_html(matrix, context),
         _investment_section_html(reference, context),
@@ -953,29 +797,21 @@ def _building_chapter_html(
 
 
 def _sub_matrix(results: List[LifecycleCostResult]) -> EvaluationMatrix:
-    """An `EvaluationMatrix` of just these results, for a chapter that owns only some of them.
-
-    The matrix-shaped section builders (the loan panel, who-pays-what) render one block per
-    perspective they are given, so restricting a chapter to its own story is a matter of handing
-    them a smaller matrix rather than teaching each of them a filter.
+    """Return an `EvaluationMatrix` of just these results, for a chapter that owns only some perspectives.
 
     Args:
-        results: The chapter's own perspectives, in the order they are to be rendered.
+        results: The chapter's perspectives, in rendering order.
 
     Returns:
-        A matrix carrying exactly those results, keyed by perspective id.
+        A matrix of exactly those results, keyed by perspective id.
     """
     return EvaluationMatrix(results={result.perspective_id: result for result in results})
 
 
 def _is_financed(result: LifecycleCostResult) -> bool:
-    """Whether this perspective borrows — the predicate the three financing sections share.
+    """Whether this perspective borrows; the test the three financing sections share.
 
-    The loan panel, the cost of credit and the equity build-up are one question asked three ways,
-    and each chapter now asks it of its own perspectives, so the test for "is there a loan here at
-    all" is written once. It is `loan_amortization_series(...).has_flows()`, the same reading the
-    sections themselves do, rather than a cheaper scan of the timeline: a perspective whose loan
-    the amortization view cannot lay out is not one the sections could draw either.
+    Uses `loan_amortization_series(...).has_flows()`, the same reading the sections do.
 
     Args:
         result: The perspective to test.
@@ -987,13 +823,10 @@ def _is_financed(result: LifecycleCostResult) -> bool:
 
 
 def _scoped_to(actor: Actor) -> Callable[[LifecycleCostResult], bool]:
-    """A `_first_result_where` predicate for "this perspective reports on that party".
+    """Return a `_first_result_where` predicate for "this perspective reports on that party".
 
-    The rented chapter has to find its landlord and its tenant *by scope*, and to notice when one
-    of them is missing. It used to take `next((... scoped ...), stories.rented[0])` for each,
-    which silently drew a tenant-only bundle's tenant flows as the landlord statement — one
-    party's money under the other party's heading, in the two sections whose whole subject is who
-    holds which half.
+    The rented chapter uses it to find its landlord and tenant by scope and to notice when one is missing, so one
+    party's flows are never shown under the other's heading.
 
     Args:
         actor: The scope the perspective must report on.
@@ -1007,19 +840,16 @@ def _scoped_to(actor: Actor) -> Callable[[LifecycleCostResult], bool]:
 def _comparison_for(
     results: Sequence[LifecycleCostResult], comparison: Optional[VariantComparison]
 ) -> Optional[VariantComparison]:
-    """The comparison, but only for the chapter whose story it is actually about.
+    """Return the comparison only for the chapter that contains the perspective it was computed for.
 
-    A `VariantComparison` is computed for *one* perspective, so handing it to a chapter that does
-    not contain that perspective would draw the owner's payback under the landlord's cash curve.
-    The chapters that do not own it show their cumulative discounted cost instead, which is what
-    the cash curve does without a reference anyway.
+    A comparison is computed for one perspective; other chapters show their cumulative discounted cost instead.
 
     Args:
-        results: The chapter's own perspectives.
-        comparison: The run's comparison, or None when nothing was compared.
+        results: The chapter's perspectives.
+        comparison: The run's comparison, or None.
 
     Returns:
-        The comparison when this chapter carries the perspective it was computed for, else None.
+        The comparison when this chapter carries its perspective, else None.
     """
     if comparison is None:
         return None
@@ -1032,18 +862,15 @@ def _result_for(
     comparison: Optional[VariantComparison],
     lead: LifecycleCostResult,
 ) -> LifecycleCostResult:
-    """The chapter's own result the comparison was computed for, or its lead without one.
+    """Return the chapter's result the comparison was computed for, or `lead` without a comparison.
 
-    The other half of `_comparison_for`. A `VariantComparison` is computed for exactly one
-    perspective, and the cash curve refuses to draw any other one beside it — a payback sentence
-    under a stranger's curve is two parties' figures presented as one. `_comparison_for` decides
-    whether this chapter owns the comparison at all; this decides which of its results the
-    comparison belongs to, so the pair handed to the section always agrees.
+    The counterpart of `_comparison_for`: the cash curve draws only the comparison's own perspective, so the pair
+    handed to the section must agree.
 
     Args:
-        results: The chapter's own perspectives.
+        results: The chapter's perspectives.
         comparison: The comparison this chapter owns, as `_comparison_for` returned it, or None.
-        lead: The perspective the chapter draws when there is no comparison to follow.
+        lead: The perspective drawn when there is no comparison.
 
     Returns:
         The result the comparison was computed for, or `lead`.
@@ -1061,23 +888,20 @@ def _owner_chapter_html(
     comparison: Optional[VariantComparison],
     context: _ChapterContext,
 ) -> List[str]:
-    """The owner-occupied story: how a household pays for this and lives with it (rule 2.8).
+    """Render the owner-occupied chapter: how a household pays for the system and lives with it.
 
-    Funding, the cash curve, the loan and what it costs, the monthly burden, the equity build-up
-    and who pays whom — all on the net / owner perspectives `views.story_perspectives` selected,
-    i.e. the after-subsidy views a household actually pays out of its own account. Each section
-    still picks the perspective that *has* its subject matter (a loan chart needs a financed one),
-    but now only from within this chapter's story.
+    Funding, the cash curve, the loan and its cost, the monthly burden, the equity build-up and who pays whom, on the
+    owner perspectives `views.story_perspectives` selected. Each section picks the perspective within the chapter that
+    has its subject (a loan chart needs a financed one).
 
     Args:
-        stories: The three story lists; this chapter renders `stories.owner`.
+        stories: The story lists; this chapter renders `stories.owner`.
         comparison: The run's comparison, passed on only when this chapter owns its perspective.
-        context: The document's chapter context; a chapter-scoped copy is derived from it and the
-            shared explanation memory is **mutated**.
+        context: The document's chapter context; a chapter copy is derived and the shared explanation memory is
+            mutated.
 
     Returns:
-        The chapter heading and its sections, or the empty list when this run tells no owner's
-        story.
+        The chapter heading and sections, or an empty list when the run has no owner story.
     """
     if not stories.owner:
         return context.skip_chapter(
@@ -1097,7 +921,7 @@ def _owner_chapter_html(
     return [
         _chapter_open(ReportChapters.OWNER_OCCUPIED),
         "".join([
-            # Q26 F4: the statement opens the chapter for the same reason the landlord's opens
+            # The statement opens the chapter for the same reason the landlord's opens
             # the rented one — it is what makes every figure after it readable. It is rendered on
             # the financed view where the run has one, because the loan flows belong on the cash
             # side of an owner's statement; without financing that is the chapter's lead anyway.
@@ -1120,38 +944,24 @@ def _rented_chapter_html(
     comparison: Optional[VariantComparison],
     context: _ChapterContext,
 ) -> List[str]:
-    """The rented-out story: the landlord's business case and the tenant's monthly reality.
+    """Render the rented chapter: the landlord's business case and the tenant's monthly cost.
 
-    Rendered only when the allocation actually produced landlord or tenant perspectives; a run of
-    an owner-occupied house has no rented story and the chapter is skipped — named under the
-    contents with its reason — rather than drawn empty. The landlord statement opens it because
-    it is the section that separates the landlord's cash from the landlord's book value, which is
-    what makes every figure after it readable.
-
-    **Either party may be missing.** A bundle can evaluate a tenant view without a landlord one,
-    and each party's sections are guarded on *its own* perspective rather than on the chapter
-    having any: the two statements used to fall back to the chapter's first result, so a
-    tenant-only bundle drew the tenant's flows under the heading "Landlord statement" — one
-    party's money presented as the other's, in the two sections whose entire subject is which half
-    is whose. What the absent party would have carried is skipped with its reason instead, and the
-    chapter keeps whichever side the run does have.
-
-    The levy is the one figure the two statements share, and it is checked here rather than in
-    either of them: `views.levy_transfer_reconciles` compares the tenant's levy line against the
-    landlord's levy income before either section is drawn, so the tenant caption's claim that the
-    two are the same booked transfer is verified when both parties are on the page.
+    Rendered only when the allocation produced landlord or tenant perspectives. The landlord statement opens it,
+    separating the landlord's cash from book value. Each party's sections are guarded on that party's own perspective,
+    so a bundle with only a tenant view shows the tenant's side and names the landlord's sections as skipped. When both
+    parties are present, `views.levy_transfer_reconciles` checks that the tenant's levy line equals the landlord's levy
+    income before either section is drawn.
 
     Args:
-        stories: The three story lists; this chapter renders `stories.rented`.
+        stories: The story lists; this chapter renders `stories.rented`.
         comparison: The run's comparison, passed on only when this chapter owns its perspective.
-        context: The document's chapter context; the shared explanation memory is **mutated**.
+        context: The document's chapter context; the shared explanation memory is mutated.
 
     Returns:
-        The chapter heading and its sections, or the empty list when nothing was rented out.
+        The chapter heading and sections, or an empty list when nothing was rented out.
 
     Raises:
-        CostDataError: If both parties are present and their two halves of the modernization levy
-            do not cancel (see `views.levy_transfer_reconciles`).
+        CostDataError: If both parties are present and their halves of the modernization levy do not cancel.
     """
     if not stories.rented:
         return context.skip_chapter(
@@ -1214,35 +1024,20 @@ def _society_chapter_html(
     comparison: Optional[VariantComparison],
     context: _ChapterContext,
 ) -> List[str]:
-    """The macroeconomic story: transfers cancel, CO2 enters at its damage cost (rule 2.8).
+    """Render the society chapter: the macroeconomic view, where transfers cancel and CO2 enters at its damage cost.
 
-    Three sections only, because that is all the perspective supports: the statement, the cash
-    curve of the resource cost over time and who pays whom once the transfers between the parties
-    have netted themselves out. Skipped entirely — and named under the contents — when the bundle
-    evaluated no system-scoped perspective that books CO2 damage.
-
-    **No financing here, and no "Not drawn" entry for it either.** The loan, the cost of credit
-    and the equity build-up are the owner's, the landlord's and the tenant's question — who
-    borrowed, at what rate, and how much of the hardware they own by the horizon — and this
-    chapter is about resources, not about whose account they came out of. A macroeconomic view
-    books no debt service by construction, so offering the three and recording that they could not
-    be drawn would print the same three lines under Society in every report that has this chapter:
-    structure, not information. They are rendered in the owner and rented chapters, on those
-    stories' own financed perspectives.
-
-    `views.story_perspectives` classifies a perspective into this chapter only when it books CO2
-    damage **and** reports on the system as a whole, which is the condition the macroeconomic
-    partition of the statement below is defined under; a landlord-scoped macroeconomic view is
-    told as the landlord's story instead of taking this chapter down with it.
+    Three sections: the statement, the cash curve of the resource cost, and who pays whom after transfers net out.
+    Financing sections are not offered, because a macroeconomic view books no debt service; they belong to the owner
+    and rented chapters. A perspective belongs here only if it books CO2 damage and reports on the whole system; a
+    landlord-scoped macroeconomic view goes to the rented chapter.
 
     Args:
-        stories: The three story lists; this chapter renders `stories.society`.
+        stories: The story lists; this chapter renders `stories.society`.
         comparison: The run's comparison, passed on only when this chapter owns its perspective.
-        context: The document's chapter context; the shared explanation memory is **mutated**.
+        context: The document's chapter context; the shared explanation memory is mutated.
 
     Returns:
-        The chapter heading and its sections, or the empty list when no perspective books CO2 at
-        its damage cost on the system's own basis.
+        The chapter heading and sections, or an empty list when no system-scoped perspective books CO2 damage.
     """
     if not stories.society:
         return context.skip_chapter(
@@ -1276,23 +1071,22 @@ def _comparison_chapter_html(
     reference_result: Optional[LifecycleCostResult],
     context: _ChapterContext,
 ) -> List[str]:
-    """The fourth block: the three sections that only exist when there is a reference variant.
+    """Render the comparison block: the sections that exist only when there is a reference variant.
 
-    Not one of the three stories — it answers a question about two runs rather than about one
-    party — which is why it carries no authored lead-in and sits at the end.
+    It compares two runs rather than describing one party, so it has no lead-in and comes last.
 
     Args:
         matrix: Evaluated perspectives; the comparison's own is looked up in it.
-        comparison: The run's comparison, or None when nothing was compared.
-        reference_result: The comparison's baseline result; without it the two sections that
-            decompose it are skipped, each naming its own reason under the contents.
-        context: The document's chapter context; the shared explanation memory is **mutated**.
+        comparison: The run's comparison, or None.
+        reference_result: The comparison's baseline result; without it the two sections that decompose it are skipped
+            with their reasons.
+        context: The document's chapter context; the shared explanation memory is mutated.
 
     Returns:
-        The chapter heading and its sections, or the empty list without a comparison.
+        The chapter heading and sections, or an empty list without a comparison.
 
     Raises:
-        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
+        ValueError: If the matrix holds no evaluated perspective.
     """
     if comparison is None:
         return []
@@ -1331,28 +1125,20 @@ def write_lifecycle_report(
     scenario_cube: Optional[views.ScenarioCubeView] = None,
     reference_result: Optional[LifecycleCostResult] = None,
 ) -> str:
-    """Writes the HTML report as `ReportFileNames.LIFECYCLE_REPORT_FILE_NAME`.
+    """Write the HTML report to `ReportFileNames.LIFECYCLE_REPORT_FILE_NAME` in the result directory.
 
-    The filesystem counterpart of `build_lifecycle_report_html`, kept separate for the same
-    reason as the markdown pair: the golden oracle and the unit tests render without touching a
-    directory, while the `report` CLI — and `bridge.py`, from stack part 8/8 — gets one call. The
-    name is fixed rather than a parameter — a comparison is a *chapter* of this report, not a
-    second document, so there was never a second name for a caller to pass.
-
-    The PNG companions are not written here: `report_plots.write_report_plots` writes them in the
-    same breath at both call sites, one set per perspective under
-    `lifecycle_<chart>_<perspective_id>.png`. This page carries every perspective in one document,
-    which is why the raster set has to carry the perspective in its file names instead.
+    The file counterpart of `build_lifecycle_report_html`, which tests render without touching a directory; the
+    `report` CLI and `bridge.py` call this. The PNG companions are written separately by
+    `report_plots.write_report_plots`, one set per perspective.
 
     Args:
         matrix: Evaluated perspectives.
-        plausibility: The panel for the plausibility section.
+        plausibility: The plausibility panel.
         result_directory: Directory to write into (the run's `results/`).
-        audit: Optional input audit for the input-audit section.
-        comparison: Optional variant comparison for the comparison section.
-        scenario_cube: Optional scenario cube for the scenarios section.
-        reference_result: The comparison's baseline, for the NPV bridge and the bank benchmark
-            that decompose it; see `build_lifecycle_report_html`.
+        audit: Optional input audit.
+        comparison: Optional variant comparison.
+        scenario_cube: Optional scenario cube.
+        reference_result: The comparison's baseline, for the NPV bridge and the bank benchmark.
 
     Returns:
         The path written.

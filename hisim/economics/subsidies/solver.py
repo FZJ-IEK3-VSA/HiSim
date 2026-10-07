@@ -1,10 +1,9 @@
 """Award computation and the cumulation solver (cost_spec.md §5.4-§5.5).
 
-Turns assessed schemes into concrete `SubsidyAward`s and picks the best admissible
-combination: eligible-cost bases, per-slot cap arithmetic (see D20/D28 — the per-slot
-choice is envelope semantics), `_combination_awards`, the support-value objective and
-`solve_cumulation`. Split out of the former single-module `subsidies.py` (PR-3 review);
-the package `__init__` re-exports everything.
+Cumulation is combining several subsidy schemes for one measure under their stacking rules. This module computes each
+scheme's eligible cost and award, applies the caps per band slot (minimum, best estimate, maximum), and picks the
+admissible combination worth most to the applicant (`solve_cumulation`). It also values each scheme alone
+(`scheme_maximum`).
 """
 
 from __future__ import annotations
@@ -50,13 +49,11 @@ from hisim.economics.subsidies.context import SubsidyDataError
 
 
 class CumulationLimits:
-    """Bounds the exponential cumulation solver is guarded by (§5.4).
+    """Size limit of the cumulation solver's subset enumeration (§5.4).
 
-    The solver enumerates *every* subset of the schemes that apply to one measure, so its cost is
-    2^n in that number; this class is the one place that bound is stated. It exists as a named
-    constant rather than a magic number because the guard's failure mode is a policy decision — a
-    catalog that trips it is treated as a data defect (see :func:`_check_cumulation_size`) rather
-    than silently truncated, since truncation would understate the support a user is entitled to.
+    The solver enumerates every subset of the schemes that apply to one measure, so its cost is 2^n. A catalog that
+    exceeds the limit is treated as a data defect (:func:`_check_cumulation_size`) rather than truncated, since
+    truncation would understate the support.
     """
 
     #: Upper bound on the number of schemes handed to a subset enumeration in the cumulation
@@ -69,21 +66,13 @@ class CumulationLimits:
 def _eligible_cost_basis(
     scheme: SubsidyScheme, measure: MeasureForSubsidy, context: SubsidyContext
 ) -> Tuple[UncertainValue, Dict[str, bool]]:
-    """Eligible cost per slot, with per-slot cap-binding flags (§3.9, §5.4).
+    """Return the eligible cost of a scheme for a measure per slot, with per-slot cap-binding flags (§3.9, §5.4).
 
-    Turns the measure's gross year-0 cost into the basis *this* scheme computes on, applying the
-    four dials of :class:`EligibleCostSpec` in a fixed order: sum the counted categories, strip VAT
-    if the scheme's basis is NET, prorate to the residential share for a residential-only programme
-    in a mixed-use building, then clamp to the per-dwelling-unit cap. The order matters — capping
-    last means the ceiling is compared against the already prorated, already net figure, which is
-    how the directives read.
-
-    Both proration and capping degrade gracefully in the direction of *not* inventing support: an
-    unanswered residential share leaves the basis unprorated, and a scheme with no cap list is
-    uncapped. The cap is applied per slot (`clamp_upper`), so it can bind in the HIGH-cost world
-    and not in LOW; the returned flags record exactly that and end up in the audit trail and in the
-    input-audit table, because "the cap bound" is usually the single most important thing to know
-    about a subsidy result.
+    The eligible cost is the part of the measure's year-0 gross cost a scheme pays on. The steps run in this order: sum
+    the counted categories, strip VAT if the scheme's basis is NET, prorate to the residential share for a
+    residential-only programme in a mixed-use building, then clamp to the per-dwelling-unit cap. An unanswered
+    residential share leaves the basis unprorated, and a scheme with no cap is uncapped. The cap applies per slot, so
+    it can bind in the HIGH slot and not in LOW.
 
     Args:
         scheme: The scheme whose eligible-cost rules apply.
@@ -91,8 +80,8 @@ def _eligible_cost_basis(
         context: The building context, read for the residential share and the dwelling-unit count.
 
     Returns:
-        The eligible-cost band in euro, and a ``{"low"/"best_estimate"/"high": bool}`` map saying in which
-        slots the cap was binding (computed *before* clamping).
+        The eligible-cost band in euro, and a ``{"low"/"best_estimate"/"high": bool}`` map saying in which slots the
+            cap was binding (computed before clamping).
     """
     basis = UncertainValue.sum(
         measure.cost_by_category.get(category, UncertainValue.exact(0.0))
@@ -117,10 +106,10 @@ def _eligible_cost_basis(
 
 
 def _share_benefit(scheme: SubsidyScheme) -> ShareBenefit:
-    """The share payload of a SHARE_OF_ELIGIBLE_COST / BONUS_SHARE scheme.
+    """Return the share payload of a SHARE_OF_ELIGIBLE_COST or BONUS_SHARE scheme.
 
-    The pairing of kind and payload type is enforced by `SubsidyScheme.__post_init__`, so this
-    is a narrowing helper for the type checker, not a runtime check.
+    `SubsidyScheme.__post_init__` already enforces the pairing of kind and payload, so this only narrows the type for
+    the type checker.
     """
     assert isinstance(scheme.benefit, ShareBenefit)
     return scheme.benefit
@@ -131,12 +120,11 @@ CapRatios = Tuple[float, float, float]
 
 
 def _overall_cap_ratios(total_upfront: UncertainValue, cap: UncertainValue) -> CapRatios:
-    """How much of the upfront support survives the overall cap, **per slot** (§5.4, §7 B12).
+    """Return how much of the upfront support survives the overall state-aid cap, per slot (§5.4).
 
-    Each slot is a coherent world: in the LOW-cost world both the support and the state-aid cap
-    (a share of that world's gross cost) are smaller, so the binding ratio is a per-slot figure.
-    Scaling every slot by the BEST_ESTIMATE-slot ratio — what this did before — let the LOW/HIGH-world
-    support exceed the same world's cap, and with wide cost bands even its gross cost.
+    Each slot is a coherent world: in the LOW world both the support and the cap (a share of that world's gross cost)
+    are smaller, so the ratio differs per slot. Using one ratio for all slots would let LOW or HIGH support exceed that
+    world's cap.
     """
 
     def ratio(total_slot: float, cap_slot: float) -> float:
@@ -152,27 +140,14 @@ def _overall_cap_ratios(total_upfront: UncertainValue, cap: UncertainValue) -> C
 
 
 def _scaled_to_cap(amount: UncertainValue, ratios: CapRatios) -> UncertainValue:
-    """Applies the per-slot cap ratios to one award, keeping the band ordered (§3.9, §7 B12).
+    """Apply the per-slot cap ratios to one award while keeping its band ordered (§3.9).
 
-    Per-slot ratios are *not* monotone across the slots: the cap grows with the gross cost while
-    the support grows with the eligible-cost bases, and a scheme paying a statutory lump sum does
-    not grow at all. Where the ratio falls from one slot to the next, a plain slot-wise product
-    would order an award's band the wrong way round (an exact lump sum keeping its full amount in
-    LOW but being cut in BEST_ESTIMATE), which is not representable as an `UncertainValue`.
-
-    The award is therefore capped from the HIGH slot downwards: each slot takes the smaller of
-    its own capped value and the slot above it. That keeps three properties at once —
-
-    * ``minimum <= best_estimate <= maximum`` by construction (no reliance on snapping tolerance);
-    * per-slot support never exceeds the per-slot cap, because every slot is at most its own
-      ``amount_slot * ratio_slot`` and those sum to at most the slot's cap;
-    * no award exceeds its own eligible basis, because the ratios are at most 1 and the
-      downward clamp only ever lowers a slot.
-
-    The price is a slot that gives up support it could have received in isolation (the LOW world
-    in the example above), which is the conservative direction: the cap is never overrun. Where
-    the ratios *are* monotone — always, when the cost bands are degenerate, as in every shipped
-    catalog and worked example — the result is exactly the plain per-slot product.
+    The ratios need not be monotone across slots: the cap grows with the gross cost, while a statutory lump sum does
+    not grow at all. A plain slot-wise product could then order the band the wrong way round. The award is therefore
+    capped from the HIGH slot downwards, each slot taking the smaller of its own capped value and the slot above. This
+    keeps ``minimum <= best_estimate <= maximum``, never overruns a slot's cap, and never exceeds the award's eligible
+    basis. A slot may give up support it would have received alone, which is the conservative direction. With monotone
+    ratios, as in every shipped catalog, the result equals the plain per-slot product.
     """
     low_ratio, best_estimate_ratio, high_ratio = ratios
     maximum = amount.maximum * high_ratio
@@ -182,28 +157,16 @@ def _scaled_to_cap(amount: UncertainValue, ratios: CapRatios) -> UncertainValue:
 
 
 def _apply_overall_cap(award: SubsidyAward, ratios: CapRatios) -> None:
-    """Scales one award to the state-aid cap **and** keeps the factors it states true (Q26 F8).
+    """Scale one award to the state-aid cap and keep its stated rate consistent with the capped amount.
 
-    The cap used to rescale `upfront_amount` alone and leave `benefit_rate` and
-    `eligible_basis_in_euro` untouched, so `views.award_arithmetic` printed "30.0 % x 30,000 EUR =
-    7,200 EUR" — a multiplication whose result is not the amount beside it — wherever the ceiling
-    bound. An award's recorded factors have to multiply to the euros it actually pays, so the rate
-    moves with the amount: the pre-cap rate is preserved beside it (`benefit_rate_before_overall_cap`)
-    and the caption names both cuts, exactly as it already does for a cumulation group's
-    combined-rate cap.
-
-    The effective rate is read back off the **best-estimate** slot — `amount / basis` — rather than
-    multiplied by that slot's ratio, so the identity `basis x rate = amount` holds exactly even
-    where `_scaled_to_cap`'s downward clamp gave a slot less than its own ratio would have. The
-    other two slots keep no rate of their own; see the field's docstring.
-
-    Two cases deliberately keep their rate unchanged. A tax-credit schedule states a rate
-    but pays through `schedule_amounts`, which this cap does not touch (its zero `upfront_amount`
-    scales to zero), so its arithmetic is still true and rewriting its rate would be the falsehood.
-    An award with no basis, or a basis of zero, has no rate to re-derive.
+    An award's recorded factors must multiply to the euros it pays, so a report can print `rate x basis = amount`. The
+    new rate is read off the best-estimate slot (`amount / basis`), and the pre-cap rate is kept in
+    `benefit_rate_before_overall_cap`. A tax-credit schedule keeps its rate, because it pays through
+    `schedule_amounts`, which this cap does not touch. An award with no basis, or a zero basis, has no rate to
+    re-derive.
 
     Args:
-        award: The award to cap, modified in place.
+        award: The award to cap; modified in place.
         ratios: The per-slot cap ratios from :func:`_overall_cap_ratios`.
     """
     scaled = _scaled_to_cap(award.upfront_amount, ratios)
@@ -226,42 +189,31 @@ def _combination_awards(
     context: SubsidyContext,
     overall_cap_share: Optional[float],
 ) -> List[SubsidyAward]:
-    """Values one admissible combination in all three slots (§5.4).
+    """Value one admissible combination of schemes in all three slots (§5.4).
 
-    The valuation kernel: given a set of schemes that may legally be combined, it produces one
-    :class:`SubsidyAward` per scheme with the amounts each would actually pay. It is called once
-    per enumerated subset by the solver, so it must be free of side effects on its inputs and is
-    the only place the cumulation *rules* — group stacking, the combined rate cap, the state-aid
-    ceiling — turn into euros.
+    Called once per enumerated subset by the solver, without side effects on its inputs. Three stages, in order:
 
-    Three stages, in this order. **Share kinds** (base rates and bonuses) are grouped by
-    ``cumulation_group``: their rates are summed, the sum is limited by the smallest
-    ``combined_rate_cap`` declared in the group (the BEG's 70 %), and the limit is distributed back
-    over the members *proportionally* — so a capped stack reports each scheme's pro-rata share
-    rather than dropping the last bonus, which is what makes the composition chart add up. Note
-    that grouping is by group label only: schemes with no group share the ``None`` group and stack
-    together. **Non-share kinds** are valued individually against their own eligible-cost basis —
-    lump sums and per-unit amounts are clamped to it, tax credits are spread over their schedule,
-    loan terms and reduced VAT carry parameters rather than amounts. **The overall cap** finally
-    bounds the total *upfront* support (grants and clamped lump sums; not tax-credit schedules, not
-    loans) by the country-level state-aid share of the gross cost, per slot, and moves the recorded
-    rate of every award it cuts down with the amount (`_apply_overall_cap`), so no award ever states
-    factors that do not multiply to its own euros.
+    - Share kinds (base rates and bonuses) are grouped by ``cumulation_group``. Their rates are summed, limited by the
+      smallest ``combined_rate_cap`` in the group (the BEG's 70 %), and the limit is distributed back over the members
+      proportionally. Schemes with no group share the ``None`` group and stack together.
+    - Other kinds are valued against their own eligible cost: lump sums and per-unit amounts are clamped to it, tax
+      credits are spread over their schedule, and loan terms and reduced VAT carry parameters rather than amounts.
+    - The overall cap limits the total upfront support (grants and lump sums, not tax-credit schedules or loans) to the
+      catalog's state-aid share of the gross cost, per slot, and adjusts the stated rate of every award it cuts
+      (`_apply_overall_cap`).
 
     Args:
-        schemes: One admissible combination — assumed already checked against ``excludes``.
-        measure: The measure being funded, supplying the cost basis and its size.
+        schemes: One combination, already checked against ``excludes``.
+        measure: The measure being funded, supplying the cost and its size.
         context: The building context the eligible-cost rules read.
-        overall_cap_share: The catalog's state-aid ceiling as a share of gross cost, or ``None``
-            for no ceiling (the shipped DE catalog declares none).
+        overall_cap_share: The catalog's state-aid ceiling as a share of gross cost, or ``None`` for no ceiling.
 
     Returns:
-        One award per scheme, amounts in nominal year-0 euro per slot. Awards may legitimately be
-        zero-valued (a loan or VAT award carries terms only).
+        One award per scheme, in nominal year-0 euro per slot. A loan or VAT award may be zero-valued, since it carries
+            terms only.
 
     Raises:
-        SubsidyDataError: If a per-unit scheme's ``size_unit`` is not the unit the measure's size is
-            stated in.
+        SubsidyDataError: If a per-unit scheme's ``size_unit`` differs from the unit of the measure's size.
     """
     awards: List[SubsidyAward] = []
     # Share-based schemes stack additively per cumulation group, capped by combined_rate_cap.
@@ -284,7 +236,7 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=basis.scale(rate),
                     caps_binding_per_slot=binding,
-                    # Q26 F8: both factors of the multiplication, and the pre-cap rate when the
+                    # Both factors of the multiplication, and the pre-cap rate when the
                     # group's combined-rate cap scaled this scheme down.
                     benefit_rate=rate,
                     benefit_rate_before_group_cap=scheme_rate if scale_down < 1.0 else None,
@@ -347,7 +299,7 @@ def _combination_awards(
                     payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
                     schedule_amounts=schedule,
                     caps_binding_per_slot=binding,
-                    # Q26 F8: a tax credit is a percentage form like a share award, so it states
+                    # A tax credit is a percentage form like a share award, so it states
                     # the same multiplication; the instalment split is the payout note's job.
                     benefit_rate=benefit.rate,
                     eligible_basis_in_euro=basis,
@@ -355,7 +307,7 @@ def _combination_awards(
                 )
             )
         elif isinstance(benefit, ReducedVatBenefit):
-            # §7 B7: no consumer reads this award — typed, but deliberately left unwired.
+            # No consumer reads this award yet; it is typed but not booked.
             awards.append(
                 SubsidyAward(
                     scheme_id=scheme.id,
@@ -392,10 +344,9 @@ def _combination_awards(
         if any(ratio < 1.0 for ratio in ratios):
             for award in awards:
                 _apply_overall_cap(award, ratios)
-    # Q20: the friendly name travels with the award, because the report that shows it is often
-    # built from a serialized result in a process that never loaded a catalog. Attached in one
-    # pass rather than at the seven construction sites above, so a new benefit kind cannot forget
-    # it.
+    # The friendly name travels with the award, because the report that shows it is often built
+    # from a serialized result in a process that never loaded a catalog. Attached in one pass so a
+    # new benefit kind cannot forget it.
     names = {scheme.id: scheme.display_name for scheme in schemes}
     for award in awards:
         award.display_name = names.get(award.scheme_id) or ""
@@ -403,19 +354,18 @@ def _combination_awards(
 
 
 class SchemeMaximumNotes:
-    """Why a scheme's maximum is ``None``: the kinds whose catalogue entry states no amount (#54)."""
+    """The notes that say why a scheme's maximum is ``None``, one per kind of scheme that states no amount."""
 
-    #: A reduced VAT rate is a rate on the price, not an amount, and no consumer books it (§7 B7).
+    #: A reduced VAT rate is a rate on the price, not an amount, and no consumer books it.
     REDUCED_VAT = "no maximum: the scheme reduces the VAT rate and states no amount it pays"
 
-    #: A soft loan with no repayment grant is a loan, no grant element: nothing it pays is a
-    #: grant, and its benefit is the cheaper interest (renovisorissues #65, cmf 2026-09-27). The
+    #: A soft loan with no repayment grant pays no grant; its benefit is the cheaper interest. The
     #: sentence an awarded loan-terms row already states.
     SOFT_LOAN = "loan terms: the benefit is in the financing costs, not a grant"
 
     #: A fixed amount is capped at the eligible cost, and a share -- a soft loan's repayment grant
     #: among them -- is a share of it, and an unpriced measure's cost is unknown, not zero, so
-    #: neither can be stated (renovisorissues #77, cmf 2026-09-28 and 2026-09-29).
+    #: neither can be stated.
     UNPRICED = (
         "no maximum: the measure is unpriced, and what the scheme pays is capped at or a share of the "
         "measure's cost, which is unknown, not zero"
@@ -423,20 +373,14 @@ class SchemeMaximumNotes:
 
 
 class UnpricedMeasures:
-    """What a scheme bounded by the cost does on a measure whose price is unknown (renovisorissues #77).
+    """Rules for a cost-bounded scheme on a measure whose price is unknown.
 
-    An unpriced measure (``ComponentCostFacts.is_unpriced``) books its unknown price as a
-    placeholder zero. A LUMP_SUM, PER_UNIT or TIERED_PER_UNIT amount is clamped to the eligible
-    cost, and a SHARE_OF_ELIGIBLE_COST, BONUS_SHARE or TAX_CREDIT is a share of it, as is a
-    SOFT_LOAN's non-zero repayment grant, so against that zero each would read "up to EUR 0" --
-    nothing -- where the truth is that the amount is unknown. Owner decisions of 2026-09-28 (and
-    2026-09-29 for the repayment grant): such a scheme's maximum is ``None``
-    (:attr:`SchemeMaximumNotes.UNPRICED`), and a scheme the answers would award is not awarded but
-    left undetermined on the measure's price (:attr:`PRICE_QUESTION`), so nothing is booked for
-    it. A scheme that counts no cost category is not bounded by the cost -- an unconditional
-    fixed amount -- and is decided as for any measure. A soft loan without a repayment grant
-    grants no amount and keeps its own rule (renovisorissues #65: no maximum, decided as usual),
-    and so does an operational (per-kWh) payment.
+    An unpriced measure (``ComponentCostFacts.is_unpriced``) books its price as a placeholder zero. A scheme whose
+    amount is capped at or a share of the eligible cost (lump sum, per-unit, share, bonus share, tax credit, or a soft
+    loan with a non-zero repayment grant) would then read "up to EUR 0" where the truth is "unknown". Such a scheme
+    gets no maximum (:attr:`SchemeMaximumNotes.UNPRICED`), and a scheme the answers would award is left undetermined on
+    the price (:attr:`PRICE_QUESTION`), so nothing is booked for it. A scheme that counts no cost category, a soft loan
+    without a repayment grant and an operational per-kWh payment are decided as usual.
     """
 
     #: The benefit kinds whose amount is always capped at the eligible cost or a share of it. A
@@ -460,10 +404,10 @@ class UnpricedMeasures:
 
     @classmethod
     def applies(cls, scheme: SubsidyScheme, measure: MeasureForSubsidy) -> bool:
-        """Whether the scheme's amount is bounded by the eligible cost, and the measure's price is unknown.
+        """Whether the measure's price is unknown and the scheme's amount is bounded by the eligible cost.
 
-        Bounded by the cost means a kind of :attr:`COST_BOUND_KINDS`, or a soft loan whose
-        repayment grant is a non-zero share of the cost, in a scheme that counts cost categories.
+        Bounded means a kind in :attr:`COST_BOUND_KINDS`, or a soft loan with a non-zero repayment grant, in a scheme
+        that counts cost categories.
         """
         benefit = scheme.benefit
         grants_a_share = scheme.benefit_kind in cls.COST_BOUND_KINDS or (
@@ -473,12 +417,11 @@ class UnpricedMeasures:
 
     @classmethod
     def assessed(cls, assessment: SchemeAssessment, measure: MeasureForSubsidy) -> SchemeAssessment:
-        """One assessment with the price question added where the scheme cannot be valued.
+        """Return the assessment with the price question added where the scheme cannot be valued.
 
-        An eligible scheme whose amount the cost bounds (:meth:`applies`: capped at or a share of
-        the eligible cost) on an unpriced measure becomes undetermined on the price; an
-        undetermined one also asks for the price; an ineligible one stays ineligible, since no
-        price could change that verdict.
+        On an unpriced measure where :meth:`applies` holds, an eligible scheme becomes undetermined on the price and an
+        undetermined one also asks for the price. An ineligible scheme stays ineligible, since no price could change
+        that.
         """
         if assessment.status == EligibilityStatus.INELIGIBLE or not cls.applies(assessment.scheme, measure):
             return assessment
@@ -490,10 +433,10 @@ class UnpricedMeasures:
 
 
 def _unstated_maximum_note(scheme: SubsidyScheme, measure: MeasureForSubsidy) -> Optional[str]:
-    """Why a scheme states no maximum for a measure before anything is valued, or None.
+    """Return why a scheme states no maximum for a measure before anything is valued, or None.
 
-    A VAT reduction states a rate on the price, no amount; an amount capped at or a share of the
-    cost of an unpriced measure is bounded by a cost nobody stated (:class:`UnpricedMeasures`).
+    A VAT reduction states a rate on the price, not an amount; a cost-bounded amount on an unpriced measure is bounded
+    by a cost nobody stated (:class:`UnpricedMeasures`).
     """
     if isinstance(scheme.benefit, ReducedVatBenefit):
         return SchemeMaximumNotes.REDUCED_VAT
@@ -508,42 +451,31 @@ def scheme_maximum(
     context: SubsidyContext,
     overall_cap_share: Optional[float],
 ) -> SchemeMaximum:
-    """The most one scheme can pay for one measure on its own, whatever its verdict (#54).
+    """Return the most one scheme can pay for one measure on its own, whatever its eligibility verdict.
 
-    The scheme valued alone by :func:`_combination_awards`, the kernel every award is valued with,
-    so the maximum and an award can only differ by what the combination did to it. Per benefit
-    kind, as the owner decided (renovisorissues #54, 2026-09-26):
+    The scheme is valued alone by :func:`_combination_awards`, the same kernel as every award, so the maximum and an
+    award differ only by what the combination did. Per benefit kind:
 
-    * LUMP_SUM: its amount -- clamped to the eligible cost, as an award is, when the scheme counts
-      cost categories;
-    * PER_UNIT and TIERED_PER_UNIT: the amount (the tier) for the measure's stated size, clamped
-      the same way;
-    * SHARE_OF_ELIGIBLE_COST and BONUS_SHARE: the rate times the eligible cost, the basis capped
-      by the scheme's eligible-basis cap (:meth:`EligibleCostSpec.cap_for_units`). A rate that
-      hinges on an open question takes the larger value: alone, a scheme keeps its full rate,
-      which a cumulation group's combined-rate cap only ever scales down depending on which
-      other schemes (and so which answers) stack with it;
-    * TAX_CREDIT: the whole credit, every instalment;
-    * SOFT_LOAN: the repayment grant on the capped eligible cost; ``None`` where it grants none,
-      since a loan without a grant element states no amount it pays (renovisorissues #65), and
-      ``None`` for an unpriced measure, whose cost the grant is a share of;
-    * OPERATIONAL: the rate times the measure's annual energy times the duration;
-    * REDUCED_VAT: ``None`` -- the catalogue states a rate on the price, no amount.
+    - LUMP_SUM: its amount, clamped to the eligible cost when the scheme counts cost categories.
+    - PER_UNIT and TIERED_PER_UNIT: the amount for the measure's size, clamped the same way.
+    - SHARE_OF_ELIGIBLE_COST and BONUS_SHARE: the rate times the eligible cost, capped by the scheme's basis cap
+      (:meth:`EligibleCostSpec.cap_for_units`). A rate that depends on an open question takes the larger value.
+    - TAX_CREDIT: the whole credit, every instalment.
+    - SOFT_LOAN: the repayment grant on the capped eligible cost; ``None`` when there is no grant.
+    - OPERATIONAL: the rate times the measure's annual energy times the duration.
+    - REDUCED_VAT: ``None``, since the catalog states a rate, not an amount.
 
-    A fixed amount, a share, a tax credit or a repayment grant on a measure whose price is unknown
-    is ``None`` too (:class:`UnpricedMeasures`): it is bounded by the cost nobody stated.
-
-    The catalogue's overall state-aid share, where it declares one, bounds the upfront amount as
-    it bounds an award.
+    A cost-bounded amount on an unpriced measure is ``None`` too (:class:`UnpricedMeasures`). The catalog's overall
+    state-aid share, where declared, bounds the upfront amount as for an award.
 
     Args:
         scheme: The scheme, whatever its eligibility verdict.
         measure: The measure, with its year-0 cost and its size.
         context: The building context the eligible-cost rules read.
-        overall_cap_share: The catalogue's state-aid ceiling, or None.
+        overall_cap_share: The catalog's state-aid ceiling, or None.
 
     Returns:
-        The maximum, a positive band in nominal year-0 euro, or None with the reason.
+        The maximum as a positive band in nominal year-0 euro, or None with the reason.
     """
     benefit = scheme.benefit
     unstated = _unstated_maximum_note(scheme, measure)
@@ -573,30 +505,23 @@ def _support_value(
     discount: Callable[[int], float],
     slot_getter: Callable[[UncertainValue], float],
 ) -> float:
-    """Discounted value of a combination's support in one slot (solver objective).
+    """Return the discounted value of a combination's support in one slot; the solver maximizes it.
 
-    The scalar the cumulation solver maximizes: the present value, to the applicant, of everything a
-    combination pays — grants at year 0 undiscounted, tax-credit installments discounted by their
-    year, operational per-kWh payments discounted over their duration, plus a soft loan's repayment
-    grant. Discounting is what makes the comparison meaningful at all, since §5.1's mechanisms pay
-    at very different times: a 20 % credit over ten years is not worth a 20 % grant today.
-
-    Two details a reviewer should note. Operational support falls back from *sold* to *bought*
-    energy for the carrier, so a heat-generation premium on consumed energy is valued even though
-    the field is named after feed-in. And the repayment grant is valued on the measure's **gross**
-    cost here while ``calculators/financing_application.py`` applies the same share to the loan
-    principal — §7 B3, preserved unfixed and currently masked by the shipped KfW rate of 0.0.
+    Grants count at year 0, tax-credit instalments are discounted by their year, operational per-kWh payments are
+    discounted over their duration, and a soft loan's repayment grant is added. Discounting matters because a 20 %
+    credit over ten years is worth less than a 20 % grant today. Operational support falls back from sold to bought
+    energy for its carrier, so a premium on consumed heat is valued too. The repayment grant is valued on the measure's
+    gross cost here, while ``calculators/financing_application.py`` applies the share to the loan principal; the two
+    differ whenever only part of the cost is financed (the shipped KfW rate is 0.0, so no shipped run is affected).
 
     Args:
         awards: The valued awards of one combination.
-        measure: The measure, read for the annual energy an OPERATIONAL award is paid on and for
-            the gross cost a repayment grant is valued on.
-        discount: Year → discount factor, supplied by the caller (``EconomicParameters``).
-        slot_getter: Picks the slot to value in; see :func:`solve_cumulation` for why the LOW slot
-            reads the band's *maximum*.
+        measure: The measure, read for the annual energy of operational awards and the gross cost of a repayment grant.
+        discount: Year to discount factor (from ``EconomicParameters``).
+        slot_getter: Picks the slot to value; see :func:`solve_cumulation` for why LOW reads the band's maximum.
 
     Returns:
-        The discounted support in euro — a positive number, larger is better for the applicant.
+        The discounted support in euro, positive; larger is better for the applicant.
     """
     value = 0.0
     for award in awards:
@@ -616,7 +541,7 @@ def _support_value(
 
 
 def _check_cumulation_size(count: int, what: str) -> None:
-    """Guards the 2^n subset enumerations of the cumulation solver.
+    """Refuse a subset enumeration that would be too large for the cumulation solver.
 
     Args:
         count: Number of schemes about to be enumerated.
@@ -643,62 +568,36 @@ def solve_cumulation(
     discount: Callable[[int], float],
     admits: Optional[Callable[[str], bool]] = None,
 ) -> SubsidyDecision:
-    """Enumerates admissible combinations of ELIGIBLE schemes and picks the best (§5.4).
+    """Pick the best admissible combination of ELIGIBLE schemes for one measure and report everything (§5.4).
 
-    The decision is made on the BEST_ESTIMATE slot; the chosen combination is then valued in all
-    three slots. UNDETERMINED schemes are excluded but reported with the optimistic upper
-    bound they could unlock (§5.7).
+    The objective is :func:`_support_value` on the best-estimate slot; the chosen combination is then valued in all
+    three slots. All 2^n subsets of the eligible schemes are enumerated in bitmask order (including the empty one, "no
+    subsidy"), subsets violating an ``excludes`` relation are skipped, and each is fully valued, since caps and
+    exclusions make the objective non-additive. A candidate replaces the incumbent only if it is better by more than
+    1e-9 euro, so ties go to the first in catalog order and the result is reproducible.
 
-    `admits` restricts the candidate set *before* the optimization (§5.5 subsidy modes; §7 B5).
-    It is a plain predicate on scheme ids rather than a `SubsidyMode` so this module keeps no
-    dependency on the perspective types. Filtering afterwards — what the evaluator used to do —
-    left ONLY/EXCLUDE perspectives with the remainder of a combination that was optimal for a
-    different (unrestricted) candidate set, which is not the best admissible combination.
-
-    Both enumerations are exponential in the number of schemes and are therefore capped at
-    MAX_CUMULATION_SCHEMES: more than that many eligible schemes (or, for the optimistic
-    bound, eligible plus undetermined ones) is treated as a catalog defect rather than
-    silently truncated, because truncating would understate the support.
-
-    **What is optimized, over what, and how ties break.** The objective is
-    :func:`_support_value` — the discounted euro value of a combination to the applicant, maximized
-    (the applicant is assumed to claim what is available to them, §5.4). The candidate set is the
-    power set of the ELIGIBLE schemes for this one measure: all 2^n subsets are enumerated in
-    increasing bitmask order, the ones violating an ``excludes`` relation are skipped, and each
-    survivor is fully valued through :func:`_combination_awards` — no greedy or incremental
-    shortcut, because caps and exclusions make the objective non-additive. Note the empty subset is
-    included, so "no subsidy at all" is always an admissible answer. A candidate replaces the
-    incumbent only if it beats it by more than 1e-9 euro, which makes the tie-break *first one
-    wins* in enumeration order: since the bits index the eligible list, which is in catalog file
-    order, an exact tie is resolved toward the combination using the fewer / earlier-listed
-    schemes. That is what makes the result reproducible across runs rather than dependent on set
-    iteration order.
-
-    **The per-slot report.** The same enumeration also tracks the best combination in the LOW and
-    HIGH slots, and ``other_slot_optimal_combination`` names it where it differs from the chosen
-    one — the honest disclosure that the plan is optimal for the best-estimate world only. The slot
-    getters map LOW to the band's *maximum* and HIGH to its *minimum*, matching the mirroring that
-    turns support into a revenue-type cash flow (`as_revenue`): in the optimistic slot the most
-    support arrives.
+    `admits` restricts the candidates before the optimization (§5.5), so ONLY and EXCLUDE perspectives get the best
+    combination among the admitted schemes. UNDETERMINED schemes are excluded but reported with the extra support they
+    could unlock (§5.7). The best combinations in the LOW and HIGH slots are named where they differ from the chosen
+    one; LOW reads the band's maximum and HIGH its minimum, because support is booked as revenue (`as_revenue`) and the
+    optimistic world gets the most.
 
     Args:
         catalog: The country catalog.
-        measure: The single measure being funded; the solver has no cross-measure view.
-        context: The applicant/building answers.
+        measure: The single measure being funded.
+        context: The applicant and building answers.
         year: The year scheme validity is tested against (the price basis year in production).
-        discount: Year → discount factor used to compare payout timings.
-        admits: Optional scheme-id predicate implementing the perspective's subsidy mode.
+        discount: Year to discount factor, for comparing payout timings.
+        admits: The perspective's subsidy-mode filter on scheme ids; ``None`` admits everything.
 
     Returns:
-        The full :class:`SubsidyDecision`: the chosen combination's awards, plus rejected,
-        undetermined, the optimistic bound, the per-slot alternatives and the objective value the
-        chosen combination scored (``discounted_support_in_euro``, the BEST_ESTIMATE-slot
-        :func:`_support_value` of ``applied``).
+        The :class:`SubsidyDecision` with the chosen awards, rejected and undetermined schemes, the optimistic bound,
+            the per-slot alternatives and the objective value (``discounted_support_in_euro``).
 
     Raises:
-        SubsidyDataError: If either scheme set exceeds MAX_CUMULATION_SCHEMES.
+        SubsidyDataError: If the eligible set, or eligible plus undetermined, exceeds MAX_CUMULATION_SCHEMES.
     """
-    # An amount bounded by an unknown price is not decided (renovisorissues #77).
+    # An amount bounded by an unknown price is not decided.
     assessments = [
         UnpricedMeasures.assessed(assessment, measure)
         for assessment in assess_schemes(catalog, measure, context, year, admits)
@@ -727,9 +626,8 @@ def solve_cumulation(
     def admissible(combination: List[SubsidyScheme]) -> bool:
         """Whether the combination violates no `excludes` relation.
 
-        Declaring the exclusion on one side is enough: the check asks every member whether any
-        other member is on its exclusion list, so `excludes` acts symmetrically even though the
-        catalog states it once (the DE catalog states it on both sides anyway).
+        Every member is checked against every other member's exclusion list, so an exclusion stated on one side applies
+        both ways.
         """
         ids = {scheme.id for scheme in combination}
         for scheme in combination:

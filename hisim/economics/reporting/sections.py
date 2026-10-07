@@ -1,15 +1,8 @@
-"""Section builders of the HTML lifecycle report (cost_spec.md §7.2, §9.5).
+"""Section builders of the HTML lifecycle report (cost_spec.md §7.2, §9.5), and the report CSS.
 
-One function per report section along the calculation chain — the primer that opens the
-document, input audit, sources, the assumptions the run was priced under, investment, timeline,
-energy bill, CO2 (with the table that states every mass as its own multiplication) and the
-subsidy tables/cards (with the D28 content-key de-duplication) — plus the report CSS. The
-sections of the visualization set
-live beside them in `sections_charts`; every one of them, here and there, opens through
-`scaffold._section_open` and `scaffold._explanation_html`, so its name, its anchor and its
-authored explanation come from one place. Assembly order and the document shell live in
-`assembly`. Split out of the former single-module `reporting.py` (PR-3 review); the package
-`__init__` re-exports everything.
+One function per section along the calculation chain: the primer, input audit, sources, assumptions, investment,
+timeline, energy bill, CO2 and subsidies. The chart sections live in `sections_charts`; every section opens through
+`scaffold._section_open` and `scaffold._explanation_html`, and the document is assembled in `assembly`.
 """
 
 
@@ -64,27 +57,20 @@ from hisim.economics.reporting.scaffold import (
     _section_open,
 )
 
-# ---------------------------------------------------------------------------- HTML report (A)
+# ---------------------------------------------------------------------------- HTML report
 
 
 def _how_to_read_section_html(context: _ChapterContext) -> str:
-    """The primer: the three conventions every other section assumes the reader knows.
+    """Render the primer: the three conventions every other section assumes.
 
-    Discounting, the three complete worlds behind every `best_estimate [min | max]` band, and the
-    sign rule that keeps costs and credits apart are stated once, at the top of the page, so no
-    section has to re-derive them next to its own chart. It carries no number and no chart, which
-    is why it is the one section built from nothing but its heading and its explanation block —
-    and why it always renders: there is no input that could make it empty.
-
-    It lives here, with the other prose sections, rather than in `scaffold.py` where the
-    vocabulary it is built from lives: scaffold keeps the primitives, a section that opens a
-    `<section>` and renders authored text is a section like any other.
+    States discounting, the three worlds behind every `best_estimate [min | max]` band, and the sign rule for costs and
+    credits, once at the top of the page. It has no number or chart and always renders.
 
     Args:
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, always.
+        The section.
     """
     return _section_open(ReportSections.HOW_TO_READ, context) + _explanation_html(
         ReportSections.HOW_TO_READ, context
@@ -92,22 +78,17 @@ def _how_to_read_section_html(context: _ChapterContext) -> str:
 
 
 def _color_declarations(prefix: str, colors: Sequence[str]) -> str:
-    """The `--<prefix>0..--<prefix>N` custom-property declarations of one theme, from a palette.
+    """Return the `--<prefix>0..--<prefix>N` CSS custom-property declarations of one theme's palette.
 
-    Two palettes are declared this way: the eight display-group hues (`--g0..--g7`) and the ten
-    steps of the sequential ramp the rate fan is drawn in (`--ramp0..--ramp9`). Both have to
-    appear in the stylesheet as well as in the palette the charts and the matplotlib companions
-    read, and writing them out twice is how a group ends up one hue in the HTML and another in its
-    PNG. Generating them means each palette is edited in one place; the output is byte-for-byte
-    the hand-written line it replaces.
+    Used for the eight display-group hues (`--g0..--g7`) and the ten steps of the sequential ramp (`--ramp0..--ramp9`).
+    Generating them from the palette the charts and PNGs also read keeps the colours identical across renderers.
 
     Args:
-        prefix: The custom-property prefix, without dashes — `"g"` or `"ramp"`.
+        prefix: The custom-property prefix without dashes, `"g"` or `"ramp"`.
         colors: That palette's colours for one theme, in index order.
 
     Returns:
-        The declarations as one line, e.g. ``--g0:#2a78d6; --g1:#1baf7a;`` — each terminated, so
-        the caller only adds the closing brace.
+        The declarations as one line, e.g. ``--g0:#2a78d6; --g1:#1baf7a;``, each terminated.
     """
     return " ".join(f"--{prefix}{index}:{color};" for index, color in enumerate(colors))
 
@@ -115,27 +96,18 @@ def _color_declarations(prefix: str, colors: Sequence[str]) -> str:
 def _neutral_color_declarations(
     chrome: Mapping[str, str], page: str, ink_2: str, baseline: str, border: str
 ) -> str:
-    """One theme's neutral declarations, with the four shared chrome roles read from the palette.
+    """Return one theme's neutral colour declarations, with the four shared chrome roles taken from the palette.
 
-    `presentation_style.ChromeColors` is the single source of the roles both renderers draw with —
-    the surface a chart sits on, the ink its text is set in, the muted tone of secondary labels
-    and the tone of the gridlines — and the stylesheet used to carry its own copy of those four
-    hex values. Two copies is how an SVG gridline ends up a different grey from the gridline of
-    its PNG companion, which is a defect nobody reads as one. The four neutrals only the HTML has
-    stay arguments, because no chart draws them: the page behind the section cards, the secondary
-    ink of the captions, the baseline rule and the card border.
-
-    The output is byte-for-byte the two hand-written lines it replaces — the line break between
-    them and the second line's two-space indent included — so the stylesheet inside the golden
-    report does not move. The *first* line carries no indent of its own: it continues the
-    literal's `:root { color-scheme: light dark;` line, and the two spaces in front of it are the
-    literal's, not this function's.
+    The surface, ink, muted and grid roles come from `presentation_style.ChromeColors`, which the chart renderers also
+    use, so an SVG gridline and its PNG companion match. The four neutrals only the HTML uses are arguments. The output
+    is two lines exactly as the stylesheet needs them: the first continues the `:root { color-scheme: light dark;`
+    line, the second has a two-space indent.
 
     Args:
-        chrome: One theme of `ChromeColors` — `LIGHT` or `DARK`.
+        chrome: One theme of `ChromeColors`, `LIGHT` or `DARK`.
         page: Background behind the section cards.
         ink_2: Secondary text colour, for captions and definitions.
-        baseline: Colour of the chart baselines and of the table header rule.
+        baseline: Colour of chart baselines and of the table header rule.
         border: Border colour of a section card.
 
     Returns:
@@ -149,42 +121,18 @@ def _neutral_color_declarations(
 
 
 class _ReportCss:
-    """The report stylesheet, inlined into the self-contained HTML.
+    """The report stylesheet, inlined so the HTML is one self-contained file.
 
-    Inlined rather than linked because the report has to be a single file that works from a
-    network share, an email attachment or an archive with no network at all — the same rule that
-    forces the charts to be hand-written SVG. Everything the page needs is here; nothing is
-    fetched.
+    The palette is declared as CSS custom properties on `:root` and redeclared under `@media (prefers-color-scheme:
+    dark)`, so inline SVG charts follow the reader's theme. `--g0`..`--g7` (display-group hues) and
+    `--ramp0`..`--ramp9` (the sequential ramp) are generated from `PresentationStyle` and `SequentialRamp`, and the
+    shared chrome roles come from `presentation_style.ChromeColors`, so HTML, SVG and PNG colours agree. `--good`,
+    `--warning` and `--critical` back the `.status.PASS`, `.status.WARN` and `.status.FAIL` classes of the plausibility
+    panel.
 
-    The whole palette is declared as CSS custom properties on `:root` and redeclared under
-    `@media (prefers-color-scheme: dark)`, which is what makes the inline charts theme-aware: a
-    bar filled with `var(--g3)` re-colours with the reader's system setting, something a
-    rasterized chart cannot do. `--g0`..`--g7` are the eight display-group hues and are *generated*
-    from `PresentationStyle.GROUP_COLORS_LIGHT` / `GROUP_COLORS_DARK` rather than transcribed, so a
-    group keeps its colour across the HTML, its SVGs and the matplotlib PNGs by construction; the
-    two lists were previously copied here by hand and could drift apart silently, and a hue that
-    disagrees between an SVG and its PNG companion is a bug nobody reads as one. `--ramp0`..
-    `--ramp9` are generated the same way from `SequentialRamp`: ten ordered steps for the one
-    chart whose series are an ordered quantity rather than eight things to tell apart. `--ink-*`,
-    `--muted`, `--surface`, `--grid` and `--baseline`
-    are the chrome roles, and `--good`/`--warning`/`--critical` back the `.status.PASS` /
-    `.status.WARN` / `.status.FAIL` classes the plausibility panel emits from the finding status
-    verbatim. The four roles both renderers share — surface, ink, muted, grid — come from
-    `presentation_style.ChromeColors` through `_neutral_color_declarations` for the same reason
-    the group hues come from the palette; the neutrals only the HTML has are still written out
-    here, because no chart draws them.
-
-    The chapter rules (`h2.chapter`, `p.chapter-intro`, `.chapter-tag`) style the Q24 structure:
-    a chapter is a rule-topped heading *between* the section cards rather than a card of its own,
-    its authored lead-in sits in the same margin as the heading, and the small muted tag inside a
-    section heading names the chapter that section is being read in. Sections are `<h3>` for the
-    same reason — they sit under a chapter's `<h2>`, so the document outline is the chapter
-    structure.
-
-    The `dl`/`dt`/`dd` rules style the "Terms used here" definition lists of every section's
-    explanation block. They deliberately reuse the existing roles — the term in `--ink-1` like a
-    heading, the definition in `--ink-2` like the surrounding prose — so a disclosure a reader
-    opens looks like the rest of the section rather than like a glossary pasted into it.
+    Chapters (`h2.chapter`, `p.chapter-intro`, `.chapter-tag`) are rule-topped headings between the section cards;
+    sections are `<h3>` beneath them. The `dl`/`dt`/`dd` rules style the "Terms used here" lists in the same ink roles
+    as headings and prose.
     """
 
     CSS = """
@@ -234,13 +182,10 @@ footer { color: var(--muted); font-size: 12px; margin: 10px 4px; }
 
 
 def _origin_label(row: ResolvedInputRow) -> str:
-    """Spells out a resolved row's origin for this report (the audit decided the precedence).
+    """Return the words for where a resolved input row's price came from.
 
-    Answers "where did this price actually come from" in one cell of the input-audit table:
-    a config override (with the source it cited, or a loud `NO SOURCE`), the database entry key
-    that matched, or `unresolved`. The precedence between those is an engine decision made once
-    in `input_audit.py` and written identically to `cost_audit.csv`; this only chooses the words,
-    so a reviewer comparing the HTML table with the CSV sees the same origin either way.
+    A config override (with its cited source, or `NO SOURCE`), the matching database entry key, or `unresolved`. The
+    precedence is decided in `input_audit.py` and written identically to `cost_audit.csv`; this only picks the words.
     """
     if row.origin_kind == OriginKind.ORIGIN_OVERRIDE:
         return f"override ({row.override_source or 'NO SOURCE'})"
@@ -250,37 +195,22 @@ def _origin_label(row: ResolvedInputRow) -> str:
 
 
 def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> str:
-    """The input audit: the declared facts and the prices they resolved to.
+    """Render the input audit: the declared facts and the prices they resolved to (§9.5).
 
-    Renders the rows `audit.build_input_audit` resolved; override precedence, the flags and the
-    source list are decided there, once, and written to `cost_audit.csv` from the same rows.
-
-    It comes first after the panel because everything downstream is a consequence of these
-    numbers: one row per priced fact with its size, its resolved unit price and lifetime, where
-    that price came from and any flags raised while resolving it. This is the §9.5 "review one
-    table instead of 46 files" workflow — a config-wiring mistake such as a 5000 kW heat pump is
-    an implausible size or price in this table long before it is a surprising NPV (and is flagged
-    as such: `AuditThresholds` bounds a size per unit, 1,000 kW among them). The sources table is
-    appended so the prices above can be checked for currency in the same place.
-
-    The unit price carries its **basis** rather than a flat "EUR/unit", from the same
-    `input_audit.price_basis` the CSV column uses: a database row states euro per unit of its size
-    while an override states an absolute amount for the whole subject, and printing the two under
-    one label made a per-kW figure and a total look like the same quantity.
-
-    The anyway-credit column is here for the same reason the unit price is (Q22): the Sowieso
-    share decides how much of a measure the counterfactual pays for, which makes it an input of
-    the same standing as a price and therefore something to audit rather than to discover in the
-    timeline. It states the whole multiplication, `share x basis = credit` (Q26 F7), so the
-    credited amount can be reproduced from the row that produced it.
+    One row per priced fact with its size, resolved unit price and lifetime, where the price came from and any flags,
+    built by `audit.build_input_audit` from the same rows as `cost_audit.csv`. A wiring mistake such as a 5000 kW heat
+    pump shows here as an implausible size (`AuditThresholds` bounds sizes per unit). The unit price carries its basis
+    (`input_audit.price_basis`), since a database row is euro per unit of size while an override is an absolute amount.
+    The anyway-credit column states `share x basis = credit`, because the share is an input like a price. The sources
+    table is appended.
 
     Args:
         audit: The resolved-input audit to render.
-        context: The chapter this section is being rendered into; it supplies the anchor and
-            decides whether the authored explanation is printed or linked to.
+        context: The chapter this section is rendered into; supplies the anchor and decides whether the explanation is
+            printed or linked.
 
     Returns:
-        The section, always non-empty — a run with no priced fact still has a sources table.
+        The section; never empty, since a run with no priced fact still has a sources table.
     """
     # A named template beats an f-string here: eight placeholders, three of them formatted,
     # and the row's shape stays readable as HTML.
@@ -293,9 +223,8 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
             unit=_esc(row.size_unit),
             price=_esc(_band_str(row.unit_price_in_euro, price_basis(row))),
             life=f"{row.lifetime_in_years:g} a" if row.lifetime_in_years else "-",
-            # Q22: the Sowieso share is an input of the same standing as the unit price — it
-            # decides how much of a measure the counterfactual pays for — so it is audited here.
-            # Q26 F7: the share and the cost it applies to, so the credit multiplies out here.
+            # The Sowieso share is an input like the unit price, so it is audited here with the
+            # cost it applies to, and the credit multiplies out.
             share=_anyway_credit_cell(row),
             origin=_esc(_origin_label(row)),
             flags=_esc("; ".join(row.flags)),
@@ -316,29 +245,20 @@ def _audit_section_html(audit: InputAuditReport, context: _ChapterContext) -> st
 def anyway_credit_text(
     share: float, basis: Optional[float], credit: Optional[float] = None
 ) -> str:
-    """One anyway credit's multiplication, in the single spelling all three sites print it in.
+    """Return one anyway credit's multiplication in the single spelling all three places print it in.
 
-    `share x basis = credit` appears in the input audit's own column, in the category cell of the
-    credit's row in the cash-flow detail table and in the caption above the timeline. Three
-    renderings of one arithmetic statement is three chances to word it differently, which is what
-    this exists to prevent — so the spelling lives here and the three call sites differ in one
-    thing only.
-
-    That thing is `credit`. The audit column and the caption have no amount beside them, so they
-    pass the product and state the whole multiplication. The cash-flow detail table's own
-    *Nominal* column carries the amount two cells to the right of the category, so it passes None
-    and states the factor and its basis without repeating a figure the row already shows.
-
-    A basis of None or zero — a result stored before the basis existed — leaves the share as the
-    only honest statement, and it is made alone rather than against an invented base.
+    An anyway credit is the cost the building would have paid anyway (§4.1). `share x basis = credit` appears in the
+    input audit, in the cash-flow detail table and in the timeline caption. The detail table already shows the amount
+    in its own column, so it passes `credit=None` and gets the factor and basis only. A basis of None or zero (a result
+    without the basis) yields the share alone.
 
     Args:
-        share: The Sowieso share the credit was computed at, as a fraction of one.
+        share: The Sowieso share the credit was computed at, as a fraction.
         basis: The cost that share was applied to, or None when the result records none.
         credit: The product, where the amount is not already on the row; None where it is.
 
     Returns:
-        The text, already safe for HTML: it is built from numbers only.
+        The text, safe for HTML since it is built from numbers only.
     """
     if not basis:
         return f"{share:.0%}"
@@ -348,20 +268,15 @@ def anyway_credit_text(
 
 
 def _anyway_credit_cell(row: ResolvedInputRow) -> str:
-    """One audit row's anyway credit as `share x basis = credit`, or the empty-cell dash (Q26 F7).
+    """Return one audit row's anyway credit as `share x basis = credit`, or the empty-cell dash.
 
-    A share on its own states a factor without its base, so the credit the timeline booked could
-    not be reproduced from the audited row; with both, the multiplication is on the page next to
-    the unit price that produced the basis. A row whose subject earned no such credit — most of
-    them — reads as the same dash the lifetime cell uses for an absent value, and a share
-    recorded without a basis (an archived audit from before the basis field) still states the
-    share alone rather than nothing.
+    A row without a credit shows the dash used for absent values; a share recorded without a basis is shown alone.
 
     Args:
-        row: The resolved input row to render the cell for.
+        row: The resolved input row.
 
     Returns:
-        The cell's text, already safe for HTML: it is built from numbers only.
+        The cell text, safe for HTML since it is built from numbers only.
     """
     if row.anyway_share is None:
         return "-"
@@ -371,14 +286,10 @@ def _anyway_credit_cell(row: ResolvedInputRow) -> str:
 
 
 def _sources_table_html(audit: InputAuditReport) -> str:
-    """The §3.10 source registry entries this evaluation cited, as resolved by the audit.
+    """Render the §3.10 source registry entries this evaluation cited, as resolved by the audit.
 
-    The bibliography of the run: which registry entries the numbers above actually came from,
-    with citation, kind, retrieval date and link. It exists because §3.10 forbids unsourced
-    datapoints, and a report that shows prices without saying where they are from cannot be
-    reviewed for currency — a reader spotting a 2019 retrieval date on an energy price knows to
-    distrust the bill section. Collapsed by default (it is reference material, not a finding)
-    and omitted entirely when the audit resolved no sources.
+    Citation, kind, retrieval date and link per entry, so prices can be checked for currency. Collapsed by default;
+    omitted when the audit resolved no sources.
     """
     if not audit.sources:
         return ""
@@ -399,54 +310,37 @@ def _sources_table_html(audit: InputAuditReport) -> str:
 
 
 def _assumption_value_text(row: views.AssumptionRow) -> str:
-    """One assumption's value as the table prints it: the number, spelled by kind, then its unit.
+    """Return one assumption's value as the table prints it: the number, spelled by kind, then its unit.
 
-    The spelling itself is `summary._value_by_kind`, shared with the scenarios table, so a row's
-    digits are decided in one place on the *report* side of the seam rather than in the view that
-    computes it. All this adds is the physical unit, which travels on the row and is appended
-    after the number.
+    The digits come from `summary._value_by_kind`, shared with the scenarios table.
 
     Args:
-        row: The row to render the value cell of.
+        row: The row whose value cell is rendered.
 
     Returns:
-        The value text, unescaped — the caller escapes it like every other cell.
+        The value text, unescaped; the caller escapes it.
     """
     text = _value_by_kind(row.kind, row.value)
     return f"{text} {row.unit}" if row.unit else text
 
 
 def _assumptions_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Every economic assumption the run was priced under, with value and source (Q26 F2).
+    """Render every economic assumption the run was priced under, with value and source.
 
-    The boundary between input and result, placed directly after the input audit because that is
-    where a reader has just finished checking *what* was priced and needs to know *under which
-    assumptions*. The audit answers "which price did this device resolve to"; this answers "at
-    what interest rate, over what horizon, with which escalation and which tariff" — the causes
-    behind every consequence the rest of the report draws (rule 2.9).
-
-    Rows come from `views.economic_assumptions`, which reads the parameters and the assumption
-    record the evaluator resolved; nothing here is a literal, and the values arrive as *numbers* —
-    the digits each of them is printed with are decided here, by `_assumption_value_text`. The
-    computed rows are marked as such, so the annuity factor is not mistaken for something somebody
-    chose, and a value with no data-layer source states `configuration`, which is a statement about
-    its provenance rather than a blank.
-
-    The whole matrix is passed on rather than one perspective because the assumption set is a
-    property of the *run*: every row but one is identical across the evaluated perspectives, and
-    the exception — the CO2 damage cost — belongs in the table when any of them applies it, which
-    the view now decides for itself instead of taking a boolean from here.
+    Placed after the input audit: the audit says which price each device resolved to, this says at which interest rate,
+    horizon, escalation and tariff. Rows come from `views.economic_assumptions`; computed rows (such as the annuity
+    factor) are marked, and a value with no data-layer source says `configuration`. The whole matrix is passed because
+    the CO2 damage-cost row belongs in the table when any perspective applies it.
 
     Args:
-        matrix: Every evaluated perspective; the table is stated on the reference one and the
-            damage-cost row follows from the whole run.
-        context: The chapter this section is being rendered into.
+        matrix: Every evaluated perspective; the table is stated on the reference one.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, or the empty string when the run publishes no assumption at all.
+        The section, or the empty string when the run publishes no assumption.
 
     Raises:
-        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
+        ValueError: If the matrix holds no evaluated perspective.
     """
     result = _reference_result(matrix)
     rows = views.economic_assumptions(list(matrix.results.values()))
@@ -486,28 +380,19 @@ def _assumptions_section_html(matrix: EvaluationMatrix, context: _ChapterContext
 
 
 def _investment_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The year-0 investment build-up, one waterfall per subject.
+    """Render the year-0 investment build-up, one waterfall per subject.
 
-    Answers "is the money that leaves the account in year 0 the money this measure should
-    cost?" — one waterfall per component walking device + installation + planning + removal
-    - subsidies - loan disbursement down to the net outflow, plus a table of gross, support and
-    net per subject. It sits directly after the input audit because that is the order the
-    numbers are built in: the audit shows the unit prices, this shows what they add up to, and
-    a component that is missing or priced from the wrong field is visible in both.
-
-    A binding subsidy cap shows here as support that stops short of the scheme's headline rate,
-    and a financed perspective shows the loan disbursement cancelling most of the outflow. Sunk
-    cost (the written-off residual book value of a replaced asset, §4.1) is appended as a note
-    rather than as a step, because it is reported but deliberately excluded from the decision
-    KPIs. Only subjects with a year-0 flow appear.
+    Each waterfall walks device + installation + planning + removal - subsidies - loan disbursement down to the net
+    outflow, with a table of gross, support and net per subject. A binding subsidy cap shows as support short of the
+    scheme's headline rate. Sunk cost (the written-off residual value of a replaced asset, §4.1) is a note, not a step,
+    since it is excluded from the decision KPIs. Only subjects with a year-0 flow appear.
 
     Args:
         result: The perspective whose year 0 is drawn.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section — always rendered, carrying the "nothing was bought in year 0" note instead of
-        the waterfalls when no subject has a year-0 flow, because that is itself worth stating.
+        The section; when nothing was bought in year 0 it carries a note saying so.
     """
     blocks = []
     build_ups = views.year_zero_build_up(result)
@@ -531,10 +416,9 @@ def _investment_section_html(result: LifecycleCostResult, context: _ChapterConte
             blocks.append(f"<h3 style='font-size:13px;margin:14px 0 2px'>{_esc(subject)}</h3>")
             blocks.append(_waterfall_svg(steps, "Net year-0 outflow", build_up.net_outflow_in_euro))
     if not blocks:
-        # "Always rendered" means this case too: a run whose year 0 is empty — an operating-only
-        # perspective, or a measure whose whole cost falls in a later year — used to drop the
-        # section, and a missing section reads as a broken renderer rather than as the finding it
-        # is. The waterfalls are what is absent, not the answer.
+        # A run whose year 0 is empty (an operating-only perspective, or a measure whose whole
+        # cost falls in a later year) still renders the section: a missing section would read
+        # as a broken renderer rather than as the finding it is.
         blocks.append(
             "<p class='sub'>Nothing was bought in year 0: no subject of this perspective books an "
             "investment, planning, removal, subsidy or loan flow in the first year, so there is no "
@@ -574,26 +458,19 @@ def _investment_section_html(result: LifecycleCostResult, context: _ChapterConte
 
 
 def _timeline_detail_table(result: LifecycleCostResult) -> str:
-    """Every flow behind the timeline chart, as a verification table.
+    """Render every flow behind the timeline chart as a verification table.
 
-    One row per (year, subject, category) with its nominal band and discounted value — the
-    §3.6 canonical timeline, laid out for checking.
-
-    Rows, ordering, the float-noise cut-off and the subtotals all come from
-    `views.timeline_detail_rows`; this only lays them out. The one thing the layout adds is the
-    anyway credit's own multiplication in its category cell (Q22, Q26 F7): a credit row whose
-    share and like-for-like basis the reader cannot see is a figure to be trusted rather than
-    checked, and both are on the result.
+    One row per (year, subject, category) with its nominal band and discounted value. Rows, order, the float-noise
+    cut-off and subtotals come from `views.timeline_detail_rows`; this adds the anyway credit's multiplication in its
+    category cell.
     """
     rows: List[List[str]] = []
     shares = result.anyway_share_by_subject
     bases = result.anyway_basis_by_subject
     for detail_year in views.timeline_detail_rows(result):
         for row in detail_year.rows:
-            # Q22: an anyway credit is `share x like-for-like cost`, so the category cell of that
-            # one row carries the share it was computed at. Without it the table states a credit
-            # whose basis the reader cannot reconstruct from anything else on the page. Q26 F7
-            # adds the basis itself, so the row multiplies out to the amount beside it.
+            # An anyway credit is `share x basis`, so the category cell of that row carries the
+            # share and the basis, and the row multiplies out to the amount beside it.
             category = row.category.value
             if row.category == CostCategory.ANYWAY_COST_CREDIT and row.subject in shares:
                 # No product: the amount is in this row's own Nominal cell, two columns right.
@@ -621,30 +498,19 @@ def _timeline_detail_table(result: LifecycleCostResult) -> str:
 
 
 def _timeline_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The cash-flow timeline: annual cash flows + cumulative discounted cost, per perspective.
+    """Render the cash-flow timeline: annual cash flows and cumulative discounted cost, per perspective (§3.6).
 
-    Answers "does the money arrive in the right years, and does the year-by-year story add up to
-    the headline NPV?" This is the report's view of the §3.6 canonical timeline, and it is
-    assembled as a chain a reviewer can walk down: legend, nominal stacked bars, the discounted
-    cumulative curve with the NPV label, then the NPV-by-category table and finally the full
-    year × subject × category detail table, so any bar in the chart can be resolved to the
-    individual flows behind it.
-
-    The loan amortization used to be a third chart in this block and is now the Loan section of
-    its own (Q18): debt service is a separate story from the timeline it replaces, and the
-    cost-of-credit panel beside it is the second half of that story rather than a footnote to
-    this one.
-
-    One collapsible block per perspective, the first open, because the same timeline read under
-    different scopes is exactly what makes an actor split or a subsidy mode comprehensible. The
-    legend lists only the display groups this perspective's scoped timeline actually contains.
+    Legend, nominal stacked bars, the cumulative discounted curve with the NPV label, the NPV-by-category table and the
+    full year x subject x category detail table, so any bar can be traced to its flows. One collapsible block per
+    perspective, the first open; each legend lists only the groups that perspective contains. Loan amortization is its
+    own section.
 
     Args:
         matrix: Every evaluated perspective; each gets a block.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, always non-empty for a matrix with at least one perspective.
+        The section; non-empty for a matrix with at least one perspective.
     """
     blocks = []
     for index, (perspective_id, result) in enumerate(matrix.results.items()):
@@ -686,20 +552,18 @@ _ANYWAY_CAPTION_TAIL = (
 
 
 def _anyway_basis_word(facts: Sequence[views.AnywayCreditFact]) -> str:
-    """What to call the basis in the caption's headline: its kind, or the generic word (F7).
+    """Return the caption's name for the anyway-credit basis: its kind when all credits share one, else `basis`.
 
-    The multiplication reads `share x like-for-like cost = credit` when every credit on the page
-    is a like-for-like one and `share x non-energy share of the measure's gross cost = credit`
-    when they are all the coupled-cost branch (Q7). Where a page carries both — or a stored result
-    that names neither — the headline says `basis` and each credit names its own kind instead, so
-    no credit is ever labelled with the other branch's quantity.
+    All like-for-like credits read `like-for-like cost`; all coupled-measure credits read `non-energy share of the
+    measure's gross cost`. A mix, or a stored result without kinds, reads `basis`, and each credit then names its own
+    kind.
     """
     kinds = {fact.basis_kind for fact in facts if fact.basis_in_euro}
     return kinds.pop() if len(kinds) == 1 else AnywayBasisKinds.UNRECORDED
 
 
 def _anyway_credit_list(facts: Sequence[views.AnywayCreditFact], name_kinds: bool) -> str:
-    """One perspective's anyway credits, each as `subject share x basis = credit` (Q22, F7)."""
+    """Return one perspective's anyway credits, each as `subject share x basis = credit`."""
     parts = []
     for fact in facts:
         text = anyway_credit_text(fact.share, fact.basis_in_euro, fact.credit_in_euro)
@@ -710,29 +574,18 @@ def _anyway_credit_list(facts: Sequence[views.AnywayCreditFact], name_kinds: boo
 
 
 def _anyway_share_caption(matrix: EvaluationMatrix) -> str:
-    """The run-specific line stating at which Sowieso share each anyway credit was computed (Q22).
+    """Return the caption line stating the Sowieso share and basis of each anyway credit in this run.
 
-    The authored prose explains what an anyway share *is*; this says what it *was* here, which is
-    the half a reader cannot get anywhere else on the page. A share below 100 % is the interesting
-    case — it means the measure was a first-time improvement and only the repair share of it was a
-    cost the building would have caused regardless — so the sentence names it per subject rather
-    than averaging it away. Q26 F7 states the full multiplication, `share x basis = credit`,
-    because a share printed beside a credit lets a reader check neither of them, and the basis is
-    named by its kind (`results.AnywayBasisKinds`) rather than by the name of one of the two
-    branches that can produce it.
-
-    **"In this run" is true by construction.** The caption used to be written from the matrix's
-    first perspective and to speak for the whole run, which is a claim the first perspective
-    cannot make: a perspective that books no investment books no anyway credit either. It now
-    reads every perspective's credits and collapses to one sentence only when they are in fact the
-    same, and states them per perspective when they are not.
+    The Sowieso share is the part of a measure's cost the building would have paid anyway, e.g. the repair share of a
+    first-time improvement. The caption gives `share x basis = credit` per subject, the basis named by its kind
+    (`results.AnywayBasisKinds`). It reads every perspective's credits and collapses to one sentence only when they are
+    the same.
 
     Args:
-        matrix: Every evaluated perspective; each contributes its own booked credits.
+        matrix: Every evaluated perspective; each contributes its own credits.
 
     Returns:
-        The caption, or the empty string when no perspective credits anything — which is most
-        runs, and every result serialized before the fields existed.
+        The caption, or the empty string when no perspective books an anyway credit.
     """
     by_perspective = views.anyway_credit_facts_by_perspective(matrix)
     if not any(by_perspective.values()):
@@ -763,27 +616,20 @@ def _anyway_share_caption(matrix: EvaluationMatrix) -> str:
 
 
 def _energy_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The energy bill: the year-1 decomposition per carrier with implied effective prices.
+    """Render the energy bill: the year-1 cost per carrier with the implied effective price.
 
-    **The fastest unit-mix-up detector in the report**, and the reason it is placed this early:
-    dividing what a carrier cost in year 1 by how much of it was bought must give back a price
-    the reader recognizes, and no domain expertise is needed to see that 0.0003 or 312 EUR/kWh
-    is wrong. A mistake anywhere between the meter, the annualization and the tariff — a Wh/kWh
-    confusion, a rate stored in cents, a missing time-of-use band — lands on this one number,
-    which is why the same figure is also checked automatically in the plausibility panel.
-
-    The whiskers show each carrier's year-1 flows as a band; the collapsible table gives the
-    quantity, the cost, the implied effective price and the split into working, standing,
-    capacity and CO2-price components. Feed-in revenue appears as a negative contribution in the
-    electricity carrier's component list but is deliberately excluded from the price numerator
-    and the band — a credit is not part of what a kWh costs (see `views.carrier_year_one_bills`).
+    Dividing a carrier's year-1 cost by the energy bought must give a recognizable price, so a Wh/kWh mix-up, a rate
+    stored in cents or a missing time-of-use band shows at once; the plausibility panel checks the same figure.
+    Whiskers show each carrier's year-1 band; the table gives quantity, cost, effective price and the split into
+    working, standing, capacity and CO2-price parts. Feed-in revenue appears in the electricity components but is left
+    out of the effective price (see `views.carrier_year_one_bills`).
 
     Args:
         result: The perspective whose year-1 bill is decomposed.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, or the empty string when the run bought no energy at all.
+        The section, or the empty string when the run bought no energy.
     """
     bills = views.carrier_year_one_bills(result)
     if not bills:
@@ -815,24 +661,12 @@ def _energy_section_html(result: LifecycleCostResult, context: _ChapterContext) 
 
 
 def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
-    """Per measure: net cost (blue) + subsidy amount (green) — how far the support carries.
+    """Draw per measure the net cost (blue) and the subsidy (green): how much of each measure support covers.
 
-    The visual half of section 5, answering "what fraction of each measure does the support
-    actually cover?" — the number a homeowner asks for and the one a scheme's headline
-    percentage rarely equals once caps and eligible-cost rules bite. Both segments and the
-    printed percentage come from `views.subsidy_share_of_gross`, including its `min(subsidy,
-    gross)` clamp, so this chart and the matplotlib investment waterfall cannot disagree.
-
-    Perspective selection is the fiddly part: it prefers a perspective that carries catalog
-    decisions, and falls back to any perspective with subsidy flows, which is what makes the
-    chart appear for support with no award trail behind it — a result archived while the §10.1
-    legacy flat shim still priced runs without a catalog (retired 2026-09-24). Renders empty when
-    no perspective has support at all, which is every run without a catalog today.
-
-    Which perspective won that selection is printed above the chart. A run's perspectives do not
-    have to agree about support — a gross view applies nothing a net view applies — so an unlabelled
-    composition invites the reader to take one perspective's funded share for the run's, and the
-    selection rule above is not something a reader of the output can see.
+    Segments and percentage come from `views.subsidy_share_of_gross`, including its `min(subsidy, gross)` clamp, so
+    this chart and the matplotlib waterfall agree. It prefers a perspective with catalog decisions and falls back to
+    any perspective with subsidy flows (an archived result without an award trail). The chosen perspective is printed
+    above the chart, since perspectives differ in what support they apply. Empty when no perspective has support.
     """
     result = next(
         (res for res in matrix.results.values() if any(res.subsidy_decisions)), None
@@ -890,42 +724,27 @@ def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
 
 
 def _scheme_html(display_name: Optional[str], scheme_id: str) -> str:
-    """A subsidy scheme named for a human, with its raw id in the tooltip (owner decision Q20).
-
-    The report used to print `DE_BEG_EM_HP_SPEED_2024` wherever a scheme appears, which is a
-    database key, not a name: a reader could not tell a speed bonus from an income bonus without
-    opening the catalog. The friendly name is now the visible text and the id moves into the
-    `title` attribute, where it stays available to the one reader who needs it — the reviewer
-    grepping `cost_audit.csv` or the catalog for that exact string.
+    """Return a scheme's display name as text with its raw id as the tooltip.
 
     Args:
-        display_name: The catalog's friendly name, or None/empty when it declared none.
-        scheme_id: The raw id, always shown as the tooltip and used as the visible text when
-            there is no friendly name (so an older catalog degrades to the previous behaviour).
+        display_name: The catalog's display name, or None or empty when it declared none.
+        scheme_id: The raw id; always the tooltip, and the visible text when there is no display name.
 
     Returns:
-        An escaped `<span>` with the name as text and the id as its tooltip.
+        An escaped `<span>` with the name as text and the id in its `title`.
     """
     name = display_name or scheme_id
     return f"<span title=\"{_esc(scheme_id)}\">{_esc(name)}</span>"
 
 
 def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
-    """All awards across measures: scheme, amount band, payout kind, binding caps.
+    """Render all applied awards across measures: scheme, amount band, payout kind and binding caps (§5.4).
 
-    The tabular form of the §5.4 audit trail: every applied award with what it is worth, how it
-    is paid out (upfront grant, repayment grant, scheduled tax credit) and which uncertainty
-    slots its cap bound in. The payout kind matters to a reviewer because it changes *when* the
-    money lands and therefore its present value, and a cap that binds only in the HIGH slot
-    explains an asymmetric band elsewhere in the report.
-
-    Amounts come from `views.describe_award`, so a scheduled payout is shown as the sum of its
-    instalments rather than as its zero upfront amount, and an award with no euro amount of its
-    own (loan terms, an operational rate) is shown by its terms rather than as a zero. Rows are
-    de-duplicated by decision *content* (`_decisions_by_content`), not by measure name:
-    perspectives that awarded a measure the same way share one row, named in the "Perspectives"
-    column, while a perspective that decided differently gets its own rows. Returns empty when no
-    award applied anywhere.
+    The payout kind (upfront grant, repayment grant, scheduled tax credit) decides when money lands and so its present
+    value; a cap binding only in HIGH explains an asymmetric band. Amounts come from `views.describe_award`, so a
+    scheduled payout shows its instalment total and loan terms show their terms. Rows are de-duplicated by decision
+    content (`_decisions_by_content`): perspectives that decided a measure the same way share a row. Empty when no
+    award applied.
     """
     rows = []
     for decision, perspective_ids in _decisions_by_content(matrix):
@@ -936,7 +755,7 @@ def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
                 _esc(decision.measure_subject),
                 _scheme_html(presentation.display_name, presentation.scheme_id),
                 _esc(_award_amount_str(presentation)),
-                # Q26 F8: the multiplication and the ceiling verdict, so an amount can be checked
+                # The multiplication and the ceiling verdict, so an amount can be checked
                 # against the rate and the basis that produced it.
                 _esc("; ".join(
                     part for part in (presentation.arithmetic, presentation.cap_verdict) if part
@@ -958,45 +777,20 @@ def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
 
 
 def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The subsidies section: the cumulation solver's audit trail, rendered.
+    """Render the subsidies section: the cumulation solver's audit trail per measure (§5.4).
 
-    Answers "why did this measure get this much support, and what did it miss?" — which is the
-    question a subsidy engine has to be able to answer to be trusted at all. Each measure gets a
-    card listing what APPLIED (with the slots any cap bound in), what was REJECTED and the
-    reason, and what is still OPEN because a required questionnaire field is unanswered, with
-    the upper bound the open questions could still unlock. That last line is the actionable one
-    for a user: it quantifies what answering the questionnaire is worth.
-
-    One card per *distinct* decision, not per measure (`_decisions_by_content`): perspectives that
-    decided a measure identically share a card and are named in its heading, and a perspective that
-    decided differently — a different subsidy mode, a different installation context — gets a card
-    of its own next to it. Before this the first perspective to mention a measure won and the rest
-    were dropped without a trace, so the section was silently incomplete precisely on the measures
-    whose support depends on the view taken.
-
-    When no catalog ships for the run's country there are no decisions to show and, since the
-    §10.1 legacy flat shim was retired (2026-09-24), no support either, so the section is omitted.
-    Support with no decision behind it — a result archived before the retirement — is drawn with a
-    note that it has no audit trail. The section is omitted entirely only when there is neither a
-    decision nor any support to draw.
-
-    An award is worth `views.describe_award`'s total here, exactly as in the awards table below
-    and in `cost_summary.md`. The card used to print the *upfront* amount instead, unlabelled,
-    which is zero for a tax-credit schedule, an operational rate and loan terms, so a §35c credit
-    worth 2,060 EUR appeared as "0.00 EUR" while the SUBSIDY category NPV beside it counted it.
-    Three renderings of one audit trail may not disagree about what an award is worth.
-
-    A card heading is an `<h4>`: sections are `<h3>` under their chapter's `<h2>` since the
-    mnemonic naming, so a card inside one has to sit a level below it or the document outline
-    reads as two sections where there is one.
+    Each card lists what APPLIED (with the slots a cap bound in), what was REJECTED and why, and what is OPEN on an
+    unanswered question, with the upper bound answering could unlock. There is one card per distinct decision
+    (`_decisions_by_content`), naming the perspectives that share it. An award is worth `views.describe_award`'s total,
+    as in the awards table and `cost_summary.md`. Support without a decision behind it (an archived result) is drawn
+    with a note that it has no audit trail. Card headings are `<h4>`, below the section's `<h3>`.
 
     Args:
         matrix: Every evaluated perspective; their decisions are grouped by content.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, or the empty string when there is neither a decision nor any support to
-        draw.
+        The section, or the empty string when there is neither a decision nor any support.
     """
     cards = []
     for decision, perspective_ids in _decisions_by_content(matrix):
@@ -1040,9 +834,8 @@ def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) ->
     if not cards and not composition:
         return ""
     # The two states of this section: with a catalog the cards below are the audit trail the
-    # authored prose describes; support drawn without any card has no decision behind it, which
-    # since the §10.1 shim's retirement only a result archived before it carries, and this note
-    # says which of the two the reader is looking at.
+    # authored prose describes; support drawn without any card has no decision behind it (only
+    # an archived result carries such support), and this note says which of the two it is.
     caption = "" if cards else (
         '<p class="sub">No subsidy catalog decision backs the support shown here. It comes from '
         "the retired flat legacy shim (cost_spec.md §10.1, retired 2026-09-24), which a run "
@@ -1061,36 +854,23 @@ def _subsidy_section_html(matrix: EvaluationMatrix, context: _ChapterContext) ->
 
 
 def _co2_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The CO2 section: lifecycle emissions (§3.8), embodied vs. operational.
+    """Render the CO2 section: lifecycle emissions (§3.8), embodied and operational.
 
-    Answers "does the emissions accounting behave like the money does, and are the two kept
-    apart?" Embodied emissions (blue, keyed by component subject, booked at installation and at
-    every replacement) and operational emissions (orange, keyed by energy carrier) are drawn on
-    one axis so their relative size is visible, since for a well-insulated building with a heat
-    pump the embodied share stops being negligible. The section's authored prose states the
-    separation the spec insists on: these are *masses*, and neither the CO2 price (a cash flow)
-    nor the CO2 damage cost (a macroeconomic charge) is ever added to them.
-
-    Three views of the same figures: sorted horizontal bars, a cumulative operational curve over
-    the horizon (flat-sloped, because v1 holds emission factors constant — the caption says so;
-    revisit both the slope and that caption when a time-varying emission-factor path ships, spec
-    §3.8), and a table whose Total row closes against `total_co2_in_kg`. Emissions are never
-    discounted, so unlike the money charts this one has no present-value counterpart.
-
-    It lives here rather than with the SVG primitives it draws with: it is a section, and every
-    section is assembled in this module so `charts.py` stays free of `report_prose` and can
-    remain the layer `scaffold.py` builds on.
+    Embodied emissions (blue, per component, booked at installation and every replacement) and operational emissions
+    (orange, per carrier) share one axis. These are masses; neither the CO2 price nor the CO2 damage cost is added to
+    them. The section shows sorted horizontal bars, a cumulative operational curve (a straight line, because emission
+    factors are constant; the caption says so), a table whose Total row matches `total_co2_in_kg`, and the factors
+    table. Emissions are not discounted.
 
     Args:
         matrix: Every evaluated perspective; the section is drawn from the reference one.
-        context: The chapter this section is being rendered into.
+        context: The chapter this section is rendered into.
 
     Returns:
-        The section, or the empty string when the run has no emissions data at all.
+        The section, or the empty string when the run has no emissions data.
 
     Raises:
-        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`); the
-            section is drawn from the reference one.
+        ValueError: If the matrix holds no evaluated perspective.
     """
     result = _reference_result(matrix)
     co2 = result.lifecycle_co2_result
@@ -1166,19 +946,14 @@ def _co2_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str
 
 
 def _co2_factors_table(result: LifecycleCostResult) -> str:
-    """The conversions behind every mass in the section above (Q26 F3, rule 2.9).
+    """Render the conversions behind every mass in the CO2 section.
 
-    One row per carrier and per device, each stating its factor, the quantity it multiplies and
-    the product — so every bar in the chart is one visible multiplication away from its inputs
-    instead of a number to be trusted. Operational rows carry the annual mass and the horizon
-    total; embodied rows carry the mass per installation and how many installations the horizon
-    booked, which is where a device replaced once inside the horizon shows its doubled mass.
-
-    Empty for a result stored before the factors were recorded, in which case the section renders
-    exactly as it did before rather than dividing masses by quantities to invent a factor.
+    One row per carrier and per device with its factor, the quantity it multiplies and the product. Operational rows
+    give the annual mass and the horizon total; embodied rows give the mass per installation and the number of
+    installations, so a device replaced once shows its doubled mass.
 
     Args:
-        result: The perspective whose CO2 accounting the table spells out.
+        result: The perspective whose CO2 accounting is spelled out.
 
     Returns:
         The disclosure, or the empty string when the result records no factor.

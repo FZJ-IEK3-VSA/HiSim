@@ -1,0 +1,90 @@
+# Mockup (design): energy_systems/assemblies/mobility/electric_vehicle.assembly.yaml, written in lean v1 syntax
+# (spec §13.1) and read by the lean reader and library check; † marks what HiSim does not have yet.
+# One electric car with its battery and its L1 charge controller, exactly the three components of the car twin
+# (energy_systems/household_heatpump_car_building_sizer.grouped.energy_system.yaml:96-132). The EMS actuates the L1's
+# ElectricityTargetFromEMS through the feed's dispatch (twin: weight 5, `dispatch: {target_input:
+# ElectricityTargetFromEMS}`), never the car battery (D21).
+#
+# Cross-boundary facts the format does not carry (dry-run gap G12), each †:
+#  - the car's driving profile is not wired: UtspLpgConnector publishes every car of its LPG household into the
+#    SimRepository and the Car finds its own by car_name, so the `usage` need has no input to lower to;
+#  - the household name and the charging station set are the OCCUPANCY's (the LPG travel route set "for 10km
+#    Commuting Distance", the charging station "at Home with 11 kW"): the request's commuting distance and charging
+#    power choose them on the site's Occupancy, so they are no parameters here, and the twin's values stand below;
+#  - CarConfig.source_weight and the L1's source_weight are "what a charging station and a car battery bind to, so
+#    several cars in one system must not share it" (generic_car.py:122-124); v1 derives nothing from an instance
+#    (D26, no $derived), so a second car needs G12 first.
+
+schema_version: 4
+kind: assembly
+name: mobility/electric_vehicle
+description: An electric car charged at home by an L1 charge controller.
+
+parameters:
+  car_name:
+    {type: string, default: Car_2_22kW_Charging_Power_avg_Speed_30_kmh,
+     description: "Normalised LPG car name (e.g. Car_2_22kW_Charging_Power_avg_Speed_30_kmh); chosen by the translator from commuting distance and charging power."}
+     # † default is a placeholder, the car twin's car: the translator always chooses the name
+  battery_set_soc:
+    {type: float, unit: ANY, default: 0.4, range: {min: 0.1, max: 1.0},
+     description: Target state of charge the L1 charges to on its own (car twin value).}
+     # unit ANY: the lean stack declares ANY on the L1's battery_set_soc (a fraction). Range: 10 to 100 %
+  # † charging_power_in_watt and commuting_distance_in_km (request leaves) choose the occupancy's charging station
+  #   and travel route set; they return as parameters when the car's coupling to the occupancy is wired (G12).
+
+components:
+  Car:
+    class: hisim.components.generic_car.Car
+    constructor:
+      for_household:
+        household_name: CHR01_Couple_both_at_Work_HH1      # † the occupancy's household, written by the setup today (G12)
+        car_name: {$param: car_name}
+    # source_weight: the class default 1 (†, see above); occupancy_identity stays AUTO: Size.OCCUPANCY_IDENTITY from
+    # the site's UtspLpgConnector
+    inputs:
+      - {$port: usage}                                     # † see the port
+  CarBattery:
+    class: hisim.components.advanced_ev_battery_bslib.CarBattery
+    preset: standard
+    inputs: [ChargeController]                             # TargetPowerToOrFromBattery <- ElectricityTargetToOrFromCarBattery
+  ChargeController:
+    class: hisim.components.controller_l1_generic_ev_charge.L1Controller
+    config:
+      charging_station_set:                                # † the occupancy's charging station set (G12)
+        Name: Charging At Home with 11 kW
+        Guid: {StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2}
+      lower_threshold_charging_power_in_watt: 1100.0
+      source_weight: 1                                     # † one car per house until G12
+      battery_set_soc: {$param: battery_set_soc}
+    inputs: [CarBattery, Car]                              # StateOfCharge, AcBatteryChargingPower; ElectricityNeededByCar, CarLocation
+
+interface:
+  needs:
+    usage:       {into: [Car], partner: UtspLpgConnector}
+                 # † the Car declares no default connections from UtspLpgConnector: it reads its profile from the
+                 #   SimRepository by car_name, so this need lowers to a bare name the wiring refuses until G12 gives
+                 #   the Car an input from the occupancy
+    electricity: {carrier: electricity, outputs: [ChargeController.BatteryChargingPowerToEMS]}
+    occupancy:   {fact: occupancy_identity, into: [Car]}
+  provides:
+    charging:
+      output: ChargeController.BatteryChargingPowerToEMS   # controller_l1_generic_ev_charge.py:269; tagged CAR_BATTERY
+      controllable: {target_input: ElectricityTargetFromEMS, optional: true}
+      # the L1's input the EMS writes (D21), lowered into the feed's dispatch.target_input, as in the car twin;
+      # optional: without a controller the L1 charges to battery_set_soc on its own
+
+tests:
+  # One day at 900 s beside the occupancy partner, whose LPG household drives the car. Charging is limited by the
+  # twin's 11 kW station (the box's 22 kW with margin); driving draws at most about 25 kW (20 kWh/100 km at 130 km/h).
+  # Signs of the car battery's outputs are not checked against advanced_ev_battery_bslib.py, so those bands are
+  # symmetric and cover driving too.
+  bounds:
+    - {output: Car.ElectricityOutput, unit: WATT, min: 0, max: 50000}                       # driving demand, 2x margin
+    - {output: CarBattery.AcBatteryChargingPower, unit: WATT, min: -60000, max: 60000}      # sign unchecked; driving or charging
+    - {output: CarBattery.DcBatteryChargingPower, unit: WATT, min: -60000, max: 60000}      # sign unchecked
+    - {output: CarBattery.AcBatteryDischargingPower, unit: WATT, min: -60000, max: 60000}   # sign unchecked
+    - {output: ChargeController.ElectricityTargetToOrFromCarBattery, unit: WATT, min: -25000, max: 25000}   # the station, with margin
+    - {output: ChargeController.BatteryChargingPowerToEMS, unit: WATT, min: -25000, max: 25000}            # the station, with margin
+  monotone:
+    - {parameter: battery_set_soc, kpi: Total charged electricity for electric car, member: CarBattery, direction: increasing}
+      # a higher target state of charge charges at least as much in a day

@@ -8,7 +8,7 @@ defaulted beyond the declarations: a value that does not fit is a load error nam
 parameter and what would fit.
 
 A parameter is *stated* for a constraint when its resolved value is neither ``none``, nor ``AUTO``,
-nor ``false``.
+nor ``false``; ``0`` is a stated value.
 """
 
 from __future__ import annotations
@@ -56,9 +56,14 @@ class ParameterChecks:
         return None
 
     @classmethod
+    def is_stated(cls, value: Any) -> bool:
+        """Whether a resolved value counts for a constraint; by identity, so ``0`` is stated and ``false`` is not."""
+        return value is not None and value is not False and value != cls.AUTO_SPELLING
+
+    @classmethod
     def violation(cls, names: Tuple[str, ...], values: Mapping[str, Any]) -> Optional[str]:
         """Names how a resolved parameter set violates one ``exactly_one_of``, or ``None``."""
-        stated = [name for name in names if values.get(name) not in (None, False, cls.AUTO_SPELLING)]
+        stated = [name for name in names if cls.is_stated(values.get(name))]
         if len(stated) == 1:
             return None
         return f"exactly one of {', '.join(names)} is stated, but {len(stated)} are ({', '.join(stated) or 'none'})"
@@ -114,8 +119,8 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
         The selection.
 
     Raises:
-        EnergySystemAssemblyError: ``EF-76`` for an unknown parameter or a value that does not fit,
-            ``EF-77`` for a violated ``exactly_one_of``.
+        EnergySystemAssemblyError: ``EF-76`` for an unknown parameter, a value that does not fit or a
+            variant selector left at no value, ``EF-77`` for a violated ``exactly_one_of``.
     """
     declarations = assembly.parameters
     values: Dict[str, Any] = {name: declaration.default for name, declaration in declarations.items()}
@@ -130,7 +135,7 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
                 alternatives_label="parameters",
                 offending_value=str(name),
             )
-        written = None if value == "none" and declaration.type != ParameterType.STRING else value
+        written = declaration.type.written(value)
         problem = ParameterChecks.problem(declaration, written)
         if problem is not None:
             raise EnergySystemAssemblyError(
@@ -151,9 +156,16 @@ def select(assembly: AssemblyFile, label: str, given: Mapping[str, Any], where: 
     variants: Dict[str, str] = {}
     offered: Set[str] = set()
     for variant in assembly.variants.values():
-        # The library check proved that the options partition the selector's values.
         option = variant.option_for(values[variant.selected_by])
-        assert option is not None
+        if option is None:
+            raise EnergySystemAssemblyError(
+                EnergySystemErrorId.PARAMETER_INVALID,
+                where,
+                f"the parameter '{variant.selected_by}' of '{label}' selects the variant '{variant.name}', but it "
+                f"resolves to {values[variant.selected_by]!r}, which no option covers.",
+                alternatives=[repr(value) for option in variant.options.values() for value in option.when],
+                alternatives_label=f"values of '{variant.selected_by}'",
+            )
         variants[variant.name] = option.name
         members.update(option.components)
         for other in variant.options.values():

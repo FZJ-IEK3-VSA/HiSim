@@ -184,8 +184,9 @@ class HydronicPort:
     """The three outputs of one water circuit, as one end of it declares them (spec §3.5).
 
     ``mass_flow`` is the pump owner's output (kg/s), ``supply_temperature`` and ``return_temperature`` the
-    outputs (°C) of the components the water leaves on each leg; each is a name under HiSim's one identifier
-    rule, :meth:`hisim.config.names.NameSyntax.require_identifier`, the rule every output name obeys.
+    outputs (°C) of the components the water leaves on each leg; each is a name under the component-key rule,
+    :meth:`hisim.config.names.NameSyntax.require_component_key`: an identifier, or identifiers joined by ``-`` as
+    an assembly member's serialized address is.
 
     ``role`` is ``OUT`` for the supply owner and ``IN`` for the receiver; it says on which side of that end's
     balance the circuit's heat counts and never changes the heat's sign, which is the circuit's own (negative for
@@ -207,7 +208,8 @@ class HydronicPort:
         """Refuse names that are not distinct identifiers and a role other than ``IN`` or ``OUT``.
 
         Raises:
-            HydronicPortError: If a name breaks HiSim's identifier rule, two names coincide, or the role is not an
+            HydronicPortError: If a name is no component key (an identifier, or an assembly member's address joined
+                by ``-``), two names coincide, or the role is not an
                 :class:`~hisim.loadtypes.EnergyRole` ``IN`` or ``OUT``.
         """
         names = {
@@ -217,7 +219,7 @@ class HydronicPort:
         }
         for field_name, output_name in names.items():
             try:
-                NameSyntax.require_identifier(output_name, f"hydronic port {field_name} output")
+                NameSyntax.require_component_key(output_name)
             except ValueError as error:
                 raise HydronicPortError(f"A hydronic port's {field_name} must name an output: {error}") from error
         if len(set(names.values())) != len(names):

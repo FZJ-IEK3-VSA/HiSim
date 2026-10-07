@@ -35,18 +35,22 @@ class AssemblySchemaBuilder:
         "default_inputs",
         "explicit_wire",
         "aggregator_feed",
+        "input_item",
+        "string_or_param",
         "sizing_sources",
         "port",
         "port_placeholder",
         "observes_placeholder",
     )
 
+    #: The parameter types that are numbers, which carry a unit and a range.
+    NUMERIC: ClassVar[list] = [kind.value for kind in ParameterType if kind.is_numeric]
+
     def build(self) -> Dict[str, Any]:
         """Builds the schema."""
         shared = SchemaBuilder(()).build()["$defs"]
         definitions = {key: shared[key] for key in self.SHARED}
         definitions.update(self._own_definitions())
-        numeric = [kind.value for kind in ParameterType if kind.is_numeric]
         return {
             "$schema": SchemaBuilder.DIALECT,
             "$id": self.FILENAME,
@@ -90,7 +94,7 @@ class AssemblySchemaBuilder:
                 "required": ["parameters"],
                 "properties": {
                     "parameters": {
-                        "not": {"additionalProperties": {"not": {"properties": {"type": {"enum": numeric}}}}}
+                        "not": {"additionalProperties": {"not": {"properties": {"type": {"enum": self.NUMERIC}}}}}
                     }
                 },
             },
@@ -101,18 +105,8 @@ class AssemblySchemaBuilder:
     @classmethod
     def _own_definitions(cls) -> Dict[str, Any]:
         """The definitions only an assembly file has."""
-        numeric = [kind.value for kind in ParameterType if kind.is_numeric]
         band = {"min": {"type": "number"}, "max": {"type": "number"}}
         one_end = {"anyOf": [{"required": ["min"]}, {"required": ["max"]}]}
-        member_input = {
-            "oneOf": [
-                {"$ref": "#/$defs/default_inputs"},
-                {"$ref": "#/$defs/explicit_wire"},
-                {"$ref": "#/$defs/aggregator_feed"},
-                {"$ref": "#/$defs/port_placeholder"},
-                {"$ref": "#/$defs/observes_placeholder"},
-            ]
-        }
         return {
             "parameter": {
                 "type": "object",
@@ -132,7 +126,7 @@ class AssemblySchemaBuilder:
                     "description": {"type": "string", "minLength": 1},
                 },
                 "allOf": [
-                    {"if": {"properties": {"type": {"enum": numeric}}}, "then": {"required": ["unit", "range"]}},
+                    {"if": {"properties": {"type": {"enum": cls.NUMERIC}}}, "then": {"required": ["unit", "range"]}},
                     {"if": {"properties": {"type": {"const": "enum"}}}, "then": {"required": ["values"]}},
                 ],
             },
@@ -148,12 +142,10 @@ class AssemblySchemaBuilder:
                 "required": [ComponentEntry.CLASS_KEY],
                 "properties": {
                     ComponentEntry.CLASS_KEY: {"type": "string"},
-                    "preset": {
-                        "oneOf": [{"type": "string"}, {"type": "object", "required": ["$param"], "maxProperties": 1}]
-                    },
+                    "preset": {"$ref": "#/$defs/string_or_param"},
                     "constructor": {"type": "object", "minProperties": 1, "maxProperties": 1},
                     "config": {"type": "object"},
-                    "inputs": {"type": "array", "items": member_input},
+                    "inputs": {"type": "array", "items": {"$ref": "#/$defs/input_item"}},
                     "sizing_sources": {"$ref": "#/$defs/sizing_sources"},
                     "display": {"type": "string"},
                 },

@@ -29,6 +29,15 @@ def test_the_display_name_is_presentation_and_never_identity() -> None:
 
 
 @pytest.mark.base
+def test_the_owning_assembly_is_informative_and_never_identity() -> None:
+    """Catches two identities of one runtime name comparing or hashing differently by their assembly."""
+    one = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="pv/array")
+    other = dataclasses.replace(one, assembly="other/array")
+    assert one == other and hash(one) == hash(other) and one.key == other.key
+    assert other.to_dict()["assembly"] == "other/array"
+
+
+@pytest.mark.base
 def test_an_identity_outside_every_assembly_serializes_as_before_and_a_path_round_trips() -> None:
     """Catches the new fields changing the dump (and so every cache key) of a component without an address."""
     assert ComponentID("Weather", building="BUI1").to_dict() == {"name": "Weather", "building": "BUI1", "unit": None}

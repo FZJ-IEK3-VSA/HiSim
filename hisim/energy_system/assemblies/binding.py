@@ -12,11 +12,13 @@ class is one of its partner classes, and a verb decides every other case. In sco
 entries, the live components of groups and variants, and every member of every import; a port never
 binds into its own instance. A verb names an import or a component the file declares, absent only
 through a disabled group or an unselected option. The refusals: ``EF-7A`` no partner, ``EF-7B``
-several and no verb, ``EF-7C`` ``none:`` on a required port, ``EF-7D`` an undeclared partner or an
+several and no verb, ``EF-7C`` ``none:`` or ``optional-bind:`` on a required port, ``EF-7D`` an undeclared partner or an
 absent ``bind:`` partner, ``EF-7E`` an optional port with candidates and no verb,
 ``EF-7F`` a verb on an inactive port, ``EF-7G`` a verb naming no need, ``EF-7H`` a bound provided
 output the need's wires do not read, ``EF-7J`` a partner of another class or a need with nowhere to
-land. Each names the owner, the port and the candidates and ends in a paste-ready verb line.
+land. Each names the owner and the port; the refusals that decide among candidates (``EF-7A``,
+``EF-7B``, ``EF-7C``, ``EF-7E``, an absent ``bind:`` partner) also list the candidates and end in a
+paste-ready verb line.
 """
 
 from __future__ import annotations
@@ -113,6 +115,11 @@ class PortBinder:
         ]
 
     @staticmethod
+    def listed(candidates: Sequence[Tuple[Owner, Unit]]) -> str:
+        """The candidates' names for a message."""
+        return ", ".join(unit.name for _other, unit in candidates) or "none"
+
+    @staticmethod
     def paste(owner: Owner, port: Port, candidates: Sequence[Tuple[Owner, Unit]], optional: bool) -> str:
         """The paste-ready verb lines of a refusal."""
         references = list(dict.fromkeys(other.reference for other, _unit in candidates)) or ["<partner>"]
@@ -137,28 +144,37 @@ class PortBinder:
                 )
             return PortRecord(name, state.value, state.value)
         optional = state == PortState.OPTIONAL
-        candidates = self.candidates(owner, port)
-        listed = ", ".join(unit.name for _other, unit in candidates) or "none"
         what = f"the {state.value} port '{name}' (partner {', '.join(port.partner)})"
         if written is not None:
             verb, target = written
             if verb == "none":
                 if not optional:
+                    candidates = self.candidates(owner, port)
                     raise self.error(
                         EnergySystemErrorId.REQUIRED_PORT_DECLINED,
                         owner,
-                        f"{what} is declined with 'none:', but a required port cannot be; candidates: {listed}.",
+                        f"{what} is declined with 'none:', but a required port cannot be; candidates: "
+                        f"{self.listed(candidates)}.",
                         remedy=self.paste(owner, port, candidates, False),
                     )
                 return PortRecord(name, state.value, "declined", "none")
             assert target is not None
+            if verb == "optional-bind" and not optional:
+                raise self.error(
+                    EnergySystemErrorId.REQUIRED_PORT_DECLINED,
+                    owner,
+                    f"{what} is written 'optional-bind: {{{name}: {target}}}', but optional-bind: leaves a port "
+                    "unbound when its partner is absent, and only an optional port may stay unbound.",
+                    remedy=f"Write `bind: {{{name}: {target}}}` in {owner.verb_site} instead.",
+                )
             head = target.split(".")[0]
             if head not in self.declared:
                 raise self.error(
                     EnergySystemErrorId.BOUND_PARTNER_ABSENT,
                     owner,
                     f"{what} is bound to '{target}' with '{verb}:', but the file declares no import or component "
-                    f"'{head}'; a house without the partner leaves the verb out. Candidates of the port: {listed}.",
+                    f"'{head}'; a house without the partner leaves the verb out. Candidates of the port: "
+                    f"{self.listed(self.candidates(owner, port))}.",
                     alternatives=self.declared,
                     alternatives_label="imports and components the file declares",
                     offending_value=head,
@@ -167,13 +183,16 @@ class PortBinder:
             if partner is None:
                 if verb == "optional-bind":
                     return PortRecord(name, state.value, f"not bound: {head} {absent}", verb)
+                candidates = self.candidates(owner, port)
                 raise self.error(
                     EnergySystemErrorId.BOUND_PARTNER_ABSENT,
                     owner,
-                    f"{what} is bound to '{target}', but '{head}' is {absent}; candidates: {listed}.",
+                    f"{what} is bound to '{target}', but '{head}' is {absent}; candidates: {self.listed(candidates)}.",
                     remedy=self.paste(owner, port, candidates, optional),
                 )
             return self.lower(owner, port, state, partner, verb)
+        candidates = self.candidates(owner, port)
+        listed = self.listed(candidates)
         if len(candidates) == 1 and not optional:
             return self.lower(owner, port, state, candidates[0][1], "default")
         if len(candidates) > 1 and not optional:
@@ -240,14 +259,14 @@ class PortBinder:
                         alternatives_label="instances",
                     )
                 targets, rest = matching, rest[1:]
-            if rest:
-                return self.provided(owner, port, targets[0], rest[0], target), ""
         else:
             return None, self.absent[head]
         if len(rest) > 1:
             raise self.error(
                 EnergySystemErrorId.BOUND_PARTNER_ABSENT, owner, f"'{target}' names more than an instance and a port."
             )
+        if rest:
+            return self.provided(owner, port, targets[0], rest[0], target), ""
         matching_units = [
             unit
             for other in targets
@@ -306,6 +325,13 @@ class PortBinder:
                 remedy=f"Name '{provided.output_name}' in the port's wires, or bind the port to "
                 f"'{target.reference}' itself.",
             )
+        if provided.output_member not in target.units:
+            raise self.error(
+                EnergySystemErrorId.BOUND_PARTNER_ABSENT,
+                owner,
+                f"'{written}': the member '{provided.output_member}' providing '{name}' is not in {target.label} "
+                "with its parameters.",
+            )
         return target.units[provided.output_member], provided.output_name
 
     def lower(
@@ -323,19 +349,18 @@ class PortBinder:
             )
         lowered: List[str] = []
         landed = False
+        items: List[AnyInputItem] = (
+            [ExplicitWire(source=unit.name, input=target, output=output) for target, output in port.wires.items()]
+            if port.wires is not None
+            else [DefaultInputs(source=unit.name)]
+        )
         for member in port.into:
             holder = owner.units.get(member)
             if holder is None:
                 continue
-            items: List[AnyInputItem] = (
-                [ExplicitWire(source=unit.name, input=target, output=output) for target, output in port.wires.items()]
-                if port.wires is not None
-                else [DefaultInputs(source=unit.name)]
-            )
             for position in holder.placeholder_positions(port.name):
                 landed = True
-                holder.lowered[position] = items
-                holder.notes[position] = f"port {port.name} bound to {unit.name} ({verb})"
+                holder.lowered[position] = (items, f"port {port.name} bound to {unit.name} ({verb})")
                 lowered.extend(f"{holder.name}.inputs: {self.item_text(item)}" for item in items)
         if not landed:
             raise self.error(

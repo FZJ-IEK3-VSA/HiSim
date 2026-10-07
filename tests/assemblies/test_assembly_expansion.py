@@ -17,6 +17,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, K
 from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Mocks, expand_text, site
 
 REPOSITORY = Path(__file__).resolve().parents[2]
+HEATER = "heater: {assembly: mock/electric_heater"
 
 
 def expand_house():
@@ -254,6 +255,34 @@ def test_an_exactly_one_of_constraint_is_checked_on_the_resolved_parameters(para
     with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
         expand_text(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, parameters: {parameters}}}"))
     assert "power_in_watt, share_of_roof" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_zero_is_a_stated_value_for_an_exactly_one_of_constraint() -> None:
+    """Catches ``0 == False`` making a power of 0 count as unstated: alone it is the one stated value."""
+    flat, record = expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {power_in_watt: 0}}"))
+    assert record.instance("pv").parameters_resolved["power_in_watt"] == 0
+    assert flat.components["pv-PVSystem"].config["power_in_watt"] == 0
+
+
+@pytest.mark.base
+def test_zero_and_a_share_both_stated_violate_an_exactly_one_of_constraint() -> None:
+    """Catches ``0 == False`` letting a power of 0 and a share of the roof both through as "exactly one"."""
+    with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
+        expand_text(
+            site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {power_in_watt: 0, share_of_roof: 0.5}}")
+        )
+    assert "2 are (power_in_watt, share_of_roof)" in str(refusal.value) and "import 'pv'" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
+    """Catches an import writing ``none`` for a variant's selector crashing on an assertion."""
+    with pytest.raises(EnergySystemAssemblyError, match="EF-76") as refusal:
+        expand_text(site(WEATHER, OCCUPANCY, imports=f"{HEATER}, parameters: {{with_thermostat: none}}}}"))
+    message = str(refusal.value)
+    for name in ("with_thermostat", "thermostat", "None", "import 'heater'"):
+        assert name in message, f"{name!r} is not in: {message}"
 
 
 @pytest.mark.base

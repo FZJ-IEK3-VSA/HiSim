@@ -82,7 +82,7 @@ class AssemblyReader:
             description=RawDocument.string(document.get("description"), f"{origin}.description", required=False),
             parameters=cls.parameters(document.get("parameters"), f"{origin}.parameters"),
             exactly_one_of=cls.constraints(document.get("constraints"), f"{origin}.constraints"),
-            components=cls.members(document.get("components"), f"{origin}.components", None, ("components",)),
+            components=cls.members(document.get("components"), f"{origin}.components", ("components",)),
             variants=cls.variants(document.get("variants"), f"{origin}.variants"),
             ports=cls.interface(document.get("interface"), f"{origin}.interface"),
             tests=cls.tests(document.get("tests"), f"{origin}.tests") if "tests" in document else None,
@@ -110,11 +110,7 @@ class AssemblyReader:
             values = body.get("values")
             if values is not None and (not isinstance(values, list) or not values):
                 raise RawDocument.malformed(f"{body_location}.values", values, "a non-empty list of values")
-            default: Any = NO_DEFAULT
-            if "default" in body:
-                default = (
-                    None if body["default"] == "none" and parameter_type != ParameterType.STRING else body["default"]
-                )
+            default: Any = parameter_type.written(body["default"]) if "default" in body else NO_DEFAULT
             declarations[name] = ParameterDeclaration(
                 name=name,
                 type=parameter_type,
@@ -160,9 +156,7 @@ class AssemblyReader:
         return tuple(constraints)
 
     @classmethod
-    def members(
-        cls, raw: Any, location: str, option: Optional[Tuple[str, str]], source_path: Tuple[str, ...]
-    ) -> Dict[str, MemberTemplate]:
+    def members(cls, raw: Any, location: str, source_path: Tuple[str, ...]) -> Dict[str, MemberTemplate]:
         """Reads a components block of an assembly: entries with local names and a display template."""
         members: Dict[str, MemberTemplate] = {}
         for name, value in RawDocument.mapping(raw, location).items():
@@ -180,7 +174,6 @@ class AssemblyReader:
                 entry=entry,
                 preset_parameter=preset_parameter,
                 display=display,
-                option=option,
                 source_path=source_path + (name,),
             )
         return members
@@ -215,7 +208,6 @@ class AssemblyReader:
                     components=cls.members(
                         option.get("components"),
                         f"{option_location}.components",
-                        (name, option_name),
                         ("variants", name, "options", option_name, "components"),
                     ),
                 )

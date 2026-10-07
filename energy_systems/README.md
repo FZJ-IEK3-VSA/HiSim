@@ -305,13 +305,14 @@ connections from that class) or, with `wires:`, to explicit wires; a **provided*
 Member.Output}` is what a need names when it must read one output. A site entry declares its own
 needs under `ports:`. Every port with a candidate is decided in the file, with one of three verbs
 on the import or the site entry: `bind: {port: partner}` (the partner must exist), `optional-bind:
-{port: partner}` (binds if it exists), `none: [port]` (declines an optional port). The partner of
+{port: partner}` (an optional port only: binds if it exists; on a required port it is refused,
+`EF-7C`), `none: [port]` (declines an optional port). The partner of
 either verb is an import or a component the file declares; it may be absent only because its group
 is disabled or its variant option not selected, which leaves an `optional-bind:` unbound with that
 reason in the record, and a name the file does not declare is refused (`EF-7D`), so a typo is never
 read as a house without the partner. `required_when`/`active_when` switch a port by the parameters.
 What cannot be decided — no partner, several and no verb, a verb on an inactive port — is refused
-with `EF-7A` … `EF-7J`, naming the candidates and a line to paste. The realized record of the run
+with `EF-7A` … `EF-7J`; the refusals that decide among candidates name them and a line to paste. The realized record of the run
 carries the import record (assembly and its sha256, parameters as given and as resolved, variants,
 addresses, every port's decision, `installation_year`/`quote`, the final sequence) and the source
 map in its metadata, so `--rerun` reproduces it without any assembly; a record whose components no
@@ -334,7 +335,7 @@ assemblies, `$switch`/`$fact`/`$derived` (`$param` is the one value placeholder)
 its own change when a real assembly needs it. Circuit, carrier, fact and observer ports,
 `controllable` and `observes:` are read but lowered in the next step; a file using them is refused
 with `EF-74`. The spec is `roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1); the mock
-library the tests run on is `tests/assemblies/mock_assemblies/`.
+library the tests run on is `tests/assemblies/mock_assemblies/library/`.
 
 ## Relation to `system_setups/`
 

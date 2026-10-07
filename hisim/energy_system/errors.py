@@ -411,7 +411,7 @@ class EnergySystemAssemblyError(EnergySystemCatalogueError):
     not have or lowers only in part 2, an assembly the library check refuses, a parameter of the
     wrong type, value, range or unit, a violated constraint, and a port that cannot be bound
     (§3.3). Every message names the import (and instance) and the port, and the binding refusals
-    list the candidates and end in a paste-ready verb line.
+    that decide among candidates list them and end in a paste-ready verb line.
     """
 
 

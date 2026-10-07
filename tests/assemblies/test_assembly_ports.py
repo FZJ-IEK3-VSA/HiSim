@@ -6,7 +6,9 @@ from typing import Tuple
 
 import pytest
 
+from hisim.energy_system.assemblies.binding import Owner, PortBinder
 from hisim.energy_system.errors import EnergySystemAssemblyError
+from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
 from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Mocks, expand_text, site
 
@@ -81,13 +83,54 @@ def test_a_bind_to_an_absent_partner_is_refused() -> None:
 @pytest.mark.base
 def test_a_bind_to_an_instance_an_import_does_not_have_is_refused_whatever_the_verb() -> None:
     """Catches a typo in an instance being taken for an absent partner by ``optional-bind:``."""
+    monitor = MONITOR.replace("ports:", "optional-bind: {pv: pv.south}\n  ports:").replace(
+        "ElectricityOutput}}", "ElectricityOutput}, optional: true}"
+    )
     refused(
-        site(MONITOR.replace("ports:", "optional-bind: {pv: pv.south}\n  ports:"), WEATHER, imports=PV_PAIR + "}"),
+        site(monitor, WEATHER, imports=PV_PAIR + "}"),
         "EF-7D",
         "pv.south",
         "east",
         "west",
     )
+
+
+@pytest.mark.base
+def test_an_optional_bind_on_a_required_port_is_refused_with_the_bind_line() -> None:
+    """Catches ``optional-bind:`` leaving a required port silently unbound when its partner is absent."""
+    message = refused(
+        site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, optional-bind: {{tank_temperature: tank}}}}"),
+        "EF-7C",
+        "tank_temperature",
+        "import 'heater'",
+        "optional-bind: {tank_temperature: tank}",
+    )
+    assert "`bind: {tank_temperature: tank}`" in message
+
+
+@pytest.mark.base
+def test_a_three_part_verb_target_on_an_import_without_instances_is_refused() -> None:
+    """Catches ``import.port.extra`` binding to the port and silently dropping the rest."""
+    refused(
+        site(OCCUPANCY, imports=f"{TANK}, bind: {{heat: heater.heat.extra}}}}\n{HEATER}}}"),
+        "EF-7D",
+        "heater.heat.extra",
+        "names more than an instance and a port",
+    )
+
+
+@pytest.mark.base
+def test_a_provided_output_whose_member_is_absent_is_refused_by_name() -> None:
+    """Catches the binder raising a KeyError for a provided output whose member the selection left out."""
+    need = Port(name="heat", section="needs", kind=PortKind.NEED, into=("Tank",), partner=("Gen",), wires={"P": "P"})
+    provided = Port(name="power", section="provides", kind=PortKind.PROVIDED, output="Gen.P")
+    states = {"power": PortState.PROVIDED}
+    target = Owner("gen", "import 'gen'", "the import 'gen'", BindingVerbs(), {}, {"power": provided}, states)
+    owner = Owner("tank", "import 'tank'", "the import 'tank'", BindingVerbs(), {}, {"heat": need}, {})
+    with pytest.raises(EnergySystemAssemblyError, match="EF-7D") as refusal:
+        PortBinder({}, {"gen": [target], "tank": [owner]}, {}).provided(owner, need, target, "power", "gen.power")
+    for name in ("gen.power", "'Gen'", "import 'gen'"):
+        assert name in str(refusal.value)
 
 
 @pytest.mark.base

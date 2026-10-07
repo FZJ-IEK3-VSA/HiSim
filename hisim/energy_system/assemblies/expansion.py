@@ -70,9 +70,10 @@ class ImportExpander:
         assemblies = {
             key: self.resolver.resolve(entry.assembly, f"imports.{key}") for key, entry in self.model.imports.items()
         }
-        for assembly in {resolved.path: resolved for resolved in assemblies.values()}.values():
+        unique = list({resolved.path: resolved for resolved in assemblies.values()}.values())
+        for assembly in unique:
             require_valid(assembly)
-        self._refuse_part_two(assemblies)
+        self._refuse_part_two(unique)
         sites: Dict[str, Owner] = {}
         blocks: List[Block] = []
         for name, site_entry in self.model.components.items():
@@ -201,7 +202,7 @@ class ImportExpander:
             states={port_name: SITE.state(port) for port_name, port in entry.ports.items()},
         )
 
-    def _refuse_part_two(self, assemblies: Mapping[str, ResolvedAssembly]) -> None:
+    def _refuse_part_two(self, assemblies: Sequence[ResolvedAssembly]) -> None:
         """Refuses, naming every one, what the file uses whose lowering is part 2 of the v1 work (``EF-74``)."""
         found: List[str] = []
         for name, entry in self.model.components.items():
@@ -218,7 +219,7 @@ class ImportExpander:
         for key, imported in self.model.imports.items():
             if imported.observes is not None:
                 found.append(f"import {key}: observes")
-        for assembly in {resolved.path: resolved for resolved in assemblies.values()}.values():
+        for assembly in assemblies:
             for port_name, port in assembly.model.ports.items():
                 if not port.kind.lowered_in_v1:
                     found.append(f"{assembly.label}: port {port_name} ({port.kind.value})")

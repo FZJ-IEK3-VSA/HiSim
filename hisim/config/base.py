@@ -239,7 +239,8 @@ class ComponentID:
 
     An assembly member (``assemblies_spec.md`` §2.4, D5) also carries its **address**: ``path``,
     the import it came through with its instance key, and ``assembly``, the library path of the
-    assembly that owns it (informative, not part of the key). ``name`` stays the member's own name
+    assembly that owns it (informative: like ``display_name`` below, it takes no part in equality,
+    hashing or the key, so one runtime name is one identity). ``name`` stays the member's own name
     inside its assembly, and the key joins building, unit and the serialized address, the path's
     keys and the name joined by ``-``: ``ComponentID("PVSystem", path=(AddressStep("pv", "east"),))``
     has the key ``"pv-east-PVSystem"``. ``display_name`` is the English label the member's
@@ -255,7 +256,7 @@ class ComponentID:
         default=(), metadata=dataclasses_json_config(exclude=lambda value: not value)
     )
     assembly: Optional[str] = dc.field(
-        default=None, metadata=dataclasses_json_config(exclude=lambda value: value is None)
+        default=None, compare=False, metadata=dataclasses_json_config(exclude=lambda value: value is None)
     )
     display_name: Optional[str] = dc.field(
         default=None, compare=False, metadata=dataclasses_json_config(exclude=lambda value: value is None)

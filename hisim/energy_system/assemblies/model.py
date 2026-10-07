@@ -33,6 +33,10 @@ class ParameterType(enum.Enum):
         """Whether the parameter is a number, which is what carries a unit and a range."""
         return self in (ParameterType.FLOAT, ParameterType.INT)
 
+    def written(self, value: Any) -> Any:
+        """The value a written spelling stands for: ``none`` is "no value" (``None``), except for a string."""
+        return None if value == "none" and self != ParameterType.STRING else value
+
 
 class NoDefault:
     """Marks a parameter declared without a default, which the library check refuses."""
@@ -85,6 +89,13 @@ class ParameterDeclaration(BaseModel):
             return self.values
         return (True, False) if self.type == ParameterType.BOOL else None
 
+    def admits(self, value: Any) -> bool:
+        """Whether a ``when:`` or condition value is one of the closed set; a bool admits only ``true``/``false``."""
+        allowed = self.allowed_values
+        if allowed is None or value not in allowed:
+            return False
+        return self.type != ParameterType.BOOL or isinstance(value, bool)
+
 
 class MemberTemplate(BaseModel):
     """One member of an assembly: a component entry with local names, before expansion.
@@ -95,7 +106,6 @@ class MemberTemplate(BaseModel):
             ``placeholders`` mark where the needs that lower into it land.
         preset_parameter: When the preset is written ``{$param: <name>}``, the parameter naming it.
         display: The English display template over the parameters (§2.4), or ``None``.
-        option: For a member of an internal variant, ``(variant, option)``.
         source_path: The key path of the member's block in its file, for its line.
     """
 
@@ -104,7 +114,6 @@ class MemberTemplate(BaseModel):
     entry: ComponentEntry
     preset_parameter: Optional[str] = None
     display: Optional[str] = None
-    option: Optional[Tuple[str, str]] = None
     source_path: Tuple[str, ...] = ()
 
     @property

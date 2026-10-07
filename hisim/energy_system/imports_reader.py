@@ -190,6 +190,12 @@ class ImportsReader:
         optional = block.get("optional", False)
         if not isinstance(optional, bool):
             raise RawDocument.malformed(f"{location}.optional", optional, "true or false")
+        if optional and "required_when" in block:
+            raise cls.shape_error(
+                location,
+                f"the port '{name}' is 'optional: true' and has 'required_when' at once, which contradict each "
+                "other; an optional port switched off by parameters writes 'active_when'.",
+            )
         fields: Dict[str, Any] = {
             "name": name,
             "section": section,

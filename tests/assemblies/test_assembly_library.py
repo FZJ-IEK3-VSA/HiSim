@@ -94,6 +94,10 @@ def test_the_base_case_passes(tmp_path: Path) -> None:
         (with_parameter("label: {type: string, unit: WATT, default: x, description: l.}"), ("label", "only a number")),
         (with_parameter("mode: {type: enum, default: a, description: m.}"), ("mode", "an enum, and only an enum")),
         (with_parameter("unused: {type: bool, default: true, description: u.}"), ("unused", "feeds no field")),
+        (
+            with_parameter("mode: {type: enum, values: [none, eco], default: eco, description: m.}"),
+            ("the enum 'mode' lists 'none', which spells no value",),
+        ),
         (BASE.replace("unit: LITER", "unit: WATT"), ("EF-78", "volume_in_liter", "LITER", "WATT")),
     ],
 )
@@ -209,6 +213,15 @@ variants:
             ),
             ("'Heater' is written with two classes",),
         ),
+        (VARIANT.replace("when: [false]", "when: [0]"), ("heated=0 is not allowed", "no option covers heated=False")),
+        (
+            VARIANT.replace("partner: MockOccupancy}", "partner: MockOccupancy, active_when: {heated: [1]}}"),
+            ("lists heated=1, which it does not allow",),
+        ),
+        (
+            VARIANT.replace("heated: {type: bool, default: true", "heated: {type: bool, default: none"),
+            ("'heated' selects the variant 'heating', so its default is one of its values, not None",),
+        ),
     ],
 )
 def test_the_variant_rules(tmp_path: Path, text: str, names: Tuple[str, ...]) -> None:
@@ -233,6 +246,50 @@ def test_a_port_into_a_member_an_active_option_lacks_is_refused(tmp_path: Path) 
     assert "the option 'off' of the variant 'heating' does not have" in problems
     switched_off = text.replace("partner: MockController}", "partner: MockController, active_when: {heated: [true]}}")
     assert problems_of(tmp_path / "off", switched_off) == ""
+
+
+@pytest.mark.base
+def test_a_provided_output_of_a_member_an_active_option_lacks_is_refused(tmp_path: Path) -> None:
+    """Catches a provided output naming a member one option leaves out while the port is still provided there."""
+    text = VARIANT.replace(
+        "    demand: {into: [Tank], partner: MockOccupancy}\n",
+        "    demand: {into: [Tank], partner: MockOccupancy}\n  provides:\n    heat: {output: Heater.ThermalPower}\n",
+    )
+    problems = problems_of(tmp_path, text)
+    assert "the port 'heat' names 'Heater', which the option 'off' of the variant 'heating' does not have" in problems
+    switched_off = text.replace("Heater.ThermalPower}", "Heater.ThermalPower, active_when: {heated: [true]}}")
+    assert problems_of(tmp_path / "off", switched_off) == ""
+
+
+@pytest.mark.base
+def test_one_member_name_in_the_options_of_two_variants_is_refused(tmp_path: Path) -> None:
+    """Catches two selected options of two variants writing one member, which would make one component of two."""
+    text = VARIANT.replace(
+        PARAMETER, PARAMETER + "  level: {type: enum, values: [low, high], default: low, description: Level.}\n"
+    ) + (
+        "  mode:\n    selected_by: level\n    options:\n      low:\n        when: [low]\n        components:\n"
+        f"          Heater: {{class: {Mocks.CLASSES}.MockHeater, preset: standard}}\n"
+        "      high:\n        when: [high]\n"
+    )
+    problems = problems_of(tmp_path, text)
+    assert "'Heater' is written in the options of the variants 'heating' and 'mode'" in problems
+
+
+@pytest.mark.base
+def test_a_member_module_raising_at_import_is_one_problem_and_the_listing_goes_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches a module that raises something other than an ImportError aborting the whole library check."""
+    modules = tmp_path / "modules"
+    modules.mkdir()
+    (modules / "raising_at_import_module.py").write_text("raise RuntimeError('boom at import')\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(modules))
+    text = BASE.replace(f"{Mocks.CLASSES}.MockTank", "raising_at_import_module.Tank").replace(
+        " description: Volume.}", "}"
+    )
+    problems = problems_of(tmp_path, text)
+    assert "the class of 'Tank' does not load: boom at import" in problems
+    assert "the parameter 'volume_in_liter' has no description" in problems
 
 
 @pytest.mark.base
@@ -349,3 +406,26 @@ def test_describe_prints_the_interface_the_parameters_and_the_contract(
     ):
         assert line in out, f"{line!r} is not in:\n{out}"
     assert cli.main(["energy-system", "describe", "mock/nothing"]) != 0
+
+
+@pytest.mark.base
+def test_facts_lists_an_imports_parameters_and_selected_variants_as_knobs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Catches ``facts`` on a version-4 file showing no knobs although its imports' parameters drive it."""
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
+    assert cli.main(["energy-system", "facts", str(Mocks.HOUSE)]) == 0
+    knobs = capsys.readouterr().out.split("knobs", 1)[1].split("facts provided", 1)[0]
+    assert "(none)" not in knobs.split("imports.heater", 1)[0]
+    for text in (
+        "imports.pv.east",
+        "imports.pv.west",
+        "mock/pv_array",
+        "given: azimuth_in_degree=270, facing='west', power_in_watt=3000",
+        "resolved: azimuth_in_degree=90, tilt_in_degree=30, power_in_watt=5000, share_of_roof=None, facing='east'",
+        "imports.tank",
+        "given: volume_in_liter=200",
+        "imports.heater",
+        "variant thermostat: fitted",
+    ):
+        assert text in knobs, f"{text!r} is not in:\n{knobs}"

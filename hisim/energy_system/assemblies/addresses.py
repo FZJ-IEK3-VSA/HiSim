@@ -39,8 +39,7 @@ class Unit:
         dropped: Local names of members its assembly's selected variants leave out.
         lines: The line index of the file it was written in.
         block_path: The key path of its block in that file.
-        lowered: Placeholder position to the items its port lowered to.
-        notes: Placeholder position to what produced those items.
+        lowered: Placeholder position to the items its port lowered to, and what produced them.
     """
 
     name: str
@@ -51,8 +50,7 @@ class Unit:
     dropped: Tuple[str, ...]
     lines: LineIndex
     block_path: Tuple[Any, ...]
-    lowered: Dict[int, List[AnyInputItem]] = field(default_factory=dict)
-    notes: Dict[int, str] = field(default_factory=dict)
+    lowered: Dict[int, Tuple[List[AnyInputItem], str]] = field(default_factory=dict)
 
     @property
     def class_name(self) -> str:
@@ -201,10 +199,9 @@ def final_entry(unit: Unit, source_map: SourceMap) -> ComponentEntry:
     inputs: List[AnyInputItem] = []
     for position in range(len(entry.inputs) + len(entry.placeholders)):
         if position in placed:
-            for item in unit.lowered.get(position, []):
-                source_map.add(
-                    unit.name, f"inputs[{len(inputs)}]", unit.source(("inputs", position), unit.notes[position])
-                )
+            items, note = unit.lowered.get(position, ([], ""))
+            for item in items:
+                source_map.add(unit.name, f"inputs[{len(inputs)}]", unit.source(("inputs", position), note))
                 inputs.append(item)
             continue
         item = next(ordinary)

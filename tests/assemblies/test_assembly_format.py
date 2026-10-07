@@ -6,12 +6,14 @@ import textwrap
 from pathlib import Path
 
 import jsonschema
+import pydantic
 import pytest
 import yaml
 
 from hisim.energy_system.assemblies.reader import AssemblyReader
 from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder, assembly_schema_is_current
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemFormatError
+from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind
 from hisim.energy_system.loader import dump_energy_system, parse_energy_system
 from tests.assemblies.helpers import (
     EMPTY_CONTRACT,
@@ -130,6 +132,41 @@ def test_an_order_that_is_no_integer_is_refused(value: str) -> None:
     with pytest.raises(EnergySystemFormatError, match="EF-07") as refusal:
         read_system(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, order: {value}}}"))
     assert "imports.pv.order" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_port_both_optional_and_required_when_is_refused() -> None:
+    """Catches ``optional: true`` being silently ignored on a port that also states ``required_when``."""
+    port = "    weather: {into: [Device], partner: MockWeather, optional: true, required_when: {fitted: [true]}}\n"
+    with pytest.raises(EnergySystemFormatError, match="EF-70") as refusal:
+        read_assembly(MINIMAL + "interface:\n  needs:\n" + port)
+    for name in ("weather", "optional: true", "required_when", "active_when"):
+        assert name in str(refusal.value)
+
+
+@pytest.mark.base
+def test_the_verbs_model_refuses_a_port_under_two_verbs() -> None:
+    """Catches a verbs model built in code holding a port the reader would refuse, which then dumps a bad file."""
+    with pytest.raises(pydantic.ValidationError, match="the ports p carry two verbs"):
+        BindingVerbs(bind={"p": "Heater"}, none=("p",))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("fields", "names"),
+    [
+        ({"kind": PortKind.PROVIDED}, ("provided port 'x'", "None", "Member.Output")),
+        ({"kind": PortKind.PROVIDED, "output": "Heater"}, ("provided port 'x'", "'Heater'")),
+        ({"kind": PortKind.NEED, "partner": ("MockTank",)}, ("need 'x'", "no member")),
+        ({"kind": PortKind.NEED, "into": ("Tank",)}, ("need 'x'", "no partner class")),
+    ],
+)
+def test_the_port_model_refuses_a_shape_its_kind_does_not_have(fields: dict, names: tuple) -> None:
+    """Catches a provided port without ``Member.Output`` or a need without members or partner, built in code."""
+    with pytest.raises(pydantic.ValidationError) as refusal:
+        Port(name="x", section="needs", **fields)
+    for name in names:
+        assert name in str(refusal.value)
 
 
 @pytest.mark.base

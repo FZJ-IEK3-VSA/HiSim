@@ -287,7 +287,6 @@ class SchemaBuilder:
         names = {
             "oneOf": [{"$ref": "#/$defs/name"}, {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/name"}}]
         }
-        plain = {"oneOf": [{"type": "string"}, {"type": "object", "required": ["$param"], "maxProperties": 1}]}
         port_properties: Dict[str, Any] = {
             "partner": names,
             "into": names,
@@ -304,10 +303,10 @@ class SchemaBuilder:
             },
             "circuit": {"$ref": "#/$defs/name"},
             "member": names,
-            "carrier": plain,
+            "carrier": {"$ref": "#/$defs/string_or_param"},
             "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
             "meter": {"$ref": "#/$defs/name"},
-            "fact": plain,
+            "fact": {"$ref": "#/$defs/string_or_param"},
             "many": {"type": "boolean"},
             "default": {"type": "string"},
             "optional": {"type": "boolean"},
@@ -320,6 +319,9 @@ class SchemaBuilder:
             "quote": {"type": "object", "description": "Recorded for the economics, never read (D22)."},
         }
         return {
+            "string_or_param": {
+                "oneOf": [{"type": "string"}, {"type": "object", "required": ["$param"], "maxProperties": 1}]
+            },
             "port": {"type": "object", "additionalProperties": False, "properties": port_properties},
             "site_port": {
                 "type": "object",

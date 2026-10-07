@@ -26,7 +26,7 @@ from hisim.energy_system.assemblies.model import AssemblyFile, MemberTemplate, P
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import ResolvedAssembly
 from hisim.energy_system.classes import ClassBinder
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemError, EnergySystemErrorId
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
 from hisim.energy_system.imports_model import ImportEntry, ObservesPlaceholder, ParameterReference, Port, PortKind
 
 
@@ -50,6 +50,17 @@ class LibraryChecker:
         #: Parameter to how it is used: ``value`` (passed into a field, a preset or a display),
         #: ``variant:<name>`` or ``condition:<port>.<key>``.
         self.uses: Dict[str, Set[str]] = {name: set() for name in self.model.parameters}
+        #: Variant to the members the options of every other variant write.
+        self.elsewhere: Dict[str, Set[str]] = {
+            variant.name: {
+                name
+                for other in self.model.variants.values()
+                if other is not variant
+                for option in other.options.values()
+                for name in option.components
+            }
+            for variant in self.model.variants.values()
+        }
 
     def add(self, path: Sequence[Any], problem: str) -> None:
         """Records one problem at a key path of the file."""
@@ -74,7 +85,8 @@ class LibraryChecker:
         if class_path not in self._configs:
             try:
                 self._configs[class_path] = ClassBinder.config_class_of(member.name, member.entry)
-            except EnergySystemError as error:
+            # A module may raise anything at import; it is one problem of the file, and the listing goes on.
+            except Exception as error:  # pylint: disable=broad-exception-caught
                 self.add(member.source_path + ("class",), f"the class of '{member.name}' does not load: {error}")
                 self._configs[class_path] = None
         return self._configs[class_path]
@@ -111,6 +123,8 @@ class LibraryChecker:
             for value in declaration.values or ():
                 if not isinstance(value, str):
                     self.add(path + ("values",), f"the value {value!r} of the enum '{name}' is not a string.")
+                elif declaration.type.written(value) is None:
+                    self.add(path + ("values",), f"the enum '{name}' lists 'none', which spells no value.")
 
     def _constraints(self) -> None:
         """Every ``exactly_one_of`` names declared parameters, and the defaults satisfy it."""
@@ -127,31 +141,46 @@ class LibraryChecker:
     def _variants(self) -> None:
         """Every internal variant partitions its selector's values; one member name, one class (§2.6)."""
         classes: Dict[str, str] = {name: member.entry.class_path for name, member in self.model.components.items()}
+        variant_of: Dict[str, str] = {}
         for name, variant in self.model.variants.items():
             path = ("variants", name)
             declaration = self.model.parameters.get(variant.selected_by)
             allowed = declaration.allowed_values if declaration is not None else None
-            if allowed is None:
+            if declaration is None or allowed is None:
                 self.add(
                     path + ("selected_by",),
                     f"the variant '{name}' is selected by '{variant.selected_by}', which is no enum or bool parameter.",
                 )
                 continue
+            if declaration.default is None or declaration.default == ParameterChecks.AUTO_SPELLING:
+                self.add(
+                    ("parameters", variant.selected_by, "default"),
+                    f"the parameter '{variant.selected_by}' selects the variant '{name}', so its default is one of "
+                    f"its values, not {declaration.default!r}.",
+                )
             self.uses[variant.selected_by].add(f"variant:{name}")
             covered: Dict[Any, str] = {}
             for option_name, option in variant.options.items():
                 for value in option.when:
-                    if value not in allowed or value in covered:
+                    if declaration.admits(value) and value not in covered:
+                        covered[value] = option_name
+                    else:
                         self.add(
                             path + ("options", option_name, "when"),
                             f"{variant.selected_by}={value!r} is not allowed or covered twice.",
                         )
-                    covered.setdefault(value, option_name)
                 for member_name, member in option.components.items():
                     if member_name in self.model.components:
                         self.add(
                             member.source_path,
                             f"the option '{option_name}' writes '{member_name}', a member outside the variant.",
+                        )
+                    elif variant_of.setdefault(member_name, name) != name:
+                        self.add(
+                            member.source_path,
+                            f"'{member_name}' is written in the options of the variants '{variant_of[member_name]}' "
+                            f"and '{name}'; one name lives in one variant, or two selected options would make one "
+                            "component of two.",
                         )
                     elif classes.setdefault(member_name, member.entry.class_path) != member.entry.class_path:
                         self.add(
@@ -293,7 +322,7 @@ class LibraryChecker:
                         continue
                     self.uses[parameter].add(f"condition:{name}.{key}")
                     for value in values:
-                        if value not in declaration.allowed_values:
+                        if not declaration.admits(value):
                             self.add(
                                 path + (key,),
                                 f"the port '{name}' {key} lists {parameter}={value!r}, which it does not allow.",
@@ -306,7 +335,7 @@ class LibraryChecker:
             for member_name in named:
                 if member_name not in members:
                     self.add(path, f"the port '{name}' names '{member_name}', which is no member.")
-                elif port.kind == PortKind.NEED:
+                elif port.kind in (PortKind.NEED, PortKind.PROVIDED):
                     self._present_where_active(path, port, member_name)
         for member in self.model.all_members():
             for placed in member.entry.placeholders:
@@ -334,17 +363,11 @@ class LibraryChecker:
                         )
 
     def _present_where_active(self, path: Tuple[Any, ...], port: Port, member: str) -> None:
-        """A need's member exists in every option of every variant under which the port can be active."""
+        """A port's member (a need's, a provided output's) exists in every option where the port can be active."""
         if member in self.model.components:
             return
         for variant in self.model.variants.values():
-            elsewhere = {
-                name
-                for other in self.model.variants.values()
-                if other is not variant
-                for option in other.options.values()
-                for name in option.components
-            }
+            elsewhere = self.elsewhere[variant.name]
             for option in variant.options.values():
                 conditions = {**port.required_when, **port.active_when}
                 values = conditions.get(variant.selected_by)
@@ -352,7 +375,7 @@ class LibraryChecker:
                 if active and member not in option.components and member not in elsewhere:
                     self.add(
                         path,
-                        f"the port '{port.name}' lowers into '{member}', which the option '{option.name}' of the "
+                        f"the port '{port.name}' names '{member}', which the option '{option.name}' of the "
                         f"variant '{variant.name}' does not have, while the port can be active there; switch it off "
                         "with active_when.",
                     )

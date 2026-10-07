@@ -19,7 +19,7 @@ from __future__ import annotations
 import enum
 from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ParameterReference:
@@ -157,10 +157,10 @@ class BindingVerbs(BaseModel):
     """The three binding verbs of one site entry or one import (``assemblies_spec.md`` §3.1, D8).
 
     ``bind: {port: partner}`` binds a need to a partner that must exist; ``optional-bind: {port:
-    partner}`` binds it if the partner exists and leaves it unbound otherwise; ``none: [port]``
-    declines an optional need although a partner exists. A partner is written ``<component>`` (a
-    site entry), ``<import>`` or ``<import>.<instance>``, optionally followed by ``.<port>`` naming
-    a provided port of that import.
+    partner}`` binds an optional need if the partner exists and leaves it unbound otherwise (on a
+    required need it is refused); ``none: [port]`` declines an optional need although a partner
+    exists. A partner is written ``<component>`` (a site entry), ``<import>`` or
+    ``<import>.<instance>``, optionally followed by ``.<port>`` naming a provided port of that import.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -171,6 +171,15 @@ class BindingVerbs(BaseModel):
     bind: Mapping[str, str] = Field(default_factory=dict)
     optional_bind: Mapping[str, str] = Field(default_factory=dict)
     none: Tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _one_verb_per_port(self) -> "BindingVerbs":
+        """Refuses a port written under two verbs, as the reader does."""
+        written = list(self.bind) + list(self.optional_bind) + list(self.none)
+        twice = sorted({port for port in written if written.count(port) > 1})
+        if twice:
+            raise ValueError(f"the ports {', '.join(twice)} carry two verbs; a port carries one.")
+        return self
 
     @property
     def is_empty(self) -> bool:
@@ -235,6 +244,17 @@ class Port(BaseModel):
     required_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
     active_when: Mapping[str, Tuple[Any, ...]] = Field(default_factory=dict)
     raw: Mapping[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _shape_of_its_kind(self) -> "Port":
+        """Refuses a provided port without ``Member.Output`` and a need without members or partner classes."""
+        if self.kind == PortKind.PROVIDED:
+            member, _, output = (self.output or "").partition(".")
+            if not member or not output or "." in output:
+                raise ValueError(f"the provided port '{self.name}' names {self.output!r}, not 'Member.Output'.")
+        if self.kind == PortKind.NEED and (not self.into or not self.partner):
+            raise ValueError(f"the need '{self.name}' names no member to lower into or no partner class.")
+        return self
 
     @property
     def output_member(self) -> str:

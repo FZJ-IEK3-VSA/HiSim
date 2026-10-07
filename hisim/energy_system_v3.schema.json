@@ -6154,6 +6154,20 @@
         }
       ]
     },
+    "string_or_param": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": [
+            "$param"
+          ],
+          "maxProperties": 1
+        }
+      ]
+    },
     "port": {
       "type": "object",
       "additionalProperties": false,
@@ -6228,18 +6242,7 @@
           ]
         },
         "carrier": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "required": [
-                "$param"
-              ],
-              "maxProperties": 1
-            }
-          ]
+          "$ref": "#/$defs/string_or_param"
         },
         "outputs": {
           "type": "array",
@@ -6252,18 +6255,7 @@
           "$ref": "#/$defs/name"
         },
         "fact": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "required": [
-                "$param"
-              ],
-              "maxProperties": 1
-            }
-          ]
+          "$ref": "#/$defs/string_or_param"
         },
         "many": {
           "type": "boolean"

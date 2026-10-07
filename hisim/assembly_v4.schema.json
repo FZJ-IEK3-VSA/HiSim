@@ -197,6 +197,39 @@
         }
       }
     },
+    "input_item": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/default_inputs"
+        },
+        {
+          "$ref": "#/$defs/explicit_wire"
+        },
+        {
+          "$ref": "#/$defs/aggregator_feed"
+        },
+        {
+          "$ref": "#/$defs/port_placeholder"
+        },
+        {
+          "$ref": "#/$defs/observes_placeholder"
+        }
+      ]
+    },
+    "string_or_param": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": [
+            "$param"
+          ],
+          "maxProperties": 1
+        }
+      ]
+    },
     "sizing_sources": {
       "type": "object",
       "propertyNames": {
@@ -290,18 +323,7 @@
           ]
         },
         "carrier": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "required": [
-                "$param"
-              ],
-              "maxProperties": 1
-            }
-          ]
+          "$ref": "#/$defs/string_or_param"
         },
         "outputs": {
           "type": "array",
@@ -314,18 +336,7 @@
           "$ref": "#/$defs/name"
         },
         "fact": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "required": [
-                "$param"
-              ],
-              "maxProperties": 1
-            }
-          ]
+          "$ref": "#/$defs/string_or_param"
         },
         "many": {
           "type": "boolean"
@@ -528,18 +539,7 @@
           "type": "string"
         },
         "preset": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "required": [
-                "$param"
-              ],
-              "maxProperties": 1
-            }
-          ]
+          "$ref": "#/$defs/string_or_param"
         },
         "constructor": {
           "type": "object",
@@ -552,23 +552,7 @@
         "inputs": {
           "type": "array",
           "items": {
-            "oneOf": [
-              {
-                "$ref": "#/$defs/default_inputs"
-              },
-              {
-                "$ref": "#/$defs/explicit_wire"
-              },
-              {
-                "$ref": "#/$defs/aggregator_feed"
-              },
-              {
-                "$ref": "#/$defs/port_placeholder"
-              },
-              {
-                "$ref": "#/$defs/observes_placeholder"
-              }
-            ]
+            "$ref": "#/$defs/input_item"
           }
         },
         "sizing_sources": {

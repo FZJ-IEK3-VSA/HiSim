@@ -27,7 +27,7 @@ the failure mode this format exists to remove.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import log
 from hisim.component import Component
@@ -47,8 +47,18 @@ from hisim.energy_system.model import (
 )
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.resolution import ResolvedDynamicConnection, ResolvedDynamicWire
-from hisim.energy_system.wiring_checks import PlannedWire, WiringChecker, unconsumed_sources
+from hisim.energy_system.wiring_checks import (
+    ConsumingOutput,
+    PlannedWire,
+    WiringChecker,
+    check_double_count,
+    unconsumed_sources,
+)
 from hisim.simulationparameters import SimulationParameters
+
+#: What selects observers' feeds among the constructed components: an expansion of imports'
+#: selection plan (``assemblies_spec.md`` §4.2), which the planner plans like written feeds.
+FeedSelection = Callable[[Mapping[str, Component]], Mapping[str, Sequence[AggregatorFeed]]]
 
 
 @dataclass(frozen=True)
@@ -56,15 +66,17 @@ class WiredSystem:
     """Everything one wired energy system consists of, in the order the file declares it.
 
     The result of :func:`wire_energy_system` and the input of the run: the components by name in
-    file order, every wire that was applied, and the resolved feeds per aggregator. The last two
-    are what a run record is written from — the wire log a reader compares against the file, and
-    the feed resolution that explains where an aggregator's derived ports came from — so they are
-    kept rather than thrown away once the connections are made.
+    file order, every wire that was applied, the resolved feeds per aggregator and the feeds a
+    selection chose per observer. The last three are what a run record is written from — the wire
+    log a reader compares against the file, the feed resolution that explains where an aggregator's
+    derived ports came from, and the selected feeds the record writes into the observers' inputs —
+    so they are kept rather than thrown away once the connections are made.
     """
 
     components: Tuple[Tuple[str, Component], ...]
     wires: Tuple[PlannedWire, ...]
     resolved_feeds: Tuple[Tuple[str, Tuple[ResolvedDynamicConnection, ...]], ...]
+    selected_feeds: Tuple[Tuple[str, Tuple[AggregatorFeed, ...]], ...] = ()
 
     def component_of(self, name: str) -> Component:
         """Returns one component by the name the file gives it.
@@ -173,14 +185,23 @@ class WiringPlanner:
     source class, never both, since a bare item would otherwise mean two different things.
     """
 
-    def __init__(self, model: EnergySystemFile, components: Sequence[Tuple[str, Component]]) -> None:
+    def __init__(
+        self,
+        model: EnergySystemFile,
+        components: Sequence[Tuple[str, Component]],
+        selection: Optional[FeedSelection] = None,
+    ) -> None:
         """Prepares a planner for one file and its already constructed components.
 
         Args:
             model: The energy system, after group expansion and validation.
             components: The ``(name, component)`` pairs in file order.
+            selection: Selects observers' feeds among the constructed components; ``None`` for a
+                file without observers.
         """
         self.model = model
+        self.selection = selection
+        self.selected: Dict[str, Tuple[AggregatorFeed, ...]] = {}
         self.components_by_name: Dict[str, Component] = dict(components)
         self.entries: Dict[str, ComponentEntry] = model.all_components()
         self.resolver = DynamicConnectionResolver(self.components_by_name)
@@ -206,6 +227,11 @@ class WiringPlanner:
                     self._collect_feed(name, self._feed_from(name, item))
                 elif isinstance(item, DefaultInputs):
                     self._expand_default_item(name, item)
+        for observer, feeds in (self.selection(self.components_by_name) if self.selection else {}).items():
+            self.selected[observer] = tuple(feeds)
+            for feed in feeds:
+                self._collect_feed(observer, self._feed_from(observer, feed))
+        check_double_count(self.feeds_by_target)
         self.written_wire_count = len(self.wires)
         for wire in self.resolver.resolve_all(self.feeds_by_target):
             self.wires.append(self._wire_from_resolution(wire))
@@ -396,6 +422,8 @@ def wire_energy_system(
     model: EnergySystemFile,
     system: ConfiguredSystem,
     simulation_parameters: SimulationParameters,
+    consuming: Sequence[ConsumingOutput] = (),
+    selection: Optional[FeedSelection] = None,
 ) -> Tuple[WiredSystem, Tuple[str, ...]]:
     """Builds every component of a configured energy system and connects it as the file says.
 
@@ -408,6 +436,10 @@ def wire_energy_system(
         model: The energy system, after group expansion and validation.
         system: Its configurations, complete and sized.
         simulation_parameters: Parameters of the run, handed to every component.
+        consuming: The consuming outputs of the carrier needs an expansion of imports lowered,
+            each checked for its carrier and its meter's feeds.
+        selection: Selects observers' feeds among the constructed components (an expansion of
+            imports' selection plan); ``None`` for a file without observers.
 
     Returns:
         The wired system and the warnings a run should print: one line per component that feeds
@@ -418,7 +450,7 @@ def wire_energy_system(
             or with a component's construction; every message names both ends.
     """
     components = ComponentBuilder(system, simulation_parameters).build()
-    planner = WiringPlanner(model, components)
+    planner = WiringPlanner(model, components, selection)
     wires = planner.plan()
     checker = WiringChecker(
         components_by_name=dict(components),
@@ -426,6 +458,7 @@ def wire_energy_system(
         written_wire_count=planner.written_wire_count,
         created_ports=planner.resolver.created_ports,
         system_name=model.name,
+        consuming=consuming,
     )
     checker.check_all()
     checker.apply()
@@ -438,6 +471,7 @@ def wire_energy_system(
             components=components,
             wires=tuple(wires),
             resolved_feeds=planner.resolved_feeds(),
+            selected_feeds=tuple(planner.selected.items()),
         ),
         unconsumed_sources([name for name, _ in components], wires),
     )

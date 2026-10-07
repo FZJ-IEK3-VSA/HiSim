@@ -40,7 +40,7 @@ class AssemblySchemaBuilder:
         "sizing_sources",
         "port",
         "port_placeholder",
-        "observes_placeholder",
+        "selection",
     )
 
     #: The parameter types that are numbers, which carry a unit and a range.

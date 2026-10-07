@@ -91,7 +91,7 @@ class Selection:
         """A port's requirement state for these parameters (§3.1); a site entry's port has none to read."""
         if port.active_when and not self.holds(port.active_when):
             return PortState.INACTIVE
-        if port.section == "provides":
+        if port.is_provision:
             return PortState.PROVIDED
         if port.required_when:
             return PortState.REQUIRED if self.holds(port.required_when) else PortState.INACTIVE

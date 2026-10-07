@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, FrozenSet, Iterable, List, Optional, Tuple, Union
 
 from hisim import loadtypes as lt
+from hisim.config.names import NameSyntax
 
 if TYPE_CHECKING:  # pragma: no cover - annotations only, never imported at runtime
     from hisim.component import Component, ComponentOutput
@@ -343,7 +344,7 @@ class ResolvedDynamicConnection:
             The derived name, for example ``ElectricityOutputFromBoiler``.
         """
         return self.AGGREGATOR_INPUT_TEMPLATE.format(
-            source_output=self.source_output, source_name=self.source_name
+            source_output=self.source_output, source_name=NameSyntax.port_name_part(self.source_name)
         )
 
     @property
@@ -362,13 +363,12 @@ class ResolvedDynamicConnection:
         """
         if self.dispatch is None:
             return None
+        participant = NameSyntax.port_name_part(self.source_name)
         if self.dispatch.target_input is not None:
             return self.DISPATCH_OUTPUT_TEMPLATE.format(
-                source_name=self.source_name, target_input=self.dispatch.target_input
+                source_name=participant, target_input=self.dispatch.target_input
             )
-        return self.RECORDED_DISPATCH_OUTPUT_TEMPLATE.format(
-            source_name=self.source_name, source_output=self.source_output
-        )
+        return self.RECORDED_DISPATCH_OUTPUT_TEMPLATE.format(source_name=participant, source_output=self.source_output)
 
     @staticmethod
     def order_key(weight: int, source_name: str, source_output: str) -> Tuple[int, str, str]:

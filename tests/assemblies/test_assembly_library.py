@@ -171,6 +171,32 @@ def test_a_value_of_an_enum_that_selects_nothing_of_its_own_is_refused(tmp_path:
         (BASE.replace("preset: standard", "preset: standard\n    display: '{size}'"), ("names 'size'",)),
         (BASE.replace("preset: standard", "preset: standard\n    display: '{volume_in_liter:d}'"), ("does not fit",)),
         (BASE.replace(f"{Mocks.CLASSES}.MockTank", f"{Mocks.CLASSES}.Nothing"), ("does not load",)),
+        (
+            BASE.replace(
+                "partner: MockOccupancy}",
+                "partner: MockOccupancy}\n  provides:\n    loss: {output: "
+                "Tank.HeatLoss, controllable: {via: nothing}}",
+            ),
+            ("controllable via 'nothing', which is no need",),
+        ),
+        (
+            BASE.replace(
+                "partner: MockOccupancy}",
+                "partner: MockOccupancy}\n  provides:\n    gas: {carrier: natural_gas, meter: Tank}",
+            ),
+            ("the port 'gas' lowers into 'Tank', which carries no '{$port: gas}' placeholder",),
+        ),
+        (
+            BASE.replace(
+                "partner: MockOccupancy}",
+                "partner: MockOccupancy}\n  provides:\n    peak: {fact: pv_peak_power_in_watt, member: Tank}",
+            ),
+            ("does not declare in its SIZING_CONTRIBUTIONS",),
+        ),
+        (
+            BASE.replace("partner: MockOccupancy}", "partner: MockOccupancy}\n    loop: {circuit: dhw, member: Pump}"),
+            ("the port 'loop' names 'Pump', which is no member",),
+        ),
     ],
 )
 def test_the_member_and_port_rules(tmp_path: Path, text: str, names: Tuple[str, ...]) -> None:
@@ -258,6 +284,34 @@ def test_a_provided_output_of_a_member_an_active_option_lacks_is_refused(tmp_pat
     problems = problems_of(tmp_path, text)
     assert "the port 'heat' names 'Heater', which the option 'off' of the variant 'heating' does not have" in problems
     switched_off = text.replace("Heater.ThermalPower}", "Heater.ThermalPower, active_when: {heated: [true]}}")
+    assert problems_of(tmp_path / "off", switched_off) == ""
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("member", "port"),
+    [
+        ("PV: {class: CLASSES.MockPVSystem, preset: rooftop}", "peak: {fact: pv_peak_power_in_watt, member: PV}"),
+        (
+            "PV: {class: CLASSES.MockGasMeter, preset: standard, inputs: [{$port: peak}]}",
+            "peak: {carrier: natural_gas, meter: PV}",
+        ),
+    ],
+    ids=["fact", "fuel"],
+)
+def test_a_provision_whose_member_an_option_drops_is_refused(tmp_path: Path, member: str, port: str) -> None:
+    """Catches a provided fact or fuel whose member one option leaves out while the port is still provided there."""
+    text = VARIANT.replace(
+        "    demand: {into: [Tank], partner: MockOccupancy}\n",
+        f"    demand: {{into: [Tank], partner: MockOccupancy}}\n  provides:\n    {port}\n",
+    ).replace(
+        "Heater: {class: tests.assemblies.mock_components.MockHeater, preset: standard}",
+        "Heater: {class: tests.assemblies.mock_components.MockHeater, preset: standard}\n          "
+        + member.replace("CLASSES", Mocks.CLASSES),
+    )
+    problems = problems_of(tmp_path, text)
+    assert "the port 'peak' names 'PV', which the option 'off' of the variant 'heating' does not have" in problems
+    switched_off = text.replace(port[:-1], port[:-1] + ", active_when: {heated: [true]}")
     assert problems_of(tmp_path / "off", switched_off) == ""
 
 

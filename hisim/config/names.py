@@ -61,6 +61,19 @@ class NameSyntax:
     COMPONENT_KEY_PATTERN: ClassVar[Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*$")
 
     @classmethod
+    def port_name_part(cls, component_name: str) -> str:
+        """A component's runtime name as it enters a port name derived from it.
+
+        An aggregator grows one input per participant and an energy manager one dispatch output,
+        each named after the participant (``ElectricityOutputFrom<participant>``). A port name is
+        an identifier, while an assembly member's runtime name joins identifiers with
+        :attr:`ADDRESS_SEPARATOR` (``pv-east-PVSystem``); the separator becomes ``_``
+        (``pv_east_PVSystem``) and every other name enters unchanged. Two participants mapping to
+        one port name are refused where the port is created (``EF-32``).
+        """
+        return component_name.replace(cls.ADDRESS_SEPARATOR, "_")
+
+    @classmethod
     def is_identifier(cls, value: Any) -> TypeGuard[str]:
         """Reports whether ``value`` is a string that satisfies the identifier grammar.
 

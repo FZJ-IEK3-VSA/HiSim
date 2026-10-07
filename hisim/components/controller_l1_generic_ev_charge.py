@@ -2,7 +2,7 @@
 """Controller of EV battery with configuration and state."""
 
 from typing import ClassVar, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
 import pandas as pd
@@ -57,7 +57,7 @@ class ChargingStationConfig(ConfigBase):
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int = 1
     #: set point for state of charge of battery
-    battery_set_soc: float = 0.8
+    battery_set_soc: float = field(default=0.8, metadata={"unit": lt.Units.ANY})
     #: CO2 footprint of investment in kg. estimated value  # Todo: check value
     device_co2_footprint_in_kg: float = 100.0
     #: cost for investment in Euro  # Todo: check value

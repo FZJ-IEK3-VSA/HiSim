@@ -12,19 +12,10 @@ import yaml
 
 from hisim.energy_system.assemblies.reader import AssemblyReader
 from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder, assembly_schema_is_current
-from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemFormatError
+from hisim.energy_system.errors import EnergySystemFormatError
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind
 from hisim.energy_system.loader import dump_energy_system, parse_energy_system
-from tests.assemblies.helpers import (
-    EMPTY_CONTRACT,
-    OCCUPANCY,
-    WEATHER,
-    Library,
-    Mocks,
-    expand_text,
-    read_system,
-    site,
-)
+from tests.assemblies.helpers import EMPTY_CONTRACT, OCCUPANCY, WEATHER, Library, Mocks, read_system, site
 
 #: A group's component carrying ``order:``, which only a top-level entry or an import may.
 ORDERED_OCCUPANCY = OCCUPANCY.replace("}", ", order: 1}")
@@ -170,49 +161,64 @@ def test_the_port_model_refuses_a_shape_its_kind_does_not_have(fields: dict, nam
 
 
 @pytest.mark.base
-def test_the_constructs_lowered_in_part_2_are_read_and_refused_together(tmp_path: Path) -> None:
-    """Catches a circuit, carrier, fact or observer port, ``controllable`` or ``observes:`` being silently ignored."""
+def test_every_port_kind_is_read_with_the_fields_it_lowers_by(tmp_path: Path) -> None:
+    """Catches a circuit, carrier, fact or observer port, ``controllable`` or ``observes:`` read without its fields."""
     library = Library(tmp_path)
     library.add(
-        "test/later",
+        "test/kinds",
         f"""\
         schema_version: 4
         kind: assembly
-        name: test/later
+        name: test/kinds
         components:
           Device:
-            class: {Mocks.CLASSES}.MockPVSystem
-            preset: rooftop
-            inputs: [{{$observes: flows}}]
+            class: {Mocks.CLASSES}.MockBoiler
+            preset: condensing
+            inputs: [{{$port: space_heating}}]
+          Meter:
+            class: {Mocks.CLASSES}.MockGasMeter
+            preset: standard
+            inputs: [{{$port: connection}}]
         interface:
           needs:
-            fuel: {{carrier: natural_gas, outputs: [Device.ElectricityOutput]}}
-            area: {{fact: roof_area_in_m2, into: [Device]}}
+            fuel: {{carrier: natural_gas, outputs: [Device.FuelUse]}}
+            area: {{fact: pv_peak_power_in_watt, many: true, into: [Device]}}
           provides:
-            power: {{output: Device.ElectricityOutput, controllable: {{target_input: Setpoint}}}}
-            sh: {{circuit: sh, member: Device}}
+            power: {{output: Device.ThermalPowerDhw, controllable: {{target_input: Setpoint, optional: true}}}}
+            space_heating: {{circuit: space_heating, member: [Device]}}
+            connection: {{carrier: natural_gas, meter: Meter}}
           observes:
-            flows: {{into: [Device], default: declared}}
+            flows: {{into: [Meter], default: [{{component_type: [PV, BATTERY]}}, {{output: FuelUse}}]}}
         tests:
           bounds: []
           monotone: []
         """,
     )
-    text = site(WEATHER, imports="later: {assembly: test/later, observes: [{output: X}]}")
-    with pytest.raises(EnergySystemAssemblyError, match="EF-74") as refusal:
-        expand_text(text, library.resolver())
-    message = str(refusal.value)
-    assert "part 2" in message
-    for named in (
-        "port fuel (carrier)",
-        "port area (fact)",
-        "port sh (circuit)",
-        "port flows (observer)",
-        "port power (controllable)",
-        "{$observes: flows}",
-        "import later: observes",
-    ):
-        assert named in message
+    model = library.resolver().resolve("test/kinds", "test").model
+    ports = model.ports
+    assert (ports["fuel"].carrier, ports["fuel"].outputs, ports["fuel"].members) == (
+        "natural_gas",
+        ("Device.FuelUse",),
+        ("Device",),
+    )
+    assert (ports["area"].fact, ports["area"].many, ports["area"].into) == ("pv_peak_power_in_watt", True, ("Device",))
+    assert ports["power"].controllable == {"target_input": "Setpoint", "optional": True}
+    assert (ports["space_heating"].circuit, ports["space_heating"].members) == ("space_heating", ("Device",))
+    assert (ports["connection"].meter, ports["connection"].is_fuel_provision) == ("Meter", True)
+    assert ports["flows"].selection is not None
+    assert ports["flows"].selection.text() == "[{component_type: PV, BATTERY}, {output: FuelUse}]"
+    text = site(WEATHER, imports="later: {assembly: mock/pv_array, observes: [{component_type: PV}]}")
+    observes = read_system(text)[0].imports["later"].observes
+    assert observes is not None and observes.to_document() == [{"component_type": ["PV"]}]
+
+
+@pytest.mark.base
+def test_an_observes_placeholder_is_refused_since_selected_feeds_follow_the_observers_inputs() -> None:
+    """Catches ``{$observes: …}`` read as an input item: a selection lands after the observer's own items."""
+    text = site(WEATHER.replace("}", ", inputs: [{$observes: flows}]}"))
+    with pytest.raises(EnergySystemFormatError, match="EF-70") as refusal:
+        read_system(text)
+    assert "an observer's selected feeds follow its own inputs" in str(refusal.value)
 
 
 @pytest.mark.base

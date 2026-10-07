@@ -504,17 +504,22 @@ def _resolution_order(
     return order
 
 
-def _qualified_source(fact: str, fact_sources: Optional[Mapping[str, str]]) -> str:
-    """Renders one fact as ``"<provider>.<fact>"`` when the provider is known, else bare."""
-    if fact_sources is None:
-        return fact
-    provider = fact_sources.get(fact)
-    return f"{provider}.{fact}" if provider else fact
+#: What the fact engine names as the source of one fact: a provider, or the providers of a many read.
+FactSource = Union[str, Tuple[str, ...]]
+
+
+def _fact_inputs(fact: str, ctx: "SizingContext", fact_sources: Optional[Mapping[str, FactSource]]) -> Tuple[Any, ...]:
+    """The ``(source, value)`` inputs one fact read gives a record entry: one per provider of a many read."""
+    value = getattr(ctx, fact, None)
+    provider = fact_sources.get(fact) if fact_sources is not None else None
+    if isinstance(provider, tuple) and isinstance(value, tuple):
+        return tuple((f"{name}.{fact}", item) for name, item in zip(provider, value))
+    return ((f"{provider}.{fact}" if provider else fact, value),)
 
 
 def _resolution_entry(
     field_name: str, law: SizingLaw, value: Any, ctx: "SizingContext",
-    own: "OwnFields", fact_sources: Optional[Mapping[str, str]],
+    own: "OwnFields", fact_sources: Optional[Mapping[str, FactSource]],
 ) -> SizingRecordEntry:
     """Builds one field's audit entry: the law, the facts it read, their values and the result.
 
@@ -533,14 +538,14 @@ def _resolution_entry(
     return SizingRecordEntry(
         field=field_name, law=law.describe(), facts_read=facts, value=value,
         inputs=tuple(
-            (_qualified_source(fact, fact_sources), getattr(ctx, fact, None)) for fact in facts
+            pair for fact in facts for pair in _fact_inputs(fact, ctx, fact_sources)
         ) + tuple(
             (f"self.{name}", own.value_of(name)) for name in law.fields_read()
         ))
 
 
 def resolve_config(
-    config: ConfigT, ctx: "SizingContext", fact_sources: Optional[Mapping[str, str]] = None
+    config: ConfigT, ctx: "SizingContext", fact_sources: Optional[Mapping[str, FactSource]] = None
 ) -> ConfigT:
     """Returns a copy of ``config`` in which every AUTO field is computed by its law.
 
@@ -607,10 +612,6 @@ def resolve_config(
             continue
         try:
             value = effective_law.evaluate(ctx, own)
-        except NotImplementedError:
-            # A declared-but-unimplemented term (Many(...)) must surface as itself rather
-            # than as a generic "law raised" wrapper, so the parking-lot message survives.
-            raise
         except ConfigSizingError as error:
             raise ConfigSizingError(
                 f"{type(config).__name__}.{field_name} <- {effective_law.describe()}: {error}"

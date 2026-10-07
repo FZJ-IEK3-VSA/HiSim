@@ -27,7 +27,8 @@ from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import ResolvedAssembly
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
-from hisim.energy_system.imports_model import ImportEntry, ObservesPlaceholder, ParameterReference, Port, PortKind
+from hisim.config.contributions import declared_facts_of
+from hisim.energy_system.imports_model import ImportEntry, ParameterReference, Port, PortKind
 
 
 class LibraryChecker:
@@ -335,35 +336,53 @@ class LibraryChecker:
             for member_name in named:
                 if member_name not in members:
                     self.add(path, f"the port '{name}' names '{member_name}', which is no member.")
-                elif port.kind in (PortKind.NEED, PortKind.PROVIDED):
+                elif port.kind == PortKind.NEED or port.is_provision:
                     self._present_where_active(path, port, member_name)
         for member in self.model.all_members():
             for placed in member.entry.placeholders:
-                placeholder = placed.placeholder
-                port_name = placeholder.observer if isinstance(placeholder, ObservesPlaceholder) else placeholder.port
+                port_name = placed.placeholder.port
                 target = self.model.ports.get(port_name)
-                kind = PortKind.OBSERVER if isinstance(placeholder, ObservesPlaceholder) else PortKind.NEED
-                if target is None or target.kind != kind or member.name not in (target.into or target.members):
+                if target is None or member.name not in self.landing_members(target):
                     self.add(
                         member.source_path + ("inputs", placed.position),
-                        f"'{member.name}' carries a placeholder for '{port_name}', which is no {kind.value} port "
-                        "lowering into it.",
+                        f"'{member.name}' carries a placeholder for '{port_name}', which is no need, circuit end or "
+                        "fuel provision landing in it.",
                     )
         for name, port in self.model.ports.items():
-            if port.kind == PortKind.NEED:
-                for into in port.into:
+            path = ("interface", port.section, name)
+            if port.kind == PortKind.NEED or port.is_fuel_provision:
+                for into in self.landing_members(port):
                     holders = [m for m in self.model.all_members() if m.name == into]
                     if holders and not any(
-                        any(getattr(p.placeholder, "port", None) == name for p in m.entry.placeholders) for m in holders
+                        any(p.placeholder.port == name for p in m.entry.placeholders) for m in holders
                     ):
                         self.add(
-                            ("interface", port.section, name),
+                            path,
                             f"the port '{name}' lowers into '{into}', which carries no '{{$port: {name}}}' "
                             "placeholder.",
                         )
+            via = port.controllable.get("via")
+            if via is not None and (via not in self.model.ports or self.model.ports[via].kind != PortKind.NEED):
+                self.add(path + ("controllable",), f"the port '{name}' is controllable via '{via}', which is no need.")
+            if port.kind == PortKind.FACT and port.is_provision:
+                for member in (item for item in self.model.all_members() if item.name in port.members):
+                    config = self.config_class(member)
+                    if config is not None and port.fact not in declared_facts_of(config):
+                        self.add(
+                            path,
+                            f"the port '{name}' provides '{port.fact}', which {config.__name__} (member "
+                            f"'{member.name}') does not declare in its SIZING_CONTRIBUTIONS.",
+                        )
+
+    @staticmethod
+    def landing_members(port: Port) -> Tuple[str, ...]:
+        """The members a port's lowered items land in, at their ``{$port: …}`` placeholder."""
+        if port.kind in (PortKind.NEED, PortKind.CIRCUIT):
+            return port.into or port.members
+        return (port.meter,) if port.kind == PortKind.CARRIER and port.meter else ()
 
     def _present_where_active(self, path: Tuple[Any, ...], port: Port, member: str) -> None:
-        """A port's member (a need's, a provided output's) exists in every option where the port can be active."""
+        """A need's or a provision's member exists in every option where the port can be active or provided."""
         if member in self.model.components:
             return
         for variant in self.model.variants.values():

@@ -202,6 +202,7 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     #: generator's maximal thermal power.
     volume_heating_water_storage_in_liter: Sizable[float] = sized_field(
         rule=VOLUME_LAW,
+        unit=lt.Units.LITER,
         note="the generator's power in kW times the litres per kW of the sibling sizing_option",
     )
 
@@ -268,7 +269,7 @@ class SimpleDHWStorageConfig(ConfigBase):
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
     #: Volume of the vessel. Sizable: left ``AUTO`` it is computed by :data:`VOLUME_LAW` from
     #: the apartment count the building contributes.
-    volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW)
+    volume_heating_water_storage_in_liter: Sizable[float] = sized_field(rule=VOLUME_LAW, unit=lt.Units.LITER)
 
     @preset
     @classmethod

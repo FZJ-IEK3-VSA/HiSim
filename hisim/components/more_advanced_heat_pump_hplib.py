@@ -15,7 +15,7 @@ import hashlib
 import importlib
 import math
 from enum import Enum, unique
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
@@ -548,8 +548,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: low- (W35) and medium-temperature (W55) application. Either, both or neither: a stated one
     #: calibrates hplib's fit to it (:class:`ScopCalibration`); unset keeps the fit as hplib ships it.
     #: Air/water and brine/water only; above 1, at most 10, and W55 not above W35.
-    standardized_scop_en14825_w35: Optional[float] = None
-    standardized_scop_en14825_w55: Optional[float] = None
+    standardized_scop_en14825_w35: Optional[float] = field(default=None, metadata={"unit": Units.ANY})
+    standardized_scop_en14825_w55: Optional[float] = field(default=None, metadata={"unit": Units.ANY})
     #: Whether the machine is allowed to cycle, which is what makes the minimum running and
     #: idle times below take effect.
     cycling_mode: bool = True
@@ -595,7 +595,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: Thermal output power the machine is sized to, ``p_th_set`` of the hplib curve fit.
     #: Sizable: left ``AUTO`` it is the building's heating load exactly, the machine covering
     #: the design load with no reserve.
-    set_thermal_output_power_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT)
+    set_thermal_output_power_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT, unit=Units.WATT)
 
     @staticmethod
     def sizing_facts(config: "MoreAdvancedHeatPumpHPLibConfig", ctx: SizingContext) -> dict:

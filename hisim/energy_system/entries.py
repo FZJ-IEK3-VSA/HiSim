@@ -96,9 +96,10 @@ class EntryReader:
             raw: Its block.
             location: Key path of the block.
             site: Whether the entry is a top-level entry of a schema-version-4 file, which may carry
-                ``ports``, the binding verbs (``assemblies_spec.md`` §3.1), placeholders and a flat
-                ``order`` (§2.3); every other entry refuses ``order`` by name (``EF-73``).
-            placeholders: Whether ``{$port: …}``/``{$observes: …}`` may stand in its ``inputs``
+                ``ports``, the binding verbs (``assemblies_spec.md`` §3.1), placeholders, its own
+                ``observes:`` selection and a flat ``order`` (§2.3); every other entry refuses
+                ``order`` by name (``EF-73``).
+            placeholders: Whether ``{$port: …}`` may stand in its ``inputs``
                 (a site entry's and an assembly member's).
 
         Raises:
@@ -145,6 +146,9 @@ class EntryReader:
             ports=ImportsReader.ports(entry.get("ports"), f"{location}.ports", "ports", site_entry=name),
             verbs=ImportsReader.verbs(entry, location),
             placeholders=placed,
+            observes=(
+                ImportsReader.selection(entry["observes"], f"{location}.observes") if "observes" in entry else None
+            ),
             order=ImportsReader.order(entry, location),
         )
 

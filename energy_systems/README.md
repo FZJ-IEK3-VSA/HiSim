@@ -327,15 +327,65 @@ members, the test contract. `hisim energy-system describe <family>/<name>` print
 interface, parameters and contract; `hisim energy-system schema` writes `assembly_v4.schema.json`
 beside the energy-system schema.
 
+Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.md` §3.2-§6):
+
+- a **circuit end**, `{circuit: dhw, member: Boiler}` (a site entry writes `ports: {dhw: {circuit:
+  dhw}}`), binds the one other end of the same circuit in the file — the circuit name is the medium,
+  `dhw` or `space_heating`, whose outputs are `MassFlow<C>`, `SupplyTemperature<C>` and
+  `ReturnTemperature<C>` — and lowers, in both directions, to a bare name of every member of the other
+  end at every member carrying the port's `{$port: dhw}` placeholder; `bind:` decides several ends, an
+  end of another circuit is refused;
+- a **carrier need**, `{carrier: natural_gas, outputs: [Boiler.FuelUse]}`, needs the one provider of
+  its carrier (an `lt.EnergyBalanceCarrier` value), `provides: {connection: {carrier: natural_gas,
+  meter: Meter}}`. For a fuel the consumer's bare name lands at the meter's `{$port: connection}`
+  placeholder and the meter's dynamic default connections expand it; the wiring then checks that each
+  consuming output's energy port carries the carrier and that the meter feeds exactly the named
+  outputs. Electricity has no link and no meter on the provision: the need only requires the one grid
+  connection. Two providers of one carrier, a need without one and a fuel provider nobody consumes from
+  are refused;
+- a **fact need**, `{fact: pv_peak_power_in_watt, into: [Battery]}`, lowers to a `sizing_sources`
+  line naming the one provider in the file — a site entry whose class contributes the fact, or an
+  import's provided fact `{fact: pv_peak_power_in_watt, member: PVSystem}`, which must be in that
+  class's `SIZING_CONTRIBUTIONS` — and with `many: true` to the list of every provider, site entries
+  first, then the imports and instances as written. A law sums such a list with
+  `Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`; a many read without a line sums every provider in the
+  file, a list into a one-provider law or one provider into a sum is refused (`EF-4E`), and an empty
+  or repeating list is `EF-4G`. The battery's class laws are sums; its preset `sized_to_pv` keeps the
+  one-array laws, so every twin is unchanged;
+- an **observer port**, `observes: {reading: {into: [Meter], default: declared}}`, and `observes:` on
+  a site entry or an import (replacing its assembly's default): `declared` is every output the
+  observer's class declares a dynamic default connection from among the components present —
+  HiSim's `connect_automatically` — and a list of selectors (`{component_type: PV}`, `{flow:
+  ELECTRICITY_PRODUCTION}`, `{output: TotalElectricityToOrFromGrid}`) filters it. The selection runs in
+  the wiring, on the constructed observer, and the realized record writes the selected feeds as
+  ordinary feeds, so `--rerun` selects nothing. A controller — an observer whose class ranks a feed
+  below weight 999 — ranks at its class's own weights (`DEFAULT_WEIGHTS`), a second device of one type
+  at the next weight; a provided output names what it actuates, `controllable: {target_input:
+  LoadingPowerInput}` or `{via: ems_modifier}`, and is ranked by exactly the one controller it binds.
+  A meter reading the energy manager's balance and a flow the manager observes counts it twice and is
+  refused, in every file.
+
+| Code | Refused |
+|---|---|
+| `EF-70` … `EF-72` | an assembly file of the wrong shape, not found, found twice |
+| `EF-73` | a construct v1 does not have, by name |
+| `EF-75`, `EF-78`, `EF-79` | the library check (every problem at once), units |
+| `EF-76`, `EF-77` | an import's parameter, a violated `exactly_one_of` |
+| `EF-7A` … `EF-7F` | no partner, several and no verb, `none:` on a required port, an absent `bind:` partner, an undecided optional port, a verb on an inactive port |
+| `EF-7G`, `EF-7H`, `EF-7J` | a verb on a port no verb binds, a bound output not read, a port that does not fit its members |
+| `EF-7K`, `EF-7L` | a circuit end of another circuit; a carrier without exactly one provider, or an idle fuel provider |
+| `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a meter not feeding exactly the outputs named |
+| `EF-7S`, `EF-7T`, `EF-7U` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller |
+| `EF-4E`, `EF-4G` | (sizing) a sources line of the wrong cardinality; an empty or repeating many list, one fact read once and many-fold |
+
 **Not in v1** (owner, 2026-10-06, D26): nesting (inner `imports`, `from:` re-exports, `internal:`
 ports), `order:` paths and `order:` on an instance or an assembly member, presets inside
 assemblies, `$switch`/`$fact`/`$derived` (`$param` is the one value placeholder),
-`at_most_one_of`/`requires`, fact exports, `priorities` and `actuates`. Each is refused by name
-(`EF-73`): assemblies are flat, which the first real assemblies need, and a cut feature returns as
-its own change when a real assembly needs it. Circuit, carrier, fact and observer ports,
-`controllable` and `observes:` are read but lowered in the next step; a file using them is refused
-with `EF-74`. The spec is `roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1); the mock
-library the tests run on is `tests/assemblies/mock_assemblies/library/`.
+`at_most_one_of`/`requires`, fact exports and the scoped-provider rule, `priorities`, `actuates` and
+`feed:`/`required:` on selectors. Each is refused by name (`EF-73`): assemblies are flat, which the
+first real assemblies need, and a cut feature returns as its own change when a real assembly needs
+it. The spec is `roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1); the mock library
+the tests run on is `tests/assemblies/mock_assemblies/library/`.
 
 ## Relation to `system_setups/`
 

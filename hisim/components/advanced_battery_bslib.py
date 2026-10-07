@@ -21,9 +21,11 @@ from hisim.config import (
     ComponentID,
     ConfigBase,
     DisplayConfig,
+    Many,
     Sizable,
     Size,
     SizingLaw,
+    Sum,
     concrete,
     preset,
     sized_field,
@@ -43,26 +45,39 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 class BatteryConfig(ConfigBase):
     """Battery Configuration.
 
-    The named default battery is :meth:`preset_sized_to_pv`, and both of its power numbers are
-    sizable: the preset leaves them ``AUTO`` and ``.resolve(ctx)`` derives them from the peak
-    power of the PV array the battery is installed beside. An author who knows the device pins
-    the two fields instead.
+    Both power numbers are sizable. The class laws size the battery to **every** PV array it
+    stands beside: :data:`CAPACITY_LAW` and :data:`INVERTER_POWER_LAW` sum the peak power of the
+    arrays its ``sizing_sources`` list names (``Sum(Many(...))``, ``assemblies_spec.md`` §6, D10),
+    which is what an assembly's ``many: true`` fact port lowers to. The named default battery,
+    :meth:`preset_sized_to_pv`, is sized to **the one** array of the recorded twins: it sets the two
+    fields to the scalar laws :data:`CAPACITY_LAW_ONE_ARRAY` and :data:`INVERTER_POWER_LAW_ONE_ARRAY`,
+    which read one provider, so a second array beside it is an ambiguity the author settles. Over
+    one array the two pairs compute the very same numbers. An author who knows the device pins the
+    two fields instead.
     """
 
     MAIN_CLASS = "hisim.components.advanced_battery_bslib.Battery"
 
     #: Sizing law of the battery's capacity: one kilowatt hour of storage per kilowatt peak of
-    #: PV, rounded to two decimals. Named as a ClassVar so the field declaration reads as one
-    #: line and the rule of thumb is written down in one place.
+    #: every PV array the battery is sized to, summed, rounded to two decimals. Named as a ClassVar
+    #: so the field declaration reads as one line and the rule of thumb is written down in one place.
     #: See https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
-    CAPACITY_LAW: ClassVar[SizingLaw] = (Size.PV_PEAK_POWER_IN_WATT * 1e-3).rounded(2)
+    CAPACITY_LAW: ClassVar[SizingLaw] = (Sum(Many(Size.PV_PEAK_POWER_IN_WATT)) * 1e-3).rounded(2)
 
     #: Sizing law of the charging and discharging power: a C-rate of 0.5 (half the capacity per
-    #: hour) on the capacity the law above gives, which is the array's peak power in watt times
+    #: hour) on the capacity the law above gives, which is the summed peak power in watt times
     #: 0.5. It reads the fact rather than the sibling capacity field on purpose: the capacity is
     #: rounded to two decimals before it is stored, and inverting that rounding into the inverter
     #: power would move the number by about a watt on a fleet-sized array.
-    INVERTER_POWER_LAW: ClassVar[SizingLaw] = (Size.PV_PEAK_POWER_IN_WATT * 0.5).rounded(2)
+    INVERTER_POWER_LAW: ClassVar[SizingLaw] = (Sum(Many(Size.PV_PEAK_POWER_IN_WATT)) * 0.5).rounded(2)
+
+    #: :data:`CAPACITY_LAW` over the one array of :meth:`preset_sized_to_pv`: the same rule of thumb
+    #: reading one provider's peak power. The sum of one provider is that provider's value, so the
+    #: two laws agree to the last bit over one array.
+    CAPACITY_LAW_ONE_ARRAY: ClassVar[SizingLaw] = (Size.PV_PEAK_POWER_IN_WATT * 1e-3).rounded(2)
+
+    #: :data:`INVERTER_POWER_LAW` over the one array of :meth:`preset_sized_to_pv`.
+    INVERTER_POWER_LAW_ONE_ARRAY: ClassVar[SizingLaw] = (Size.PV_PEAK_POWER_IN_WATT * 0.5).rounded(2)
 
     #: structured identity (name, building, unit) of the component
     component_id: ComponentID
@@ -90,12 +105,12 @@ class BatteryConfig(ConfigBase):
     #: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
     lifetime_in_cycles: float = 5e3
     #: charging and discharging power in Watt. Sizable: left ``AUTO`` it is computed by
-    #: :data:`INVERTER_POWER_LAW` from the PV peak power the array contributes.
-    custom_pv_inverter_power_generic_in_watt: Sizable[float] = sized_field(rule=INVERTER_POWER_LAW)
+    #: :data:`INVERTER_POWER_LAW` from the peak power the arrays contribute.
+    custom_pv_inverter_power_generic_in_watt: Sizable[float] = sized_field(rule=INVERTER_POWER_LAW, unit=Units.WATT)
     #: battery capacity in kWh. Sizable: left ``AUTO`` it is computed by :data:`CAPACITY_LAW`
-    #: from the same fact. Marked as the capacity field for the cost engine.
+    #: from the same facts. Marked as the capacity field for the cost engine.
     custom_battery_capacity_generic_in_kilowatt_hour: Sizable[float] = sized_field(
-        rule=CAPACITY_LAW, metadata={"capacity": True}
+        rule=CAPACITY_LAW, unit=Units.KWH, metadata={"capacity": True}
     )
 
     @preset
@@ -107,9 +122,11 @@ class BatteryConfig(ConfigBase):
         database, first in the energy management hierarchy, starting empty and rated for five
         thousand full cycles. What the preset does not fix is how big the device is:
         ``custom_battery_capacity_generic_in_kilowatt_hour`` and
-        ``custom_pv_inverter_power_generic_in_watt`` stay ``AUTO`` so that :data:`CAPACITY_LAW`
-        and :data:`INVERTER_POWER_LAW` derive them from the array's peak power, and an author who
-        knows the device pins the two fields instead.
+        ``custom_pv_inverter_power_generic_in_watt`` carry the one-array laws
+        :data:`CAPACITY_LAW_ONE_ARRAY` and :data:`INVERTER_POWER_LAW_ONE_ARRAY`, which derive them
+        from the peak power of the one array beside it, as every recorded twin has it. Setting the
+        fields to ``AUTO`` selects the class laws, which sum every array the battery's sources list
+        names; an author who knows the device pins the two fields instead.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
@@ -117,7 +134,11 @@ class BatteryConfig(ConfigBase):
         Returns:
             BatteryConfig: The preset configuration, with both power numbers unsized.
         """
-        return cls(component_id=ComponentID(name=name))
+        return cls(
+            component_id=ComponentID(name=name),
+            custom_pv_inverter_power_generic_in_watt=cls.INVERTER_POWER_LAW_ONE_ARRAY,
+            custom_battery_capacity_generic_in_kilowatt_hour=cls.CAPACITY_LAW_ONE_ARRAY,
+        )
 
 
 class Battery(Component):

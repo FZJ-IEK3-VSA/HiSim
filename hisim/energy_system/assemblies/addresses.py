@@ -40,6 +40,7 @@ class Unit:
         lines: The line index of the file it was written in.
         block_path: The key path of its block in that file.
         lowered: Placeholder position to the items its port lowered to, and what produced them.
+        sizing: Fact to the ``sizing_sources`` value a fact port lowered to, and what produced it.
     """
 
     name: str
@@ -51,6 +52,7 @@ class Unit:
     lines: LineIndex
     block_path: Tuple[Any, ...]
     lowered: Dict[int, Tuple[List[AnyInputItem], str]] = field(default_factory=dict)
+    sizing: Dict[str, Tuple[Any, str]] = field(default_factory=dict)
 
     @property
     def class_name(self) -> str:
@@ -219,6 +221,9 @@ def final_entry(unit: Unit, source_map: SourceMap) -> ComponentEntry:
             source_map.add(unit.name, f"sizing_sources.{fact}", unit.source(("sizing_sources", fact)))
         for key in entry.config:
             source_map.add(unit.name, f"config.{key}", unit.source(("config", key)))
+    for fact, (value, note) in unit.sizing.items():
+        sizing[fact] = value
+        source_map.add(unit.name, f"sizing_sources.{fact}", unit.source((), note))
     return entry.model_copy(
         update={
             "name": unit.name,
@@ -227,6 +232,7 @@ def final_entry(unit: Unit, source_map: SourceMap) -> ComponentEntry:
             "ports": {},
             "verbs": BindingVerbs(),
             "placeholders": (),
+            "observes": None,
             "order": None,
         }
     )

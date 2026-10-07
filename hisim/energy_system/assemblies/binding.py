@@ -9,9 +9,11 @@ Member.Output}`` is what a verb names when a need must read one particular outpu
 
 **The default rule** mirrors the sizing engine's: a port binds to the one component in scope whose
 class is one of its partner classes, and a verb decides every other case. In scope are the site
-entries and every member of every import; a port never binds into its own instance. The refusals:
-``EF-7A`` no partner, ``EF-7B`` several and no verb, ``EF-7C`` ``none:`` on a required port,
-``EF-7D`` an absent ``bind:`` partner, ``EF-7E`` an optional port with candidates and no verb,
+entries, the live components of groups and variants, and every member of every import; a port never
+binds into its own instance. A verb names an import or a component the file declares, absent only
+through a disabled group or an unselected option. The refusals: ``EF-7A`` no partner, ``EF-7B``
+several and no verb, ``EF-7C`` ``none:`` on a required port, ``EF-7D`` an undeclared partner or an
+absent ``bind:`` partner, ``EF-7E`` an optional port with candidates and no verb,
 ``EF-7F`` a verb on an inactive port, ``EF-7G`` a verb naming no need, ``EF-7H`` a bound provided
 output the need's wires do not read, ``EF-7J`` a partner of another class or a need with nowhere to
 land. Each names the owner, the port and the candidates and ends in a paste-ready verb line.
@@ -55,15 +57,20 @@ class Owner:
 class PortBinder:
     """Decides and lowers every port of one file, with every owner in scope."""
 
-    def __init__(self, sites: Mapping[str, Owner], imports: Mapping[str, Sequence[Owner]]) -> None:
+    def __init__(
+        self, sites: Mapping[str, Owner], imports: Mapping[str, Sequence[Owner]], absent: Mapping[str, str]
+    ) -> None:
         """Prepares the binding.
 
         Args:
-            sites: Every site entry by name, in file order.
+            sites: Every live component of the file by name, the site entries first.
             imports: Import key to its instances' owners (one for an import without instances), in file order.
+            absent: Each component a disabled group or an unselected option leaves out, to the reason.
         """
         self.sites = sites
         self.imports = imports
+        self.absent = absent
+        self.declared = tuple(sites) + tuple(absent) + tuple(imports)
         self.owners: List[Owner] = list(sites.values()) + [owner for owners in imports.values() for owner in owners]
 
     def bind(self) -> Dict[str, List[PortRecord]]:
@@ -145,14 +152,25 @@ class PortBinder:
                     )
                 return PortRecord(name, state.value, "declined", "none")
             assert target is not None
-            partner, absent = self.resolve(owner, port, target)
-            if partner is None:
-                if verb == "optional-bind":
-                    return PortRecord(name, state.value, f"not bound: partner absent ({absent})", verb)
+            head = target.split(".")[0]
+            if head not in self.declared:
                 raise self.error(
                     EnergySystemErrorId.BOUND_PARTNER_ABSENT,
                     owner,
-                    f"{what} is bound to '{target}', but {absent}; candidates: {listed}.",
+                    f"{what} is bound to '{target}' with '{verb}:', but the file declares no import or component "
+                    f"'{head}'; a house without the partner leaves the verb out. Candidates of the port: {listed}.",
+                    alternatives=self.declared,
+                    alternatives_label="imports and components the file declares",
+                    offending_value=head,
+                )
+            partner, absent = self.resolve(owner, port, target)
+            if partner is None:
+                if verb == "optional-bind":
+                    return PortRecord(name, state.value, f"not bound: {head} {absent}", verb)
+                raise self.error(
+                    EnergySystemErrorId.BOUND_PARTNER_ABSENT,
+                    owner,
+                    f"{what} is bound to '{target}', but '{head}' is {absent}; candidates: {listed}.",
                     remedy=self.paste(owner, port, candidates, optional),
                 )
             return self.lower(owner, port, state, partner, verb)
@@ -185,9 +203,10 @@ class PortBinder:
     def resolve(self, owner: Owner, port: Port, target: str) -> Tuple[Optional[Tuple[Unit, str]], str]:
         """Resolves a verb's partner reference: the partner and the provided output it names (or ``""``).
 
-        A reference whose head names nothing in the file is an absent partner, which ``optional-bind:``
-        accepts; a reference whose head exists but whose instance or port does not is refused, whatever
-        the verb, because it is a mistake rather than an absence.
+        A reference whose head the file declares but a disabled group or an unselected option leaves out
+        is an absent partner, which ``optional-bind:`` accepts; a reference whose head exists but whose
+        instance or port does not is refused, whatever the verb, because it is a mistake rather than an
+        absence. The caller has refused a head the file does not declare.
 
         Returns:
             ``((partner, output), "")``, or ``(None, why it is absent)``.
@@ -224,7 +243,7 @@ class PortBinder:
             if rest:
                 return self.provided(owner, port, targets[0], rest[0], target), ""
         else:
-            return None, f"the file has no component or import '{head}'"
+            return None, self.absent[head]
         if len(rest) > 1:
             raise self.error(
                 EnergySystemErrorId.BOUND_PARTNER_ABSENT, owner, f"'{target}' names more than an instance and a port."

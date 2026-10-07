@@ -248,10 +248,11 @@ class ComponentEntry(BaseModel):
     #: Wire spelling of the ``class_path`` field: ``class`` is a Python keyword.
     CLASS_KEY: ClassVar[str] = "class"
 
-    #: The keys schema version 4 adds to a top-level entry (``assemblies_spec.md`` §3.1): the ports
-    #: an import binds to and the three binding verbs. The expansion of imports consumes them, and
-    #: the ``{$port: …}`` placeholders, so no later stage ever sees one.
-    SITE_KEYS: ClassVar[Tuple[str, ...]] = ("ports", "bind", "optional-bind", "none")
+    #: The keys schema version 4 adds to a top-level entry (``assemblies_spec.md`` §3.1, §2.3): the
+    #: ports an import binds to, the three binding verbs and the flat evaluation ``order``. The
+    #: expansion of imports consumes them, and the ``{$port: …}`` placeholders, so no later stage
+    #: ever sees one.
+    SITE_KEYS: ClassVar[Tuple[str, ...]] = ("ports", "bind", "optional-bind", "none", "order")
 
     name: str
     class_path: str
@@ -263,11 +264,13 @@ class ComponentEntry(BaseModel):
     ports: Mapping[str, Port] = Field(default_factory=dict)
     verbs: BindingVerbs = Field(default_factory=BindingVerbs)
     placeholders: Tuple[PlacedPlaceholder, ...] = ()
+    #: The flat evaluation order of a top-level entry of a version-4 file (D26 revised, §2.3).
+    order: Optional[int] = None
 
     @property
     def uses_assemblies(self) -> bool:
-        """Whether the entry carries a port, a verb or a placeholder of schema version 4."""
-        return bool(self.ports) or not self.verbs.is_empty or bool(self.placeholders)
+        """Whether the entry carries a port, a verb, a placeholder or an ``order`` of schema version 4."""
+        return bool(self.ports) or not self.verbs.is_empty or bool(self.placeholders) or self.order is not None
 
     def sizing_references(self) -> Tuple[Tuple[str, SourceReference], ...]:
         """Flattens ``sizing_sources`` into ``(fact, reference)`` pairs.

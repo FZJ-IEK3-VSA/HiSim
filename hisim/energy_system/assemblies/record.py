@@ -5,7 +5,8 @@ file it produces, neither part of the file, so a file without imports stays byte
 
 - the **import record**: per import and instance the assembly path and the sha256 of its file, the
   parameters as given and as resolved, the internal variants selected, the members' addresses,
-  every port's state and binding decision, and the reserved ``installation_year``/``quote``;
+  every port's state and binding decision, and the reserved ``installation_year``/``quote``; and the
+  final sequence in which the simulator adds the components (D26 revised), which a re-run checks;
 - the **source map**: per produced item — a component, an input item, a sizing line, a config
   value — the import, the instance, the member and the files and lines it came from.
 
@@ -105,8 +106,8 @@ class PortRecord:
     Attributes:
         port: The port's name.
         state: ``required``, ``optional``, ``inactive`` or ``provided``.
-        decision: ``bound``, ``declined``, ``not bound: partner absent``, ``not bound: no candidate``,
-            ``inactive`` or ``provided``.
+        decision: ``bound``, ``declined``, ``not bound: <partner> disabled by group <G>`` (or ``… by
+            variant <V> …``), ``not bound: no candidate``, ``inactive`` or ``provided``.
         verb: ``bind``, ``optional-bind``, ``none`` or ``default`` (the default rule).
         partner: The partner's component name, when bound.
         lowered_to: The items the binding wrote, ``<member>.inputs: <item>``.
@@ -171,10 +172,15 @@ class ImportRecord:
     of a case distinction, as :class:`~hisim.energy_system.groups.ExpansionRecord` does.
     """
 
+    #: The key the sequence is written under in the record's ``imports`` block.
+    SEQUENCE_KEY: ClassVar[str] = "sequence"
+
     instances: List[InstanceRecord] = field(default_factory=list)
     site_ports: Dict[str, List[PortRecord]] = field(default_factory=dict)
     addresses: Dict[str, ComponentID] = field(default_factory=dict)
     source_map: SourceMap = field(default_factory=SourceMap)
+    #: Every live component's name, in the order the simulator adds them.
+    sequence: Tuple[str, ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -193,6 +199,7 @@ class ImportRecord:
             "instances": [record.to_document() for record in self.instances],
             "site_ports": {name: [port.to_document() for port in ports] for name, ports in self.site_ports.items()},
             AddressTable.ADDRESSES_KEY: AddressTable.to_document(self.addresses),
+            self.SEQUENCE_KEY: list(self.sequence),
         }
 
     def metadata(self, given: Optional[Mapping[str, Any]]) -> Dict[str, Any]:

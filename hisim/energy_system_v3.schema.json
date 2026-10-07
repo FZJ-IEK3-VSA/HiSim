@@ -268,6 +268,10 @@
           "items": {
             "$ref": "#/$defs/name"
           }
+        },
+        "order": {
+          "type": "integer",
+          "description": "Version 4: the entries and imports carrying order: come first, ascending; the others follow in file order. Only on a top-level entry or an import."
         }
       },
       "allOf": [
@@ -6374,6 +6378,10 @@
         "assembly": {
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*(/[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "order": {
+          "type": "integer",
+          "description": "Version 4: the entries and imports carrying order: come first, ascending; the others follow in file order. Only on a top-level entry or an import."
         },
         "parameters": {
           "type": "object",

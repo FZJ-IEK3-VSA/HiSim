@@ -250,6 +250,13 @@ class SchemaBuilder:
             },
         }
 
+    #: The flat evaluation order of a top-level entry or an import (``assemblies_spec.md`` §2.3, D26 revised).
+    ORDER: Dict[str, Any] = {
+        "type": "integer",
+        "description": "Version 4: the entries and imports carrying order: come first, ascending; the others follow "
+        "in file order. Only on a top-level entry or an import.",
+    }
+
     @classmethod
     def verb_properties(cls) -> Dict[str, Any]:
         """The three binding verbs (``assemblies_spec.md`` §3.1), on a top-level entry and on an import."""
@@ -340,6 +347,7 @@ class SchemaBuilder:
                 "not": {"required": ["instances", "parameters"]},
                 "properties": {
                     "assembly": {"type": "string", "pattern": cls.ASSEMBLY_PATTERN},
+                    "order": cls.ORDER,
                     "parameters": {"type": "object", "propertyNames": {"$ref": "#/$defs/name"}},
                     "instances": {
                         "type": "object",
@@ -386,6 +394,7 @@ class SchemaBuilder:
                     "description": "What a top-level entry of a version-4 file needs from an import (§3).",
                 },
                 **self.verb_properties(),
+                "order": self.ORDER,
             },
             "allOf": [self._class_branch(component) for component in self.classes],
         }

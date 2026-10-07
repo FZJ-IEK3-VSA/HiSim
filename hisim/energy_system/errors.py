@@ -63,9 +63,11 @@ class EnergySystemErrorId(enum.Enum):
     of the work, ``EF-75`` for the library check (which lists every problem of a file at once, the
     unit problems among them under ``EF-78``/``EF-79``), ``EF-76``/``EF-77`` for an import's
     parameters and constraints, and ``EF-7A`` … ``EF-7H`` for the binding of ports (§3.3), ``EF-7J``
-    for a port that does not fit its assembly's members. The letters ``I`` and ``O`` are skipped,
-    as they read like a one and a zero. All of them are raised by the expansion of imports, from
-    the files alone, before any class is constructed.
+    for a port that does not fit its assembly's members, ``EF-7P`` for an evaluation order that
+    names one number twice or a record whose components do not stand in the sequence its import
+    record states. The letters ``I`` and ``O`` are skipped, as they read like a one and a zero. All
+    of them are raised by the expansion of imports, from the files alone, before any class is
+    constructed.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
@@ -158,6 +160,7 @@ class EnergySystemErrorId(enum.Enum):
     UNKNOWN_PORT = "EF-7G"
     BOUND_OUTPUT_NOT_READ = "EF-7H"
     PORT_CONTRACT = "EF-7J"
+    ORDER_INVALID = "EF-7P"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
     RECORDED_NAME_INVALID = "EF-R1"

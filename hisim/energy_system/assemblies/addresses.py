@@ -4,8 +4,9 @@ One import instance's members become **units**: entries with the parameters subs
 …}`` in config values and constructor arguments, the preset a ``{$param}`` names), the structured
 address ``ComponentID(name, path=(AddressStep(import, instance),), assembly, display_name)`` whose
 serialization ``pv-east-PVSystem`` is the component's name in the flat file, and their place in the
-file's order: members in their assembly's written order. A site entry is a unit too, without an
-address. Once the ports are bound (:mod:`.binding`), :func:`final_entry` writes each unit's entry as
+file's sequence (:func:`sequence`): members in their assembly's written order, an import one block
+that a flat ``order:`` positions. A site entry is a unit too, without an address. Once the ports are
+bound (:mod:`.binding`), :func:`final_entry` writes each unit's entry as
 the flat file holds it — references between members rewritten to the serialized names, placeholders
 replaced by what their ports lowered to — and its source-map entries.
 """
@@ -13,7 +14,7 @@ replaced by what their ports lowered to — and its source-map entries.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from hisim.config import AddressStep, ComponentID
 from hisim.energy_system.assemblies.parameters import Selection
@@ -78,9 +79,41 @@ class Unit:
         )
 
 
-def site_unit(name: str, entry: ComponentEntry, lines: LineIndex) -> Unit:
-    """A site entry as a unit."""
-    return Unit(name, entry, None, (lines.location("components", name),), {}, (), lines, ("components", name))
+def site_unit(name: str, entry: ComponentEntry, lines: LineIndex, block_path: Tuple[Any, ...] = ()) -> Unit:
+    """A component of the energy-system file as a unit; ``block_path`` locates one inside a group or variant."""
+    block_path = block_path or ("components", name)
+    return Unit(name, entry, None, (lines.location(*block_path),), {}, (), lines, block_path)
+
+
+@dataclass
+class Block:
+    """What a flat ``order:`` positions (§2.3): a site entry, or an import's units, instances in written order."""
+
+    label: str
+    location: str
+    order: Optional[int]
+    units: List[Unit]
+
+
+def sequence(blocks: Sequence[Block]) -> List[Unit]:
+    """The units of ``blocks`` (in file order, sites first): those carrying ``order:`` ascending, then the rest.
+
+    Raises:
+        EnergySystemAssemblyError: ``EF-7P`` when two blocks carry the same number.
+    """
+    numbered: Dict[int, Block] = {}
+    for block in blocks:
+        if block.order is None:
+            continue
+        if block.order in numbered:
+            raise EnergySystemAssemblyError(
+                EnergySystemErrorId.ORDER_INVALID,
+                block.location,
+                f"{block.label} and {numbered[block.order].label} both carry order: {block.order}.",
+            )
+        numbered[block.order] = block
+    chosen = [numbered[number] for number in sorted(numbered)] + [block for block in blocks if block.order is None]
+    return [unit for block in chosen for unit in block.units]
 
 
 def member_units(
@@ -197,6 +230,7 @@ def final_entry(unit: Unit, source_map: SourceMap) -> ComponentEntry:
             "ports": {},
             "verbs": BindingVerbs(),
             "placeholders": (),
+            "order": None,
         }
     )
 

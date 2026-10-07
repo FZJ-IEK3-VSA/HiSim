@@ -13,8 +13,9 @@ every committed file — comes back as the very same object. For a file of versi
 3. gives every member its structured address and substitutes its parameters (:mod:`.addresses`);
 4. binds every need of every import and site entry and lowers it to bare names and wires
    (:mod:`.binding`);
-5. writes the flat file — site entries first, then each import's members, instances and imports in
-   file order — and the import record with its source map (:mod:`.record`).
+5. writes the flat file in the sequence a flat ``order:`` sets (:func:`.addresses.sequence`) — the
+   entries and imports carrying one ascending, then the others in file order, site entries first,
+   each import one block — and the import record with that sequence and its source map (:mod:`.record`).
 
 Everything downstream sees ordinary components; whether the constructed components accept the
 lowered items the wiring stage checks, like every other connection.
@@ -22,18 +23,21 @@ lowered items the wiring stage checks, like every other connection.
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from hisim.config import AddressStep
-from hisim.energy_system.assemblies.addresses import Unit, final_entry, member_units, site_unit
+from hisim.energy_system.address_table import AddressTable
+from hisim.energy_system.assemblies.addresses import Block, Unit, final_entry, member_units, sequence, site_unit
 from hisim.energy_system.assemblies.binding import Owner, PortBinder
 from hisim.energy_system.assemblies.library import require_valid
 from hisim.energy_system.assemblies.parameters import SITE, select
 from hisim.energy_system.assemblies.record import ImportRecord, InstanceRecord
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
-from hisim.energy_system.imports_model import InstanceEntry, ObservesPlaceholder, PortKind, PortPlaceholder
-from hisim.energy_system.model import ComponentEntry, EnergySystemFile
+from hisim.energy_system.groups import enabled_component_names
+from hisim.energy_system.imports_model import BindingVerbs, InstanceEntry, ObservesPlaceholder, PortKind
+from hisim.energy_system.imports_model import PortPlaceholder
+from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, VariantOption
 from hisim.energy_system.source_lines import LineIndex
 
 
@@ -70,14 +74,17 @@ class ImportExpander:
             require_valid(assembly)
         self._refuse_part_two(assemblies)
         sites: Dict[str, Owner] = {}
-        site_units: List[Unit] = []
+        blocks: List[Block] = []
         for name, site_entry in self.model.components.items():
             unit = site_unit(name, site_entry, self.lines)
-            site_units.append(unit)
+            location = self.lines.location("components", name).text
+            blocks.append(Block(f"component '{name}'", location, site_entry.order, [unit]))
             sites[name] = self._site_owner(unit)
+        absent = self._switched_components(sites)
         imports: Dict[str, List[Owner]] = {}
-        member_lists: List[List[Unit]] = []
         for key, entry in self.model.imports.items():
+            members = Block(f"import '{key}'", self.lines.location("imports", key).text, entry.order, [])
+            blocks.append(members)
             assembly = assemblies[key]
             instances: Sequence[Tuple[Optional[str], Optional[InstanceEntry]]] = (
                 tuple(entry.instances.items()) if entry.instances is not None else ((None, None),)
@@ -91,7 +98,7 @@ class ImportExpander:
                 label = f"import '{key}'" + (f" (instance '{instance_key}')" if instance_key is not None else "")
                 selection = select(assembly.model, assembly.label, given, f"{label}, {origin.text}")
                 units = member_units(assembly, selection, AddressStep(key, instance_key), origin)
-                member_lists.append(units)
+                members.units.extend(units)
                 reference = key if instance_key is None else f"{key}.{instance_key}"
                 imports.setdefault(key, []).append(
                     Owner(
@@ -118,14 +125,38 @@ class ImportExpander:
                         reserved=reserved,
                     )
                 )
-        records = PortBinder(sites, imports).bind()
+        records = PortBinder(sites, imports, absent).bind()
         for instance_record in self.record.instances:
             reference = instance_record.import_key + (
                 f".{instance_record.instance}" if instance_record.instance else ""
             )
             instance_record.ports = records[reference]
         self.record.site_ports = {name: records[name] for name in sites if records[name]}
-        return self._assemble(site_units + [unit for units in member_lists for unit in units]), self.record
+        flat = self._assemble(sequence(blocks))
+        self.record.sequence = enabled_component_names(flat)
+        return flat, self.record
+
+    def _switched_components(self, sites: Dict[str, Owner]) -> Dict[str, str]:
+        """Adds the live group and variant components to ``sites`` as partners; returns the others, with why."""
+        groups = self.model.groups.items()
+        places: List[Tuple[Tuple[str, ...], bool, str, Union[Group, VariantOption]]] = [
+            (("groups", name), group.enabled, f"group {name}", group) for name, group in groups
+        ]
+        places += [
+            (("variants", name, "options", key), key == chosen.selected, f"variant {name} ({chosen.selected})", option)
+            for name, chosen in self.model.variants.items()
+            for key, option in chosen.options.items()
+        ]
+        absent: Dict[str, str] = {}
+        for path, live, switch, holder in places:
+            for name, entry in holder.components.items():
+                if not live:
+                    absent[name] = f"disabled by {switch}"
+                    continue
+                unit = site_unit(name, entry, self.lines, path + ("components", name))
+                label = f"component '{name}', {unit.chain[0].text}"
+                sites[name] = Owner(name, label, f"the component '{name}'", BindingVerbs(), {name: unit}, {}, {})
+        return {name: reason for name, reason in absent.items() if name not in sites}
 
     def _check_names(self) -> None:
         """Refuses an import key that is also a component, group or variant name: a verb could mean either."""
@@ -246,7 +277,21 @@ def expand_imports(
         EnergySystemAssemblyError: For any condition of the ``EF-7x`` band.
     """
     if model.schema_version == EnergySystemFile.SUPPORTED_SCHEMA_VERSION:
+        _check_recorded_sequence(model)
         return model, ImportRecord()
     if resolver is None:
         resolver = AssemblyResolver.default() if model.imports else AssemblyResolver(())
     return ImportExpander(model, resolver, lines or LineIndex.empty("<energy system>")).expand()
+
+
+def _check_recorded_sequence(model: EnergySystemFile) -> None:
+    """Refuses (``EF-7P``) a record whose components no longer stand in the sequence its import record states."""
+    recorded = (model.metadata or {}).get(AddressTable.IMPORTS_KEY)
+    stated = recorded.get(ImportRecord.SEQUENCE_KEY) if isinstance(recorded, Mapping) else None
+    if stated is not None and list(enabled_component_names(model)) != list(stated):
+        raise EnergySystemAssemblyError(
+            EnergySystemErrorId.ORDER_INVALID,
+            f"metadata.{AddressTable.IMPORTS_KEY}.{ImportRecord.SEQUENCE_KEY}",
+            f"the record's components stand in the order {list(enabled_component_names(model))}, not in the sequence "
+            f"{list(stated)} its import record states; a re-run would add them in another order.",
+        )

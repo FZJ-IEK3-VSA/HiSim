@@ -23,6 +23,13 @@ Monitor:
 PV_PAIR = "pv: {assembly: mock/pv_array, instances: {east: {azimuth_in_degree: 90}, west: {azimuth_in_degree: 270}}"
 
 
+def switched(verb: str = "optional-bind", enabled: bool = True) -> str:
+    """A heater whose ``ems_modifier`` a verb names ``Ems``, which sits in the group ``control``."""
+    imports = f"{TANK}}}\n{HEATER}, {verb}: {{ems_modifier: Ems}}}}"
+    group = f"groups:\n  control:\n    enabled: {str(enabled).lower()}\n    components: {{{EMS}}}\n"
+    return site(OCCUPANCY, imports=imports) + group
+
+
 def refused(text: str, code: str, *names: str) -> str:
     """Expands a file that must be refused with ``code`` and a message naming every one of ``names``."""
     with pytest.raises(EnergySystemAssemblyError, match=code) as refusal:
@@ -182,10 +189,8 @@ def test_a_site_port_binds_to_one_instance_and_lowers_to_its_wires() -> None:
 @pytest.mark.base
 def test_the_optional_states_are_recorded_and_lower_nothing() -> None:
     """Catches an optional port lowered without a partner, or its decision not stated."""
-    absent = ports_of(
-        site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, optional-bind: {{ems_modifier: control}}}}"), "heater"
-    )
-    assert absent["ems_modifier"].decision.startswith("not bound: partner absent")
+    absent = ports_of(switched(enabled=False), "heater")
+    assert absent["ems_modifier"].decision == "not bound: Ems disabled by group control"
     declined = ports_of(site(OCCUPANCY, EMS, imports=f"{TANK}}}\n{HEATER}, none: [ems_modifier]}}"), "heater")
     assert declined["ems_modifier"].decision == "declined" and not declined["ems_modifier"].lowered_to
     alone = ports_of(site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}}}"), "heater")
@@ -202,3 +207,40 @@ def test_a_port_never_binds_into_its_own_instance() -> None:
     assert flat.components["tank-Tank"].inputs[1] == ExplicitWire(
         source="heater-Heater", input="ThermalPower", output="ThermalPower"
     )
+
+
+@pytest.mark.base
+def test_an_optional_bind_to_a_live_declared_partner_binds_it() -> None:
+    """Catches a partner in an enabled group being out of the binding's reach."""
+    flat, record = expand_text(switched())
+    port = {port.port: port for port in record.instance("heater").ports}["ems_modifier"]
+    assert (port.decision, port.verb, port.partner) == ("bound", "optional-bind", "Ems")
+    assert DefaultInputs(source="Ems") in flat.components["heater-Controller"].inputs
+
+
+@pytest.mark.base
+def test_an_optional_bind_to_a_partner_an_unselected_option_holds_stays_unbound_with_the_reason() -> None:
+    """Catches a switched-off partner failing the file, or its port's record not saying why it is unbound."""
+    text = site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, optional-bind: {{ems_modifier: Ems}}}}") + (
+        "variants:\n  metering:\n    selected: bare\n    options:\n"
+        f"      managed: {{components: {{{EMS}}}}}\n      bare: {{components: {{{WEATHER}}}}}\n"
+    )
+    flat, record = expand_text(text)
+    port = {port.port: port for port in record.instance("heater").ports}["ems_modifier"]
+    assert port.decision == "not bound: Ems disabled by variant metering (bare)"
+    assert not port.lowered_to and flat.components["heater-Controller"].inputs == (DefaultInputs(source="tank-Tank"),)
+
+
+@pytest.mark.base
+def test_a_bind_to_a_switched_off_partner_is_refused_with_the_reason() -> None:
+    """Catches ``bind:`` accepting a partner a disabled group removes."""
+    refused(switched("bind", enabled=False), "EF-7D", "Ems", "disabled by group control")
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("verb", ["optional-bind", "bind"])
+def test_a_partner_the_file_does_not_declare_is_refused_whatever_the_verb(verb: str) -> None:
+    """Catches a typo in a partner being taken for a house without that import."""
+    text = site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, {verb}: {{ems_modifier: control}}}}")
+    message = refused(text, "EF-7D", "'control'", "declares no import or component")
+    assert "Occupancy, heater, tank" in message

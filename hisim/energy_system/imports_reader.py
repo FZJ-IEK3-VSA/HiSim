@@ -39,7 +39,8 @@ class CutConstructs:
         "imports": "nesting is not in v1: assemblies are flat, and a shared sub-structure is duplicated",
         "from": "re-exports belong to nesting, which is not in v1: assemblies are flat",
         "internal": "internal ports belong to nesting, which is not in v1: assemblies are flat",
-        "order": "order: is not in v1: the sequence is file order, site entries first, then the imports",
+        "order": "order: is a flat integer on a top-level component or an import only, never on an instance, an "
+        "assembly member or a group's or variant's component (revised 2026-10-07)",
         "presets": "presets inside assemblies are not in v1: parameters have defaults and importers set values",
         "preset": "assembly presets are not in v1: an import sets parameter values; the defaults are the preset",
         "$switch": "$switch is not in v1: $param is the only placeholder; per-variant values live in the options",
@@ -338,6 +339,7 @@ class ImportsReader:
             instances=instances,
             verbs=cls.verbs(block, location),
             observes=block.get("observes"),
+            order=cls.order(block, location),
             **cls._reserved(block, location),
         )
 
@@ -353,6 +355,14 @@ class ImportsReader:
         if ParameterReference.walk(parameters):
             raise cls.shape_error(location, "an energy-system file has no parameters to refer to.")
         return InstanceEntry(name=name, parameters=parameters, **reserved)
+
+    @classmethod
+    def order(cls, block: Mapping[str, Any], location: str) -> Optional[int]:
+        """Reads the flat ``order:`` of a top-level entry or an import, an integer (D26 revised, §2.3)."""
+        value = block.get("order")
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+            raise RawDocument.malformed(f"{location}.order", value, "an integer")
+        return value
 
     @classmethod
     def _reserved(cls, block: Mapping[str, Any], location: str) -> Dict[str, Any]:

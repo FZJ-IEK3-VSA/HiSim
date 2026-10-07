@@ -13,7 +13,19 @@ from hisim.energy_system.assemblies.reader import AssemblyReader
 from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder, assembly_schema_is_current
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemFormatError
 from hisim.energy_system.loader import dump_energy_system, parse_energy_system
-from tests.assemblies.helpers import EMPTY_CONTRACT, Library, Mocks, expand_text, read_system, site, WEATHER
+from tests.assemblies.helpers import (
+    EMPTY_CONTRACT,
+    OCCUPANCY,
+    WEATHER,
+    Library,
+    Mocks,
+    expand_text,
+    read_system,
+    site,
+)
+
+#: A group's component carrying ``order:``, which only a top-level entry or an import may.
+ORDERED_OCCUPANCY = OCCUPANCY.replace("}", ", order: 1}")
 
 #: A minimal assembly every refusal test changes in one place.
 MINIMAL = f"""\
@@ -96,19 +108,28 @@ def test_every_cut_construct_of_an_assembly_is_refused_by_name(construct: str, t
 @pytest.mark.parametrize(
     ("construct", "text"),
     [
-        ("order", site(WEATHER.replace("}", ", order: 1}"))),
         ("preset", site(WEATHER, imports="pv: {assembly: mock/pv_array, preset: south}")),
-        ("order", site(WEATHER, imports="pv: {assembly: mock/pv_array, order: 2}")),
+        ("order", site(WEATHER, imports="pv: {assembly: mock/pv_array, instances: {east: {order: 1}}}")),
+        ("order", site(WEATHER) + f"groups:\n  extra:\n    enabled: true\n    components: {{{ORDERED_OCCUPANCY}}}\n"),
         ("actuates", site(WEATHER, imports="pv: {assembly: mock/pv_array, actuates: {}}")),
         ("$switch", site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {tilt_in_degree: {$switch: a}}}")),
         ("preset", site(WEATHER, imports="pv: {assembly: mock/pv_array, instances: {east: {preset: south}}}")),
     ],
 )
 def test_every_cut_construct_of_an_energy_system_file_is_refused_by_name(construct: str, text: str) -> None:
-    """Catches ``order:``, an import preset or ``$switch`` on the importing side slipping through."""
+    """Catches ``order:`` off a top-level entry or import, an import preset or ``$switch`` slipping through."""
     with pytest.raises(EnergySystemFormatError, match="EF-73") as refusal:
         read_system(text)
     assert f"'{construct}'" in str(refusal.value)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("value", ["first", "true", "1.5", "[1]"])
+def test_an_order_that_is_no_integer_is_refused(value: str) -> None:
+    """Catches ``order: true`` or ``order: 1.5`` being read as a position."""
+    with pytest.raises(EnergySystemFormatError, match="EF-07") as refusal:
+        read_system(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, order: {value}}}"))
+    assert "imports.pv.order" in str(refusal.value)
 
 
 @pytest.mark.base

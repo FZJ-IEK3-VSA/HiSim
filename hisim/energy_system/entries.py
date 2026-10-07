@@ -96,7 +96,8 @@ class EntryReader:
             raw: Its block.
             location: Key path of the block.
             site: Whether the entry is a top-level entry of a schema-version-4 file, which may carry
-                ``ports`` and the binding verbs (``assemblies_spec.md`` §3.1) and placeholders.
+                ``ports``, the binding verbs (``assemblies_spec.md`` §3.1), placeholders and a flat
+                ``order`` (§2.3); every other entry refuses ``order`` by name (``EF-73``).
             placeholders: Whether ``{$port: …}``/``{$observes: …}`` may stand in its ``inputs``
                 (a site entry's and an assembly member's).
 
@@ -114,7 +115,7 @@ class EntryReader:
                 alternatives_label="entry keys",
             )
         allowed = ComponentEntry.ENTRY_KEYS + (ComponentEntry.SITE_KEYS if site else ())
-        if site or placeholders:
+        if not site:
             CutConstructs.refuse_keys(entry, location, ("order",))
         for key in entry:
             if key not in allowed:
@@ -144,6 +145,7 @@ class EntryReader:
             ports=ImportsReader.ports(entry.get("ports"), f"{location}.ports", "ports", site_entry=name),
             verbs=ImportsReader.verbs(entry, location),
             placeholders=placed,
+            order=ImportsReader.order(entry, location),
         )
 
     @classmethod

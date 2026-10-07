@@ -48,8 +48,8 @@ def test_the_expansion_is_idempotent() -> None:
 
 @pytest.mark.base
 def test_site_entries_come_first_then_each_import_in_file_order() -> None:
-    """Catches an evaluation order other than file order (no ``order:`` in v1)."""
-    flat, _record = expand_house()
+    """Catches an evaluation order other than file order for a file without ``order:``, or a record not stating it."""
+    flat, record = expand_house()
     assert list(flat.components) == [
         "Weather",
         "Occupancy",
@@ -61,6 +61,60 @@ def test_site_entries_come_first_then_each_import_in_file_order() -> None:
         "heater-Heater",
         "heater-Controller",
     ]
+    assert record.sequence == tuple(flat.components) == tuple(record.to_document()["sequence"])
+
+
+TANK_AND_HEATER = "tank: {assembly: mock/hot_water_tank{tank}}\nheater: {assembly: mock/electric_heater{heater}}"
+
+
+def ordered(weather: str = "", occupancy: str = "", tank: str = "", heater: str = "") -> str:
+    """A file of Weather, Occupancy, a tank and a heater, each with the given ``order:`` suffix."""
+    return site(
+        WEATHER.replace("}", weather + "}"),
+        OCCUPANCY.replace("}", occupancy + "}"),
+        imports=TANK_AND_HEATER.replace("{tank}", tank).replace("{heater}", heater),
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            ordered(occupancy=", order: 2", heater=", order: 1"),
+            ["heater-Heater", "heater-Controller", "Occupancy", "Weather", "tank-Tank"],
+        ),
+        (  # the twin's interleaving: an import placed between two site entries
+            ordered(weather=", order: 10", occupancy=", order: 30", tank=", order: 20"),
+            ["Weather", "tank-Tank", "Occupancy", "heater-Heater", "heater-Controller"],
+        ),
+        (ordered(), ["Weather", "Occupancy", "tank-Tank", "heater-Heater", "heater-Controller"]),
+    ],
+    ids=["ordered-first", "interleaved", "file-order"],
+)
+def test_order_sorts_the_entries_carrying_it_then_the_others_follow_in_file_order(text: str, expected: list) -> None:
+    """Catches ``order:`` ignored, splitting an import's block, or reordering the entries without it."""
+    flat, record = expand_text(text)
+    assert list(flat.components) == expected and list(record.sequence) == expected
+    assert all(entry.order is None for entry in flat.components.values())
+
+
+@pytest.mark.base
+def test_an_import_with_instances_is_one_block_in_written_order() -> None:
+    """Catches ``order:`` on an import separating its instances or reversing them."""
+    text = site(
+        WEATHER.replace("}", ", order: 2}"),
+        imports="pv: {assembly: mock/pv_array, order: 1, instances: {west: {azimuth_in_degree: 270}, east: {}}}",
+    )
+    assert list(expand_text(text)[0].components) == ["pv-west-PVSystem", "pv-east-PVSystem", "Weather"]
+
+
+@pytest.mark.base
+def test_a_repeated_order_number_is_refused() -> None:
+    """Catches two entries claiming one position, which would leave their sequence to chance."""
+    with pytest.raises(EnergySystemAssemblyError, match="EF-7P") as refusal:
+        expand_text(ordered(occupancy=", order: 1", heater=", order: 1"))
+    assert "component 'Occupancy'" in str(refusal.value) and "import 'heater'" in str(refusal.value)
 
 
 @pytest.mark.base

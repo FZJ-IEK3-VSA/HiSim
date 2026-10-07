@@ -284,6 +284,7 @@ class ImportEntry(BaseModel):
         observes: An ``observes:`` selection, read in v1 and lowered in part 2.
         installation_year: The reserved economics field of D18, recorded, never read here.
         quote: The reserved economics field of D22, recorded, never read here.
+        order: The flat evaluation order of the import's members, one block (D26 revised, §2.3).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -291,6 +292,7 @@ class ImportEntry(BaseModel):
     #: The keys an import may carry, in canonical order.
     IMPORT_KEYS: ClassVar[Tuple[str, ...]] = (
         "assembly",
+        "order",
         "parameters",
         "instances",
         "bind",
@@ -312,10 +314,13 @@ class ImportEntry(BaseModel):
     observes: Optional[Any] = None
     installation_year: Optional[int] = None
     quote: Optional[Mapping[str, Any]] = None
+    order: Optional[int] = None
 
     def to_document(self) -> Dict[str, Any]:
         """The import as the file writes it, in canonical key order."""
         document: Dict[str, Any] = {"assembly": self.assembly}
+        if self.order is not None:
+            document["order"] = self.order
         if self.parameters:
             document["parameters"] = dict(self.parameters)
         if self.instances is not None:

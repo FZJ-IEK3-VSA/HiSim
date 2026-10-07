@@ -200,6 +200,7 @@ class GenericBoilerConfig(ConfigBase):
     minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=0.0)
     maximal_thermal_power_in_watt: Sizable[float] = sized_field(
         rule=MAXIMAL_POWER_LAW,
+        unit=lt.Units.WATT,
         note="the larger of the building's heating load and 2.5 kW per apartment, plus 10 % when it serves both",
     )
     eff_th_min: float = 0.60

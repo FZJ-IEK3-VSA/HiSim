@@ -11,7 +11,9 @@ import yaml
 from hisim.cli import main
 from hisim.cli_exit import ExitCodes
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
-from hisim.energy_system.errors import EnergySystemWiringError
+from hisim.energy_system.assemblies.expansion import expand_imports
+from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemWiringError
+from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.executor import EnergySystemExecutor
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulationparameters import SimulationParameters
@@ -40,6 +42,7 @@ def test_a_mock_house_runs_records_its_imports_and_its_record_reruns(
         ("heater", None),
     ]
     assert imports["addresses"]["heater-Controller"]["path"] == [{"import": "heater"}]
+    assert imports["sequence"] == list(record["components"])
     assert imports["instances"][3]["quote"]["source"] == "mock"
     source_map = record["metadata"]["source_map"]
     assert source_map["tank-Tank"]["inputs[1]"]["chain"] == [
@@ -73,6 +76,35 @@ def test_a_mock_house_runs_records_its_imports_and_its_record_reruns(
     again = yaml.safe_load((second / "realized.energy_system.yaml").read_text(encoding="utf-8"))
     assert again["metadata"]["imports"] == imports and again["metadata"]["source_map"] == source_map
     assert again["components"] == record["components"]
+
+
+@pytest.mark.base
+def test_an_ordered_house_records_its_sequence_and_a_reordered_record_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Catches a re-run that does not add the components in the sequence ``order:`` chose, or adds them in another."""
+    monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
+    house = tmp_path / "ordered.energy_system.yaml"
+    text = Mocks.HOUSE.read_text(encoding="utf-8").replace("  heater:\n", "  heater:\n    order: 1\n", 1)
+    house.write_text(text.replace("  Ems:\n", "  Ems:\n    order: 2\n", 1), encoding="utf-8")
+    first, second = tmp_path / "first", tmp_path / "second"
+    assert main(["energy-system", "run", str(house), str(Mocks.PARAMETERS), "--result-dir", str(first)]) == ExitCodes.OK
+    realized = first / "realized.energy_system.yaml"
+    record = yaml.safe_load(realized.read_text(encoding="utf-8"))
+    assert list(record["components"])[:3] == ["heater-Heater", "heater-Controller", "Ems"]
+    assert record["metadata"]["imports"]["sequence"] == list(record["components"])
+
+    rerun = ["energy-system", "run", str(realized), str(first / "realized.simulation.yaml"), "--rerun"]
+    assert main(rerun + ["--result-dir", str(second)]) == ExitCodes.OK
+    again = yaml.safe_load((second / "realized.energy_system.yaml").read_text(encoding="utf-8"))
+    assert list(again["components"]) == list(record["components"])
+
+    swapped = dict(reversed(list(record["components"].items())))
+    reordered = tmp_path / "reordered.energy_system.yaml"
+    reordered.write_text(yaml.safe_dump({**record, "components": swapped}, sort_keys=False), encoding="utf-8")
+    with pytest.raises(EnergySystemAssemblyError, match="EF-7P"):
+        expand_imports(parse_energy_system(reordered))
+    capsys.readouterr()
 
 
 @pytest.mark.base

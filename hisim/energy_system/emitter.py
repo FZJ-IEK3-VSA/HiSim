@@ -332,6 +332,8 @@ class EnergySystemEmitter:
                 fact: ([reference.text for reference in value] if isinstance(value, tuple) else value.text)
                 for fact, value in entry.sizing_sources.items()
             }
+        if entry.order is not None:
+            document["order"] = entry.order
         document.update(entry.verbs.to_document())
         if entry.ports:
             document["ports"] = {name: dict(port.raw) for name, port in entry.ports.items()}

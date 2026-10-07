@@ -10,11 +10,16 @@ and outputs are checked when a system is built.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, TextIO, Tuple
+from typing import Any, Mapping, Optional, TextIO, Tuple
 
 from hisim.energy_system.assemblies.model import NO_DEFAULT, ParameterDeclaration
 from hisim.energy_system.assemblies.resolver import ResolvedAssembly
 from hisim.energy_system.imports_model import Port, PortKind
+
+
+def band(minimum: Optional[float], maximum: Optional[float]) -> str:
+    """A test contract's band as ``describe`` and the harness's failures write it: ``[min, max]``, an open end ``…``."""
+    return f"[{'…' if minimum is None else f'{minimum:g}'}, {'…' if maximum is None else f'{maximum:g}'}]"
 
 
 class AssemblyDescription:
@@ -67,13 +72,13 @@ class AssemblyDescription:
         for bounds in tests.bounds:
             subject = bounds.output or f"{bounds.kpi} of {bounds.member or 'the building (derived)'}"
             unit = f" [{bounds.unit}]" if bounds.unit else ""
-            print(f"  bounds    {subject}{unit}: {cls._band(bounds.min, bounds.max)}", file=out)
+            print(f"  bounds    {subject}{unit}: {band(bounds.min, bounds.max)}", file=out)
         for monotone in tests.monotone:
             subject = f"{monotone.kpi} of {monotone.member or 'the building (derived)'}"
             print(f"  monotone  {monotone.parameter} rises: {subject} {monotone.direction.value}", file=out)
         for expect in tests.expect:
             subject = f"{expect.kpi} of {expect.member or 'the building (derived)'}"
-            print(f"  expect    at the defaults: {subject} {cls._band(expect.min, expect.max)}", file=out)
+            print(f"  expect    at the defaults: {subject} {band(expect.min, expect.max)}", file=out)
 
     @classmethod
     def _line(cls, name: str, text: str, out: TextIO) -> None:
@@ -132,8 +137,3 @@ class AssemblyDescription:
             parts.append("values " + ", ".join(str(value) for value in declaration.values))
         parts.append("no default" if declaration.default is NO_DEFAULT else f"default {declaration.default!r}")
         return f"{'  '.join(parts)} — {declaration.description or '(no description)'}"
-
-    @staticmethod
-    def _band(low: Any, high: Any) -> str:
-        """A band, either side open."""
-        return f"{'-inf' if low is None else f'{low:g}'} … {'inf' if high is None else f'{high:g}'}"

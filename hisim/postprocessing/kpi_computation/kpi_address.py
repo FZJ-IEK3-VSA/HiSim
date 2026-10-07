@@ -133,7 +133,7 @@ class KpiFinder:
         if "value" not in entry:
             raise ValueError(
                 f"KPI collection: {building}.{tag}.{key} has no 'value' and so is not a KPI entry; "
-                "an entry whose value is not known carries \"value\": null."
+                'an entry whose value is not known carries "value": null.'
             )
         source = KpiSource.from_entry_dict(entry)
         if entry.get("tag") is None:
@@ -166,8 +166,13 @@ class KpiFinder:
         instance: Optional[str] = None,
         member: Optional[str] = None,
         assembly: Optional[str] = None,
+        derived: bool = False,
     ) -> Iterator[Tuple[KpiAddress, Mapping[str, Any]]]:
-        """Yield every entry whose address matches all the given filters."""
+        """Yield every entry whose address matches all the given filters; ``derived`` keeps the entries without source.
+
+        Raises:
+            ValueError: For ``derived`` together with a source filter, which no entry can match.
+        """
         source_filters: Dict[str, Optional[str]] = {
             "name": source,
             "import_key": import_key,
@@ -176,6 +181,10 @@ class KpiFinder:
             "assembly": assembly,
         }
         wanted_source_fields = {field: value for field, value in source_filters.items() if value is not None}
+        if derived and wanted_source_fields:
+            raise ValueError(
+                f"A derived KPI has no source, so it matches no source filter ({', '.join(wanted_source_fields)})."
+            )
         wanted_tag = None if tag is None else self._tag_name(tag)
         for address, entry in self._entries:
             if building is not None and address.building != building:
@@ -183,6 +192,8 @@ class KpiFinder:
             if wanted_tag is not None and address.tag != wanted_tag:
                 continue
             if name is not None and address.name != name:
+                continue
+            if derived and address.source is not None:
                 continue
             if wanted_source_fields:
                 if address.source is None:
@@ -220,9 +231,10 @@ class KpiFinder:
         instance: Optional[str] = None,
         member: Optional[str] = None,
         assembly: Optional[str] = None,
+        derived: bool = False,
     ) -> List[Tuple[KpiAddress, Mapping[str, Any]]]:
-        """Every ``(address, entry)`` matching the filters, in collection order."""
-        return list(self._matching(building, tag, name, source, import_key, instance, member, assembly))
+        """Every ``(address, entry)`` matching the filters, in collection order; ``derived``: those without source."""
+        return list(self._matching(building, tag, name, source, import_key, instance, member, assembly, derived))
 
     def one(
         self,
@@ -235,14 +247,15 @@ class KpiFinder:
         instance: Optional[str] = None,
         member: Optional[str] = None,
         assembly: Optional[str] = None,
+        derived: bool = False,
     ) -> Tuple[KpiAddress, Mapping[str, Any]]:
-        """The one entry matching the filters.
+        """The one entry matching the filters; ``derived`` keeps the entries without source.
 
         Raises:
             ValueError: If none or several match, naming the filters and every candidate, so a
                 lookup that meant "the car's distance" in a two-car setup fails by name.
         """
-        found = list(self._matching(building, tag, name, source, import_key, instance, member, assembly))
+        found = list(self._matching(building, tag, name, source, import_key, instance, member, assembly, derived))
         if len(found) == 1:
             return found[0]
         filters = {
@@ -254,6 +267,7 @@ class KpiFinder:
             "instance": instance,
             "member": member,
             "assembly": assembly,
+            "derived": derived or None,
         }
         described = ", ".join(f"{field}={value!r}" for field, value in filters.items() if value is not None)
         if not found:
@@ -272,6 +286,7 @@ class KpiFinder:
         instance: Optional[str] = None,
         member: Optional[str] = None,
         assembly: Optional[str] = None,
+        derived: bool = False,
     ) -> Any:
         """The ``value`` of :meth:`one` (a float for numeric KPIs, a string or ``None`` otherwise)."""
         _, entry = self.one(
@@ -283,5 +298,6 @@ class KpiFinder:
             instance=instance,
             member=member,
             assembly=assembly,
+            derived=derived,
         )
         return entry["value"]

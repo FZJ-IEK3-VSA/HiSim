@@ -114,6 +114,16 @@ class LibraryChecker:
                 self.add(path + ("unit",), f"the unit '{declaration.unit}' of '{name}' is no member of lt.Units.")
             if numeric and declaration.range is None:
                 self.add(path, f"the numeric parameter '{name}' has no range (D24: the box it is tested over).")
+            if (
+                declaration.type == ParameterType.INT
+                and declaration.range is not None
+                and not all(bound.is_integer() for bound in declaration.range)
+            ):
+                self.add(
+                    path + ("range",),
+                    f"the int parameter '{name}' has the range [{declaration.range[0]:g}, {declaration.range[1]:g}], "
+                    "whose bounds are not both integers.",
+                )
             if not numeric and (declaration.unit is not None or declaration.range is not None):
                 self.add(
                     path,
@@ -128,9 +138,17 @@ class LibraryChecker:
                     self.add(path + ("values",), f"the enum '{name}' lists 'none', which spells no value.")
 
     def _constraints(self) -> None:
-        """Every ``exactly_one_of`` names declared parameters, and the defaults satisfy it."""
+        """Every ``exactly_one_of`` names declared parameters, none shared with another, and the defaults satisfy it."""
         defaults = {name: declaration.default for name, declaration in self.model.parameters.items()}
+        first: Dict[str, int] = {}
         for index, names in enumerate(self.model.exactly_one_of):
+            for name in names:
+                if first.setdefault(name, index) != index:
+                    self.add(
+                        ("constraints", index),
+                        f"'{name}' is named by the exactly_one_of constraints {first[name]} and {index}; a parameter "
+                        "belongs to one constraint at most, or stating it would decide two of them at once.",
+                    )
             unknown = [name for name in names if name not in self.model.parameters]
             if unknown:
                 self.add(("constraints", index), f"exactly_one_of names {', '.join(unknown)}, which are no parameters.")

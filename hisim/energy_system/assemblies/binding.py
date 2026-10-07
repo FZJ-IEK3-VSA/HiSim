@@ -248,17 +248,7 @@ class PortBinder:
                     remedy=f"Write `bind: {{{name}: {target}}}` in {owner.verb_site} instead.",
                 )
             head = target.split(".")[0]
-            if head not in self.declared:
-                raise self.error(
-                    EnergySystemErrorId.BOUND_PARTNER_ABSENT,
-                    owner,
-                    f"{what} is bound to '{target}' with '{verb}:', but the file declares no import or component "
-                    f"'{head}'; a house without the partner leaves the verb out. Candidates of the port: "
-                    f"{self.listed(self.candidates(owner, port))}.",
-                    alternatives=self.declared,
-                    alternatives_label="imports and components the file declares",
-                    offending_value=head,
-                )
+            self.check_declared(owner, port, what, verb, target)
             partner, absent = self.resolve(owner, port, target)
             if partner is None:
                 if verb == "optional-bind":
@@ -369,6 +359,25 @@ class PortBinder:
             lines = [f"`optional-bind: {{{port.name}: {reference}}}`" for reference in references] + lines
             lines.append(f"`none: [{port.name}]`")
         return f"add to {owner.verb_site} one of " + ", ".join(lines) + "."
+
+    def check_declared(self, owner: Owner, port: Port, what: str, verb: str, target: str) -> None:
+        """Refuses a verb whose partner reference has a head the file does not declare.
+
+        Raises:
+            EnergySystemAssemblyError: ``EF-7D`` naming the head and the imports and components declared.
+        """
+        head = target.split(".")[0]
+        if head not in self.declared:
+            raise self.error(
+                EnergySystemErrorId.BOUND_PARTNER_ABSENT,
+                owner,
+                f"{what} is bound to '{target}' with '{verb}:', but the file declares no import or component "
+                f"'{head}'; a house without the partner leaves the verb out. Candidates of the port: "
+                f"{self.listed(self.candidates(owner, port))}.",
+                alternatives=self.declared,
+                alternatives_label="imports and components the file declares",
+                offending_value=head,
+            )
 
     def resolve(self, owner: Owner, port: Port, target: str) -> Tuple[Optional[Candidate], str]:
         """Resolves a verb's partner reference among the port's candidates.
@@ -599,7 +608,9 @@ class PortBinder:
         other, lowered = self.joined[(owner.reference, port.name)]
         if written is not None and (written[0] == "none" or written[1] not in (other.owner.reference, other.name)):
             if written[0] != "none":
-                self.resolve(owner, port, written[1])  # a target that is no free end of this circuit says why
+                # A target the file does not declare, or that is no free end of this circuit, says why.
+                self.check_declared(owner, port, f"the circuit end '{port.name}'", written[0], written[1])
+                self.resolve(owner, port, written[1])
             raise self.error(
                 EnergySystemErrorId.CIRCUIT_MISMATCH,
                 owner,

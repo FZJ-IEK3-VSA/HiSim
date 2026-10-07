@@ -329,7 +329,9 @@ jobs:
       # Every sample is one xdist_group, so loadgroup keeps the checks of one isolation run on
       # one worker, which makes the run once.
       - name: Assembly test contracts, nightly tier
-        run: python -m pytest -m nightly -n 4 --dist loadgroup tests/assemblies/test_library_contracts.py
+        run: >-
+          python -m pytest -m nightly -n 4 --dist loadgroup tests/assemblies/test_library_contracts.py
+          --samples 16 --seed 20261003
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
       - name: Report the resource usage

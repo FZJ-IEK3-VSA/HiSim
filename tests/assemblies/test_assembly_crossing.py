@@ -140,6 +140,22 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
 
 
 @pytest.mark.base
+def test_a_joined_circuit_end_bound_to_an_undeclared_name_is_refused_by_name() -> None:
+    """Catches a joined end whose verb names a partner the file does not declare escaping as a KeyError."""
+    message = refusal(
+        SITE
+        + imports(
+            "boiler: {assembly: mock/gas_boiler}",
+            "gas: {assembly: mock/gas_connection}",
+            "cylinder: {assembly: mock/dhw_cylinder, bind: {circuit: wrong}}",
+        )
+    )
+    assert message.startswith("EF-7D at import 'cylinder'")
+    assert "the circuit end 'circuit' is bound to 'wrong' with 'bind:'" in message
+    assert "declares no import or component 'wrong'" in message
+
+
+@pytest.mark.base
 def test_binding_an_end_of_another_circuit_is_refused(tmp_path: Path) -> None:
     """Catches a dhw cylinder bound to a space_heating end: the circuit name is the medium."""
     library = Library(tmp_path)

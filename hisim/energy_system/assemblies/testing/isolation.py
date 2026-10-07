@@ -14,14 +14,17 @@ wherever the format has one. A port no partner serves refuses the build by name.
 **The run.** One calculation through :func:`~hisim.energy_system.executor.run_energy_system`, the
 entry point every run takes, in a fresh directory the caller names: the system file and its
 simulation parameters (one day at 900 s, the KPIs written as JSON) are written there first, so the
-directory reproduces the run. The energy-balance check and every component's ``i_doublecheck`` run
-in every simulation. A run that raises is captured with its error, a finding about the assembly the
-checks report (:mod:`.checks`); an error of the harness — a missing partner — is raised.
+directory reproduces the run until :meth:`IsolationRun.release` deletes it with the run. The
+energy-balance check and every component's ``i_doublecheck`` run in every simulation. A run that
+raises is captured with its error, one finding about the sample the checks report (:mod:`.checks`),
+naming the innermost raising ``file.py:line`` so the reader sees whether the assembly or the harness
+raised; an error of the harness before the run — a missing partner — is raised.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -35,6 +38,7 @@ from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAs
 from hisim.energy_system.assemblies.testing.partners import ServedKey, TestPartnerRegistry
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import Port, PortKind, PortState
+from hisim.energy_system.model import EnergySystemFile
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 
 #: The import key of the assembly under test in its isolation system.
@@ -109,7 +113,7 @@ def isolation_document(
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
     return {
-        "schema_version": 4,
+        "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,
         "name": f"isolation_{assembly.path.replace('/', '_')}",
         "description": f"The isolation system of {assembly.path} (assemblies_spec.md §9.4).",
         "components": registry.document(partners, f"the test partners of '{assembly.path}'"),
@@ -117,9 +121,13 @@ def isolation_document(
     }
 
 
+class IsolationRunError(Exception):
+    """A check read an isolation run that was released, or has no results although it raised nothing: a harness bug."""
+
+
 @dataclass
 class IsolationRun:
-    """What one isolation run produced; the checks read it, and :meth:`release` drops the large parts.
+    """What one isolation run produced; the checks read it, and :meth:`release` drops it.
 
     Attributes:
         label: How a failure names the run: ``mock/pv_array sample s003``.
@@ -130,6 +138,7 @@ class IsolationRun:
         outputs: The simulator's outputs, matching the frame's columns.
         members: Member name of the assembly under test to its constructed component.
         runtime: Member name to its runtime name in the expanded system.
+        released: Whether :meth:`release` dropped the run; no check reads it afterwards.
     """
 
     label: str
@@ -140,20 +149,28 @@ class IsolationRun:
     outputs: List[Any] = field(default_factory=list)
     members: Dict[str, Any] = field(default_factory=dict)
     runtime: Dict[str, str] = field(default_factory=dict)
+    released: bool = False
+    _finder: Optional[KpiFinder] = field(default=None, repr=False)
 
     def finder(self) -> KpiFinder:
-        """The run's KPI collection, read from its ``all_kpis.json``.
+        """The run's KPI collection, read from its ``all_kpis.json`` once.
 
         Raises:
             FileNotFoundError: When the run wrote none.
         """
-        return KpiFinder(json.loads((self.directory / "all_kpis.json").read_text(encoding="utf-8")))
+        if self._finder is None:
+            self._finder = KpiFinder(json.loads((self.directory / "all_kpis.json").read_text(encoding="utf-8")))
+        return self._finder
 
     def release(self) -> None:
-        """Drops the result frame, the outputs and the components once the run's checks are done."""
+        """Drops the frame, the outputs, the components, the KPIs and the run's directory once its checks are done."""
         self.results = None
         self.outputs = []
         self.members = {}
+        self._finder = None
+        self.released = True
+        if self.directory.exists():
+            shutil.rmtree(self.directory)
 
 
 def run_isolation(

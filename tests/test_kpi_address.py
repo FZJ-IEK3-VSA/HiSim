@@ -254,7 +254,7 @@ def test_the_finder_filters_on_the_source_fields_and_never_splits_a_key() -> Non
 
     assert len(finder.addresses()) == 5
     assert [getattr(address.source, "instance") for address in finder.addresses(import_key="pv")] == ["east", "west"]
-    (address, entry), = finder.entries(import_key="pv", instance="east")
+    ((address, entry),) = finder.entries(import_key="pv", instance="east")
     assert entry["value"] == 3120.5
     assert address.dotted == "BUI1.PV.Electricity production (pv-east-PVSystem)"
     assert finder.value(name="Electricity production", source="pv-west-PVSystem") == 2875.0
@@ -277,6 +277,19 @@ def test_one_fails_by_name_on_two_candidates_and_on_none() -> None:
     assert "BUI1.PV.Electricity production (pv-west-PVSystem)" in str(raised.value)
     with pytest.raises(ValueError, match="No KPI matches name='Distance driven'"):
         finder.value(name="Distance driven")
+
+
+@pytest.mark.base
+def test_the_derived_filter_keeps_the_kpis_without_a_source_and_refuses_a_source_filter_beside_it() -> None:
+    """Catches a derived lookup reading a component's KPI of the same name, or a caller re-counting matches."""
+    finder = KpiFinder(_composed_collection())
+
+    assert [address.name for address, _ in finder.entries(derived=True)] == ["Self-consumption rate"]
+    assert finder.value(name="Self-consumption rate", derived=True) == 41.2
+    with pytest.raises(ValueError, match="No KPI matches name='Electricity production', derived=True"):
+        finder.one(name="Electricity production", derived=True)
+    with pytest.raises(ValueError, match=r"A derived KPI has no source, so it matches no source filter \(member\)"):
+        finder.entries(member="PVSystem", derived=True)
 
 
 @pytest.mark.base
@@ -427,9 +440,7 @@ def test_the_cli_writes_a_value_that_is_not_a_number_as_json_and_omits_an_empty_
 
 
 @pytest.mark.base
-@pytest.mark.parametrize(
-    "document, json_type", [([1, 2], "list"), ("text", "string"), (None, "null"), (3, "number")]
-)
+@pytest.mark.parametrize("document, json_type", [([1, 2], "list"), ("text", "string"), (None, "null"), (3, "number")])
 def test_the_cli_refuses_a_document_that_is_not_a_kpi_collection(
     tmp_path: Path, capsys: pytest.CaptureFixture, document: Any, json_type: str
 ) -> None:
@@ -625,9 +636,7 @@ def test_a_serialized_source_may_leave_out_every_field_but_its_name() -> None:
 
 @pytest.mark.base
 @pytest.mark.parametrize("floor_area, skipped", [(None, True), (140.0, False)])
-def test_the_building_sizer_json_is_skipped_for_a_floor_area_without_a_value(
-    floor_area: Any, skipped: bool
-) -> None:
+def test_the_building_sizer_json_is_skipped_for_a_floor_area_without_a_value(floor_area: Any, skipped: bool) -> None:
     """Catches the sizer JSON being written, or failing, for a Building whose floor area was not computed.
 
     A floor area of ``None`` normalizes nothing: the building object is skipped as if it had no

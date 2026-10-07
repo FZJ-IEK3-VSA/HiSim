@@ -15,11 +15,20 @@ branch an unstated parameter is fixed, and every other one is a dimension: a num
 its ``range``, a boolean or an enum a stratified discrete dimension whose bins are cut over the
 hypercube's strata, so with ``N`` samples each value is drawn ``floor(N/m)`` or ``ceil(N/m)`` times.
 An internal variant is selected by a boolean or an enum, so its selector's dimension is the
-variant's. Branch ``i`` draws from ``numpy.random.default_rng((seed, i))``; no sample is thrown away.
+variant's. Branch ``i`` draws from ``numpy.random.default_rng((seed, i))``; no sample is thrown away,
+but two points of a branch whose dimensions are all discrete can draw the same values, which are one
+sample, so ``N`` is an upper bound there. The constraints are disjoint (the library check refuses a
+parameter in two), so every choice of one parameter per constraint is a branch.
 
 **Sweeps** (``tests.monotone``): from a base sample one numeric parameter moves across its range in
-:data:`MONOTONE_STEPS` equidistant values, everything else fixed. A base whose branch keeps the
-parameter unstated admits no sweep of it, since moving it would change two things at once.
+:data:`MONOTONE_STEPS` equidistant values, everything else fixed; an int parameter takes the nearest
+integer of each, so it sweeps up to that many distinct values. A base whose branch keeps the
+parameter unstated admits no sweep of it, since moving it would change two things at once. Two bases
+that differ only in the swept parameter reach the same points, which are one sweep.
+
+**Int parameters.** Every value the sampler gives an int parameter — a boundary, a representative,
+a hypercube coordinate, a sweep point — goes through :func:`range_value`: the nearest integer, half
+rounding up, clamped into the range, whose bounds the library check holds to integers.
 
 Every sample is checked against every declaration and constraint as it is made; one that breaks
 one is a bug of the harness (:class:`SamplerError`).
@@ -27,11 +36,12 @@ one is a bug of the harness (:class:`SamplerError`).
 
 from __future__ import annotations
 
+import enum
 import itertools
 import json
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 from scipy.stats import qmc
@@ -47,6 +57,24 @@ class SamplerError(Exception):
     """A sample the harness built breaks a declaration or a constraint of its assembly: a bug of the harness."""
 
 
+class Tier(enum.Enum):
+    """The tier a sample runs in: the deterministic samples in the PR gate, the hypercube nightly."""
+
+    BASE = "base"
+    NIGHTLY = "nightly"
+
+
+def range_value(value: float, low: float, high: float, integer: bool) -> Any:
+    """A point of a numeric range ``[low, high]``, clamped into it; for an int parameter the nearest integer.
+
+    Half rounds up. The one conversion every boundary, representative, hypercube point and sweep point
+    of a numeric parameter takes, so an int parameter's value never leaves its (integer) range.
+    """
+    if integer:
+        return min(int(high), max(int(low), math.floor(value + 0.5)))
+    return float(min(high, max(low, value)))
+
+
 @dataclass
 class Sample:
     """One complete parameter set of one assembly.
@@ -54,18 +82,20 @@ class Sample:
     Attributes:
         sample_id: ``s000`` … for the deterministic samples, ``h000`` … for the hypercube, in the order made.
         values: Every declared parameter's value, in declaration order.
+        tier: The tier it runs in, set by the sampler that drew it.
         origins: Every reason the sample exists (``defaults``, ``max of power_in_watt``,
             ``hypercube power_in_watt stated #3``); a parameter set reached twice is one sample.
     """
 
     sample_id: str
     values: Dict[str, Any]
+    tier: Tier
     origins: List[str] = field(default_factory=list)
 
     @property
     def nightly(self) -> bool:
         """Whether the sample belongs to the nightly tier (the hypercube)."""
-        return self.sample_id.startswith("h")
+        return self.tier == Tier.NIGHTLY
 
 
 class ParameterSpace:
@@ -86,8 +116,8 @@ class ParameterSpace:
         return result
 
     @staticmethod
-    def key(values: Mapping[str, Any]) -> str:
-        """The canonical text of a parameter set, by which two samples are the same."""
+    def key(values: Any) -> str:
+        """The canonical text of a parameter set (or a list of them), by which two samples (or sweeps) are the same."""
         return json.dumps(values, sort_keys=True, default=repr)
 
     def defaults(self) -> Dict[str, Any]:
@@ -107,7 +137,8 @@ class ParameterSpace:
         if ParameterChecks.is_stated(declaration.default):
             return declaration.default
         if declaration.range is not None:
-            return int(declaration.range[0]) if declaration.type == ParameterType.INT else declaration.range[0]
+            low, high = declaration.range
+            return range_value(low, low, high, declaration.type == ParameterType.INT)
         stated = [value for value in declaration.allowed_values or () if ParameterChecks.is_stated(value)]
         return stated[0] if stated else None
 
@@ -144,10 +175,13 @@ class ParameterSpace:
 class SampleSet:
     """The samples of one assembly and tier, each parameter set once, with every reason it was drawn."""
 
-    def __init__(self, space: ParameterSpace, prefix: str, known: Sequence[Sample] = ()) -> None:
+    #: The identifier prefix of each tier's samples.
+    PREFIXES: ClassVar[Mapping[Tier, str]] = {Tier.BASE: "s", Tier.NIGHTLY: "h"}
+
+    def __init__(self, space: ParameterSpace, tier: Tier, known: Sequence[Sample] = ()) -> None:
         """Starts an empty set; parameter sets the ``known`` samples hold are not drawn again."""
         self.space = space
-        self.prefix = prefix
+        self.tier = tier
         self.samples: List[Sample] = []
         self._by_key: Dict[str, Sample] = {ParameterSpace.key(sample.values): sample for sample in known}
 
@@ -167,20 +201,21 @@ class SampleSet:
             )
         key = ParameterSpace.key(normalised)
         if key not in self._by_key:
-            self._by_key[key] = Sample(f"{self.prefix}{len(self.samples):03d}", normalised)
+            self._by_key[key] = Sample(f"{self.PREFIXES[self.tier]}{len(self.samples):03d}", normalised, self.tier)
             self.samples.append(self._by_key[key])
         self._by_key[key].origins.append(origin)
 
 
 def deterministic_samples(space: ParameterSpace) -> List[Sample]:
     """The defaults, every range boundary, every allowed value and every variant option (§9.4)."""
-    samples = SampleSet(space, "s")
+    samples = SampleSet(space, Tier.BASE)
     base = space.defaults()
     samples.add(base, "defaults")
     for name, declaration in space.declarations.items():
         if declaration.range is not None:
+            low, high = declaration.range
             for label, bound in zip(("min", "max"), declaration.range):
-                value = int(bound) if declaration.type == ParameterType.INT else bound
+                value = range_value(bound, low, high, declaration.type == ParameterType.INT)
                 samples.add(space.place(base, name, value), f"{label} of {name}")
     for name, declaration in space.declarations.items():
         for value in declaration.allowed_values or ():
@@ -198,10 +233,20 @@ class Dimension:
     """One dimension of a branch's hypercube: a numeric range, or a closed set of values (``choices``)."""
 
     parameter: str
-    low: float = 0.0
-    high: float = 0.0
+    range: Optional[Tuple[float, float]] = None
     integer: bool = False
     choices: Tuple[Any, ...] = ()
+
+    def __post_init__(self) -> None:
+        """A dimension is a range with ``low <= high`` or a set of choices: exactly one of them.
+
+        Raises:
+            SamplerError: For both, neither, or a range running backwards (a bug of the harness).
+        """
+        if (self.range is None) == (not self.choices):
+            raise SamplerError(f"the dimension '{self.parameter}' needs a range or choices, exactly one of them.")
+        if self.range is not None and self.range[0] > self.range[1]:
+            raise SamplerError(f"the dimension '{self.parameter}' runs from {self.range[0]} down to {self.range[1]}.")
 
     def value(self, unit: float, size: int) -> Any:
         """The value at a coordinate of the unit interval, for a hypercube of ``size`` points.
@@ -210,13 +255,14 @@ class Dimension:
         integer bins); a discrete one takes the coordinate's stratum ``floor(u * size)`` and cuts the
         strata into equal bins, one per value.
         """
-        if self.choices:
+        if self.range is None:
             stratum = min(int(math.floor(unit * size)), size - 1)
             return self.choices[stratum * len(self.choices) // size]
+        low, high = self.range
         if self.integer:
-            low, high = int(self.low), int(self.high)
-            return min(high, low + int(math.floor(unit * (high - low + 1))))
-        return float(self.low + unit * (self.high - self.low))
+            # Each of the high - low + 1 integers gets an equal share of the unit interval.
+            return range_value(low - 0.5 + unit * (high - low + 1), low, high, True)
+        return range_value(low + unit * (high - low), low, high, False)
 
 
 @dataclass(frozen=True)
@@ -242,18 +288,12 @@ def branches(space: ParameterSpace) -> List[Branch]:
         SamplerError: When no assignment is admitted (the library check accepted the defaults, so
             this is a bug of the harness).
     """
-    constraints = space.model.exactly_one_of
-    assignments: List[Dict[str, bool]] = []
-    for choice in itertools.product(*constraints):
-        stated: Dict[str, bool] = {}
-        consistent = all(
-            stated.setdefault(name, name == chosen) == (name == chosen)
-            for names, chosen in zip(constraints, choice)
-            for name in names
-        )
-        possible = all(space.representative(name) is not None for name, is_stated in stated.items() if is_stated)
-        if consistent and possible and stated not in assignments:
-            assignments.append(stated)
+    constraints = space.model.exactly_one_of  # disjoint: the library check refuses a parameter in two
+    assignments = [
+        {name: name == chosen for names, chosen in zip(constraints, choice) for name in names}
+        for choice in itertools.product(*constraints)
+        if all(space.representative(name) is not None for name in choice)
+    ]
     if not assignments:
         raise SamplerError(f"no branch of the constraints of '{space.model.name}' can be stated.")
     result: List[Branch] = []
@@ -269,8 +309,7 @@ def branches(space: ParameterSpace) -> List[Branch]:
             if stated.get(name) is False:
                 fixed[name] = space.unstated(name)
             elif declaration.range is not None:
-                low, high = declaration.range
-                dimensions.append(Dimension(name, low, high, integer=declaration.type == ParameterType.INT))
+                dimensions.append(Dimension(name, declaration.range, integer=declaration.type == ParameterType.INT))
             elif len(choices) > 1:
                 dimensions.append(Dimension(name, choices=choices))
             else:
@@ -282,12 +321,15 @@ def branches(space: ParameterSpace) -> List[Branch]:
 def hypercube_samples(space: ParameterSpace, size: int, seed: int, known: Sequence[Sample] = ()) -> List[Sample]:
     """The seeded Latin hypercube sample, ``size`` points per branch; sets the ``known`` samples hold are skipped.
 
+    ``size`` is an upper bound for a branch whose dimensions are all discrete (enums, booleans, int
+    parameters): two points drawing the same values are one sample.
+
     Raises:
         SamplerError: For a size below one, or a drawn sample that breaks a constraint.
     """
     if size < 1:
         raise SamplerError(f"the hypercube sample size is {size}; it must be at least 1.")
-    samples = SampleSet(space, "h", known)
+    samples = SampleSet(space, Tier.NIGHTLY, known)
     for branch in branches(space):
         points = np.zeros((1, 0))
         if branch.dimensions:
@@ -317,15 +359,18 @@ def sweep(
     constrained = any(parameter in names for names in space.model.exactly_one_of)
     if declaration.range is None or (constrained and not ParameterChecks.is_stated(base.values[parameter])):
         return None
-    points: List[Any] = [float(point) for point in np.linspace(declaration.range[0], declaration.range[1], steps)]
-    if declaration.type == ParameterType.INT:
-        points = list(dict.fromkeys(int(round(point)) for point in points))
+    low, high = declaration.range
+    integer = declaration.type == ParameterType.INT
+    points = list(
+        dict.fromkeys(range_value(float(point), low, high, integer) for point in np.linspace(low, high, steps))
+    )
     swept = [space.normalised({**base.values, parameter: point}) for point in points]
     for values in swept:
-        if space.problems(values):
+        problems = space.problems(values)
+        if problems:
             raise SamplerError(
                 f"the sweep of '{parameter}' from {base.sample_id} of '{space.model.name}' breaks its declarations: "
-                + "; ".join(space.problems(values))
+                + "; ".join(problems)
             )
     return swept
 
@@ -341,5 +386,5 @@ def sweeps(
     for base in bases:
         points = sweep(space, base, declaration.parameter)
         if points is not None:
-            found.setdefault(ParameterSpace.key({"points": points}), (base, points))
+            found.setdefault(ParameterSpace.key(points), (base, points))
     return list(found.values())

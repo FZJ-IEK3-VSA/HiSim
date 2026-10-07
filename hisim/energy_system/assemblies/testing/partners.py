@@ -29,10 +29,10 @@ system only as another partner's requirement:
 - ``{controls: <class name>}`` — the controller ranking a ``controllable: {target_input}`` output of a
   member of that class (§4.4).
 
-One thing is served by one partner, and every name a ``requires`` lists is a partner; a file that
-breaks this, or a site entry that does not read, is refused whole (:class:`TestPartnerRegistryError`).
-A port no partner serves is refused when its isolation system is built (:class:`TestPartnerMissingError`),
-naming the class, circuit, carrier or fact.
+One thing is served by one partner, every name a ``requires`` lists is a partner, and no partner
+requires itself through others; a file that breaks this, or a site entry that does not read, is
+refused whole (:class:`TestPartnerRegistryError`). A port no partner serves is refused when its
+isolation system is built (:class:`TestPartnerMissingError`), naming the class, circuit, carrier or fact.
 """
 
 from __future__ import annotations
@@ -47,6 +47,7 @@ from hisim import loadtypes as lt
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.loader import EnergySystemReader
+from hisim.energy_system.model import EnergySystemFile
 
 #: What a partner serves, as the registry finds it: the form's key, then its values.
 ServedKey = Tuple[Any, ...]
@@ -101,7 +102,7 @@ class TestPartnerRegistry:
 
         Raises:
             TestPartnerRegistryError: For a partner or a served thing registered twice, an unknown
-                requirement, or a site entry that does not read.
+                requirement, a cycle of requirements, or a site entry that does not read.
         """
         self.files = tuple(files)
         self.partners: Dict[str, TestPartner] = {}
@@ -228,13 +229,24 @@ class TestPartnerRegistry:
         )
 
     def closure(self, names: Sequence[str]) -> List[str]:
-        """The partners and every partner they require, transitively, each once, a requirement first where it can be."""
+        """The partners and every partner they require, transitively, each once, a requirement first.
+
+        Raises:
+            TestPartnerRegistryError: For partners requiring each other in a cycle, naming it.
+        """
         ordered: List[str] = []
         visiting: List[str] = []
 
         def visit(name: str) -> None:
-            if name in ordered or name in visiting:
+            if name in ordered:
                 return
+            if name in visiting:
+                cycle = visiting[visiting.index(name) :] + [name]
+                raise TestPartnerRegistryError(
+                    f"the test partners require each other in a cycle, {' → '.join(cycle)} "
+                    f"({self.partners[name].origin}); drop one requirement of the cycle: a partner that joins only "
+                    "with another reads it without requiring it back."
+                )
             visiting.append(name)
             for required in self.partners[name].requires:
                 visit(required)
@@ -252,7 +264,12 @@ class TestPartnerRegistry:
             TestPartnerRegistryError: When the entries do not read as the components of a file.
         """
         components = {name: dict(self.partners[name].component) for name in self.closure(names)}
-        text = yaml.safe_dump({"schema_version": 4, "name": "test_partners", "components": components}, sort_keys=False)
+        document = {
+            "schema_version": EnergySystemFile.ASSEMBLIES_SCHEMA_VERSION,
+            "name": "test_partners",
+            "components": components,
+        }
+        text = yaml.safe_dump(document, sort_keys=False)
         try:
             EnergySystemReader.build(RawDocument.parse_text(text, origin), origin)
         except EnergySystemError as error:

@@ -403,18 +403,23 @@ tests:
 
 `tests/assemblies/test_library_contracts.py` draws the samples from the declarations — the defaults,
 the `min` and `max` of every `range`, every allowed value, every internal variant, and a seeded Latin
-hypercube per `exactly_one_of` branch — and runs each sample once in isolation: the assembly as one
-import beside a test partner for every active port (optional ports included), one day at 900 s, the
-energy balance and `i_doublecheck` on. One test per check kind reads that run: the run raised
-nothing, the balance closed, every result column is finite, the member contract holds (every energy
-or temperature output of a member has a `bounds` entry in its unit, every KPI named is one the member
-reports; an energy manager's dispatch outputs, named by what the system gives it to steer, are
-exempt), and every applicable `bounds` entry and, at the defaults, every `expect` entry holds.
-Every `monotone` entry sweeps its parameter across its range in four steps from every sample that
-admits a sweep, within the golden gate's tolerance. A failure is named by assembly, sample, check
-and subject: `mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [0, 20000]: …`;
-the run's directory (under pytest's `tmp_path`) holds its `isolation.energy_system.yaml` and
-parameters, which reproduce it.
+hypercube per `exactly_one_of` branch (`--samples` points per branch, an upper bound for a branch whose
+dimensions are all discrete, where two points drawing the same values are one sample) — and runs each
+sample once in isolation: the assembly as one import beside a test partner for every active port whose
+binding changes what the assembly computes (optional ports included; a providing port gets none, except
+a consumer for a fuel it provides), one day at 900 s, the energy balance and `i_doublecheck` on. One
+test per check kind reads that run: the run raised nothing (a failure names the innermost raising
+`file.py:line`), the balance closed, every result column is finite, the member contract holds (every
+energy or temperature output of a member has a `bounds` entry in its unit, every KPI named is one the
+member reports; an energy manager's dispatch outputs, named by what the system gives it to steer, are
+exempt), and every applicable `bounds` entry and, at the defaults, every `expect` entry holds; a
+bounded column that is not numeric or not finite fails. Every `monotone` entry sweeps its parameter
+across its range in four equidistant steps from the samples that admit a sweep, one sweep per distinct
+point set, within the golden gate's tolerance; an int parameter takes the nearest integer of each step,
+so its sweep yields up to four distinct values across the range. A failure is named by assembly,
+sample, check and subject:
+`mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [0, 20000]: …`. A run's directory (under pytest's `tmp_path`) holds its `isolation.energy_system.yaml` and
+parameters while its sample's checks run, and is deleted with the run once they are done.
 
 ```bash
 pytest -m base tests/assemblies/test_library_contracts.py                  # the deterministic samples (PR gate)

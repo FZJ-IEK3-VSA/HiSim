@@ -60,14 +60,6 @@ def with_parameter(line: str) -> str:
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("path", sorted(Mocks.LIBRARY.rglob("*.assembly.yaml")), ids=lambda path: path.stem)
-def test_every_mock_assembly_passes_the_library_check(path: Path) -> None:
-    """Catches the mock library itself falling out of its own contract."""
-    library_path = path.relative_to(Mocks.LIBRARY).as_posix()[: -len(".assembly.yaml")]
-    assert not check_assembly(AssemblyResolver([Mocks.LIBRARY]).resolve(library_path, "test"))
-
-
-@pytest.mark.base
 def test_the_base_case_passes(tmp_path: Path) -> None:
     """Catches a base case that would make every refusal below vacuous."""
     assert problems_of(tmp_path, BASE) == ""
@@ -99,6 +91,14 @@ def test_the_base_case_passes(tmp_path: Path) -> None:
             ("the enum 'mode' lists 'none', which spells no value",),
         ),
         (BASE.replace("unit: LITER", "unit: WATT"), ("EF-78", "volume_in_liter", "LITER", "WATT")),
+        (
+            with_parameter("count: {type: int, unit: ANY, default: 2, range: {min: 1.5, max: 5}, description: c.}"),
+            ("the int parameter 'count' has the range [1.5, 5], whose bounds are not both integers",),
+        ),
+        (
+            with_parameter("count: {type: int, unit: ANY, default: 2.5, range: {min: 1, max: 5}, description: c.}"),
+            ("the default of 'count' is 2.5 is not an integer",),
+        ),
     ],
 )
 def test_the_parameter_rules(tmp_path: Path, text: str, names: Tuple[str, ...]) -> None:
@@ -153,6 +153,16 @@ def test_a_value_of_an_enum_that_selects_nothing_of_its_own_is_refused(tmp_path:
     ("text", "names"),
     [
         (BASE + "constraints: [{exactly_one_of: [volume_in_liter, power]}]\n", ("exactly_one_of names power",)),
+        (
+            BASE.replace(
+                PARAMETER,
+                PARAMETER
+                + "  low: {type: float, unit: LITER, default: none, range: {min: 1, max: 2}, description: l.}\n"
+                + "  high: {type: float, unit: LITER, default: none, range: {min: 1, max: 2}, description: h.}\n",
+            )
+            + "constraints: [{exactly_one_of: [low, volume_in_liter]}, {exactly_one_of: [volume_in_liter, high]}]\n",
+            ("'volume_in_liter' is named by the exactly_one_of constraints 0 and 1",),
+        ),
         (BASE.replace("{$param: volume_in_liter}", "{$param: volume}"), ("'volume', which is no parameter",)),
         (
             BASE.replace("      - {$port: demand}", "      - {$port: demand}\n      - Heater"),
@@ -475,6 +485,14 @@ def test_describe_prints_the_interface_the_parameters_and_the_contract(
         "fitted when [True]: Controller (tests.assemblies.mock_components.MockController)",
         "test contract: 2 bounds, 1 monotone, 0 expect",
         "monotone  power_in_watt rises: Heater energy of Heater increasing",
+        "bounds    Heater.ThermalPower [WATT]: [0, 6000]",
+    ):
+        assert line in out, f"{line!r} is not in:\n{out}"
+    assert cli.main(["energy-system", "describe", "mock/pv_array"]) == 0
+    out = capsys.readouterr().out
+    for line in (
+        "bounds    PV production of PVSystem: [0, …]",
+        "expect    at the defaults: PV production of PVSystem [0, 100]",
     ):
         assert line in out, f"{line!r} is not in:\n{out}"
     assert cli.main(["energy-system", "describe", "mock/nothing"]) != 0

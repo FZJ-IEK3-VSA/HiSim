@@ -86,7 +86,9 @@ partners:
       ports:
         fuel: {carrier: natural_gas, outputs: [FuelUse]}
   GasCylinder:
-    requires: [Occupancy, GasBoiler]
+    # Joins only as GasBoiler's requirement, so it reads the boiler without requiring it back: the
+    # requirements of a registry form no cycle.
+    requires: [Occupancy]
     component:
       class: tests.assemblies.mock_components.MockCylinder
       preset: standard

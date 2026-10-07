@@ -5,15 +5,17 @@ partners of its ``test_partners.yaml``. Each assembly gets its library check, an
 samples one isolation run (one day at 900 s, the energy balance and ``i_doublecheck`` on) that one
 test per check kind reads: the run, the energy balance, finiteness, the member contract, every
 applicable ``bounds`` entry, and ``expect`` at the defaults. Every ``monotone`` entry sweeps its
-parameter from every sample admitting a sweep. The deterministic samples run under the ``base``
-marker (the PR gate), the Latin hypercube under ``nightly`` (the golden-year workflow), sized and
-seeded by ``--samples`` and ``--seed``. A failure reads ``mock/pv_array sample s003 bounds
-PVSystem.ElectricityOutput [WATT] in [0, 20000]: …``.
+parameter from the samples admitting a sweep, once per distinct point set
+(:func:`~hisim.energy_system.assemblies.testing.checks.evaluate_monotone`). The deterministic
+samples run under the ``base`` marker (the PR gate), the Latin hypercube under ``nightly`` (the
+golden-year workflow), sized and seeded by ``--samples`` and ``--seed``. A failure reads
+``mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [0, 20000]: …``.
 
 A sample's run is made once by the module's run cache, which keeps the run of one sample at a
 time: ``tests/assemblies/conftest.py`` puts the tests of one sample next to each other, and the
-frames of a sample are released when the next sample's run is made. Under ``xdist`` every sample
-is one ``xdist_group``, so ``--dist loadgroup`` keeps its tests on one worker.
+run of a sample (its frames and its directory) is released when the next sample's run is made.
+Under ``xdist`` every sample is one ``xdist_group``, so ``--dist loadgroup`` keeps its tests on one
+worker.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from __future__ import annotations
 import functools
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
 import pytest
 
@@ -71,7 +73,6 @@ class Sweep:
     assembly: str
     declaration: MonotoneDeclaration
     base: Sample
-    points: Tuple[Dict[str, Any], ...]
 
 
 class ContractLibrary:
@@ -103,10 +104,10 @@ class ContractLibrary:
                     for base in deterministic + hypercube
                     if declaration.member in (None,) + members[base.sample_id]
                 ]
-                for base, points in sweeps(space, bases, declaration):
+                for base, _ in sweeps(space, bases, declaration):
                     self.sweeps.append(
                         pytest.param(
-                            Sweep(path, declaration, base, tuple(points)),
+                            Sweep(path, declaration, base),
                             id=f"{path}:{base.sample_id}:monotone[{index}]",
                             marks=pytest.mark.nightly if base.nightly else pytest.mark.base,
                         )
@@ -131,7 +132,7 @@ class ContractLibrary:
         return params
 
 
-@functools.lru_cache(maxsize=None)
+@functools.lru_cache(maxsize=1)
 def contract_library(directory: str, size: int, seed: int) -> ContractLibrary:
     """The library under test, once per session and worker."""
     return ContractLibrary(Path(directory), size, seed)
@@ -239,19 +240,9 @@ def test_monotone(sweep: Sweep, request: pytest.FixtureRequest, tmp_path: Path) 
     """One ``monotone`` entry holds over the sweep of its parameter from one base sample."""
     library = library_of(request.config)
     assembly = library.assembly(sweep.assembly)
-    parameter = sweep.declaration.parameter
-    label = f"{sweep.assembly} sweep of {parameter} from {sweep.base.sample_id}"
-    points = []
-    for index, values in enumerate(sweep.points):
-        run = run_isolation(
-            assembly, values, library.registry, library.resolver, tmp_path / f"point{index}", f"{label}, point {index}"
-        )
-        subject = f"{sweep.declaration.kpi} of {sweep.declaration.member or 'the system'}"
-        points.append(
-            (
-                values[parameter],
-                checks.kpi_value(run, "monotone", subject, sweep.declaration.kpi, sweep.declaration.member),
-            )
-        )
-        run.release()
-    checks.check_monotone(label, sweep.declaration, points)
+
+    def run_point(index: int, values: Mapping[str, Any], label: str) -> IsolationRun:
+        """The isolation run of one sweep point, in its own directory."""
+        return run_isolation(assembly, values, library.registry, library.resolver, tmp_path / f"point{index}", label)
+
+    checks.evaluate_monotone(run_point, ParameterSpace(assembly.model), sweep.base, sweep.declaration)

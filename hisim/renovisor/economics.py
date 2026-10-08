@@ -54,6 +54,12 @@ from hisim.economics.facts import (
     InstallationYearOrigin,
 )
 from hisim.economics.parameters import EconomicParameters
+from hisim.economics.staged_record import (
+    EconomicsStageRecord,
+    MainSubjectRule,
+    MainSubjectRuleKind,
+    StageCatalogue,
+)
 from hisim.economics.subsidies import (
     ApplicantActor,
     ApplicantProfile,
@@ -67,7 +73,7 @@ from hisim.renovisor.apply import MeasureRegistry
 from hisim.renovisor.constants import AnywayShareByPlacement, Placement
 from hisim.renovisor.layers import SimulatedEnvelope, positive_number
 from hisim.renovisor.report import MappingReport
-from hisim.renovisor.request import House, Measure, Request, SemanticChecks
+from hisim.renovisor.request import CatalogueTable, House, Measure, Request, SemanticChecks
 from hisim.renovisor.simulation import SimulationSetup
 from hisim.renovisor.vocabulary import BuildingType, HeatGenerator, ReportStatus, ThermalElement
 from hisim.renovisor.whitelist import TranslatorError
@@ -561,10 +567,9 @@ class MeasureSubjects:
     ) -> None:
         """Sort acted-on measures into the costless and the unpriced ones, each with its note.
 
-        The one place the declarations become subjects: the translator calls it through
-        :meth:`record`, and the staged command calls it for a mapping report written before
-        renovisorissues #58, which is what a re-translation of that stage would write. A measure
-        that already stands for a subject, or that is not declared, is left alone.
+        The one place the declarations become subjects; the translator calls it through
+        :meth:`record`. A measure that already stands for a subject, or that is not declared, is
+        left alone.
 
         Args:
             measure_ids: The ids of the measures acted on.
@@ -623,9 +628,8 @@ class ReplacedSubjects:
     as the plan's new one: a new ``PVSystem`` replaces the reference's ``PVSystem``). Nothing is
     inferred beyond it: a register entry the reference holds no subject for names none.
 
-    The translator writes the result into the mapping report (``replaces_subjects``); for a report
-    written before that field existed the staged command derives it with the same rule from the
-    register and the subjects each stage's stored inputs carry.
+    The translator writes the result into the mapping report (``replaces_subjects``) and its
+    economics stage record, from where the staged command reads it.
     """
 
     @staticmethod
@@ -658,16 +662,6 @@ class ReplacedSubjects:
         return replaced
 
 
-class MainSubjectError(RuntimeError):
-    """A quoted measure's main subject cannot be determined from the stage it is quoted for.
-
-    The subject a reader's quote prices is decided by :class:`MainSubjects`, never guessed. A
-    measure the table does not know, or a stage whose subjects for the measure match the table
-    zero or several times, is a translator or table defect, not a bad plan: the staged command
-    exits 3 on it.
-    """
-
-
 class MainSubjects:
     """Which cost subject a reader's quote for a measure prices: its main subject (#53).
 
@@ -689,7 +683,11 @@ class MainSubjects:
     no quote. Every other catalogue measure the translator acts on is in exactly one of the two
     sets, which ``tests/renovisor/test_economics_context.py`` pins; a quote for one that is in
     neither, or whose stage's subjects do not single out one main subject, raises
-    :class:`MainSubjectError` rather than pricing a guess.
+    :class:`~hisim.economics.staged_record.MainSubjectError` rather than pricing a guess.
+
+    The tables travel to the staged command as plain rules
+    (:class:`~hisim.economics.staged_record.MainSubjectRule`, :meth:`rules`) in every stage's
+    economics stage record, which applies them with the same code :meth:`resolve` does.
     """
 
     #: Measures whose main subject is the subject named by the measure id.
@@ -710,11 +708,31 @@ class MainSubjects:
         **{device.measure_id: frozenset({device.asset_class}) for device in DeviceAssets.ALL},
     }
 
-    #: What an unresolvable quote is refused with.
-    UNRESOLVED_MESSAGE: ClassVar[str] = (
-        "the quote for {measure_id!r} in stage {stage} cannot be placed: {reason} The main subject a "
-        "quote prices is declared in MainSubjects (hisim/renovisor/economics.py) and never guessed."
-    )
+    @classmethod
+    def rule_of(cls, measure_id: str) -> Optional[MainSubjectRule]:
+        """Return the rule naming one measure's main subject, or None for a measure with none.
+
+        Args:
+            measure_id: The catalogue measure.
+
+        Returns:
+            A ``named_by_measure`` rule, an ``asset_class`` rule with the measure's classes, or None.
+        """
+        if measure_id in cls.NAMED_BY_MEASURE:
+            return MainSubjectRule(MainSubjectRuleKind.NAMED_BY_MEASURE)
+        if measure_id in cls.BY_ASSET_CLASS:
+            return MainSubjectRule(MainSubjectRuleKind.ASSET_CLASS, cls.BY_ASSET_CLASS[measure_id])
+        return None
+
+    @classmethod
+    def rules(cls) -> Dict[str, MainSubjectRule]:
+        """Return the rule of every measure that has one, for the economics stage record."""
+        rules: Dict[str, MainSubjectRule] = {}
+        for measure_id in sorted(cls.NAMED_BY_MEASURE | set(cls.BY_ASSET_CLASS)):
+            rule = cls.rule_of(measure_id)
+            if rule is not None:
+                rules[measure_id] = rule
+        return rules
 
     @classmethod
     def resolve(
@@ -736,39 +754,81 @@ class MainSubjects:
             MainSubjectError: If the measure is in neither set of the table, or the stage's
                 subjects do not single out exactly one main subject.
         """
-        if measure_id in cls.NAMED_BY_MEASURE:
-            if measure_id not in subjects:
-                raise MainSubjectError(
-                    cls.UNRESOLVED_MESSAGE.format(
-                        measure_id=measure_id,
-                        stage=stage,
-                        reason=f"its subject is named by the measure id, and the stage has no subject {measure_id!r}.",
-                    )
-                )
-            main = measure_id
-        elif measure_id in cls.BY_ASSET_CLASS:
-            classes = cls.BY_ASSET_CLASS[measure_id]
-            matching = sorted(subject for subject, asset_class in subjects.items() if asset_class in classes)
-            if len(matching) != 1:
-                raise MainSubjectError(
-                    cls.UNRESOLVED_MESSAGE.format(
-                        measure_id=measure_id,
-                        stage=stage,
-                        reason=(
-                            f"{len(matching)} of the stage's subjects of the measure ({', '.join(matching) or 'none'}) "
-                            f"are priced as {', '.join(sorted(item.value for item in classes))}, and a quote "
-                            "prices exactly one."
-                        ),
-                    )
-                )
-            main = matching[0]
-        else:
-            raise MainSubjectError(
-                cls.UNRESOLVED_MESSAGE.format(
-                    measure_id=measure_id, stage=stage, reason="the measure has no main subject declared."
-                )
-            )
-        return main, tuple(sorted(subject for subject in subjects if subject != main))
+        rule = cls.rule_of(measure_id)
+        if rule is None:
+            raise MainSubjectRule.undeclared(measure_id, stage)
+        return rule.resolve(measure_id, stage, subjects)
+
+
+class EconomicsStageRecords:
+    """Builds the economics stage record a mapping report carries for ``python -m hisim.economics staged``.
+
+    The staged command prices a plan out of stage directories and reads, per stage, which measures
+    the stage carries out and which cost subjects they created, plus this translator's measure
+    tables. It reads them from one plain JSON record inside ``mapping_report.json``
+    (:class:`~hisim.economics.staged_record.EconomicsStageRecord`, key ``economics_stage``), so the
+    cost engine needs no import of this package. The record is built from the report's own keys:
+
+    * ``measures``: the measures whose line the translation acted on (``used`` or
+      ``approximated``), in catalogue order, an id the catalogue does not know after them;
+    * ``subjects``, ``unpriced_subjects``, ``costless_subjects``, ``subject_notes`` and
+      ``replaces_subjects``: copied from the report;
+    * ``catalogue``: :meth:`CatalogueTable.ids`, :attr:`MeasureSubjects.COSTLESS` and
+      :meth:`MainSubjects.rules`.
+
+    Example::
+
+        document = EconomicsStageRecords.completed(translated.report.to_json())
+        document["economics_stage"]["measures"]  # ["external_insulation", "heating_system"]
+    """
+
+    @classmethod
+    def of_report(cls, document: Mapping[str, Any]) -> EconomicsStageRecord:
+        """Return the record of one mapping report.
+
+        Args:
+            document: The report as :meth:`MappingReport.to_json` returns it; every key it writes
+                must be there.
+
+        Returns:
+            The record.
+        """
+        statuses = {status.value for status in MappingReport.ACTED_ON_STATUSES}
+        acted_on = [
+            str(entry["id"]) for entry in document[MappingReport.MEASURES_FIELD] if entry.get("status") in statuses
+        ]
+        order = {measure_id: position for position, measure_id in enumerate(CatalogueTable.ids())}
+        return EconomicsStageRecord(
+            measures=tuple(sorted(acted_on, key=lambda measure_id: (order.get(measure_id, len(order)), measure_id))),
+            subjects=dict(document[MappingReport.SUBJECTS_FIELD]),
+            unpriced_subjects=tuple(document[MappingReport.UNPRICED_SUBJECTS_FIELD]),
+            costless_subjects=tuple(document[MappingReport.COSTLESS_SUBJECTS_FIELD]),
+            subject_notes=dict(document[MappingReport.SUBJECT_NOTES_FIELD]),
+            replaces_subjects={
+                subject: list(names) for subject, names in document[MappingReport.REPLACES_SUBJECTS_FIELD].items()
+            },
+            catalogue=StageCatalogue(
+                measure_ids=tuple(CatalogueTable.ids()),
+                costless_measure_ids=tuple(MeasureSubjects.COSTLESS),
+                main_subjects=MainSubjects.rules(),
+            ),
+        )
+
+    @classmethod
+    def completed(cls, document: Mapping[str, Any]) -> Dict[str, Any]:
+        """Return the mapping report with its economics stage record, as ``mapping_report.json`` is written.
+
+        A record the document already carries is replaced by the one its keys give now.
+
+        Args:
+            document: The report as :meth:`MappingReport.to_json` returns it.
+
+        Returns:
+            A new dict: the report's keys and, last, ``economics_stage``.
+        """
+        completed = {key: value for key, value in document.items() if key != EconomicsStageRecord.KEY}
+        completed[EconomicsStageRecord.KEY] = cls.of_report(document).to_json()
+        return completed
 
 
 class UnknownAge:

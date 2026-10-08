@@ -16,7 +16,7 @@ from typing import Any, Mapping, Tuple
 
 import pytest
 
-from hisim.economics.__main__ import StagedCli
+from hisim.economics.staged_cli import StagedCli
 from hisim.economics.staged_document import StagedDocument
 from hisim.renovisor.costs import CostBuilder, CostField, CostSchema, EconomicsDocument
 

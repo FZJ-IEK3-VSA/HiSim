@@ -1,7 +1,8 @@
 """The progress line: what a running calculation tells the worker that runs it.
 
-The translator writes its progress to standard output as single lines, one JSON object each,
-behind a fixed prefix (``progress-spec`` §1)::
+A RenoVisor calculation (``python -m hisim.renovisor run``) and the staged economics command
+(``python -m hisim.economics staged``) write their progress to standard output as single lines, one
+JSON object each, behind a fixed prefix (``progress-spec`` §1)::
 
     RENOVISOR_PROGRESS {"phase":"simulating","fraction":0.42,"eta_seconds":35,"simulated_days":153.3,"total_days":365}
 
@@ -12,6 +13,10 @@ writes at most one more line every five seconds, from the time loop's own progre
 ends, which is also where ``evaluating`` begins: HiSim's postprocessing runs right after the loop.
 The ``staged`` economics command writes only ``reading``, ``evaluating`` and ``writing``.
 
+The module sits below both commands' packages, so the cost engine can report progress without
+importing the translator. It imports :mod:`hisim.simulator` only when a time loop reports, so the
+staged command does not load the simulator.
+
 Progress is informational. :class:`ProgressWriter` swallows every way writing a line can fail
 -- a closed or broken standard output, an encoding error -- so that a calculation runs and ends
 exactly as it would without it.
@@ -21,9 +26,10 @@ import enum
 import json
 import sys
 import time
-from typing import Any, Callable, ClassVar, Dict, Optional, TextIO, Tuple
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Optional, TextIO, Tuple
 
-from hisim.simulator import ProgressEvent, SimulationProgress
+if TYPE_CHECKING:  # Imported at call time in `on_simulation_progress`; see the module docstring.
+    from hisim.simulator import SimulationProgress
 
 
 class Phase(str, enum.Enum):
@@ -128,12 +134,15 @@ class ProgressWriter:
         self._phase = phase
         self._write({"phase": phase.value})
 
-    def on_simulation_progress(self, progress: SimulationProgress) -> None:
+    def on_simulation_progress(self, progress: "SimulationProgress") -> None:
         """Turn one report of the time loop into a line; the callback the simulator is given.
 
         The loop's start enters ``simulating``, its periodic reports write a line at most every
         five seconds, and its end writes the last ``simulating`` line and enters ``evaluating``.
         """
+        # Imported here so that a command without a time loop never loads the simulator.
+        from hisim.simulator import ProgressEvent  # pylint: disable=import-outside-toplevel
+
         if not self._enabled:
             return
         self._total_days = round(progress.total_days, 3)

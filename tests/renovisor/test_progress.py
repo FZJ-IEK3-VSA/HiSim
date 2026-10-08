@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from hisim.renovisor.progress import Phase, ProgressLine, ProgressWriter
+from hisim.calculation_progress import Phase, ProgressLine, ProgressWriter
 from hisim.simulator import ProgressEvent, SimulationProgress
 
 pytestmark = pytest.mark.base

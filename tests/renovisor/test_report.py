@@ -1,6 +1,6 @@
 """Where the commit in every stored document comes from, and what it does when nothing says.
 
-:class:`hisim.renovisor.report.HiSimCommit` is the provenance of three documents — the mapping
+:class:`hisim.hisim_commit.HiSimCommit` is the provenance of three documents — the mapping
 report, the capability document and ``economics_result.json`` — and it has to work in a container
 image, which is not a git checkout. These cases pin the order of its three sources and the one
 property none of them may break: a run is never failed, and no document becomes invalid, when no
@@ -11,8 +11,8 @@ import re
 
 import pytest
 
+from hisim.hisim_commit import HiSimCommit
 from hisim.renovisor.capabilities import CapabilityDocument
-from hisim.renovisor.report import HiSimCommit
 
 pytestmark = pytest.mark.base
 

@@ -185,6 +185,10 @@ catalogue, the registry or the bindings change, or `tests/renovisor/test_map.py`
 path-verification harness, tier 1: `probes.py` chooses each probe's base and checks completeness against
 the request schema and the catalogue, `runner.py` translates and diffs, `render.py` writes the report).
 
+RenoVisor sits on top: no module under `hisim/` outside `hisim/renovisor/` may import `hisim.renovisor`
+(what the cost engine needs from the translator travels as the `economics_stage` record inside each
+`mapping_report.json`), and `tests/test_renovisor_import_lint.py` enforces it.
+
 The rule the package rests on: **fail loudly, except for what is written down.** A feature the translator
 has not implemented is a note in the mapping report and the calculation runs, but only if
 `not_implemented_yet.yaml` says so; anything else that cannot be mapped fails the translator's own build.

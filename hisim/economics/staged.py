@@ -322,8 +322,8 @@ class InvestmentOverride:
 
     A quote is an installed total in euro for one measure. It replaces the year-0 investment, planning and removal of
     the measure's main subject in that stage; the measure's other subjects there are bought at zero and keep their
-    lifetimes and later database-priced replacements. The caller decides which subject is the main one (for RenoVisor,
-    `hisim.renovisor.economics.MainSubjects`).
+    lifetimes and later database-priced replacements. The caller decides which subject is the main one (the staged
+    command, by the `staged_record.MainSubjectRule` in the stages' economics stage records).
 
     Args:
         stage: The index of the stage the quote is for.

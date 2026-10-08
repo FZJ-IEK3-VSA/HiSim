@@ -37,12 +37,13 @@ from typing import Any, ClassVar, Dict, List, Optional, Protocol, Sequence, Tupl
 
 import yaml
 
+from hisim.calculation_progress import Phase, ProgressWriter
 from hisim.calculation_scope import CalculationScope
 from hisim.energy_system.executor import build_energy_system, write_records
 from hisim.renovisor import TRANSLATOR_VERSION
 from hisim.renovisor.apply import apply
 from hisim.renovisor.contract import ContractFiles
-from hisim.renovisor.progress import Phase, ProgressWriter
+from hisim.renovisor.economics import EconomicsStageRecords
 from hisim.renovisor.report import ReportError
 from hisim.renovisor.request import Request, RequestError
 from hisim.renovisor.result import ResultBuilder
@@ -72,7 +73,7 @@ class ExitCode(IntEnum):
 class Outputs:
     """The names of everything a calculation writes into its output directory."""
 
-    #: Written by ``translate``.
+    #: Written by ``translate``, with the economics stage record the staged command reads.
     MAPPING_REPORT: ClassVar[str] = "mapping_report.json"
 
     #: Written by HiSim's ``write_records``, before the first timestep.
@@ -265,7 +266,7 @@ class Calculation:
             another.
         subsidy_catalogue_directory: Where the country subsidy catalogues live; the shipped
             directory when omitted.
-        progress: Writes the progress lines of :meth:`run` (:mod:`hisim.renovisor.progress`); one
+        progress: Writes the progress lines of :meth:`run` (:mod:`hisim.calculation_progress`); one
             on standard output when omitted. The real runner is given its simulator callback; an
             injected runner that wants to report the time loop calls
             :meth:`ProgressWriter.on_simulation_progress` itself.
@@ -392,12 +393,17 @@ class Calculation:
         return request, applied, translated
 
     def _translate_and_write(self) -> Tuple[Request, Any, TranslatedSystem]:
-        """Translate and write the energy-system file and the mapping report."""
+        """Translate and write the energy-system file and the mapping report.
+
+        The report is written with its economics stage record (:class:`EconomicsStageRecords`),
+        which ``python -m hisim.economics staged`` reads when this output directory is a stage of
+        a plan.
+        """
         request, applied, translated = self._translate()
         path = self._output / translated.file_name
         path.write_text(translated.yaml_text, encoding="utf-8")
         self._written.append(translated.file_name)
-        self._write_json(Outputs.MAPPING_REPORT, translated.report.to_json())
+        self._write_json(Outputs.MAPPING_REPORT, EconomicsStageRecords.completed(translated.report.to_json()))
         return request, applied, translated
 
     def _calculate(self) -> None:

@@ -40,7 +40,7 @@ path verification (below).
 | File | What it is |
 | --- | --- |
 | `renovisor_<hash>.energy_system.yaml` | the file that ran; `<hash>` is the first 16 hex of the SHA-256 of the canonical request |
-| `mapping_report.json` | what the translator did with every leaf of the request and every measure |
+| `mapping_report.json` | what the translator did with every leaf of the request and every measure, and under `economics_stage` the record `python -m hisim.economics staged` reads (below) |
 | `realized.energy_system.yaml`, `realized.audit.yaml`, `realized.simulation.yaml`, `component_connections.json` | what HiSim made of it, written before the first timestep |
 | `results/` | the simulation's own outputs, including `all_kpis.json` |
 | `result.json` | the KPIs and the costs, every value with its provenance |
@@ -91,7 +91,7 @@ error message.
 `run` and `python -m hisim.economics staged` report their progress on standard output, always --
 there is no option and no environment variable. **A line that starts with `RENOVISOR_PROGRESS` is
 progress, not log output:** the prefix, one space, and one compact JSON object, then a flush, and
-nothing else on that line (`hisim/renovisor/progress.py`, progress-spec §1):
+nothing else on that line (`hisim/calculation_progress.py`, progress-spec §1):
 
 ```
 RENOVISOR_PROGRESS {"phase":"simulating","fraction":0.42,"eta_seconds":35,"simulated_days":153.3,"total_days":365}
@@ -210,9 +210,39 @@ counted as wood pellets, which the mapping report notes.
 
 The same two codes hold for `python -m hisim.economics staged`, which prices a plan out of
 finished jobs: exit 2 with a `problems.json` for a plan the caller can fix — stage years that run
-backwards, a stage directory that carries `economic_inputs.json` but no `mapping_report.json`, any
-parameter key it does not accept — and exit 3 for an engine failure they cannot. There is no exit 2
-without the file.
+backwards, a stage directory that carries `economic_inputs.json` but no `mapping_report.json`, a
+report without its `economics_stage` record or with a record of another schema version, stages
+whose records state different measure tables, any parameter key it does not accept — and exit 3
+for an engine failure they cannot. There is no exit 2 without the file.
+
+A stage directory is a finished job's `economic_inputs.json` (in the directory or its `results/`)
+and its `mapping_report.json` (in the directory or its parent) — the two files a backend's worker
+copies. The staged command reads one key of the report, `economics_stage`: a plain JSON record that
+`run` and `translate` write with every report (`EconomicsStageRecords` in
+`hisim/renovisor/economics.py`), whose format belongs to the cost engine
+(`hisim/economics/staged_record.py`), so the engine imports nothing from this package:
+
+```json
+"economics_stage": {
+  "schema_version": 1,
+  "measures": ["heating_system"],
+  "subjects": {"HeatPump": "heating_system", "GenericBoiler": null},
+  "unpriced_subjects": [], "costless_subjects": [], "subject_notes": {},
+  "replaces_subjects": {"HeatPump": ["GenericBoiler"]},
+  "catalogue": {
+    "measure_ids": ["external_insulation", "...", "heating_system", "..."],
+    "costless_measure_ids": ["change_room_temperature"],
+    "main_subjects": {"heating_system": {"rule": "asset_class", "asset_classes": ["HeatPump", "..."]},
+                      "external_insulation": {"rule": "named_by_measure"}}
+  }
+}
+```
+
+`measures` are the measures the translation acted on (`used` or `approximated`), in catalogue
+order; the five subject keys repeat the report's own; `catalogue` holds the tables a quote is
+checked against (every measure id, the measures that cost nothing, and per measure the rule naming
+the subject a quote prices). A report written by an image from before the record existed has no
+`economics_stage` and is refused; translate that stage again.
 
 Its `--parameters` file is the document's own `parameters` block, so a reader can feed a
 document's assumptions back in unchanged:

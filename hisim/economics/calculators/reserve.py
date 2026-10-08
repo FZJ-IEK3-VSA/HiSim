@@ -1,17 +1,9 @@
-"""The operating view's replacement reserve (cost-spec-v2 §2.3).
+"""The replacement reserve of the operating-only view (cost_spec.md §2.3, §4.2).
 
-The §2.3 "replacement reserve" calculator. Under the OPERATING_ONLY installation context the
-perspective sees no capital expenditure at all — no year-0 investment, no REPLACEMENT entries.
-Charging nothing for the wear of equipment that will have to be replaced would understate the
-cost of operating, so the replacements are instead levelized into a **sinking fund**: their
-present value at the discount rate, spread over the observation period with the annuity factor,
-paid as an equal REPLACEMENT_RESERVE amount in every year 1..T (cost_spec.md §4.2).
-
-Note that the replacement flows this works on are collected by the investment calculator even
-when the REPLACEMENT entries themselves are suppressed — that is exactly the OPERATING_ONLY case
-this fund exists for.
-
-Realizes: cost_spec.md §4.2 (operating view), §3.4 (discounting and the annuity factor).
+Under the OPERATING_ONLY installation context a perspective (one named way of looking at the costs) sees no capital
+expenditure. So that equipment wear is still charged, the replacements are levelized into a sinking fund: their present
+value, spread over years 1..T with the annuity factor, paid as an equal REPLACEMENT_RESERVE amount each year. The
+investment calculator collects the replacement flows even when their REPLACEMENT entries are suppressed.
 """
 
 from __future__ import annotations
@@ -26,11 +18,8 @@ from hisim.economics.uncertainty import UncertainValue
 class ReserveConstants:
     """Labels of the replacement-reserve flows (§4.2).
 
-    The reserve is levelized across *all* subjects at once, so its entries cannot be attributed to
-    any one component; they are booked under a synthetic subject name instead. That name is a
-    published string — it appears as a row in `cash_flow_timeline.csv`, in the per-subject
-    breakdowns and in the report charts — so it lives here as a constant rather than as a literal
-    at the emit site.
+    The reserve covers all subjects at once, so its entries are booked under one synthetic subject name. That name
+    appears in `cash_flow_timeline.csv`, the per-subject breakdowns and the report charts.
     """
 
     #: Timeline subject the reserve is booked under (it belongs to no single component).
@@ -41,26 +30,19 @@ def replacement_reserve_amount(
     replacement_flows: List[Tuple[int, UncertainValue]],
     parameters: EconomicParameters,
 ) -> UncertainValue:
-    """The level annual sinking-fund payment one set of replacement flows implies (§4.2).
+    """Return the level annual sinking-fund payment that a set of replacement flows implies (§4.2).
 
-    The arithmetic half of :func:`build_replacement_reserve_entries`, separated from the emitting
-    half because the staged evaluator needs the figure without the entries: a plan's replacements
-    fall in different years from any single stage's, so the plan's reserve has to be recomputed
-    from the re-dated flows and written into the entries the splice already carries (step 12
-    §2.1 item 3).
-
-    Example::
-
-        replacement_reserve_amount([(10, UncertainValue.exact(20000.0))], parameters)
+    Example: `replacement_reserve_amount([(10, UncertainValue.exact(20000.0))], parameters)`. The staged evaluator
+    calls this on its own, without the entries, because a plan's replacements fall in different years than any single
+    stage's.
 
     Args:
-        replacement_flows: ``(year, amount)`` pairs, nominal and already escalated to their year,
-            cost-positive, in the order they were collected. The fold is left-to-right in that
-            order because float addition is not associative and the total is published.
-        parameters: Economic parameters — supplies the discount factor and the annuity factor.
+        replacement_flows: `(year, amount)` pairs, nominal, escalated to their year and cost-positive. They are summed
+            left to right in the given order, because float addition is not associative and the total is published.
+        parameters: Economic parameters; supply the discount factor and the annuity factor.
 
     Returns:
-        The equal amount paid in each year 1..T; the exact zero band for an empty list.
+        The equal amount paid in each year 1..T; an exact zero band for an empty list.
     """
     discounted_band = UncertainValue.exact(0.0)
     for repl_year, amount in replacement_flows:
@@ -73,30 +55,22 @@ def build_replacement_reserve_entries(
     parameters: EconomicParameters,
     horizon: int,
 ) -> List[CashFlowEntry]:
-    """The annual sinking-fund payment covering the suppressed replacements (§4.2).
+    """Return the annual sinking-fund entries that cover the suppressed replacements (§4.2).
 
-    Discounts every replacement to today, annuitizes the sum, and emits that amount in each
-    year 1..T. The fold over the flows is left-to-right in collection order, which is the order
-    the subjects were processed in — kept because float addition is not associative.
-
-    The closed form is the standard sinking-fund/capital-recovery pair: `a * sum_t(F_t / (1+i)^t)`
-    with `a` the VDI 2067-1 annuity factor over the same horizon and interest rate. The result is
-    a *level nominal* payment — deliberately not escalated, because it is already the annuity of
-    escalated future prices — and it is the German Instandhaltungsrücklage figure a homeowner or
-    a WEG should set aside. It exists only under OPERATING_ONLY; every other perspective charges
-    the replacements themselves and would double count if it also charged a reserve.
+    The amount is `a * sum_t(F_t / (1+i)^t)` with `a` the VDI 2067-1 annuity factor over the horizon: every replacement
+    is discounted to today and the sum annuitized. The payment is level and nominal, not escalated, because it is
+    already the annuity of escalated future prices. Only OPERATING_ONLY uses it; other perspectives charge the
+    replacements themselves.
 
     Args:
-        replacement_flows: `(year, amount)` pairs from every subject's `InvestmentSchedule`, in
-            collection order. Amounts are nominal, already escalated to their year, cost-positive
-            euro bands; the years are relative to the investment date.
-        parameters: Economic parameters — supplies the discount factor and the annuity factor.
+        replacement_flows: `(year, amount)` pairs from every subject's `InvestmentSchedule`, in collection order;
+            amounts are nominal, escalated to their year and cost-positive, years relative to the investment date.
+        parameters: Economic parameters; supply the discount factor and the annuity factor.
         horizon: Observation period T in years; one entry is emitted per year 1..T.
 
     Returns:
-        T identical cost-positive REPLACEMENT_RESERVE entries, one per year, in euro per year.
-        An empty `replacement_flows` list still yields T zero-valued entries, so the caller only
-        invokes this when there is something to reserve for.
+        T identical cost-positive REPLACEMENT_RESERVE entries in euro per year. An empty list still yields T zero
+            entries.
     """
     reserve = replacement_reserve_amount(replacement_flows, parameters)
     return [

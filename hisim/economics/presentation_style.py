@@ -1,25 +1,10 @@
-"""Display grouping, palette and layout geometry, shared by every report output (W4.7).
+"""Display grouping, palette and chart layout geometry shared by every report output.
 
-The 16+ cost categories of `timeline.CostCategory` fold onto 8 display groups so a fixed
-categorical palette covers them and a group keeps its hue across the HTML report, the SVG
-charts and the matplotlib PNGs. That mapping is the *one* piece of the seam-4 contract the spec
-leaves on the presentation side (§2.4, stated exception): the grouping is a display concept —
-the group **sums** are not, and come from `views.fold_categories` / `views.fold_category_matrix`,
-into which presentation passes `CATEGORY_TO_GROUP`.
-
-Beside the grouping sit the things two renderers would otherwise each own a copy of: the four
-neutral chrome colours (`ChromeColors`) and the two layout algorithms every shared chart needs —
-`squarified_layout` for the treemap and `sankey_node_boxes` for the whole Sankey family. Both the
-matplotlib PNGs and the inline SVGs of the `reporting` package draw those charts, and a layout
-implemented twice eventually places the same tile or the same ribbon end in two different spots,
-which reads as two different charts of the same number. Geometry is not a computation in the
-seam-4 sense: nothing here reads a result or derives a figure, it only turns amounts a view
-already produced into rectangles.
-
-This module exists so `report_plots.py` no longer imports the `reporting` package (and through it
-the engine) just to learn what colour "Energy" is. It imports nothing but `timeline.CostCategory`,
-which makes it importable from either side of the seam without dragging anything along; the
-import-lint that pins that is `tests/test_economics_import_lint.py`.
+The cost categories of `timeline.CostCategory` fold onto 8 display groups, so one fixed categorical palette colours
+them the same in the HTML report, its SVG charts and the matplotlib PNGs. The group sums themselves are computed by
+`views.fold_categories`, which takes `CATEGORY_TO_GROUP` as an argument. The module also holds the neutral chart
+colours and the treemap and Sankey layouts both renderers draw, so the two never place the same tile differently. It
+imports only `timeline.CostCategory` (pinned by ``tests/test_economics_import_lint.py``).
 """
 
 from __future__ import annotations
@@ -35,19 +20,10 @@ from hisim.economics.timeline import CostCategory
 def _build_category_to_group(
     display_groups: List[Tuple[str, Tuple[CostCategory, ...]]]
 ) -> Dict[CostCategory, int]:
-    """Total category -> group-index mapping, refusing a `CostCategory` no group declares.
+    """Invert the display groups into a category-to-group-index map that covers every `CostCategory`.
 
-    Inverts the group definitions into a lookup and checks that it is *total* over the whole
-    `CostCategory` enum, which is what lets the result be handed to `views.fold_categories` (it
-    rejects gaps on purpose).
-
-    An undeclared category used to fall back to group 0, "Investment & financing". That is not a
-    safe default, it is a wrong one: a new category — a levy, a tax, a credit — would be summed
-    into the investment block, coloured as investment and legended as investment in every chart of
-    every report, and the resulting number is arithmetically fine and semantically false, which is
-    the one failure mode a reader cannot catch. Refusing at import time turns "someone added a
-    category and nobody told presentation" into an immediate, named error at the first import of
-    this module rather than into a plausible-looking bar.
+    A category no group declares fails the import of this module by name, instead of being silently summed and coloured
+    as some other group. The result can be handed to `views.fold_categories`, which rejects gaps.
 
     Args:
         display_groups: The ordered display groups with the categories each declares.
@@ -73,18 +49,11 @@ def _build_category_to_group(
 
 
 class PresentationStyle:
-    """The display grouping and its categorical palette (W4.7).
+    """The display grouping and its categorical palette: ordered groups, light and dark colours, and the category map.
 
-    Holds the three constants that make every chart in every report output look like one system: the
-    ordered display groups, the light and dark colour ramps, and the total category-to-group map.
-    Grouping is needed because there are more cost categories than a categorical palette can
-    distinguish, and *fixed* ordering is needed because a group that changes hue or stack position
-    between the HTML report, its inline SVGs and the matplotlib PNGs makes the three impossible to
-    read side by side.
-
-    A reviewer should note the boundary this class sits on: it decides how sums are *labelled and
-    coloured*, never what the sums are. `views.fold_categories` computes the folded values and takes
-    `CATEGORY_TO_GROUP` as an argument, so a grouping change can never alter a number.
+    There are more cost categories than a categorical palette can tell apart, so they are grouped, and the fixed order
+    keeps a group's hue and stack position the same in every output. This class labels and colours sums; it never
+    decides them.
     """
 
     #: (group label, member categories) in the fixed order every chart stacks and legends them.
@@ -108,40 +77,18 @@ class PresentationStyle:
     GROUP_COLORS_LIGHT = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"]
     GROUP_COLORS_DARK = ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#e66767", "#d55181", "#d95926"]
 
-    #: **Total** category -> group-index mapping — every `CostCategory` member has an entry, so it
-    #: can be handed to `views.fold_categories` (which rejects gaps on purpose). Totality is
-    #: enforced, not defaulted: a category `DISPLAY_GROUPS` does not declare fails the import of
-    #: this module by name rather than being folded into group 0 (see `_build_category_to_group`).
+    #: Category -> group-index mapping covering every `CostCategory` member, so it can be handed to
+    #: `views.fold_categories` (which rejects gaps). An undeclared category fails the import of this module.
     CATEGORY_TO_GROUP: Dict[CostCategory, int] = _build_category_to_group(DISPLAY_GROUPS)
 
 
 class ChromeColors:
-    """The four neutral chrome roles of a chart — surface, ink, muted, grid — in one place.
+    """The four neutral, non-data chart colours (surface, ink, muted, grid), keyed by role name.
 
-    The *non*-data colours: the background a chart sits on, the colour its text is set in, the
-    quieter tone of ticks and secondary labels, and the tone of the gridlines and spines. They are
-    here for the same reason `GROUP_COLORS_LIGHT` is: the HTML report declares them as CSS custom
-    properties and the matplotlib companions bake them into every PNG, and a report whose SVG
-    gridlines are a different grey from its PNG gridlines reads as two documents rather than one.
-    Keeping the values in this module makes that a fact of the build rather than of two people
-    copying the same hex string.
-
-    The two sets exist because the outputs differ in what they can do, not in what they mean: the
-    HTML report re-resolves the roles under `prefers-color-scheme: dark`, while a PNG is baked once
-    and may end up in a PDF or a slide, so it always takes the light values. `LIGHT` and `DARK` map
-    a role name to its hex value, so a caller reads `ChromeColors.LIGHT["surface"]` rather than
-    remembering a position in a list.
-
-    Both renderers read them from here: the `:root` block of `reporting/sections.py` declares the
-    CSS custom properties from these entries, and `report_plots._Palette` is four aliases onto
-    `LIGHT`. Neither transcribes a hex string any more, which is what makes the two outputs agree
-    by construction rather than by review.
-
-    Both maps are read-only proxies rather than plain dicts. A palette is a constant of the
-    document, and a renderer that reached in and assigned one role would change every chart drawn
-    after it in the same process — including the other renderer's — with nothing in the output
-    saying where the colour came from. Item access is unchanged, so `ChromeColors.LIGHT["surface"]`
-    reads exactly as it did; only assignment is refused, at the point that attempts it.
+    Example: ``ChromeColors.LIGHT["surface"]``. The HTML report declares them as CSS custom properties in
+    ``reporting/sections.py`` and ``report_plots._Palette`` aliases `LIGHT`, so SVG and PNG charts share one grey. The
+    report switches to `DARK` under ``prefers-color-scheme: dark``; a PNG is baked once and always uses `LIGHT`. Both
+    maps are read-only proxies, so a renderer cannot change a colour for every later chart.
     """
 
     LIGHT: Mapping[str, str] = types.MappingProxyType({
@@ -159,25 +106,11 @@ class ChromeColors:
 
 
 class SequentialRamp:
-    """A ten-step sequential ramp, for the one chart whose series are an ordered quantity.
+    """A ten-step sequential ramp for the one chart whose series are an ordered quantity.
 
-    The group palette is *categorical*: eight hues that have to be told apart, in no order, and
-    it is the right palette for everything that stacks or legends a display group. The bank
-    benchmark's rate fan is the other kind of series — ten interest rates from 1 % to 10 %, which
-    a reader follows as a direction rather than as ten unrelated things. Drawing it in the
-    categorical palette cycled after eight lines, so 9 % and 10 % came out in exactly the hues of
-    1 % and 2 %, and the two ends of the fan were indistinguishable from each other.
-
-    Ten entries, light to dark, in the report's own ink: the first is a muted tint that still
-    reads on the surface, the last is close to `ChromeColors` ink. Ordered position *is* the
-    encoding here, so the steps are monotone in lightness and nothing else — no hue shift, which
-    would read as a second variable.
-
-    `LIGHT` and `DARK` exist for the same reason `ChromeColors` has two maps: the HTML report
-    declares both and re-resolves them under `prefers-color-scheme: dark`, where a ramp that ran
-    from pale to black would run from invisible to invisible. A baked PNG takes `LIGHT`. Both are
-    tuples rather than lists, because a palette is a constant of the document and a renderer that
-    appended a step would change every chart drawn after it in the same process.
+    The bank benchmark's rate fan shows ten interest rates from 1 % to 10 %; a categorical palette repeats after eight
+    hues, so an ordered ramp is used. Steps run light to dark in the report's ink, monotone in lightness only. `LIGHT`
+    and `DARK` serve the two colour schemes like `ChromeColors`; both are tuples so no renderer can alter them.
     """
 
     #: Step 0 (1 %) to step 9 (10 %) on a light surface: muted to ink, monotone in luminance.
@@ -197,40 +130,18 @@ class SequentialRamp:
 def squarified_layout(
     values: List[float], x: float, y: float, width: float, height: float
 ) -> List[Tuple[float, float, float, float]]:
-    """The classic squarified-treemap layout: one rectangle per value, in the input's order.
+    """Lay out a squarified treemap: one rectangle per value, in the input's order.
 
-    Lays the areas out in rows (or columns, whichever the remaining rectangle is wider in) so
-    that the tiles stay as close to square as possible, which is what makes areas comparable by
-    eye at all. The returned rectangles tile the given box exactly, so a treemap's "areas sum to
-    the total" invariant survives the layout.
-
-    **Descending order is a precondition of the near-square guarantee**, not something this
-    function arranges: it lays the values out in the order it is given, because the caller's order
-    is what pairs each rectangle with its label and its colour, and sorting here would silently
-    break that pairing. Squarify's quality argument assumes the largest areas are placed first —
-    hand it an ascending list and it still tiles the box exactly, still returns the rectangles in
-    input order, and still guarantees nothing about their aspect ratios. Callers that group tiles
-    by colour before sorting by size within the group therefore get near-square tiles per group
-    rather than over the whole box, which is the trade they are making knowingly.
-
-    **Every value has to be a positive, finite area** and a violation raises rather than drawing:
-    a zero or negative area has no rectangle, and a caller that passes one is either showing the
-    reader a tile that means nothing or has an amount whose sign it has not decided about. The
-    tiling arithmetic would not notice — a zero tile comes back as a zero-height rectangle and a
-    negative one eats into its row — so the wrong picture would be drawn in silence.
-
-    It lives in this module — with the display grouping and the palette rather than with either
-    renderer — for the same reason those do: the matplotlib PNG and the inline-SVG report both
-    draw the treemap, and two copies of a layout would eventually place the same tiles
-    differently. It needs no imports at all, which is what keeps this module importable from
-    either side of the seam. The `squarify` PyPI package implements the same algorithm and is
-    deliberately not depended on (visualization spec §3, V8).
+    Rows (or columns, along the longer side of the remaining box) are filled so tiles stay close to square, which makes
+    areas comparable by eye; the rectangles tile the box exactly. Tiles are near-square only if values come largest
+    first; the function does not sort, because the caller's order pairs each rectangle with its label and colour. Both
+    the PNG and the SVG report use this layout; the ``squarify`` package is not a dependency.
 
     Args:
-        values: Tile areas in any unit, every one of them positive and finite, largest first (see
-            above). An empty list is not an error and lays nothing out.
+        values: Tile areas in any unit, each positive and finite, ideally largest first. An empty list lays out
+            nothing.
         x: Left edge of the box to fill.
-        y: Bottom (or top — the caller's coordinate convention) edge of the box.
+        y: Bottom (or top, in the caller's convention) edge of the box.
         width: Box width in the same units as `x`.
         height: Box height.
 
@@ -238,8 +149,7 @@ def squarified_layout(
         One `(x, y, width, height)` per input value, in input order.
 
     Raises:
-        ValueError: If any value is zero, negative or not finite; the message names the index and
-            the value.
+        ValueError: If any value is zero, negative or not finite; the message names the index and the value.
     """
     for index, value in enumerate(values):
         if not math.isfinite(value) or value <= 0.0:
@@ -285,14 +195,11 @@ def squarified_layout(
 
 
 def _worst_aspect(row: List[float], side: float) -> float:
-    """Worst width/height ratio of a candidate treemap row — squarify's quality measure.
+    """Return the worst width/height ratio of a candidate treemap row, squarify's quality measure.
 
-    The algorithm keeps adding tiles to a row while this does not get worse and closes the row
-    the moment it does. A zero-area row, or a row holding a zero-area tile, is reported as
-    infinitely bad so that it can never win a comparison and stall the layout. `squarified_layout`
-    already refuses a non-positive value before any row is built, so neither guard can fire on the
-    public path; they stay as defence in depth, because the alternative to an `inf` here is a
-    `ZeroDivisionError` from inside a layout, which says nothing about the amount that caused it.
+    The layout keeps adding tiles to a row while this does not get worse. A zero-area row or tile counts as infinitely
+    bad, so it never wins a comparison; `squarified_layout` already refuses such values, so this only guards against a
+    `ZeroDivisionError`.
     """
     total = sum(row)
     if total <= 0:
@@ -304,20 +211,11 @@ def _worst_aspect(row: List[float], side: float) -> float:
 
 
 class SankeyLayout:
-    """Shared geometry of the hand-drawn Sankeys (V1, V10, V11, V12).
+    """Shared geometry constants of the Sankey charts, as fractions of the unit square.
 
-    All values are fractions of the unit square the diagram is laid out in, so the same numbers
-    work at any figure or viewBox size. `CURVATURE` is the share of the horizontal gap the Bézier
-    control points sit at — 0 would draw straight trapezoids, 1 makes every ribbon leave and
-    arrive perfectly horizontally, and the value here is the compromise that keeps crossing
-    ribbons distinguishable. It sits beside the palette because both renderers read it and a
-    ribbon that curves differently in the PNG than in the report would look like a different
-    chart.
-
-    There is deliberately no same-column geometry any more: owner decision Q23 gave every
-    internal party its own column, so an inter-actor transfer is an ordinary ribbon between two
-    adjacent columns and the looping band the levy used to be drawn as — with its own bulge
-    constant and its own width correction — is gone from both renderers.
+    `CURVATURE` is the share of the horizontal gap at which the Bézier control points sit: 0 draws straight trapezoids,
+    1 makes ribbons leave and arrive horizontally. Every internal party has its own column, so a transfer between
+    actors is an ordinary ribbon between adjacent columns.
     """
 
     NODE_WIDTH = 0.035
@@ -326,16 +224,14 @@ class SankeyLayout:
     #: Smallest usable fraction of the unit square a column may be squeezed into by its node gaps;
     #: a diagram with more nodes than gaps fit keeps drawing rather than collapsing to nothing.
     MINIMUM_USABLE_HEIGHT = 0.1
-    #: Alternating barycenter passes over the columns (Q19). Four is the usual stopping point for
-    #: this heuristic: the ordering is almost always stable after two, and more passes trade run
-    #: time for nothing while risking a two-cycle that never settles.
+    #: Alternating barycenter passes over the columns. The ordering is almost always stable after two; more
+    #: passes cost time and risk a two-cycle that never settles.
     BARYCENTER_SWEEPS = 4
-    #: Passes of the adjacent-swap refinement after each barycenter sweep (Q29 R7). It stops as
-    #: soon as a full pass improves nothing, so the bound only caps a pathological input.
+    #: Passes of the adjacent-swap refinement after each barycenter sweep. It stops as soon as a full pass
+    #: improves nothing, so the bound only caps a pathological input.
     TRANSPOSE_ROUNDS = 8
-    #: Prefix of the virtual (dummy) nodes that give a column-skipping ribbon a corridor to route
-    #: through (Q29 R7). Renderers never draw a node they were not handed, and every id built here
-    #: starts with this, so a renderer can also assert on it.
+    #: Prefix of the virtual (dummy) nodes that give a column-skipping ribbon a corridor to route through.
+    #: Every id built here starts with it, so a renderer can assert that it never draws one.
     VIRTUAL_NODE_PREFIX = "__via:"
     #: Length of a net-position stub as a fraction of the horizontal column pitch. Long enough to
     #: read as a flow leaving the face, far too short to be mistaken for a ribbon to a neighbour.
@@ -347,18 +243,12 @@ class SankeyLayout:
 
 @dataclass(frozen=True)
 class RibbonSegment:
-    """One column-to-column leg of a ribbon, with the offsets of its two ends (Q29 R7).
+    """One column-to-column leg of a Sankey ribbon, with the offsets of its two ends.
 
-    A ribbon that skips a column is no longer drawn as one long curve past whatever happens to sit
-    in between; it is cut at every intermediate column, where a virtual node reserves exactly its
-    width, and drawn as a chain of these legs. A ribbon between neighbouring columns has a single
-    leg, which is the shape every ribbon used to have.
-
-    `out_anchor` is the offset of the leg's start above the bottom of the source node's right
-    face, `in_anchor` the same for the target node's left face. The two ends of the whole ribbon
-    are therefore the first leg's `out_anchor` and the last leg's `in_anchor`; there is no
-    separate projection of that pair, because a renderer that draws the chain already walks past
-    both and one that draws only the ends would draw a curve through whatever lies between.
+    A ribbon that skips columns is cut at each intermediate column, where a virtual node reserves its width, and drawn
+    as a chain of legs; a ribbon between neighbouring columns has one leg. `out_anchor` is the start's offset above the
+    bottom of the source node's right face, `in_anchor` the same for the target node's left face. The ribbon's own ends
+    are the first leg's `out_anchor` and the last leg's `in_anchor`.
     """
 
     source: str
@@ -369,18 +259,12 @@ class RibbonSegment:
 
 @dataclass(frozen=True)
 class NetStub:
-    """The unmatched remainder of a node's face: its net position, drawn (Q29 R7).
+    """The part of a Sankey node's face that its ribbons do not fill: the node's net position.
 
-    A node is drawn as tall as the larger of what enters and what leaves it, so an actor who
-    receives more than it passes on has an outgoing face that its ribbons do not fill. That
-    remainder is not nothing: it is precisely the actor's net gain, and leaving it blank was the
-    defect — a third of the landlord's block was untiled and unexplained. Rendered as a short stub
-    off the deficient face it makes both faces tile at 100 %.
-
-    `amount` is the absolute imbalance in flow units (the renderer formats and signs it),
-    `anchor` its offset above the bottom of that face — always the top of the tiled part, since
-    ribbons stack from the bottom — and `is_outgoing` says which face is short: True when more
-    arrives than leaves (a net gain), False when the node pays out more than it takes in.
+    A node is as tall as the larger of its inflow and outflow, so an actor receiving more than it passes on has an
+    unfilled outgoing face; the stub shows that net gain (or loss) so both faces are fully tiled. `amount` is the
+    absolute imbalance in flow units, `anchor` its offset above the bottom of the face (ribbons stack from the bottom),
+    and `is_outgoing` is True when more arrives than leaves.
     """
 
     node: str
@@ -391,28 +275,14 @@ class NetStub:
 
 @dataclass(frozen=True)
 class SankeyGeometry:
-    """Where every Sankey node sits, how wide a unit is, and where each ribbon attaches.
+    """The complete Sankey layout both renderers draw: node boxes, the unit scale, ribbon legs and net stubs.
 
-    The complete layout both Sankey renderers consume, so that a renderer only has to draw. `boxes`
-    maps a node id to `(x of its left edge, y of its bottom, height)` in the unit square;
-    `unit_scale` is the height one unit of flow occupies — *the same number in every column*, which
-    is what makes a ribbon keep its width from end to end (visualization spec rule 2.7); and
-    `ribbon_segments` gives, per input ribbon and in the input's order, the chain of legs it is
-    drawn as (Q29 R7): one leg per column gap, each carrying the offsets of its two ends above the
-    bottom of their node, so the ribbons on a face tile it exactly in the crossing-minimizing order
-    (Q19). A ribbon between neighbouring columns is a chain of one, which is the shape every ribbon
-    used to have; the ribbon's own two ends are the first leg's `out_anchor` and the last leg's
-    `in_anchor`.
-
-    Handing the scale out rather than letting each renderer re-derive it from a node's height is
-    the whole point: dividing a node's height by what it carries reproduces a per-node scale, and
-    a middle column that carries each unit twice then gets a different one from its neighbours —
-    which is exactly the defect this replaced.
-
-    `boxes` also contains the virtual nodes the routing introduced — their ids start with
-    `SankeyLayout.VIRTUAL_NODE_PREFIX` and they are deliberately *not* in any caller's column list,
-    so a renderer that draws the columns it was handed never draws them. `net_stubs` closes the
-    faces that ribbons do not fill.
+    `boxes` maps a node id to `(x of left edge, y of bottom, height)` in the unit square. `unit_scale` is the height
+    one unit of flow occupies, the same in every column, so a ribbon keeps its width end to end; renderers must use it
+    rather than derive a per-node scale. `ribbon_segments` gives, per input ribbon and in input order, its chain of
+    legs (one per column gap) with end offsets that tile each face in crossing-minimizing order. `boxes` also holds the
+    virtual routing nodes (ids start with `SankeyLayout.VIRTUAL_NODE_PREFIX`), which no caller's column list contains,
+    so they are never drawn. `net_stubs` closes the faces ribbons do not fill.
     """
 
     boxes: Dict[str, Tuple[float, float, float]]
@@ -424,12 +294,10 @@ class SankeyGeometry:
 def _place_nodes(
     columns: List[List[str]], values_by_node: Dict[str, float], unit_scale: float
 ) -> Dict[str, Tuple[float, float, float]]:
-    """Turns a column ordering into node rectangles under a given global scale.
+    """Turn a column ordering into node rectangles under the given global scale.
 
-    Factored out of `sankey_node_boxes` because the barycenter sweeps need the *positions* an
-    ordering produces in order to score the next one, and re-deriving them by hand would let the
-    heuristic optimize a layout that is not the one drawn. Columns are vertically centred, so a
-    column carrying less than the fullest one sits in the middle rather than sinking to the floor.
+    The barycenter sweeps use it to score an ordering by the positions it actually produces. Columns are vertically
+    centred.
     """
     boxes: Dict[str, Tuple[float, float, float]] = {}
     column_count = max(len(columns), 1)
@@ -453,27 +321,18 @@ def _barycenter_order(
     values_by_node: Dict[str, float],
     unit_scale: float,
 ) -> List[List[str]]:
-    """Reorders the nodes of each column to reduce ribbon crossings (Q19).
+    """Reorder the nodes of each column to reduce ribbon crossings (barycenter heuristic).
 
-    The standard barycenter heuristic of layered graph drawing: a node wants to sit at the
-    flow-weighted mean height of the nodes it is connected to in the neighbouring column, so
-    sorting each column by that value pulls connected pairs level with each other and untangles
-    the ribbons between them. Sweeps alternate left-to-right and right-to-left, because a single
-    direction only ever tidies one side of each column, and stop as soon as a full sweep changes
-    nothing or after `SankeyLayout.BARYCENTER_SWEEPS` passes.
-
-    Determinism is a requirement, not a nicety — a report re-rendered from the same result must
-    be byte-identical, so the sort key ends in the flow volume and the node id and nothing here
-    consults a hash order or a random seed. A node with no link into the reference column keeps
-    its current height as its barycenter, which leaves it where it was instead of collecting all
-    unconnected nodes at the floor.
+    Each node is sorted by the flow-weighted mean height of its partners in the neighbouring column. Sweeps alternate
+    left-to-right and right-to-left and stop when a sweep changes nothing or after `SankeyLayout.BARYCENTER_SWEEPS`
+    passes. The result is deterministic (ties broken by flow volume and node id), so a re-rendered report is
+    byte-identical. A node without partners in the reference column keeps its current height.
 
     Args:
         columns: The caller's node order per column, left to right.
-        ribbons: `(source, target, amount)` triples; same-column links are ignored, since they
-            connect two nodes whose relative order this heuristic is deciding.
-        values_by_node: Node id -> flow volume, for the node heights the sweeps score against.
-        unit_scale: The global unit-to-height scale, so the sweeps see the drawn geometry.
+        ribbons: `(source, target, amount)` triples; same-column links are ignored.
+        values_by_node: Node id to flow volume, for the node heights.
+        unit_scale: The global unit-to-height scale.
 
     Returns:
         A new list of columns with the nodes reordered; the input is not mutated.
@@ -530,20 +389,12 @@ def _barycenter_order(
 def _crossing_count(
     order: List[List[str]], legs: List[Tuple[str, str]], column_of: Dict[str, int]
 ) -> int:
-    """Edge crossings of a layered ordering: inverted pairs within each column gap (Q29 R7).
+    """Count the edge crossings of a layered ordering: inverted pairs within each column gap.
 
-    The exact count for a layered drawing, not a proxy: two edges of the same gap cross precisely
-    when their endpoints appear in opposite order in the two columns, which is a comparison of
-    positions and needs no geometry. It is what the ordering is now *scored* by — barycenter
-    sweeps are a heuristic and can make a picture worse, as run 1's rented view showed, so the
-    layout keeps the best-scoring pass rather than the last one.
-
-    Cost: every call recounts every crossing from scratch, and `_transposed` calls it once per
-    candidate swap, which is quadratic in a column's nodes and quadratic again in the legs of a
-    gap. That is the right trade for the diagrams this report draws — a dozen nodes and a couple
-    of dozen ribbons, where the whole layout is microseconds. The upgrade, if a diagram ever grows
-    past a few dozen nodes, is delta scoring: a single adjacent swap changes only the crossings
-    within that one gap pair, so the count can be updated rather than recomputed.
+    Two edges of the same gap cross exactly when their endpoints appear in opposite order in the two columns. The
+    layout keeps the ordering with the lowest count, since barycenter sweeps can make a picture worse. Every call
+    recounts from scratch, which is fine for a dozen nodes; delta scoring per gap would be the upgrade for much larger
+    diagrams.
     """
     position = {node: index for nodes in order for index, node in enumerate(nodes)}
     by_gap: Dict[int, List[Tuple[str, str]]] = {}
@@ -563,18 +414,11 @@ def _crossing_count(
 def _transposed(
     order: List[List[str]], legs: List[Tuple[str, str]], column_of: Dict[str, int]
 ) -> List[List[str]]:
-    """The transpose step of the Sugiyama method: adjacent swaps while they reduce crossings.
+    """Swap adjacent nodes while the swap reduces the crossing count (the Sugiyama transpose step).
 
-    Barycenter placement gets the columns roughly right and then stops improving; swapping
-    neighbours and keeping the swap only when the exact crossing count falls is what removes the
-    last tangles, and it is the standard companion pass. Deterministic: columns are visited left
-    to right, pairs bottom to top, and a swap is kept only on a strict improvement, so equal-cost
-    alternatives never flip a re-render.
-
-    Cost: each candidate swap is scored by a full `_crossing_count` of the whole drawing rather
-    than by the change it makes in its own gap. Recounting is fine at report scale (a dozen nodes)
-    and delta scoring per gap is the upgrade when a diagram exceeds a few dozen; nothing here is
-    on a path where that has ever mattered.
+    Removes the tangles barycenter placement leaves. Columns are visited left to right and pairs bottom to top, and a
+    swap is kept only on a strict improvement, so the result is deterministic. Each candidate is scored by a full
+    `_crossing_count`, which is fine at report scale.
     """
     current = [list(nodes) for nodes in order]
     score = _crossing_count(current, legs, column_of)
@@ -602,13 +446,10 @@ def _barycenter_of(
     column_of: Dict[str, int],
     centers: Dict[str, float],
 ) -> float:
-    """Flow-weighted mean height of a node's partners in one neighbouring column.
+    """Return the flow-weighted mean height of a node's partners in one neighbouring column.
 
-    The score the barycenter sweeps sort on. Weighting by flow rather than counting partners is
-    what makes the heuristic follow the picture: a node hanging off one fat ribbon and three
-    hairlines belongs next to the fat one. A node with no partner in the reference column falls
-    back to its own current height, which is the "leave it alone" answer rather than an arbitrary
-    zero that would sink every unconnected node to the floor of the column.
+    Weighting by flow puts a node next to its fattest ribbon. A node with no partner in the reference column returns
+    its own current height, so it stays where it is.
     """
     weighted, total = 0.0, 0.0
     for partner, amount in links.get(node, []):
@@ -621,68 +462,32 @@ def _barycenter_of(
 def sankey_node_boxes(
     columns: List[List[str]], ribbons: List[Tuple[str, str, float]]
 ) -> SankeyGeometry:
-    """Lays a Sankey out: one global scale, crossing-minimized order, per-ribbon anchors.
+    """Lay out a Sankey diagram: one global scale, crossing-minimized order and per-ribbon anchors.
 
-    The shared layout of the whole Sankey family (V1, V10, V11, V12), used by the matplotlib
-    companions and by the inline-SVG report alike — both draw the same diagram, so both have to
-    place the same node and the same ribbon end in the same spot. A node's height is `unit_scale`
-    times the larger of what flows into it and what flows out of it, which makes a pass-through
-    node exactly as tall as what crosses it.
+    Used by both the matplotlib charts and the inline-SVG report so they place every node and ribbon end identically. A
+    node's height is `unit_scale` times the larger of its inflow and outflow. Coordinates are fractions of a unit
+    square with y growing upward; an SVG renderer flips them.
 
-    **One scale, all columns** (visualization spec rule 2.7). The scale is chosen so the *fullest*
-    column exactly fills the unit square once its inter-node gaps are taken out, and every other
-    column is then shorter — vertically centred, so the diagram stays balanced. Scaling each
-    column independently to fill the height, which this function used to do, is what made ribbons
-    change width in flight: a column carrying each unit twice (every actor in V1 is both a payer
-    and a payee) got roughly half the scale of its neighbours, so the same flow arrived narrower
-    than it left.
-
-    **Corridors** (Q29 R7). A ribbon that skips a column is cut into one leg per column gap, with
-    a virtual node reserving its width in every column it passes — the dummy nodes of the Sugiyama
-    method. They take part in the ordering and in the space a column claims, which is what turns
-    "the ribbon happens to miss the block" into "the ribbon has somewhere to go"; the invariant it
-    buys is that no ribbon path intersects any node rectangle, and it is tested as one.
-
-    **Net stubs** (Q29 R7). A node is as tall as the larger of its two faces, so an internal node
-    whose inflow and outflow differ has a face its ribbons cannot fill. That remainder is the
-    node's net position and is handed to the renderers as a `NetStub` to draw and label, which is
-    what makes both faces of every node tile at 100 %.
-
-    **Untangling** (Q19) is two steps, both standard and both here rather than in a renderer.
-    Nodes are reordered per column by barycenter sweeps (`_barycenter_order`), and the ribbons on
-    each node face are then stacked in the order of their *far* ends, so two correctly ordered
-    columns are not re-tangled by the ribbons between them. The caller's column lists are read for
-    membership only; their order is a starting point, not a constraint.
-
-    Coordinates are fractions of a unit square with y growing upward; a renderer whose y grows
-    downward (SVG) flips them itself.
-
-    **Bad input is refused, not drawn.** A ribbon amount has to be positive and finite, and both
-    of a ribbon's nodes have to be declared by some column. A zero-width ribbon is a flow the
-    reader cannot see but which still claims height on both faces it touches; a negative one is a
-    sign the caller has not resolved, and a Sankey encodes direction in the node pair rather than
-    in a sign; and a ribbon naming an undeclared node used to be kept, silently skipped by every
-    renderer, and yet counted into its source node's face height — a node drawn taller than the
-    ribbons that tile it, for a reason nothing in the picture states.
+    - One scale for all columns: the fullest column fills the height after gaps, others are shorter and centred, so
+      ribbons keep their width.
+    - Corridors: a ribbon that skips columns is cut into one leg per gap, with a virtual node reserving its width in
+      each skipped column, so no ribbon crosses a node rectangle.
+    - Net stubs: a node face its ribbons do not fill gets a `NetStub` showing the net position.
+    - Untangling: nodes are reordered per column by barycenter sweeps and adjacent swaps, and ribbons on each face are
+      stacked in the order of their far ends. The caller's column order is only a starting point.
 
     Args:
-        columns: Node ids per column, left to right. The order within a column is the sweep's
-            starting point.
-        ribbons: `(source id, target id, amount)` triples; only the amounts are read here. Every
-            amount has to be positive and finite and both node ids have to appear in `columns`.
-            An empty list is not an error: the declared nodes are placed with height zero and
-            `unit_scale` comes back as `0.0`, which is the honest geometry of a diagram with
-            nothing in it.
+        columns: Node ids per column, left to right.
+        ribbons: `(source id, target id, amount)` triples; each amount positive and finite, both ids declared in
+            `columns`. An empty list places all nodes with height zero and returns `unit_scale` 0.0.
 
     Returns:
-        A `SankeyGeometry` whose `ribbon_segments` are index-aligned with `ribbons`. A node named
-        in `columns` but carrying no flow gets height zero: under one global scale "no flow" is
-        genuinely no height, and inventing a share for it would re-introduce a second scale
-        through the back door.
+        A `SankeyGeometry` whose `ribbon_segments` align with `ribbons` by index. A declared node without flow gets
+            height zero.
 
     Raises:
-        ValueError: If a ribbon amount is zero, negative or not finite, or if a ribbon names a
-            node no column declares; the message names the ribbon.
+        ValueError: If a ribbon amount is zero, negative or not finite, or a ribbon names a node no column declares;
+            the message names the ribbon.
     """
     for index, (source, target, amount) in enumerate(ribbons):
         if not math.isfinite(amount) or amount <= 0.0:
@@ -735,24 +540,11 @@ def sankey_node_boxes(
 def _route_through_corridors(
     columns: List[List[str]], ribbons: List[Tuple[str, str, float]]
 ) -> Tuple[List[List[str]], List[Tuple[str, str, float]], List[List[int]]]:
-    """Cuts column-skipping ribbons into legs through virtual nodes (Q29 R7, Sugiyama).
+    """Cut column-skipping ribbons into neighbour-to-neighbour legs through virtual nodes (Sugiyama dummy nodes).
 
-    The layered-graph-drawing answer to a ribbon that crosses a column it has no business in: give
-    it a *dummy node* in every column it skips, sized exactly as wide as the ribbon, and let that
-    node take part in the ordering and in the space the column reserves. The ribbon is then a
-    chain of ordinary neighbour-to-neighbour legs, and since a leg only ever occupies the gap
-    between two adjacent columns it cannot overlap a node rectangle — the invariant that used to
-    be violated by four source-to-landlord ribbons crossing straight through the tenant's block.
-
-    Virtual ids are built from the ribbon's index and the column, so the expansion is a pure
-    function of the input and a re-render is byte-identical. They are appended to the intermediate
-    column in ribbon order; where they end up vertically is the barycenter sweeps' business.
-
-    A ribbon naming a node no column declares is refused here rather than routed. It used to be
-    kept as a single leg with no geometry: every renderer skipped it, so the flow was invisible,
-    while its amount still counted into the source node's outgoing total and made that node taller
-    than the ribbons tiling it. A misspelt or unlisted node is a caller bug, and the only place it
-    is still identifiable is here, where the id is in hand.
+    Each skipped column gets a virtual node as wide as the ribbon, which takes part in the ordering and the column's
+    space, so no leg can overlap a node rectangle. Virtual ids are built from the ribbon index and the column, so the
+    result is deterministic; they are appended to the intermediate column in ribbon order.
 
     Args:
         columns: The caller's columns, left to right; read for membership and column index.
@@ -762,8 +554,7 @@ def _route_through_corridors(
         `(columns including the virtual nodes, legs, leg indices per ribbon)`.
 
     Raises:
-        ValueError: If a ribbon names a node that appears in no column; the message names both
-            the node and the ribbon it belongs to.
+        ValueError: If a ribbon names a node that appears in no column; the message names the node and the ribbon.
     """
     column_of = {node: index for index, nodes in enumerate(columns) for node in nodes}
     routed = [list(nodes) for nodes in columns]
@@ -804,15 +595,10 @@ def _net_stubs(
     outgoing: Dict[str, float],
     unit_scale: float,
 ) -> List[NetStub]:
-    """The face remainders of internal nodes, as stubs to draw (Q29 R7).
+    """Return the net-position stubs of internal nodes (nodes with flow on both faces).
 
-    Only *internal* nodes qualify — a node with flow on both faces. A first-column source or a
-    last-column sink has one empty face by definition, and closing that with a stub would draw a
-    payment nobody makes; the imbalance that needs explaining is the one inside the picture, where
-    a party keeps part of what it receives.
-
-    Emitted in column order, then in the caller's node order, so the list is deterministic and a
-    golden diff of the stubs reads top-to-bottom like the diagram.
+    A first-column source or last-column sink has one empty face by definition and gets no stub. Stubs come in column
+    order, then the caller's node order, so the list is deterministic.
     """
     stubs: List[NetStub] = []
     for nodes in columns:
@@ -840,18 +626,12 @@ def _ribbon_anchors(
     boxes: Dict[str, Tuple[float, float, float]],
     unit_scale: float,
 ) -> List[Tuple[float, float]]:
-    """Offsets of each ribbon's two ends above the bottom of their node face (Q19).
+    """Return each ribbon's two end offsets above the bottom of their node faces.
 
-    The second untangling step. Once the columns are ordered, the ribbons leaving a node are
-    stacked in the order of the heights their *targets* sit at, and the ribbons arriving at a node
-    in the order of the heights their *sources* sit at — so a ribbon going up stays above one
-    going down instead of the two crossing inside the gap between the columns. The stacking is
-    cumulative and uses the global scale, which is what makes the ribbons tile the face exactly.
-
-    Returns the anchors index-aligned with `ribbons`, so a renderer can iterate the flows in its
-    own order (colour, credit-versus-cost) without disturbing the geometry. Every node named here
-    is in `boxes`: this runs on the routed legs, and `sankey_node_boxes` has already refused a
-    ribbon naming a node no column declares, so there is no unplaceable end left to skip.
+    Ribbons leaving a node are stacked by the height of their targets, ribbons arriving by the height of their sources,
+    so a ribbon going up stays above one going down instead of crossing it. Stacking uses the global scale, so ribbons
+    tile each face exactly. The anchors align with `ribbons` by index, so a renderer may draw flows in any order. Every
+    node is in `boxes`, because unknown nodes were refused earlier.
     """
     def centre(node: str) -> float:
         """Vertical middle of a node, the key both stacking orders sort on."""
@@ -880,22 +660,17 @@ def _ribbon_anchors(
 
 
 def group_of(category: CostCategory) -> int:
-    """Display-group index of a cost category.
+    """Return the display-group index of a cost category.
 
-    The accessor the HTML report and the matplotlib companions use to pick a stack segment and its
-    colour for a category. It never raises for a valid `CostCategory`, because the underlying map
-    is total over the enum and is checked to be so when this module is imported; the index doubles
-    as the index into `GROUP_COLORS_LIGHT`/`GROUP_COLORS_DARK` and into `DISPLAY_GROUPS`, which is
-    what keeps colour, label and stacking order in lockstep.
+    Never raises for a valid `CostCategory`, since the map covers the whole enum. The index also indexes
+    `GROUP_COLORS_LIGHT`, `GROUP_COLORS_DARK` and `DISPLAY_GROUPS`, keeping colour, label and stack order together.
     """
     return PresentationStyle.CATEGORY_TO_GROUP[category]
 
 
 def group_name(index: int) -> str:
-    """Label of a display group.
+    """Return the label of a display group, for legends, axis labels and table headers.
 
-    The inverse-direction accessor, used for legends, axis labels and table headers so a group's
-    human-readable name is written in exactly one place. Takes the index `group_of` returns; an
-    index outside the eight defined groups is a programming error and raises.
+    Takes the index `group_of` returns; an index outside the eight groups raises.
     """
     return PresentationStyle.DISPLAY_GROUPS[index][0]

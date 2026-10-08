@@ -1,43 +1,13 @@
-"""Context resolution: what does this subject actually cost *here* (cost-spec-v2 §2.3).
+"""Context resolution: what a cost subject is priced with and whether it is bought (cost_spec.md §2.3).
 
-The §2.3 "context resolution" calculator. It answers, per cost subject, the questions that
-precede every euro of the investment schedule:
+A cost subject is one costed item on the timeline (a component instance or a measure). Per subject this module picks
+each cost building block from a component override or the database entry, records its provenance, and decides the
+installation context (cost_spec.md §4.1): a new investment, a kept existing asset, or a replacement of one, with the
+replaced asset's sunk cost and anyway credit. `evaluator.build_timeline` calls `resolve_device` first and hands the
+resulting `DeviceCosting` to the investment, maintenance and subsidy calculators, which only do arithmetic on it.
 
-* which database entry / override supplies each cost building block, and with what provenance;
-* is this a **new investment**, a **kept** existing asset, or a **replacement** of one
-  (installation context, cost_spec.md §4.1) — and therefore, is anything charged at year 0;
-* when does the first replacement fall due (a kept asset has already aged);
-* what happens to the asset being replaced: its written-off residual book value (**sunk cost**,
-  reported but excluded from decision KPIs) and the **anyway-cost credit** for the like-for-like
-  replacement that no longer has to be paid, or — for coupled measures — the non-energy share
-  that would have been spent anyway (spec Q7).
-
-This module is a straight extraction of `_resolve_device` and the §4.1 blocks of
-`build_timeline`; the arithmetic, the ordering of the context checks (the replacement check
-runs before the "kept" check on purpose) and the fallbacks on missing database entries are
-unchanged.
-
-**Its place in the pipeline.** It runs first, once per cost subject, before any cash flow
-exists: `evaluator.build_timeline` calls :func:`resolve_device` and hands the resulting
-:class:`DeviceCosting` to the investment, maintenance and subsidy calculators, which then only
-do arithmetic on it. That is the review concern this module isolates — *which numbers are used
-and why*, separated from *what is done with them*. It is also the last place database lookups
-and the provenance ledger are touched for a subject, so a value that cannot be explained later
-was not recorded here.
-
-Units and conventions used throughout: euro amounts are banded (`UncertainValue`, §3.9) and
-cost-positive; the anyway-cost credit is the one entry emitted here and it is revenue-mirrored
-(negative). Years are relative to the investment date, so `first_replacement_year` is "years
-from now", not a calendar year; scheme validity is anchored on the *price basis year* — the
-economic "today" — which may differ from the simulated weather year. Ages are measured at the
-``ageing_reference_year``, the timeline's year 0: the price basis year when nothing is stated, a
-staged plan's own year 0 when the caller passes one (``plan_start_year``, else the price basis
-year; hisim-dutz, hisim-nl6j); never the weather year. The plan's calendar years count from that
-year only when the plan states a start year (they are null without one). A register asset whose
-age the caller states (``ExistingAsset.stated_age_in_years``, a stage purchase) takes that age.
-
-Realizes: cost_spec.md §3.5 (device entries, removal cost), §3.10 (provenance), §4.1 (existing
-assets, sunk cost, anyway cost), spec Q7 (coupled cost).
+Years are relative to year 0. Ages are measured at the ageing reference year, the timeline's year 0: the price basis
+year (the economic "today"), or a staged plan's own year 0; never the weather year.
 """
 
 from __future__ import annotations
@@ -59,20 +29,10 @@ from hisim.loadtypes import ComponentType
 
 
 class ContextResolutionConstants:
-    """The one fallback applied when the database cannot answer for an existing asset (§4.1).
+    """The fallback service life for a replaced asset the database does not price (§4.1).
 
-    A brownfield register may name an asset class that the current cost database no longer
-    prices — an old night-storage heater, a technology dropped from the catalog — and the
-    replaced asset's *remaining life* is still needed to compute the sunk cost and to decide
-    whether the anyway-cost credit applies.
-
-    That situation is only survivable when the register itself supplies the missing price through
-    `ExistingAsset.replacement_cost_override_in_euro`, the designed escape hatch for exactly this
-    case: the price is then declared, and only the service life is missing, so the default below
-    stands in for it. Without the override there is nothing left to assume from and
-    `resolve_replaced_asset` raises instead of reporting a 0 EUR sunk cost and a guessed life as
-    if they were established figures (issue #25c). The constant is therefore reachable only on the
-    override path.
+    Used only when the register supplies the price through `ExistingAsset.replacement_cost_override_in_euro`; without
+    that override `resolve_replaced_asset` raises instead of inventing a sunk cost.
     """
 
     #: Service life assumed for a replaced asset that is priced by an override but has no
@@ -82,23 +42,17 @@ class ContextResolutionConstants:
 
 @dataclass
 class DeviceCosting:
-    """Resolved year-0 cost building blocks for one component (per slot).
+    """The resolved year-0 cost building blocks of one subject, per slot.
 
-    Everything the downstream calculators need about one cost subject, resolved once: the euro
-    building blocks (already banded and already multiplied by `facts.count` / sized by
-    `facts.size`), the technical figures that drive the schedule, and the installation-context
-    verdict. It is the contract between "which number applies here" (this module) and "what is
-    done with it" (`investment.py`, `maintenance.py`, `subsidy_application.py`), and it carries
-    the `provenance_ids` that let `explain` walk any resulting euro back to its data file.
+    Euro amounts are bands (`UncertainValue`, one value per uncertainty slot) at price-basis-year prices,
+    cost-positive, already sized and multiplied by `facts.count`. It is what `investment.py`, `maintenance.py` and
+    `subsidy_application.py` compute from, and its `provenance_ids` let `explain` trace a euro back to its data file.
 
-    Units, in the order the fields appear: `device_cost`, `installation_cost`, `planning_cost`
-    and `removal_cost_of_replaced` are euro bands, cost-positive, at price-basis-year prices;
-    `maintenance_rate` is a dimensionless *share of gross investment per year*;
-    `fixed_operation_cost` is euro per year; `service_life_years` is years; `embodied_co2_kg` is
-    kilograms for the whole installation (size and count already applied); `vat_rate` is a
-    fraction; `energy_related_cost_share` is the dimensionless
-    Q7 coupled-cost share (1.0 = fully energy-related). `first_replacement_year` is a *relative*
-    year index — years from the investment date, already shortened by a kept asset's age.
+    Units: `device_cost`, `installation_cost`, `planning_cost` and `removal_cost_of_replaced` are euro bands;
+    `maintenance_rate` is a share of gross investment per year; `fixed_operation_cost` is euro per year;
+    `service_life_years` is years; `embodied_co2_kg` is kilograms for the whole installation; `vat_rate` is a fraction;
+    `energy_related_cost_share` is the coupled-cost share (1.0 = fully energy-related). `first_replacement_year` is
+    years from year 0, already shortened by a kept asset's age.
     """
 
     subject: str
@@ -116,7 +70,7 @@ class DeviceCosting:
     provenance_ids: Tuple[int, ...]
     is_new_investment: bool  # charged at year 0 in this installation context
     first_replacement_year: int  # relative year of the first replacement
-    # Coupled-cost share and anyway threshold, resolved from the device entry (Q7):
+    # Coupled-cost share and anyway threshold, resolved from the device entry:
     energy_related_cost_share: UncertainValue
     anyway_threshold_years: float
     replaced_asset: Optional[ExistingAsset] = None
@@ -127,15 +81,12 @@ class DeviceCosting:
     purchase_override: Optional[UncertainValue] = None
 
     def purchase_blocks(self) -> Tuple[UncertainValue, UncertainValue, UncertainValue]:
-        """The year-0 purchase as ``(investment, planning, removal)``, the three year-0 categories.
+        """Return the year-0 purchase as `(investment, planning, removal)`, the three year-0 categories.
 
-        Without a stated purchase price these are the building blocks themselves, exactly as the
-        investment schedule and the subsidies read them. A stated price (a reader's quote,
-        renovisorissues #53) covers the whole job, so it is split over the three in the
-        proportions the database's own blocks have in the best-estimate slot: every consumer then
-        sees the quote in total, and a scheme that funds planning alone still sees a planning
-        share. When the database's blocks sum to nothing -- a subject whose request carried no
-        price -- the whole quote is investment.
+        Without a stated purchase price these are the building blocks themselves. A stated price (a reader's quote)
+        covers the whole job, so it is split in the proportions of the database's best-estimate blocks; a scheme
+        funding planning alone still sees a planning share. When the database's blocks sum to zero, the whole quote is
+        investment.
 
         Returns:
             The investment (device plus installation), planning and removal bands of the purchase.
@@ -161,9 +112,8 @@ class DeviceCosting:
     def purchased_gross(self) -> UncertainValue:
         """The gross investment of the year-0 purchase: investment plus planning, removal excluded.
 
-        ``gross_investment`` without a stated purchase price; with one, the quote less its removal
-        share (:meth:`purchase_blocks`). It is what the year-0 purchase is written down from and
-        what a coupled-cost anyway credit is a share of.
+        Equals `gross_investment` without a stated purchase price, else the quote less its removal share. The year-0
+        purchase is written down from it, and a coupled-cost anyway credit is a share of it.
         """
         if self.purchase_override is None:
             return self.gross_investment
@@ -174,12 +124,9 @@ class DeviceCosting:
     def gross_investment(self) -> UncertainValue:
         """I_gross = device + installation + planning (§3.6).
 
-        The reference amount three separate mechanisms are computed from, which is why it is one
-        property rather than three sums: replacements re-purchase it escalated (§3.6 rule 2), the
-        residual value writes it down straight-line (rule 3), and maintenance is a rate *of* it
-        (rule 4). The removal cost of a replaced asset is deliberately **not** part of it — it is
-        a one-off disposal charge, not something that recurs at every replacement or attracts a
-        maintenance rate — and enters the modernization-levy basis as its own addend instead.
+        Replacements re-purchase it escalated (§3.6 rule 2), the residual value writes it down straight-line (rule 3),
+        and maintenance is a rate of it (rule 4). The removal cost of a replaced asset is not part of it; it is a
+        one-off charge.
         """
         return self.device_cost + self.installation_cost + self.planning_cost
 
@@ -188,58 +135,45 @@ class DeviceCosting:
 class ReplacedAssetOutcome:
     """The §4.1 consequences of replacing an existing asset, for one subject.
 
-    `sunk_cost` is this subject's contribution to the reported write-off; `credit_entry` is the
-    ANYWAY_COST_CREDIT timeline entry, present only when a credit is actually due, and
-    `credit_amount` is that credit as a positive figure (it feeds the modernization-levy basis).
-
-    The two halves are separated because they go to different places and mean different things.
-    `evaluator.build_timeline` accumulates `sunk_cost` into `sunk_cost_written_off_in_euro`, which
-    is *reported but deliberately kept out of every decision KPI* — a sunk cost must not distort a
-    comparison, yet researchers want to see it (§4.1). `credit_entry` is real money in the
-    differential frame and goes onto the timeline; `credit_amount` is the same figure unmirrored,
-    summed into the avoided-maintenance deduction of the §6.4 levy basis. Both euro bands, both
-    cost-positive as stored here (only the entry itself carries the negative sign).
+    `sunk_cost` is the replaced asset's written-off residual book value; it is reported but kept out of decision KPIs.
+    `credit_entry` is the ANYWAY_COST_CREDIT timeline entry, present only when a credit is due; the anyway credit is
+    the avoided cost of a replacement that would have been paid anyway. `credit_amount` is that credit as a positive
+    figure, which feeds the modernization-levy basis (§6.4). All stored amounts are cost-positive euro bands; only the
+    entry itself is negative.
     """
 
     sunk_cost: UncertainValue
     credit_entry: Optional[CashFlowEntry] = None
     credit_amount: UncertainValue = UncertainValue.exact(0.0)
-    #: The Sowieso share the credit was computed at, for the audit trail and the report's
-    #: captions. 1.0 — a genuine like-for-like replacement — whenever the register declares none.
+    #: The anyway (Sowieso) share the credit was computed at, for the audit trail and captions.
+    #: 1.0, a like-for-like replacement, when the register declares none.
     anyway_share: float = 1.0
-    #: The cost the share was applied to, in nominal euro of the credit year, BEST_ESTIMATE slot:
-    #: the escalated like-for-like replacement price, or — on the Q7 coupled-cost branch — the
-    #: non-energy share of the new measure that would have been spent anyway. `share x this =
-    #: credit`, which is the multiplication the report has to show rather than assert. 0.0 when no
+    #: The cost the share was applied to, in nominal euro of the credit year, best-estimate slot:
+    #: the escalated like-for-like replacement price, or on the coupled-cost branch the non-energy
+    #: share of the new measure. `share x this = credit`, which the report shows. 0.0 when no
     #: credit is due.
     credit_basis_in_euro: float = 0.0
-    #: Which of the two quantities that basis is, from `results.AnywayBasisKinds`. The branch is
-    #: decided here and nowhere else, so the caption that words the multiplication reads the
-    #: answer rather than re-deriving it from a coupled-cost share it does not have.
+    #: Which of the two quantities that basis is, from `results.AnywayBasisKinds`, so the caption
+    #: does not have to re-derive it.
     credit_basis_kind: str = AnywayBasisKinds.LIKE_FOR_LIKE
 
 
 @dataclass(frozen=True)
 class InstallationVerdict:
-    """Whether one asset class is bought, kept or replacing something, before any price (§4.1).
+    """Whether one asset class is bought, kept or replacing something, decided before any price (§4.1).
 
-    Three outcomes, and the fields say which one without contradiction: a **replacement** is a new
-    investment with the register entry it replaces; a **kept** asset is no investment and names the
-    register entry it is; anything else is either a new investment of nothing registered
-    (GREENFIELD, or BROWNFIELD without a matching entry) or, under STATUS_QUO, no investment of
-    nothing registered. A replacement is always a new investment: STATUS_QUO carries out no
-    replacement, so its verdict never names one (:func:`installation_verdict`).
+    A replacement is a new investment naming the register entry it replaces; a kept asset is no investment and names
+    the register entry it is; otherwise the subject is a new investment of nothing registered (GREENFIELD, or
+    BROWNFIELD without a match) or, under STATUS_QUO, no investment.
 
     Attributes:
         is_new_investment: Whether the subject is charged at year 0.
-        replaced_asset: The register entry the subject replaces, if it replaces one.
-        kept_asset: The register entry the subject *is*, if it is a kept existing asset (under
-            BROWNFIELD or STATUS_QUO with a matching register entry that nothing replaces, or
-            under STATUS_QUO with any matching register entry).
+        replaced_asset: The register entry the subject replaces, if any.
+        kept_asset: The register entry the subject is, if it is a kept existing asset.
 
     Raises:
-        ValueError: On a verdict that is a replacement and not an investment, or kept and an
-            investment, or both a replacement and kept.
+        ValueError: On a replacement that is not an investment, a kept asset that is an investment, or both a
+            replacement and kept.
     """
 
     is_new_investment: bool
@@ -247,7 +181,7 @@ class InstallationVerdict:
     kept_asset: Optional[ExistingAsset] = None
 
     def __post_init__(self) -> None:
-        """Refuse the combinations :func:`installation_verdict` never produces."""
+        """Refuse the combinations `installation_verdict` never produces."""
         if self.replaced_asset is not None and self.kept_asset is not None:
             raise ValueError("an installation verdict is a replacement or a kept asset, never both")
         if self.replaced_asset is not None and not self.is_new_investment:
@@ -263,42 +197,28 @@ def installation_verdict(
     subject: Optional[str] = None,
     own_register_entry: bool = False,
 ) -> InstallationVerdict:
-    """Decide the §4.1 installation context of one asset class, touching no price and no ledger.
+    """Decide the §4.1 installation context of one asset class without touching prices or the ledger.
 
-    Under BROWNFIELD the replacement check runs FIRST, so a like-for-like measure (new windows
-    replacing old windows, same asset class) is charged as an investment instead of being
-    "kept". Under STATUS_QUO nothing is a new investment and so nothing is replaced: the register's
-    replacements are the measures the do-nothing reference does not carry out, and a matching
-    entry is a kept asset that ages toward its like-for-like replacement. Split out of
-    :func:`resolve_device` so the evaluator can ask, before it prices anything, which asset classes
-    an evaluation installs -- what the subsidy conditions' ``package.*`` fields report -- with
-    exactly the rule the pricing uses.
+    Under BROWNFIELD the replacement check runs first, so new windows replacing old windows count as an investment, not
+    as kept. Under STATUS_QUO nothing is a new investment and nothing is replaced; a matching entry is a kept asset
+    ageing toward its like-for-like replacement. The evaluator uses this before pricing to learn which asset classes an
+    evaluation installs (the subsidy conditions' `package.*` fields).
 
-    Before 2026-09-26 STATUS_QUO ran the replacement check too and returned "not a new investment,
-    replacing X": every consumer gates the replaced asset on ``is_new_investment``, so the removal,
-    write-off and credit it names were never booked, but it hid the kept asset of a like-for-like
-    replacement, whose first replacement then fell at a full service life instead of at its
-    remaining life.
-
-    A register entry bound to a subject (``ExistingAsset.subject``) is seen by that subject
-    alone, and a subject with ``own_register_entry`` sees nothing else: the increment a staged
-    plan adds to a kept subject is kept or bought on its own entry, never on the unit it enlarges
-    (hisim-1y0m). A register binding nothing reads exactly as before.
+    A register entry bound to a subject (`ExistingAsset.subject`) is seen only by that subject, and a subject with
+    `own_register_entry` sees no other entry; a staged plan's increment on a kept subject uses its own entry.
 
     Args:
         asset_class: The subject's asset class.
         context: The perspective's installation context.
-        register: The existing-asset register, or ``None`` for a greenfield run.
-        subject: The subject asked about; only read against bound entries.
-        own_register_entry: The subject's ``ComponentCostFacts.own_register_entry``.
+        register: The existing-asset register, or None for a greenfield run.
+        subject: The subject asked about; only compared with bound entries.
+        own_register_entry: The subject's `ComponentCostFacts.own_register_entry`.
 
     Returns:
         The verdict.
 
     Raises:
-        ValueError: When more than one register entry is declared replaced by ``asset_class``.
-            One subject replaces one asset; with two, the first match would silently decide whose
-            removal, write-off and anyway credit the subject carries and the other would be kept.
+        ValueError: When more than one register entry is declared replaced by `asset_class`.
     """
     replaced_asset: Optional[ExistingAsset] = None
     kept_asset: Optional[ExistingAsset] = None
@@ -336,11 +256,10 @@ def installation_verdict(
 
 
 def _age(asset: ExistingAsset, ageing_reference_year: int) -> int:
-    """The age a kept or replaced register asset is priced at (§4.1).
+    """Return the age a kept or replaced register asset is priced at (§4.1).
 
-    The age its caller states, when it states one -- the staged evaluator does for a subject an
-    earlier stage bought (:attr:`ExistingAsset.stated_age_in_years`, hisim-4uv9) -- and otherwise
-    its floored age at the timeline's year 0 (:meth:`ExistingAsset.age_in_years`).
+    The caller's stated age (`ExistingAsset.stated_age_in_years`, set by the staged evaluator for a subject an earlier
+    stage bought) if there is one, else its floored age at the timeline's year 0 (`ExistingAsset.age_in_years`).
     """
     if asset.stated_age_in_years is not None:
         return asset.stated_age_in_years
@@ -358,61 +277,39 @@ def resolve_device(
     price_basis_year: int,
     ageing_reference_year: int,
 ) -> DeviceCosting:
-    """Resolves one subject's cost building blocks and its installation context (§3.5, §4.1).
+    """Resolve one subject's cost building blocks and its installation context (§3.5, §4.1).
 
-    Two questions in one pass. First, *where does each number come from*: for every building
-    block (investment, installation, planning, maintenance rate, fixed O&M, service life,
-    embodied CO2) a component-declared override wins over the country's device entry for the
-    price basis year, and whichever wins is recorded in the provenance ledger — overrides as
-    `CONFIG_OVERRIDE` citing their `override_source`, database fields as the entry's own record
-    (W2.1). Second, *is this subject bought today*: the perspective's installation context plus
-    the existing-asset register decide whether the subject is a new investment, a like-for-like
-    or fuel-switching **replacement** of a registered asset, or a **kept** asset that costs
-    nothing at year 0 and merely ages toward its first replacement.
-
-    The order of the context checks is load-bearing and deliberately not "obvious": the
-    replacement check (`asset.replaced_by_asset_classes` names this class) runs *before* the
-    same-class "kept" lookup, so that new windows replacing old windows are charged as an
-    investment instead of silently counting as the existing element. STATUS_QUO always ends up
-    as "not a new investment" — that is what a do-nothing reference variant means — but an
-    unregistered class still gets its full service life as first replacement year.
+    For each building block (investment, installation, planning, maintenance rate, fixed operation cost, service life,
+    embodied CO2) a component override wins over the country's device entry for the price basis year, and the winner is
+    recorded in the provenance ledger. The installation context comes from `installation_verdict`: a new investment, a
+    replacement of a registered asset, or a kept asset that costs nothing at year 0 and is first replaced at its
+    remaining life. An unregistered class under STATUS_QUO gets its full service life as first replacement year.
 
     Args:
-        subject: Timeline subject name for this cost subject (component instance or measure).
-        facts: What the component/variant declared about itself — asset class, size, count,
-            optional per-field overrides (§3.3). No prices.
-        context: The perspective's installation context (GREENFIELD / BROWNFIELD / STATUS_QUO /
-            OPERATING_ONLY, §4.1).
-        existing_assets: Register of what is physically already in the building; `None` for a
-            greenfield run.
-        ledger: Provenance ledger; every priced field resolved here is interned into it (§3.10).
-        database: Loaded cost database for the country's device entries (§3.5).
-        parameters: Economic parameters — supplies the country and the default
-            `anyway_threshold_years`.
-        price_basis_year: The economic "today"; device entries are looked up for it, deliberately
-            not for the simulated weather year.
-        ageing_reference_year: The calendar year of the timeline's year 0, at which a kept
-            asset's age is measured: the price basis year on every path but a staged plan, which
-            passes its own year 0 (:meth:`hisim.economics.staged.StagedEvaluator.plan_year_zero`).
-            A kept asset with a ``stated_age_in_years`` takes that age instead.
+        subject: Timeline subject name (component instance or measure).
+        facts: What the component declared: asset class, size, count, optional per-field overrides (§3.3). No prices.
+        context: The perspective's installation context (§4.1).
+        existing_assets: Register of what is already installed; None for a greenfield run.
+        ledger: Provenance ledger; every priced field resolved here is recorded in it (§3.10).
+        database: Loaded cost database (§3.5).
+        parameters: Economic parameters; supply the country and the default `anyway_threshold_years`.
+        price_basis_year: The economic "today" the device entries are looked up for, not the weather year.
+        ageing_reference_year: Calendar year of the timeline's year 0, at which a kept asset's age is measured; the
+            price basis year except for a staged plan (`StagedEvaluator.plan_year_zero`).
 
     Returns:
-        A `DeviceCosting` with every building block banded and sized, the installation-context
-        verdict (`is_new_investment`, `first_replacement_year`, `replaced_asset`) and the
-        provenance ids of everything that entered it.
+        A `DeviceCosting` with every block banded and sized, the installation verdict (`is_new_investment`,
+            `first_replacement_year`, `replaced_asset`) and the provenance ids used.
 
     Raises:
-        CostDataError: If no device entry exists for the asset class, country and year *and* the
-            component did not override both the investment cost and the lifetime — the two fields
-            that cannot be defaulted. A missing entry is otherwise tolerated field by field.
+        CostDataError: If no device entry exists for the asset class, country and year and the component does not
+            override both the investment cost and the lifetime.
     """
     year = price_basis_year
     entry: Optional[DeviceEntry] = None
     provenance_ids: List[int] = []
-    # W2.1: the entry is resolved *with* the provenance of every field this subject will be
-    # priced from — which fields those are is decided by the overrides, so it is declared here
-    # and recorded by the database layer. Fields an override supersedes are not requested: the
-    # override's own record replaces them, exactly as before.
+    # The entry is resolved with the provenance of every field this subject is priced from. Fields
+    # an override supersedes are not requested; the override's own record replaces them.
     priced_fields = [
         field_name
         for field_name, is_overridden in (
@@ -480,7 +377,7 @@ def resolve_device(
         service_life = facts.lifetime_override_in_years
         provenance_ids.append(override_record("lifetime_override_in_years", service_life))
     elif facts.lifetime_of_asset_class is not None:
-        # Part of another subject's system: renewed on that class's life (renovisorissues #77).
+        # Part of another subject's system: renewed on that class's life.
         companion = database.resolve_device_entry(
             facts.lifetime_of_asset_class, year, parameters.country, ledger, ["service_life_in_years"]
         )
@@ -508,10 +405,9 @@ def resolve_device(
     replaced_asset = verdict.replaced_asset
     first_replacement_year = int(round(service_life))
     if verdict.kept_asset is not None:
-        # Kept asset: no investment; first replacement at service_life - current_age.
-        # Ages anchor on the timeline's year 0: the price basis year (the economic "today", like
-        # scheme validity and the CO2 path) when nothing is stated, a staged plan's own year 0
-        # when the caller passes one; never the possibly historical weather year.
+        # Kept asset: no investment; first replacement at service_life - current_age. Ages are
+        # measured at the timeline's year 0 (the price basis year, or a staged plan's own year 0),
+        # never at the weather year.
         age = _age(verdict.kept_asset, ageing_reference_year)
         first_replacement_year = max(1, int(round(service_life - age)))
     if context == InstallationContext.STATUS_QUO and register is None:
@@ -524,10 +420,8 @@ def resolve_device(
 
     removal_cost = UncertainValue.exact(0.0)
     if is_new_investment and replaced_asset is not None:
-        # Disposal of the replaced device type (§3.5 removal_cost). Deliberately the raw lookup:
-        # this field never had a provenance record of its own (the removal entry rides on the
-        # measure's provenance ids), and W2.1 preserves the ledger content exactly. Recording it
-        # is a separate, deliberate change — see the W2.1 note in cost-spec-v2 §2.2.
+        # Disposal of the replaced device type (§3.5 removal_cost). A raw lookup: the removal entry
+        # carries the measure's provenance ids and has no ledger record of its own.
         try:
             old_entry = database.get_device_entry(replaced_asset.asset_class, year, parameters.country)
             removal_cost = old_entry.removal_cost_in_euro
@@ -572,66 +466,41 @@ def resolve_replaced_asset(
     ageing_reference_year: int,
     ledger: Optional[ProvenanceLedger] = None,
 ) -> ReplacedAssetOutcome:
-    """Sunk cost and anyway-cost credit for the asset this measure replaces (§4.1, Q7).
+    """Compute the sunk cost and the anyway credit for the asset a measure replaces (§4.1).
 
-    Only called for measures that are charged at year 0 and do replace a registered asset.
+    Called only for measures charged at year 0 that replace a registered asset. The sunk cost is the old asset's
+    straight-line residual book value, `like_for_like_price * remaining_life / service_life`; it is reported but kept
+    out of decision KPIs. The anyway credit applies when the old asset had at most `anyway_threshold_years` left: the
+    replacement it would have needed anyway is credited, so only the extra cost of the measure is charged.
 
-    Two figures, both about the *old* asset. The **sunk cost** is its straight-line residual book
-    value — `like_for_like_price * remaining_life / service_life`, in euro at price-basis-year
-    prices — thrown away by replacing it early; the evaluator reports it and keeps it out of every
-    decision KPI. The **anyway-cost credit** is the differential-comparison correction of the EU
-    cost-optimal methodology: if the old asset had at most `anyway_threshold_years` of life left,
-    the replacement it no longer needs would have been paid regardless, so its cost is credited
-    against the measure and only the *extra* cost of choosing a heat pump over a new boiler is
-    charged. Above the threshold no credit is due and the full measure price stands.
-
-    Which credit is computed depends on the coupled-cost share (spec Q7). With
-    `energy_related_cost_share < 1` — envelope measures, where scaffolding and render would have
-    been paid anyway — the credit is the *non-energy* share of this measure's own gross cost;
-    otherwise it is the avoided like-for-like replacement of the old asset. The two are mutually
-    exclusive by construction so they can never double count, and each is escalated to
-    `credit_year` (the old asset's remaining life, rounded) with its own asset class's investment
-    escalation rate.
-
-    **The anyway share** scales whichever of the two applies:
-    `credit = anyway_share × like-for-like cost @ credit_year`. It is the Sowieso-Kosten question
-    the previous version answered with an implicit 1.0 for everything — "how much of this measure
-    would the counterfactual really have paid?" Replacing dead windows with windows: all of it.
-    Insulating a facade that was never insulated: only the repair share, because the world without
-    the renovation would have rendered and painted, not insulated. Crediting the full insulation
-    price there was crediting money nobody would ever have spent, and it made every first-time
-    envelope improvement look tens of thousands of euros cheaper than it is.
+    With `energy_related_cost_share < 1` (envelope measures, where scaffolding and render are paid anyway) the credit
+    is the non-energy share of the measure's own gross cost; otherwise it is the old asset's like-for-like replacement.
+    Either is escalated to `credit_year` (the remaining life, rounded) and then scaled by the anyway share, the
+    fraction the counterfactual would really have paid: 1.0 for dead windows replaced by windows, only the repair share
+    for a facade that was never insulated.
 
     Args:
-        costing: The replacing measure's resolved costing; supplies `replaced_asset` (with its
-            anyway share), the coupled-cost share and the anyway threshold for this class.
-        gross: The measure's own gross investment (euro band), used only for the coupled-cost
-            branch.
+        costing: The replacing measure's costing; supplies `replaced_asset` (with its anyway share), the coupled-cost
+            share and the anyway threshold.
+        gross: The measure's own gross investment band, used only on the coupled-cost branch.
         database: Loaded cost database, for the replaced asset's price and service life.
-        parameters: Economic parameters — country and the escalation-rate fallback chains.
+        parameters: Economic parameters: the country and the escalation-rate fallbacks.
         price_basis_year: The economic "today" the replaced asset's price is looked up for.
-        ageing_reference_year: The calendar year of the timeline's year 0, at which the replaced
-            asset's age is measured (see :func:`resolve_device`); a replaced asset with a
-            ``stated_age_in_years`` takes that age instead.
-        ledger: Provenance ledger; the applied anyway share is recorded into it so the credit's
-            basis is traceable with `explain`. Optional only because the tests that exercise the
-            arithmetic alone do not carry one.
+        ageing_reference_year: Calendar year of the timeline's year 0, at which the replaced asset's age is measured.
+        ledger: Provenance ledger the applied anyway share is recorded in; optional for arithmetic-only tests.
 
     Returns:
-        A `ReplacedAssetOutcome`. `sunk_cost` is always present (possibly zero); `credit_entry` is
-        `None` unless a credit is actually due and positive, in which case it is a revenue-mirrored
-        ANYWAY_COST_CREDIT entry at `credit_year` and `credit_amount` mirrors it cost-positive.
+        A `ReplacedAssetOutcome`. `sunk_cost` is always present (possibly zero); `credit_entry` is None unless a
+            positive credit is due, in which case it is a negative ANYWAY_COST_CREDIT entry at `credit_year`.
 
     Raises:
-        CostDataError: When the replaced asset's class has no database entry and the register
-            declared no `replacement_cost_override_in_euro` for it — see
-            `ContextResolutionConstants` for why that combination cannot be assumed away.
+        CostDataError: When the replaced asset's class has no database entry and the register declares no
+            `replacement_cost_override_in_euro` for it.
     """
     replaced = costing.replaced_asset
     assert replaced is not None
     try:
-        # Raw lookup for the same reason as the removal cost above: the replaced asset's own
-        # entry contributes no ledger record today, and W2.1 keeps the ledger content unchanged.
+        # Raw lookup, as for the removal cost above: the replaced asset's own entry adds no ledger record.
         old_entry = database.get_device_entry(replaced.asset_class, price_basis_year, parameters.country)
         like_for_like = (
             replaced.replacement_cost_override_in_euro
@@ -640,9 +509,8 @@ def resolve_replaced_asset(
         old_life = old_entry.service_life_in_years
     except CostDataError as err:
         if replaced.replacement_cost_override_in_euro is None:
-            # No entry and no declared price: the sunk cost and the anyway-cost threshold would
-            # both be invented (a 0 EUR like-for-like and a guessed service life), and the
-            # register would silently mis-state the decision situation (issue #25c).
+            # No entry and no declared price: the sunk cost and the anyway threshold would both be
+            # invented, so refuse.
             raise CostDataError(
                 f"Registered existing asset {replaced.asset_class.value} has no cost database "
                 f"entry for {parameters.country} at price basis year {price_basis_year} and no "
@@ -661,10 +529,9 @@ def resolve_replaced_asset(
     anyway_share = replaced.anyway_share
     share = costing.energy_related_cost_share
     if share.best_estimate < 1.0:
-        # Coupled-cost credit (Q7): the non-energy share of the measure
-        # (scaffolding, render, standard glazing) would have been spent
-        # anyway when the old element was due — it replaces the
-        # like-for-like credit so the two never double count.
+        # Coupled-cost credit: the non-energy share of the measure (scaffolding, render, standard
+        # glazing) would have been spent anyway; it replaces the like-for-like credit, so the two
+        # never double count.
         non_energy_share = UncertainValue(
             best_estimate=1.0 - share.best_estimate,
             minimum=1.0 - share.maximum,
@@ -677,15 +544,11 @@ def resolve_replaced_asset(
         credit = escalate(like_for_like, old_rate, credit_year)
     else:
         credit = UncertainValue.exact(0.0)
-    # The Sowieso share is applied to whichever branch produced the credit, last, so that the
-    # escalated like-for-like cost stays the stated basis and the share stays a visible factor on
-    # top of it rather than something folded into a price. That basis is captured here, before the
-    # share scales it, because it is exactly the number the report multiplies out.
+    # The anyway share is applied last, to whichever branch produced the credit, so the report can
+    # show the escalated basis and the share as separate factors. The basis is captured before scaling.
     credit_basis = credit.best_estimate
-    # What the basis *is* differs by branch, and the provenance detail has to say which: on the
-    # coupled-cost branch it is the non-energy share of the measure being built now, on the other
-    # it is the escalated like-for-like cost of the device being replaced. One wording for both
-    # would describe the wrong quantity in one of them.
+    # The provenance detail names which quantity the basis is: the non-energy share of the new
+    # measure on the coupled-cost branch, the escalated like-for-like cost otherwise.
     credit_basis_kind = (
         AnywayBasisKinds.NON_ENERGY_SHARE
         if share.best_estimate < 1.0

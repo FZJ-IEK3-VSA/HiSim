@@ -1,35 +1,12 @@
-"""Serialization of evaluator inputs for post-hoc re-pricing (cost_spec.md §4.6).
+"""Serialization of evaluator inputs and stored results, for re-pricing without re-simulating (cost_spec.md §4.6).
 
-All evaluator inputs are serialized into the result directory (`economic_inputs.json`,
-accompanied by `cost_provenance.json`) so new economic assumptions never require re-running
-the building simulation.
-
-**This module implements the seam-1 contract of cost-spec-v2 §2.1.** The engine is required to be
-a pure function of a JSON file: everything the evaluator needs about one simulated variant must
-survive being written to disk and read back, so that re-pricing an archived run under new interest
-rates, an updated subsidy catalog or a reviewer's "what if" never re-runs the building simulation.
-That is also what makes the two error classes separable — "the wrong physical quantities went in"
-is a question about this file, "they were priced wrong" is a question about everything downstream
-of it — and what lets the downstream tests be small hand-written JSON files with exact expected
-results instead of simulation runs.
-
-**Round-trip fidelity is therefore the property under test**, not an implementation detail:
-`tests/test_economics_data_and_integration.py` writes inputs, reads them back and asserts that the
-reloaded record evaluates to the same NPV per slot, that a `SubsidyBuildingContext.existing_heating`
-survives with every attribute (it decides the BEG speed bonus — dropping it used to silently degrade
-that scheme, cost-spec-v2 W1.3), and that a `TariffContract` which exists in no catalog file
-round-trips byte-equal and prices identically (W1.4). A field that does not round-trip is a bug of
-exactly the class this seam exists to prevent: it makes an archived run re-price differently from
-the run that produced it, silently and without any error to catch. The one *deliberate* exception is
-the default tariff contract synthesized from the §3.5 price entries — it is written for the record
-but not restored, because it is derived data the evaluator regenerates at the price basis year, and
-restoring it would freeze the shipped prices and defeat scenario price overlays.
-
-The module owns nothing economic: no defaults, no fallbacks, no validation beyond what the target
-types enforce in their own constructors. It also owns the *inverse* direction (below the "stored
-results" divider, W4.5): reading `lifecycle_costs.json`, `cash_flow_timeline.csv` and
-`cost_provenance.json` back into a full `EvaluationMatrix`, so `python -m hisim.economics report`
-renders a stored evaluation instead of quietly performing a new one.
+Everything the evaluator needs about one simulated variant is written to ``economic_inputs.json`` and read back, so an
+archived run can be re-priced under new rates or catalogs and evaluate to the same result. A field that does not
+round-trip would make an archived run re-price differently from the original. The one deliberate exception is the
+default tariff contract built from the §3.5 price entries: it is written but not restored, because the evaluator
+regenerates it at the price basis year. The second half of the module reads ``lifecycle_costs.json``,
+``cash_flow_timeline.csv`` and ``cost_provenance.json`` back into an `EvaluationMatrix`, so ``python -m hisim.economics
+report`` renders a stored evaluation instead of re-evaluating.
 """
 
 from __future__ import annotations
@@ -82,38 +59,29 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource, KpiTag
 
 
 class SerializationFileNames:
-    """Names of the files the input/provenance serialization writes.
+    """Names of the files the input and provenance serialization writes.
 
-    Kept as named constants rather than literals because both directions of the seam and several
-    unrelated readers (the CLI, the parity pass, the report layer, archived-result tooling) address
-    the same two files; the export-side names live in `exports.ExportFileNames`.
+    Export file names are in `exports.ExportFileNames`.
     """
 
     ECONOMIC_INPUTS_FILE_NAME = "economic_inputs.json"
     PROVENANCE_FILE_NAME = "cost_provenance.json"
 
-    #: Top-level key of `economic_inputs.json` holding the country the run was priced for. One of
-    #: the two economic values in a file that otherwise carries only the simulation's extract,
-    #: because it is a fact of the house and a re-pricing consumer cannot derive or default it.
+    #: Top-level key of `economic_inputs.json` holding the country the run was priced for. A re-pricing consumer
+    #: cannot derive or default it.
     COUNTRY_KEY = "country"
 
-    #: Top-level key holding the *resolved* price basis year the run actually priced at — the
-    #: `EconomicParameters.price_basis_year` when one was set, else what
-    #: `evaluator.effective_price_basis_year` picked. The second value that travels with the
-    #: extract, for the same reason as the country: a consumer holding only this file would
-    #: otherwise re-derive a different year and publish a plan priced at a different price level
-    #: than the runs behind it.
+    #: Top-level key holding the resolved price basis year the run priced at: `EconomicParameters.price_basis_year`
+    #: when set, else what `evaluator.effective_price_basis_year` picked. A consumer holding only this file would
+    #: otherwise re-derive a possibly different year.
     PRICE_BASIS_YEAR_KEY = "price_basis_year"
 
 
 def facts_to_json(facts: ComponentCostFacts) -> dict:
-    """Serializes ComponentCostFacts.
+    """Serialize `ComponentCostFacts`, including per-field overrides and `override_source`.
 
-    Writes every declared field including the per-field overrides and `override_source`, so a
-    re-priced run applies exactly the same overrides — and stays as traceable — as the original.
-    Enums are stored by `name` (asset class, size unit) and the KPI tag by its value; the free-form
-    `technical_attributes` dict passes through unchanged, which is why `ComponentCostFacts` requires
-    it to be JSON-serializable in the first place.
+    Enums are stored by name (asset class, size unit) and the KPI tag by its value; `technical_attributes` passes
+    through unchanged, so it must be JSON-serializable.
     """
     return {
         "asset_class": facts.asset_class.name,
@@ -141,13 +109,10 @@ def facts_to_json(facts: ComponentCostFacts) -> dict:
 
 
 def facts_from_json(raw: dict) -> ComponentCostFacts:
-    """Deserializes ComponentCostFacts.
+    """Deserialize `ComponentCostFacts`, the inverse of `facts_to_json`.
 
-    The exact inverse of `facts_to_json`. Optional keys are read with `.get` and their dataclass
-    defaults, so a file written by an older version still loads; note that this reconstruction runs
-    through `ComponentCostFacts.__post_init__`, i.e. the same fail-fast validation a component
-    declaration goes through — a hand-edited inputs file with an implausible size or an unpriceable
-    size unit is rejected here rather than producing nonsense downstream.
+    Optional keys fall back to their dataclass defaults. Construction runs `ComponentCostFacts.__post_init__`, so a
+    hand-edited file with an implausible size or unknown size unit is rejected here.
     """
     kpi_tag = None
     if raw.get("kpi_tag"):
@@ -175,7 +140,7 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
         lifetime_of_asset_class=(
             ComponentType[raw["lifetime_of_asset_class"]] if raw.get("lifetime_of_asset_class") else None
         ),
-        # Both absent in facts written before a staged plan split an enlarged subject (hisim-1y0m).
+        # Both keys are optional; older files lack them.
         own_register_entry=bool(raw.get("own_register_entry", False)),
         share_of_energy_sold=float(raw.get("share_of_energy_sold", 1.0)),
         technical_attributes=raw.get("technical_attributes", {}),
@@ -183,14 +148,11 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
 
 
 def billing_to_json(determinants: BillingDeterminants) -> dict:
-    """Serializes BillingDeterminants.
+    """Serialize `BillingDeterminants`: one record per carrier that crossed the system boundary (§3.4).
 
-    One record per carrier that crossed the system boundary (§3.4), carrying everything a tariff
-    needs to bill it: annual volumes bought and sold, the time-of-use band split, the billing-period
-    and annual peaks for capacity charges (§8.4), and — for dynamic tariffs — the in-simulation
-    integrated cost/revenue and mean spot price. Every quantity is in kilowatt-hours, for every
-    carrier: the `_in_kwh` field names are literally true since prices, not quantities, carry the
-    conversion out of EUR/t and EUR/l (D26).
+    Holds annual volumes bought and sold, the time-of-use band split, the peaks for capacity charges (§8.4), and for
+    dynamic tariffs the integrated cost, revenue and mean spot price. Every quantity is in kWh for every carrier;
+    conversion from EUR/t or EUR/l happens on the price side.
     """
     return {
         "carrier": determinants.carrier.value,
@@ -206,11 +168,9 @@ def billing_to_json(determinants: BillingDeterminants) -> dict:
 
 
 def billing_from_json(raw: dict) -> BillingDeterminants:
-    """Deserializes BillingDeterminants.
+    """Deserialize `BillingDeterminants`; only carrier and bought volume are required.
 
-    Only carrier and bought volume are required; every other determinant defaults to its
-    "not measured" value, so a hand-written test input can state a bare annual consumption and be
-    billed against a flat tariff without inventing peaks or band splits.
+    Every other determinant defaults to "not measured", so a test input can state a bare annual consumption.
     """
     return BillingDeterminants(
         carrier=EnergyCarrier(raw["carrier"]),
@@ -226,15 +186,12 @@ def billing_from_json(raw: dict) -> BillingDeterminants:
 
 
 def asset_to_json(asset: ExistingAsset) -> dict:
-    """Serializes a single existing asset.
+    """Serialize one existing asset, i.e. a piece of the building as it was before the measure.
 
-    An `ExistingAsset` is a piece of the building as it was *before* the measure, and the fields
-    below are exactly what the brownfield arithmetic of §4.1 needs: installation year (drives
-    remaining life, first replacement and the anyway-cost credit), functionality, carrier, an
-    optional like-for-like replacement price, `anyway_share` (the Sowieso share the credit is
-    computed at) and `replaced_by_asset_classes` — the declaration that
-    turns "kept" into "replaced by this measure". Used both for register entries and for the
-    subsidy context's `existing_heating`, which the BEG speed bonus conditions on.
+    The fields are what the brownfield arithmetic of §4.1 needs: installation year (remaining life, first replacement,
+    anyway credit), functionality, carrier, an optional like-for-like replacement price, `anyway_share` (the share of
+    the avoided like-for-like replacement credited, "Sowieso" share) and `replaced_by_asset_classes`, which marks it as
+    replaced by the measure. Used for register entries and for the subsidy context's `existing_heating`.
     """
     return {
         "asset_class": asset.asset_class.name,
@@ -254,10 +211,9 @@ def asset_to_json(asset: ExistingAsset) -> dict:
 
 
 def asset_from_json(item: dict) -> ExistingAsset:
-    """Deserializes a single existing asset.
+    """Deserialize one existing asset, the inverse of `asset_to_json`.
 
-    Inverse of `asset_to_json`; `is_functional` defaults to True and the replacement declarations to
-    empty, which is the "an old but working device is simply there" reading.
+    `is_functional` defaults to True and the replacement declarations to empty: an old but working device that stays.
     """
     return ExistingAsset(
         asset_class=ComponentType[item["asset_class"]],
@@ -270,26 +226,23 @@ def asset_from_json(item: dict) -> ExistingAsset:
         is_functional=item.get("is_functional", True),
         energy_carrier=EnergyCarrier(item["energy_carrier"]) if item.get("energy_carrier") else None,
         replaced_by_asset_classes=[ComponentType[name] for name in item.get("replaced_by_asset_classes", [])],
-        # Absent in a register written before the Sowieso share existed, which means the
-        # implicit full like-for-like credit the field now makes explicit.
+        # Optional key; older files lack it, and 1.0 is the full like-for-like credit.
         anyway_share=item.get("anyway_share", 1.0),
-        # Absent in a register written before the result document published where a year came from.
+        # Optional key; older files lack it.
         installation_year_origin=(
             InstallationYearOrigin(item["installation_year_origin"])
             if item.get("installation_year_origin")
             else None
         ),
-        # Absent in a register written before an entry could be bound to a subject (hisim-1y0m).
+        # Optional key; older files lack it.
         subject=item.get("subject"),
     )
 
 
 def register_to_json(register: Optional[ExistingAssetRegister]) -> Optional[list]:
-    """Serializes the existing-asset register.
+    """Serialize the existing-asset register, keeping None distinct from an empty list.
 
-    The None/list distinction carries real meaning here and must survive the file: no register at
-    all means greenfield, and an empty list means "a brownfield situation with nothing worth
-    registering" — the former evaluates the greenfield perspectives, the latter the brownfield ones
+    None means greenfield; an empty list means brownfield with nothing registered. Each selects different perspectives
     (`perspectives.select_applicable`).
     """
     if register is None:
@@ -305,16 +258,10 @@ def register_from_json(raw: Optional[list]) -> Optional[ExistingAssetRegister]:
 
 
 def subsidy_context_to_json(context: SubsidyContext) -> dict:
-    """Serializes the subsidy context.
+    """Serialize the subsidy context: the applicant and building answers the eligibility conditions read (§5.3, §5.7).
 
-    The applicant/building answers the §5.3 eligibility conditions resolve against — everything the
-    §5.7 questionnaire asks. Every field is written even when None, because in the condition language
-    an unanswered field is *undetermined* (reported as such, with an upper bound on what it could
-    have been worth) rather than false, and that tri-state has to survive re-pricing.
-
-    `building.existing_heating` in particular is load-bearing: the shipped DE catalog's BEG speed
-    bonus conditions on it, and it was silently dropped here until cost-spec-v2 W1.3 — re-priced
-    runs used to lose that bonus without a word.
+    Every field is written even when None, because an unanswered field is undetermined in the condition language, not
+    false. `building.existing_heating` matters for the DE catalog's BEG speed bonus.
     """
     building = context.building
     return {
@@ -344,16 +291,13 @@ def subsidy_context_to_json(context: SubsidyContext) -> dict:
 
 
 def subsidy_context_from_json(raw: dict) -> SubsidyContext:
-    """Deserializes the subsidy context.
+    """Deserialize the subsidy context; an empty dict yields an owner-occupier context with nothing answered.
 
-    Tolerant by construction: an empty dict yields a default owner-occupier context with everything
-    unanswered, which is what a run without an `EconomicContext` produces. Only `heritage_status`
-    is defaulted to a concrete value (NONE) rather than left None, mirroring
-    `SubsidyBuildingContext`'s own default.
+    Only `heritage_status` gets a concrete default (NONE), as in `SubsidyBuildingContext`.
     """
     applicant_raw = raw.get("applicant", {})
     building_raw = raw.get("building", {})
-    # Absent in files written before the field was round-tripped; stays None there.
+    # Optional key; older files lack it and the value stays None.
     existing_heating_raw = building_raw.get("existing_heating")
     return SubsidyContext(
         applicant=ApplicantProfile(
@@ -386,13 +330,10 @@ def subsidy_context_from_json(raw: dict) -> SubsidyContext:
 
 
 def _attribution_from_json(raw: dict, key: str, context: str) -> Dict[str, Dict[str, float]]:
-    """Reads one per-subject energy-attribution map back, refusing a negative quantity.
+    """Read one per-subject energy-attribution map back, refusing a negative quantity.
 
-    Both sides of the round trip carry a map of this shape — the extract's simulated-period one
-    and the result's annualized one — and both are read back here so a hand-edited or
-    foreign-written file cannot put a negative magnitude into the household balance. Absent is not
-    an error: it is what every file written before the field existed looks like, and the chart
-    skips itself on the empty map.
+    Used for the extract's simulated-period map and the result's annualized map. An absent key yields an empty map, and
+    the energy balance chart then skips itself.
 
     Args:
         raw: The decoded JSON object holding the map.
@@ -400,7 +341,7 @@ def _attribution_from_json(raw: dict, key: str, context: str) -> Dict[str, Dict[
         context: The dotted field path, for the error message.
 
     Returns:
-        Subject -> role -> kWh, empty when the key is absent.
+        Subject to role to kWh, empty when the key is absent.
 
     Raises:
         ValueError: If any quantity is negative.
@@ -414,24 +355,12 @@ def _attribution_from_json(raw: dict, key: str, context: str) -> Dict[str, Dict[
 
 
 def inputs_to_json(inputs: EvaluationInputs) -> dict:
-    """Serializes EvaluationInputs to the economic_inputs.json structure.
+    """Serialize `EvaluationInputs` to the ``economic_inputs.json`` structure.
 
-    The seam-1 payload: every field of `EvaluationInputs` appears here, which is the property that
-    makes the evaluator a pure function of this file. No economic *assumption* is written — no
-    prices, no rates, no perspective, not even the price basis year, which is re-derived
-    downstream from `simulation_year` so the postprocessing bridge and the `evaluate` CLI cannot
-    drift apart (cost-spec-v2 W1.2). The two exceptions are the country and the *resolved* price
-    basis year, which `write_inputs` adds beside this payload: neither is an assumption a later
-    caller may change, and both are things a re-pricing consumer holding only this file cannot
-    derive — the country decides which price data and which subsidy catalogue apply, and the
-    basis year decides at which price level the run was costed, which a consumer that re-derived
-    it from `simulation_year` would silently get wrong. They are written by `write_inputs` rather
-    than here so that this function stays exactly "every field of `EvaluationInputs`, and nothing
-    else".
-
-    Adding a field to `EvaluationInputs` without adding it here silently breaks re-pricing, since
-    the reader would fall back to that field's default. The round-trip tests in
-    `tests/test_economics_data_and_integration.py` are what catch it.
+    Every field of `EvaluationInputs` appears and no economic assumption does (no prices, rates or perspectives); the
+    price basis year is derived downstream from `simulation_year`. `write_inputs` adds the country and the resolved
+    price basis year beside this payload. A field added to `EvaluationInputs` but not here is lost on re-pricing; the
+    round-trip tests in ``tests/test_economics_data_and_integration.py`` catch that.
     """
     return {
         "simulation_year": inputs.simulation_year,
@@ -441,23 +370,22 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
             for subject_facts in inputs.cost_facts
         ],
         "billing": [billing_to_json(determinants) for determinants in inputs.billing],
-        # Per-subject energy-balance flows (simulated-period kWh per role). Additive: nothing
-        # prices it, but it has to survive the round trip or a re-priced archive would silently
-        # lose the household energy balance it was extracted for.
+        # Per-subject energy-balance flows (simulated-period kWh per role). Nothing prices them, but they must
+        # survive the round trip or a re-priced archive would lose the household energy balance.
         "energy_attribution_by_subject_in_kwh": {
             subject: dict(by_role)
             for subject, by_role in inputs.energy_attribution_by_subject_in_kwh.items()
         },
-        # Extraction failures travel with the extract (issue #2): re-pricing an archived run must
-        # hit the same D7 wall as the original one, not quietly price a smaller system.
+        # Extraction failures travel with the extract, so re-pricing an archived run fails the same way as the
+        # original instead of pricing a smaller system.
         "unresolved_subjects": [
             {"subject": unresolved.subject, "reason": unresolved.reason}
             for unresolved in inputs.unresolved_subjects
         ],
         "existing_assets": register_to_json(inputs.existing_assets),
         "subsidy_context": subsidy_context_to_json(inputs.subsidy_context),
-        # Contracts are embedded in full (W1.4): the file is self-contained, so re-pricing uses
-        # byte-identical contract data instead of whatever the tariffs directory happens to hold.
+        # Contracts are embedded in full, so re-pricing uses the same contract data rather than whatever the
+        # tariffs directory holds.
         "tariff_contracts": {
             carrier.value: contract_to_json(contract) for carrier, contract in inputs.tariff_contracts.items()
         },
@@ -471,8 +399,8 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
         "heated_floor_area_in_m2": inputs.heated_floor_area_in_m2,
         "living_area_in_m2": inputs.living_area_in_m2,
         "current_cold_rent_in_euro_per_m2_month": inputs.current_cold_rent_in_euro_per_m2_month,
-        # Which subjects are HiSim components, and their KPI source (kpi_address_spec.md); the
-        # staged document's rows carry it. None only for a record read from a file older than it.
+        # Which subjects are HiSim components, and their KPI source (kpi_address_spec.md); the staged document's
+        # rows carry it. None only for a record read from an older file.
         "component_sources": (
             None
             if inputs.component_sources is None
@@ -482,24 +410,13 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
 
 
 def contracts_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Dict[EnergyCarrier, Any]:
-    """Reads the tariff contracts of an inputs file.
+    """Read the tariff contracts of an inputs file.
 
-    Preferred form (W1.4): ``tariff_contracts`` holds the full contract objects, so no catalog
-    lookup happens and contracts that exist in no file survive the round trip. Files written
-    before that (``tariff_contract_ids``) are still read by resolving the ids against the
-    tariffs directory. In both forms, contracts generated from the §3.5 price entries are
-    skipped: they are derived data that the evaluator regenerates at the price basis year, which
-    keeps scenario price overlays effective.
-
-    How a generated contract is recognized differs between the two forms, and only because it has
-    to: an embedded contract declares itself through the typed ``is_default_contract`` flag, while
-    an id-only file offers nothing but the id — and a generated contract has no catalog file to
-    load and ask. `TariffContract.is_default_contract_id` therefore answers that from the id shape,
-    next to the code that mints it, instead of the substring split against a hardcoded pair of
-    countries this function used to do (which sent a generated contract for any third country to
-    the catalog loader, where it failed). An id that survives that check is loaded and its flag
-    tested too, so a default contract that *was* written to a file is still skipped by its own
-    declaration.
+    ``tariff_contracts`` holds full contract objects; older files hold ``tariff_contract_ids``, resolved against the
+    tariffs directory. Contracts generated from the §3.5 price entries are skipped in both forms, because the evaluator
+    regenerates them at the price basis year (which keeps scenario price overlays effective). An embedded contract is
+    recognized by its ``is_default_contract`` flag, an id by `TariffContract.is_default_contract_id`; a loaded id-only
+    contract whose flag is set is skipped too.
     """
     contracts: Dict[EnergyCarrier, Any] = {}
     embedded = raw.get("tariff_contracts")
@@ -521,21 +438,17 @@ def contracts_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> D
 
 
 def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> EvaluationInputs:
-    """Deserializes EvaluationInputs (`tariffs_base_path` only matters for old id-only files).
+    """Deserialize `EvaluationInputs`; only `simulation_year` and `simulated_period_fraction` are required.
 
-    The entry point of every downstream consumer that did not run the simulation itself: the
-    `evaluate` / `explain` / `report` CLI commands, the parity pass, and the downstream half of the
-    seam-1 test strategy (hand-written input files with exact expected results). Only
-    `simulation_year` and `simulated_period_fraction` are mandatory; everything else degrades to the
-    dataclass default, so a minimal file stays a legitimate input.
+    Used by every consumer that did not run the simulation: the `evaluate`, `explain` and `report` CLI commands, the
+    parity pass, and tests with hand-written input files. Other fields fall back to their dataclass defaults.
 
     Args:
-        raw: The parsed `economic_inputs.json` payload.
-        tariffs_base_path: Directory to resolve contract *ids* against — needed only for files
-            written before contracts were embedded in full (W1.4).
+        raw: The parsed ``economic_inputs.json`` payload.
+        tariffs_base_path: Directory to resolve contract ids against; needed only for older files that store ids.
 
     Returns:
-        The reconstructed record; evaluating it must reproduce the original result exactly.
+        The reconstructed record; evaluating it must reproduce the original result.
     """
     contracts = contracts_from_json(raw, tariffs_base_path)
     return EvaluationInputs(
@@ -561,8 +474,8 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
         consumed_tariff_ids=raw.get("consumed_tariff_ids", []),
         annual_heat_demand_in_kwh=raw.get("annual_heat_demand_in_kwh"),
         useful_heat_of_simulated_period_in_kwh=raw.get("useful_heat_of_simulated_period_in_kwh"),
-        # Absent from files written before the split; `UsefulHeatKind(...)` refuses a kind it
-        # does not know rather than carrying it into `heat_cost_omits_hot_water`.
+        # Optional key; older files lack it. `UsefulHeatKind(...)` refuses an unknown kind rather than carrying it
+        # into `heat_cost_omits_hot_water`.
         useful_heat_of_simulated_period_by_kind_in_kwh={
             UsefulHeatKind(kind).value: float(kwh)
             for kind, kwh in (raw.get("useful_heat_of_simulated_period_by_kind_in_kwh") or {}).items()
@@ -576,17 +489,14 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
 
 
 def _component_sources_from_json(raw: dict) -> Optional[Dict[str, KpiSource]]:
-    """Reads the subject -> KPI source map of an inputs file.
+    """Read the subject-to-KPI-source map of an inputs file.
 
-    Absent from a file written before the field existed: the record then says ``None`` (not
-    known), never an empty map (no component), so a reader that needs the sources -- the staged
-    document's ``by_subject[].source`` -- refuses it instead of calling every subject a
-    non-component.
+    A file without the field yields None (unknown), never an empty map (no components), so a reader that needs the
+    sources, such as the staged document's ``by_subject[].source``, can refuse it.
 
     Raises:
-        ValueError: If the field is present but not a map of subject to source object, if a source
-            lacks ``name`` or carries a key a source does not have (:meth:`KpiSource.from_json_object`),
-            or if a source's name is not the subject it is filed under.
+        ValueError: If the field is not a map of subject to source object, a source lacks ``name`` or has an unknown
+            key (:meth:`KpiSource.from_json_object`), or a source's name differs from its subject.
     """
     if "component_sources" not in raw or raw["component_sources"] is None:
         return None
@@ -611,39 +521,23 @@ def write_inputs(
     country: Optional[str] = None,
     price_basis_year: Optional[int] = None,
 ) -> str:
-    """Writes economic_inputs.json into the result directory.
+    """Write ``economic_inputs.json`` into the result directory and return its path.
 
-    Called by `bridge.py` as the very first thing after extraction — before the cost database is
-    consulted, before the resolution check, before any evaluation — so the file is a faithful
-    extract of the simulation and never depends on cost-database state (cost-spec-v2 W1.1). It is
-    written even for a run where nothing can be priced, which is precisely when someone wants to
-    look at it. Indented JSON on purpose: the file is meant to be read and diffed by humans.
-
-    Beside the extract it writes the two statements about the run that are *facts* rather than
-    assumptions: the country it was priced for and the resolved price basis year it was priced
-    at, under `SerializationFileNames.COUNTRY_KEY` and
-    `SerializationFileNames.PRICE_BASIS_YEAR_KEY`. They belong here because a consumer that holds
-    only this file — a staged plan assembled by a backend out of finished jobs — otherwise has no
-    way of knowing which country's price data the run belongs to or which price level it was
-    costed at, and would answer both from a default: an Irish house priced with German data, and
-    a plan priced at a year the runs behind it never used.
-
-    Neither value is computed here. The caller passes what the run used, which keeps this
-    function a pure writer and keeps the resolution in the one place that owns it
-    (`evaluator.effective_price_basis_year`, reached through the bridge).
+    `bridge.py` calls it right after extraction, before the cost database is consulted, so the file is a faithful
+    extract of the simulation even when nothing can be priced. The JSON is indented for humans to read and diff. Beside
+    the extract it writes the country and the resolved price basis year (`SerializationFileNames.COUNTRY_KEY`,
+    `SerializationFileNames.PRICE_BASIS_YEAR_KEY`), since a consumer holding only this file, such as a staged plan
+    built from finished jobs, cannot derive them. Both values come from the caller.
 
     Args:
         inputs: The extract to write.
-        result_directory: Where `economic_inputs.json` goes.
-        country: The ISO-3166 alpha-2 code the run was priced for (the `country` of its
-            `EconomicParameters`), or None when the writer does not know one — a hand-built
-            extract in a test. The key is written either way, so `null` and "written by an engine
-            that did not have the key yet" both read back as None, which is the same statement.
-        price_basis_year: The resolved basis year the run priced at, or None when the writer does
-            not know one. Written the same way, and read back the same way.
+        result_directory: Where ``economic_inputs.json`` goes.
+        country: The ISO-3166 alpha-2 code the run was priced for, or None if unknown (e.g. a test extract). The key is
+            written either way.
+        price_basis_year: The resolved basis year the run priced at, or None if unknown. The key is written either way.
 
     Returns:
-        The path written, for logging and for tests.
+        The path written.
     """
     path = os.path.join(result_directory, SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME)
     payload = inputs_to_json(inputs)
@@ -655,26 +549,18 @@ def write_inputs(
 
 
 def read_stored_country(result_directory: str) -> Optional[str]:
-    """The country a stored extract was priced for, or None when the file does not say.
+    """Return the country a stored extract was priced for, or None when the file does not say.
 
-    The counterpart of `write_inputs`'s country key, and the reason a staged plan can be priced
-    without being told its country: the stage directories a backend assembles hold
-    `economic_inputs.json` and the mapping report and nothing else, so this file is where their
-    country has to come from. `read_stored_parameters` answers the same question from a stored
-    *evaluation* (`lifecycle_costs.json`), which a job directory only has once it has been priced.
-
-    Returns None rather than a default in every case that is not a country plainly written down:
-    no file, no key (an extract written before the key existed), an explicit `null`, or a value
-    that is not a string. There is no default country anywhere in this path — pricing an Irish
-    house with German data because a file said nothing is exactly the failure the key exists to
-    prevent.
+    A staged plan reads its stage directories' country from here, since they hold only ``economic_inputs.json`` and the
+    mapping report. None is returned for no file, no key, an explicit null or a non-string value; there is deliberately
+    no default country.
 
     Example::
 
         read_stored_country("jobs/baseline/results")  # -> "IE"
 
     Args:
-        result_directory: A directory holding `economic_inputs.json`.
+        result_directory: A directory holding ``economic_inputs.json``.
 
     Returns:
         The ISO-3166 alpha-2 code, or None when the file states none.
@@ -689,24 +575,18 @@ def read_stored_country(result_directory: str) -> Optional[str]:
 
 
 def read_stored_price_basis_year(result_directory: str) -> Optional[int]:
-    """The price basis year a stored extract was priced at, or None when the file does not say.
+    """Return the price basis year a stored extract was priced at, or None when the file does not say.
 
-    The counterpart of `write_inputs`'s basis-year key, and the companion of
-    `read_stored_country`: together they are everything a staged plan needs to know about stage
-    directories that hold only the extract and the mapping report. Without it such a plan would
-    re-derive the year from `simulation_year` and price at a different price level than the runs
-    it is made of — the same class of silent difference as a defaulted country.
-
-    Returns None rather than a year in every case that is not a year plainly written down: no
-    file, no key (an extract written before the key existed), an explicit `null`, or a value that
-    is not an integer. `True` is not an integer here, for all that Python says otherwise.
+    The companion of `read_stored_country` for staged plans; re-deriving the year from `simulation_year` could price at
+    a different level than the runs behind the plan. None is returned for no file, no key, an explicit null or a
+    non-integer value (``True`` counts as non-integer).
 
     Example::
 
         read_stored_price_basis_year("jobs/baseline/results")  # -> 2026
 
     Args:
-        result_directory: A directory holding `economic_inputs.json`.
+        result_directory: A directory holding ``economic_inputs.json``.
 
     Returns:
         The resolved basis year, or None when the file states none.
@@ -721,45 +601,33 @@ def read_stored_price_basis_year(result_directory: str) -> Optional[int]:
 
 
 def read_inputs(result_directory: str, tariffs_base_path: Optional[str] = None) -> EvaluationInputs:
-    """Reads economic_inputs.json from a (possibly archived) result directory.
+    """Read ``economic_inputs.json`` from a result directory, possibly archived years ago.
 
-    ``tariffs_base_path`` is only consulted for legacy files that reference contracts by id.
-
-    "Possibly archived" is the point: a study's result directory stays re-priceable years after the
-    simulation ran, against a newer cost database or an updated subsidy catalog, without the
-    original system setup, HiSim version or weather data being available (§4.6).
+    The directory can be re-priced against a newer database or catalog without the original setup, HiSim version or
+    weather data (§4.6). ``tariffs_base_path`` is only used for older files that reference contracts by id.
 
     Raises:
-        OSError: If the directory holds no `economic_inputs.json` — which the callers treat as
-            "this directory was not produced by a lifecycle-cost run" rather than as a failure.
+        OSError: If the directory holds no ``economic_inputs.json``; callers read this as "not a lifecycle-cost run".
     """
     path = os.path.join(result_directory, SerializationFileNames.ECONOMIC_INPUTS_FILE_NAME)
     with open(path, encoding="utf-8") as file:
         return inputs_from_json(json.load(file), tariffs_base_path)
 
 
-# ---------------------------------------------------------------------- stored results (W4.5)
+# ---------------------------------------------------------------------- stored results
 #
-# The inverse of the export set, so `python -m hisim.economics report` can render a stored
-# evaluation without reconstructing database, catalog and evaluator — which is what it used to
-# do, in contradiction of reporting's own docstring (cost-spec-v2 W4.5).
-#
-# Three files carry a full `EvaluationMatrix`: `lifecycle_costs.json` (everything aggregated),
-# `cash_flow_timeline.csv` (the entries, in long format) and, when present,
-# `cost_provenance.json` (the ledger). Nothing else is needed: since W4.2/W4.6 the result also
-# carries the physical quantities, reference areas, scope and simulation year the reports and
-# the plausibility checks used to fetch from `EvaluationInputs`. The one thing a reload cannot
-# reproduce is `source_resolver`, a cost-database/catalog artifact — the report reads its source
-# list off the stored input audit instead (`input_audit.read_input_audit`).
+# The inverse of the export set, so `python -m hisim.economics report` can render a stored evaluation without
+# rebuilding database, catalog and evaluator. Three files carry a full `EvaluationMatrix`: `lifecycle_costs.json`
+# (aggregates), `cash_flow_timeline.csv` (entries, long format) and, when present, `cost_provenance.json`
+# (the ledger). The result also carries the physical quantities, reference areas, scope and simulation year the
+# reports need. A reload cannot reproduce `source_resolver`; the report reads its source list from the stored
+# input audit instead (`input_audit.read_input_audit`).
 
 
 def _breakdown_from_json(raw: dict) -> ComponentCostBreakdown:
-    """Rebuilds one subject's `ComponentCostBreakdown` from `lifecycle_costs.json` (W4.5).
+    """Rebuild one subject's `ComponentCostBreakdown` from ``lifecycle_costs.json``.
 
-    The per-subject pivot the stacked-bar frontends and the report's section 7 render (§7.4). Every
-    field is required here rather than defaulted: a breakdown with a missing category would still
-    render, but would no longer satisfy the invariant that the subjects sum to the perspective total
-    — so a truncated file must fail loudly instead of producing a chart that does not reconcile.
+    Every field is required, since a breakdown missing a category would not sum to the perspective total.
     """
     return ComponentCostBreakdown(
         subject=raw["subject"],
@@ -783,13 +651,10 @@ def _breakdown_from_json(raw: dict) -> ComponentCostBreakdown:
 
 
 def _decision_from_json(raw: dict) -> SubsidyDecision:
-    """Rebuilds one measure's `SubsidyDecision` — the §5 audit trail — from stored results (W4.5).
+    """Rebuild one measure's `SubsidyDecision`, the §5 audit trail, from stored results.
 
-    Restores not only what was granted (`applied`, with payout kind, schedule, loan terms and which
-    caps bound in which slot) but also what was *not*: rejected schemes with their reason and
-    undetermined ones with the upper bound of what an unanswered question could still be worth. That
-    negative half is the part a reviewer checks, so it has to survive into an archived directory
-    rather than being recomputed from a catalog that may have changed since.
+    Restores the applied schemes (payout kind, schedule, loan terms, which caps bound in which slot), the rejected ones
+    with their reason, and the undetermined ones with the most an unanswered question could still be worth.
     """
     return SubsidyDecision(
         measure_subject=raw["measure_subject"],
@@ -811,8 +676,8 @@ def _decision_from_json(raw: dict) -> SubsidyDecision:
                 loan_repayment_grant_share=item.get("loan_repayment_grant_share"),
                 reduced_vat_rate=item.get("reduced_vat_rate"),
                 caps_binding_per_slot=dict(item.get("caps_binding_per_slot", {})),
-                # Q26 F8: absent in a result written before the award arithmetic was recorded,
-                # where the report states the amount without the multiplication behind it.
+                # Optional key; older results lack it, and the report then states the amount without the
+                # multiplication behind it.
                 benefit_rate=item.get("benefit_rate"),
                 benefit_rate_before_group_cap=item.get("benefit_rate_before_group_cap"),
                 benefit_rate_before_overall_cap=item.get("benefit_rate_before_overall_cap"),
@@ -822,8 +687,7 @@ def _decision_from_json(raw: dict) -> SubsidyDecision:
                     else None
                 ),
                 eligible_basis_cap_in_euro=item.get("eligible_basis_cap_in_euro"),
-                # Q20: absent in a result written before display names existed, which the
-                # award's `label` then resolves back to the scheme id.
+                # Optional key; older results lack it, and the award's `label` then falls back to the scheme id.
                 display_name=item.get("display_name") or "",
             )
             for item in raw.get("applied", [])
@@ -836,10 +700,10 @@ def _decision_from_json(raw: dict) -> SubsidyDecision:
 
 
 def read_cash_flow_timelines(result_directory: str) -> Dict[str, CashFlowTimeline]:
-    """Reads `cash_flow_timeline.csv` back into one timeline per perspective.
+    """Read ``cash_flow_timeline.csv`` back into one timeline per perspective.
 
-    The stored timeline is always the **full** allocated one (all payers); the perspective's own
-    scope is restored from `LifecycleCostResult.scope_payer`, exactly as the evaluator set it.
+    The stored timeline is the full allocated one (all payers); the perspective's scope comes from
+    `LifecycleCostResult.scope_payer`.
     """
     path = os.path.join(result_directory, ExportFileNames.CASH_FLOW_TIMELINE_FILE_NAME)
     timelines: Dict[str, CashFlowTimeline] = {}
@@ -873,27 +737,24 @@ def result_from_json(
     timeline: Optional[CashFlowTimeline] = None,
     ledger: Optional[ProvenanceLedger] = None,
 ) -> LifecycleCostResult:
-    """Rebuilds one `LifecycleCostResult` from its `lifecycle_costs.json` entry (W4.5).
+    """Rebuild one perspective's `LifecycleCostResult` from its ``lifecycle_costs.json`` entry.
 
-    Restores one perspective's complete result — headline KPIs, the category/component/payer pivots,
-    the nominal annual series, the CO2 result, the subsidy decisions and the parameters it was
-    evaluated under. The timeline and the ledger come from separate files and are passed in, because
-    they are stored per run rather than per perspective (`cash_flow_timeline.csv`,
-    `cost_provenance.json`); a result without them still renders every aggregate figure, it just
-    cannot explain one.
+    Restores the headline KPIs, the category, component and payer pivots, the nominal annual series, the CO2 result,
+    the subsidy decisions and the parameters. Timeline and ledger come from separate files; without them every
+    aggregate still renders but no figure can be explained.
 
     Args:
-        raw: One perspective's entry of `lifecycle_costs.json`.
+        raw: One perspective's entry of ``lifecycle_costs.json``.
         timeline: That perspective's reloaded cash-flow timeline, if the CSV was present.
-        ledger: That perspective's provenance ledger, if `cost_provenance.json` was present.
+        ledger: That perspective's provenance ledger, if ``cost_provenance.json`` was present.
 
     Returns:
-        The reconstructed result, equivalent to what the evaluator produced for the same run.
+        The reconstructed result, equivalent to what the evaluator produced.
     """
     co2 = raw.get("lifecycle_co2", {})
     equivalent_annual_cost = UncertainValue.from_json(raw["equivalent_annual_cost_in_euro"])
-    # A file written before hisim-cyc.6 has no monthly equivalent; it is the annuity over the
-    # months the aggregation divides by, so it is derived rather than missing.
+    # Older files have no monthly equivalent; it is the annuity over the months the aggregation divides by, so
+    # it is derived rather than missing.
     monthly_equivalent_cost = UncertainValue.optional_from_json(raw.get("monthly_equivalent_cost_in_euro"))
     if monthly_equivalent_cost is None:
         monthly_equivalent_cost = equivalent_annual_cost.scale(1.0 / TimelineAggregation.MONTHS_PER_YEAR)
@@ -930,8 +791,8 @@ def result_from_json(
             operational_co2_by_carrier_in_kg=dict(co2.get("operational_co2_by_carrier_in_kg", {})),
             total_co2_in_kg=co2.get("total_co2_in_kg", 0.0),
             embodied_by_subject_in_kg=dict(co2.get("embodied_by_subject_in_kg", {})),
-            # Additive; absent in files written before the factors table existed, where the
-            # CO2 section states the masses without their multiplication.
+            # Optional key; older files lack it, and the CO2 section then states the masses without their
+            # multiplication.
             emission_factor_by_carrier_in_kg_per_kwh=dict(
                 co2.get("emission_factor_by_carrier_in_kg_per_kwh", {})
             ),
@@ -956,32 +817,30 @@ def result_from_json(
         ),
         simulated_period_fraction=raw.get("simulated_period_fraction", 1.0),
         simulation_year=raw.get("simulation_year"),
-        # Additive with the visualization extension; absent in files written before it, which is
-        # exactly the case the household energy balance skips itself on.
+        # Optional key; older files lack it, and the household energy balance then skips itself.
         annual_energy_attribution_by_subject_in_kwh=_attribution_from_json(
             raw,
             "annual_energy_attribution_by_subject_in_kwh",
             "LifecycleCostResult.annual_energy_attribution_by_subject_in_kwh",
         ),
         raw_flexibility_value_by_carrier=dict(raw.get("raw_flexibility_value_by_carrier", {})),
-        # Additive; absent in a result written before the Sowieso share existed, where every
-        # credit was implicitly a full one.
+        # Optional key; older results lack it, and every credit is then a full one.
         anyway_share_by_subject={
             subject: float(share) for subject, share in raw.get("anyway_share_by_subject", {}).items()
         },
-        # Additive; without it the anyway caption states the share alone.
+        # Optional key; without it the anyway caption states the share alone.
         anyway_basis_by_subject={
             subject: float(basis) for subject, basis in raw.get("anyway_basis_by_subject", {}).items()
         },
-        # Additive; without it the caption calls the basis what it is ("basis") rather than
-        # naming which of the two §4.1/Q7 branches produced it.
+        # Optional key; without it the caption calls the basis "basis" rather than naming which of the two §4.1
+        # branches produced it.
         anyway_basis_kind_by_subject={
             subject: str(kind)
             for subject, kind in raw.get("anyway_basis_kind_by_subject", {}).items()
         },
-        # Additive; None for every perspective without a levy, which is most of them.
+        # Optional key; None for every perspective without a levy, which is most of them.
         modernization_levy=ModernizationLevySummary.from_json(raw.get("modernization_levy")),
-        # Additive; None for a file written before the assumptions section existed.
+        # Optional key; None for older files.
         assumptions=EconomicAssumptions.from_json(raw.get("assumptions")),
     )
 
@@ -991,15 +850,12 @@ def matrix_from_json(
     timelines: Optional[Dict[str, CashFlowTimeline]] = None,
     ledgers: Optional[Dict[str, ProvenanceLedger]] = None,
 ) -> EvaluationMatrix:
-    """Rebuilds a full `EvaluationMatrix` from `lifecycle_costs.json` (W4.5).
+    """Rebuild a full `EvaluationMatrix` (one result per perspective id) from ``lifecycle_costs.json``.
 
-    The matrix is just "one result per perspective id", so this loops `result_from_json` and hands
-    each result its own timeline and ledger where they were found. Perspectives with no stored
-    timeline or ledger are kept rather than skipped: an incomplete result directory should still
-    report its numbers.
+    Perspectives without a stored timeline or ledger are kept, so an incomplete directory still reports its numbers.
 
     Args:
-        raw: The parsed `lifecycle_costs.json` — perspective id -> result payload.
+        raw: The parsed ``lifecycle_costs.json``: perspective id to result payload.
         timelines: Reloaded timelines by perspective id (from `read_cash_flow_timelines`).
         ledgers: Reloaded provenance ledgers by perspective id.
     """
@@ -1014,27 +870,17 @@ def matrix_from_json(
 
 
 def read_stored_parameters(result_directory: str) -> Optional[EconomicParameters]:
-    """The economic assumptions a stored run was priced under, or None if the directory has none.
+    """Return the economic parameters a stored run was priced under, or None if the directory has none.
 
-    Every `LifecycleCostResult` carries the `EconomicParameters` it was evaluated with — including
-    the *resolved* price basis year, which is the field a re-pricing invocation most easily gets
-    wrong — and `lifecycle_costs.json` serializes them per perspective. So the assumptions do
-    travel with the artifacts, and a later `explain`/`report`/`evaluate` on an archived directory
-    can reproduce the run instead of silently substituting the engine defaults (which is what the
-    CLI did: a run priced at basis year 2026 was re-priced at 2024 and then failed the D7
-    resolution check on data valid from 2026).
-
-    The first perspective's parameters are returned. All perspectives of one matrix are evaluated
-    by the same evaluator from the same parameter set — a perspective varies the subsidy mode, the
-    actor scope and the installation context, never the assumptions — so "the first" is "the
-    run's".
+    Lets `explain`, `report` and `evaluate` on an archived directory reproduce the run, including the resolved price
+    basis year, instead of using engine defaults. The first perspective's parameters are returned; all perspectives of
+    one matrix share them.
 
     Args:
-        result_directory: A directory holding `lifecycle_costs.json`.
+        result_directory: A directory holding ``lifecycle_costs.json``.
 
     Returns:
-        The stored parameters, or None when the directory holds no stored evaluation (or a stored
-        evaluation without a single perspective).
+        The stored parameters, or None when there is no stored evaluation or it has no perspective.
     """
     path = os.path.join(result_directory, ExportFileNames.LIFECYCLE_COSTS_FILE_NAME)
     if not os.path.isfile(path):
@@ -1049,16 +895,10 @@ def read_stored_parameters(result_directory: str) -> Optional[EconomicParameters
 
 
 def read_results(result_directory: str) -> Optional[EvaluationMatrix]:
-    """Reads a stored evaluation back, or None when the directory holds none (W4.5).
+    """Read a stored evaluation back, or return None when the directory holds none.
 
-    The one call `python -m hisim.economics report` makes before deciding whether it may render or
-    must re-price: a directory written by the bridge, by `evaluate` or by an earlier `report` has
-    everything the reports need, so reporting stays rendering rather than quietly becoming a second
-    evaluation. Returning None (rather than raising) for a directory holding only
-    `economic_inputs.json` is what makes that fallback a clean branch in the CLI.
-
-    Reads three files, of which only the first is required: `lifecycle_costs.json` (the aggregates),
-    `cash_flow_timeline.csv` (the entries) and `cost_provenance.json` (the ledger).
+    ``python -m hisim.economics report`` calls it to decide between rendering and re-pricing. Reads
+    ``lifecycle_costs.json`` (required), ``cash_flow_timeline.csv`` and ``cost_provenance.json``.
     """
     path = os.path.join(result_directory, ExportFileNames.LIFECYCLE_COSTS_FILE_NAME)
     if not os.path.isfile(path):

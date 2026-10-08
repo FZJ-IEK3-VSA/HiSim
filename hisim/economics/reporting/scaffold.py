@@ -1,18 +1,10 @@
-"""Section identity, chapter frame and the explanation block of the HTML report (rule 2.8).
+"""Section identity, chapter frame and explanation blocks of the HTML report.
 
-The scaffolding every section builder opens with: the mnemonic `(anchor, name)` pairs of
-`ReportSections`, the `ReportChapters` a section is rendered into, the `_ChapterContext` that
-makes an anchor unique, remembers what has already been explained and collects what the run
-could not draw, and the renderers built on them — `_section_open`, `_chapter_open` and
-`_explanation_html`, the last of which is the only place `report_prose.ReportProse` reaches the
-page. `_table_of_contents_html` and `_not_drawn_html` sit here for the same reason: both are
-made of nothing but this vocabulary. The prose sections themselves, the primer included, live in
-`sections.py` with the rest of the authored text.
-
-Its own module rather than a block of `assembly.py` because both `sections.py` and
-`sections_charts.py` open their sections through it while `assembly.py` imports *them* — putting
-it in `assembly` would close that loop into a circular import. It sits one layer above
-`charts.py`, whose `_esc` and `_details` it borrows, and imports nothing else from the package.
+Holds `ReportSections` (the `(anchor, name)` pair of every section), `ReportChapters`, the `_ChapterContext` that makes
+anchors unique and remembers what has been explained or skipped, and the renderers built on them: `_section_open`,
+`_chapter_open`, `_explanation_html` (the only place `report_prose.ReportProse` reaches the page),
+`_table_of_contents_html` and `_not_drawn_html`. A module of its own because `sections.py` and `sections_charts.py` use
+it while `assembly.py` imports them; it imports only `charts.py` from the package.
 """
 
 
@@ -27,32 +19,14 @@ from hisim.economics.reporting.charts import _details, _esc
 
 
 class ReportSections:
-    """The mnemonic identity of every report section (rule 2.8, owner decision Q18).
+    """The `(anchor, name)` identity of every report section.
 
-    One `(anchor, name)` pair per section of the report. The report used to interleave two
-    numbering schemes — legacy sections 0 to 10 with 4b and 6b wedged in, plus
-    the V-numbers of the chart set — neither of which ran monotonically down the document, so a
-    reader could not use either to navigate. Names replace both; the V-numbers survive only as
-    spec-internal identifiers, the way the decision log's D-numbers do.
-
-    `ORDER` is the canonical *membership* and the canonical names of the sections, not the page
-    order: the page order is the one each chapter builder in `assembly.py` writes down, and the
-    same section name legitimately appears in more than one chapter, in a position each chapter
-    chooses for its own story, so no single list here could be the order. What this list is for
-    is the set: `tests/test_economics_sections_a.py` checks that every anchor the document emits
-    is a member of it, and the table of contents looks its names up in each chapter that rendered
-    before sorting them by where they actually are on the page.
-
-    It is a superset of what any one document contains: a section that has nothing to show
-    returns an empty string and then appears in neither the page nor the contents (the document
-    says so under "Not drawn for this run" instead), and a chapter renders only the sections its
-    own story needs.
-
-    `HOW_TO_READ` is the one section that carries no chart and no number: the primer that states
-    the three conventions — discounting, the three worlds of the min/max band, and the sign rule —
-    every other section then leans on. It is a section like the others rather than a preamble
-    glued to the header so that it has an anchor, a contents entry and an explanation block built
-    the same way as everywhere else.
+    `ORDER` is the set of sections and their canonical names, not the page order: each chapter builder in `assembly.py`
+    sets its own order, and one section may appear in several chapters. `tests/test_economics_sections_a.py` checks
+    that every anchor the document emits is a member, and the table of contents looks names up here. A section with
+    nothing to show renders as an empty string and is listed under "Not drawn for this run". `HOW_TO_READ` is the
+    primer stating the three conventions every other section relies on: discounting, the three worlds of the min/max
+    band, and the sign rule.
     """
 
     HOW_TO_READ = ("how-to-read", ReportProse.PRIMER_SECTION_NAME)
@@ -89,7 +63,7 @@ class ReportSections:
     COMPARISON = ("comparison", "Comparison")
     NPV_BRIDGE = ("npv-bridge", "NPV bridge")
     BANK_BENCHMARK = ("bank-benchmark", "Bank benchmark")
-    #: The one chart that lives with the audit outputs rather than in the report (Q9).
+    #: The one chart that lives with the audit outputs rather than in the report.
     LEDGER_HEATMAP = ("ledger-heatmap", "Ledger heatmap")
 
     ORDER = [
@@ -105,28 +79,14 @@ class ReportSections:
 
 
 class ReportChapters:
-    """The chapters the report is organized into (owner decision Q24, rule 2.8).
+    """The chapters of the report: a common part on the gross basis, then one chapter per reader's question.
 
-    The report used to be one flat sequence of sections that told three stories at once: a
-    perspective-free part about what the technology costs, an owner-occupier part, a
-    landlord/tenant part and a macroeconomic part, interleaved, with each section picking a
-    perspective of its own. A reader following it end to end therefore switched stories several
-    times per page without being told. The chapters make the switch explicit: a common part on the
-    gross basis, then one chapter per question a reader actually has.
-
-    A perspective-scoped section consequently renders **once per chapter**, on that chapter's own
-    perspectives, so the same section name legitimately appears more than once in a document — and
-    that is why anchors are chapter-prefixed (`owner-cash-curve`) and the contents are two-level.
-    `COMPARISON` is deliberately not one of the three stories: it is the fourth block, present only
-    when a reference variant exists, and it carries no authored intro because it answers a
-    question about two runs rather than about one party.
-
-    `assembly.py` has one builder per chapter and hands each of them only the perspectives
-    `views.story_perspectives` classified into it, so which story a section is telling is decided
-    by what its results *book* rather than by what they are called. A chapter whose perspectives
-    this run has none of is skipped with `skip_chapter` rather than rendered empty: an
-    owner-occupied house genuinely has no landlord story, and the reason is named under the
-    contents where a reader of the document will find it.
+    A perspective-scoped section renders once per chapter on that chapter's perspectives, so anchors are
+    chapter-prefixed (`owner-cash-curve`) and the contents have two levels. `assembly.py` has one builder per chapter
+    and passes it the perspectives `views.story_perspectives` assigned to it, based on what their results book. A
+    chapter without perspectives is skipped with `skip_chapter` and the reason is shown under the contents (an
+    owner-occupied house has no landlord story). `COMPARISON` appears only with a reference variant and has no authored
+    intro.
     """
 
     THE_BUILDING = ("building", "The building")
@@ -144,18 +104,12 @@ class ReportChapters:
 
 @dataclass(frozen=True)
 class SkippedSection:
-    """One section — or, from slice 9 of this stack, one chapter — the run did not draw, and why.
-
-    The report is read by people who did not build it, and a section that is simply absent is
-    indistinguishable from one that was never written: "no loan chart" reads as "this run has no
-    loan" to one reader and as "the loan chart is broken" to another. The reason travels with the
-    omission so the document can answer that itself, which is what `_not_drawn_html` prints.
+    """One section or chapter the run did not draw, and why; `_not_drawn_html` prints these.
 
     Attributes:
-        name: The section's (or chapter's) own name, as its heading would have carried it.
-        reason: The full sentence stating why it could not be drawn.
-        chapter: The chapter it would have been drawn in; empty for a chapter-level skip, which
-            *is* a chapter.
+        name: The section's or chapter's name, as its heading would have shown it.
+        reason: The full sentence saying why it was not drawn.
+        chapter: The chapter it would have been drawn in; empty for a skipped chapter.
     """
 
     name: str
@@ -165,19 +119,11 @@ class SkippedSection:
 
 @dataclass
 class _ChapterContext:
-    """Which chapter a section is being rendered into, and what has already been explained.
+    """The chapter a section is rendered into, plus the document's memory of explanations and skips.
 
-    Two jobs, both of which exist only because a section can appear more than once. It makes the
-    section's anchor unique by prefixing it with the chapter's own anchor, and it remembers where
-    each section name's four-part explanation was rendered *first*, so a second and third
-    occurrence link back to it instead of repeating a page of prose. Tripling the explanation
-    weight of the report is the obvious failure mode of the chapter restructure: the prose is the
-    longest part of most sections, and a reader who has just read it does not want it again three
-    screens further down.
-
-    `first_explained` and `skipped` are shared between the contexts of all chapters — they are
-    the document's memory, not the chapter's — which is why this is a mutable object handed
-    around rather than a value each chapter builds for itself.
+    The context prefixes a section's anchor with the chapter's anchor, and remembers where each section name was first
+    explained so later occurrences link back instead of repeating the prose. `first_explained` and `skipped` are shared
+    by all chapters' contexts, which is why this object is mutable and handed around.
     """
 
     chapter: Tuple[str, str]
@@ -187,46 +133,33 @@ class _ChapterContext:
     skipped: List[SkippedSection] = field(default_factory=list)
 
     def for_chapter(self, chapter: Tuple[str, str]) -> "_ChapterContext":
-        """A context for another chapter, sharing this one's explanation and skip memory.
-
-        Both memories are the *document's* rather than the chapter's: a section explains itself
-        once wherever it first appears and links back from every later chapter, and every
-        omission — whichever chapter reached it — lands in the one list the document prints under
-        its table of contents.
-        """
+        """Return a context for another chapter that shares this one's explanation and skip memory."""
         return _ChapterContext(
             chapter=chapter, first_explained=self.first_explained, skipped=self.skipped
         )
 
     def skip(self, section: Tuple[str, str], reason: str) -> str:
-        """Records a section this run cannot draw, and returns the empty string it renders as.
+        """Record a section this run cannot draw and return the empty string it renders as.
 
-        A skipped section used to be a log line, which is the one place a reader of the report
-        will never look: the document simply had one section fewer than the last one they read,
-        with nothing to say whether it was dropped, empty or broken. The reason is now collected
-        here and printed under the table of contents by `_not_drawn_html`, so the answer arrives
-        with the question.
+        The reason is printed under the table of contents by `_not_drawn_html`.
 
         Args:
-            section: The `(anchor, name)` pair of the section that is not being drawn.
-            reason: Why — a full sentence, because it is read as prose in the document.
+            section: The `(anchor, name)` pair of the section not drawn.
+            reason: Why, as a full sentence; it is read as prose in the document.
 
         Returns:
-            The empty string, so a builder can `return context.skip(...)` in one line.
+            The empty string, so a builder can `return context.skip(...)`.
         """
         self.skipped.append(SkippedSection(name=section[1], reason=reason, chapter=self.chapter[1]))
         return ""
 
     def skip_chapter(self, chapter: Tuple[str, str], reason: str) -> List[str]:
-        """The same for a whole chapter, whose builder returns a list of blocks rather than one.
+        """Record a whole chapter this run cannot draw, e.g. no landlord story for an owner-occupied house.
 
-        A chapter is the largest thing a run can be missing — "this run tells no owner's story" —
-        and it is missing for a reason a reader can act on: an owner-occupied house genuinely has
-        no landlord. The three story chapters call it before they derive their own context, so
-        the entry carries no chapter tag: it *is* the chapter.
+        The entry carries no chapter tag, since it is the chapter.
 
         Args:
-            chapter: The `(anchor, name)` pair of the chapter that is not being drawn.
+            chapter: The `(anchor, name)` pair of the chapter not drawn.
             reason: Why, as a full sentence.
 
         Returns:
@@ -236,22 +169,16 @@ class _ChapterContext:
         return []
 
     def anchor_of(self, section: Tuple[str, str]) -> str:
-        """The chapter-prefixed anchor of a section in this chapter (`owner-cash-curve`)."""
+        """Return the chapter-prefixed anchor of a section in this chapter (`owner-cash-curve`)."""
         return f"{self.chapter[0]}-{section[0]}"
 
 
 def _section_open(section: Tuple[str, str], context: _ChapterContext, subtitle: str = "") -> str:
-    """Opening tag and heading of a report section, with its chapter-prefixed anchor.
+    """Return the opening tag and `<h3>` heading of a report section, with its chapter-prefixed anchor.
 
-    The single place a section's name reaches the page, so the heading, the anchor a table-of-
-    contents link points at and the name a cross-reference in some other section's prose can
-    never drift apart. `subtitle` is the perspective id (or any qualifier) the section applies
-    to, shown in brackets after the name and escaped here so callers do not have to.
-
-    The heading carries its chapter (Q24) because the same section name can appear in more than
-    one of them: "Cash curve" alone would not tell a reader arriving by a contents link whether
-    they are looking at the owner's liquidity or the landlord's. Sections are `<h3>` under the
-    chapter's `<h2>`, so the document outline is the chapter structure.
+    The only place a section's name reaches the page, so heading, contents link and cross-references agree. The heading
+    names its chapter because one section name can appear in several. `subtitle` (a perspective id or other qualifier)
+    is escaped and shown in brackets.
     """
     _anchor, name = section
     tail = f" ({_esc(subtitle)})" if subtitle else ""
@@ -260,13 +187,7 @@ def _section_open(section: Tuple[str, str], context: _ChapterContext, subtitle: 
 
 
 def _chapter_open(chapter: Tuple[str, str]) -> str:
-    """A chapter heading with its authored lead-in (Q24), or without one for the fourth block.
-
-    Chapters are headings between the section cards rather than cards themselves: a chapter is not
-    a thing to read, it is the answer to "which of the questions do the next few sections answer".
-    The lead-in comes from `ReportProse.CHAPTER_INTROS` verbatim, like every other word of
-    explanation in the report.
-    """
+    """Return a chapter's `<h2>` heading with its lead-in from `ReportProse.CHAPTER_INTROS`, if it has one."""
     anchor, name = chapter
     intro = (
         "" if chapter in ReportChapters.WITHOUT_INTRO
@@ -276,35 +197,19 @@ def _chapter_open(chapter: Tuple[str, str]) -> str:
 
 
 def _explanation_html(section: Tuple[str, str], context: _ChapterContext) -> str:
-    """The authored four-part explanation of one section — once per section name (Q24).
+    """Return the four-part explanation of one section, in full only at its first occurrence.
 
-    Every section of the report opens the same way, so a reader who arrives at any of them by
-    following a contents link is never missing context: two visible paragraphs — what the chart
-    *shows* and what it *adds* that nothing else covers — then two collapsed disclosures, the
-    definition list of every term of art the section uses and the account of how its numbers are
-    calculated. The disclosures are collapsed because the report is read twice: once by someone
-    who knows the vocabulary and wants the charts, once by someone who does not and needs the
-    definitions to be one click away rather than in a glossary at the other end of the document.
-
-    A section name that appears in a second chapter is explained at its **first** occurrence only
-    and every later one links back to it: the prose is the longest part of most sections, and
-    printing "Cash curve" three times in full would triple the weight of the report for a reader
-    who has just read it. The back-link names the chapter it points at, because "see above" is
-    useless in a document this long.
-
-    The text itself lives in `ReportProse` and is never assembled here — this function only makes
-    HTML of it, so an editorial change is a change to one file of prose and the rendering cannot
-    quietly reword anything. The two summary strings come from the same place for the same
-    reason: `tests/test_economics_sections_a.py` asserts on them section by section.
+    The four parts: two visible paragraphs (what the chart shows, and what it adds) and two collapsed `<details>`
+    blocks (definitions of its terms, and how its numbers are calculated). A later occurrence in another chapter gets a
+    one-line link back that names the chapter. The text comes verbatim from `ReportProse`;
+    `tests/test_economics_sections_a.py` asserts on the summary strings.
 
     Args:
-        section: The `(anchor, name)` pair of `ReportSections`; the name is the prose key.
-        context: The chapter being rendered; **mutated** — it records this section name as
-            explained, so a later occurrence links here instead of repeating the text.
+        section: The `(anchor, name)` pair from `ReportSections`; the name is the prose key.
+        context: The chapter being rendered; mutated to record this section name as explained.
 
     Returns:
-        The two paragraphs and the two `<details>` blocks at the first occurrence, a one-line
-        cross-reference paragraph at every later one.
+        The two paragraphs and two `<details>` blocks at the first occurrence, a cross-reference paragraph afterwards.
     """
     name = section[1]
     already = context.first_explained.get(name)
@@ -333,17 +238,11 @@ def _explanation_html(section: Tuple[str, str], context: _ChapterContext) -> str
 
 
 def _table_of_contents_html(document: str) -> str:
-    """Two-level contents: every chapter that rendered, with the sections inside it (Q24).
+    """Return the two-level contents: every chapter that rendered, with its sections.
 
-    Navigation is the whole reason the numbering existed, so removing the numbers means providing
-    it properly. Both levels are built by asking the rendered document whether an anchor is in it,
-    which means a section that skipped itself (no loans, no comparison, a degenerate band) and a
-    chapter whose perspectives were absent are missing from the contents for free — an empty entry
-    pointing at nothing would be worse than no numbering at all.
-
-    The nesting is what makes the same section name appearing more than once readable: "Cash
-    curve" under Owner-occupied, under Rented out and under Society are three different charts of
-    three different parties, and a flat list would show them as three identical words.
+    Entries are found by checking whether each anchor is in the rendered document, so skipped sections and chapters are
+    left out automatically. The nesting distinguishes a section that appears in several chapters (e.g. "Cash curve" for
+    owner, landlord and society).
     """
     parts = ["<nav class='sub' style='margin:0 0 18px 0;line-height:1.9'>"]
     for chapter_anchor, chapter_name in ReportChapters.ORDER:
@@ -370,20 +269,13 @@ def _table_of_contents_html(document: str) -> str:
 
 
 def _not_drawn_html(skipped: List[SkippedSection]) -> str:
-    """What this run could not draw, named and explained, straight under the contents.
-
-    The counterpart of the contents: the contents list what is there, this lists what is not and
-    says why, so the two together account for every section the report could have had. It is
-    deliberately part of the *document* rather than a log line — the reader who notices the gap
-    is never the person tailing the process output, and by the time anyone reads the HTML the log
-    is somewhere else entirely.
+    """Return the block listing what this run could not draw and why, shown under the contents.
 
     Args:
-        skipped: What the section and chapter builders recorded while the document was rendered,
-            in the order they reached it.
+        skipped: What the builders recorded, in the order they reached it.
 
     Returns:
-        The block, or the empty string when this run drew everything it had a builder for.
+        The block, or the empty string when everything was drawn.
     """
     if not skipped:
         return ""

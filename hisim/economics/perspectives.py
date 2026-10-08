@@ -1,35 +1,10 @@
-"""Cost perspectives: named configurations of five orthogonal dimensions (cost_spec.md §4).
+"""Cost perspectives: named combinations of five independent dimensions (cost_spec.md §4).
 
-"What does this system cost?" has no single answer, and pretending otherwise is how cost studies end
-up incomparable. A gross figure and a subsidized one, the system total and the tenant's share, the
-research view and the household bill are all legitimate — they answer different questions. A
-`Perspective` names one such question by fixing five independent dimensions, and the engine
-evaluates a whole bundle of them against the *same* simulation and the same canonical timeline
-(§3.6), so the numbers in a report are guaranteed to be mutually consistent rather than assembled
-from separate runs.
-
-The five dimensions are:
-
-1. **installation context** (`InstallationContext`) — which investments are charged at all:
-   everything new (GREENFIELD), only the measures on top of an existing system (BROWNFIELD), the
-   do-nothing reference (STATUS_QUO), or running costs only (OPERATING_ONLY);
-2. **actor scope** (`ActorScope`) — whose cash flows are reported, after the allocation ruleset of
-   §6 has tagged every entry with a payer;
-3. **subsidy mode** (`SubsidyMode`) — none, all eligible schemes, or an explicit include/exclude
-   list, which is what makes a gross/net pair of one evaluation;
-4. **financing** (`FinancingPlan`, `None` = cash) — a loan changes the liquidity profile
-   dramatically and the NPV only via the loan-rate/discount-rate spread (§4.3, §4.4);
-5. **accounting** (`Accounting`) — the household bill (FINANCIAL) or the socio-economic view
-   (MACROECONOMIC: transfers removed, taxes and levies stripped, CO2 damage cost added, §4.5).
-
-Note what is deliberately *not* a dimension: price and rate assumptions. Interest rates, escalation
-paths and CO2 trajectories are `EconomicParameters` and belong to the scenario layer (§4.6);
-uncertainty bands are a third, orthogonal mechanism again (§3.9). Perspectives are about the frame
-of the question, not about the numbers going in.
-
-This module owns only the description of a perspective and the loading/selection of the shipped
-bundle. Acting on the dimensions — filtering categories, allocating payers, deciding which subsidy
-awards apply — is the evaluator's and the calculators' job.
+A perspective names one question ("what does the tenant pay, with subsidies?") by fixing the installation context, the
+actor scope, the subsidy mode, the financing and the accounting. The engine evaluates a bundle of them against the same
+simulation and timeline, so the figures in one report are consistent. Price and rate assumptions are not a dimension;
+they are `EconomicParameters` (§4.6). Acting on the dimensions is the evaluator's job; this module only describes
+perspectives and loads the shipped bundle.
 """
 
 from __future__ import annotations
@@ -47,19 +22,11 @@ from hisim.economics.timeline import Actor
 class InstallationContext(str, enum.Enum):
     """Which investments the perspective charges (§4.1, §4.2).
 
-    The most consequential of the five dimensions, because it decides what the comparison is even
-    about. GREENFIELD buys everything new at year 0 — the right frame for new construction and for
-    "what does this system cost in absolute terms". BROWNFIELD charges only the *measures* against a
-    register of what is already installed: kept assets cost nothing but get replaced at
-    `service_life − age`, replaced ones add the old device's removal cost and may earn the
-    anyway-cost credit. STATUS_QUO is the do-nothing reference — the existing system kept and
-    replaced like-for-like — which matters because doing nothing is not free and pretending it is
-    flatters inaction.
-
-    OPERATING_ONLY is the odd one out: it drops every investment-related category (see
-    `CategoryRules.INVESTMENT_CATEGORIES`) and adds a replacement reserve instead, answering "what
-    does running this cost per year, honestly including wear" — the German
-    Instandhaltungsrücklage logic (§4.2).
+    GREENFIELD buys everything new at year 0. BROWNFIELD charges only the measures against a register of installed
+    assets: kept assets cost nothing today and are replaced at `service_life - age`; replaced ones add the old device's
+    removal cost and may earn the anyway credit (the avoided cost of a replacement that was due anyway). STATUS_QUO is
+    the do-nothing reference, the existing system kept and replaced like-for-like. OPERATING_ONLY drops every
+    investment category and charges a replacement reserve instead (Instandhaltungsrücklage, §4.2).
     """
 
     GREENFIELD = "GREENFIELD"
@@ -71,10 +38,8 @@ class InstallationContext(str, enum.Enum):
 class SubsidyModeKind(str, enum.Enum):
     """Kinds of subsidy filtering (§5.5).
 
-    The discriminator of `SubsidyMode`. NONE and FULL are the two ends that produce the shipped
-    gross/net perspective pair from one evaluation; ONLY and EXCLUDE carry an explicit scheme-id
-    list and exist for the policy question "what is this particular programme worth", which is
-    answered by re-evaluating with that scheme admitted or suppressed and differencing the results.
+    NONE and FULL give the gross and net views of one evaluation. ONLY and EXCLUDE carry a scheme-id list, for asking
+    what one programme is worth.
     """
 
     NONE = "NONE"
@@ -85,16 +50,11 @@ class SubsidyModeKind(str, enum.Enum):
 
 @dataclass(frozen=True)
 class SubsidyMode:
-    """NONE | FULL | ONLY(scheme_ids) | EXCLUDE(scheme_ids).
+    """Which subsidy schemes a perspective admits: NONE, FULL, ONLY(scheme_ids) or EXCLUDE(scheme_ids).
 
-    A tagged union expressing which subsidy schemes a perspective admits — a kind plus, for the two
-    list-carrying kinds, the scheme ids. It is a *filter on admissibility only*: it never decides
-    whether a scheme is legally applicable (that is the catalog's condition tree, §5.4) nor how
-    several schemes cumulate (that is the cumulation solver, §5.5). Frozen and tuple-based so it is
-    hashable and safely shared between perspectives.
-
-    The named constructors below are the intended way to build one; `admits` is the single
-    predicate the subsidy engine consults.
+    A filter on admissibility only: whether a scheme legally applies is the catalog's condition tree (§5.4), and how
+    schemes combine is the cumulation solver's (§5.5). Build one with the named constructors; `admits` is the predicate
+    the subsidy engine consults.
     """
 
     kind: SubsidyModeKind = SubsidyModeKind.FULL
@@ -121,11 +81,9 @@ class SubsidyMode:
         return cls(SubsidyModeKind.EXCLUDE, scheme_ids)
 
     def admits(self, scheme_id: str) -> bool:
-        """Whether a scheme may contribute under this mode.
+        """Return whether a scheme may contribute under this mode.
 
-        The one place the four kinds are interpreted, so no caller re-implements the filter. It
-        answers admissibility only — a scheme that passes here still has to satisfy its eligibility
-        conditions and survive the cumulation solver before any money is booked.
+        An admitted scheme still has to meet its eligibility conditions and survive the cumulation solver.
         """
         if self.kind == SubsidyModeKind.NONE:
             return False
@@ -137,17 +95,11 @@ class SubsidyMode:
 
 
 class Accounting(str, enum.Enum):
-    """Financial vs macroeconomic accounting (EU 244/2012, §4.5).
+    """Financial or macroeconomic accounting (EU 244/2012, §4.5).
 
-    FINANCIAL is the household's own bill: prices as paid, gross of VAT and energy taxes, subsidies
-    included per the subsidy mode. It is the default and the only sensible basis for owner, landlord
-    and tenant perspectives. MACROECONOMIC is the socio-economic view the EPBD cost-optimal
-    methodology requires: pure transfers are removed (no subsidies, prices net of taxes and levies)
-    and a CO2 damage cost is added instead, because from society's point of view emissions cost
-    something whether or not anyone is billed for them.
-
-    The distinction matters for interpretation as much as for arithmetic — a macroeconomic result is
-    a research figure, not a number any household will ever pay.
+    FINANCIAL is the household's bill: prices as paid, VAT and energy taxes included, subsidies per the subsidy mode;
+    the default. MACROECONOMIC is the EPBD cost-optimal societal view: transfers removed (no subsidies, prices net of
+    taxes and levies) and a CO2 damage cost added. A macroeconomic result is a research figure, not a bill anyone pays.
     """
 
     FINANCIAL = "FINANCIAL"
@@ -157,15 +109,9 @@ class Accounting(str, enum.Enum):
 class ActorScope(str, enum.Enum):
     """Whose cash flows the perspective reports (§6).
 
-    Selects one payer's slice of the allocated timeline: the total before allocation (SYSTEM), the
-    self-using owner, or the two sides of a tenancy. The split is what makes the landlord/tenant
-    dilemma visible — who pays for the retrofit and who benefits from the lower bill — and because
-    allocation only re-tags and splits existing entries, the scopes sum back to SYSTEM exactly, per
-    uncertainty slot (§6.5).
-
-    It duplicates `timeline.Actor` on purpose: `Actor` is a property of an entry inside the kernel,
-    `ActorScope` a dimension of a perspective in the configuration layer, and `to_actor` is the one
-    bridge between them.
+    SYSTEM is the total before allocation; the others are the self-using owner and the two sides of a tenancy.
+    Allocation only re-tags and splits entries, so the scopes sum back to SYSTEM in every band slot (§6.5).
+    `timeline.Actor` is the payer tag on an entry; `to_actor` maps between the two.
     """
 
     SYSTEM = "SYSTEM"
@@ -174,11 +120,9 @@ class ActorScope(str, enum.Enum):
     TENANT = "TENANT"
 
     def to_actor(self) -> Actor:
-        """Maps to the timeline payer enum.
+        """Return the matching timeline payer `Actor`.
 
-        The single translation point between the perspective vocabulary and the timeline's payer
-        tags; the resulting `Actor` is handed to `CashFlowTimeline.scoped_to`, where SYSTEM means
-        "everything" rather than "entries literally tagged SYSTEM".
+        `CashFlowTimeline.scoped_to` treats SYSTEM as "every entry", not "entries tagged SYSTEM".
         """
         return {
             ActorScope.SYSTEM: Actor.SYSTEM,
@@ -190,18 +134,11 @@ class ActorScope(str, enum.Enum):
 
 @dataclass
 class Perspective:
-    """A named configuration of five orthogonal dimensions (§4).
+    """One perspective: an id plus the five dimensions (§4).
 
-    One instance is one answerable question, and its `id` is the name that question's results are
-    published under: `LifecycleCostResult.perspective_id`, the keys of the `EvaluationMatrix`, the
-    namespaced KPIs, and the left-hand side of an `explain` value path such as
-    `brownfield_net/equivalent_annual_cost_in_euro`. Ids are therefore part of the output contract
-    and should not be renamed casually.
-
-    Perspectives are data, not code: the shipped bundle lives in `perspectives_default.json`, a
-    RenoVisor request may define additional ones, and `from_json` is the only parser. Since the
-    dimensions are orthogonal, the combinations the bundle does not ship are still expressible —
-    a macroeconomic operating-only tenant view is a legal object, just not one anybody asked for.
+    The `id` is the name results are published under (`LifecycleCostResult.perspective_id`, KPI namespaces, `explain`
+    paths such as `brownfield_net/equivalent_annual_cost_in_euro`), so it is part of the output contract. The shipped
+    bundle is `perspectives_default.json`; a RenoVisor request may define more.
     """
 
     #: Default location of the shipped default perspective bundle (§7.1).
@@ -218,17 +155,14 @@ class Perspective:
 
     @classmethod
     def from_json(cls, raw: dict) -> "Perspective":
-        """Parses one entry of perspectives_default.json (or a request block).
+        """Parse one entry of `perspectives_default.json` or a request block.
 
-        The only reader of the perspective schema, which is why adding a bundle row or letting a
-        RenoVisor request define its own perspective needs no code change. It is deliberately
-        lenient about the two dimensions with several natural spellings: `subsidies` may be a bare
-        kind string (`"FULL"`) or an object with `kind` and `scheme_ids`, and `financing` may be
-        `null`, `"cash"` or `"-"` for a cash purchase, `{}` for the default loan, or an object of
-        `FinancingPlan` fields. `actor` and `accounting` default to SYSTEM/FINANCIAL when absent.
+        `subsidies` may be a kind string (`"FULL"`) or an object with `kind` and `scheme_ids`. `financing` may be null,
+        `"cash"` or `"-"` for a cash purchase, `{}` for the default loan, or an object of `FinancingPlan` fields.
+        `actor` and `accounting` default to SYSTEM and FINANCIAL.
 
         Args:
-            raw: One perspective object; `id` and `context` are mandatory, the rest optional.
+            raw: One perspective object; `id` and `context` are mandatory.
 
         Returns:
             The parsed perspective.
@@ -259,13 +193,10 @@ class Perspective:
 
 
 def load_default_bundle(path: Optional[str] = None) -> List[Perspective]:
-    """Loads the standard perspective bundle (§7.1).
+    """Load the shipped perspective bundle (§7.1).
 
-    Reads the nine shipped perspectives — greenfield gross/net, brownfield gross/net, operating,
-    owner_monthly, landlord, tenant and macroeconomic — that every `COMPUTE_LIFECYCLE_COSTS` run
-    evaluates. It is called by `bridge.py` at the end of a simulation and by the `evaluate`,
-    `explain` and `report` CLI commands, always paired with `select_applicable`, which prunes the
-    rows that do not fit the situation.
+    The nine shipped perspectives are greenfield gross and net, brownfield gross and net, operating, owner_monthly,
+    landlord, tenant and macroeconomic. Callers pair it with `select_applicable`.
 
     Args:
         path: Alternative bundle file; defaults to `Perspective.DEFAULT_BUNDLE_PATH`.
@@ -279,21 +210,14 @@ def load_default_bundle(path: Optional[str] = None) -> List[Perspective]:
 
 
 def select_applicable(perspectives: List[Perspective], has_register: bool) -> List[Perspective]:
-    """Greenfield rows are skipped when a register exists and vice versa (§7.1).
+    """Return the perspectives that fit whether an existing-asset register exists (§7.1).
 
-    Turns the presence of an `ExistingAssetRegister` into the perspective selection, so a caller
-    declares the *situation* — is there an existing system or not — instead of hand-picking which
-    perspectives make sense. Brownfield and status-quo views need a register to have anything to
-    compare against; a greenfield view would double-charge a building whose system already exists.
-    Every other row (operating, and the actor and accounting variants, which are brownfield-based
-    in the shipped bundle) passes through unchanged.
-
-    Both CLI entry points and `bridge.py` call it immediately after `load_default_bundle`, which is
-    why an economic run with no `EconomicContext` silently produces the greenfield pair only.
+    Without a register, BROWNFIELD and STATUS_QUO rows are dropped (nothing to compare against); with one, GREENFIELD
+    rows are dropped (they would charge an existing system again). Other rows pass unchanged.
 
     Args:
         perspectives: Candidate perspectives, normally the default bundle.
-        has_register: Whether an existing-asset register was supplied for this variant.
+        has_register: Whether an existing-asset register was supplied.
 
     Returns:
         The applicable subset, in input order.

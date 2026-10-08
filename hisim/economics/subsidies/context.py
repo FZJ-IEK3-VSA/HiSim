@@ -1,12 +1,8 @@
 """Applicant and building context for subsidy eligibility (cost_spec.md §5.3, §5.7).
 
-The country-neutral vocabulary the questionnaire fills and eligibility conditions read:
-who applies (`ApplicantActor`, `ApplicantProfile`), the building facts
-(`SubsidyBuildingContext`, `HeritageStatus`), and the derived field vocabulary
-(`SubsidyContextFields`) that keeps condition/question field names honest (W2.3).
-Split out of the former single-module `subsidies.py` (PR-3 review); the package
-`__init__` re-exports everything, so `from hisim.economics.subsidies import ...` is
-unchanged.
+Holds the country-neutral facts that the questionnaire fills and eligibility conditions read: who applies
+(`ApplicantActor`, `ApplicantProfile`), the building (`SubsidyBuildingContext`), what the evaluation installs
+(`SubsidyPackageContext`), and the vocabulary of field names a condition may use (`SubsidyContextFields`).
 """
 
 from __future__ import annotations
@@ -28,25 +24,20 @@ from hisim.economics.facts import ExistingAsset
 
 
 class SubsidyDataError(ValueError):
-    """Raised for malformed subsidy catalogs.
+    """Raised for malformed subsidy catalogs and for problems the cumulation solver cannot handle.
 
-    The single error type of this module, used both at load time (unknown benefit kind, missing
-    ``legal_basis``, a condition on a field no context provides, unsourced scheme) and at solve
-    time (a candidate set too large for the cumulation solver). Failing loudly on catalog data is
-    the point: a scheme that silently parsed wrong would produce a plausible-looking euro amount
-    that no legal text backs, which is exactly what the provenance requirements of §3.10 exist to
-    prevent.
+    Raised at load time (unknown benefit kind, missing ``legal_basis``, a condition on a field no context provides, an
+    unsourced scheme) and at solve time (a candidate set too large for the solver). A scheme that parsed wrongly would
+    yield a plausible euro amount no legal text backs, so the engine fails instead (§3.10).
     """
 
 
 class HeritageStatus(str, enum.Enum):
-    """Heritage-protection status (§5.3).
+    """Heritage-protection status of the building (§5.3).
 
-    Heritage protection is a first-class eligibility input because German (and several other EU)
-    programmes *relax* their technical thresholds for protected buildings — the BEG for instance
-    accepts a lower SCOP for a listed monument — and because it caps what an envelope retrofit may
-    physically do. The member names follow the legal categories rather than a severity ordering;
-    conditions test them with ``==`` / ``!=`` / ``in``, never with ``<``.
+    Several programmes relax their technical thresholds for protected buildings (the BEG, for example, accepts a lower
+    SCOP for a listed monument). The members are legal categories, not a severity order, so conditions compare them
+    with ``==``, ``!=`` or ``in``, never ``<``.
     """
 
     NONE = "NONE"
@@ -56,21 +47,15 @@ class HeritageStatus(str, enum.Enum):
 
 
 class DwellingType(str, enum.Enum):
-    """How the dwelling is attached to its neighbours, as fixed-amount grants band it (§5.3).
+    """How the dwelling is attached to its neighbours, in the bands that fixed-amount grants use (§5.3).
 
-    Several national programmes pay a *different fixed amount* for the same measure depending on
-    how much external surface the dwelling has: Ireland's SEAI grants quote four figures for every
-    insulation measure (a detached house gets EUR 2,000 for attic insulation, a mid-terrace house
-    EUR 1,400), and the British schemes band the same way. The German BEG has no such axis, which
-    is why the field is optional and why no shipped DE or AT scheme reads it.
+    Some programmes pay a different fixed amount per measure depending on this: Ireland's SEAI pays EUR 2,000 for attic
+    insulation in a detached house and EUR 1,400 in a mid-terrace house. Semi-detached and end-of-terrace houses are
+    paid the same everywhere and share one member. The German BEG has no such axis, so the field is optional. ``None``
+    means unanswered and makes a condition on it UNDETERMINED rather than false.
 
-    The four members are the bands the programmes actually use, not a geometry taxonomy: a
-    semi-detached house and an end-of-terrace house are paid the same amount everywhere the band
-    appears and therefore share one member. As everywhere else in the eligibility context, ``None``
-    means *unanswered* and makes a condition touching it UNDETERMINED rather than false.
-
-    Example: the catalog leaf ``{"field": "building.dwelling_type", "op": "==", "value":
-    "DETACHED"}`` selects the detached-house variant of a banded grant.
+    Example: the catalog leaf ``{"field": "building.dwelling_type", "op": "==", "value": "DETACHED"}`` selects the
+    detached-house variant of a banded grant.
     """
 
     DETACHED = "DETACHED"
@@ -80,19 +65,12 @@ class DwellingType(str, enum.Enum):
 
 
 class ApplicantActor(str, enum.Enum):
-    """Applicant roles for eligibility conditions.
+    """Who signs the funding application, as eligibility conditions test it.
 
-    Who applies decides what is on offer: most residential programmes are open to owner-occupiers,
-    landlords and condominium associations but not to tenants, and several bonuses (the BEG
-    income bonus, for example) require self-occupation. The vocabulary is deliberately
-    country-neutral — a condominium association is a "Wohnungseigentümergemeinschaft (WEG)" in
-    Germany, an "owners' management company" in Ireland — so the same context serves every
-    country catalog. This is also deliberately *not* ``timeline.Actor``: that enum is about who
-    pays a cash flow and includes the pre-allocation ``SYSTEM`` view, whereas this one is about
-    who signs the funding application. The two are not convertible into each other, and nothing
-    tries: the applicant is stated directly on the :class:`ApplicantProfile` of the economic
-    context, and ``CONDOMINIUM_ASSOCIATION`` has no ``Actor`` counterpart to map back to at all
-    (§8 D23).
+    Most residential programmes are open to owner-occupiers, landlords and condominium associations but not to tenants.
+    The names are country-neutral, so one context serves every country catalog. This is not ``timeline.Actor``, which
+    says who pays a cash flow; the two are not converted into each other, and ``CONDOMINIUM_ASSOCIATION`` has no
+    ``Actor`` counterpart.
     """
 
     OWNER_OCCUPIER = "OWNER_OCCUPIER"
@@ -103,13 +81,11 @@ class ApplicantActor(str, enum.Enum):
 
 @dataclass
 class ApplicantProfile:
-    """Who applies for the subsidy (§5.3).
+    """Facts about the person applying for the subsidy (§5.3).
 
-    One half of the eligibility context (the other is :class:`SubsidyBuildingContext`): the facts
-    about the *person* that no simulation can produce and that the §5.7 questionnaire therefore
-    asks. Every optional field defaults to ``None``, and ``None`` means *unanswered* rather than
-    "not applicable" — a condition touching it makes its scheme UNDETERMINED instead of ineligible,
-    which is what keeps a half-filled questionnaire from silently costing the user money.
+    The applicant half of the eligibility context; the building half is :class:`SubsidyBuildingContext`. No simulation
+    produces these facts, so the questionnaire asks them (§5.7). ``None`` means unanswered: a condition touching it
+    makes its scheme UNDETERMINED instead of ineligible.
     """
 
     actor: ApplicantActor = ApplicantActor.OWNER_OCCUPIER
@@ -135,14 +111,12 @@ class ApplicantProfile:
 
 @dataclass
 class SubsidyBuildingContext:
-    """Building facts consumed by eligibility conditions (§5.3).
+    """Building facts read by eligibility conditions (§5.3).
 
-    The building half of the eligibility context: age, size, usage split, heritage status and the
-    heating system being replaced — the facts programmes key their thresholds on. Some of these the
-    simulation or the building model already knows (construction year, floor areas) and the caller
-    fills them in; the rest are questionnaire answers (§5.7). As on :class:`ApplicantProfile`,
-    ``None`` means unanswered and propagates as UNDETERMINED, whereas the non-optional fields carry
-    defaults that are assertions: a single dwelling unit and no commercial floor area.
+    Age, size, usage split, heritage status and the heating system being replaced. The caller fills what the building
+    model knows (construction year, floor areas); the rest are questionnaire answers (§5.7). ``None`` means unanswered
+    and makes a condition UNDETERMINED; the non-optional fields default to a single dwelling unit and no commercial
+    floor area.
     """
 
     construction_year: Optional[int] = None
@@ -164,15 +138,14 @@ class SubsidyBuildingContext:
 
     @property
     def residential_share(self) -> Optional[float]:
-        """Derived, never asked separately (§5.7).
+        """Residential fraction of the floor area in [0, 1], derived and never asked separately (§5.7).
 
-        The residential fraction of the floor area, in [0, 1]. Two things read it: eligibility
-        conditions of residential-only programmes (``building.residential_share >= 0.5``) and the
-        ``RESIDENTIAL_SHARE`` proration of the eligible-cost basis in mixed-use buildings (§5.2).
-        Returning ``None`` when the residential area is unanswered — or when both areas are zero —
-        is what makes those conditions UNDETERMINED rather than false; see
-        :attr:`SubsidyContextFields.DERIVED_CONTEXT_FIELDS` for how the questionnaire asks the two
-        areas behind it instead.
+        Read by conditions of residential-only programmes (``building.residential_share >= 0.5``) and by the
+        ``RESIDENTIAL_SHARE`` proration of the eligible cost in mixed-use buildings (§5.2).
+
+        Returns:
+            The share, or ``None`` when the residential area is unanswered or both areas are zero, which makes
+                conditions on it UNDETERMINED.
         """
         if self.residential_floor_area_in_m2 is None:
             return None
@@ -184,25 +157,16 @@ class SubsidyBuildingContext:
 
 @dataclass
 class SubsidyPackageContext:
-    """What the evaluation being priced installs, for conditions on what a measure comes with.
+    """What the evaluation being priced newly installs, for conditions on what a measure must come with.
 
-    Some grants are only paid for a measure carried out *together with* another one: SEAI's
-    central-heating grant is for the radiators or floor circuits installed beside a heat pump, not
-    for new radiators on an oil boiler. Nothing about one measure's own cost facts can say that, so
-    the evaluator states, per evaluation, which asset classes that evaluation newly installs --
-    every cost subject that is a new investment or a replacement under the §4.1 installation
-    context, exactly the ones it charges at year 0 (``calculators.context_resolution
-    .installation_verdict``). In a staged plan one evaluation is one stage, so "in the same
-    package" means "bought in the same stage": a heat pump an earlier stage bought is an existing
-    asset of the later one.
+    Some grants are paid only for a measure carried out together with another: SEAI's central-heating grant covers
+    radiators installed beside a heat pump, not new radiators on an oil boiler. The evaluator lists the asset classes
+    it charges at year 0 as new investments or replacements (``calculators.context_resolution.installation_verdict``).
+    In a staged plan one evaluation is one stage, so "in the same package" means "bought in the same stage". The fields
+    are computed, never asked; a context nobody filled leaves them ``None``, so conditions on them are UNDETERMINED.
 
-    The fields are computed, never asked (like ``measure.*``): the questionnaire has no question
-    for them, and a context nobody filled -- a caller outside the evaluator -- leaves them
-    ``None``, i.e. unanswered, so a condition on them is UNDETERMINED rather than false.
-
-    Example: the catalog leaf ``{"field": "package.installed_asset_classes", "op": "contains",
-    "value": "HeatPump"}`` holds when the same evaluation installs a heat pump. The values are the
-    ``ComponentType`` *values*, as ``building.existing_heating.asset_class`` compares them.
+    Example: the leaf ``{"field": "package.installed_asset_classes", "op": "contains", "value": "HeatPump"}`` holds
+    when the same evaluation installs a heat pump. The values are ``ComponentType`` values.
     """
 
     #: The ``ComponentType`` values of every asset class the evaluation newly installs, sorted.
@@ -210,16 +174,12 @@ class SubsidyPackageContext:
 
 
 # --------------------------------------------------------------------------- field vocabulary
-# W2.3: ONE source of truth for the names conditions and questions may use. The vocabulary is
-# derived from the context dataclasses themselves, so a field added to `ApplicantProfile` or
-# `SubsidyBuildingContext` cannot be forgotten in a hand-maintained whitelist.
+# The names conditions and questions may use, derived from the context dataclasses themselves.
 
 def _dataclass_of(annotation: Any) -> Optional[type]:
-    """The dataclass behind a (possibly `Optional[...]`) annotation, if there is one.
+    """Return the dataclass behind a possibly `Optional[...]` annotation, or ``None`` if there is none.
 
-    Lets :func:`_enumerate_context_fields` descend one level into nested context objects, which is
-    what makes ``building.existing_heating.energy_carrier`` an addressable condition field. Returns
-    ``None`` for plain scalars, so a non-dataclass annotation simply contributes no sub-fields.
+    Lets :func:`_enumerate_context_fields` descend into nested context objects such as ``building.existing_heating``.
     """
     if dataclasses.is_dataclass(annotation) and isinstance(annotation, type):
         return annotation
@@ -230,14 +190,19 @@ def _dataclass_of(annotation: Any) -> Optional[type]:
 
 
 def _enumerate_context_fields(context_roots: Optional[Dict[str, type]] = None) -> FrozenSet[str]:
-    """Every addressable context field: dataclass fields, one nested level, and properties.
+    """Return every field name a condition may address: dataclass fields, one nested level, and properties.
 
-    Derives the condition vocabulary from the context dataclasses by reflection instead of a
-    hand-maintained whitelist (W2.3), so a field added to :class:`ApplicantProfile` or
-    :class:`SubsidyBuildingContext` is immediately addressable and cannot be forgotten. Properties
-    are included because derived fields such as ``building.residential_share`` are legitimate
-    condition targets. Exactly one nesting level is walked — deeper paths are not expressible in
-    the catalog today, and unbounded recursion would admit names no question could ever cover.
+    The vocabulary is derived from the context dataclasses by reflection, so a new field on :class:`ApplicantProfile`
+    or :class:`SubsidyBuildingContext` is addressable at once. Properties are included because derived fields such as
+    ``building.residential_share`` are valid targets. Only one nesting level is walked, since the catalog cannot
+    express deeper paths.
+
+    Args:
+        context_roots: Root name to dataclass, e.g. ``{"applicant": ApplicantProfile}``; ``None`` uses
+            `SubsidyContextFields.CONTEXT_ROOTS`.
+
+    Returns:
+        Dotted names such as ``building.existing_heating.energy_carrier``.
     """
     names: Set[str] = set()
     for root, context_class in (context_roots or SubsidyContextFields.CONTEXT_ROOTS).items():
@@ -255,16 +220,13 @@ def _enumerate_context_fields(context_roots: Optional[Dict[str, type]] = None) -
 
 
 def _known_context_fields(context_roots: Dict[str, type], derived: Dict[str, Tuple[str, ...]]) -> FrozenSet[str]:
-    """The vocabulary, with the derived-field registry checked against it.
+    """Return the condition vocabulary after checking the derived-field registry against it.
 
-    Runs at import time to build :attr:`SubsidyContextFields.KNOWN_CONTEXT_FIELDS`, and takes the
-    opportunity to verify that every name in ``DERIVED_CONTEXT_FIELDS`` — both the derived fields
-    and the user-answerable targets they point at — actually exists in the enumerated vocabulary.
-    A stale registry entry would otherwise surface much later as a question that can never be
-    answered, so it is caught as an import-time coding error instead.
+    Runs at import time to build :attr:`SubsidyContextFields.KNOWN_CONTEXT_FIELDS`. A stale registry entry would
+    otherwise show up much later as a question nobody can answer.
 
     Raises:
-        SubsidyDataError: If the derived-field registry references a name the context does not have.
+        SubsidyDataError: If the derived-field registry names a field the context does not have.
     """
     names = _enumerate_context_fields(context_roots)
     unknown_derived = sorted(
@@ -278,13 +240,12 @@ def _known_context_fields(context_roots: Dict[str, type], derived: Dict[str, Tup
 
 
 class SubsidyContextFields:
-    """The addressable eligibility-context vocabulary (§5.7).
+    """Namespace for the field names an eligibility condition may use (§5.7).
 
-    A namespace, not a value type: it holds the three pieces of knowledge about *what a condition
-    may talk about* — which roots resolve against which dataclass, which fields are computed rather
-    than asked, and the resulting set of legal field names. Keeping them together is what lets the
-    catalog loader reject a typo like ``applicant.incom`` at load time (§5.3) and lets the data-file
-    CI prove that every field any shipped scheme references has a localized question (§9.6).
+    Holds which root (``applicant``, ``building``, ``package``) resolves against which dataclass, which fields are
+    computed rather than asked, and the resulting set of legal names. The catalog loader uses it to reject a typo like
+    ``applicant.incom`` (§5.3), and the data-file checks use it to prove every referenced field has a localized
+    question (§9.6).
     """
 
     #: Condition roots and the dataclass each resolves against. `measure.*` is deliberately
@@ -324,12 +285,10 @@ class SubsidyContextFields:
 
 
 def question_targets(fieldname: str) -> Tuple[str, ...]:
-    """The user-answerable field(s) whose answers determine `fieldname` (§5.7).
+    """Return the user-answerable field(s) whose answers determine `fieldname` (§5.7).
 
-    Plain fields map to themselves; derived fields map to the friendly questions behind them.
-    A condition on ``building.residential_share`` thus turns into two area questions rather than a
-    percentage nobody can state off-hand. Both the question derivation (:func:`required_questions`)
-    and the question-coverage check in ``validation.py`` route through this function, so the two
-    can never disagree about which entry a catalog must ship.
+    Plain fields map to themselves; derived fields map to the questions behind them, so ``building.residential_share``
+    becomes the two floor-area questions. Both :func:`required_questions` and the coverage check in ``validation.py``
+    use this function, so they agree on which questions a catalog must ship.
     """
     return SubsidyContextFields.DERIVED_CONTEXT_FIELDS.get(fieldname, (fieldname,))

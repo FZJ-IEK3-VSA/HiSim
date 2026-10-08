@@ -1,34 +1,15 @@
-"""``economics_result.json``: one staged plan written in the shape the frontend draws from.
+"""Builds `economics_result.json`: one staged plan in the shape the RenoVisor frontend draws its charts from.
 
-The engine's own outputs (``lifecycle_costs.json``, ``component_costs.json``,
-``cash_flow_timeline.csv``) are shaped for the engine's report and for re-pricing. The RenoVisor
-frontend needs a different cut of the same money: nine charts, every one of them a selection out
-of a document rather than arithmetic of its own. This module builds that document out of a
-:class:`~hisim.economics.staged.StagedResult` and nothing else, and validates every document it
-writes against ``economics_result.schema.json``, which ships beside it.
-
-Four conventions hold throughout, and the schema enforces the first three:
-
-* **Bands.** Every amount is ``{"min": …, "best": …, "max": …}`` — the engine's LOW /
-  BEST_ESTIMATE / HIGH slots — so nothing downstream can collapse a band silently.
-* **Signs.** Cost is positive, money arriving is negative: a subsidy, a feed-in revenue, a
-  residual value and an anyway-cost credit are all negative, which is the engine's own rule
-  (``cost_spec.md`` §3.6) carried through unchanged.
-* **Relative years.** Years are ``0..T`` with ``calendar_year`` given on every row, so a reader
-  never has to add anything themselves. It is ``parameters.plan_start_year + year``, and ``null``
-  on every row when the plan names no start year; ``parameters.weather_year`` is the year of the
-  stages' weather and dates nothing (renovisorissues #57).
-* **Ids, not labels.** Subjects, asset classes, measure ids, scheme ids and perspective ids are
-  written as they are; the frontend labels them from its own catalogue and country pack.
+The document is built from a `StagedResult` alone and validated against the shipped `economics_result.schema.json`
+before it is written. Every amount is a band `{"min", "best", "max"}` (the engine's LOW, BEST_ESTIMATE and HIGH slots);
+cost is positive and money arriving is negative (cost_spec.md §3.6). Years are relative (`0..T`), with `calendar_year`
+on every row, `null` when the plan names no start year. Subjects, asset classes, measures, schemes and perspectives are
+written as ids; the frontend labels them.
 
 Example::
 
     document = StagedDocument(result, parameters, perspective, measure_ids={"HeatPump": "heating_system"})
     document.write(Path("economics_result.json"))
-
-Specification: ``specs/economics-hisim-spec.md`` of the renovisorissues project §3 (the document) and §5 (what
-the charts need from it), with the engine-side decisions of
-``roadmap/renovisor/implementation/step10_staged_economics.md`` §3.
 """
 
 from __future__ import annotations
@@ -61,61 +42,43 @@ AwardKey = Tuple[str, str, Optional[int]]
 
 
 class SchemaValidationUnavailableError(RuntimeError):
-    """``jsonschema`` is not installed, so a written document cannot be validated.
+    """Raised when `jsonschema` is not installed, so a document cannot be validated before it is written.
 
-    The document is a contract with a frontend that has no way of checking it, so writing one
-    unvalidated would ship whatever shape the code happened to produce. Refusing before the file
-    exists is the same choice ``__main__.AuditLayerProbe`` makes for the audit exports: a
-    half-kept promise is worse than a named refusal.
+    The frontend cannot check the document itself, so writing it unvalidated is refused.
     """
 
 
 class BandOrderError(ValueError):
-    """A band in the document is not ``min <= best <= max``.
+    """Raised when a band in the document is not `min <= best <= max`.
 
-    Raised by :meth:`StagedDocument.assert_bands_ordered` before the file is written. The schema
-    can say that a band is three numbers but not that they are ordered, so the one invariant the
-    frontend relies on when it draws a range — the low world is the low end — is checked here
-    instead. It is always a bug in this module: every band it publishes comes from an
-    :class:`~hisim.economics.uncertainty.UncertainValue`, which cannot be unordered, unless the
-    document builds one out of separate slot values and gets the ends wrong.
+    The schema cannot express the order of a band's three numbers, so `StagedDocument.assert_bands_ordered` checks it
+    before writing. It always indicates a bug in this module, since an `UncertainValue` is ordered by construction.
     """
 
 
 class SubsidyReconciliationError(ValueError):
-    """An evaluation books a subsidy its own ``subsidies[]`` rows do not award.
+    """Raised when an evaluation books a subsidy that its own `subsidies[]` rows do not award.
 
-    Raised by :meth:`StagedDocument.assert_subsidies_reconciled` before the file is written. The
-    document states support twice — as the ``Subsidies`` group of every year's stack and as the
-    awarded rows of ``subsidies[]`` — and a frontend draws both, so a grant in one that is absent
-    from the other is a chart contradicting the table beside it (hisim-cyc.5). Like
-    :class:`BandOrderError` it is always a bug in the engine or in this module, never in the input.
+    The document states support twice, as the `Subsidies` stack of each year and as the awarded `subsidies[]` rows, and
+    the frontend draws both. `StagedDocument.assert_subsidies_reconciled` raises this before writing; it always
+    indicates a bug in the engine or this module, never in the input.
     """
 
 
 class MeasureWithoutRowError(ValueError):
-    """A measure a stage carries out has no ``by_subject`` row in the document.
+    """Raised when a measure a stage carries out has no `by_subject` row in the document.
 
-    Raised by :meth:`StagedDocument.assert_every_measure_has_row` before the file is written
-    (renovisorissues #58). ``by_subject`` is what the frontend draws "what the work costs" from, so
-    a measure the plan bought and no row names disappears from it without a trace. Every measure
-    the translator acts on either creates a cost subject or is declared costless or unpriced with
-    a reason in its mapping report (``hisim.renovisor.economics.MeasureSubjects``); a measure that
-    is neither is a translator or engine bug, or a mapping report written before the declaration
-    existed, which a re-translation of the stage fixes.
+    `by_subject` is what the frontend draws the cost of the work from, so a missing row hides a bought measure. Every
+    measure the translator acts on creates a cost subject or is declared costless or unpriced in its mapping report;
+    one that is neither is a translator or engine bug, or a stale mapping report that re-translating the stage fixes.
     """
 
 
 class CostGroup(str, enum.Enum):
-    """The eight stacks every chart of E-spec §5 draws, in the order they are drawn in.
+    """The eight cost groups every stacked chart draws, in drawing order.
 
-    A closed set with a fixed order, because the frontend's stacked columns (V1) and stacked bars
-    (V2) must show the same eight segments in the same sequence for the baseline and for the plan,
-    and the document states that order once under its ``groups`` key rather than leaving two
-    renderers to agree on it.
-
-    The names are the E-spec's own and are *ids* like everything else in the document: the
-    frontend translates them, and nothing in HiSim parses them back.
+    The order is fixed and published under the document's `groups` key, so the baseline and the plan show the same
+    segments in the same sequence. The names are ids the frontend translates.
     """
 
     INVESTMENT_AND_FINANCING = "Investment & financing"
@@ -129,12 +92,10 @@ class CostGroup(str, enum.Enum):
 
 
 class CostGroups:
-    """The one table mapping the engine's cost categories onto the document's eight groups.
+    """The table mapping every engine cost category onto one of the document's eight groups.
 
-    Every :class:`~hisim.economics.timeline.CostCategory` appears exactly once, which is what
-    makes "the eight groups sum to the total" true by construction rather than by a test that
-    happens to pass: a category added to the engine and forgotten here fails
-    :meth:`assert_total`, not a chart.
+    Each `CostCategory` appears exactly once, so the groups sum to the total by construction; `assert_total` fails at
+    import if a category is missing.
 
     Example::
 
@@ -167,7 +128,7 @@ class CostGroups:
 
     @classmethod
     def of(cls, category: CostCategory) -> CostGroup:
-        """The group one category is shown under.
+        """Return the group one cost category is shown under.
 
         Args:
             category: An engine cost category.
@@ -176,17 +137,13 @@ class CostGroups:
             Its group.
 
         Raises:
-            KeyError: If the category is not in the table, which means a category was added to the
-                engine without deciding which stack it belongs in.
+            KeyError: If the category is not in the table.
         """
         return cls.BY_CATEGORY[category]
 
     @classmethod
     def assert_total(cls) -> None:
-        """Raise unless every cost category has a group.
-
-        Called once when the module is imported, so an engine that grows a category fails at
-        import rather than by writing a document whose stacks do not add up.
+        """Raise unless every cost category has a group; called once at import.
 
         Raises:
             ValueError: Naming the categories with no group.
@@ -203,13 +160,10 @@ CostGroups.assert_total()
 
 
 class SubsidyStatus(str, enum.Enum):
-    """What the document says about one subsidy scheme (E-spec §3, §5.7).
+    """What the document says about one subsidy scheme: `AWARDED`, `INELIGIBLE` or `UNDETERMINED`.
 
-    Three states and no fourth: a scheme was ``AWARDED``, was refused on an answered condition
-    (``INELIGIBLE``), or could not be decided because a question the applicant has not answered
-    stands in the way (``UNDETERMINED``). The last one exists so that an unanswered question is
-    shown as a question; publishing it as a zero is the mistake §5.7 forbids, and is why an
-    undetermined entry carries no amount at all rather than an amount of nothing.
+    `INELIGIBLE` means refused on an answered condition; `UNDETERMINED` means an unanswered applicant question decides
+    it. An undetermined row carries no amount at all, so the question is shown as a question rather than as a zero.
     """
 
     AWARDED = "awarded"
@@ -218,12 +172,10 @@ class SubsidyStatus(str, enum.Enum):
 
 
 class EventKind(str, enum.Enum):
-    """The markers a year of the annual series can carry (E-spec §3, chart V1 and V9).
+    """The markers a year of the annual series can carry.
 
-    Closed on purpose: the frontend draws one glyph per kind, so a new kind is a frontend change
-    and not a HiSim decision. ``REPLACEMENT`` is the one addition to the E-spec's three examples,
-    without which chart V9 ("which measure starts when, replacements") would have to re-derive
-    replacement years from ``by_subject`` while the other markers come ready-made.
+    The set is closed because the frontend draws one glyph per kind. `REPLACEMENT` marks the years a subject is
+    replaced, so the timeline chart need not derive them from `by_subject`.
     """
 
     INVESTMENT = "investment"
@@ -233,12 +185,7 @@ class EventKind(str, enum.Enum):
 
 
 class SubjectKindNames:
-    """How ``by_subject[].kind`` spells the two kinds of cost subject.
-
-    The engine's :class:`~hisim.economics.timeline.SubjectKind` is ``COMPONENT`` / ``CARRIER``;
-    the document writes them lower-case, which is what E-spec §3's example shows and what the
-    rest of the document's own enumerations (statuses, event kinds) use.
-    """
+    """How `by_subject[].kind` spells the two kinds of cost subject: `component` and `carrier`, in lower case."""
 
     #: A device or an envelope measure — something that was bought — and also the zero row of a
     #: measure the engine prices no subject for (a setting, a measure HiSim holds no price for),
@@ -250,51 +197,38 @@ class SubjectKindNames:
 
     @classmethod
     def of(cls, subject_kind: Any) -> str:
-        """The document's spelling of one engine subject kind."""
+        """Return the document's spelling of one engine `SubjectKind`."""
         return str(getattr(subject_kind, "value", subject_kind)).lower()
 
 
 class StagedDocument:
-    """Builds and writes ``economics_result.json`` for one priced plan.
+    """Builds and writes `economics_result.json` for one priced plan.
 
-    The builder holds the priced plan and the context the plan cannot know about itself — which
-    catalogue measure created which cost subject, which subjects are in the document without a
-    price behind them, where the provenance file is — and turns them into one JSON document.
-    Nothing is computed here that the plan does not already carry: every figure is a filter, a
-    pivot or a sum of the two :class:`~hisim.economics.results.LifecycleCostResult` objects on the
-    :class:`~hisim.economics.staged.StagedResult`, which is what makes the document and the
-    engine's own report incapable of disagreeing.
+    It holds the priced plan plus what the plan does not know about itself: which catalogue measure created which cost
+    subject, which subjects have no price, and where the provenance file is. Every figure is a filter, pivot or sum of
+    the two `LifecycleCostResult` objects (reference and plan) on the `StagedResult`, so the document cannot disagree
+    with the engine's own report. A cost subject is one costed thing on the timeline, such as a component, an envelope
+    element or an energy carrier.
 
     Args:
         result: The priced plan.
-        parameters: The assumptions it was priced under; written into ``parameters`` so a stored
-            document states its own basis.
-        perspective: The accounting frame, for its id and its financing plan.
+        parameters: The assumptions it was priced under, written into `parameters`.
+        perspective: The accounting frame, for its id and financing plan.
         measure_ids: Cost subject -> the catalogue measure that created it, from the translator's
-            ``mapping_report.json`` ``subjects`` map. A subject absent from the mapping belongs to
-            the baseline and is stamped ``null``.
-            ``None`` -- a document built by hand without the map -- stamps no measure on any row
-            and skips :meth:`assert_every_measure_has_row`, which has nothing to check against.
-        unpriced_subjects: Subjects present in the plan with no price behind them — an envelope
-            measure whose request carried no ``cost`` block, or a measure HiSim holds no price
-            for. They are flagged rather than hidden, so the document says what it does not know
-            (step 10 §1).
-        cost_provenance: Name of the provenance file beside the document, for ``provenance``.
-        costless_subjects: Subjects of a measure that costs nothing to carry out -- a setting,
-            not a purchase. With the measure-only subjects of ``unpriced_subjects`` they are the
-            subjects the engine prices no cost facts for, and each gets a zero row of its own
-            (renovisorissues #58). Also a subject that is part of another's purchase and whose
-            facts the translator's context zeroed -- the battery's energy-management controller
-            (renovisorissues #77); it keeps its own row, with a zero one where it booked no flow.
-        subject_notes: Subject -> the sentence its row's ``note`` carries: why an unpriced
-            subject has no price, why a costless one costs nothing.
-        replaces_subjects: Measure subject -> the reference subjects it replaces, from the
-            translator's mapping report (hisim-ryw1); a row whose subject no measure created, and
-            every reference row of a subject stage 0 does not carry out, states an empty list.
+            `mapping_report.json`; a subject absent from it belongs to the baseline and gets `null`. None (a document
+            built without the map) stamps no measure on any row and skips `assert_every_measure_has_row`.
+        unpriced_subjects: Subjects in the plan with no price (an envelope measure without a `cost` block, or a measure
+            HiSim holds no price for); flagged, not hidden.
+        cost_provenance: Name of the provenance file beside the document.
+        costless_subjects: Subjects of a measure that costs nothing (a setting, not a purchase), and subjects bought as
+            part of another whose facts were zeroed (the battery's energy-management controller); each gets a zero row
+            of its own where it booked no flow.
+        subject_notes: Subject -> the sentence its row's `note` carries (why it has no price, or costs nothing).
+        replaces_subjects: Measure subject -> the reference subjects it replaces, from the mapping report; rows without
+            a measure state an empty list.
     """
 
-    #: Version of this document format. Bumped when a consumer would have to change; 8 added the
-    #: required ``source`` of every ``by_subject`` row (``roadmap/kpi_address_spec.md``).
+    #: Version of this document format, bumped whenever a consumer would have to change.
     SCHEMA_VERSION: ClassVar[int] = 8
 
     #: The one currency the engine prices in.
@@ -322,12 +256,12 @@ class StagedDocument:
         "no subsidy catalogue for {country}; no maximum: there is no scheme to state one"
     )
 
-    #: The note of a subsidy row whose decision carries no maximum for its scheme -- a decision
-    #: made before the maximum existed; the solver states one for every scheme it assesses.
+    #: The note of a subsidy row whose decision carries no maximum for its scheme (a stored decision
+    #: from an older version); the solver states one for every scheme it assesses.
     NO_MAXIMUM_NOTE: ClassVar[str] = "no maximum: the decision states none for this scheme"
 
     #: The note of a row the reader's quote prices, where HiSim holds no price of its own for the
-    #: subject (renovisorissues #53): it replaces the note that said the row was unpriced.
+    #: subject: it replaces the note that said the row was unpriced.
     QUOTED_UNPRICED_NOTE: ClassVar[str] = (
         "priced by the reader's quote; HiSim holds no price of its own for it"
     )
@@ -362,15 +296,11 @@ class StagedDocument:
         subject_notes: Optional[Mapping[str, str]] = None,
         replaces_subjects: Optional[Mapping[str, Sequence[str]]] = None,
     ) -> None:
-        """Store the plan and its context; nothing is built until :meth:`to_json`.
+        """Store the plan and its context; nothing is built until `to_json`.
 
-        Which catalogue the plan was priced under is read off the result
-        (:attr:`~hisim.economics.staged.StagedResult.subsidy_catalog_id`) and not taken from the
-        caller, so the ``parameters`` block and the ``subsidies[]`` rows cannot name a catalogue
-        the figures were not priced with. A plan with no catalogue was priced with
-        ``subsidy_mode: NONE`` (:meth:`~hisim.economics.staged.StagedEvaluator.priced_under`), so
-        the parameters and the perspective are resolved the same way here, and the ``parameters``
-        block says what ran whichever perspective the caller passed.
+        The subsidy catalogue is read off the result (`StagedResult.subsidy_catalog_id`), not taken from the caller, so
+        the document cannot name a catalogue the figures were not priced with. A plan without a catalogue was priced
+        with subsidy mode NONE, and the parameters and perspective are resolved the same way here.
         """
         subsidy_catalog_id = result.subsidy_catalog_id
         if subsidy_catalog_id is None:
@@ -379,8 +309,8 @@ class StagedDocument:
         self._parameters = parameters
         self._perspective = perspective
         self._measure_ids: Dict[str, Optional[str]] = dict(measure_ids or {})
-        # An increment a later stage bought for a kept subject is that subject's measure too
-        # (hisim-1y0m): its row sits beside the subject it enlarges, under the same measure.
+        # An increment a later stage bought for a kept subject is that subject's measure too:
+        # its row sits beside the subject it enlarges, under the same measure.
         for stage in result.stages:
             for subject_facts in stage.inputs.cost_facts:
                 base = IncrementSubjects.base_of(subject_facts.subject)
@@ -399,17 +329,14 @@ class StagedDocument:
 
     @staticmethod
     def _sources_of_components(result: StagedResult) -> Dict[str, KpiSource]:
-        """Subject -> KPI source of every component any stage simulated.
+        """Return subject -> KPI source of every component any stage simulated.
+
+        A KPI source is the stable address of a HiSim component (import path, instance, assembly member, name). The
+        first stage's `display_name` and `label` stand when a later stage renames them.
 
         Raises:
-            ValueError: If a stage's inputs were read from a file written before the sources
-                existed, which would leave every row's ``source`` unknowable; or if two stages give
-                one subject sources that differ in an identity field (``import``, ``instance``,
-                ``path``, ``member``, ``assembly``, ``name``: :attr:`KpiSource.IDENTITY_FIELDS`),
-                which would make one subject two components.
-                ``display_name`` and ``label`` are presentation: a stage that renamed the label of
-                a kept component still prices the same component, and the first stage's
-                presentation stands.
+            ValueError: If a stage's inputs carry no sources (written by an older version), or if two stages give one
+                subject sources that differ in an identity field (`KpiSource.IDENTITY_FIELDS`).
         """
         sources: Dict[str, KpiSource] = {}
         for index, stage in enumerate(result.stages):
@@ -429,12 +356,11 @@ class StagedDocument:
         return sources
 
     def _source_of(self, subject: str) -> Optional[Dict[str, Any]]:
-        """A row's ``source``: the KPI source of the component its subject is, or None.
+        """Return a row's `source`: the KPI source of the component its subject is, or None.
 
-        A subject is a HiSim component when a stage simulated a component of that name; the
-        increment a later stage bought for a kept component (:class:`IncrementSubjects`) is that
-        component's too. Every other subject -- an envelope element or measure, a carrier, a
-        synthetic subject such as the financing -- has none.
+        A subject is a component when a stage simulated a component of that name; the increment a later stage bought
+        for a kept component counts as that component. Envelope elements, measures, carriers and synthetic subjects
+        such as financing have none.
         """
         source = self._component_sources.get(subject)
         if source is None:
@@ -448,9 +374,8 @@ class StagedDocument:
         """Return the whole document as JSON-ready data.
 
         Returns:
-            The document of E-spec §3: ``schema_version``, ``engine``, ``parameters``,
-            ``currency``, ``groups``, ``stages``, ``reference``, ``plan``, ``comparison`` and
-            ``provenance``, in that order, so two runs of one plan produce the same bytes.
+            The document with `schema_version`, `engine`, `parameters`, `currency`, `groups`, `stages`, `reference`,
+                `plan`, `comparison` and `provenance`, in that order, so two runs of one plan produce the same bytes.
         """
         return {
             "schema_version": self.SCHEMA_VERSION,
@@ -474,24 +399,21 @@ class StagedDocument:
     def write(self, path: Path) -> Dict[str, Any]:
         """Validate the document and write it, or write nothing.
 
-        Validation happens before the first byte is written, so a document that does not match its
-        own schema never reaches a consumer. The file is written with a trailing newline and
-        stable key order, which is what lets two runs of one plan be compared byte for byte.
+        Validation runs before the first byte is written. The file has stable key order and a trailing newline, so two
+        runs of one plan compare byte for byte.
 
         Args:
             path: Where the document goes; parent directories are created.
 
         Returns:
-            The document that was written, so a caller need not read it back.
+            The document that was written.
 
         Raises:
-            SchemaValidationUnavailableError: If ``jsonschema`` cannot be imported.
-            jsonschema.ValidationError: If the document does not match the schema, which is a bug
-                in this module rather than in its inputs.
-            BandOrderError: If any band in the document is not ``min <= best <= max``.
-            SubsidyReconciliationError: If an evaluation books support that its ``subsidies[]``
-                rows do not award.
-            MeasureWithoutRowError: If a measure a stage carries out has no ``by_subject`` row.
+            SchemaValidationUnavailableError: If `jsonschema` cannot be imported.
+            jsonschema.ValidationError: If the document does not match the schema (a bug in this module).
+            BandOrderError: If a band is not `min <= best <= max`.
+            SubsidyReconciliationError: If an evaluation books support its `subsidies[]` rows do not award.
+            MeasureWithoutRowError: If a measure a stage carries out has no `by_subject` row.
         """
         document = self.to_json()
         self.validate(document)
@@ -506,12 +428,12 @@ class StagedDocument:
 
     @classmethod
     def schema_path(cls) -> Path:
-        """Where the shipped JSON Schema is, beside this module."""
+        """Return the path of the shipped JSON Schema, beside this module."""
         return Path(os.path.dirname(os.path.abspath(__file__))) / cls.SCHEMA_FILE_NAME
 
     @classmethod
     def schema(cls) -> Dict[str, Any]:
-        """The shipped JSON Schema, parsed."""
+        """Return the shipped JSON Schema, parsed."""
         with cls.schema_path().open(encoding="utf-8") as handle:
             loaded: Dict[str, Any] = json.load(handle)
         return loaded
@@ -524,9 +446,8 @@ class StagedDocument:
             document: The document to check.
 
         Raises:
-            SchemaValidationUnavailableError: If ``jsonschema`` is not installed.
-            jsonschema.ValidationError: Naming the first place the document departs from the
-                schema.
+            SchemaValidationUnavailableError: If `jsonschema` is not installed.
+            jsonschema.ValidationError: Naming the first place the document departs from the schema.
         """
         try:
             import jsonschema  # pylint: disable=import-outside-toplevel  # optional at import time
@@ -542,31 +463,24 @@ class StagedDocument:
 
     #: The bands whose ends may be ``null`` with a stated meaning, by the key they sit under, and
     #: the value a ``null`` end is ordered as. A payback year is ``null`` when that end never pays
-    #: back within the horizon, which is later than any year (renovisorissues #73). Every other
+    #: back within the horizon, which is later than any year. Every other
     #: band of the schema has numeric ends (or is ``null`` whole), so a ``null`` end anywhere else
     #: is left to the schema, which refuses it.
     NULL_END_MEANS: ClassVar[Dict[str, float]] = {"discounted_payback_year": math.inf}
 
     @classmethod
     def assert_bands_ordered(cls, document: Any, path: str = "") -> None:
-        """Raise unless every band in the document reads ``min <= best <= max``.
+        """Raise unless every band in the document reads `min <= best <= max`.
 
-        The schema types a band as three numbers and cannot express their order, so a band that
-        got its ends the wrong way round — a sign flip applied slot by slot, a difference not
-        re-enveloped — validates and then draws backwards in the frontend. Checking it once over
-        the finished document is cheap and catches every such mistake at the place the document is
-        written rather than in a chart.
-
-        A band whose ends may be ``null`` with a meaning (:attr:`NULL_END_MEANS`) is checked with
-        ``null`` read as that meaning -- a payback year that never comes is later than every year --
-        rather than skipped, which is how a reversed payback band with an open end used to pass.
+        A band whose end may be `null` with a meaning (`NULL_END_MEANS`) is checked with that meaning; for example a
+        payback year that never comes counts as later than every year.
 
         Args:
             document: The document, or any part of it while recursing.
-            path: The dotted path of ``document`` inside the whole, for the message.
+            path: The dotted path of `document` inside the whole, for the message.
 
         Raises:
-            BandOrderError: Naming the first band that is out of order and where it is.
+            BandOrderError: Naming the first out-of-order band and where it is.
         """
         if isinstance(document, Mapping):
             null_end = cls.NULL_END_MEANS.get(path.rsplit(".", 1)[-1])
@@ -598,24 +512,18 @@ class StagedDocument:
 
     @classmethod
     def assert_subsidies_reconciled(cls, document: Mapping[str, Any]) -> None:
-        """Raise unless each evaluation's ``Subsidies`` stack is exactly its awarded ``subsidies[]``.
+        """Raise unless each evaluation's `Subsidies` stack matches its awarded `subsidies[]` rows.
 
-        Three statements are checked for the reference and for the plan. Every ``subsidy`` event
-        of the ``annual`` series names a scheme that ``subsidies[]`` reports as awarded, so no year
-        carries support from a scheme the table does not know. Every awarded row's
-        ``amount_by_year_in_euro`` sums to its ``amount_in_euro``. And in every year the
-        ``Subsidies`` group equals the awarded rows' amounts booked in that year, slot by slot, so
-        the chart and the table state one figure year by year and not only over the horizon: a
-        grant moved to another year with its total conserved is refused. An evaluation with no
-        awarded row therefore books no support in any year, which is the no-catalogue case
-        hisim-cyc.5 was about.
+        Checked for the reference and the plan: every `subsidy` event names a scheme awarded in `subsidies[]`; every
+        awarded row's `amount_by_year_in_euro` sums to its `amount_in_euro`; and every year's `Subsidies` group equals
+        the awarded amounts booked in that year, slot by slot. An evaluation with no awarded row therefore books no
+        support in any year.
 
         Args:
             document: The finished document.
 
         Raises:
-            SubsidyReconciliationError: Naming the evaluation, the year where there is one, and the
-                first disagreement found.
+            SubsidyReconciliationError: Naming the evaluation, the year if any, and the first disagreement.
         """
         tolerance = cls.RECONCILIATION_TOLERANCE_IN_EURO
         for variant in ("reference", "plan"):
@@ -666,12 +574,11 @@ class StagedDocument:
 
     @staticmethod
     def assert_every_measure_has_row(document: Mapping[str, Any]) -> None:
-        """Raise unless every measure a stage carries out has a ``by_subject`` row naming it.
+        """Raise unless every measure a stage carries out has a `by_subject` row naming it.
 
-        The plan carries out every measure of every stage's ``measures``, the reference those of
-        ``stages[0]``; each must be the ``measure_id`` of at least one row of that evaluation's
-        ``by_subject`` (renovisorissues #58). Only a document built with the translator's measure
-        map is checked (:meth:`write`): without it no row names a measure.
+        The plan carries out the measures of every stage, the reference those of `stages[0]`; each must be the
+        `measure_id` of at least one row of that evaluation. `write` checks this only for a document built with the
+        translator's measure map.
 
         Args:
             document: The finished document.
@@ -699,29 +606,22 @@ class StagedDocument:
     # ------------------------------------------------------------------ header blocks
 
     def _engine(self) -> Dict[str, Any]:
-        """Which code produced the document: the repository commit and the package version.
+        """Return which code produced the document: the repository commit and the package version.
 
-        The commit is asked of :class:`hisim.renovisor.report.HiSimCommit`, which reads a baked
-        ``hisim/COMMIT`` file or the ``HISIM_COMMIT`` environment variable before falling back to
-        git, so an image built without a ``.git`` directory still says what it is. The import is
-        function-local: ``hisim.renovisor`` depends on ``hisim.economics`` and not the other way
-        round, and this one provenance string is not worth inverting that.
+        The commit comes from `hisim.renovisor.report.HiSimCommit`, which reads a baked `hisim/COMMIT` file or the
+        `HISIM_COMMIT` variable before falling back to git. The import is function-local because `hisim.renovisor`
+        depends on `hisim.economics`, not the reverse.
         """
         from hisim.renovisor.report import HiSimCommit  # pylint: disable=import-outside-toplevel
 
         return {"hisim_commit": HiSimCommit.of(), "economics_version": self.ECONOMICS_VERSION}
 
     def _parameters_block(self) -> Dict[str, Any]:
-        """The assumptions the plan was priced under, as the document states them.
+        """Return the assumptions the plan was priced under, as the document's `parameters` block.
 
-        Built by :meth:`~hisim.economics.staged_parameters.StagedParameters.to_document_block`,
-        which is also the table of keys ``--parameters`` reads. One table for both directions is
-        what makes this block a legal input file: a reader can copy it out of a document, hand it
-        back over the same stages and get the same run.
-
-        ``price_basis_year`` is the year the plan was *priced at*, as the evaluator resolved it
-        (:attr:`~hisim.economics.staged.StagedResult.price_basis_year`), not the caller's record,
-        which may leave it unset for the evaluator to derive from ``plan_start_year``.
+        Built by `StagedParameters.to_document_block`, the same key table `--parameters` reads, so the block fed back
+        over the same stages gives the same run. `price_basis_year` is the year the evaluator resolved
+        (`StagedResult.price_basis_year`), not the caller's record, which may leave it unset.
         """
         parameters = self._parameters
         if self._result.price_basis_year is not None:
@@ -746,7 +646,7 @@ class StagedDocument:
         )
 
     def _stages(self) -> List[Dict[str, Any]]:
-        """One row per stage: its index, label, year, job and the measures it added."""
+        """Return one row per stage: its index, label, year, job and the measures it added."""
         return [
             {
                 "index": index,
@@ -761,13 +661,11 @@ class StagedDocument:
     # ------------------------------------------------------------------ one evaluation
 
     def _evaluation(self, result: LifecycleCostResult, staged: bool) -> Dict[str, Any]:
-        """The ``Evaluation`` block of E-spec §3, for the reference or for the plan.
+        """Return the evaluation block for the reference or for the plan.
 
-        The same shape serves both, which is what lets the frontend draw the two side by side with
-        one renderer. ``staged`` decides only where the per-row stage index comes from: the plan's
-        rows carry the stage that paid for or is active in them; the reference — one state held
-        over the whole horizon — carries ``0`` in its ``annual`` series and ``null`` in its
-        ``by_subject`` rows and its ``subsidies`` rows, because no stage bought its subjects.
+        Both share one shape so the frontend draws them side by side. `staged` only decides each row's stage: plan rows
+        carry the stage that paid for or is active in them; the reference (one state held over the horizon) carries `0`
+        in `annual` and `null` in `by_subject` and `subsidies`.
 
         Args:
             result: The evaluated variant.
@@ -799,16 +697,11 @@ class StagedDocument:
         }
 
     def _totals(self, result: LifecycleCostResult) -> Dict[str, Any]:
-        """The seven headline figures of an evaluation.
+        """Return the seven headline figures of an evaluation.
 
-        Two of them are monthly, and they answer different questions.
-        ``monthly_equivalent_cost_in_euro`` is the equivalent annual cost over twelve: an even
-        monthly spread of that yearly payment, not a monthly annuity, and the headline (hisim-cyc.6,
-        E-spec §3). The result
-        carries it, from :class:`~hisim.economics.calculators.aggregation.TimelineAggregation`,
-        so the document divides nothing itself. ``monthly_cost_year1_in_euro`` is year 1's cash
-        over twelve, replacements included: true for that year, and misleading as a running cost
-        when the reference replaces its boiler in year 1.
+        `monthly_equivalent_cost_in_euro` is the equivalent annual cost divided by twelve (an even monthly spread, not
+        a monthly annuity) and is the headline; it comes from the result. `monthly_cost_year1_in_euro` is year 1's cash
+        over twelve, replacements included, so it is high when the reference replaces its boiler in year 1.
         """
         investment = UncertainValue.exact(0.0)
         for entry in result.timeline.entries:
@@ -829,11 +722,9 @@ class StagedDocument:
         }
 
     def _by_group(self, result: LifecycleCostResult) -> Dict[str, Any]:
-        """The eight stacks of the NPV, every one of them present even at zero.
+        """Return the eight group stacks of the NPV, each present even at zero.
 
-        A group with nothing in it is written as a zero band rather than omitted, because chart V1
-        stacks the baseline and the plan side by side and a missing segment would shift the colours
-        of everything above it.
+        An empty group is a zero band rather than omitted, so the stacked charts keep their segment colours aligned.
         """
         totals: Dict[CostGroup, UncertainValue] = {group: UncertainValue.exact(0.0) for group in CostGroup}
         for category, band in result.npv_by_category.items():
@@ -842,64 +733,30 @@ class StagedDocument:
         return {group.value: self._band(totals[group]) for group in CostGroup}
 
     def _by_subject(self, result: LifecycleCostResult, staged: bool) -> List[Dict[str, Any]]:
-        """One row per cost subject, with the measure and the stage that produced it.
+        """Return one `by_subject` row per cost subject, with the measure and stage that produced it.
 
-        Chart V4 (the investment build-up per stage) filters these rows by ``stage``, so every row
-        carries one even when it is ``null`` — a subject of the baseline that no stage bought.
-        ``unpriced`` says the opposite of what an absent row would: the subject is part of the
-        plan and its price is not known, which is the honest answer for an envelope measure whose
-        request carried no ``cost`` block.
+        - `stage`: the last stage that paid for the subject; `null` for a baseline subject no stage bought.
+        - `unpriced`: the subject is in the plan but its price is unknown (e.g. an envelope measure with no `cost`
+          block).
+        - `investment_in_euro`: the investment, planning and removal booked in year 0 by every stage starting then. On
+          the reference it is the whole purchase.
+        - `investment_by_stage`: one `{"stage": k, "investment_in_euro": band}` per stage that booked investment,
+          planning or removal for the subject, ascending, each in nominal euros of the stage's start year; a stage that
+          carried the subject over or kept it as existing equipment has none. For a plan whose stages all start in year
+          0 the entries sum to `investment_in_euro`. Empty on the reference.
+        - `measure_id`: on the reference, only for a measure `stages[0]` carries out.
+        - `service_life_years`, `service_life_origin`, `installation_year` (a kept asset's register year, or plan year
+          0 plus the buying stage's `from_year`; plan year 0 is `plan_start_year`, else the price basis year) and
+          `installation_year_origin`: `null` on carrier rows, synthetic subjects (financing, replacement reserve, CO2
+          damage) and measure-only rows.
+        - `investment_origin` and `investment_source`: where the row's purchase was priced from (`reader_quote`,
+          `included_in_reader_quote`, `request` or `cost_database`) and the quote's or request's source sentence;
+          `null` on carrier, unpriced and measure-only rows.
+        - `note`: why a row has no price or costs nothing, or what a reader's quote made of it.
+        - `replaces_subjects`: the reference subjects the measure's subject replaces (e.g. external insulation names
+          `envelope_facade`); empty without a `measure_id`.
 
-        ``stage`` is the *last* stage that charged the subject. ``investment_in_euro`` is the
-        **year-0 investment** -- the investment, planning and removal booked in year 0, by every
-        stage that starts then; **stages starting later are in** ``investment_by_stage``. On those
-        two alone a row two stages paid into cannot be filtered by stage: the filter would count
-        the earlier stage's purchase as the later one's (renovisorissues #48).
-        ``investment_by_stage`` is that split, and it is additive: one
-        ``{"stage": k, "investment_in_euro": band}`` per stage whose evaluation booked investment,
-        planning or removal for the subject on the plan's timeline, ascending by ``k``, each the
-        nominal amount of that stage's purchase in the year the stage starts. A stage that carried
-        the subject over unchanged has no entry, and neither has a stage that kept it as existing
-        equipment. For a plan whose stages all start in year 0 the entries sum to
-        ``investment_in_euro``; a stage starting later books its purchase in its own year, which
-        ``investment_in_euro`` deliberately does not count (owner decision 2026-09-26) and
-        ``investment_by_stage`` does. The reference is not staged: its rows carry an empty list,
-        and its ``investment_in_euro`` is its whole purchase.
-
-        A reference row carries a ``measure_id`` only for a measure the reference itself carries
-        out (``stages[0].measures``, normally none): the measure map is read over every stage's
-        mapping report, and a buffer the plan's heating_system replaces is, in the reference, the
-        house's own vessel.
-
-        ``service_life_years`` is the lifetime the engine priced the subject with and
-        ``service_life_origin`` where it came from (:class:`~hisim.economics.staged.LifeOrigin`);
-        ``installation_year`` is the calendar year it counts as installed in -- a kept asset's
-        register year, from which its replacements are scheduled, or the start of the stage that
-        bought it, plan year 0 + its ``from_year`` (plan year 0 is ``plan_start_year``, else the
-        price basis year: :meth:`~hisim.economics.staged.StagedEvaluator.plan_year_zero`) -- and
-        ``installation_year_origin`` where that came from
-        (:class:`~hisim.economics.facts.InstallationYearOrigin`). All four are ``null`` on a
-        carrier row, on a synthetic subject's row (financing, replacement reserve, CO2 damage) and
-        on a measure-only row, which have no lifetime the engine prices (renovisorissues #58).
-        ``note`` says why a row has no price or costs nothing, or what a reader's quote made of it,
-        and is ``null`` otherwise.
-
-        ``investment_origin`` says where the purchase the row describes was priced from
-        (:class:`~hisim.economics.staged.InvestmentOrigin`, renovisorissues #53): the reader's quote
-        (``reader_quote``, the measure's main subject), within that quote (``included_in_reader_quote``,
-        the measure's further subjects, bought at zero), the request's own price (``request``) or the
-        cost database (``cost_database``); ``investment_source`` is the quote's or the request's source
-        sentence. Both are ``null`` on a carrier row, an unpriced row and a measure-only row. On the
-        plan the purchase is the one of the row's ``stage``; on the reference, stage 0's.
-
-        A measure the engine prices no subject for -- a setting, or one HiSim holds no price for
-        -- still gets a row, a zero one of its own (:meth:`_measure_only_rows`), so every measure a
-        stage carries out is on this list (:meth:`assert_every_measure_has_row`).
-
-        ``replaces_subjects`` names the reference subjects a measure's subject replaces, as the
-        translator's mapping report states them (hisim-ryw1): the external insulation's row names
-        ``envelope_facade``, the element whose like-for-like renewal the reference carries and the
-        insulation takes over from its stage on. It is empty on every row without a ``measure_id``.
+        A measure with no priced subject still gets a zero row (`_measure_only_rows`), so every measure appears.
         """
         rows: List[Dict[str, Any]] = []
         replacements = self._replacement_years(result)
@@ -942,17 +799,15 @@ class StagedDocument:
         return sorted(rows, key=lambda row: row["subject"])
 
     def _row_stage(self, subject: str, staged: bool, by_stage: Mapping[str, Mapping[int, Any]]) -> Optional[int]:
-        """The ``stage`` of one ``by_subject`` row: the last stage that paid for the subject, else null.
+        """Return the `stage` of one `by_subject` row: the last stage that paid for the subject, else None.
 
-        Stage 0 is the reference state, so it "charges" every subject it holds
-        (:meth:`~hisim.economics.staged.StagedResult.stage_of_subject`) though it pays for none it
-        merely keeps -- a cylinder, a meter, a kept envelope element. Such a row is ``null``, as the
-        reference's rows are, unless stage 0 actually booked a purchase for it (renovisorissues #65).
+        Stage 0 holds every reference subject but pays for none it merely keeps (a cylinder, a meter, a kept envelope
+        element), so such a row is None unless stage 0 booked a purchase for it.
 
         Args:
             subject: The row's subject.
             staged: Whether the row is the plan's.
-            by_stage: :meth:`_investment_by_stage` of the plan.
+            by_stage: `_investment_by_stage` of the plan.
 
         Returns:
             The stage index, or None.
@@ -967,25 +822,18 @@ class StagedDocument:
     def _no_flow_rows(
         self, result: LifecycleCostResult, staged: bool, by_stage: Mapping[str, Mapping[int, Any]]
     ) -> List[Dict[str, Any]]:
-        """One zero row per unpriced or costless subject the evaluation carries that booked no flow at all.
+        """Return one zero row per unpriced or costless subject that booked no flow at all.
 
-        An unpriced subject is priced at zero, so it books money only where the timeline dates an
-        event for it -- a renewal inside the horizon. A kept envelope element whose renewal falls
-        after the horizon (hisim-ryw1) books none, and the engine's pivot, which is the timeline's,
-        has no row for it. The document gives it one: its lifetime and installation year say when
-        the renewal falls due, and ``unpriced`` says why the row carries no money. Every band is an
-        exact zero, so every sum the document states is unchanged. The subjects are the cost facts
-        of ``stages[0]`` on the reference and of every stage active in some year on the plan.
-
-        A costless subject with cost facts -- the battery's energy-management controller, part of
-        the battery system (renovisorissues #77) -- is a subject too, and its facts cost nothing,
-        so a kept controller whose renewal falls after the horizon would otherwise have no row. It
-        gets one the same way, ``unpriced: false``, its note saying why it carries no money.
+        An unpriced subject is priced at zero, so it books money only where the timeline dates an event for it; a kept
+        envelope element whose renewal falls after the horizon books nothing and has no pivot row. Its row here states
+        its lifetime and installation year with `unpriced: true`. A costless subject with cost facts (the battery's
+        energy-management controller) gets one the same way with `unpriced: false`. All bands are exact zeros, so no
+        sum changes. The subjects are those of `stages[0]` on the reference and of every active stage on the plan.
 
         Args:
             result: The evaluation the rows go into.
             staged: Whether it is the plan.
-            by_stage: :meth:`_investment_by_stage` of the plan, for :meth:`_row_stage`.
+            by_stage: `_investment_by_stage` of the plan, for `_row_stage`.
 
         Returns:
             The rows, unsorted.
@@ -1030,15 +878,14 @@ class StagedDocument:
         return rows
 
     def _note(self, subject: str, quote: Optional[Tuple[InvestmentOverride, bool]]) -> Optional[str]:
-        """One row's ``note``: the mapping report's, or what a reader's quote made of the row.
+        """Return one row's `note`: the mapping report's, or what a reader's quote made of the row.
 
-        A quote replaces an "unpriced" note, since the row now has a price; a measure HiSim holds
-        no asset class for says it is bought once; a further subject of the quoted measure says it
-        was bought within the quote. Every other row keeps the mapping report's sentence.
+        A quote replaces an "unpriced" note; a quoted measure with no asset class says it is bought once; a further
+        subject of a quoted measure says it was bought within the quote.
 
         Args:
             subject: The row's subject.
-            quote: The quote that priced its purchase, and whether it is the main subject, or None.
+            quote: The quote that priced its purchase and whether this is the main subject, or None.
 
         Returns:
             The note, or None.
@@ -1065,7 +912,7 @@ class StagedDocument:
     }
 
     def _life_fields(self, subject: str, staged: bool) -> Dict[str, Any]:
-        """The four lifetime and age fields of one row, ``null`` where the subject has no lifetime."""
+        """Return the four lifetime and age fields of one row, `null` where the subject has no lifetime."""
         life = self._result.life_of(subject, staged)
         if life is None:
             return dict(self.NO_LIFE)
@@ -1079,20 +926,13 @@ class StagedDocument:
         }
 
     def _measure_only_rows(self, result: LifecycleCostResult, staged: bool) -> List[Dict[str, Any]]:
-        """One zero row per measure the engine prices no subject for, in the stage that carries it out.
+        """Return one zero row per measure the engine prices no subject for, in the stage that carries it out.
 
-        The subject is the measure id, as an envelope measure's is, and it comes from the mapping
-        report's ``costless_subjects`` (priced zero: a setting, not a purchase) or its
-        ``unpriced_subjects`` (flagged: HiSim holds no price). A subject the engine does price has
-        its breakdown row instead and gets none here, and so does one any stage has cost facts for:
-        if the engine lost such a subject's row, :meth:`assert_every_measure_has_row` says so.
-        Every band is an exact zero, so every sum the document states is unchanged; lifetime and
-        age are ``null`` because nothing prices the measure, so no life is read for it: a setting
-        installs nothing, and the lagging of the cylinder does age, but HiSim holds no price and
-        so no lifetime for it. On the plan the row's ``stage`` is the
-        first stage carrying the measure out and ``investment_by_stage`` states that stage's zero,
-        as an unpriced envelope row does; on the reference a row exists only for a measure
-        ``stages[0]`` itself carries out.
+        The subject is the measure id, taken from the mapping report's `costless_subjects` (a setting, priced zero) or
+        `unpriced_subjects` (HiSim holds no price). A subject that has a breakdown row or cost facts in any stage gets
+        none here. Bands are exact zeros and lifetime fields `null`. On the plan the row's `stage` is the first stage
+        carrying the measure out, with that stage's zero in `investment_by_stage`; on the reference a row exists only
+        for a measure of `stages[0]`.
 
         Args:
             result: The evaluation the rows go into.
@@ -1156,30 +996,29 @@ class StagedDocument:
         source: Optional[Dict[str, Any]],
         replaces_subjects: Sequence[str] = (),
     ) -> Dict[str, Any]:
-        """One ``by_subject`` row: the one place its key set is written.
+        """Return one `by_subject` row; the only place its key set is written.
 
         Args:
             subject: The cost subject.
-            kind: Its :class:`SubjectKindNames` word.
-            asset_class: Its asset class's value, or ``None``.
-            measure_id: The measure that created it, or ``None``.
-            stage: The stage it is attributed to, or ``None`` off the plan.
-            unpriced: Whether HiSim holds no price for it (and no quote priced it).
+            kind: Its `SubjectKindNames` word.
+            asset_class: Its asset class value, or None.
+            measure_id: The measure that created it, or None.
+            stage: The stage it is attributed to, or None.
+            unpriced: Whether HiSim holds no price for it and no quote priced it.
             npv: Its net present value.
             investment: Its gross investment.
-            investment_origin: Where that purchase was priced from (:class:`InvestmentOrigin` value), or ``None``.
-            investment_source: The quote's or the request's source sentence, or ``None``.
-            investment_by_stage: ``(stage, amount)`` per stage that paid into it, ascending.
-            categories: Its NPV by cost category; a category it lacks is an exact zero.
-            life: The four lifetime and age fields (:meth:`_life_fields`, :attr:`NO_LIFE`).
+            investment_origin: Where that purchase was priced from (an `InvestmentOrigin` value), or None.
+            investment_source: The quote's or request's source sentence, or None.
+            investment_by_stage: `(stage, amount)` per stage that paid into it, ascending.
+            categories: Its NPV by cost category; a missing category is an exact zero.
+            life: The four lifetime and age fields (`_life_fields`, `NO_LIFE`).
             replacement_years: The years its replacements fall in.
-            note: Why it has no price or costs nothing, or what a reader's quote made of it; ``None`` otherwise.
-            replaces_subjects: The reference subjects its subject replaces; empty for one no measure created.
-            source: The KPI source of the component the subject is (:meth:`_source_of`), or None
-                for a subject that is no HiSim component.
+            note: Why it has no price or costs nothing, or what a quote made of it; None otherwise.
+            source: The KPI source of the component it is, or None.
+            replaces_subjects: The reference subjects it replaces; empty when no measure created it.
 
         Returns:
-            The row, in the key order of the schema.
+            The row, in the schema's key order.
         """
         zero = UncertainValue.exact(0.0)
         return {
@@ -1208,19 +1047,17 @@ class StagedDocument:
         }
 
     def _investment_by_stage(self, result: LifecycleCostResult) -> Dict[str, Dict[int, UncertainValue]]:
-        """Each subject's gross purchase on the plan's timeline, split by the stage that made it.
+        """Return each subject's gross purchase on the plan's timeline, split by the stage that made it.
 
-        The categories are :attr:`INVESTMENT_TOTAL_CATEGORIES` -- investment, planning, removal,
-        the three ``investment_in_euro`` sums -- in whatever year the stage books them; the stage
-        of an entry is the one the splice took it from
-        (:meth:`~hisim.economics.staged.StagedResult.stage_of_timeline_entry`), which is the stage
-        that bought it and not the stage active in its year.
+        The categories are `INVESTMENT_TOTAL_CATEGORIES` (investment, planning, removal) in whatever year the stage
+        books them. An entry's stage is the stage that bought it (`StagedResult.stage_of_timeline_entry`), not the
+        stage active in its year.
 
         Args:
             result: The plan's evaluation.
 
         Returns:
-            Subject -> stage index -> the band that stage booked for it.
+            Subject -> stage index -> the band that stage booked.
         """
         amounts: Dict[str, Dict[int, UncertainValue]] = {}
         for position, entry in enumerate(result.timeline.entries):
@@ -1235,7 +1072,7 @@ class StagedDocument:
 
     @staticmethod
     def _replacement_years(result: LifecycleCostResult) -> Dict[str, List[int]]:
-        """Which years each subject is replaced in, read off the timeline."""
+        """Return the years each subject is replaced in, read off the timeline."""
         years: Dict[str, List[int]] = {}
         for entry in result.timeline.entries:
             if entry.category != CostCategory.REPLACEMENT:
@@ -1246,12 +1083,10 @@ class StagedDocument:
         return {subject: sorted(found) for subject, found in years.items()}
 
     def _annual(self, result: LifecycleCostResult, staged: bool, horizon: int) -> List[Dict[str, Any]]:
-        """The year-by-year series chart V1 draws, with its group stack and its markers.
+        """Return the year-by-year series with its group stack and markers.
 
-        ``calendar_year`` is the plan's start year plus the relative year, and ``null`` when the
-        plan names no start year: the stages' ``simulation_year`` is the year of their weather,
-        and dating a plan priced in 2026 from a 2019 weather file put its payback in 2021
-        (renovisorissues #57).
+        `calendar_year` is the plan's start year plus the relative year, and `null` when the plan names no start year;
+        the stages' simulation (weather) year dates nothing.
         """
         start = self._result.plan_start_year
         by_year_group: Dict[int, Dict[CostGroup, UncertainValue]] = {
@@ -1285,7 +1120,7 @@ class StagedDocument:
         return rows
 
     def _events(self, entries: Iterable[CashFlowEntry], year: int, staged: bool) -> List[Dict[str, Any]]:
-        """The markers of one year: what was bought, what was granted, what stage began."""
+        """Return the markers of one year: what was bought, what was granted, which stage began."""
         events: List[Dict[str, Any]] = []
         if staged:
             for index, stage in enumerate(self._result.stages):
@@ -1309,7 +1144,7 @@ class StagedDocument:
         return events
 
     def _cumulative(self, result: LifecycleCostResult, horizon: int) -> List[Dict[str, Any]]:
-        """The running total chart V3 draws, nominal and discounted."""
+        """Return the running cumulative total, nominal and discounted."""
         series = result.annual_cost_series_nominal_in_euro
         nominal = UncertainValue.exact(0.0)
         discounted = UncertainValue.exact(0.0)
@@ -1360,13 +1195,10 @@ class StagedDocument:
         return rows
 
     def _co2(self, result: LifecycleCostResult) -> Dict[str, Any]:
-        """The emission masses, as degenerate bands.
+        """Return the emission masses as degenerate bands (three equal slots).
 
-        The engine's CO2 accounting is a mass and carries no uncertainty band of its own
-        (:class:`~hisim.economics.results.LifecycleCo2Result`), while the document's rule is that
-        every quantity is a band. The three slots are therefore equal here, which says "this
-        figure has no band" in the document's own vocabulary rather than by a special shape the
-        frontend would have to branch on.
+        The engine's CO2 accounting carries no band, but the document writes every quantity as a band; equal slots say
+        "no band" without a special shape.
         """
         masses = result.lifecycle_co2_result
         by_year = list(masses.operational_co2_by_year_in_kg)
@@ -1379,17 +1211,11 @@ class StagedDocument:
         }
 
     def _subsidies(self, result: LifecycleCostResult, staged: bool) -> List[Dict[str, Any]]:
-        """One row per scheme the solver considered, or the "no catalogue" question.
+        """Return one row per scheme the solver considered, or the "no catalogue" rows.
 
-        With no catalogue configured the engine runs ``subsidy_mode: NONE``, so nothing is awarded
-        and nothing is refused; the honest statement is then one undetermined row per stage that
-        buys something, saying that the country has no catalogue (step 10 §1). Such a plan books
-        no support at all — the engine's §10.1 flat shim is retired — and
-        :meth:`assert_subsidies_reconciled` refuses a document whose stacks book support these rows
-        do not award.
-
-        On the plan, each decision's rows carry the stage whose evaluation made the decision, so a
-        subject bought in one stage and grown in another states each stage's grant on its own row.
+        Without a catalogue the engine runs subsidy mode NONE, so nothing is awarded or refused; the document then
+        states one undetermined row per buying stage saying the country has no catalogue, and books no support. On the
+        plan, each row carries the stage whose evaluation made the decision.
         """
         if self._catalog_id is None:
             return self._no_catalogue_rows(staged)
@@ -1412,17 +1238,12 @@ class StagedDocument:
 
     @classmethod
     def _with_measure_maxima(cls, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Stamp every row with ``max_amount_for_measure_in_euro`` (renovisorissues #65).
+        """Stamp every row with `max_amount_for_measure_in_euro`, the most a scheme can pay for the whole measure.
 
-        A scheme paying towards a measure pays towards each of its subjects, one decision (and so
-        one row) each: Warmer Homes on ``heating_system`` funds the heat pump and whatever else of
-        the measure its asset classes cover. ``max_amount_in_euro`` is the row's own subject's
-        maximum; the measure's is the slot-wise sum of the rows of the same scheme, measure and
-        stage, stated on each of them, so "up to EUR X" is what the household can get for the
-        measure. Null on a row with no measure, and on every row of the scheme, measure and stage
-        as soon as one of them is null: a scheme with no amount is none on every subject, and a
-        sum with an unknown term -- a fixed amount on an unpriced subject (renovisorissues #77) --
-        is unknown.
+        A scheme funding a measure makes one decision (one row) per subject of it. `max_amount_in_euro` is the row's
+        own subject's maximum; the measure's is the slot-wise sum over the rows of the same scheme, measure and stage,
+        stated on each. It is None on a row without a measure, and on all rows of the group when any of them is None
+        (an unknown term makes the sum unknown).
         """
         totals: Dict[Tuple[Any, Any, Any], Optional[Dict[str, float]]] = {}
         for row in rows:
@@ -1447,12 +1268,10 @@ class StagedDocument:
 
     @classmethod
     def _maximum(cls, decision: SubsidyDecision, scheme_id: Optional[str], scale: float) -> Tuple[Any, Optional[str]]:
-        """One row's ``max_amount_in_euro`` and the note it needs, if any (renovisorissues #54).
+        """Return one row's `max_amount_in_euro` and the note it needs, if any.
 
-        The maximum is the subsidy layer's (:func:`~hisim.economics.subsidies.scheme_maximum`),
-        moved into the plan exactly as the stage's own year-0 award is (the share the stage pays;
-        both are valued on the cost as the plan books it in the stage's year, hisim-xnkp) and
-        signed as a credit, like ``amount_in_euro``.
+        The maximum comes from `subsidies.scheme_maximum`, moved into the plan exactly as the stage's year-0 award is
+        (valued on the cost as booked in the stage's year) and signed as a credit, like `amount_in_euro`.
 
         Args:
             decision: The decision the row belongs to.
@@ -1460,7 +1279,7 @@ class StagedDocument:
             scale: The factor the stage's year-0 figures of the subject are booked with.
 
         Returns:
-            ``(the band or None, the note a None needs or None)``.
+            `(band or None, the note a None needs or None)`.
         """
         maximum: Optional[SchemeMaximum] = decision.maximum_by_scheme.get(str(scheme_id))
         if maximum is None:
@@ -1473,19 +1292,17 @@ class StagedDocument:
 
     @staticmethod
     def _joined(*notes: Optional[str]) -> Optional[str]:
-        """Notes joined with ``; ``, or None when there is none."""
+        """Return the notes joined with `; `, or None when there are none."""
         present = [note for note in notes if note]
         return "; ".join(present) or None
 
     def _decisions(
         self, result: LifecycleCostResult, staged: bool
     ) -> List[Tuple[Optional[int], SubsidyDecision]]:
-        """Every subsidy decision of an evaluation, with the stage that made it.
+        """Return every subsidy decision of an evaluation, with the stage that made it.
 
-        The plan's decisions are its stages' decisions in stage order
-        (:meth:`~hisim.economics.staged.StagedEvaluator.evaluate` concatenates them), so they are
-        read stage by stage here, which is what tells each decision's stage. The reference is one
-        state and its decisions carry no stage.
+        The plan's decisions are its stages' decisions in stage order, so they are read stage by stage. The reference's
+        decisions carry no stage.
         """
         if not staged:
             return [(None, decision) for decision in result.subsidy_decisions]
@@ -1546,32 +1363,25 @@ class StagedDocument:
         claimed: Set[AwardKey],
         scale: float = 1.0,
     ) -> List[Dict[str, Any]]:
-        """The rows of one measure's subsidy decision: awarded, refused and undecided.
+        """Return the rows of one measure's subsidy decision: awarded, refused and undecided.
 
-        The awarded amount is read off the plan's own timeline rather than off the award record,
-        so what the document publishes as support is exactly what the NPV was computed with — a
-        staged award is moved into its stage's year (valued there, hisim-xnkp),
-        and re-reading the award would state the unmoved figure. An awarded row always carries an
-        amount: a benefit that books no cash states a zero band and says where its money is instead.
-
-        A soft loan's repayment grant is booked under the financing subject rather than under any
-        measure, because the loan is taken out against the stage's investment as a whole. The
-        first loan-terms row of that scheme in the stage states it; a further row of the same
-        scheme states zero and says where the loan is (``claimed`` remembers which grants are
-        already stated, across the decisions of one evaluation).
+        The awarded amount is read off the plan's timeline, not the award record, so the published support is what the
+        NPV used (a staged award is moved into and valued in its stage's year). An awarded row always carries an
+        amount; a benefit that books no cash states a zero band and says where its money is. A soft loan's repayment
+        grant is booked under the financing subject, since the loan covers the stage's whole investment: the first
+        loan-terms row of that scheme in the stage states it, later rows state zero.
 
         Args:
             decision: The solver's decision for one measure.
-            stage: The stage that made the decision, or ``None`` on the reference.
+            stage: The stage that made the decision, or None on the reference.
             measure_id: The catalogue measure behind the decision's subject.
-            awarded: What :meth:`_awarded_amounts` read off the timeline.
+            awarded: What `_awarded_amounts` read off the timeline.
             claimed: The financing keys whose grant a row already states; updated in place.
-            scale: The factor the stage books its year-0 awards for the subject with, which the
-                row's ``max_amount_in_euro`` is moved by (:meth:`_maximum`,
-                :meth:`~hisim.economics.staged.StagedResult.subsidy_scale`); 1.0 on the reference.
+            scale: The factor the stage books its year-0 awards with, applied to `max_amount_in_euro`; 1.0 on the
+                reference.
 
         Returns:
-            The rows, awarded first. Every row states ``max_amount_in_euro``, whatever its status.
+            The rows, awarded first; every row states `max_amount_in_euro`.
         """
         rows: List[Dict[str, Any]] = []
         for award in decision.applied:
@@ -1649,19 +1459,13 @@ class StagedDocument:
     def _awarded_amounts(
         self, result: LifecycleCostResult, staged: bool
     ) -> Dict[AwardKey, Dict[int, UncertainValue]]:
-        """What each scheme paid for each subject in each stage, year by year, signed as a credit.
+        """Return what each scheme paid for each subject in each stage, year by year, signed as a credit.
 
-        Keyed by ``(scheme id, subject, stage)`` because one scheme routinely funds two measures
-        of a plan, and one subject can be bought in one stage and grown in another: each row states
-        its own grant, not the scheme's total. The stage is the one the entry came from
-        (:meth:`~hisim.economics.staged.StagedResult.stage_of_timeline_entry`), which is the stage
-        whose decision awarded it even for a payout that runs on into a later stage's years; a
-        result without that map falls back to the stage active in the entry's year. On the
-        reference the stage is ``None``. A soft loan's repayment grant is keyed under
-        :attr:`~hisim.economics.calculators.financing_application.FinancingConstants.FINANCING_SUBJECT`.
-
-        Read off the scoped timeline, the one every other figure of the evaluation is a pivot of;
-        the entries are walked on the full timeline only because the stage map is indexed by it.
+        Keyed by `(scheme id, subject, stage)`, since one scheme can fund two measures and one subject can be bought in
+        one stage and enlarged in another. The stage is the one whose decision awarded the entry
+        (`StagedResult.stage_of_timeline_entry`), falling back to the stage active in the entry's year; None on the
+        reference. A soft loan's repayment grant is keyed under `FinancingConstants.FINANCING_SUBJECT`. Amounts come
+        from the scoped timeline; the full timeline is walked only because the stage map is indexed by it.
         """
         scoped = {id(entry) for entry in result.scoped_timeline().entries}
         amounts: Dict[AwardKey, Dict[int, UncertainValue]] = {}
@@ -1684,23 +1488,19 @@ class StagedDocument:
     def _financing(
         self, result: LifecycleCostResult, horizon: int, staged: bool
     ) -> Optional[Dict[str, Any]]:
-        """The loans of the plan, one per stage that borrowed, or ``None`` for a cash purchase.
+        """Return the plan's loans, one per stage that borrowed, or None for a cash purchase.
 
-        Every debt-service entry is attributed to the loan it repays rather than to the loan of
-        whichever stage is active in the payment year. The two differ whenever a later stage
-        borrows before an earlier loan's term is up: the first loan's remaining instalments would
-        otherwise move onto the second loan's schedule, and the block would show a ten-year loan
-        repaid in two years (step 12 §2.2). Plan totals are unaffected — the same entries are
-        reported either way — but the per-loan series is what the financing chart draws.
+        Each debt-service entry is attributed to the loan it repays, not to the loan of the stage active in the payment
+        year, so a later stage borrowing before an earlier loan is repaid does not move instalments between loans.
+        Totals are the same either way; the per-loan series is what the financing chart draws.
 
         Args:
             result: The evaluated variant.
-            horizon: The last year index of the horizon; every loan's schedule spans 0..T.
-            staged: Whether this is the staged plan, whose entries carry the stage they came from.
+            horizon: The last year index; every loan's schedule spans 0..T.
+            staged: Whether this is the staged plan, whose entries carry their stage.
 
         Returns:
-            The financing block, or ``None`` when the perspective buys for cash or nothing was
-            borrowed.
+            The financing block, or None when the perspective buys for cash or nothing was borrowed.
         """
         plan = self._perspective.financing
         disbursed: Dict[int, UncertainValue] = {}
@@ -1740,24 +1540,20 @@ class StagedDocument:
     def _borrowing_year(
         self, position: int, year: int, disbursement_years: List[int], staged: bool
     ) -> int:
-        """The disbursement year of the loan a debt-service entry belongs to.
+        """Return the disbursement year of the loan a debt-service entry belongs to.
 
-        On the plan the answer is carried rather than derived: the splice records which stage
-        every entry came from (:meth:`~hisim.economics.staged.StagedResult.stage_of_timeline_entry`)
-        and a stage's loan disburses in that stage's own year, so the attribution is exact even
-        when two loans are being repaid in the same year. On the reference — one state, at most one
-        loan — and for a result whose entries carry no stage, the fallback is the last
-        disbursement at or before the payment year, which is the same answer wherever the map
-        exists and never blames a loan that had not been taken out yet.
+        On the plan the splice (the assembly of the plan's timeline from its stages' timelines) records each entry's
+        stage, and a stage's loan disburses in that stage's year, so the answer is exact. On the reference, or without
+        that record, it is the last disbursement at or before the payment year.
 
         Args:
-            position: The entry's index in the timeline it was read from.
+            position: The entry's index in the timeline.
             year: The payment year.
             disbursement_years: The years a loan was disbursed in, ascending.
             staged: Whether the timeline is the staged plan's.
 
         Returns:
-            The year the loan being repaid was disbursed in.
+            The year the repaid loan was disbursed in.
         """
         if staged:
             stage_index = self._result.stage_of_timeline_entry(position)
@@ -1809,7 +1605,7 @@ class StagedDocument:
             ),
             "monthly_cost_year1_delta_in_euro": monthly_delta,
             # The range by value, not by slot: which world pays back first depends on which
-            # uncertainty dominates the savings (renovisorissues #73).
+            # uncertainty dominates the savings.
             "discounted_payback_year": comparison.discounted_payback_envelope.to_band(),
             "cumulative_delta": cumulative,
             "lifecycle_co2_delta_in_kg": self._scalar_band(
@@ -1820,12 +1616,10 @@ class StagedDocument:
         }
 
     def _warm_rent(self, comparison: VariantComparison) -> Optional[Dict[str, float]]:
-        """The warm-rent change per square metre and month, or ``None``.
+        """Return the warm-rent change per square metre and month, or None.
 
-        The engine reports the change per month for the whole dwelling and only for a tenant-scope
-        perspective; the document's unit is per square metre, so the figure exists only when both
-        the change and the living area are known. Neither is invented: an unknown area makes the
-        field ``null`` rather than a per-dwelling number labelled per square metre.
+        The engine reports the monthly change for the whole dwelling, and only for a tenant-scope perspective; without
+        a known living area the field is None rather than a per-dwelling number.
         """
         change = comparison.warm_rent_change_per_month_in_euro
         area = self._result.plan.reference_areas.living_area_in_m2
@@ -1837,37 +1631,28 @@ class StagedDocument:
 
     @staticmethod
     def _band(value: UncertainValue) -> Dict[str, float]:
-        """One band as the document writes it: ``{"min", "best", "max"}``.
+        """Return one band as the document writes it: `{"min", "best", "max"}`.
 
-        Deliberately not :meth:`hisim.economics.uncertainty.UncertainValue.to_json`, which
-        collapses a degenerate band to a bare float: the document's contract is that every amount
-        has the same three keys, so a consumer never has to branch on the shape of a number.
+        Unlike `UncertainValue.to_json`, a degenerate band is not collapsed to a float, so every amount has the same
+        three keys.
         """
         return {"min": value.minimum, "best": value.best_estimate, "max": value.maximum}
 
     @staticmethod
     def _negated_band(value: UncertainValue) -> Dict[str, float]:
-        """A band with its sign flipped and its ends swapped, so it stays ordered.
+        """Return a band with its sign flipped and its ends swapped, so it stays ordered.
 
-        Used for the one figure the document reports with the opposite sign to the timeline: a
-        loan principal. On the timeline a disbursement is money arriving and therefore negative;
-        ``financing.loans[].principal_in_euro`` is "how much was borrowed", which is a positive
-        quantity in every chart that shows it. Negating a band swaps which end is the low world,
-        which is why the ends are exchanged rather than negated in place.
+        Used for a loan principal: on the timeline a disbursement is negative (money arriving), while
+        `financing.loans[].principal_in_euro` states the amount borrowed as positive.
         """
         return {"min": -value.maximum, "best": -value.best_estimate, "max": -value.minimum}
 
     @staticmethod
     def _negated_slots(low: float, best: float, high: float) -> Dict[str, float]:
-        """Three per-slot values negated into one ordered band.
+        """Negate three per-slot values into one ordered band.
 
-        The document's cumulative difference is the sign flip of the engine's cumulative *savings*
-        curves, which are stored slot by slot (``results.compare``) and are not an envelope: the
-        low-world saving can exceed the high-world one when the reference's band is wider than the
-        plan's. Negating the three slots in place would then leave ``min > max`` and the chart
-        would draw the range backwards, which is why the ends are chosen by value rather than by
-        position — the same thing :meth:`_negated_band` does for an already-ordered band, and what
-        :meth:`UncertainValue.__sub__` does when it re-sorts a difference into an envelope.
+        The cumulative difference is the negated cumulative savings, stored per slot and not an envelope: the low-world
+        saving can exceed the high-world one. The ends are therefore chosen by value, not by position.
 
         Args:
             low: The value in the LOW world.
@@ -1875,12 +1660,12 @@ class StagedDocument:
             high: The value in the HIGH world.
 
         Returns:
-            The band with the sign flipped and ``min <= best <= max`` restored.
+            The negated band with `min <= best <= max`.
         """
         negated = (-low, -best, -high)
         return {"min": min(negated), "best": -best, "max": max(negated)}
 
     @staticmethod
     def _scalar_band(value: float) -> Dict[str, float]:
-        """A quantity with no band of its own, written as three equal slots."""
+        """Return a quantity with no band of its own as three equal slots."""
         return {"min": value, "best": value, "max": value}

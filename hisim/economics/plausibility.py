@@ -1,35 +1,9 @@
-"""Automated plausibility checks on an evaluated result (cost-spec-v2 §2.4, W4.2).
+"""Automated plausibility checks on an evaluated result, as typed numbers (cost_spec.md §2.4).
 
-Engine side of the results/presentation seam: the checks are arithmetic — reconciliation
-deltas, effective prices, EUR/m²a, band-width ratios — and they used to live inside
-`reporting.py`, down to pre-formatted value strings in the check records. Here they produce a
-typed `PlausibilityReport` of numbers; rendering (rounding, units, table markup) belongs to the
-report writers and nothing else.
-
-Two severities, unchanged from the original panel:
-
-* **FAIL** — a structural invariant is broken (subject NPVs must sum to the total, a band must
-  be ordered, support cannot exceed its own basis). Something in the engine or the data is
-  wrong.
-* **WARN** — a magnitude left a deliberately generous range. Catches unit mix-ups and rates
-  stored as absolute amounts, not modelling disagreements.
-
-Thresholds are reviewable data (`cost_database/plausibility_checks.json`), not code. That is
-deliberate: whether 0.48 EUR/kWh is "still plausible for electricity" is a domain judgement a
-reviewer must be able to change and diff without touching Python, and the ranges are set wide
-enough that a PASS says "no obvious blunder", never "this model is right".
-
-**What a finding means for the caller.** Nothing here raises, aborts or suppresses output. The
-report layer renders the panel as section 0 of `lifecycle_report.html` and as the first table of
-`cost_summary.md`, and `bridge.py` additionally logs every non-PASS finding as a warning after
-writing the files. So a FAIL is a signal to a human that the *engine or its data* is broken —
-a reconciliation that does not close, a band whose best estimate sits outside its own bounds — and
-should stop the results being used, but it will not stop them being produced; a WARN says a
-figure is outside a generous magnitude range and wants a look, most often at a unit.
-
-Every input comes off `LifecycleCostResult`: the annualized energy quantities and reference
-areas the range checks divide by are carried on the result itself, so the checks no longer
-need `EvaluationInputs` (W4.2).
+A check either FAILs (a structural invariant is broken, e.g. subject NPVs do not sum to the total) or WARNs (a
+magnitude left a generous range, which usually means a unit mix-up). Nothing here raises or suppresses output: the
+report renders the findings as its first panel and `bridge.py` logs every non-PASS finding. The thresholds are data in
+`cost_database/plausibility_checks.json`; formatting belongs to the report writers.
 """
 
 from __future__ import annotations
@@ -46,13 +20,11 @@ from hisim.economics.uncertainty import UncertainValue
 
 
 class CheckStatus:
-    """Statuses a finding can carry. The values land in JSON and reports.
+    """Status strings a finding can carry: PASS, WARN or FAIL.
 
-    Three levels only, and the split between the two non-PASS ones is the module's central
-    convention: FAIL is reserved for broken structural invariants (an arithmetic identity that
-    must hold), WARN for a magnitude outside a reviewable range. Plain strings rather than an
-    enum because they are serialized verbatim into `to_json`, into the rendered panel and into
-    the CSS class of the HTML status cell, so their spelling is part of the output contract.
+    FAIL marks a broken structural invariant, WARN a magnitude outside a reviewable range. The values are written
+    verbatim into JSON, the rendered panel and the CSS class of the HTML status cell, so their spelling is part of the
+    output.
     """
 
     PASS = "PASS"
@@ -61,16 +33,9 @@ class CheckStatus:
 
 
 class CheckIds:
-    """Stable ids, one per check kind.
+    """Stable ids, one per check kind, that renderers and machine readers switch on.
 
-    Consumers (renderers, machine readers) switch on these instead of parsing the
-    human-readable name.
-
-    The `name` of a finding carries its scope ("subjects sum to total (greenfield_net)") and is
-    written for a reader, so it changes whenever perspectives or wording change; the id does not.
-    `reporting.py` keys both its value formatting and its reader hints off these constants, which
-    is what lets a check be re-worded without touching the renderer — and, conversely, means
-    renaming one of these ids is a breaking change for anything reading the findings JSON.
+    A finding's `name` is prose and may change; the id does not, so renaming an id breaks readers of the findings JSON.
     """
 
     CHECK_RESULTS_PRESENT = "results_present"
@@ -80,9 +45,8 @@ class CheckIds:
     CHECK_SUBSIDIES_BELOW_BASIS = "subsidies_below_basis"
     CHECK_EFFECTIVE_PRICE = "effective_price"
     CHECK_EAC_PER_M2 = "equivalent_annual_cost_per_m2"
-    # The check now *reads* "system cost per unit of heat" (Q27 R1, `results.HeatCostNaming`);
-    # the id keeps its old spelling for the reason stated above — an id is a contract, a name
-    # is prose.
+    # The check reads "system cost per unit of heat" (`results.HeatCostNaming`); the id keeps
+    # its spelling because ids are a contract and names are prose.
     CHECK_LEVELIZED_COST_OF_HEAT = "levelized_cost_of_heat"
     CHECK_MAINTENANCE_RATIO = "maintenance_to_investment_ratio"
     CHECK_BAND_WIDTH = "band_width"
@@ -92,36 +56,28 @@ class CheckIds:
 
 
 class PlausibilityCategories:
-    """Category groupings the checks are computed over.
+    """The category groupings the checks compute over.
 
-    Holds the one selection set the checks need, so that "what counts as an energy bill" is a
-    reviewable definition rather than a filter buried in `_effective_price_findings`. The set is
-    the kernel's `timeline.CategoryRules.BILL_CATEGORIES`, bound here under the name the checks
-    use: the panel's effective-price check and report section 4 are the same statement about the
-    same carrier, and while the two held verbatim copies nothing stopped them drifting until the
-    panel validated a price the report does not show (review finding 14).
+    `BILL_CATEGORIES` is the kernel's `timeline.CategoryRules.BILL_CATEGORIES`, so the effective-price check and report
+    section 4 judge the same bill.
     """
 
-    #: The categories that make up an energy carrier's bill (§8) — the numerator of the effective
-    #: price check. The kernel definition, not a copy of it; `views.ViewCategories` binds the same
-    #: object.
+    #: The categories that make up an energy carrier's bill (§8), the numerator of the effective
+    #: price check. The kernel's set itself; `views.ViewCategories` binds the same object.
     BILL_CATEGORIES = CategoryRules.BILL_CATEGORIES
 
 
 @dataclass
 class PlausibilityConfig:
-    """Thresholds loaded from cost_database/plausibility_checks.json (reviewable data).
+    """Thresholds of the checks, loaded from `cost_database/plausibility_checks.json`.
 
-    Every bound the checks below judge against, in one place, so that tuning the panel is a data
-    PR rather than a code change. The field defaults are the fallback used when no thresholds
-    file ships (and only then) — they are not a second source of truth, and a bound the JSON file
-    sets always wins. All ranges are inclusive `(low, high)` pairs in the unit of the figure they
-    bound; `reconciliation_tolerance` is different in kind, being a *relative* tolerance for the
-    structural sum check rather than a plausibility range.
+    Ranges are inclusive `(low, high)` pairs in the unit of the figure they bound; `reconciliation_tolerance` is a
+    relative tolerance instead. The field defaults apply only when no thresholds file exists; a value in the file
+    always wins.
     """
 
-    #: carrier id -> plausible year-1 effective price in EUR/kWh, uniformly for every carrier
-    #: (D26). Carriers absent from the map are not checked at all.
+    #: carrier id -> plausible year-1 effective price in EUR/kWh, for every carrier.
+    #: Carriers absent from the map are not checked.
     effective_price_ranges: Dict[str, Tuple[float, float]] = field(default_factory=dict)
     eac_per_m2_range: Tuple[float, float] = (5.0, 80.0)  # EUR per m2 of reference area per year
     lcoh_range: Tuple[float, float] = (0.05, 0.50)  # EUR per kWh of delivered heat
@@ -132,21 +88,17 @@ class PlausibilityConfig:
 
     @classmethod
     def load(cls, base_path: Optional[str] = None) -> "PlausibilityConfig":
-        """Loads the thresholds file; falls back to the defaults above when missing.
+        """Load the thresholds file, falling back to the field defaults when it is missing.
 
-        The single entry point for obtaining thresholds — `run_plausibility_checks` calls it when
-        no config is passed, and tests pass a hand-built config instead to exercise a failing
-        check. A missing file is not an error: the panel is meant to run in any deployment, so an
-        absent `plausibility_checks.json` silently yields the dataclass defaults. The
-        `isinstance(bounds, list)` guard on `effective_price_ranges` is what lets that block
-        carry a `"comment"` string alongside the carrier bounds, as the shipped file does.
+        A missing file is not an error. Non-list values in `effective_price_ranges` (such as a `"comment"` string) are
+        skipped.
 
         Args:
-            base_path: Directory holding `plausibility_checks.json`; defaults to the shipped
-                `cost_database/` directory (`CostDatabase.DEFAULT_PATH`).
+            base_path: Directory holding `plausibility_checks.json`; defaults to the shipped `cost_database/` directory
+                (`CostDatabase.DEFAULT_PATH`).
 
         Returns:
-            A fully populated config; never None.
+            A fully populated config.
         """
         path = os.path.join(base_path or CostDatabase.DEFAULT_PATH, "plausibility_checks.json")
         if not os.path.isfile(path):
@@ -169,12 +121,10 @@ class PlausibilityConfig:
 
 @dataclass(frozen=True)
 class PlausibilityFinding:
-    """One check outcome as **data**: numbers, a unit, and the range that was required.
+    """One check outcome as unformatted data: a value, its unit and the range it was judged against.
 
-    Nothing here is formatted. `value` is the figure the check judged, in `unit`; `context`
-    carries the further numbers the check looked at, keyed by role, so a renderer can say
-    "4,800 vs 16,000 EUR" or "1,760 EUR for 5,000 units" without recomputing anything. Which
-    context keys exist is fixed per `check_id` and documented at the producing call site.
+    `context` holds further numbers the check looked at, keyed by role, so a renderer can write "4,800 vs 16,000 EUR"
+    without recomputing. Which keys exist depends on `check_id` and is documented where the check is produced.
     """
 
     check_id: str
@@ -191,12 +141,7 @@ class PlausibilityFinding:
     band: Optional[UncertainValue] = None
 
     def to_json(self) -> dict:
-        """Serialization (machine consumers read findings, never rendered strings).
-
-        Emits every field, including the ones that are None for this check kind, so the record
-        shape is the same for all findings and a consumer can read `status` and `check_id`
-        without knowing which check produced the row.
-        """
+        """Serialize every field, including those that are None, so all findings share one record shape."""
         return {
             "check_id": self.check_id,
             "name": self.name,
@@ -213,39 +158,29 @@ class PlausibilityFinding:
 class PlausibilityReport:
     """All findings of one evaluation, in panel order.
 
-    The single object the report writers and `bridge.py` receive from
-    `run_plausibility_checks`; it is a thin wrapper around the finding list whose value is that
-    the *order* of that list is the panel's order and is therefore part of the golden output.
-    It exposes `flagged()`/`ok()` so a caller can react to the outcome without knowing the
-    status vocabulary, and iterating the report iterates the findings, so it can be passed
-    anywhere a sequence of findings is expected.
+    The order is the panel's order and is pinned by the golden reports. Iterating the report iterates its findings.
     """
 
     findings: List[PlausibilityFinding] = field(default_factory=list)
 
     def __iter__(self):
-        """Iterating the report iterates its findings."""
+        """Iterate the findings."""
         return iter(self.findings)
 
     def __len__(self) -> int:
-        """Number of findings."""
+        """Return the number of findings."""
         return len(self.findings)
 
     def flagged(self) -> List[PlausibilityFinding]:
-        """Everything that is not a PASS — what a reader has to look at."""
+        """Return every finding that is not a PASS."""
         return [finding for finding in self.findings if finding.status != CheckStatus.PASS]
 
     def ok(self) -> bool:
-        """True when nothing is flagged."""
+        """Return True when no finding is flagged."""
         return not self.flagged()
 
     def to_json(self) -> dict:
-        """Serialization.
-
-        Wraps the findings in a `{"findings": [...]}` object rather than emitting a bare list, so
-        the document can grow further top-level keys (a summary count, a config fingerprint)
-        without breaking readers.
-        """
+        """Serialize as `{"findings": [...]}`; an object, so top-level keys can be added later."""
         return {"findings": [finding.to_json() for finding in self.findings]}
 
 
@@ -257,12 +192,9 @@ def _range_finding(
     unit: str,
     context: Optional[Dict[str, float]] = None,
 ) -> PlausibilityFinding:
-    """A magnitude check: inside the bounds is a PASS, outside is advisory (WARN).
+    """Build a magnitude finding: PASS inside the inclusive bounds, WARN outside.
 
-    The constructor for every range check in the module, which is what guarantees that no
-    magnitude check can ever produce a FAIL — being outside a generous range is evidence of a
-    likely mistake, never proof of one. Bounds are inclusive on both ends, and the finding
-    carries them so the panel can print the range it judged against instead of a bare verdict.
+    Every range check uses this, so a magnitude check can never FAIL.
     """
     low, high = bounds
     return PlausibilityFinding(
@@ -277,13 +209,10 @@ def _range_finding(
 
 
 def _npv_of(result: LifecycleCostResult, *categories: CostCategory) -> float:
-    """BEST_ESTIMATE-slot NPV of the given categories (the checks judge the expected world).
+    """Return the best-estimate NPV of the given categories, or 0.0 when the result has none of them.
 
-    Sums `result.npv_by_category` over the categories passed, skipping any the perspective has
-    no entry for, and returns 0.0 when none are present — which is why the callers below guard
-    on truthiness before emitting a finding rather than dividing by a possible zero. Only the
-    BEST_ESTIMATE slot is used: LOW and HIGH are the deliberately extreme corners of the envelope and
-    would trip generous ranges for reasons that are not defects (§3.9).
+    Only the best-estimate slot is used; the minimum and maximum slots are deliberate extremes that would trip generous
+    ranges (§3.9).
     """
     return sum(
         result.npv_by_category[category].best_estimate
@@ -295,28 +224,15 @@ def _npv_of(result: LifecycleCostResult, *categories: CostCategory) -> float:
 def _structural_findings(
     matrix: EvaluationMatrix, config: PlausibilityConfig
 ) -> List[PlausibilityFinding]:
-    """The hard invariants (§7.4 reconciliation, §3.9 band ordering, §5.4 support bounds).
+    """Check the hard invariants on every perspective; any violation is a FAIL (§7.4, §3.9, §5.4).
 
-    Four identities that must hold for *every* perspective in the matrix, not just the reference
-    one, because each of them can break in one perspective while holding in the others (an actor
-    scope reconciles differently from a system scope, a subsidy mode changes what support exists
-    at all). Any violation is a FAIL: the engine or the data produced a result that contradicts
-    itself, so nothing downstream of it can be trusted.
+    The four checks: subject NPVs sum to the perspective total within a relative tolerance; the total NPV band is
+    ordered minimum <= best estimate <= maximum (a finding only when violated); the residual value does not exceed what
+    was purchased; support does not exceed its eligible cost basis. The last two compare magnitudes (credits are
+    negative), allow `1e-9` relative slack for float error, and are emitted only when both sides are non-zero.
 
-    The four are: subject NPVs sum to the perspective total (within a relative tolerance, since
-    the two sides are different fold orders of the same floats); the total NPV band is ordered
-    min <= best_estimate <= max; the residual value never exceeds what was ever purchased; and support
-    never exceeds its own eligible cost basis. The last two are only emitted when both sides are
-    non-zero — a perspective without subsidies has nothing to check — and both compare
-    magnitudes via `abs()`, because credits are booked negative under the package sign
-    convention. The `1e-9` relative slack on those two absorbs float error at the equality case,
-    where a cap makes support exactly equal its basis. The band-ordering check differs from the
-    other three in that it appends a finding only when it is violated, so it is invisible in a
-    healthy panel.
-
-    The two passes over `matrix.results` are not redundant: they put all reconciliation and band
-    findings above all residual/subsidy findings in the panel, and panel order is pinned by the
-    golden reports.
+    All reconciliation and band findings come before all residual and subsidy findings, which is why `matrix.results`
+    is walked twice.
     """
     findings: List[PlausibilityFinding] = []
     for perspective_id, result in matrix.results.items():
@@ -377,26 +293,14 @@ def _structural_findings(
 def _effective_price_findings(
     reference: LifecycleCostResult, config: PlausibilityConfig
 ) -> List[PlausibilityFinding]:
-    """Year-1 bill / annualized quantity per carrier — the fastest unit-mix-up detector.
+    """Check each carrier's year-1 effective price, its year-1 bill divided by the kWh bought, against its range.
 
-    Divides what a carrier cost in its first full operating year by how much of it was bought,
-    and compares the result against the per-carrier range in the thresholds file. A price that
-    lands three orders of magnitude off is the signature of a Wh/kWh or ct/EUR confusion
-    anywhere between the meter, the annualization and the tariff, and this check finds it
-    without anyone having to know where the mistake was made. The numerator is the same four
-    bill categories the report's section-4 decomposition adds up (feed-in revenue excluded — a
-    credit is not part of what a kWh costs).
+    A price orders of magnitude off reveals a Wh/kWh or ct/EUR confusion anywhere between meter and tariff. The bill is
+    the four `BILL_CATEGORIES` (feed-in revenue excluded). The quotient is EUR/kWh for every carrier, pellets and oil
+    included, because per-ton and per-litre quotes are converted when prices are resolved. A carrier is skipped when it
+    has no range, nothing was bought or its year-1 bill is zero.
 
-    The quotient is EUR/kWh for every carrier, pellets and heating oil included: the denominator
-    is kWh throughout and the per-ton and per-liter quotes of the data files are divided out when
-    the price entry is resolved (D26), so the shipped bands are EUR/kWh bands too. That uniformity
-    is what makes the check readable — before it, two of the eight bands were per ton and could
-    only ever have judged a number of a different kind (review finding 11).
-
-    A carrier is skipped silently when it has no range configured, when nothing was bought, or
-    when its year-1 bill is zero, so free or unpriced carriers do not produce noise.
-
-    Context keys: ``year1_cost`` (the bill the price was derived from) and ``quantity``.
+    Context keys: `year1_cost` (the bill) and `quantity` (kWh bought).
     """
     findings: List[PlausibilityFinding] = []
     for carrier, quantities in reference.annual_energy_quantities_by_carrier.items():
@@ -425,26 +329,18 @@ def _effective_price_findings(
 
 
 def _flexibility_value_findings(reference: LifecycleCostResult) -> List[PlausibilityFinding]:
-    """Warns when a dynamic-tariff carrier was timed worse than the flat mean price (issue #25b).
+    """Warn for each dynamic-tariff carrier whose consumption timing cost more than a flat profile (§8.5).
 
-    The §8.5 decomposition splits an energy bill into a volume effect and a *flexibility value* —
-    what the timing of consumption was worth against a flat profile at the unweighted mean spot
-    price. A negative value means the simulated load was systematically on the expensive hours: a
-    controller optimizing the wrong signal, an inverted price series, a tariff assigned to the
-    wrong carrier. The projection clamps it to zero so the two components do not escalate apart,
-    and that clamp used to be the end of the story; the raw figure now travels on the result and
-    is reported here.
-
-    Like every magnitude check this is advisory: the headline numbers keep the clamped value, and
-    a healthy run emits nothing at all — the finding is appended only when the value is actually
-    negative, so a panel with no dynamic tariff looks exactly as it did before.
+    The flexibility value is what consumption timing was worth against a flat profile at the mean spot price. A
+    negative value means the load sat on expensive hours, e.g. a controller following the wrong signal. The headline
+    figures use the value clamped to zero; this check reports the raw one.
 
     Args:
         reference: The reference perspective's result, read for its per-carrier raw values.
 
     Returns:
-        One WARN per carrier with a negative flexibility value, in carrier order; usually empty.
-        Context key: ``clamped_to`` — the 0.0 the projection actually used.
+        One WARN per carrier with a negative flexibility value, in carrier order; usually empty. Context key
+            `clamped_to` holds the 0.0 actually used.
     """
     findings: List[PlausibilityFinding] = []
     for carrier, value in reference.raw_flexibility_value_by_carrier.items():
@@ -466,23 +362,12 @@ def _flexibility_value_findings(reference: LifecycleCostResult) -> List[Plausibi
 def _magnitude_findings(
     reference: LifecycleCostResult, config: PlausibilityConfig
 ) -> List[PlausibilityFinding]:
-    """The advisory range checks on the first (reference) perspective.
+    """Run the advisory range checks on the reference (first) perspective; each yields at most a WARN.
 
-    Six magnitude questions a domain expert would ask first, in the order the panel prints
-    them: is each carrier's effective price recognizable, is the equivalent annual cost per
-    square metre in the right order of magnitude for a dwelling, is the system cost per unit of
-    heat plausible, is maintenance a sane fraction of investment (a huge ratio is the signature
-    of an absolute fee stored as a rate), is the uncertainty band suspiciously wide (which
-    usually
-    means a band typo in a data file), and did any carrier's load timing actually *cost* money
-    against a flat profile (`_flexibility_value_findings`). Every one of them yields at most a
-    WARN.
-
-    Each check is emitted only when its inputs exist — no reference area, no LCOH, no
-    maintenance or no investment simply drops that row — the band-width check additionally
-    requires a strictly positive minimum, since `max/min` is meaningless for a band that spans
-    zero or is negative throughout, and the flexibility check appears only when something is
-    wrong, so an unchanged run yields an unchanged panel.
+    In panel order: each carrier's effective price, the equivalent annual cost per m², the system cost per unit of
+    heat, the maintenance-to-investment ratio (a huge ratio means an absolute fee stored as a rate), the band width (a
+    very wide band usually means a typo in a data file), and the flexibility value. A check is skipped when its inputs
+    are missing; the band-width check needs a strictly positive minimum.
     """
     findings = _effective_price_findings(reference, config)
     area = reference.reference_areas.preferred()
@@ -537,26 +422,18 @@ def _magnitude_findings(
 
 
 def _extrapolation_findings(simulated_period_fraction: Optional[float]) -> List[PlausibilityFinding]:
-    """A WARN when the results were extrapolated from less than a simulated year (§8.5).
+    """Warn when results were extrapolated from less than a simulated year (§8.5).
 
-    A run shorter than a year is annualized by dividing its energy quantities by the simulated
-    fraction, so a one-day run multiplies everything by 365 — and the resulting lifecycle figures
-    are an extrapolation of one day's weather, occupancy and control behaviour, not a measurement.
-    Nothing in the output said so: the numbers look exactly like a full-year run's, and the
-    factor lives nowhere a reader of `cost_summary.md` or the HTML report can see it.
-
-    It is a check rather than only a log line because a log line is gone by the time anyone reads
-    the report, and it is WARN rather than FAIL because such a run is a perfectly legitimate thing
-    to do — the figures are just not what they appear to be. The finding carries the fraction as
-    its value and the extrapolation factor in `context`, so a renderer can quote either.
+    A shorter run is annualized by dividing by the simulated fraction, so a one-day run multiplies everything by 365;
+    the figures look like a full year's but are not. The finding's value is the fraction, and `context` carries the
+    extrapolation factor.
 
     Args:
-        simulated_period_fraction: The share of a year the simulation covered, or None when the
-            caller does not know it (the `report` CLI on stored results, the golden fixtures).
+        simulated_period_fraction: Share of a year the simulation covered, or None when unknown (stored results, golden
+            fixtures).
 
     Returns:
-        One WARN finding for a partial year, and nothing at all for a full year or an unknown
-        fraction — a panel row saying "this run covered a whole year" is noise.
+        One WARN for a partial year; nothing for a full year or an unknown fraction.
     """
     if simulated_period_fraction is None or simulated_period_fraction >= 1.0:
         return []
@@ -575,21 +452,18 @@ def _extrapolation_findings(simulated_period_fraction: Optional[float]) -> List[
 
 
 def _heat_without_hot_water_findings(heat_without_hot_water_in_kwh: Optional[float]) -> List[PlausibilityFinding]:
-    """A WARN when the heat-cost figure divides by the rooms' heat and no hot water (hisim-4wlu).
+    """Warn when the heat-cost figure divides by room heat only, without hot water.
 
-    The system cost per unit of heat divides by the useful heat the run measured, rooms plus hot
-    water (`adapter.UsefulHeatSources`). A run whose building has no hot-water source the table
-    lists — a combi boiler, an electric water heater — measures the rooms alone while its costs
-    still pay for the hot water, so the figure reads too high by the hot water's share. It is the
-    same kind of statement as the extrapolation warning: a legitimate run whose figure is not what
-    it appears to be, so a WARN in the panel rather than a log line the report's reader never sees.
+    The system cost per unit of heat divides by the measured useful heat, rooms plus hot water
+    (`adapter.UsefulHeatSources`). If the building's hot-water source is not one the table lists, only room heat is
+    measured while the costs still pay for hot water, so the figure reads too high.
 
     Args:
-        heat_without_hot_water_in_kwh: The annual rooms-only heat the figure divides by, or None
-            when the denominator is whole (or declared, or absent, or unknown to the caller).
+        heat_without_hot_water_in_kwh: The annual room-only heat the figure divides by, or None when the denominator is
+            complete or unknown.
 
     Returns:
-        One WARN finding carrying the heat as its value, or nothing.
+        One WARN carrying the heat as its value, or nothing.
     """
     if heat_without_hot_water_in_kwh is None:
         return []
@@ -610,36 +484,22 @@ def run_plausibility_checks(
     simulated_period_fraction: Optional[float] = None,
     heat_without_hot_water_in_kwh: Optional[float] = None,
 ) -> PlausibilityReport:
-    """The automated panel: structural invariants (FAIL) and magnitude ranges (WARN).
+    """Run the plausibility panel: structural invariants on every perspective, magnitude ranges on the first.
 
-    Magnitude checks are evaluated on the *first* perspective of the matrix — the reference
-    view a reader reads first; the structural ones run on every perspective. Order is part of
-    the contract: the report panel prints findings in the order they are produced here.
-
-    This is the module's only public entry point and the engine-side half of report section 0.
-    It is called by `bridge.py` after a simulation, by the `report` CLI on stored results, and by
-    the golden tests; each of those then hands the report to `reporting.render_plausibility_findings`
-    for display. It never raises on a bad result — an empty matrix is itself reported, as a single
-    FAIL finding, so that "the engine produced nothing" arrives through the same channel as every
-    other defect instead of as an exception in a postprocessing step.
+    Called by `bridge.py` after a simulation, by the `report` CLI on stored results and by the golden tests;
+    `reporting.summary.render_plausibility_findings` renders the result. It never raises: an empty matrix yields a
+    single FAIL finding.
 
     Args:
-        matrix: The evaluated perspectives. Insertion order matters twice — the first entry is
-            the reference perspective for the magnitude checks, and it is the order findings are
-            emitted in.
-        config: Thresholds to judge against; loaded from `cost_database/plausibility_checks.json`
-            when omitted.
-        simulated_period_fraction: The share of a year the run covered, when the caller knows it.
-            Only the postprocessing bridge does; passing it adds the §8.5 extrapolation warning to
-            the panel, and omitting it leaves the panel exactly as it was.
-        heat_without_hot_water_in_kwh: The annual heat the heat-cost figure divides by when it
-            covers the rooms and no hot water (`EvaluationInputs.heat_cost_omits_hot_water`), which
-            only the postprocessing bridge knows; passing it adds a WARN row saying so.
+        matrix: The evaluated perspectives. The first is the reference for the magnitude checks, and the order is the
+            order findings are emitted in.
+        config: Thresholds; loaded from `cost_database/plausibility_checks.json` when omitted.
+        simulated_period_fraction: Share of a year the run covered, if known; adds the §8.5 extrapolation warning.
+        heat_without_hot_water_in_kwh: Annual heat the heat-cost figure divides by when it omits hot water
+            (`EvaluationInputs.heat_cost_omits_hot_water`); adds a WARN saying so.
 
     Returns:
-        A `PlausibilityReport` whose findings are ordered structural-first, then magnitude.
-        `report.ok()` is True when every check passed; a FAIL means an engine/data invariant is
-        broken, a WARN means a magnitude wants a look (see the module docstring).
+        The findings, structural first, then magnitude. `report.ok()` is True when every check passed.
     """
     config = config or PlausibilityConfig.load()
     if not matrix.results:

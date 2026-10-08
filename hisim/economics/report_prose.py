@@ -1,47 +1,11 @@
-"""The authored explanation of every report section — the report's own prose, in one place.
+"""The authored explanation of every report section, kept in one place as prose.
 
-Every section of `lifecycle_report.html` opens with the same four parts: what the chart in front
-of the reader *shows*, what it *adds* that no other section covers, the terms of art it uses
-(defined at engineering-bachelor level), and how the numbers in it are calculated. This module
-holds that text and nothing else, so the renderers stay geometry and the wording stays reviewable
-as prose rather than as string fragments spread over the section builders of the `reporting`
-package.
-
-Two mappings live here: `SECTIONS`, the four-part explanation of every report section, and
-`CHAPTER_INTROS`, the short authored lead-in of each story chapter (owner decision Q24). A chapter
-intro is deliberately not four-part — a chapter has no chart to show, nothing to add and nothing
-to calculate; it is the sentence that says which of the reader's three questions the sections
-below it answer. Both are keyed by the names of registries — `ReportSections` and
-`ReportChapters` — that arrive with the renderer slices further up this stack, so the keys here
-are the strings those registries will publish rather than anything this slice can import.
-
-**Verbatim.** The text is the owner-reviewed explanation copy, transcribed without rewording from
-the authoring document it was reviewed in (which is not in the tree — this module is the copy of
-record); a change here is an editorial decision, not a rendering one. It is deliberately
-**number-free**: every run-specific figure stays in the renderers' dynamic captions, so the prose
-is identical in every report and the golden file only moves when the wording is actually edited.
-Recurring terms are re-defined in every section that leans on them, because the report is read
-non-linearly and a reader landing mid-page must not have to find the primer first.
-
-**The one exception** is at the foot of this module: `payback_interval_sentence` and
-`treemap_disclosure` (with `format_euro`, the report's single rounding rule, under them) are
-run-specific captions that *both* renderers print, and a sentence printed by two renderers is a
-sentence that drifts — the payback wording had already come to disagree about which world pays
-back first, and the two treemap disclosures named the same fold differently. They are plain
-functions over plain values, so the HTML report and the PNG caption are the same string by
-construction rather than by review.
-
-**Markup.** The strings carry markdown emphasis (`*term*`, `**emphasis**`, `` `code` ``) rather
-than HTML, because both renderers need them: the `reporting` package turns them into `<em>` /
-`<strong>` / `<code>` with `to_html`, and `report_plots.py` strips them for the caption of the
-ledger heatmap with `to_plain_text` — both of those renderers arrive with later slices of this
-stack, and what lands here is the text plus the two conversions they will call. Markup that
-cannot be rendered is refused rather than passed through: an unbalanced or nested marker raises
-out of *both* conversions, and the test suite runs both over every authored string, so a stray
-asterisk fails in CI instead of reaching a reader as a literal one. The `<details>` summaries are
-constants for the same reason the section names are: they are the one source of the two
-disclosure titles the renderer slices read, and two spellings of "Terms used here" would put both
-of them in one report.
+`SECTIONS` maps each section of `lifecycle_report.html` to four parts: what its chart shows, what it adds, the terms it
+uses and how its numbers are calculated. `CHAPTER_INTROS` holds the one-sentence lead-in of each story chapter. The
+text is number-free, so the golden report only moves when the wording is edited; it carries markdown emphasis that
+`to_html` and `to_plain_text` convert, and both refuse unbalanced or nested markers. The functions at the foot
+(`format_euro`, `payback_interval_sentence`, `treemap_disclosure`) are the run-specific captions that the HTML report
+and the PNG plots both print.
 """
 
 import html
@@ -49,10 +13,8 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-# The view layer, for the two shared captions at the foot of this module: they state a run's own
-# figures, so they read the view objects the renderers hand them. `views` is on the presentation
-# layer's allowed surface (`tests/test_economics_import_lint.py`), and the dependency runs one
-# way — nothing in the engine may reach back for authored wording.
+# The view layer, for the two shared captions at the foot of this module. `views` is on the
+# presentation layer's allowed surface (`tests/test_economics_import_lint.py`).
 from hisim.economics import views
 
 
@@ -60,10 +22,9 @@ from hisim.economics import views
 class SectionProse:
     """The four parts of one section's explanation.
 
-    `shows` and `adds` are the two visible paragraphs, `terms` the definition list behind the
-    "Terms used here" disclosure (one `(term, definition)` pair per entry, in the order they are
-    to be read, not alphabetically), and `calculation` the paragraphs behind "How this is
-    calculated". All of them carry markdown emphasis; see the module docstring.
+    `shows` and `adds` are the two visible paragraphs; `terms` is the definition list behind the "Terms used here"
+    disclosure, as `(term, definition)` pairs in reading order; `calculation` is the paragraphs behind "How this is
+    calculated". All carry markdown emphasis.
     """
 
     shows: str
@@ -75,12 +36,9 @@ class SectionProse:
 class ReportProse:
     """Every section's explanation, keyed by the section name `ReportSections` publishes.
 
-    Keyed by name rather than by anchor so the mapping reads as the table of contents does, and
-    so a renamed section fails loudly in `for_section` instead of silently dropping its
-    explanation. `SECTIONS` covers every entry of `ReportSections.ORDER` plus `Ledger heatmap`,
-    which is a PNG in the audit outputs rather than an HTML section: only its `shows` paragraph
-    fits a matplotlib caption, and its terms and calculation are unreachable there — a limitation
-    recorded in the PR description rather than papered over.
+    `SECTIONS` covers every entry of `ReportSections.ORDER` plus `Ledger heatmap`, a PNG in the audit outputs whose
+    caption can only use the `shows` paragraph. Keying by name makes a renamed section fail in `for_section` instead of
+    losing its explanation.
     """
 
     TERMS_SUMMARY = "Terms used here"
@@ -1876,12 +1834,9 @@ class ReportProse:
         ),
     }
 
-    #: The short authored lead-in of each story chapter (owner decision Q24). Chapter intros are
-    #: deliberately *not* four-part `SectionProse`: a chapter is not a chart, it has nothing to
-    #: show, add, define or calculate — it is the sentence that says which of the three questions
-    #: the sections below it answer. Keyed by the chapter names `ReportChapters` publishes, for
-    #: the same reason `SECTIONS` is keyed by section name: a renamed chapter fails loudly in
-    #: `for_chapter` instead of silently rendering an unexplained heading.
+    #: The one-sentence lead-in of each story chapter, keyed by the chapter names
+    #: `ReportChapters` publishes. A chapter has no chart, so it gets one sentence, not the four
+    #: parts of `SectionProse`.
     CHAPTER_INTROS: Dict[str, str] = {
         "The building": (
             "What the technology costs and does, before asking whose money it is: the priced inputs, the "
@@ -1909,10 +1864,10 @@ class ReportProse:
 
     @classmethod
     def for_chapter(cls, name: str) -> str:
-        """The authored lead-in of one chapter, by the name its heading carries (Q24).
+        """Return the authored lead-in of one chapter, by the name its heading carries.
 
-        Raises `KeyError` rather than returning an empty string, for the same reason
-        `for_section` does: a chapter heading with no lead-in is a silent editorial regression.
+        Raises:
+            KeyError: If the chapter has no lead-in.
         """
         if name not in cls.CHAPTER_INTROS:
             raise KeyError(f"No authored intro for report chapter {name!r}")
@@ -1920,11 +1875,10 @@ class ReportProse:
 
     @classmethod
     def for_section(cls, name: str) -> SectionProse:
-        """The prose of one section, by the name its heading carries.
+        """Return the prose of one section, by the name its heading carries.
 
-        Raises `KeyError` with the offending name rather than returning an empty block: a section
-        that renders without its explanation is the failure this module exists to prevent, and it
-        would otherwise be invisible in a report that is thousands of lines long.
+        Raises:
+            KeyError: If the section has no explanation; a section must not render without one.
         """
         if name not in cls.SECTIONS:
             raise KeyError(f"No authored explanation for report section {name!r}")
@@ -1934,10 +1888,8 @@ class ReportProse:
     _CODE_SPAN = re.compile(r"`([^`]+)`")
     _STRONG = re.compile(r"\*\*([^*]+)\*\*")
     _EMPHASIS = re.compile(r"\*([^*]+)\*")
-    #: Stands in for an already-rendered code span while the emphasis patterns run over the rest
-    #: of the text. NUL is the one character authored prose cannot contain — it is not typeable,
-    #: not in any of the transcribed source documents, and would not survive a JSON round trip —
-    #: so a slot can never collide with the text it is embedded in.
+    #: Placeholder for an already-rendered code span while the emphasis patterns run. NUL cannot
+    #: occur in authored prose, so a placeholder never collides with the text around it.
     _SPAN_SLOT = "\x00{}\x00"
     _SPAN_SLOT_PATTERN = re.compile("\x00(\\d+)\x00")
 
@@ -1949,21 +1901,11 @@ class ReportProse:
         strong: Tuple[str, str],
         emphasis: Tuple[str, str],
     ) -> str:
-        """One markup pass with the three delimiter pairs the caller wants, validated at the end.
+        """Replace the three markups of `text` with the given delimiter pairs and refuse any leftover marker.
 
-        Both renderers run this, with tags for HTML and with empty strings for plain text, so the
-        two can never disagree about what the markup *is*: a string either renders in both or is
-        refused by both. Order is part of the contract. Code spans are substituted first and
-        their content parked in a slot, so an asterisk between backticks stays an asterisk instead
-        of being read as emphasis inside a `<code>` element; strong runs before emphasis, because
-        `**x**` would otherwise be consumed as two empty emphases.
-
-        The patterns are not "non-greedy" — they exclude their own marker character
-        (`[^*]+`, `` [^`]+ ``), which is stronger: a run cannot span from one term to the next
-        even where a lazy quantifier would have been allowed to. The price is that nested
-        emphasis (`**bold with *italic* inside**`) is not expressible, and rather than
-        rendering it as something the author did not write, it is refused: whatever the three
-        passes could not consume is left in the text, and a leftover marker raises.
+        Both `to_html` and `to_plain_text` call this, so a string either renders in both or is refused by both. Code
+        spans are replaced first and parked in a placeholder slot, so an asterisk inside backticks stays literal;
+        strong (`**x**`) runs before emphasis (`*x*`). Nested emphasis cannot be expressed and is refused.
 
         Args:
             text: The authored string, already escaped if the caller escapes.
@@ -1980,7 +1922,7 @@ class ReportProse:
         spans: List[str] = []
 
         def stash(match: "re.Match[str]") -> str:
-            """Renders one code span and parks it, so emphasis cannot reach inside it."""
+            """Render one code span and park it in a placeholder, so emphasis cannot reach inside it."""
             spans.append(f"{code[0]}{match.group(1)}{code[1]}")
             return cls._SPAN_SLOT.format(len(spans) - 1)
 
@@ -1994,16 +1936,13 @@ class ReportProse:
 
     @classmethod
     def _refuse_unrendered_markup(cls, rendered: str, source: str) -> None:
-        """Raises when a markup character survived the substitutions of `_rendered`.
+        """Raise when a `*` or backtick survived the substitutions of `_rendered`.
 
-        A leftover `*` or backtick means one of two things, and neither may reach a report: the
-        marker is unbalanced (`value *`, a footnote star, a multiplication sign) and would be
-        printed raw where the author meant nothing by it, or the emphasis is nested
-        (`**a *b* c**`) and the passes have already rendered part of it into something the
-        author did not write. Both are editorial mistakes in a module whose entire content is
-        authored text, and both are invisible in a rendered report that is thousands of lines
-        long — a raw asterisk reads as punctuation and a mis-nested one reads as emphasis. The
-        message quotes the offending string, because the string is the bug report.
+        A leftover marker means the markup is unbalanced (a stray star) or nested (`**a *b* c**`); both would print
+        wrongly.
+
+        Raises:
+            ValueError: Quoting the offending source string.
         """
         leftover = [marker for marker in ("*", "`") if marker in rendered]
         if leftover:
@@ -2016,22 +1955,14 @@ class ReportProse:
 
     @classmethod
     def to_html(cls, text: str) -> str:
-        """Markdown emphasis to HTML, with the text escaped first.
+        """Convert markdown emphasis to HTML after escaping the text.
 
-        The only transformation the prose is allowed to undergo on its way into the report: the
-        markup characters become entities, `` `x` `` becomes `<code>`, `**x**` becomes `<strong>`
-        and `*x*` becomes `<em>` — in that order, and refusing anything the three passes cannot
-        consume; `_rendered` carries the reasoning for both. Escaping runs first, so a definition
-        mentioning `<details>` cannot open a tag.
-
-        The escaping is `html.escape(..., quote=True)`, the same call the `reporting` package's
-        `_esc` makes, rather than a hand-rolled replacement of `&`, `<` and `>`. Two escapers in
-        one document is one escaper too many: the hand-rolled one left quotes alone, so a
-        paragraph that ever reached an attribute — a `title`, an SVG `aria-label` — would have
-        closed it, and the two would have had to be kept in step by hand forever.
+        Escaping uses `html.escape(..., quote=True)`, the same call as the `reporting` package's `_esc`, so the result
+        is also safe inside attributes. Then `` `x` `` becomes `<code>`, `**x**` becomes `<strong>` and `*x*` becomes
+        `<em>`.
 
         Raises:
-            ValueError: If the markup is unbalanced or nested, exactly as in `to_plain_text`.
+            ValueError: If the markup is unbalanced or nested.
         """
         return cls._rendered(
             html.escape(text, quote=True),
@@ -2042,49 +1973,28 @@ class ReportProse:
 
     @classmethod
     def to_plain_text(cls, text: str) -> str:
-        """The same prose with the emphasis markers removed and nothing else changed.
+        """Return the prose with the emphasis markers removed and nothing else changed.
 
-        For the one renderer that cannot carry markup: the matplotlib caption of the ledger
-        heatmap. Dropping the markers rather than substituting anything keeps the caption
-        character-for-character comparable with the authored source.
-
-        It runs the same pass `to_html` does, with empty delimiters, rather than three string
-        replacements. Stripping by `replace` accepted anything — `value *` came out as `value `,
-        silently — so the caption renderer would have printed prose that the HTML renderer
-        refuses. One validator, one verdict.
+        Used for the matplotlib caption of the ledger heatmap, which cannot carry markup. It runs the same validating
+        pass as `to_html` with empty delimiters, so both renderers accept and refuse the same strings.
 
         Raises:
-            ValueError: If the markup is unbalanced or nested, exactly as in `to_html`.
+            ValueError: If the markup is unbalanced or nested.
         """
         return cls._rendered(text, code=("", ""), strong=("", ""), emphasis=("", ""))
 
 
 # ------------------------------------------------------------------ captions both renderers share
 #
-# The authored text above is number-free by design; the three functions below are the exception the
-# module docstring names. They are the sentences that carry a run's own figures and are printed by
-# *both* renderers — the HTML report and the matplotlib PNGs — and they live here rather than in
-# either of them because a caption that exists twice is a caption that drifts: the two copies of the
-# payback sentence had already disagreed about which world pays back first, and the two treemap
-# disclosures named different things (one said "subsidies", the other "support") for the same fold.
+# The three functions below are the run-specific captions that both the HTML report and the
+# matplotlib PNGs print; they live here so the two renderers cannot word them differently.
 
 
 def format_euro(value: float) -> str:
-    """Compact euro formatting, the one place the report chooses precision.
+    """Format a euro amount compactly, with a precision chosen by magnitude.
 
-    Chosen by magnitude rather than fixed: cents below 100 EUR (a maintenance fee must be
-    readable), whole euros up to 100k, thousands above that (a 340k NPV printed to the cent is
-    noise). It rounds a number for display, it never derives one.
-
-    Because it is a pure function of the value with no locale, width or context dependence, the
-    same number always renders as the same string — which is what makes the golden markdown
-    diffable at all. The flip side a reviewer should know: it discards precision, so two figures
-    that differ below the printed digit are indistinguishable in the report, and the exports
-    (`lifecycle_costs.json`, `cash_flow_timeline.csv`) carry the full values.
-
-    It lives in the prose module rather than in the `reporting` package because the captions
-    below are rendered by both renderers and have to come out byte-identical; `reporting`'s own
-    `_fmt` is this function under its old name.
+    Cents below 100 EUR, whole euros up to 100k, thousands above that (e.g. `340k`). The result depends only on the
+    value, so the golden report is stable; the exports carry the full values. `reporting`'s `_fmt` is this function.
 
     Args:
         value: The amount in euros.
@@ -2100,31 +2010,23 @@ def format_euro(value: float) -> str:
 
 
 def payback_year_phrase(year: Optional[int]) -> str:
-    """One world's zero-crossing as it is read aloud: "year 12", or that it never crossed."""
+    """Return one world's payback year as read aloud: "year 12", or that it never paid back."""
     return f"year {year}" if year is not None else "never within the horizon"
 
 
 def payback_interval_sentence(
     earliest: Optional[int], central: Optional[int], latest: Optional[int]
 ) -> str:
-    """The payback sentence under a discounted-savings panel, with the open end spelled out.
+    """Return the payback sentence under a discounted-savings panel, including the case of no payback.
 
-    Says "never within the horizon" in words rather than omitting the statement, which is the
-    failure mode this wording exists to prevent: an absent annotation reads as "did not pay back"
-    to one reader and as "not computed" to another. All three worlds are consulted, because a
-    sentence built from two of them cannot say where the answer actually lands.
-
-    **No world is named optimistic or pessimistic.** Savings are reference minus variant within
-    one world, and which world saves most depends on which uncertainty dominates: the reference's
-    energy bill (the HIGH world saves most) or the plan's investment (the LOW world does). The
-    sentence used to name the slots by position and was wrong in one of the two cases; it now
-    states the range by value, :class:`~hisim.economics.results.PaybackEnvelope`
-    (renovisorissues #73), whose ``None`` in ``latest`` means that at least one world never pays
-    back.
+    A world is one of the three band slots (low, best estimate, high), each a coherent set of assumptions. The sentence
+    states the range of payback years by value and never names a world optimistic or pessimistic, because which world
+    saves most depends on whether the reference's energy bill or the plan's investment dominates the uncertainty.
+    "Never within the horizon" is written out, so an absent payback is not mistaken for one not computed.
 
     Args:
         earliest: The first year any world has paid back, or None when none does.
-        central: The crossing of the central (best-estimate) world, or None.
+        central: The payback year of the best-estimate world, or None.
         latest: The year every world has paid back, or None when one never does.
 
     Returns:
@@ -2144,16 +2046,11 @@ def payback_interval_sentence(
 
 
 def treemap_disclosure(tiles: views.CostStructureTiles, basis: views.TileBasis) -> str:
-    """What one treemap panel has to disclose about the areas it could not draw.
+    """Return what one treemap panel discloses about the amounts it could not draw.
 
-    A treemap has no negative area, so each basis hides something different and has to say what:
-    the gross panel hides the credits, the net panel hides the subjects whose credits exceeded
-    their costs and were clamped to zero. Naming the clamped subjects is the point — they are
-    exactly the entries a reviewer should ask about, and a panel that merely came out smaller
-    would not tell anyone which ones they are.
-
-    Both figures come from the view's own disclosure fields rather than from a second pass over
-    the tiles, so a caption cannot drift from the picture above it.
+    A treemap has no negative area: the gross panel leaves out the credits, the net panel clamps to zero the subjects
+    whose credits exceed their costs and names them. The figures come from the view's own disclosure fields, so the
+    caption matches the picture.
 
     Args:
         tiles: The tiles and disclosures `views.cost_structure_tiles` returned for this basis.

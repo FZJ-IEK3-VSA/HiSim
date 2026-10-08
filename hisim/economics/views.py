@@ -1,42 +1,14 @@
-"""Derived views on a lifecycle cost result (cost-spec-v2 §2.4, W4.1).
+"""Derived views on a lifecycle cost result (cost_spec.md §2.4).
 
-The presentation layer must never compute: every number a report shows has to exist in the
-result object or be derived here, once, on the engine side. This module is that "once" — pure
-functions of `LifecycleCostResult` returning plain data (dataclasses, dicts, lists of floats and
-`UncertainValue`s), with no formatting, no colors and no HTML.
+A view reshapes one evaluated `LifecycleCostResult` into the form one report figure needs: a per-year series, a
+per-carrier bill, a payer x category pivot, a per-subject waterfall. Views are pure functions returning plain data,
+with no formatting; they never re-run the engine or apply assumptions of their own, so every report reads one
+definition of each figure. Figures the engine publishes itself (NPV, EAC, `npv_by_category`) stay on the result in
+`results.py`.
 
-Each function names the presentation site it replaces; the line references are the ones the
-spec's W4.1 inventory carries (`roadmap/cost-spec-v2.md` §2.4), i.e. the pre-W4 state of
-`reporting.py`/`report_plots.py`.
-
-**What a "view" is here, and where it stops.** A view is a *re-shaping* of one already-evaluated
-`LifecycleCostResult` into the shape one report figure needs — a per-year series, a per-carrier
-bill, a payer × category pivot, a per-subject waterfall. It never re-runs the engine, never
-reaches for `EvaluationInputs`, the cost database or the evaluator, and never applies economic
-assumptions of its own: everything it returns is a sum, a filter, a pivot or a discounting of
-flows the evaluator already put on the timeline. The boundary against `results.py` is one of
-*publication*, not of difficulty: figures the engine publishes about an evaluation (the NPV, the
-EAC, `npv_by_category`, the per-subject `ComponentCostBreakdown`s, the comparison arithmetic of
-`compare`) are fields and methods there and are read directly; figures that exist only because a
-chart or a table asks for them live here, so that no report has to mint them itself and two
-reports cannot mint them differently. Consumers are `reporting.py`, `report_plots.py` and
-`exports.py` (the latter for `subject_equivalent_annual_cost_by_category` and
-`total_subsidies_received`, so a written CSV/KPI and the report showing it share one
-definition); the import-lint in `tests/test_economics_import_lint.py` keeps presentation on
-this side of the line.
-
-Two conventions worth stating once:
-
-* **Scoping.** Views read `result.scoped_timeline()` — the flows the perspective reports on.
-  The one exception is `payer_category_npv_pivot`, which is the view *of* the split and must see
-  every payer. (`year_zero_build_up` was a second exception until package S4b; see its
-  docstring for why it no longer is.)
-* **Discounting.** Every present value goes through `timeline.discount_factor` (W4.3), never
-  through a locally written `1/(1+i)**year`.
-
-Display *grouping* (16 cost categories onto ~8 groups) stays a presentation concept, per the
-spec's stated exception — but the group **sums** come from here: presentation passes its own
-category→group mapping into `fold_categories` / `fold_category_matrix`.
+Views read `result.scoped_timeline()`, the flows the perspective reports on, except `payer_category_npv_pivot`, which
+needs every payer. Every present value goes through `timeline.discount_factor`. Display grouping of categories stays in
+presentation, but the group sums come from `fold_categories` and `fold_category_matrix`.
 """
 
 from __future__ import annotations
@@ -90,19 +62,15 @@ from hisim.economics.uncertainty import Slot, UncertainValue
 
 
 class ViewCategories:
-    """Category groupings the view models are built from.
+    """Cost-category sets the views select on.
 
-    A namespace of the fixed `CostCategory` tuples the views below select on, kept here rather
-    than inline so that "what counts as a bill" and "what counts as year-0 money movement" are
-    stated once and can be reviewed as definitions rather than found in a filter expression.
-    These are *selection* sets of the engine's own categories, not display groups — the
-    presentation-side folding of 16 categories onto 8 coloured groups lives in
-    `presentation_style.py` and reaches the sums only through `fold_categories`.
+    These are selection sets of the engine's own categories ("what counts as a bill", "what moves money in year 0"),
+    not display groups; the display grouping lives in `presentation_style.py`.
     """
 
     #: The categories that make up an energy bill; feed-in revenue is deliberately not one of them.
-    #: Bound from the kernel so the report and the plausibility panel cannot disagree about what a
-    #: bill is (review finding 14) — the same object, not a copy of the membership.
+    #: The same object as the kernel's bill categories, so the report and the plausibility panel
+    #: agree on what a bill is.
     BILL_CATEGORIES = CategoryRules.BILL_CATEGORIES
 
     #: The year-0 build-up steps, in the order the investment waterfall shows them (§4.1).
@@ -123,26 +91,19 @@ GroupKey = TypeVar("GroupKey", bound=Hashable)
 # ---------------------------------------------------------------------------- category folding
 
 def _display_group_of(category: CostCategory, mapping: Mapping[CostCategory, GroupKey]) -> GroupKey:
-    """The display group of one category, or a located error naming the incomplete mapping.
+    """Return the display group of one category.
 
-    The single lookup every folding view in this module goes through, so that "the mapping does
-    not cover this category" is one sentence rather than three. It raises `CostDataError` rather
-    than the bare `KeyError` the fold used to let out: a `KeyError` surfacing from the middle of a
-    report reads as an ordinary dictionary accident and is caught by generic handling on the way
-    up, while the thing that actually happened is that a category -> group mapping is not total
-    over the categories it was handed — a defect in the *presentation's* declaration, which the
-    message names together with the groups on offer.
+    The single lookup every folding view uses.
 
     Args:
         category: The category to place.
-        mapping: The caller's category -> group mapping; presentation passes
-            `PresentationStyle.CATEGORY_TO_GROUP`, which is deliberately total over the enum.
+        mapping: The caller's category -> group mapping, usually `PresentationStyle.CATEGORY_TO_GROUP`.
 
     Returns:
         The group key `mapping` declares for `category`.
 
     Raises:
-        CostDataError: If `mapping` declares no group for `category`.
+        CostDataError: If `mapping` declares no group for `category`; the message names the groups on offer.
     """
     try:
         return mapping[category]
@@ -158,29 +119,21 @@ def _display_group_of(category: CostCategory, mapping: Mapping[CostCategory, Gro
 def fold_categories(
     values: Mapping[CostCategory, Any], mapping: Mapping[CostCategory, GroupKey]
 ) -> Dict[GroupKey, Any]:
-    """Folds a category→amount map onto arbitrary groups, summing slot-wise.
+    """Fold a category -> amount map onto groups, summing slot-wise.
 
-    Amounts may be floats or `UncertainValue`s (both add). The `mapping` must cover every
-    category present in `values`; a gap is a caller bug and raises rather than silently
-    bucketing amounts into a default group.
-
-    The presentation passes its own DISPLAY_GROUPS mapping in — grouping is a display concept,
-    the sums are not (spec §2.4, stated exception).
+    Example: `fold_categories(result.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)`. Grouping is a display
+    concept, but the sums are computed here (§2.4).
 
     Args:
-        values: category → amount, e.g. `result.npv_by_category` or one row of
-            `nominal_annual_matrix_by_category`. Amounts are euros; whether they are nominal or
-            discounted is whatever the caller passed in — folding does not change it.
-        mapping: category → group key. Callers in this package pass
-            `PresentationStyle.CATEGORY_TO_GROUP`, which is deliberately total over the enum.
+        values: Category -> amount in euro, as floats or `UncertainValue`s; folding keeps them nominal or discounted as
+            given.
+        mapping: Category -> group key; must cover every category in `values`.
 
     Returns:
-        group key → summed amount, of the same type as the input amounts. Only groups that
-        received at least one category appear.
+        Group key -> summed amount, of the same type as the inputs; only groups that received a category appear.
 
     Raises:
-        CostDataError: if `values` contains a category `mapping` does not declare — see
-            `_display_group_of`, which is where the message is written.
+        CostDataError: If `values` contains a category `mapping` does not declare.
     """
     folded: Dict[GroupKey, Any] = {}
     for category, amount in values.items():
@@ -192,13 +145,10 @@ def fold_categories(
 def fold_category_matrix(
     matrix: List[Dict[CostCategory, Any]], mapping: Mapping[CostCategory, GroupKey]
 ) -> List[Dict[GroupKey, Any]]:
-    """`fold_categories` applied per year of a year×category matrix.
+    """Apply `fold_categories` to each year of a year x category matrix.
 
-    The stacked-bar form of the annual cash-flow chart: `nominal_annual_matrix_by_category`
-    produces the raw matrix, this folds each year's row onto the display groups the chart has
-    colours for. Row order is the year index and is preserved, so `result[year]` still means
-    year `year`; an empty row (a year with no flows) folds to an empty dict rather than
-    disappearing.
+    Used for the stacked annual cash-flow chart. Row order (the year index) is kept, and a year with no flows folds to
+    an empty dict.
     """
     return [fold_categories(row, mapping) for row in matrix]
 
@@ -206,13 +156,10 @@ def fold_category_matrix(
 # ---------------------------------------------------------------------------- time series
 
 def cumulative_discounted_cost_series(result: LifecycleCostResult) -> Dict[Slot, List[float]]:
-    """Cumulative discounted cost per slot over years 0..T (index = year).
+    """Return the cumulative discounted cost per slot over years 0..T (index = year).
 
-    The last point of each slot's series is that slot's reported NPV, which is what makes the
-    chart's end label and the headline KPI agree by construction. Flows outside the horizon are
-    not part of the reported NPV and are excluded here too.
-
-    Replaces `reporting.py:686-701` (the cumulative-NPV chart's own discounting loop).
+    A slot is one of the three band values (minimum, best estimate, maximum). The last point of each series is that
+    slot's reported NPV; flows outside the horizon are excluded, as they are from the NPV.
     """
     horizon = result.parameters.observation_period_in_years
     interest = result.parameters.interest_rate
@@ -236,20 +183,14 @@ def cumulative_discounted_cost_series(result: LifecycleCostResult) -> Dict[Slot,
 def nominal_annual_matrix_by_category(
     result: LifecycleCostResult, slot: Slot = Slot.BEST_ESTIMATE
 ) -> List[Dict[CostCategory, float]]:
-    """Nominal euros per (year, category) for years 0..T — index = year.
+    """Return nominal euros per (year, category) for years 0..T, index = year.
 
-    The un-grouped form of the annual cash-flow chart's input; presentation folds it onto its
-    display groups with `fold_category_matrix`.
+    The ungrouped input of the annual cash-flow chart; presentation folds it with `fold_category_matrix`. Nominal means
+    undiscounted, the "what leaves the account in year N" view. Costs are positive and revenue/support negative.
 
-    Nominal means undiscounted: this is the liquidity view ("what leaves the account in year
-    N"), the counterpart of `cumulative_discounted_cost_series` above it in the same report
-    section. Package sign convention applies unchanged — costs positive, revenue/support
-    negative — which is what puts credits below the axis in the chart. Only one slot is
-    returned because a stacked bar cannot show a band; `slot` selects which of the three
-    coherent worlds is drawn, and every caller in this package draws BEST_ESTIMATE.
-
-    Replaces `reporting.py:640-646` and `report_plots.py:48-51`, which both accumulated
-    per-group year totals while drawing.
+    Args:
+        result: The evaluated perspective.
+        slot: Which band value to return; a stacked bar cannot show a band.
     """
     horizon = result.parameters.observation_period_in_years
     matrix: List[Dict[CostCategory, float]] = [{} for _ in range(horizon + 1)]
@@ -262,23 +203,13 @@ def nominal_annual_matrix_by_category(
 
 @dataclass(frozen=True)
 class LoanAmortization:
-    """Interest, principal and outstanding balance per year 0..T (index = year), nominal (§4.4).
+    """Interest, principal and outstanding balance of the loan per year 0..T (index = year), nominal (§4.4).
 
-    The two components of a financed perspective's debt service, split so the report can stack
-    them and a reviewer can see the shape an annuity loan has (falling interest, rising
-    principal) or fails to have. All lists always span the full horizon, zero-padded, so they
-    index by year directly and can be zipped with each other and with any other year series in
-    this module. The disbursement itself is *not* one of the bar series — it is a year-0 flow of
-    the `LOAN_DISBURSEMENT` category and shows up in the investment waterfall instead — but it
-    is carried here as `disbursement_in_euro` because the balance line starts from it.
-
-    `outstanding_balance_in_euro` is the disbursement minus the cumulative principal repayments
-    up to and including that year, so it reconciles with the plotted bars by construction rather
-    than by a second schedule computation. Year 0 therefore carries the disbursement *less any
-    principal booked at year 0* — normally the full disbursement, since an annuity plan repays
-    nothing in the year it is taken out, but a plan that books a year-0 repayment starts below it
-    rather than above the sum of its own repayments. A fully amortizing plan ends at zero within
-    float tolerance.
+    All lists span the full horizon, zero-padded, so they index by year. The disbursement is a year-0
+    `LOAN_DISBURSEMENT` flow shown in the investment waterfall; it is carried in `disbursement_in_euro` because the
+    balance line starts from it. `outstanding_balance_in_euro` is the disbursement minus the cumulative principal
+    repaid up to and including that year, so it matches the bars; a fully amortizing loan ends at zero within float
+    tolerance.
     """
 
     interest_in_euro: List[float]
@@ -293,16 +224,11 @@ class LoanAmortization:
         return any(self.interest_in_euro) or any(self.principal_in_euro)
 
     def loan_free_year(self) -> Optional[int]:
-        """First year the outstanding balance reaches zero, or None while debt remains.
+        """Return the first year the outstanding balance reaches zero, or None while debt remains.
 
-        The "loan-free" milestone a lifecycle-milestone lane draws. It reads the balance series
-        rather than the plan's term so that a truncated schedule (a term reaching past the
-        observation horizon) honestly reports None instead of a maturity the timeline never books.
-        The tolerance is `ViewTolerances.BALANCE_EPSILON`, which is why this method is defined
-        here but documented with the chart views at the end of the module. An unfinanced
-        perspective has no milestone rather than one in year 1: its balance series is all zeros,
-        and reading a "loan-free" year off a loan that never existed would be a caption stating
-        something that did not happen.
+        The "loan-free" milestone of the milestone chart. It reads the balance series, not the loan term, so a term
+        reaching past the horizon gives None. An unfinanced perspective also gives None. The tolerance is
+        `ViewTolerances.BALANCE_EPSILON`.
         """
         if not self.has_flows():
             return None
@@ -315,19 +241,11 @@ class LoanAmortization:
 def loan_amortization_series(
     result: LifecycleCostResult, slot: Slot = Slot.BEST_ESTIMATE
 ) -> LoanAmortization:
-    """The loan's interest/principal split per year (§4.4).
+    """Return the loan's interest/principal split per year (§4.4).
 
-    Reads the `LOAN_INTEREST` and `LOAN_PRINCIPAL` entries off the scoped timeline — it does not
-    re-run the schedule builder in `financing.py`, so what the chart shows is by construction
-    the debt service the NPV was computed from. Callers use `LoanAmortization.has_flows()` to
-    decide whether the perspective is financed at all and skip the chart when it is not, which
-    is the common case (cash purchase).
-
-    The outstanding-balance series is built here from the same entries (disbursement minus the
-    running principal repayments), which is what keeps a balance line and the bars drawn beside it
-    from disagreeing.
-
-    Replaces `reporting.py:517-526` (the amortization chart's accumulation loop).
+    Reads the `LOAN_INTEREST` and `LOAN_PRINCIPAL` entries of the scoped timeline instead of re-running the schedule in
+    `financing.py`, so the chart shows the debt service the NPV was computed from. The outstanding balance is built
+    from the same entries. Callers check `has_flows()` and skip the chart for a cash purchase.
     """
     horizon = result.parameters.observation_period_in_years
     interest_per_year = [0.0] * (horizon + 1)
@@ -356,16 +274,10 @@ def loan_amortization_series(
 
 
 def cumulative_operational_co2_in_kg(result: LifecycleCostResult) -> List[float]:
-    """Running total of operational CO2 over the horizon (index = year), undiscounted (§3.8).
+    """Return the running total of operational CO2 in kg over the horizon (index = year), undiscounted (§3.8).
 
-    A plain cumulative sum of `LifecycleCo2Result.operational_co2_by_year_in_kg`, drawn as the
-    curve under the CO2 bars in report section 4b. Emissions are masses, not money: they are
-    never discounted (a kilogram in year 20 counts exactly like one in year 1), which is why
-    this has no discount factor while its monetary sibling
-    `cumulative_discounted_cost_series` does. The last element is the lifecycle operational
-    total and is the figure the section's table prints.
-
-    Replaces `reporting.py:584-588`.
+    A cumulative sum of `LifecycleCo2Result.operational_co2_by_year_in_kg`. Emissions are masses and are never
+    discounted. The last element is the lifecycle operational total.
     """
     cumulative: List[float] = []
     running = 0.0
@@ -381,11 +293,8 @@ def cumulative_operational_co2_in_kg(result: LifecycleCostResult) -> List[float]
 class TimelineDetailRow:
     """One (year, subject, category) cell of the cash-flow detail table.
 
-    The finest grain the report ever shows: all timeline entries that share a year, a subject
-    and a category, added up. It carries both readings of the same money on purpose — the
-    nominal band as it was booked, and the BEST_ESTIMATE slot after discounting — because the two
-    side by side are what lets a reviewer verify the discount factor of a given year by
-    division, without leaving the table.
+    All timeline entries sharing a year, a subject and a category, added up. It carries the nominal band as booked and
+    the discounted best-estimate value, so a reader can check a year's discount factor by division.
     """
 
     year: int
@@ -397,12 +306,9 @@ class TimelineDetailRow:
 
 @dataclass(frozen=True)
 class TimelineDetailYear:
-    """One year of the detail table: its rows plus the subtotal printed under them.
+    """One year of the detail table: its rows and their subtotal.
 
-    Groups the rows of a single year so the renderer can print a bold subtotal line without
-    re-adding anything. The totals cover exactly the rows in `rows` — including the noise cells
-    dropped by `ViewTolerances.DETAIL_ROW_EPSILON` being absent from both — so the table always
-    adds up on screen.
+    The totals cover exactly the rows in `rows`, so the table adds up on screen.
     """
 
     year: int
@@ -412,14 +318,11 @@ class TimelineDetailYear:
 
 
 def timeline_detail_rows(result: LifecycleCostResult) -> List[TimelineDetailYear]:
-    """The §3.6 timeline as a verification table: (year, subject, category) with subtotals.
+    """Return the §3.6 timeline as a verification table of (year, subject, category) rows with subtotals.
 
-    Same scoping as the chart it sits under; duplicate cells are aggregated, and cells that are
-    zero in every slot up to `ViewTolerances.DETAIL_ROW_EPSILON` are dropped as float noise. Rows within a year
-    are ordered by nominal BEST_ESTIMATE amount, so the biggest credit and the biggest cost of a year
-    frame its block. The subtotals cover exactly the rows shown.
-
-    Replaces `reporting.py:1086-1120`.
+    Uses the scoped timeline. Duplicate cells are added up; cells that are zero in every slot within
+    `ViewTolerances.DETAIL_ROW_EPSILON` are dropped as float noise. Rows within a year are ordered by their nominal
+    best-estimate amount.
     """
     interest = result.parameters.interest_rate
     aggregated: Dict[Tuple[int, str, CostCategory], UncertainValue] = {}
@@ -472,12 +375,10 @@ def timeline_detail_rows(result: LifecycleCostResult) -> List[TimelineDetailYear
 def payer_category_npv_pivot(
     result: LifecycleCostResult,
 ) -> Dict[Actor, Dict[CostCategory, UncertainValue]]:
-    """Who pays which cost block, in present value (§6.5).
+    """Return who pays which cost block, in present value (§6.5).
 
-    Taken on the **full** timeline (all payers must be visible for the zero-sum check) and
-    without the unallocated SYSTEM payer. Presentation folds the inner map onto display groups.
-
-    Replaces `reporting.py:1384-1396`.
+    Taken on the full timeline, because the zero-sum check needs every payer, and without the unallocated SYSTEM payer.
+    Presentation folds the inner map onto display groups.
     """
     interest = result.parameters.interest_rate
     pivot: Dict[Actor, Dict[CostCategory, UncertainValue]] = {}
@@ -493,13 +394,11 @@ def payer_category_npv_pivot(
 
 
 def equivalent_annual_cost_of(npv: UncertainValue, result: LifecycleCostResult) -> UncertainValue:
-    """One NPV annuitized over the observation period (§3.4) — the EAC of anything.
+    """Annuitize one NPV over the observation period, giving its equivalent annual cost (EAC, §3.4).
 
-    Multiplies a present value in euro by the perspective's own annuity factor, giving the
-    constant euro-per-year payment with the same present value over the horizon. It takes the
-    factor from `result.parameters` rather than from an argument so that every annuitized figure
-    in a report uses the same interest rate and the same horizon as the headline KPI beside it —
-    the reason this exists as a shared helper instead of a multiplication at each call site.
+    The EAC is the constant euro-per-year payment with the same present value over the horizon. The annuity factor
+    comes from `result.parameters`, so every annuitized figure in a report uses the same rate and horizon as the
+    headline KPI.
     """
     return npv.scale(result.parameters.annuity_factor())
 
@@ -507,11 +406,9 @@ def equivalent_annual_cost_of(npv: UncertainValue, result: LifecycleCostResult) 
 def equivalent_annual_cost_by_category(
     result: LifecycleCostResult,
 ) -> Dict[CostCategory, UncertainValue]:
-    """Per-category equivalent annual cost of the whole perspective (§3.4).
+    """Return the equivalent annual cost per category of the whole perspective (§3.4).
 
-    `npv_by_category` restated in euro per year, which is the unit most readers compare against
-    a bill or a rent. Because annuitizing is a single multiplication, the categories still sum
-    to the perspective's headline EAC exactly as their NPVs sum to its NPV.
+    `npv_by_category` in euro per year; the categories still sum to the headline EAC.
     """
     return {
         category: equivalent_annual_cost_of(npv, result)
@@ -522,14 +419,10 @@ def equivalent_annual_cost_by_category(
 def subject_equivalent_annual_cost_by_category(
     result: LifecycleCostResult,
 ) -> Dict[str, Dict[CostCategory, UncertainValue]]:
-    """Per-subject, per-category equivalent annual cost — the `component_costs.csv` figure.
+    """Return the equivalent annual cost per subject and category, the `component_costs.csv` figure.
 
-    The two-level pivot behind the stacked-bar frontends: for every component subject, what its
-    cost blocks are worth per year. It is the only view whose primary consumer is an export
-    rather than a report, which is precisely why it lives here — the CSV and any report showing
-    the same figure now read one definition.
-
-    Replaces the annuity multiplication minted while writing the CSV (`exports.py:68-76`).
+    A subject is one costed thing on the timeline, such as a heat pump. The export and any report showing this figure
+    read this one definition.
     """
     return {
         subject: {
@@ -544,18 +437,12 @@ def subject_equivalent_annual_cost_by_category(
 
 @dataclass(frozen=True)
 class CarrierYearOneBill:
-    """One carrier's year-1 bill, its annual volume and the price those two imply.
+    """One carrier's year-1 bill, its annual volume and the effective price they imply.
 
-    The record behind the report's most useful sanity check: dividing what a carrier cost in
-    year 1 by how much of it was bought must give back a price a reader recognizes (roughly
-    0.3 EUR/kWh for German household electricity, ~0.10 for gas). A factor of 1000, or a price
-    of zero, means a unit mix-up or a missing tariff somewhere upstream, and it shows here
-    before it shows anywhere else. That check only works because the denominator is kWh for
-    *every* carrier, pellets and heating oil included — the per-ton and per-liter quotes of the
-    data files are divided out when the price entry is resolved (D26), so a reader comparing two
-    carriers is comparing two numbers of the same kind. Year 1 rather than year 0 because
-    operating flows are booked over years 1..T while year 0 is the investment year; the figures
-    are nominal euros of the BEST_ESTIMATE slot, except `year_one_band_in_euro`, which keeps the full
+    A sanity check for the report: year-1 cost divided by volume must give a recognizable price (about 0.3 EUR/kWh for
+    German household electricity, 0.10 for gas); a factor of 1000 or zero points to a unit mix-up or a missing tariff.
+    The volume is in kWh for every carrier, fuels included, because per-ton and per-litre prices are converted when the
+    price is resolved. Figures are nominal best-estimate euros, except `year_one_band_in_euro`, which keeps the full
     band.
     """
 
@@ -565,7 +452,7 @@ class CarrierYearOneBill:
     by_category_in_euro: Dict[CostCategory, float]
     #: Sum of `by_category_in_euro` **without** feed-in revenue — what the energy actually cost.
     total_excluding_feed_in_in_euro: float
-    #: Annualized bought volume in kilowatt-hours, for every carrier alike (D26).
+    #: Annualized bought volume in kilowatt-hours, for every carrier alike.
     annual_quantity_in_kwh: float
     #: `total_excluding_feed_in_in_euro / annual_quantity_in_kwh`, 0.0 for an unbilled carrier.
     effective_price_in_euro_per_kwh: float
@@ -575,14 +462,11 @@ class CarrierYearOneBill:
 
 
 def carrier_year_one_bills(result: LifecycleCostResult) -> Dict[str, CarrierYearOneBill]:
-    """Year-1 bill decomposition per carrier with the implied effective price (§8).
+    """Return the year-1 bill per carrier with its implied effective price (§8).
 
-    The revenue subject (`carriers.bill_subjects`, the feed-in one for electricity) is folded into
-    the carrier's category map — that is where the report has always shown it — but never into
-    `total_excluding_feed_in_in_euro`, the numerator of the price, nor into the band: a credit is
-    not part of what a kWh costs.
-
-    Replaces `reporting.py:1166-1192`.
+    The carrier's revenue subject (`carriers.bill_subjects`, the feed-in one for electricity) is included in the
+    carrier's category map, but not in `total_excluding_feed_in_in_euro`, the price numerator, nor in the band: a
+    credit is not part of what a kWh costs.
     """
     bills: Dict[str, CarrierYearOneBill] = {}
     entries = [entry for entry in result.scoped_timeline().entries if entry.year == 1]
@@ -618,14 +502,11 @@ def carrier_year_one_bills(result: LifecycleCostResult) -> Dict[str, CarrierYear
 
 @dataclass(frozen=True)
 class YearZeroBuildUp:
-    """One subject's year-0 money movement: the waterfall steps and where they end up.
+    """One subject's year-0 money movement: the investment waterfall steps and their net.
 
-    Feeds the investment waterfall of report section 2, whose whole job is to make the chain
-    "device + installation + planning + removal - subsidies - loan disbursement = net outflow"
-    visible per component, so a binding subsidy cap or a component that was never priced can be
-    spotted at a glance. Only the five `ViewCategories.YEAR_ZERO_CATEGORIES` are carried, in
-    that order, and only where the amount is non-zero; sign follows the package convention, so
-    subsidies and the loan disbursement appear as negative steps that pull the net down.
+    Feeds the investment waterfall of report section 2: device + installation + planning + removal - subsidies - loan
+    disbursement = net outflow. Only the `ViewCategories.YEAR_ZERO_CATEGORIES` are carried, in that order, and only
+    when non-zero; subsidies and the disbursement are negative steps.
     """
 
     subject: str
@@ -639,19 +520,10 @@ class YearZeroBuildUp:
 
 
 def year_zero_build_up(result: LifecycleCostResult) -> Dict[str, YearZeroBuildUp]:
-    """Per-subject year-0 build-up: device + planning + removal - subsidies - loan = net.
+    """Return each subject's year-0 build-up: device + planning + removal - subsidies - loan = net.
 
-    Reads the **scoped** timeline, like every other view. W4.1 inherited the full timeline from
-    the section this feeds (`reporting.py:1041-1054`) on the argument that year 0 is about what
-    the measure costs, before the question of who carries it, and left the question open. It is
-    settled the other way (package S4b): the same section's table is built from
-    `component_breakdowns`, which the engine derives from the scoped timeline, so under an
-    actor scope the waterfall and the table beneath it disagreed — a tenant perspective drew the
-    landlord's full investment above an empty table. Measured on the S4b golden fixture, the two
-    readings differ for exactly that case (a tenant scope now has no year-0 build-up at all, as
-    it has no year-0 flows) and are identical for every other perspective, landlord included.
-
-    Subjects with no year-0 flow are absent.
+    Reads the scoped timeline, so it agrees with the component table beneath the waterfall; a tenant perspective has no
+    year-0 flows and so no build-up. Subjects with no year-0 flow are absent.
     """
     build_ups: Dict[str, YearZeroBuildUp] = {}
     scoped = result.scoped_timeline()
@@ -674,14 +546,10 @@ def year_zero_build_up(result: LifecycleCostResult) -> Dict[str, YearZeroBuildUp
 
 @dataclass(frozen=True)
 class SubsidyShare:
-    """How far the support carries one subject's gross investment (BEST_ESTIMATE slot, nominal).
+    """How far support covers one subject's gross investment, in nominal best-estimate euros.
 
-    A "X % of this measure is funded" statement, used by the subsidy composition bars in the
-    HTML report and by the matplotlib investment waterfall. Both parts are nominal (undiscounted)
-    euros of the BEST_ESTIMATE slot, because the question it answers is about the money on the invoice
-    rather than about present value. `subsidy_in_euro` is clamped to the gross so
-    `share_of_gross` is always a fraction in [0, 1] — see `subsidy_share_of_gross` for why that
-    clamp is a deliberate business rule and where the unclamped figure lives.
+    Used by the subsidy composition bars and the investment waterfall. `subsidy_in_euro` is clamped to the gross, so
+    `share_of_gross` is always in [0, 1]; see `subsidy_share_of_gross`.
     """
 
     subject: str
@@ -701,17 +569,11 @@ class SubsidyShare:
 
 
 def subsidy_share_of_gross(result: LifecycleCostResult) -> Dict[str, SubsidyShare]:
-    """Per-subject funded share of the year-0 gross investment (nominal euros, §5.4).
+    """Return each subject's funded share of its year-0 gross investment, in nominal euros (§5.4).
 
-    **The clamp is a business rule, and this is its only home.** Nominal support can exceed the
-    year-0 gross of a subject — a scheme paid out over several years, or support attached to a
-    measure whose investment sits partly in later years — and a "share of gross" above 100 % is
-    not a meaningful statement, so the reported support is `min(subsidy, gross)`. Until W4.1
-    this clamp lived, undocumented, in two chart helpers (`reporting.py:1227` and
-    `report_plots.py:93-96`), where nothing kept the two copies honest. Consumers that need the
-    unclamped figure read `ComponentCostBreakdown.subsidies_nominal_in_euro`.
-
-    Subjects without a positive gross investment are absent.
+    Nominal support can exceed the year-0 gross (support paid over several years, or attached to later investment), so
+    the reported support is `min(subsidy, gross)`. This is the only place that clamp is applied; the unclamped figure
+    is `ComponentCostBreakdown.subsidies_nominal_in_euro`. Subjects without a positive gross investment are absent.
     """
     shares: Dict[str, SubsidyShare] = {}
     for subject, breakdown in result.component_breakdowns.items():
@@ -726,13 +588,10 @@ def subsidy_share_of_gross(result: LifecycleCostResult) -> Dict[str, SubsidyShar
 
 
 def investment_net_of_subsidies(result: LifecycleCostResult) -> Dict[str, UncertainValue]:
-    """Per-subject year-0 gross investment minus nominal support, as a **band**.
+    """Return each subject's year-0 gross investment minus nominal support, as a band.
 
-    The "Net" column of the investment table (`reporting.py:976`), which is a different figure
-    from `SubsidyShare.net_in_euro`: that one is the BEST_ESTIMATE slot with the share clamp applied
-    (a "how far does the support carry" statement), this one is the plain slot-wise difference
-    of two reported bands and may go negative when support exceeds the year-0 gross. Subjects
-    with no positive gross investment are absent — the table skips them.
+    The "Net" column of the investment table. Unlike `SubsidyShare.net_in_euro` it is unclamped and slot-wise, so it
+    can go negative when support exceeds the gross. Subjects without a positive gross investment are absent.
     """
     return {
         subject: breakdown.investment_gross_in_euro - breakdown.subsidies_nominal_in_euro
@@ -742,39 +601,28 @@ def investment_net_of_subsidies(result: LifecycleCostResult) -> Dict[str, Uncert
 
 
 def payer_npv_total(result: LifecycleCostResult) -> UncertainValue:
-    """Sum of all payer NPVs — the system total the §6.5 zero-sum check reconciles against.
+    """Return the sum of all payer NPVs, the system total the §6.5 zero-sum check reconciles against.
 
-    Includes the unallocated SYSTEM payer, so it is the whole allocated timeline's present
-    value however the ruleset split it. Report section 6b prints it in the header above the
-    payer whiskers, which is the visual form of the invariant: an allocation ruleset moves money
-    between actors and may not create or destroy any, so the individual payer bars below it have
-    to add up to this one number. Replaces `reporting.py:1306`.
+    Includes the unallocated SYSTEM payer. Report section 6b prints it above the payer bars, which must add up to it,
+    because an allocation ruleset moves money between actors without creating or destroying any.
     """
     return UncertainValue.sum(result.npv_by_payer.values())
 
 
 def scheme_display_names(result: LifecycleCostResult) -> Dict[str, str]:
-    """Every support id this result can show, mapped to the name a reader sees (Q20).
+    """Map every support id this result can show to the name a reader sees.
 
-    Built from the awards of the result's own subsidy decisions, because that is where the
-    catalog's `display_name` was captured at evaluation time — a report is regularly rendered in
-    a process that never loaded a catalog, so re-reading the data files here would be both a
-    seam-4 violation and unreliable. Ids with no award (the legacy shim, an unattributed support
-    entry) get their labels from `SubsidySchemeLabels`, and an id the mapping does not know maps
-    to itself, so nothing ever renders as an empty cell.
-
-    It has no production caller in this slice of the cost stack: its consumer is the subsidy
-    Sankey view of a later slice, which labels the nodes of a support flow diagram and is the
-    reason the mapping has to cover ids that never were an award. Kept here rather than deferred
-    with it, because the definition belongs beside the awards it is built from.
+    Built from the awards of the result's own subsidy decisions, which captured the catalog's `display_name` at
+    evaluation time, so a report renders without loading a catalog. Ids without an award get their labels from
+    `SubsidySchemeLabels`, and unknown ids map to themselves, so no cell is ever empty. Its consumer is a subsidy
+    Sankey view not built yet.
 
     Args:
-        result: The evaluated perspective whose timeline and decisions are about to be rendered.
+        result: The evaluated perspective being rendered.
 
     Returns:
-        `{scheme id: display name}`, always including the legacy-shim id and the unattributed
-        key (the empty string), so callers can look up straight from a timeline entry's
-        `subsidy_scheme_id or ""`.
+        `{scheme id: display name}`, always including the legacy-shim id and the empty string (unattributed support),
+            so callers can look up `entry.subsidy_scheme_id or ""` directly.
     """
     names = {
         "": SubsidySchemeLabels.UNATTRIBUTED,
@@ -791,19 +639,10 @@ def scheme_display_names(result: LifecycleCostResult) -> Dict[str, str]:
 
 
 def award_total_amount(award: SubsidyAward) -> UncertainValue:
-    """The amount an award is worth in total, nominal (§5.4).
+    """Return the total nominal amount an award is worth (§5.4).
 
-    A scheduled payout (a tax credit spread over N years) is worth the sum of its instalments,
-    not its — zero — upfront amount; every other kind is worth its upfront amount. The awards
-    table has always shown it this way; stating the rule here keeps it from drifting away from
-    the KPI beside it. `describe_award` is what renderers call — this is its euro half, kept
-    separate because the KPI export and the chart data want the band without the prose.
-
-    The two halves are *added* rather than chosen between, so an award that one day carries both
-    a year-0 payment and a schedule is worth both. Today no solver branch produces such an award
-    — a `TaxCreditBenefit` leaves `upfront_amount` at zero and every other euro-valued benefit
-    leaves `schedule_amounts` empty — so the sum equals the old either/or for every award that
-    exists, and stays correct if that ever changes.
+    The upfront amount plus the sum of any scheduled instalments, so a tax credit paid over N years is worth its
+    instalments. `describe_award` is what renderers call; this is its euro half, for the KPI export and the chart data.
 
     Args:
         award: One entry of `SubsidyDecision.applied`.
@@ -816,31 +655,13 @@ def award_total_amount(award: SubsidyAward) -> UncertainValue:
 
 @dataclass
 class AwardPresentation:
-    """One applied award reduced to what a reader has to be told about it (§5.4).
+    """One applied award reduced to what a reader needs to know about it (§5.4).
 
-    The renderers of the subsidy section — the markdown summary's decision list, the HTML decision
-    cards and the awards table — used to each read `SubsidyAward` fields directly, and all three
-    read `upfront_amount`. That is zero for three of the five payout kinds, so a §35c tax credit
-    worth 2,060 EUR was printed as "0.00 EUR" on the card and dropped entirely from the markdown
-    list (which filtered on a non-zero upfront amount), while the SUBSIDY category NPV beside it
-    counted the money. This record is the single place where "what is this award worth, and how
-    does it arrive" is decided, so the three renderings cannot disagree again.
-
-    `total_in_euro` is None exactly when the award carries no euro amount at all — loan terms,
-    an operational per-kWh rate, a reduced VAT rate — because their value depends on the
-    financing plan or the energy flows and is booked by another calculator. Those awards are
-    still *applied* and must still be listed, which is what `payout_note` is for: it names the
-    terms instead of a euro band.
-
-    A loan award's **repayment grant** is the one figure deliberately withheld even though euros
-    for it exist: the solver values the forgiven share in its objective (`solver._support_value`,
-    which is how a soft loan can win a combination at all), and `calculators/financing_application`
-    later books it onto the timeline as a SUBSIDY entry. Those two are not the same number — §7 B3:
-    the solver applies the share to the measure's gross cost, the calculator applies it to the loan
-    *principal*, which the financing plan decides — so neither is a euro figure this award line can
-    stand behind, and it states the share through `payout_note` instead. Resolving that
-    disagreement is the trigger for showing the euros: once the award's own valuation is the amount
-    the plan actually pays, the presentation can read it rather than pick one of two answers.
+    The single source for the markdown decision list, the HTML decision cards and the awards table, so the three agree.
+    `total_in_euro` is None exactly when the award carries no euro amount (loan terms, a per-kWh operational rate, a
+    reduced VAT rate), because another calculator books its value; `payout_note` then states its terms. A loan's
+    repayment grant is stated as a share, not in euros, because the solver values it on the gross measure cost while
+    `calculators/financing_application` applies it to the loan principal, so there is no single euro figure.
     """
 
     scheme_id: str
@@ -848,9 +669,9 @@ class AwardPresentation:
     total_in_euro: Optional[UncertainValue]
     payout_note: str
     caps_binding: Tuple[str, ...]
-    #: The friendly name a reader sees (Q20); equal to `scheme_id` when the catalog had none.
+    #: The friendly name a reader sees; equal to `scheme_id` when the catalog had none.
     display_name: str = ""
-    #: The multiplication that produced `total_in_euro`, as `rate x basis = amount` (Q26 F8), or
+    #: The multiplication that produced `total_in_euro`, as `rate x basis = amount`, or
     #: the empty string for an award whose form states no rate — a lump sum, a per-unit amount,
     #: loan terms, a VAT reduction — where `payout_note` already carries the form's own terms.
     arithmetic: str = ""
@@ -861,20 +682,17 @@ class AwardPresentation:
 
 
 def describe_award(award: SubsidyAward) -> AwardPresentation:
-    """What an applied award is worth and how it is paid out, per payout kind (§5.2, §5.4).
+    """Return what an applied award is worth and how it is paid out, by payout kind (§5.2, §5.4).
 
-    The mapping from the flat `SubsidyAward` union onto the fields a renderer needs. An upfront
-    grant is worth its year-0 amount and needs no note; a tax credit is worth the sum of its
-    instalments and says over how many years they arrive; loan terms, operational support and a
-    VAT reduction have no euro amount of their own and are described by their terms — the
-    interest rate and term they impose on the financing plan, the per-kWh rate and duration, the
-    reduced rate — so that the reader sees an applied award rather than a silent gap.
+    An upfront grant is worth its year-0 amount and needs no note; a tax credit is worth its instalments and says over
+    how many years; loan terms, operational support and a VAT reduction have no euro amount and are described by their
+    terms (rate and term, per-kWh rate and duration, reduced rate).
 
     Args:
         award: One entry of `SubsidyDecision.applied`.
 
     Returns:
-        The renderable form; `total_in_euro` is None only for the kinds that carry no euro amount.
+        The renderable form; `total_in_euro` is None only for the kinds without a euro amount.
     """
     total = award_total_amount(award)
     caps = tuple(slot for slot, bound in award.caps_binding_per_slot.items() if bound)
@@ -915,30 +733,19 @@ def describe_award(award: SubsidyAward) -> AwardPresentation:
 
 
 def award_arithmetic(award: SubsidyAward, total: UncertainValue) -> str:
-    """`rate x eligible basis = amount` for the two percentage forms, else "" (Q26 F8).
+    """Return `rate x eligible basis = amount` for the two percentage forms, else "".
 
-    An award line that states only its euro amount cannot be checked: the reader cannot tell a
-    9 % rate on a small basis from a 20 % rate that a ceiling cut back, and those are different
-    conclusions about what a second measure would earn. The solver records both factors on the
-    award, so the multiplication is a formatting of stored data rather than a re-derivation —
-    which is what keeps it inside the seam-4 rule.
-
-    The lump-sum, per-unit, loan-terms and VAT forms return the empty string on purpose: they
-    have no rate, and `describe_award`'s `payout_note` already states their own terms.
-
-    Two ceilings can each have cut the rate down, and both are named where they applied: a
-    cumulation group's combined-rate cap and the EU state-aid overall cap. They compose — a rate
-    that first lost the group's stack and then the state-aid ceiling reads as "17.5 % (of 20.0 %,
-    …combined-rate cap) (of 17.5 %, …state-aid overall cap)" — because a reader who sees only the
-    final rate cannot tell which limit is the binding one, and those imply different answers about
-    what a second measure would earn.
+    Example: "20.0% x 30,000 EUR eligible basis = 6,000 EUR". The solver stores both factors on the award, so this only
+    formats stored data. When a cumulation group's combined-rate cap or the EU state-aid overall cap cut the rate, each
+    is named where it applied, e.g. "17.5% (of 20.0%, cut back by the cumulation group's combined-rate cap)". Lump-sum,
+    per-unit, loan-terms and VAT forms return "", since `describe_award` states their terms.
 
     Args:
-        award: The applied award, read for its rate, its eligible basis and the two pre-cap rates.
-        total: The award's value as `award_total_amount` computed it, for the product.
+        award: The applied award; read for its rate, eligible basis and pre-cap rates.
+        total: The award's value from `award_total_amount`.
 
     Returns:
-        A short arithmetic string with the best-estimate slot of both factors, or "".
+        The arithmetic with the best-estimate value of both factors, or "".
     """
     if award.benefit_rate is None or award.eligible_basis_in_euro is None:
         return ""
@@ -960,23 +767,19 @@ def award_arithmetic(award: SubsidyAward, total: UncertainValue) -> str:
 
 
 def award_cap_verdict(award: SubsidyAward, binding: Optional[Tuple[str, ...]] = None) -> str:
-    """What the eligible-cost ceiling did to this award, in the solver's own terms (Q26 F8).
+    """Return what the eligible-cost ceiling did to this award, in the solver's terms.
 
-    The second half of an award line a reader cannot otherwise reconstruct: below the ceiling the
-    support scales with what was spent, at the ceiling it does not, and the same measure costing
-    more would earn exactly the same euros. The solver records the ceiling and the per-slot
-    binding flags; this states them.
+    Below the ceiling support scales with spending; at the ceiling a more expensive measure earns the same euros. The
+    solver records the ceiling and which slots it bound in; this states them.
 
     Args:
         award: The applied award.
-        binding: The slots whose cap bound, when the caller already has them — `describe_award`
-            computes exactly this tuple for `AwardPresentation.caps_binding`, so passing it
-            through keeps the list from being derived twice from the same field. Omitted, it is
-            read off the award.
+        binding: The slots whose cap bound, if the caller already has them (as `describe_award` does); omitted, they
+            are read off the award.
 
     Returns:
-        "capped at X EUR eligible cost (slot, ...)" naming the slots whose cap bound,
-        "cap not binding (X EUR eligible cost)", or "" when the scheme declares no cap at all.
+        "capped at X EUR eligible cost (slot, ...)", "cap not binding (X EUR eligible cost)", or "" when the scheme
+            declares no cap.
     """
     if award.eligible_basis_cap_in_euro is None:
         return ""
@@ -994,25 +797,13 @@ def award_cap_verdict(award: SubsidyAward, binding: Optional[Tuple[str, ...]] = 
 
 
 def total_subsidies_received(result: LifecycleCostResult) -> Optional[UncertainValue]:
-    """Nominal support carried by the SUBSIDY entries of the **scoped** timeline, or None.
+    """Return the nominal support on the SUBSIDY entries of the scoped timeline, or None if there are none.
 
-    Owner decision D2 (cost-spec-v2 §8) unified this KPI with the W3.4 levy basis: both are
-    `nominal_support_from_entries` over timeline SUBSIDY entries — nominal, undiscounted euros,
-    complete by construction. It used to sum the solver's award amounts
-    (`SubsidyDecision.applied[*].upfront_amount`) instead, which silently omitted every euro of
-    support that reaches the timeline without a catalog award or without being upfront: the
-    since-retired §10.1 legacy flat shim, operational support, and the instalments of a
-    scheduled payout or a repayment grant. The per-subject counterpart is
-    `ComponentCostBreakdown.subsidies_nominal_in_euro`; the per-award figure is
-    `award_total_amount`.
-
-    Scoping follows the module convention: the figure covers the flows the perspective reports
-    on. For a SYSTEM-scope perspective that is *every* SUBSIDY entry of the run; for an actor
-    scope it is the support that actor receives, so a tenant perspective reports the support
-    allocated to the tenant and nothing of the landlord's.
-
-    Returns None when the scoped timeline carries no SUBSIDY entry at all, so callers can omit
-    the KPI entirely rather than publish a zero (the historical behaviour of the export).
+    Computed with `nominal_support_from_entries`, the same basis as the levy, so it includes support without a catalog
+    award, operational support and scheduled instalments (§8). For a SYSTEM-scope perspective this is every SUBSIDY
+    entry of the run; for an actor scope, the support that actor receives. None lets callers omit the KPI instead of
+    publishing a zero. The per-subject counterpart is `ComponentCostBreakdown.subsidies_nominal_in_euro`; the per-award
+    one is `award_total_amount`.
     """
     entries = [
         entry for entry in result.scoped_timeline().entries if entry.category == CostCategory.SUBSIDY
@@ -1022,24 +813,14 @@ def total_subsidies_received(result: LifecycleCostResult) -> Optional[UncertainV
     return nominal_support_from_entries(entries)
 
 
-# ----- 9/9 views, V1-V7 -----
+# ----- chart views: actor flows to event strip -----
 
 class ViewTolerances:
-    """The one namespace of numeric tolerances the views apply (visualization spec §5).
+    """The numeric tolerances the views apply, in one place.
 
-    Two kinds of number live here, and there is exactly one place for both. Most of the views
-    added for the V1-V15 chart set do not merely re-shape the result, they *check* themselves: a
-    Sankey whose transfer ribbons do not net to zero, a tornado whose bars do not sum to the band
-    or a sources-and-uses statement that does not balance is a lie about the engine, so those
-    views raise `CostDataError` instead of drawing, and every such comparison needs a tolerance.
-    The other kind is `DETAIL_ROW_EPSILON`, the one point at which a view is allowed to *drop*
-    data — and only ever to suppress float noise, values that are arithmetically zero but land at
-    1e-13 after a chain of discounting and slot arithmetic.
-
-    Collecting both here is the point: a reviewer sees in one place how much disagreement counts
-    as float noise (half a cent on a euro figure) rather than as a defect, and how much may be
-    hidden from a table. There used to be a second namespace, `ViewThresholds`, holding the
-    dropping tolerance and claiming the same "one place" for itself; folding it in leaves one.
+    Two kinds: the reconciliation tolerances of the self-checking views (a Sankey whose transfers do not net to zero, a
+    tornado whose bars do not sum to the band, an unbalanced sources-and-uses statement raise `CostDataError`), and
+    `DETAIL_ROW_EPSILON`, the only threshold below which a view drops data, which suppresses float noise.
     """
 
     #: Absolute euro tolerance for the reconciliation checks (half a cent).
@@ -1050,11 +831,10 @@ class ViewTolerances:
     #: Balance below this counts as repaid; guards `LoanAmortization.loan_free_year` against
     #: float residue.
     BALANCE_EPSILON = 0.01
-    #: Relative tolerance for the kWh attribution check of the energy balance (the V11 view of
-    #: the next slice is its reader), where quantities are large enough that an absolute euro
-    #: epsilon means nothing.
+    #: Relative tolerance for the kWh attribution check of the energy balance, where quantities
+    #: are large enough that an absolute euro epsilon means nothing.
     QUANTITY_RELATIVE_EPSILON = 1e-6
-    #: Relative tolerance on "the replacement arrived exactly when the life ran out" (V15). The
+    #: Relative tolerance on "the replacement arrived exactly when the life ran out". The
     #: engine spaces replacements at the rounded service life and the depreciation life is
     #: recovered by inverting the residual formula, so the two agree to a few ulps and must be
     #: treated as agreeing; only a genuinely *early* replacement shortens a write-down.
@@ -1073,27 +853,22 @@ def _fold_small(
     fold_key: Callable[[FoldItem], Any],
     fold_factory: Callable[[Any, float], FoldItem],
 ) -> Tuple[List[FoldItem], int, float]:
-    """Folds items below `share` of the total into one replacement item per fold key.
+    """Fold items below `share` of the total into one replacement item per fold key.
 
-    The one fold algorithm of the chart views, written once because the Sankey's ribbon fold and
-    the treemap's tile fold are the same operation on different item types: measure every item,
-    drop the ones carrying less than `share` of the whole, and put back a single replacement per
-    fold key carrying exactly what they carried together. Nothing is ever dropped — the fold is a
-    readability choice, never a silent cap — which is what lets the reconciliation invariants of
-    the folding views survive it.
+    Shared by the Sankey's ribbon fold and the treemap's tile fold. Nothing is dropped: the replacement carries exactly
+    what the folded items carried, so the reconciliation checks still hold.
 
     Args:
-        items: The items to fold, in the order the caller wants them kept.
-        amount_of: The magnitude of one item; the fold threshold is `share` of their sum.
+        items: The items to fold, in the order to keep them.
+        amount_of: The magnitude of one item.
         share: Fraction of the total below which an item is folded.
-        fold_key: Which replacement item an folded item belongs to — the (source, target) node
-            pair for ribbons, the display group for tiles — so a fold never merges across the
-            grouping the chart is built on.
-        fold_factory: Builds the replacement item from its fold key and its total amount.
+        fold_key: The replacement an item folds into, e.g. the (source, target) pair for ribbons or the display group
+            for tiles.
+        fold_factory: Builds the replacement item from its fold key and total amount.
 
     Returns:
-        `(kept, folded_count, folded_total)` — the surviving items followed by one replacement
-        per fold key, how many items were folded, and the euros they carried.
+        `(kept, folded_count, folded_total)`: the surviving items followed by one replacement per fold key, how many
+            items were folded, and the euros they carried.
     """
     total = sum(amount_of(item) for item in items)
     threshold = total * share
@@ -1113,24 +888,15 @@ def _fold_small(
     return kept, folded_count, sum(folded_amounts.values())
 
 
-# ============================================================================ V1 actor flows
+# ============================================================================ actor flows
 
 class FlowCounterparties:
-    """Who is on the other side of a cash flow, per cost category (visualization spec §3, V1).
+    """The external counterparty of a cash flow per cost category, for the actor Sankey.
 
-    The actor Sankey needs a *node* for every end of every ribbon, and the timeline names only
-    one of the two: the payer. This table supplies the other one — the external counterparty the
-    money goes to or comes from — as a fixed, reviewable mapping from cost category onto the five
-    node labels the owner approved (Q3): "market" for contractors and vendors, "suppliers" for
-    energy, operation and insurance, "state" for taxes and support, "bank" for the loan, and
-    "grid operator" for feed-in revenue.
-
-    Two properties make the mapping safe to trust. It is *declared*, not inferred: a category the
-    table does not name raises `CostDataError` rather than landing in a default bucket, so a
-    category added to the engine cannot silently disappear into an unlabelled ribbon. And
-    inter-actor transfers are declared separately in `TRANSFER_CATEGORIES` instead of being
-    detected by summing to zero at runtime — a transfer that fails to net out is then a reported
-    defect rather than a pair of ribbons that quietly stopped being a transfer.
+    The timeline names only the payer; this fixed mapping supplies the other end: "market" (contractors, vendors),
+    "suppliers" (energy, operation, insurance), "state" (taxes, support), "bank" (the loan) and "grid operator"
+    (feed-in revenue). An unmapped category raises `CostDataError` instead of landing in a default bucket. Transfers
+    between actors are declared in `TRANSFER_CATEGORIES`, so one that fails to net out is reported as a defect.
     """
 
     #: Contractors and vendors: the capital side, including the residual value written back.
@@ -1174,7 +940,7 @@ class FlowCounterparties:
 
     #: Categories booked as *matched pairs* between two payers by the allocation rulesets. They
     #: are drawn payer-to-payer instead of as two external stubs, and the view validates that
-    #: they net to zero across payers (fail-fast, D25). This is the narrow, Sankey sense of
+    #: they net to zero across payers. This is the narrow, Sankey sense of
     #: "transfer" — both legs are on the timeline — and is deliberately *not*
     #: `StatementPartitions.SOCIETY_TRANSFER_CATEGORIES`, which is the wider macroeconomic sense.
     TRANSFER_CATEGORIES = frozenset({CostCategory.MODERNIZATION_LEVY})
@@ -1187,11 +953,10 @@ class FlowCounterparties:
 
     @classmethod
     def counterparty_of(cls, category: CostCategory) -> str:
-        """The counterparty node of one category, or `CostDataError` if none is declared.
+        """Return the counterparty node of one category.
 
-        The fail-fast half of the taxonomy: an unmapped category means the Sankey would have to
-        invent a node, and inventing one would silently misattribute real money. The message
-        names the category and the class to extend, because that is the whole fix.
+        Raises `CostDataError` naming the category and this class if none is declared, since inventing a node would
+        misattribute real money.
         """
         counterparty = cls.BY_CATEGORY.get(category)
         if counterparty is None:
@@ -1207,12 +972,9 @@ class FlowCounterparties:
 class ActorFlow:
     """One ribbon of the actor Sankey: nominal euros moving from one node to another.
 
-    Direction is already resolved — `source` pays `target` — so the renderer never has to look
-    at a sign: an entry booked positive (a cost) becomes payer -> counterparty, a negative one
-    (support, revenue, a disbursement) becomes counterparty -> payer, and `amount_in_euro` is
-    always the positive magnitude. `category` is the flow's cost category, which the renderer
-    turns into a display-group hue; it is None for the folded "other" ribbon, which has no single
-    category left.
+    `source` pays `target`: a cost becomes payer -> counterparty, support, revenue or a disbursement becomes
+    counterparty -> payer, and `amount_in_euro` is always positive. `category` sets the ribbon's colour; it is None for
+    the folded "other" ribbon.
     """
 
     source: str
@@ -1224,23 +986,17 @@ class ActorFlow:
 
 @dataclass(frozen=True)
 class ActorFlowMatrix:
-    """Who pays whom over the whole horizon, as ribbons plus the node columns (V1).
+    """Who pays whom over the whole horizon, as ribbons plus node columns.
 
-    Nominal lifetime sums of the **full** allocated timeline in the BEST_ESTIMATE slot, which is
-    the only reading under which the §6.5 zero-sum property stays checkable: a scoped timeline
-    would show one leg of every transfer and none of the counter-party's. `total_band` carries
-    the grand total as a band so the title can state the uncertainty the ribbons themselves
-    cannot.
-
-    Reconciliation: `net_by_actor()` of an actor equals the nominal sum of the entries booked on
-    that payer inside the horizon — its scoped timeline, for an actor-scoped perspective — and
-    the transfer ribbons net to zero across payers. Both are validated in `actor_flow_matrix`
-    before the matrix is returned, so an instance that exists reconciles.
+    Nominal lifetime sums of the full allocated timeline in the best-estimate slot, so both legs of every transfer are
+    visible (§6.5). `total_band` carries the grand total as a band for the title. `actor_flow_matrix` checks before
+    returning that each actor's `net_by_actor()` equals the nominal sum of its timeline entries inside the horizon and
+    that transfer ribbons net to zero.
     """
 
     flows: List[ActorFlow]
     #: Payer nodes, in the order they first appear on the timeline. Each gets a column of its own
-    #: in the drawing; `actor_columns` decides in which order (Q23).
+    #: in the drawing; `actor_columns` decides in which order.
     actors: List[str]
     #: Counterparty nodes that appear as a ribbon source (left column).
     sources: List[str]
@@ -1253,24 +1009,12 @@ class ActorFlowMatrix:
     folded_amount_in_euro: float = 0.0
 
     def actor_columns(self) -> List[List[str]]:
-        """One column per internal party, ordered so transfers between them run left to right.
+        """Return one column per internal party, ordered so transfers between them run left to right.
 
-        The layout decision (Q23), made here rather than in a renderer because it is a property
-        of the flows and both renderers have to reach the same answer. Every actor used to share
-        one middle column, which meant the tenant-to-landlord levy had nowhere to go: it was drawn
-        as a band looping out of the column and back into it, a special case in both Sankey
-        renderers and the only ribbon on the page that did not read left to right. Giving each
-        party its own column removes the case entirely — the levy becomes an ordinary ribbon
-        between two adjacent columns.
-
-        The order is a topological sort of the transfer graph: an edge runs from each payer to each
-        payee of a declared inter-actor transfer, and a payer's column is placed before its payee's.
-        Ties — actors with no transfer between them, which is every pair in a run without a levy —
-        keep the timeline order the payers first appeared in, so the layout is deterministic and a
-        re-rendered report stays byte-identical. A cycle (A pays B, B pays A) has no topological
-        order at all; the remaining actors are then appended in timeline order rather than raising,
-        because a mutual transfer is a legitimate allocation and a picture whose columns are merely
-        in an arbitrary order is much better than no picture.
+        The order is a topological sort of the transfer graph (each payer before its payee), with ties kept in the
+        order payers first appear on the timeline, so the layout is deterministic. A tenant-to-landlord levy thus
+        becomes an ordinary ribbon between adjacent columns. A cycle (A pays B, B pays A) has no such order; the
+        remaining actors are appended in timeline order instead of raising.
 
         Returns:
             One single-actor column per party, left to right.
@@ -1290,11 +1034,9 @@ class ActorFlowMatrix:
         return [[actor] for actor in ordered]
 
     def net_by_actor(self) -> Dict[str, float]:
-        """Outflows minus inflows per actor — the actor's nominal lifetime cost.
+        """Return outflows minus inflows per actor, the actor's nominal lifetime cost.
 
-        The reconciliation handle: this equals the nominal sum of the entries the timeline books
-        on that payer, which is what makes the picture an accounting statement rather than an
-        illustration. `actor_flow_matrix` checks it here rather than leaving it to a caption.
+        Equals the nominal sum of the entries the timeline books on that payer; `actor_flow_matrix` checks this.
         """
         nets: Dict[str, float] = {actor: 0.0 for actor in self.actors}
         for flow in self.flows:
@@ -1305,23 +1047,16 @@ class ActorFlowMatrix:
         return nets
 
 
-# ------------------------------------------------------------------ story chapters (Q24)
+# ------------------------------------------------------------------ story chapters
 
 
 @dataclass(frozen=True)
 class StoryPerspectives:
-    """Which evaluated perspectives belong to which chapter of the report (owner decision Q24).
+    """Which evaluated perspectives belong to which chapter of the report.
 
-    The report tells three stories — the owner lives here, the owner rents it out, and what it
-    means for the economy — and each is told with its own perspectives. Deciding which is which is
-    a classification of the *results*, not a rendering choice, which is why it lives here: a
-    renderer that picked perspectives by matching their id against strings would silently tell the
-    wrong story for any bundle whose ids differ from the shipped ones.
-
-    Each list may be empty, and an empty one means the chapter is skipped — named with its reason
-    under the report's table of contents — rather than rendered as an empty box: a run of an
-    owner-occupied house genuinely has no landlord story, and inventing one would be worse than
-    omitting it.
+    The report tells three stories: the owner lives in the house, the owner rents it out, and the economy-wide view.
+    Classifying results here keeps renderers from matching perspective ids against strings. An empty list means the
+    chapter is skipped, with its reason under the table of contents; an owner-occupied house has no landlord story.
     """
 
     owner: Tuple[LifecycleCostResult, ...]
@@ -1330,62 +1065,30 @@ class StoryPerspectives:
 
 
 def has_macroeconomic_accounting(result: LifecycleCostResult) -> bool:
-    """Whether this perspective is the macroeconomic one, by what it books rather than by its id.
+    """Return whether this perspective uses macroeconomic accounting, judged by what it books rather than by its id.
 
-    CO2 at its damage cost is the structural signature of §4.5 accounting: no financial
-    perspective books a `CO2_DAMAGE` flow, and the macroeconomic one always does whenever the
-    building emits anything at all. Reading the timeline for it keeps presentation from having to
-    know that the shipped bundle happens to call that perspective "macroeconomic".
-
-    **The one signal, and which reading of it is authoritative.** The report used to carry a
-    second predicate for the same question (`prices_co2_damage`) that read `npv_by_category`
-    instead, and the two genuinely disagree: the pivot is built from the *scoped* timeline, so a
-    macroeconomic perspective scoped to a landlord books the damage flow and reports none of it —
-    the pivot answers "does this party pay it", which is a different question. The **full
-    timeline** is therefore the authoritative source and the only one read here: it says what the
-    accounting booked, which is what both readers of this predicate — the story classification
-    and the Assumptions table's damage-cost row — actually ask.
+    Macroeconomic accounting (§4.5) books CO2 at its damage cost; no financial perspective books a `CO2_DAMAGE` flow.
+    The full timeline is read, not `npv_by_category`: a macroeconomic perspective scoped to a landlord books the damage
+    flow but its scoped pivot shows none of it.
     """
     return any(entry.category == CostCategory.CO2_DAMAGE for entry in result.timeline.entries)
 
 
 def story_perspectives(results: Iterable[LifecycleCostResult]) -> StoryPerspectives:
-    """Sorts an evaluated matrix's perspectives into the three story chapters (Q24).
+    """Sort an evaluated matrix's perspectives into the three story chapters.
 
-    Three rules, applied in this order because the classes overlap at the edges. A perspective
-    that books CO2 damage **and reports on the system as a whole** is the **society** story. One
-    scoped to a landlord or a tenant is the **rented-out** story. Of what is left, the
-    **owner-occupied** story takes the ones an owner would actually be shown: an explicitly
-    owner-scoped perspective, or a net one — a perspective that books support, i.e. the
-    after-subsidy view a household pays out of its own account. The
-    gross perspectives stay out of it, because their whole purpose is the perspective-free "what
-    does the technology cost" question the common chapter answers.
-
-    A run with no support at all would leave the owner story empty by that rule, which would be
-    wrong rather than honest — a cash purchase without subsidies is still an owner's story — so
-    the leftovers are promoted in that one case, and the case is tested for rather than inferred
-    from the owner list being empty. The difference matters for a bundle that pairs a gross
-    system perspective with a rented-out pair: support *is* on the page, the owner rule correctly
-    finds no owner perspective among the leftovers, and the chapter has to stay empty instead of
-    being filled with the perspective-free gross view, whose whole purpose is the common chapter.
-    When the fallback does fire it still prefers the owner-like leftovers — the ones scoped to an
-    owner-occupier or to the system as a whole — over anything scoped to some other party.
-
-    **Why the society rule carries a scope condition.** The society chapter's own section states
-    the macroeconomic partition, which reads the transfer side off the full timeline and the
-    resource side off the scoped one and is therefore defined only for a SYSTEM-scoped result
-    (see `perspective_statement`). A macroeconomic perspective scoped to a landlord — a legal
-    combination of the five orthogonal dimensions, just not one the shipped bundle asks for —
-    classified by the accounting alone would have taken the whole report down with a
-    reconciliation error at render time. It is a party's view of a macroeconomic world, so it is
-    told as that party's story: the rented one when it is scoped to a landlord or a tenant, and
-    otherwise by the owner rule below, exactly like any other leftover.
+    Rules, in order: a perspective that books CO2 damage and is scoped to the whole system is the society story; one
+    scoped to a landlord or tenant is the rented-out story; of the rest, the owner-occupied story takes owner-scoped
+    perspectives and net ones (those that book support). Gross perspectives stay in the common chapter. If the run
+    books no support at all, the leftovers become the owner story, preferring those scoped to an owner-occupier or the
+    system. A macroeconomic perspective scoped to a party is told as that party's story, because the society statement
+    is only defined for a SYSTEM-scoped result (see `perspective_statement`).
 
     Args:
-        results: The evaluated perspectives, in bundle order (the order they are rendered in).
+        results: The evaluated perspectives, in bundle (rendering) order.
 
     Returns:
-        The three lists, each in the input's order.
+        The three lists, each in the input order.
     """
     evaluated = list(results)
     society: List[LifecycleCostResult] = []
@@ -1412,13 +1115,10 @@ def story_perspectives(results: Iterable[LifecycleCostResult]) -> StoryPerspecti
 
 
 def _run_books_support(results: Sequence[LifecycleCostResult]) -> bool:
-    """Whether any perspective of the run books a subsidy anywhere on its full timeline.
+    """Return whether any perspective of the run books a subsidy on its full timeline.
 
-    The guard on the owner chapter's fallback. It reads the **full** timeline of every
-    perspective rather than the scoped one, because the question is about the run — "was this
-    renovation supported at all" — and not about what one perspective reports on: a landlord
-    perspective's grant is support on the page even when the leftover gross perspective knows
-    nothing of it.
+    Guards the owner chapter's fallback. It reads full timelines because the question is whether the run was supported
+    at all, not what one perspective reports.
     """
     return any(
         entry.category == CostCategory.SUBSIDY
@@ -1427,29 +1127,18 @@ def _run_books_support(results: Sequence[LifecycleCostResult]) -> bool:
     )
 
 
-# ------------------------------------------- party statements (Q21 landlord, Q26 F4 the rest)
+# ------------------------------------------- party statements (landlord, owner, tenant, society)
 
 
 class LandlordStatementCategories:
-    """Which cost categories are cash and which are accounting credits, plus the row labels (Q21).
+    """Which cost categories are cash and which are accounting credits, plus the statement row labels.
 
-    The whole content of a two-sided statement is this split, so it is data rather than a chain of
-    `if`s inside a renderer. **Cash** categories move money through an account in the year they are
-    booked: the investment and the replacements paid to contractors, the maintenance, the levy
-    received from the tenant, the subsidies, the feed-in revenue, the loan flows. **Accounting
-    credits** value something without any money moving — the residual worth of hardware at the
-    horizon and the anyway credit for a renovation the building would have needed regardless. Both
-    belong in a lifecycle NPV; only one of them pays bills, and a landlord perspective can look
-    strongly advantageous on the strength of the half that does not.
-
-    Anything the engine one day books onto a party that is not named here counts as cash, which is
-    the conservative direction: an unclassified flow is then *understated* as an advantage rather
-    than being silently promoted into the accounting half.
-
-    The class keeps its Q21 name because it is the landlord statement's own vocabulary and the
-    charts and tests address it by that name; the generalization to the owner, the tenant and
-    society (Q26 F4) reuses `ACCOUNTING_CREDIT_CATEGORIES` and `LABELS` through
-    `StatementPartitions` rather than restating them.
+    Cash categories move money in the year they are booked: investment, replacements, maintenance, the levy, subsidies,
+    feed-in revenue, loan flows. Accounting credits value something without money moving: the residual value at the
+    horizon and the anyway credit (the avoided cost of a renovation the building needed regardless). A landlord
+    perspective can look advantageous mainly through credits, so the statement keeps them apart. A category not named
+    here counts as cash, which understates rather than overstates an advantage. `StatementPartitions` reuses
+    `ACCOUNTING_CREDIT_CATEGORIES` and `LABELS` for the other parties.
     """
 
     ACCOUNTING_CREDIT_CATEGORIES = (CostCategory.RESIDUAL_VALUE, CostCategory.ANYWAY_COST_CREDIT)
@@ -1485,22 +1174,14 @@ class LandlordStatementCategories:
 
 @dataclass(frozen=True)
 class StatementPartition:
-    """How one party's NPV is split into two named sides (owner decision Q26 F4).
+    """How one party's NPV is split into two named sides.
 
-    The generalization of the Q21 landlord statement: every party the report states — the
-    owner-occupier, the landlord, the tenant, society — gets the same two-sided treatment, and the
-    only thing that differs between them is *which* categories belong on the second side and what
-    the two sides are called. Making that a value rather than four near-identical functions is
-    what keeps the reconciliation invariant (the sides sum exactly to the perspective's NPV) a
-    single implementation instead of four chances to get it wrong.
-
-    Fields worth a word. `secondary_categories` are the categories of the second side — the two
-    accounting credits for the household parties, the transfer categories for society.
-    `secondary_is_transfer` switches the second side from "value, not payment" to "money that
-    moves between parties without using resources", which the report renders paired and with an
-    explicit zero-sum line. `labels` is consulted before `LandlordStatementCategories.LABELS`, so
-    a party can rename a row that means something different from its side of the same flow: the
-    levy is *income* to the landlord and a *payment* to the tenant.
+    Every party the report states (owner-occupier, landlord, tenant, society) uses the same two-sided form, so the
+    reconciliation (the sides sum to the NPV) has one implementation. `secondary_categories` are the second side's
+    categories: the two accounting credits for household parties, the transfer categories for society.
+    `secondary_is_transfer` makes the second side "money moving between parties" instead of "value, not payment".
+    `labels` override `LandlordStatementCategories.LABELS`, e.g. the levy is income to the landlord and a payment to
+    the tenant.
     """
 
     id: str
@@ -1512,7 +1193,7 @@ class StatementPartition:
     labels: Mapping[CostCategory, str] = field(default_factory=dict)
 
     def label_of(self, category: CostCategory) -> str:
-        """The row label of one category under this partition, falling back to the shared table."""
+        """Return the row label of one category, falling back to the shared label table."""
         if category in self.labels:
             return self.labels[category]
         return LandlordStatementCategories.LABELS.get(category, category.value)
@@ -1523,19 +1204,11 @@ class StatementPartition:
 
 
 class StatementPartitions:
-    """The four party statements the report publishes (Q21 landlord, Q26 F4 the other three).
+    """The four party statements the report publishes: owner-occupier, landlord, tenant and society.
 
-    One partition per chapter of the report. The three household parties share the cash /
-    accounting-credit split — it is the same distinction between money that moved and value that
-    was merely booked — and differ only in the row labels and in which flows their perspective
-    carries at all. Society is the structurally different one: its second side is not a book value
-    but the *transfers*, which are the whole point of the macroeconomic view.
-
-    `TENANT` deliberately declares an empty second side. A tenant receives nothing back in this
-    ledger, and the authored prose says so explicitly: where the renovation lowers the energy
-    bill, the relief shows up as a smaller cost line, never as a credit. An empty side is
-    therefore the honest partition rather than a missing feature, and the report renders its
-    subtotal as the zero it is.
+    The three household parties share the cash / accounting-credit split and differ in labels. Society's second side is
+    the transfers. `TENANT` has an empty second side, because a tenant receives no credit in this ledger; a lower
+    energy bill shows as a smaller cost line.
     """
 
     #: Categories that move money between parties without consuming resources (§4.5). Society's
@@ -1613,16 +1286,11 @@ class StatementPartitions:
 
 @dataclass(frozen=True)
 class StatementLine:
-    """One row of a party statement: a category, its present value and which side it is on.
+    """One row of a party statement: a category, its present value and its side.
 
-    `npv_in_euro` keeps the report's sign convention — positive is a cost to the party, negative
-    is money or value arriving — so a reader comparing this row against the perspectives table or
-    the category pivot sees the same number with the same sign, not a re-signed one.
-
-    `is_accounting_credit` says the row sits on the *second* side of its partition. For the three
-    household parties that side is the accounting credits, which is what the flag is named after
-    and what the landlord Sankey styles differently; for society it is the transfers, and the
-    society statement labels the side itself rather than leaning on the flag's name.
+    `npv_in_euro` keeps the report's sign convention (positive is a cost to the party, negative is money or value
+    arriving). `is_accounting_credit` means the row is on the second side of its partition: the accounting credits for
+    household parties, the transfers for society.
     """
 
     label: str
@@ -1631,7 +1299,7 @@ class StatementLine:
     is_accounting_credit: bool
     #: For a paired transfer row: the party that carries this half of the pair, or None for an
     #: ordinary row. The society statement renders both halves of every transfer so their sum is
-    #: visibly zero (Q26 F4), and the two halves are otherwise indistinguishable.
+    #: visibly zero, and the two halves are otherwise indistinguishable.
     payer: Optional[Actor] = None
 
 
@@ -1639,12 +1307,8 @@ class StatementLine:
 class IncomeRibbon:
     """One ribbon of the landlord income Sankey: money arriving at or leaving the landlord node.
 
-    The named form of what used to be a five-tuple. Direction is already resolved — `source` pays
-    `target` — and `amount_in_euro` is the positive magnitude, because a Sankey ribbon has no
-    sign. It is deliberately *not* an `ActorFlow`: an actor-flow ribbon runs between a payer and
-    an external counterparty and carries the transfer flag, while these ribbons run between the
-    landlord and one of his own statement rows and carry the cash / accounting-credit split the
-    renderer styles them by.
+    `source` pays `target`, and `amount_in_euro` is a positive magnitude. Unlike an `ActorFlow`, it runs between the
+    landlord and one of his statement rows and carries the cash / accounting-credit split the renderer styles it by.
     """
 
     source: str
@@ -1658,24 +1322,13 @@ class IncomeRibbon:
 
 @dataclass(frozen=True)
 class PerspectiveStatement:
-    """One party's NPV as a two-sided statement (Q21 for the landlord, Q26 F4 for the rest).
+    """One party's NPV as a two-sided statement.
 
-    Answers the question the headline NPV cannot: a perspective can show a strongly negative net
-    position — an advantage — while very little of it ever reaches a bank account, because the
-    residual value of the hardware and the anyway credit for a renovation the building needed
-    anyway are book entries, not payments. The statement states each side's bottom line before
-    combining them. Under the society partition the same shape answers a different question: what
-    of the result is real resource use and what is a transfer that nets to zero.
-
-    Reconciliation, validated in :func:`perspective_statement`: `cash_subtotal +
-    accounting_subtotal == net_position == the perspective's total NPV`. It is not new arithmetic
-    — the split is by category over the same discounted timeline everything else in the report
-    reads — which is exactly why the identity has to hold exactly rather than approximately.
-
-    The two side fields keep the Q21 names (`cash_lines`, `accounting_lines`) because that is what
-    they are for three of the four partitions and what the landlord Sankey and its tests address;
-    `partition` carries the labels a renderer should print, so the society statement's sides are
-    titled "real resource costs" and "transfers" without any renderer special-casing.
+    Shows how much of a perspective's net position is cash and how much is book value (residual value, anyway credit),
+    each side with its own subtotal. Under the society partition the sides are real resource cost and transfers.
+    `perspective_statement` checks that `cash_subtotal + accounting_subtotal == net_position == total NPV` exactly. The
+    side fields are named `cash_lines` and `accounting_lines` after the household case; `partition` carries the labels
+    to print.
     """
 
     perspective_id: str
@@ -1693,30 +1346,15 @@ class PerspectiveStatement:
     partition: StatementPartition = StatementPartitions.LANDLORD
 
     def income_flows(self) -> Tuple[Tuple[IncomeRibbon, ...], bool]:
-        """The landlord income Sankey as `IncomeRibbon`s, plus the net-position direction flag.
+        """Return the landlord income Sankey as `IncomeRibbon`s, plus the net-position direction flag.
 
-        The earnings-Sankey convention (Q25): everything that arrives flows into the landlord node
-        from the left, everything that is spent leaves to the right, and **the ribbon left over is
-        the bottom line** — it runs on to a terminal node named for the net position. Because the
-        report's sign convention is cost-positive, an income line is a category with a negative NPV
-        and an expense line one with a positive NPV.
-
-        Both signs of the net position are handled, which is the case the convention makes easy to
-        get wrong. When the renovation is advantageous for the landlord (negative NPV, income
-        exceeds expenses) the leftover leaves the landlord node to the right, like a profit. When
-        it is a net cost (positive NPV) the picture is a loss: the missing money has to come from
-        somewhere, so the net position enters from the *left* as a source and the flag says so.
-
-        **Landlord only.** The node labels are the landlord's own (`LANDLORD_NODE`), so the
-        picture claims a party the statement may not be about. A statement is callable under any
-        of the four partitions, and drawing a tenant's or society's rows around a node labelled
-        "landlord" would be a mislabelled picture rather than a missing feature — so this refuses
-        instead. The tenant and society chapters state their sides as tables.
+        Income (categories with a negative NPV) flows into the landlord node from the left, expenses leave to the
+        right, and the leftover ribbon runs on to a node named for the net position. When the result is a net cost
+        (positive NPV), the net position instead enters from the left as a source, and the flag says so. Only the
+        landlord partition is drawn, because the nodes are labelled for the landlord.
 
         Returns:
-            The ribbons, and `True` when the net-position ribbon is an inflow (a net cost) rather
-            than the usual leftover outflow. Ribbon amounts are magnitudes; a Sankey ribbon has
-            no sign.
+            The ribbons (positive magnitudes), and True when the net-position ribbon is an inflow (a net cost).
 
         Raises:
             CostDataError: If the statement was built under a partition other than the landlord's.
@@ -1759,16 +1397,14 @@ class PerspectiveStatement:
 
 
 def landlord_statement(result: LifecycleCostResult) -> PerspectiveStatement:
-    """The landlord's NPV split into money that moves and value that is merely booked (Q21).
+    """Return the landlord's NPV split into money that moves and value that is only booked.
 
-    The Q21 statement under its own name: :func:`perspective_statement` with the landlord
-    partition. It stays a named function because the landlord statement is the one that also
-    carries an income Sankey and because three call sites and a test class address it directly.
+    `perspective_statement` with the landlord partition, kept as a named function because the landlord statement also
+    carries an income Sankey.
 
     Args:
-        result: The landlord perspective's result. Any result is accepted — the split is defined
-            for every perspective — but only a landlord one is meaningful, and the report only
-            renders it for that chapter.
+        result: The perspective's result; any result is accepted, but the report renders it only for the landlord
+            chapter.
 
     Returns:
         The two-sided statement with both subtotals and the net position.
@@ -1782,41 +1418,23 @@ def landlord_statement(result: LifecycleCostResult) -> PerspectiveStatement:
 def perspective_statement(
     result: LifecycleCostResult, partition: StatementPartition
 ) -> PerspectiveStatement:
-    """One party's NPV as a two-sided statement, under the given partition (Q21, Q26 F4).
+    """Return one party's NPV as a two-sided statement under the given partition.
 
-    One pass over `npv_by_category` of the perspective, sorting each category onto the first or
-    the second side of `partition` and subtotalling both. No number is recomputed: the lines are
-    the same present values the category pivot and the perspectives table publish, which is what
-    lets the two sides be added back into the headline figure and checked against it — the whole
-    reason the report may publish a decomposition at all (rule 2.9).
-
-    A transfer partition (society) additionally renders **both halves of every transfer pair**,
-    read from the full allocated timeline rather than the scoped one: a transfer is only visibly
-    zero when the payer and the receiver are on the page together. The two halves cancel, so the
-    reconciliation identity is unaffected — which is exactly the claim the society chapter makes
-    and this is where it is checked rather than asserted.
-
-    That mixed reading is also why a transfer partition has a precondition: the primary side is
-    the perspective's *scoped* pivot while the transfer side is the *full* timeline, and the two
-    are reconciled against the scoped total. The sum only closes when the two readings coincide,
-    i.e. when the perspective is scoped to `Actor.SYSTEM` — which every macroeconomic perspective
-    is. Applied to an actor-scoped result the statement would raise a reconciliation error that
-    blamed a lost category for what is really a misuse, so the misuse is named up front instead.
+    One pass over the perspective's `npv_by_category`, sorting each category onto a side and subtotalling; nothing is
+    recomputed, so the sides add back to the headline NPV. A transfer partition (society) also lists both halves of
+    every transfer pair from the full timeline, so the reader sees them cancel. That mixes the scoped and the full
+    timeline, which only reconciles for a SYSTEM-scoped perspective.
 
     Args:
-        result: The perspective to state; its `npv_by_category` and, for a transfer partition,
-            its full `timeline`.
+        result: The perspective to state.
         partition: Which two sides to split into and what to call them.
 
     Returns:
         The two-sided statement with both subtotals and the net position.
 
     Raises:
-        CostDataError: If a transfer partition is asked for on a perspective that is not
-            SYSTEM-scoped, or if the two sides do not sum to the perspective's total NPV. The
-            latter can only happen if a category was dropped between the pivot and this split,
-            which would make the statement a picture of a business case that is not the one
-            being reported.
+        CostDataError: If a transfer partition is asked for on a perspective that is not SYSTEM-scoped, or if the two
+            sides do not sum to the total NPV.
     """
     if partition.secondary_is_transfer and result.scope_payer != Actor.SYSTEM:
         raise CostDataError(
@@ -1868,31 +1486,22 @@ def perspective_statement(
 def levy_transfer_reconciles(
     landlord: PerspectiveStatement, tenant: PerspectiveStatement
 ) -> Optional[float]:
-    """The two halves of the modernization levy, checked against each other (Q26 F4).
+    """Check that the landlord's levy income and the tenant's levy cost are the same amount.
 
-    The levy is booked as a transfer pair: the same euros are an income line of the landlord
-    statement and a cost line of the tenant's, with opposite signs. The tenant section says so in
-    its caption — "the levy is the exact counterpart of the landlord statement's levy income" —
-    and until this existed that sentence was a claim about two figures nobody had compared. Two
-    statements are built from two independently scoped timelines, so a transfer that leaked
-    somewhere between the allocation and the pivot would print two different numbers under one
-    sentence, in two sections a reader is never looking at simultaneously.
-
-    Absence is a value here, not a special case: a party with no levy line contributes zero, so a
-    run in which only one side books the levy is a mismatch and is refused rather than passed as
-    "one of them has nothing to compare".
+    The modernization levy (the rent increase a landlord may charge after a renovation) is booked as a transfer pair:
+    income in the landlord statement, cost in the tenant's. The two statements come from separately scoped timelines,
+    so this confirms they agree. A party without a levy line counts as zero, so a levy booked on one side only is a
+    mismatch.
 
     Args:
-        landlord: The landlord's statement, under any partition that keeps the levy on a side.
-        tenant: The tenant's statement, from the same run's allocation.
+        landlord: The landlord's statement, under a partition that keeps the levy on a side.
+        tenant: The tenant's statement from the same run.
 
     Returns:
-        The tenant's levy present value (positive: what the tenant pays), or None when neither
-        party books a levy at all.
+        The tenant's levy present value (positive: what the tenant pays), or None when neither party books a levy.
 
     Raises:
-        CostDataError: If the two figures differ by more than
-            `ViewTolerances.RECONCILIATION_EPSILON`, naming both.
+        CostDataError: If the two figures differ by more than `ViewTolerances.RECONCILIATION_EPSILON`.
     """
     landlord_levy = _levy_line_npv(landlord)
     tenant_levy = _levy_line_npv(tenant)
@@ -1913,7 +1522,7 @@ def levy_transfer_reconciles(
 
 
 def _levy_line_npv(statement: PerspectiveStatement) -> Optional[float]:
-    """The modernization levy line of one statement, on whichever side it landed, or None."""
+    """Return the modernization levy line of one statement from either side, or None."""
     for line in list(statement.cash_lines) + list(statement.accounting_lines):
         if line.category == CostCategory.MODERNIZATION_LEVY:
             return line.npv_in_euro
@@ -1923,18 +1532,11 @@ def _levy_line_npv(statement: PerspectiveStatement) -> Optional[float]:
 def _transfer_statement_lines(
     result: LifecycleCostResult, partition: StatementPartition
 ) -> List[StatementLine]:
-    """Both halves of every transfer, from the full timeline, so their sum is visibly zero (F4).
+    """Return both halves of every transfer from the full timeline, so their sum is visibly zero.
 
-    The society statement's second side. It reads the **full** allocated timeline rather than the
-    perspective's scoped pivot, because a transfer's two halves are booked on two different
-    payers: the scoped view of one of them is not a transfer at all, it is a cost. Every declared
-    transfer category is emitted per payer, in payer order, so a reader sees the tenant's payment
-    beside the landlord's receipt and can add them to zero on the page.
-
-    The macroeconomic accounting removes transfers at source (§4.5) — no subsidy, no feed-in
-    revenue and no CO2 price is ever booked on that perspective — so on a macroeconomic result
-    this returns an empty list, whose subtotal is the zero the statement prints. That is the
-    honest rendering of "the transfers cancel": they never entered.
+    The society statement's second side. A transfer's two halves are booked on different payers, so the scoped view
+    would show a cost, not a transfer. Lines are emitted per transfer category and payer, in payer order. On a
+    macroeconomic result the list is empty, because that accounting removes transfers at source (§4.5).
 
     Args:
         result: The perspective whose full timeline is read.
@@ -1969,34 +1571,17 @@ def _transfer_statement_lines(
 
 
 def actor_flow_matrix(result: LifecycleCostResult) -> ActorFlowMatrix:
-    """Every timeline entry classified into a (source, target, amount) ribbon (V1).
+    """Classify every timeline entry into a (source, target, amount) ribbon for the actor Sankey.
 
-    Reads `result.timeline` — the FULL allocated timeline, deliberately, because the chart's
-    subject *is* the split between payers; the scoped timeline would draw a tenant paying a levy
-    to nobody. Amounts are nominal (undiscounted) lifetime sums of the BEST_ESTIMATE slot (Q2): a
-    banded Sankey is unreadable, so the band travels in `total_band` and is stated in the title
-    instead.
-
-    Three rules decide a ribbon. The counterparty comes from `FlowCounterparties`, declared per
-    category and raising for anything unmapped. The direction comes from the entry's sign, so
-    costs leave the payer and credits arrive. And a category declared in `TRANSFER_CATEGORIES` —
-    the §559e modernization levy today — is drawn as one payer-to-receiver ribbon instead of as
-    two external stubs; the view checks that those legs net to zero across all payers and raises
-    if they do not, since a transfer that creates money is a defect in the allocation ruleset,
-    not something to render, and it refuses a transfer running between more than two parties
-    rather than inventing a split (see `_transfer_ribbons`).
-
-    Reconciliation, both halves validated here: the transfer ribbons net to zero across payers,
-    and each actor's net (outflows − inflows) equals the nominal sum of the entries the timeline
-    books on that payer — which for an actor-scoped perspective is that actor's scoped timeline.
-    The second check is what makes the picture an accounting statement rather than an
-    illustration, and it catches what the first cannot: a ribbon drawn to the wrong end, a
-    counterparty label that collides with a payer node, a fold that lost euros.
+    Reads the full allocated timeline, since the chart shows the split between payers. Amounts are nominal lifetime
+    sums of the best-estimate slot; the band goes into `total_band`. The counterparty comes from `FlowCounterparties`;
+    the direction from the entry's sign (costs leave the payer, credits arrive); a category in `TRANSFER_CATEGORIES`
+    (the modernization levy) becomes one payer-to-receiver ribbon. Before returning it checks that transfers net to
+    zero and that each actor's net equals the nominal sum the timeline books on that payer.
 
     Raises:
-        CostDataError: On a category with no declared counterparty, on declared transfers that do
-            not net to zero across payers, or on an actor whose ribbons do not net to what the
-            timeline books on it.
+        CostDataError: On a category without a declared counterparty, on transfers that do not net to zero or run
+            between more than two parties, or on an actor whose ribbons do not net to its timeline sum.
     """
     horizon = result.parameters.observation_period_in_years
     ribbons: Dict[Tuple[str, str, Optional[CostCategory]], float] = {}
@@ -2045,20 +1630,16 @@ def actor_flow_matrix(result: LifecycleCostResult) -> ActorFlowMatrix:
 
 
 def _validate_actor_nets(matrix: ActorFlowMatrix, nominal_by_actor: Mapping[str, float]) -> None:
-    """Checks every actor's ribbon net against the nominal sum the timeline books on that payer.
+    """Check every actor's ribbon net against the nominal sum the timeline books on that payer.
 
-    The per-actor half of the V1 reconciliation, mirroring `_transfer_ribbons`' zero-sum check:
-    the ribbons are a re-shaping of the timeline, so re-summing them per node has to give the
-    timeline's own per-payer total back. A difference is never a rounding story — the ribbons are
-    the same nominal amounts — it means money changed ends on the way into the picture.
+    The ribbons reshape the timeline without rounding, so any difference means money was drawn to the wrong end.
 
     Args:
-        matrix: The assembled matrix, ribbons and node columns.
+        matrix: The assembled matrix.
         nominal_by_actor: Payer node -> nominal sum of that payer's entries inside the horizon.
 
     Raises:
-        CostDataError: If any actor's net differs by more than
-            `ViewTolerances.RECONCILIATION_EPSILON`.
+        CostDataError: If any actor's net differs by more than `ViewTolerances.RECONCILIATION_EPSILON`.
     """
     nets = matrix.net_by_actor()
     mismatches = [
@@ -2078,32 +1659,21 @@ def _validate_actor_nets(matrix: ActorFlowMatrix, nominal_by_actor: Mapping[str,
 
 
 def _transfer_ribbons(transfer_net: Dict[str, float]) -> List[ActorFlow]:
-    """The single payer-to-payer ribbon of the declared transfers, validated to net to zero.
+    """Return the single payer-to-receiver ribbon of the declared transfers, checked to net to zero.
 
-    `FlowCounterparties.TRANSFER_CATEGORIES` declares one category today, the §559e modernization
-    levy, and it is booked as one matched pair: the tenant pays, the landlord receives. So the
-    ribbon is that pair — one payer, one receiver, the whole net — and a run with a second payer
-    or a second receiver is *refused* rather than drawn.
-
-    The refusal replaces a proportional payer × receiver split that used to run here. With one
-    payer and one receiver the split is the identity, so it was never exercised; with two of
-    either it would have invented an allocation the engine never made — a tenant's levy spread
-    over two landlords in proportion to what they received is an assumption, not a reading of the
-    timeline. Restoring a split is the right upgrade when a second transfer category arrives, and
-    it will then need the pair *the entries themselves* carry (per category and per subject)
-    rather than a proportion derived from the nets.
+    The one declared transfer category is the modernization levy, booked as a matched pair (the tenant pays, the
+    landlord receives). A run with a second payer or receiver is refused, because splitting the transfer between them
+    would invent an allocation the engine never made.
 
     Args:
-        transfer_net: Payer node -> nominal net of that payer's transfer entries; positive is a
-            payer of the transfer, negative a receiver.
+        transfer_net: Payer node -> nominal net of its transfer entries; positive for a payer, negative for a receiver.
 
     Returns:
-        The one ribbon, or an empty list when the run books no transfer at all.
+        The one ribbon, or an empty list when the run books no transfer.
 
     Raises:
-        CostDataError: If the declared transfers do not net to zero across payers, i.e. if the
-            allocation created or destroyed money; or if more than one payer or more than one
-            receiver appears.
+        CostDataError: If the transfers do not net to zero across payers, or if more than one payer or receiver
+            appears.
     """
     total = sum(transfer_net.values())
     if abs(total) > ViewTolerances.RECONCILIATION_EPSILON:
@@ -2144,12 +1714,9 @@ def _transfer_ribbons(transfer_net: Dict[str, float]) -> List[ActorFlow]:
 
 
 def _fold_small_flows(flows: List[ActorFlow]) -> Tuple[List[ActorFlow], int, float]:
-    """Folds ribbons below `FlowCounterparties.SMALL_FLOW_SHARE` into one "other" per node pair.
+    """Fold ribbons below `FlowCounterparties.SMALL_FLOW_SHARE` into one "other" ribbon per node pair.
 
-    A Sankey with fifty hairline ribbons is unreadable, but dropping them would be a silent cap,
-    so the small ones are merged per (source, target) pair into a single categoryless ribbon and
-    the count and total euros are returned for the caption to name. Folding preserves every node
-    pair's total exactly, which is why the per-actor net reconciliation survives it.
+    Returns the ribbons plus the folded count and euros for the caption. Each node pair's total is kept exactly.
     """
     return _fold_small(
         flows,
@@ -2160,35 +1727,27 @@ def _fold_small_flows(flows: List[ActorFlow]) -> Tuple[List[ActorFlow], int, flo
     )
 
 
-# ============================================================================ V2 liquidity fan
+# ============================================================================ liquidity fan
 
 def band_zero_crossings(series_by_slot: Mapping[Any, List[float]]) -> Dict[Any, Optional[int]]:
-    """First non-negative year of each slot's series; None where it never crosses (V2).
+    """Return the first non-negative year of each slot's series, or None where it never crosses.
 
-    The band form of `results.discounted_payback_year`, and it *calls* that function per slot
-    rather than re-implementing the crossing rule, so the fan's annotated interval and the
-    printed payback year cannot disagree about what a crossing is (year 0 excluded, first
-    crossing only). Keys are whatever the caller's series dict uses — `Slot` members for the
-    view-side series, the `"low"/"best_estimate"/"high"` strings a `VariantComparison` carries.
+    Calls `results.discounted_payback_year` per slot, so the chart and the printed payback year use the same crossing
+    rule (year 0 excluded, first crossing only). Keys are the caller's: `Slot` members or the
+    `"low"/"best_estimate"/"high"` strings of a `VariantComparison`.
 
     Returns:
-        One crossing year per input key, None meaning "never within the horizon" — which is a
-        real answer the fan annotates rather than omits.
+        One crossing year per input key; None means no crossing within the horizon.
     """
     return {key: discounted_payback_year(series) for key, series in series_by_slot.items()}
 
 
 def cumulative_nominal_cost_series(result: LifecycleCostResult) -> Dict[Slot, List[float]]:
-    """Cumulative *nominal* cost per slot over years 0..T — the liquidity fan's upper panel (V2).
+    """Return the cumulative nominal cost per slot over years 0..T, the upper panel of the liquidity chart.
 
-    The undiscounted counterpart of `cumulative_discounted_cost_series`: a slot-wise running sum
-    of `result.annual_cost_series_nominal_in_euro`, so the last point of each slot is that slot's
-    nominal lifetime cost and the highest point is the deepest out-of-pocket position. Summing
-    slot-wise is legitimate precisely because a slot is a coherent world — the LOW curve is "the
-    whole horizon in the cheap world", not a lower confidence bound.
-
-    It exists as a view rather than as a cumsum in the chart because a renderer that adds numbers
-    is a renderer that can disagree with the engine (seam 4).
+    A slot-wise running sum of `result.annual_cost_series_nominal_in_euro`; the last point is the slot's nominal
+    lifetime cost and the highest point the deepest out-of-pocket position. Summing slot-wise is valid because each
+    slot is one consistent world (all cheap, all expensive), not a confidence bound.
     """
     series: Dict[Slot, List[float]] = {}
     for slot in Slot:
@@ -2202,16 +1761,12 @@ def cumulative_nominal_cost_series(result: LifecycleCostResult) -> Dict[Slot, Li
 
 
 def worst_liquidity_position(result: LifecycleCostResult) -> Tuple[int, float]:
-    """Year and amount of the deepest out-of-pocket position (BEST_ESTIMATE slot, nominal) (V2).
+    """Return the year and amount of the deepest out-of-pocket position (best-estimate slot, nominal).
 
-    The annotation the nominal panel carries and the lifecycle-milestone lane restates: the
-    maximum of the cumulative nominal cost curve, i.e. the point at which the most money has left
-    the account and not come back. Cost is positive here (owner decision Q4), so "deepest" is the
-    curve's maximum, and the reading is carried by the annotation rather than by the axis
-    direction.
+    The maximum of the cumulative nominal cost curve, where the most money has left the account; cost is positive.
 
     Returns:
-        `(year, cumulative nominal cost in euro)` — year 0 with 0.0 for an empty series.
+        `(year, cumulative nominal cost in euro)`, or `(0, 0.0)` for an empty series.
     """
     curve = cumulative_nominal_cost_series(result)[Slot.BEST_ESTIMATE]
     if not curve:
@@ -2220,14 +1775,12 @@ def worst_liquidity_position(result: LifecycleCostResult) -> Tuple[int, float]:
     return worst_year, curve[worst_year]
 
 
-# ============================================================================ V3 attribution
+# ============================================================================ uncertainty attribution
 
 class AttributionThresholds:
-    """Cut-offs of the uncertainty attribution tornado (V3).
+    """Cut-offs of the uncertainty attribution tornado.
 
-    Only one number, but it decides what a reader sees: how many subjects get their own bar
-    before the rest are folded into a single row. The fold keeps the sum invariant exact, so the
-    cut-off is a readability choice and never a hidden cap.
+    `TOP_N` is how many subjects get their own bar before the rest fold into one row; the fold keeps the sum exact.
     """
 
     #: Subjects shown individually; everything below is folded into one row.
@@ -2239,18 +1792,11 @@ class AttributionThresholds:
 
 @dataclass(frozen=True)
 class AttributionRow:
-    """One subject's contribution to the width of the total NPV band (V3).
+    """One subject's contribution to the width of the total NPV band.
 
-    `low_delta_in_euro` and `high_delta_in_euro` are the subject's own NPV in the LOW resp. HIGH
-    world minus its NPV in the BEST_ESTIMATE world — signed, and *not* absolute widths.
-
-    The sign of a revenue subject's LOW delta follows the band's orientation, and the orientation
-    is already fixed by the time a flow reaches the timeline: a revenue-type amount enters through
-    `UncertainValue.as_revenue`, which mirrors the band so that `minimum` always means "this
-    entry in the LOW world" — for a revenue, the world where the *most* money arrives. A feed-in
-    or support subject therefore has a negative LOW delta and a positive HIGH delta exactly like a
-    cost subject, and its bar straddles the axis the same way. A positive LOW delta would mean an
-    unmirrored band reached the timeline, which the entry's own min <= best <= max check forbids.
+    `low_delta_in_euro` and `high_delta_in_euro` are the subject's NPV in the LOW and HIGH world minus its
+    best-estimate NPV, signed. Revenue bands are mirrored on entry (`UncertainValue.as_revenue`), so `minimum` always
+    means the LOW world and a revenue subject's bar straddles the axis like a cost subject's.
     """
 
     subject: str
@@ -2262,27 +1808,17 @@ class AttributionRow:
 
     @property
     def width_in_euro(self) -> float:
-        """How much of the total band's width this subject accounts for (the sort key)."""
+        """Return how much of the total band width this subject accounts for; the sort key."""
         return self.high_delta_in_euro - self.low_delta_in_euro
 
 
 def uncertainty_attribution(result: LifecycleCostResult) -> List[AttributionRow]:
-    """Per-subject decomposition of the total NPV band (V3) — attribution, not sensitivity.
+    """Decompose the total NPV band into per-subject contributions (attribution, not sensitivity).
 
-    Nothing is re-evaluated here. Because all engine arithmetic is slot-wise, the LOW and HIGH
-    totals decompose *exactly* into per-subject contributions under the same assembly rules the
-    total uses, and this view is that decomposition: `timeline.npv_by(subject)` on the scoped
-    timeline, each subject's LOW and HIGH read against its own BEST_ESTIMATE. The chart title has
-    to say "uncertainty attribution" rather than "sensitivity" for exactly this reason — no input
-    was varied one at a time.
-
-    Rows are sorted by band width descending, and everything below `AttributionThresholds.TOP_N`
-    is folded into one row so that the bars still sum to the total.
-
-    Reconciliation: `sum(low_delta) == total.minimum − total.best_estimate` and
-    `sum(high_delta) == total.maximum − total.best_estimate`, including the folded row —
-    validated here, not only in the tests, because a tornado whose bars do not sum to the total
-    lies quietly.
+    Nothing is re-evaluated: all engine arithmetic is slot-wise, so the LOW and HIGH totals split exactly into
+    `timeline.npv_by(subject)` on the scoped timeline. It is not a sensitivity analysis, since no input is varied. Rows
+    are sorted by band width, descending, and those beyond `AttributionThresholds.TOP_N` fold into one row. The view
+    checks `sum(low_delta) == total.minimum - total.best_estimate` and the same for the maximum.
 
     Raises:
         CostDataError: If the per-subject deltas do not sum to the total band's edges.
@@ -2324,17 +1860,14 @@ def uncertainty_attribution(result: LifecycleCostResult) -> List[AttributionRow]
     return shown
 
 
-# ============================================================================ V4 bridge
+# ============================================================================ comparison bridge
 
 @dataclass(frozen=True)
 class BridgeStep:
-    """One floating bar of the comparison bridge: a display group's NPV delta (V4).
+    """One floating bar of the comparison bridge: one display group's NPV delta.
 
-    `group` is whatever key the caller's category mapping produces (the display-group index for
-    every caller in this package), and `delta_in_euro` is variant minus reference in the
-    BEST_ESTIMATE slot. Deltas deliberately carry no band: `high(variant − reference)` is not
-    `high(variant) − high(reference)`, so a whisker on a delta bar would be arithmetic that means
-    nothing (spec §3 V4).
+    `group` is the caller's group key; `delta_in_euro` is variant minus reference in the best-estimate slot. Deltas
+    carry no band, because `high(variant - reference)` is not `high(variant) - high(reference)`.
     """
 
     group: Any
@@ -2346,25 +1879,15 @@ def comparison_bridge(
     variant: LifecycleCostResult,
     mapping: Mapping[CostCategory, GroupKey],
 ) -> List[BridgeStep]:
-    """Why the variant's NPV differs from the reference's, decomposed by display group (V4).
+    """Decompose the difference between the variant's and the reference's NPV by display group.
 
-    The bridge between two published totals: each display group's NPV in the variant minus the
-    same group's NPV in the reference, BEST_ESTIMATE slot, in the fixed group order rather than
-    sorted by magnitude — a bridge whose bars reorder between two reports cannot be read side by
-    side (IBCS). A group present in only one variant folds in naturally, because a missing group
-    is an explicit zero on that side.
-
-    It takes the two *results* rather than the `VariantComparison` because the comparison object
-    publishes deltas per subject and in total, never per category, and re-deriving a category
-    split from subject deltas is not possible. The grouping mapping is passed in for the usual
-    reason (`fold_categories`): grouping is a display concept, the sums are not.
-
-    Reconciliation: `sum(step.delta) == variant.total_npv − reference.total_npv` in the
-    BEST_ESTIMATE slot, validated here.
+    Each group's best-estimate NPV in the variant minus that in the reference, in fixed group order so two reports can
+    be read side by side; a group missing on one side counts as zero. It takes the two results because
+    `VariantComparison` has no per-category deltas. The view checks that the steps sum to `variant.total_npv -
+    reference.total_npv`.
 
     Raises:
-        CostDataError: If the steps do not sum to the published NPV delta, or if the caller's
-            group keys cannot be ordered — see below.
+        CostDataError: If the steps do not sum to the NPV delta, or if the caller's group keys cannot be ordered.
     """
     variant_groups = fold_categories(variant.npv_by_category, mapping)
     reference_groups = fold_categories(reference.npv_by_category, mapping)
@@ -2373,11 +1896,8 @@ def comparison_bridge(
         # Display-group indices sort into the fixed order every chart stacks them in.
         keys: List[Any] = sorted(present)
     except TypeError as error:
-        # A mapping whose keys cannot be compared has no bar order, and the bar order is the
-        # bridge's whole readability claim (IBCS): two reports drawn from mappings that happened
-        # to iterate differently would put the same group in different places, which is exactly
-        # the silent divergence this view exists to prevent. Falling back to first-appearance
-        # order used to hide that; naming the keys hands the caller the fix.
+        # A mapping whose keys cannot be compared has no bar order, and two reports could then put
+        # the same group in different places (IBCS). Naming the keys hands the caller the fix.
         raise CostDataError(
             "The comparison bridge's group keys cannot be ordered, so its bars have no fixed "
             f"order: {sorted((type(key).__name__, repr(key)) for key in present)}. Give the "
@@ -2404,30 +1924,17 @@ def comparison_bridge(
     return steps
 
 
-# ============================================================================ V5 cost of credit
+# ============================================================================ cost of credit
 
 @dataclass(frozen=True)
 class TotalCostOfCredit:
-    """The consumer-credit disclosure of a financed perspective (V5's companion panel).
+    """The consumer-credit disclosure of a financed perspective.
 
-    "You borrow 50,000 and pay back 63,400", in the four parts a loan document states: the
-    principal, the interest it costs, any fees, and the repayment grant that comes back off it.
-    All figures are nominal (undiscounted) euros of the BEST_ESTIMATE slot, because that is what a
-    loan contract quotes; `effective_annual_rate` is the internal rate of the loan's own flow
-    sequence (disbursement and grant in, debt service out), i.e. the Effektivzins a reader can
-    compare with a bank's offer.
-
-    The rate is `None` whenever the flows on the timeline do not define one, and
-    `effective_annual_rate_note` then says why in a phrase the panel can print beside the "n/a" —
-    "no rate" and "no rate *because the schedule reaches past the horizon*" are very different
-    statements about a loan, and the second one is not a defect the reader should have to guess
-    at. The note is empty exactly when a rate is given.
-
-    `fees_in_euro` is structurally zero today: the engine books no loan fee category, and the
-    field exists so that the disclosure is complete and a future fee flows straight in rather
-    than being bolted onto the interest. `unrepaid_principal_in_euro` is the part of the
-    disbursement whose repayment falls beyond the observation horizon — a truncated schedule,
-    not a defect, but one the panel has to state or its total would look wrong.
+    "You borrow 50,000 and pay back 63,400" in four parts: principal, interest, fees and the repayment grant. Figures
+    are nominal best-estimate euros, as a loan contract quotes them. `effective_annual_rate` is the internal rate of
+    the loan's own flows (the Effektivzins); when it is None, `effective_annual_rate_note` says why, and the note is
+    empty exactly when a rate is given. `fees_in_euro` is always zero, as the engine books no fee category yet.
+    `unrepaid_principal_in_euro` is the principal repaid beyond the horizon.
     """
 
     principal_in_euro: float
@@ -2446,26 +1953,21 @@ class TotalCostOfCredit:
 
     @property
     def net_cost_of_credit_in_euro(self) -> float:
-        """What borrowing cost, net of the repayment grant: interest + fees − grants."""
+        """Return the net cost of borrowing: interest + fees - grants."""
         return self.interest_in_euro + self.fees_in_euro - self.grants_in_euro
 
 
 def total_cost_of_credit(result: LifecycleCostResult) -> TotalCostOfCredit:
-    """Principal, interest, fees and grants of the perspective's loan, plus its effective rate.
+    """Return the principal, interest, fees and grants of the perspective's loan, plus its effective rate.
 
-    Read off the same scoped timeline entries `loan_amortization_series` stacks, so the panel and
-    the bars beside it cannot disagree. The repayment grant is picked up from the SUBSIDY entries
-    booked under the financing subject — that is where `calculators/financing_application.py`
-    puts a Tilgungszuschuss — and it enters the effective-rate calculation as money received at
-    year 0, which is exactly why a grant lowers the rate.
-
-    Reconciliation: the nominal sum of every loan-category entry plus the repayment grant equals
-    `net_cost_of_credit_in_euro` minus the unrepaid principal — validated here.
+    Reads the same scoped timeline entries as `loan_amortization_series`. The repayment grant (Tilgungszuschuss) is
+    taken from the SUBSIDY entries booked under the financing subject and enters the rate as money received in year 0.
+    The view checks that the loan entries plus the grant equal `net_cost_of_credit_in_euro` minus the unrepaid
+    principal.
 
     Returns:
-        The disclosure. `effective_annual_rate` is None when there is no loan at all, when the
-        schedule reaches past the observation horizon, or when the repayment grant exceeds the
-        whole debt service; `effective_annual_rate_note` names which of the last two it was.
+        The disclosure; `effective_annual_rate` is None when there is no loan, when the schedule reaches past the
+            horizon, or when the grant exceeds the whole debt service, and the note names which of the last two.
 
     Raises:
         CostDataError: If the loan entries do not reconcile with the disclosure's parts.
@@ -2520,31 +2022,19 @@ def total_cost_of_credit(result: LifecycleCostResult) -> TotalCostOfCredit:
 def _effective_annual_rate(
     amortization: LoanAmortization, grants_in_euro: float
 ) -> Tuple[Optional[float], str]:
-    """Internal rate of the loan's own flows: disbursement and grant in, debt service out.
+    """Return the internal rate of the loan's flows: disbursement and grant in, debt service out.
 
-    The Effektivzins, found by bisection (`numerics.bisect_root`, shared with the scenario
-    break-even) on the same `discount_factor` every other present value in the package uses — one
-    flow sequence instead of a grid. For a fee-free, grant-free annuity with annual periods it
-    returns the nominal rate exactly, which is the null test the spec asks for; a repayment grant
-    strictly lowers it because the borrower received money without owing more.
-
-    **Two cases have no rate, and both used to produce a wrong one.** A schedule whose term
-    reaches past the observation horizon is only *partly* on the timeline: solving the truncated
-    sequence prices a loan the borrower never took — a ten-year 4 % annuity seen at a four-year
-    horizon looks like −23 %, because most of the repayment is missing. That is refused on the
-    same test `LoanAmortization.loan_free_year` uses, unrepaid principal above the reconciliation
-    epsilon. And the search window is non-negative, `[0, 5.0]`: a repayment grant larger than the
-    whole debt service means the borrower paid back less than was received, for which no
-    non-negative rate solves the sequence, and the old window's −0.99 end always produced a root
-    because the present value there is hugely negative. Both cases return a note instead.
+    Solved by bisection (`numerics.bisect_root`) with the package's `discount_factor`. A fee-free, grant-free annual
+    annuity returns its nominal rate; a grant lowers it. Two cases have no rate: a schedule reaching past the horizon
+    (solving the truncated flows would give a meaningless rate, e.g. -23 % for a ten-year loan seen over four years),
+    and a grant larger than the whole debt service (no rate in the search window [0, 5.0] solves it).
 
     Args:
         amortization: The loan's booked interest, principal and disbursement.
-        grants_in_euro: The repayment grant, positive, received at year 0.
+        grants_in_euro: The repayment grant, positive, received in year 0.
 
     Returns:
-        `(rate, note)`. The rate is a fraction and the note is empty; or the rate is None and the
-        note says why in a phrase a panel can print.
+        `(rate, "")` with the rate as a fraction, or `(None, note)` with a printable reason.
     """
     if not amortization.has_flows() or amortization.disbursement_in_euro <= 0:
         return None, ""
@@ -2568,17 +2058,12 @@ def _effective_annual_rate(
     return rate, ""
 
 
-# ============================================================================ V7 event strip
+# ============================================================================ event strip
 
 class EventKinds(str, enum.Enum):
-    """The three things that can happen to a component on its lifetime strip (V7).
+    """The three events on a component's lifetime strip: bought, replaced, or worth something at the horizon.
 
-    The vocabulary of the strip in one place: a component is bought, is replaced, or is worth
-    something at the horizon, and nothing on the chart means anything else. It is an enum rather
-    than a bag of string constants because `LifecycleEvent.kind` is typed with it, which is what
-    makes "nothing else" a property the type checker holds rather than a sentence in a docstring;
-    the `str` mixin keeps the members printable and comparable with the plain strings the
-    renderers were written against, so `event.kind == "residual"` still means what it says.
+    The `str` mixin keeps members comparable with plain strings, so `event.kind == "residual"` works.
     """
 
     INVESTMENT = "investment"
@@ -2586,11 +2071,7 @@ class EventKinds(str, enum.Enum):
     RESIDUAL = "residual"
 
     def __str__(self) -> str:
-        """The kind's own word, so a member printed into a label reads as the chart's vocabulary.
-
-        Without this, `f"{kind}"` would render "EventKinds.INVESTMENT" — the enum's default —
-        into a lane label, which is the one place the enum must not be visible.
-        """
+        """Return the kind's own word, so a label shows "residual" rather than "EventKinds.RESIDUAL"."""
         return self.value
 
 
@@ -2598,9 +2079,7 @@ class EventKinds(str, enum.Enum):
 class LifecycleEvent:
     """One dated event on a component's strip: what happened, when, and for how much.
 
-    Amounts are nominal BEST_ESTIMATE-slot euros as the timeline booked them, so an investment is
-    positive and a residual value negative — the sign is the reader's cue that the residual is a
-    credit, and the renderer does not flip it.
+    Amounts are nominal best-estimate euros as booked: an investment is positive, a residual value negative.
     """
 
     year: int
@@ -2612,10 +2091,8 @@ class LifecycleEvent:
 class ServiceSpan:
     """One interval a component was in service, derived from the events the timeline booked.
 
-    Derived from the *booked* events and never from the catalog lifetime: the chart shows what
-    the timeline charged, and a span that disagrees with the database service life is exactly
-    the mismatch a reviewer should be able to see. Spans run from an install or replacement year
-    to the next event, or to the horizon for the last one.
+    Spans come from booked events, not the catalog lifetime, so a mismatch with the database service life is visible. A
+    span runs from an install or replacement year to the next event, or to the horizon for the last one.
     """
 
     start_year: int
@@ -2624,25 +2101,14 @@ class ServiceSpan:
 
 @dataclass(frozen=True)
 class EventStripRow:
-    """One component's lifetime lane: its purchases, its replacements and its residual (V7).
+    """One component's lifetime lane: its purchases, replacements and residual value.
 
-    The row checks its own shape, because every property the renderer relies on to draw a lane is
-    a property of *this object* rather than of the loop that happened to build it:
-
-    * a `residual` requires at least one investment or replacement event — only an installation
-      the timeline actually charged may be written down (§4.1, review package A);
-    * the events are sorted by year, which is the order the lane is drawn in;
-    * the spans align to the events — one span per event, starting at its year, each running to
-      the start of the next and the last to the horizon — so a lane's bars tile its lane without
-      overlapping or leaving a hole between two events.
-
-    `component_event_strip` builds rows that satisfy all three; the checks are here so that a
-    second builder (a comparison strip, a webtool payload) cannot quietly produce a lane that
-    draws wrongly, and so that the gate is a checked property of the output rather than a
-    calculator-internal rule.
+    The row checks its own shape so any builder produces a lane that draws correctly: a residual requires at least one
+    investment or replacement event (§4.1); events are sorted by year; there is one span per event, starting at its
+    year and running to the next event or, for the last one, the horizon.
 
     Raises:
-        CostDataError: If any of the three invariants is violated.
+        CostDataError: If any of these invariants is violated.
     """
 
     subject: str
@@ -2651,7 +2117,7 @@ class EventStripRow:
     residual: Optional[LifecycleEvent] = None
 
     def __post_init__(self) -> None:
-        """Enforces the three invariants stated in the class docstring."""
+        """Check the three invariants stated in the class docstring."""
         if self.residual is not None and not self.events:
             raise CostDataError(
                 f"Subject {self.subject!r} carries a residual-value credit of "
@@ -2684,28 +2150,21 @@ class EventStripRow:
 
     @property
     def year_zero_investment_in_euro(self) -> float:
-        """Year-0 investment of this row — the sort key that puts the biggest asset first."""
+        """Return this row's year-0 investment, the sort key that puts the biggest asset first."""
         return sum(event.amount_in_euro for event in self.events if event.year == 0)
 
 
 def component_event_strip(result: LifecycleCostResult) -> List[EventStripRow]:
-    """When each component was bought, replaced and written down (V7).
+    """Return when each component was bought, replaced and written down.
 
-    One row per COMPONENT-kind subject of the scoped timeline, built from the INVESTMENT,
-    REPLACEMENT and RESIDUAL_VALUE entries in the BEST_ESTIMATE slot. Service spans are *derived
-    from those events* — install or replacement to the next event, last one to the horizon —
-    rather than from the database service life, so a component whose booked replacement interval
-    disagrees with the catalog is visible instead of being drawn as the catalog claims.
-
-    Rows are sorted by year-0 investment descending, biggest asset first.
-
-    Reconciliation: every event amount is a timeline entry of the named category, so the row
-    sums equal the per-subject `npv_by_component` figures before discounting.
+    One row per COMPONENT-kind subject of the scoped timeline, from the INVESTMENT, REPLACEMENT and RESIDUAL_VALUE
+    entries in the best-estimate slot. Service spans are derived from these events, not from the database service life.
+    Rows are sorted by year-0 investment, descending. Each event amount is a timeline entry, so a row sums to the
+    subject's undiscounted `npv_by_component` figure.
 
     Raises:
-        CostDataError: From `EventStripRow`, whose invariants every row built here has to
-            satisfy — most visibly the package-A residual gate: a subject carrying a
-            residual-value credit without any investment or replacement the timeline charged.
+        CostDataError: From `EventStripRow`, e.g. a subject with a residual-value credit but no charged investment or
+            replacement.
     """
     horizon = result.parameters.observation_period_in_years
     by_subject: Dict[str, List[CashFlowEntry]] = {}
@@ -2754,45 +2213,33 @@ def component_event_strip(result: LifecycleCostResult) -> List[EventStripRow]:
     return rows
 
 
-# ----- 9/9 views, V8-V15 -----
+# ----- chart views: treemap to equity build-up -----
 
-# ============================================================================ V8 treemap
+# ============================================================================ treemap
 
 class TileBasis(str, enum.Enum):
-    """The two ways a treemap can answer "what does this cost" (V8, owner decision Q11).
+    """The two ways the cost treemap can show what something costs.
 
-    A treemap has no negative areas, so credits cannot be drawn — which leaves two honest options
-    and no third one. GROSS shows the cost side only and states the excluded credits in the
-    caption; NET_OF_CREDITS nets **per subject across display groups** and clamps a subject whose
-    credits exceed its costs at zero, disclosing every clamped subject. Both are rendered side by
-    side so the two readings can be compared on real evaluations before one is retired.
-
-    Netting per subject rather than per cell is the only netting that changes anything: a wall's
-    subsidy is booked in the support group while its investment is booked in the investment
-    group, so a per-cell subtraction would find no credit in any cost cell and reproduce the
-    gross panel exactly.
-
-    An enum rather than two string constants, because "there is no third option" is the whole
-    claim: `cost_structure_tiles` used to route anything that was not `GROSS` to the net branch,
-    so a typo drew a net panel under a gross heading and disclosed the wrong thing. The `str`
-    mixin keeps the members comparable with the plain strings the renderers were written against,
-    and `__str__` keeps a member printed into a label reading as the chart's own word.
+    A treemap has no negative areas, so credits cannot be drawn. GROSS shows the cost side only and states the excluded
+    credits in the caption. NET_OF_CREDITS nets each subject's credits against its costs across display groups (a
+    wall's subsidy and its investment sit in different groups, so netting per cell would change nothing) and clamps a
+    subject whose credits exceed its costs to zero, disclosing it. Being an enum, an unknown basis is rejected rather
+    than drawn as the wrong panel.
     """
 
     GROSS = "gross"
     NET_OF_CREDITS = "net"
 
     def __str__(self) -> str:
-        """The basis's own word, so a member interpolated into a caption is not "TileBasis.GROSS"."""
+        """Return the basis's own word, so a caption does not show "TileBasis.GROSS"."""
         return self.value
 
 
 class TreemapThresholds:
-    """Cut-offs of the cost-structure treemap (V8).
+    """Cut-offs of the cost-structure treemap.
 
-    A tile smaller than a few pixels carries no information and costs a label, so small tiles are
-    folded per group. The threshold is relative to the whole treemap's area, and the fold is
-    named in the caption, so nothing is capped silently.
+    Tiles below `SMALL_TILE_SHARE` of the whole treemap area are folded per group into one "other" tile, which the
+    caption names.
     """
 
     #: Tiles below this share of the total area fold into one "other" tile per display group.
@@ -2804,14 +2251,11 @@ class TreemapThresholds:
 
 @dataclass(frozen=True)
 class TreemapTile:
-    """One rectangle of the treemap: a (display group, subject) cell and its area in euros.
+    """One rectangle of the treemap: a (display group, subject) cell and its area in euro.
 
-    `area_in_euro` is what the rectangle encodes and is always non-negative — the whole point of
-    `TileBasis`. `clamped_from_in_euro` is set only on the net-of-credits basis and records the
-    negative net value the *subject* would have had (costs minus credits, summed across display
-    groups), so the caption can disclose exactly which subjects were clamped and how many euros
-    the clamping erased. A clamped tile carries zero area and is never drawn; it exists so the
-    disclosure travels with the tiles instead of being recomputed by each renderer.
+    `area_in_euro` is never negative. `clamped_from_in_euro` is set only on the net-of-credits basis, for a subject
+    whose credits reached its costs: it records the negative net (costs minus credits across groups) so the caption can
+    disclose it; such a tile has zero area and is not drawn.
     """
 
     group: Any
@@ -2821,18 +2265,13 @@ class TreemapTile:
     is_fold: bool = False
 
     def __post_init__(self) -> None:
-        """Enforces the two properties the class docstring states, so a renderer can rely on them.
+        """Check that the area is non-negative and that a clamped tile has zero area and a negative recorded net.
 
-        A treemap rectangle with a negative area is not a rectangle, and a clamped tile that
-        carried area or a non-negative `clamped_from_in_euro` would be a disclosure of something
-        that did not happen — the field records the *negative* net the subject would have had, and
-        the tile itself is not drawn. Both are checked here rather than in the one builder that
-        exists today, because the caption arithmetic (`areas − erased == net NPV`) is only sound
-        while they hold.
+        The caption arithmetic (`areas - erased == net NPV`) relies on both.
 
         Raises:
-            CostDataError: On a negative area, or on a clamped tile that is drawable or whose
-                recorded net is not a credit balance.
+            CostDataError: On a negative area, or on a clamped tile that is drawable or whose recorded net is not
+                negative.
         """
         if self.area_in_euro < 0.0:
             raise CostDataError(
@@ -2853,14 +2292,12 @@ class TreemapTile:
 
 @dataclass(frozen=True)
 class CostStructureTiles:
-    """The treemap's tiles plus everything its caption has to disclose (V8).
+    """The treemap's tiles plus everything its caption discloses.
 
-    Carries both sides of the picture on purpose: the gross cost NPV the tiles add up to, the
-    credit total the gross variant leaves out, and the net NPV the two imply — so a reader can
-    check `gross − credits == net` against the headline KPI without leaving the caption. On the
-    net basis, `clamped_total_in_euro` and the clamped tiles name the euros the clamp erased, and
-    the tile areas minus that erased total reproduce the same net NPV — which is what makes the
-    net panel a genuine second reading rather than a redrawn gross panel.
+    Carries the gross cost NPV the tiles add up to, the credit total the gross variant leaves out and the net NPV they
+    imply, so a reader can check `gross - credits == net` against the headline KPI. On the net basis,
+    `clamped_total_in_euro` and the clamped tiles name the euros the clamp erased; the tile areas minus that total give
+    the same net NPV.
     """
 
     basis: TileBasis
@@ -2873,12 +2310,7 @@ class CostStructureTiles:
     folded_amount_in_euro: float = 0.0
 
     def clamped_tiles(self) -> List[TreemapTile]:
-        """The subjects whose negative net value was clamped to zero — the caption's disclosure.
-
-        These are the subjects whose credits reached or exceeded their costs, so they carry no
-        area on the net basis; the renderers name them and the euros erased, because they are
-        exactly the entries a reviewer should ask about.
-        """
+        """Return the subjects whose negative net value was clamped to zero, for the caption to name."""
         return [tile for tile in self.tiles if tile.clamped_from_in_euro is not None]
 
 
@@ -2887,31 +2319,19 @@ def cost_structure_tiles(
     mapping: Mapping[CostCategory, GroupKey],
     basis: TileBasis = TileBasis.GROSS,
 ) -> CostStructureTiles:
-    """Lifetime cost composition as (display group -> subject) tiles, on either basis (V8).
+    """Return the lifetime cost composition as (display group, subject) tiles on either basis.
 
-    Pivots the scoped timeline by (subject, display group) in present value, BEST_ESTIMATE slot,
-    and splits each cell into its cost and credit halves — the split is by the *sign of the
-    contributing entries*, so a subject that both costs and earns (a PV system) keeps the two
-    apart instead of being netted into a smaller cost.
-
-    On `TileBasis.GROSS` the tile area is the cost half and the credit half is reported as
-    `credit_total_in_euro` for the caption. On `TileBasis.NET_OF_CREDITS` the netting happens
-    **per subject, across display groups** — a subject's whole credit total is applied to its
-    whole cost total and the resulting shrink factor is spread proportionally over that subject's
-    cost cells, so the group nesting survives while the areas actually move. Subjects whose
-    credits reach or exceed their costs clamp to zero area and are disclosed with the euros the
-    clamp erased. Tiles below `TreemapThresholds.SMALL_TILE_SHARE` are folded into one "other"
-    tile per group.
-
-    Reconciliation, validated here on both bases: `gross − credits == net_npv_in_euro ==
-    result.total_npv_in_euro.best_estimate`; the gross tile areas sum to `gross_cost_npv_in_euro`
-    (fold included); and the net tile areas minus `clamped_total_in_euro` reproduce that same
-    net NPV.
+    Pivots the scoped timeline by (subject, display group) in present value, best-estimate slot, and splits each cell
+    into cost and credit by the sign of its entries, so a PV system's investment and revenue stay apart. On
+    `TileBasis.GROSS` the area is the cost half and the credits go to `credit_total_in_euro`. On
+    `TileBasis.NET_OF_CREDITS` each subject's credits shrink all its cost cells proportionally; subjects whose credits
+    reach their costs clamp to zero and are disclosed. Tiles below `TreemapThresholds.SMALL_TILE_SHARE` fold into one
+    "other" tile per group. The view checks `gross - credits == net_npv_in_euro ==
+    result.total_npv_in_euro.best_estimate`, that the gross areas sum to `gross_cost_npv_in_euro`, and that the net
+    areas minus `clamped_total_in_euro` give the net NPV.
 
     Raises:
-        CostDataError: If `basis` is not a `TileBasis`, if the tiles do not sum to the stated
-            gross, if the net areas net of the disclosed erasure do not reproduce the net NPV, or
-            if gross minus credits does not reproduce the published net NPV.
+        CostDataError: If `basis` is not a `TileBasis`, or if any of the checks above fails.
     """
     if not isinstance(basis, TileBasis):
         raise CostDataError(
@@ -2922,7 +2342,7 @@ def cost_structure_tiles(
         )
 
     def cell_of(item: CashFlowEntry) -> Tuple[Any, str]:
-        """The (display group, subject) cell one entry belongs in."""
+        """Return the (display group, subject) cell one entry belongs in."""
         return (_display_group_of(item.category, mapping), item.subject)
 
     cost_cells, credit_cells = result.scoped_timeline().npv_split_by(
@@ -2974,21 +2394,15 @@ def cost_structure_tiles(
 def _net_cells_per_subject(
     cost_cells: Mapping[Tuple[Any, str], float], credit_cells: Mapping[Tuple[Any, str], float]
 ) -> Tuple[Dict[Tuple[Any, str], float], List[TreemapTile]]:
-    """Applies each subject's credits to that subject's cost cells, across display groups.
+    """Apply each subject's credits to that subject's cost cells, across display groups.
 
-    A subject's costs and its credits almost never share a cell — an insulation measure's
-    investment is booked in the investment group while its subsidy is booked in the support
-    group — so netting cell by cell would subtract nothing anywhere and the net panel would be a
-    copy of the gross one. Netting per subject fixes that: the subject's shrink factor
-    `max(0, C − K) / C` scales every one of its cost cells proportionally, which keeps the
-    two-level group nesting intact while the areas genuinely move.
-
-    Subjects whose credits reach or exceed their costs (a pure subsidy line, a PV system that
-    earns more than it cost) cannot be drawn at all; they come back as zero-area disclosure tiles
-    carrying the negative net `C − K`, filed under the display group of their largest cell.
+    A subject's costs and credits rarely share a cell (insulation investment and its subsidy sit in different groups),
+    so each subject's cost cells are scaled by `max(0, C - K) / C`, with C its costs and K its credits. Subjects whose
+    credits reach their costs return as zero-area disclosure tiles carrying `C - K`, filed under the group of their
+    largest cell.
 
     Returns:
-        The per-cell net areas, and the disclosure tiles for the clamped subjects.
+        The per-cell net areas, and the disclosure tiles of the clamped subjects.
     """
     subject_costs: Dict[str, float] = {}
     subject_credits: Dict[str, float] = {}
@@ -3026,12 +2440,10 @@ def _dominant_group(
     cost_cells: Mapping[Tuple[Any, str], float],
     credit_cells: Mapping[Tuple[Any, str], float],
 ) -> Any:
-    """The display group a clamped subject is filed under: the group of its largest cell.
+    """Return the display group a clamped subject is filed under: the group of its largest cell.
 
-    A clamped subject has no area, but it still needs a group so the disclosure can be coloured
-    and grouped like everything else. Cost cells win over credit cells, because a subject that
-    had costs belongs where the money was spent; a credit-only subject falls back to the group of
-    its largest credit, which for a subsidy line is the support group.
+    Cost cells win over credit cells; a credit-only subject falls back to the group of its largest credit (the support
+    group for a subsidy line).
     """
     for cells in (cost_cells, credit_cells):
         candidates = [(amount, group) for (group, cell_subject), amount in cells.items() if cell_subject == subject]
@@ -3041,16 +2453,11 @@ def _dominant_group(
 
 
 def _fold_small_tiles(areas: Mapping[Tuple[Any, str], float]) -> Tuple[List[TreemapTile], int, float]:
-    """Turns (group, subject) -> area into tiles, folding the small ones per group.
+    """Turn (group, subject) -> area into tiles, folding the small ones per group.
 
-    The fold key is the display group rather than nothing, so that a group never disappears
-    entirely: its small subjects collapse into one "other" tile that keeps the group's own total
-    exact, which is what lets the sum invariant survive the readability cut. The *threshold* is
-    global — it is a share of the whole treemap, which is the area a reader's eye compares
-    against — and that is exactly what `_fold_small` measures, so the algorithm is the shared one
-    and only the ordering is decided here. Only drawable (positive) areas reach this function;
-    the net basis's zero-area disclosure tiles are appended by the caller so they are never
-    folded away.
+    Folding per group keeps every group's total exact; the threshold is a share of the whole treemap, as `_fold_small`
+    measures it. Only positive areas arrive here; the caller appends the zero-area disclosure tiles afterwards so they
+    are never folded.
     """
     tiles, folded_count, folded_amount = _fold_small(
         [TreemapTile(group=group, subject=subject, area_in_euro=area)
@@ -3066,15 +2473,13 @@ def _fold_small_tiles(areas: Mapping[Tuple[Any, str], float]) -> Tuple[List[Tree
     return tiles, folded_count, folded_amount
 
 
-# ============================================================================ V9 swimlane
+# ============================================================================ swimlane
 
 @dataclass(frozen=True)
 class LaneEvent:
-    """One dated marker on a swimlane: a disbursement, a payout, a milestone (V9).
+    """One dated marker on a swimlane: a disbursement, a payout or a milestone.
 
-    `amount_in_euro` is optional because not every milestone has one — "loan-free" is a year, not
-    a sum — and the renderer prints the amount only where it exists rather than showing a zero
-    that would read as a real figure.
+    `amount_in_euro` is None for a marker without an amount (the loan-free year), so the renderer prints no zero.
     """
 
     year: int
@@ -3084,12 +2489,10 @@ class LaneEvent:
 
 @dataclass(frozen=True)
 class LaneSpan:
-    """One interval on a swimlane: a repayment period, a levy period, a payback range (V9).
+    """One interval on a swimlane: a repayment period, a levy period or a payback range.
 
-    `end_year` is None for an open-ended span — the payback range whose HIGH world never crosses
-    zero inside the horizon — which the renderer draws with an open arrow and the caption states
-    in words. Collapsing that case to "pays back at T" would be exactly the false precision the
-    range bar exists to avoid.
+    `end_year` is None for an open-ended span, such as a payback range whose HIGH world never crosses zero within the
+    horizon; the renderer draws an open arrow.
     """
 
     start_year: int
@@ -3099,13 +2502,9 @@ class LaneSpan:
 
 @dataclass(frozen=True)
 class Lane:
-    """One labelled swimlane: its spans and its markers (V9).
+    """One labelled swimlane: its spans and its markers.
 
-    Frozen, and meant as a finished object: `lifecycle_lanes` collects a lane's markers and spans
-    into plain lists first and constructs the lane once from them. Appending to `events` after
-    construction would have worked — a frozen dataclass freezes the *bindings*, not the lists they
-    point at — but it makes the freeze a decoration rather than a guarantee, and a lane that is
-    still being filled after it exists is exactly the state `is_empty` cannot answer for.
+    `lifecycle_lanes` builds each lane once from finished lists; do not append to its lists afterwards.
     """
 
     name: str
@@ -3113,18 +2512,16 @@ class Lane:
     spans: List[LaneSpan] = field(default_factory=list)
 
     def is_empty(self) -> bool:
-        """True when the lane has nothing to draw, so the renderer can drop it and log the skip."""
+        """Return True when the lane has nothing to draw, so the renderer can drop it and log the skip."""
         return not self.events and not self.spans
 
 
 @dataclass(frozen=True)
 class LifecycleLanes:
-    """The one-page life of the renovation: assets, financing, support and milestones (V9).
+    """The one-page life of the renovation: assets, financing, support and milestones on one year axis.
 
-    A *composition*, not a computation: every lane restates a figure that exists in full
-    elsewhere — the asset rows are the component event strip's, the financing lane reads the
-    amortization series, the milestones read the band crossings — which is what makes the
-    overview safe. It introduces no new numbers and no new fields, only a shared year axis.
+    A composition only: each lane restates figures from other views (the component event strip, the amortization
+    series, the band crossings), so it adds no new numbers.
     """
 
     horizon: int
@@ -3137,25 +2534,20 @@ class LifecycleLanes:
 def lifecycle_lanes(
     result: LifecycleCostResult, comparison: Optional[VariantComparison] = None
 ) -> LifecycleLanes:
-    """Assets, financing, support and milestones on one year axis (V9).
+    """Return assets, financing, support and milestones on one year axis.
 
-    Delegates rather than re-derives: the component event strip supplies the asset rows,
-    `loan_amortization_series` the financing lane (disbursement, the years carrying debt service,
-    and the year the outstanding balance reaches zero), `subsidy_decisions` and the
-    MODERNIZATION_LEVY entries the support lane, and the band crossings plus the worst liquidity
-    position the milestones. Because the numbers come from those views, the swimlane cannot
-    disagree with the detail charts it summarizes.
+    Delegates to other views so the swimlane cannot disagree with the charts it summarizes: `component_event_strip` for
+    assets; `loan_amortization_series` for financing (disbursement, years with debt service, the loan-free year);
+    `subsidy_decisions` and the MODERNIZATION_LEVY entries for support; band crossings and `worst_liquidity_position`
+    for milestones.
 
     Args:
         result: The perspective to draw.
-        comparison: The variant comparison, if one exists. The payback milestone is a *range* between the
-            LOW-world and HIGH-world crossings of its savings curve, so without a comparison
-            there is no payback question to answer and the milestone is simply absent.
+        comparison: The variant comparison, if any; the payback milestone is the range between the LOW and HIGH
+            crossings of its savings curve and is absent without one.
 
     Returns:
-        The four lane groups. Empty lanes are returned empty rather than omitted, so the renderer
-        can name what it is not drawing — in the document, under its table of contents — instead
-        of silently drawing fewer lanes.
+        The four lane groups; empty lanes are returned empty, so the renderer can name what it skips.
     """
     horizon = result.parameters.observation_period_in_years
     assets = component_event_strip(result)
@@ -3245,8 +2637,7 @@ def lifecycle_lanes(
         )
     )
     if comparison is not None:
-        # The range by value (renovisorissues #73): which world pays back first is not a
-        # property of its slot.
+        # The range by value: which world pays back first is not a property of its slot.
         envelope = PaybackEnvelope.of(
             band_zero_crossings(comparison.cumulative_discounted_savings_in_euro)
         )
@@ -3265,17 +2656,14 @@ def lifecycle_lanes(
     )
 
 
-# ============================================================================ V10 sources & uses
+# ============================================================================ sources & uses
 
 @dataclass(frozen=True)
 class FundingNode:
-    """One node of the sources-and-uses statement: a label and an amount in euros (V10).
+    """One node of the sources-and-uses statement: a label and an amount in euro.
 
-    Amounts are positive on both sides — a source and a use of the same 10,000 EUR are the same
-    number seen from two ends — so the double-entry property is a plain equality of the two
-    column totals rather than a sign convention the reader has to hold in their head.
-    `category` is carried where one exists, so the renderer can hue the node like every other
-    mark of the same money.
+    Amounts are positive on both sides, so the balance is a plain equality of the two column totals. `category` is set
+    where one exists, for colouring.
     """
 
     label: str
@@ -3286,7 +2674,7 @@ class FundingNode:
     #: funding structure that does not exist. None for the untied sources (own capital, a loan
     #: taken against the investment as a whole).
     subject: Optional[str] = None
-    #: The raw subsidy scheme id behind a support node, when there is one (Q20). `label` carries
+    #: The raw subsidy scheme id behind a support node, when there is one. `label` carries
     #: the friendly name a reader sees; this is what a reviewer greps the catalog with, and the
     #: renderers put it in the node's tooltip.
     scheme_id: Optional[str] = None
@@ -3294,13 +2682,11 @@ class FundingNode:
 
 @dataclass(frozen=True)
 class SourcesAndUses:
-    """Where the year-0 money comes from and what it buys (V10).
+    """Where the year-0 money comes from and what it buys.
 
-    The project-finance statement ("Mittelherkunft und Mittelverwendung") for year 0 in the
-    BEST_ESTIMATE slot: subsidy schemes, loan disbursements and own capital on the left; the
-    gross investment per subject plus planning and removal on the right.
-    `funding_sources_and_uses` validates that the two sides balance, which is what makes this a
-    statement rather than a picture.
+    The sources-and-uses statement (Mittelherkunft und Mittelverwendung) for year 0 in the best-estimate slot: subsidy
+    schemes, loan disbursements and own capital on the left; gross investment per subject plus planning and removal on
+    the right. `funding_sources_and_uses` checks that the sides balance.
     """
 
     sources: List[FundingNode]
@@ -3308,7 +2694,7 @@ class SourcesAndUses:
     gross_year_zero_investment_in_euro: float
 
     def total_sources_in_euro(self) -> float:
-        """Sum of the left column — equal to the uses total by construction."""
+        """Return the sum of the left column, equal to the uses total by construction."""
         return sum(node.amount_in_euro for node in self.sources)
 
     def total_uses_in_euro(self) -> float:
@@ -3316,20 +2702,15 @@ class SourcesAndUses:
         return sum(node.amount_in_euro for node in self.uses)
 
     def has_external_funding(self) -> bool:
-        """True when anything but own capital funds year 0 — the chart's skip condition."""
+        """Return True when anything but own capital funds year 0; the chart is skipped otherwise."""
         return any(node.category is not None for node in self.sources)
 
     def ribbons(self) -> List[Tuple[str, str, float]]:
-        """(source label, use label, euros) triples whose widths tile both columns exactly.
+        """Return (source label, use label, euros) ribbons whose widths fill both columns exactly.
 
-        The allocation the Sankey draws, decided here rather than in the renderer because it is a
-        statement about the money and not about geometry. Two passes: a source that names a
-        subject (a subsidy scheme awarded for one measure) fills that use first, up to what the
-        use still needs; whatever is left — own capital, the loan, an over-award — is spread over
-        the remaining capacity in proportion to it, since those sources genuinely are untied.
-
-        Both column totals are preserved exactly, which is what keeps the double-entry property
-        the view validated visible in the drawing.
+        Two passes: a source tied to a subject (a subsidy awarded for one measure) first fills that use, up to what it
+        still needs; the untied rest (own capital, the loan, an over-award) is spread over the remaining capacity in
+        proportion to it. Both column totals are kept exactly.
         """
         capacity = {node.label: node.amount_in_euro for node in self.uses}
         pairs: List[Tuple[str, str, float]] = []
@@ -3355,26 +2736,16 @@ class SourcesAndUses:
 
 
 def funding_sources_and_uses(result: LifecycleCostResult) -> SourcesAndUses:
-    """Year-0 funding sources against year-0 uses, balanced to the euro (V10).
+    """Return year-0 funding sources against year-0 uses, balanced to the euro.
 
-    Sources are one node per subsidy scheme (labelled with the display name the scheme carries,
-    which is where the `subsidy_scheme_id` dimension earns its keep — "state -> KfW 261 -> heat
-    pump" reads very differently from one grey "subsidies" node), **one** node carrying every
-    year-0 loan disbursement together, and own capital as the balancing item. Debt is one node
-    rather than one per disbursement because a loan is not tied to a measure the way an award is:
-    the timeline records no subject for it that the Sankey could draw a ribbon to, so splitting it
-    would produce several identically untied nodes that the allocation would then spread the same
-    way. Uses are the gross year-0 investment per subject plus the planning and removal categories
-    as their own nodes.
-
-    A *negative* balancing item — support plus debt exceeding the gross investment — is a data
-    defect rather than a rendering case, and raises.
-
-    Reconciliation: sources total == uses total == gross year-0 investment, validated here and
-    restated in the caption.
+    Sources: one node per subsidy scheme, labelled with its display name; one node for all year-0 loan disbursements
+    together, since the timeline ties a loan to no subject; and own capital as the balancing item. Uses: the gross
+    year-0 investment per subject plus planning and removal as their own nodes. The view checks that sources, uses and
+    the gross year-0 investment are equal.
 
     Raises:
-        CostDataError: If own capital comes out negative, or if the two columns do not balance.
+        CostDataError: If own capital comes out negative (support plus debt exceed the investment), or if the two
+            columns do not balance.
     """
     scoped = [entry for entry in result.scoped_timeline().entries if entry.year == 0]
     uses: List[FundingNode] = []
@@ -3445,16 +2816,14 @@ def funding_sources_and_uses(result: LifecycleCostResult) -> SourcesAndUses:
     return statement
 
 
-# ============================================================================ V11 subject flows
+# ============================================================================ subject flows
 
 @dataclass(frozen=True)
 class SubjectGroupFlow:
-    """One ribbon from a subject to a cost group, in present value (V11).
+    """One ribbon from a subject to a cost group, in present value.
 
-    Cost and credit ribbons are separate records rather than one signed number: a Sankey ribbon
-    has no sign, so a PV system's investment and its feed-in revenue are two ribbons of the same
-    subject, one solid and one hatched, and nothing is netted. `amount_in_euro` is therefore
-    always positive and `is_credit` says which side of the divider the ribbon belongs on.
+    Costs and credits are separate ribbons, since a ribbon has no sign: `amount_in_euro` is always positive and
+    `is_credit` says which side of the divider it belongs on.
     """
 
     subject: str
@@ -3466,25 +2835,19 @@ class SubjectGroupFlow:
 def subject_category_flows(
     result: LifecycleCostResult, mapping: Mapping[CostCategory, GroupKey]
 ) -> List[SubjectGroupFlow]:
-    """What each subject causes, split by cost group and by sign (V11).
+    """Return what each subject costs and earns, split by display group.
 
-    A subject × display-group pivot of the scoped timeline in present value (BEST_ESTIMATE slot),
-    with cost and credit contributions kept apart at entry level, so both margins of the pivot
-    reconcile against tested result fields: a subject's cost ribbons sum to its gross present
-    cost, cost minus credit is its `npv_by_component` entry, and a group's ribbons sum to the
-    folded `npv_by_category`.
-
-    Reconciliation is by construction (the same discounted entries, partitioned two ways) rather
-    than by a check, because every ribbon here *is* one bucket of `npv_by` — literally so: the
-    pivot is `CashFlowTimeline.npv_split_by`, the same one the treemap builds its cells with, so
-    the two charts cannot disagree about what a subject cost.
+    A subject x display-group pivot of the scoped timeline in present value (best-estimate slot), built with
+    `CashFlowTimeline.npv_split_by` like the treemap, with costs and credits kept apart per entry. A subject's cost
+    ribbons sum to its gross present cost, cost minus credit is its `npv_by_component` value, and a group's ribbons sum
+    to the folded `npv_by_category`.
 
     Raises:
         CostDataError: If `mapping` declares no display group for a category on the timeline.
     """
 
     def cell_of(item: CashFlowEntry) -> Tuple[str, Any]:
-        """The (subject, display group) cell one entry belongs in."""
+        """Return the (subject, display group) cell one entry belongs in."""
         return (item.subject, _display_group_of(item.category, mapping))
 
     cost_cells, credit_cells = result.scoped_timeline().npv_split_by(
@@ -3500,18 +2863,11 @@ def subject_category_flows(
 
 @dataclass(frozen=True)
 class SubjectFlowMargins:
-    """The two margins of the V11 pivot, as the node labels and the caption print them (Q28 R6).
+    """The per-node sums behind the subject-to-group Sankey, as its labels and caption print them.
 
-    The cost-shapes Sankey drew ribbons with no amounts anywhere, so a node's extent — its costs
-    *plus* the magnitude of its credits, stacked and never netted — was a quantity no table in the
-    report publishes and no reader could reproduce. These are the sums behind that geometry: per
-    subject the solid and the dashed side separately, per group node its signed total. They live
-    on the view side because presentation may format numbers but may not derive them (seam 4), and
-    because the node label, the tooltip and the caption must all print the same figure.
-
-    `net_of` is the difference, i.e. what the component breakdown publishes as the subject's NPV;
-    the caption states it beside the extent so the two numbers a reader can find in a table (net)
-    and on the chart (extent) are visibly the same data read two ways.
+    Per subject the cost and the credit side separately, per group node its signed total. A node's drawn extent is
+    costs plus credits stacked, which no table publishes, so these sums let labels, tooltip and caption print the same
+    figures. `net_of` gives the subject's NPV as the breakdown table shows it.
     """
 
     costs_by_subject: Dict[str, float]
@@ -3523,11 +2879,11 @@ class SubjectFlowMargins:
         return self.costs_by_subject.get(subject, 0.0) + self.credits_by_subject.get(subject, 0.0)
 
     def net_of(self, subject: str) -> float:
-        """Costs minus credits — the subject's net present value, as the breakdown table prints it."""
+        """Return costs minus credits, the subject's net present value as the breakdown table prints it."""
         return self.costs_by_subject.get(subject, 0.0) - self.credits_by_subject.get(subject, 0.0)
 
     def widest_subject(self) -> Optional[str]:
-        """The subject with the largest node, i.e. the one the caption uses as its worked example."""
+        """Return the subject with the largest node, used as the caption's worked example."""
         if not self.costs_by_subject and not self.credits_by_subject:
             return None
         subjects = set(self.costs_by_subject) | set(self.credits_by_subject)
@@ -3535,18 +2891,16 @@ class SubjectFlowMargins:
 
 
 def subject_flow_margins(flows: Sequence[SubjectGroupFlow]) -> SubjectFlowMargins:
-    """Per-node sums of the V11 ribbons: the numbers the Sankey's labels state (Q28 R6).
+    """Sum the subject-to-group ribbons per node, giving the numbers the Sankey's labels state.
 
-    A pure re-aggregation of the ribbons the chart already draws, so a label can never disagree
-    with the geometry beside it: the same list is summed by subject (split by side) and by group
-    node (signed, credit groups negative), and nothing else is consulted.
+    Only the ribbons are read, so labels cannot disagree with the drawing: summed by subject (split by side) and by
+    group node (signed, credit groups negative).
 
     Args:
         flows: The ribbons from `subject_category_flows`, in any order.
 
     Returns:
-        The margins; subjects with only credits appear in `credits_by_subject` alone, and
-        `costs_by_subject.get(subject, 0.0)` is the honest zero for them.
+        The margins; a credit-only subject appears only in `credits_by_subject`.
     """
     cost_totals: Dict[str, float] = {}
     credit_totals: Dict[str, float] = {}
@@ -3564,22 +2918,15 @@ def subject_flow_margins(flows: Sequence[SubjectGroupFlow]) -> SubjectFlowMargin
     )
 
 
-# ============================================================================ V12 energy balance
+# ============================================================================ energy balance
 
 class EnergyBalanceLayout:
-    """The node vocabulary and the tolerances of the household energy balance (V12).
+    """Node vocabulary and tolerances of the household electricity balance.
 
-    One documented home for what the balance is made of, so neither the view nor a renderer has to
-    decide it. The structure is the busbar every PV-monitoring dashboard draws: sources on the
-    left, the house's electricity bus in the middle, sinks on the right — and the battery on both
-    sides, discharging into the bus and charging out of it, which is what a pass-through *is* when
-    only its two terminals are measured. Attributing the charge to a particular source or the
-    discharge to a particular load would be an allocation the simulation never made, so it is not
-    drawn.
-
-    `MINIMUM_DEVICE_FLOWS` is the skip threshold of the Q16 decision: the two grid roles come from
-    the meter, which every run has, so a balance that carries nothing else has no devices in it
-    and must skip rather than draw a picture of a meter talking to itself.
+    Sources on the left, the house's electricity bus in the middle, sinks on the right, with the battery on both sides
+    (discharging into the bus, charging from it); charge and discharge are not attributed to particular sources or
+    loads, as the simulation does not. `MINIMUM_DEVICE_FLOWS` is the skip threshold: the two grid roles come from the
+    meter in every run, so a balance needs device flows beyond them.
     """
 
     SOURCE_ROLES = (
@@ -3619,12 +2966,10 @@ class EnergyBalanceLayout:
 
 @dataclass(frozen=True)
 class EnergyBalanceNode:
-    """One terminal of the household energy balance: a quantity, a label and its money annotation.
+    """One terminal of the household energy balance: a quantity in kWh per year, a label and its money annotation.
 
-    The unit is kWh per year throughout — the whole point of the Q16 redesign is that the diagram
-    never changes unit mid-flight. `annotation_in_euro` is what that quantity *costs or earns* in
-    year 1, filled only for the two nodes that cross a billing boundary (grid import, grid export)
-    and None everywhere else, because no bill exists for electricity that never leaves the house.
+    `annotation_in_euro` is the year-1 cost or revenue, set only on the two nodes that cross a billing boundary (grid
+    import and export) and None elsewhere.
     """
 
     role: Optional[EnergyFlowRole]
@@ -3635,29 +2980,15 @@ class EnergyBalanceNode:
 
 @dataclass(frozen=True)
 class EnergyBalanceFlows:
-    """The year-1 household electricity balance: sources, a bus and sinks (V12).
+    """The year-1 household electricity balance: sources, a bus and sinks, in kWh.
 
-    Everything the energy-balance Sankey draws and every number its caption states, in kWh. The
-    two lists are the terminals; the bus in the middle carries `bus_total_in_kwh`, which is both
-    the sum of the sources and the sum of the sinks — conservation holds at every node by
-    construction because the imbalance between the drawn terminals is booked as an explicit
-    `losses / unattributed` terminal rather than absorbed silently.
-
-    `self_consumption_share` is the share of the PV generation that did not leave the house, and
-    `self_sufficiency_share` the share of the house's own consumption that did not come from the
-    grid; both are None when their denominator is zero (no PV, or no attributed consumption)
-    rather than being reported as a misleading zero. `battery_round_trip_loss_in_kwh` is the
-    difference between what went into the battery and what came back out — the loss the caption
-    names, so that the battery reading as a lossy pass-through is stated rather than inferred. It
-    is clamped at zero: a year in which the battery discharged more than it charged is a year that
-    began with carried-over charge, and the surplus is energy stored *before* the measured year
-    rather than energy the battery created. Reporting that as a negative loss would invite the
-    reading "the battery gained energy", which is the one thing it certainly did not do.
-
-    `unattributed_roles_in_kwh` is the honest remainder: role names the record carried that this
-    reader's `EnergyFlowRole` vocabulary does not contain. They have no side of the bus, so they
-    cannot become a terminal without inventing a direction — but they are not dropped either, and
-    a caption that lists them tells a reader exactly how much energy the diagram is not showing.
+    The bus carries `bus_total_in_kwh`, the sum of both the sources and the sinks; any imbalance between the drawn
+    terminals becomes an explicit `losses / unattributed` terminal. `self_consumption_share` is the share of PV
+    generation used in the house and `self_sufficiency_share` the share of consumption not from the grid; both are None
+    when their denominator is zero. `battery_round_trip_loss_in_kwh` is charge minus discharge, clamped at zero (more
+    discharge than charge means charge carried over from the previous year). `unattributed_roles_in_kwh` lists role
+    names this reader's `EnergyFlowRole` does not know; they have no side of the bus and are reported instead of
+    dropped.
     """
 
     sources: List[EnergyBalanceNode]
@@ -3673,23 +3004,17 @@ class EnergyBalanceFlows:
 def _read_energy_attribution(
     result: LifecycleCostResult,
 ) -> Tuple[Dict[EnergyFlowRole, float], Dict[str, float]]:
-    """One walk of the attribution record, returning the placeable roles and the rest.
+    """Read the energy attribution record once, returning the placeable roles and the rest.
 
-    The record is read twice by the balance — once for what can be drawn, once for what cannot —
-    and the two readings are the same parse of the same dictionary with the two branches of one
-    `try` swapped. Walking it once and returning both halves is what keeps them exhaustive and
-    disjoint by construction: no role can be absent from both because a second loop was written
-    with a slightly different condition. The two public functions below are the two projections
-    of this one pass and keep their own names, because a caller asking "what can I draw" should
-    not have to unpack a pair.
+    One pass keeps the two halves exhaustive and disjoint; `energy_balance_quantities` and
+    `_unattributed_energy_roles_in_kwh` are its two projections.
 
     Args:
         result: The evaluated perspective.
 
     Returns:
-        `(placeable, unplaceable)` — role -> annual kWh for the roles this reader's
-        `EnergyFlowRole` knows, and role *name* -> annual kWh for the rest. Zero-quantity roles
-        are dropped from both, since a terminal carrying nothing is not a flow.
+        `(placeable, unplaceable)`: role -> annual kWh for roles `EnergyFlowRole` knows, and role name -> annual kWh
+            for the rest. Zero quantities are dropped from both.
     """
     totals: Dict[EnergyFlowRole, float] = {}
     unknown: Dict[str, float] = {}
@@ -3708,51 +3033,30 @@ def _read_energy_attribution(
 
 
 def energy_balance_quantities(result: LifecycleCostResult) -> Dict[EnergyFlowRole, float]:
-    """The result's per-subject energy record collapsed onto the balance roles, in annual kWh.
+    """Return the result's per-subject energy record summed per balance role, in annual kWh.
 
-    The one place the subject dimension is dropped: the balance is a picture of the *house*, so
-    two PV arrays are one PV generation node. Only role names this reader's `EnergyFlowRole`
-    knows appear here — a record written by a newer extraction can carry others, and those are
-    *not* silently absorbed by the residual node, which is computed from the drawn terminals
-    alone. `_unattributed_energy_roles_in_kwh` is the other half of the same pass and collects
-    them instead, and `energy_balance_flows` carries them out on
-    `EnergyBalanceFlows.unattributed_roles_in_kwh`, so an unreadable role shrinks the diagram
-    visibly rather than invisibly.
+    The subject dimension is dropped here (two PV arrays make one PV node). Only roles `EnergyFlowRole` knows appear;
+    others are returned by `_unattributed_energy_roles_in_kwh` and carried on
+    `EnergyBalanceFlows.unattributed_roles_in_kwh`, not absorbed into the residual node.
     """
     return _read_energy_attribution(result)[0]
 
 
 def _unattributed_energy_roles_in_kwh(result: LifecycleCostResult) -> Dict[str, float]:
-    """Every attribution role name the balance vocabulary cannot place, with its annual kWh.
+    """Return every attribution role name the balance cannot place, with its annual kWh.
 
-    The complement of `energy_balance_quantities`, and the other projection of
-    `_read_energy_attribution`. A role this reader does not know has no side of the busbar —
-    drawing it as a source or as a sink would be a guess about direction that the stored record
-    does not support — so it cannot become a terminal. What it must not do is disappear: it is
-    real energy, and a balance that quietly drops it looks exactly like a balance that never had
-    it.
+    The complement of `energy_balance_quantities`. An unknown role has no known direction, so it cannot be a terminal,
+    but it is reported rather than dropped.
     """
     return _read_energy_attribution(result)[1]
 
 
 def has_energy_balance(result: LifecycleCostResult) -> bool:
-    """Whether the result carries enough device flows for the household energy balance.
+    """Return whether the result has enough device flows to draw the household energy balance.
 
-    The skip predicate of decision Q16, and deliberately stricter than "is the field non-empty":
-    a result whose only flows are the meter's own grid import and export carries no *device*
-    information at all, and drawing a two-node diagram of the meter feeding itself was exactly the
-    content-free stub the redesign retired. `MINIMUM_DEVICE_FLOWS` device flows is the floor.
-    Roles the vocabulary cannot place do not count: they are never drawn, so they cannot make a
-    diagram worth drawing.
-
-    The count alone is not enough, and the docstring promised more than the code checked: a
-    busbar needs a side to come from and a side to go to, so the record must also place at least
-    one `EnergyBalanceLayout.SOURCE_ROLES` role and at least one `SINK_ROLES` role. Two device
-    flows that are both sinks (a heat pump and a household load with no generation and no import)
-    draw a bus fed by nothing, whose entire content is then the residual terminal — the same
-    content-free picture the device floor exists to refuse, arrived at from the other direction.
-    The meter's own roles count towards *this* half of the test, because an all-electric house
-    genuinely sourced from the grid is a balance worth drawing.
+    Requires at least `MINIMUM_DEVICE_FLOWS` placeable device flows (the meter's own grid import and export do not
+    count), and at least one placeable role from `EnergyBalanceLayout.SOURCE_ROLES` and one from `SINK_ROLES`, where
+    the grid roles do count. A bus fed by nothing, or a meter feeding itself, is not drawn.
     """
     quantities = energy_balance_quantities(result)
     devices = [role for role in quantities if role not in EnergyBalanceLayout.METER_ROLES]
@@ -3764,35 +3068,26 @@ def has_energy_balance(result: LifecycleCostResult) -> bool:
 
 
 def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
-    """Where the house's electricity came from and where it went, in year-1 kWh (V12).
+    """Return where the house's electricity came from and where it went, in year-1 kWh.
 
-    The pure-kWh redesign of decision Q16: sources (PV generation, grid import, battery
-    discharge), the house's electricity bus, sinks (heat pump, household, grid export, battery
-    charge). Money appears only as an annotation on the two grid nodes, read from
-    `carrier_year_one_bills`, because the EUR/kWh basis (D26) makes that a one-line statement
-    rather than a second unit flowing through the diagram.
-
-    Reconciliation, all validated here rather than left to a test: the grid import and export
-    nodes equal the bought and sold quantities of `annual_energy_quantities_by_carrier` — the same
-    meter the bills are computed from — and the two sides of the bus balance exactly, because
-    whatever they do not account for is booked as a `losses / unattributed` terminal on the
-    shorter side. The battery is a pass-through whose round-trip loss is reported rather than
-    hidden. Roles the vocabulary cannot place travel out on `unattributed_roles_in_kwh`, since
-    they are outside the balance rather than inside its residual; the renderers print them, which
-    is the only place a reader can act on them, and this module logs nothing.
+    Sources (PV generation, grid import, battery discharge), the bus, and sinks (heat pump, household, grid export,
+    battery charge). Money appears only as annotations on the two grid nodes, read from `carrier_year_one_bills`. The
+    view checks that the grid nodes equal the bought and sold quantities of `annual_energy_quantities_by_carrier` (the
+    meter the bills come from); the two sides of the bus balance because any remainder becomes a `losses /
+    unattributed` terminal on the shorter side. Unknown roles go to `unattributed_roles_in_kwh` for the renderers to
+    print.
 
     Args:
-        result: The evaluated perspective. Its `annual_energy_attribution_by_subject_in_kwh` is the
-            source of every quantity; `has_energy_balance` is the caller's skip check.
+        result: The evaluated perspective; quantities come from `annual_energy_attribution_by_subject_in_kwh`, and
+            callers check `has_energy_balance` first.
 
     Returns:
-        The terminals, the bus total, the three derived figures the caption states and the roles
-        the diagram could not place.
+        The terminals, the bus total, the three derived figures the caption states and the roles that could not be
+            placed.
 
     Raises:
-        CostDataError: When the result carries no usable device flows (the located error the skip
-            predicate exists to avoid), or when a grid node disagrees with the metered carrier
-            quantity it must equal.
+        CostDataError: If the result carries no usable device flows, or if a grid node disagrees with the metered
+            quantity.
     """
     if not has_energy_balance(result):
         raise CostDataError(
@@ -3867,32 +3162,16 @@ def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
 def _check_grid_nodes_against_the_meter(
     result: LifecycleCostResult, quantities: Dict[EnergyFlowRole, float]
 ) -> None:
-    """Raises unless the balance's two grid nodes equal the metered carrier quantities.
+    """Raise unless the balance's two grid nodes equal the metered carrier quantities.
 
-    The reconciliation that makes the EUR annotations trustworthy: the import node is annotated
-    with the year-1 electricity bill and the export node with the feed-in revenue, and both bills
-    are computed from `annual_energy_quantities_by_carrier`. If the balance's own grid figures
-    disagreed with those quantities the annotation would price a different number from the one it
-    is written beside, which is the silent kind of wrong this module fails fast on (D25).
-
-    **Why the tolerance is float noise and not a margin.** Since slice 3 the attribution's two
-    grid roles and the billing determinants are summed from the same meter columns, converted by
-    the same unit converter and annualized identically; the two figures are therefore the same
-    arithmetic run twice, and the only difference they can legitimately show is the order the
-    additions happened in. Anything larger is a defect — a second extraction path, a unit slip, a
-    partial year — and widening this tolerance would hide exactly the class of bug it exists to
-    catch. `QUANTITY_RELATIVE_EPSILON` is a millionth, which is float residue on a five-figure
-    kWh total and nothing else.
-
-    A *missing* electricity record is the same failure seen from the other side, and is refused
-    rather than skipped: if the balance is about to draw grid nodes there is nothing to reconcile
-    them against, so their euro annotations would be unchecked figures beside unchecked
-    quantities. A record with no grid nodes at all (an off-grid house) has nothing to check and
-    returns.
+    The import node is annotated with the year-1 electricity bill and the export node with the feed-in revenue, both
+    computed from `annual_energy_quantities_by_carrier`; they must price the same quantity. Both figures come from the
+    same meter columns and conversion, so the tolerance `QUANTITY_RELATIVE_EPSILON` (one millionth) only allows float
+    residue. A record without grid nodes (an off-grid house) returns.
 
     Raises:
-        CostDataError: If a grid node disagrees with the meter, or if grid nodes would be drawn
-            for a result carrying no ELECTRICITY quantities at all.
+        CostDataError: If a grid node disagrees with the meter, or if grid nodes would be drawn for a result with no
+            ELECTRICITY quantities.
     """
     metered = result.annual_energy_quantities_by_carrier.get(EnergyCarrier.ELECTRICITY.value)
     if metered is None:
@@ -3924,16 +3203,13 @@ def _check_grid_nodes_against_the_meter(
             )
 
 
-# ============================================================================ V13 benchmark
+# ============================================================================ wealth benchmark
 
 class WealthBenchmarkGrid:
-    """The interest-rate grid of the fixed-interest benchmark (V13).
+    """The interest-rate grid of the fixed-interest wealth benchmark.
 
-    One tuning namespace for the chart's whole x-axis: which rates the trajectories are drawn
-    for, and hence the window inside which a break-even rate can be reported at all. The window
-    is deliberately closed — the view never extrapolates a break-even rate outside it, and the
-    caption says "break-even rate(s) in the shown range" — because an internal rate of return
-    found by extending a grid is a number nobody checked.
+    Sets the rates the trajectories are drawn for and thus the window in which a break-even rate can be reported; the
+    view never extrapolates a break-even rate outside it.
     """
 
     #: 1 % to 10 % in 1 % steps: the range of savings rates a household actually compares against.
@@ -3942,27 +3218,14 @@ class WealthBenchmarkGrid:
 
 @dataclass(frozen=True)
 class WealthBenchmark:
-    """Wealth advantage of renovating over banking the money, per interest rate (V13).
+    """Wealth advantage of renovating over banking the money, per interest rate.
 
-    `series_by_rate[i][t]` is `W_i(t) = Σ_{j<=t} d_j (1+i)^(t−j)` with `d_j` the differential
-    nominal flow of year j (reference minus variant), so a positive value means the renovator is
-    ahead of the household that did nothing and banked the difference at rate *i*. Interest is
-    nominal and **pre-tax** (owner decision Q14): capital-income taxation is country-specific and
-    the module is applied beyond Germany, so no tax law is baked in and the caption says so.
-
-    The identity `W_i(T) == (1+i)^T · NPV(i)` ties the chart to the engine — future value is
-    discounting run backwards — and is validated here for every grid rate *and* for the parameter
-    rate, which is what makes the verdict at the parameter rate provably the engine's own
-    verdict. The LOW and HIGH bands satisfy the same identity against their own differential
-    flows; those flows are not fields of this object (only the BEST_ESTIMATE series is, since it
-    is what the grid trajectories are built from), so `wealth_benchmark` checks the two bands
-    where it still has them and this class checks everything its own fields can express.
-
-    The shape checks come with it, because a chart cannot draw a trajectory whose rate it does not
-    have an axis position for: the three rate-keyed collections carry exactly the same rates,
-    every trajectory spans years 0..T like the differential flow it is built from, and no reported
-    break-even rate falls outside the drawn window. Together they are what lets a renderer index
-    `series_by_rate[rate]` and place `break_even_rates` without a guard of its own.
+    `series_by_rate[i][t]` is `W_i(t) = sum_{j<=t} d_j (1+i)^(t-j)`, with `d_j` the differential nominal flow of year j
+    (reference minus variant); positive means the renovator is ahead of a household that did nothing and banked the
+    difference at rate i. Interest is nominal and pre-tax, since capital-income tax is country-specific. The class
+    checks `W_i(T) == (1+i)^T * NPV(i)` for every grid rate and the best-estimate parameter-rate line
+    (`wealth_benchmark` checks the LOW and HIGH bands), and that the three rate-keyed collections share the same rates,
+    every trajectory spans years 0..T and no break-even rate lies outside the grid.
     """
 
     rates: List[float]
@@ -3976,12 +3239,12 @@ class WealthBenchmark:
     differential_flow_in_euro: List[float]
 
     def __post_init__(self) -> None:
-        """Validates the shape and the future-value identity stated in the class docstring.
+        """Validate the shape and the future-value identity stated in the class docstring.
 
         Raises:
-            CostDataError: On a rate the three collections do not agree on, a missing slot, a
-                trajectory of the wrong length, a terminal that is not its own series' last
-                point, a broken future-value identity, or a break-even rate outside the grid.
+            CostDataError: On rates the three collections disagree on, a missing slot, a trajectory of the wrong
+                length, a terminal that is not its series' last point, a broken future-value identity, or a break-even
+                rate outside the grid.
         """
         if not self.differential_flow_in_euro:
             raise CostDataError(
@@ -4043,10 +3306,10 @@ class WealthBenchmark:
             )
 
     def terminal_at_parameter_rate(self) -> float:
-        """Terminal wealth advantage at the evaluation's own discount rate.
+        """Return the terminal wealth advantage at the evaluation's own discount rate.
 
-        The number that has to agree in sign with the comparison bridge's NPV delta: if
-        renovating has the lower present cost, the renovator ends up richer, and vice versa.
+        Agrees in sign with the comparison bridge's NPV delta: if renovating has the lower present cost, the renovator
+        ends up richer.
         """
         return self.parameter_series_by_slot[Slot.BEST_ESTIMATE][-1]
 
@@ -4054,20 +3317,16 @@ class WealthBenchmark:
 def _check_future_value_identity(
     rate: float, horizon: int, terminal: float, flows: Sequence[float], what: str
 ) -> None:
-    """Raises unless one benchmark trajectory ends where discounting run backwards says it must.
+    """Raise unless one benchmark trajectory ends at its present value carried forward.
 
-    `W_i(T) == (1+i)^T · NPV(i)` is the tie between the chart and the engine: the future value of
-    a flow series at rate *i* is its present value carried forward, so a trajectory that ends
-    anywhere else is drawn from arithmetic the engine does not do. The present value is recomputed
-    through this module's own `discount_factor` rather than through a local `1/(1+i)**year`, which
-    is the point — it is the engine's discounting the identity is checked against.
+    Checks `W_i(T) == (1+i)^T * NPV(i)`, with NPV recomputed through the package's `discount_factor`.
 
     Args:
         rate: The rate the trajectory was future-valued at.
         horizon: T, the last year of the series.
         terminal: `W_i(T)`, the trajectory's last point.
-        flows: The differential nominal flow the trajectory was built from, index = year.
-        what: How to name this trajectory in the error, e.g. "grid rate 4 %".
+        flows: The differential nominal flow, index = year.
+        what: The trajectory's name in the error, e.g. "grid rate 4 %".
 
     Raises:
         CostDataError: If the two sides differ by more than float residue.
@@ -4083,34 +3342,17 @@ def _check_future_value_identity(
 
 
 def wealth_benchmark(reference: LifecycleCostResult, variant: LifecycleCostResult) -> WealthBenchmark:
-    """The 'should I just leave the money in the bank' question, as one series (V13).
+    """Answer "should I just leave the money in the bank" as one series per interest rate.
 
-    If the do-nothing household banks the unspent renovation money and the renovating household
-    banks its annual savings, both at rate *i*, the wealth *difference* between the two
-    strategies is a single series: the differential nominal cash flow, future-valued at *i*. That
-    is what this view computes, for the grid on `WealthBenchmarkGrid` plus the evaluation's own
-    parameter rate (the one line that also carries a LOW/HIGH band, slot-wise).
-
-    It takes the two results rather than a `VariantComparison` because the comparison publishes
-    the differential only as a discounted cumulative curve at the parameter rate, and a rate grid
-    needs the undiscounted per-year differential — `annual_cost_series_nominal_in_euro` on both
-    sides.
-
-    Reconciliation: `W_i(T) == (1+i)^T · NPV(i)` for every grid rate and for the parameter rate in
-    all three worlds, with `NPV(i)` recomputed from the same differential flows through the
-    module's own `discount_factor`. The grid rates and the BEST_ESTIMATE parameter line are
-    checked by `WealthBenchmark.__post_init__`, which can express them from the object's own
-    fields; the LOW and HIGH bands are checked here, where their differential flows still exist.
-
-    The two results must share an observation horizon. A differential between series of different
-    lengths is not a differential — the shorter side would contribute nothing for the years it
-    does not have, which reads as "the reference costs nothing after year 10" rather than as "the
-    reference was evaluated over ten years" — so a mismatch is refused instead of truncated.
+    If the do-nothing household banks the unspent renovation money and the renovating one banks its annual savings,
+    both at rate i, the wealth difference is the differential nominal cash flow future-valued at i. Computed for the
+    `WealthBenchmarkGrid` rates plus the evaluation's own rate (with a LOW/HIGH band). It needs the two results, not a
+    `VariantComparison`, because a rate grid needs the undiscounted per-year differential. The future-value identity is
+    checked for the LOW and HIGH bands here and for the rest in `WealthBenchmark.__post_init__`.
 
     Raises:
-        CostDataError: If the two results were evaluated over different horizons, if either
-            nominal series does not span its own horizon, or if the future-value identity fails,
-            which would mean the chart and the engine's discounting disagree.
+        CostDataError: If the two results have different horizons, if either nominal series does not span its horizon,
+            or if the future-value identity fails.
     """
     horizon = variant.parameters.observation_period_in_years
     if reference.parameters.observation_period_in_years != horizon:
@@ -4168,12 +3410,10 @@ def wealth_benchmark(reference: LifecycleCostResult, variant: LifecycleCostResul
 
 
 def _terminal_zero_crossings(terminal_by_rate: Mapping[float, float]) -> List[float]:
-    """Every rate inside the grid at which the terminal advantage changes sign.
+    """Return every rate inside the grid at which the terminal advantage changes sign.
 
-    Reported as a list rather than as "the" internal rate of return on purpose: a differential
-    series that changes sign more than once can have several, and claiming a unique IRR for such
-    a project is a standard finance mistake. Crossings are linearly interpolated between adjacent
-    grid points, and nothing outside the grid window is ever reported.
+    A list, not a single internal rate of return, because a differential series that changes sign more than once can
+    have several. Crossings are linearly interpolated between grid points; nothing outside the grid is reported.
     """
     rates = sorted(terminal_by_rate)
     crossings: List[float] = []
@@ -4188,27 +3428,16 @@ def _terminal_zero_crossings(terminal_by_rate: Mapping[float, float]) -> List[fl
     return crossings
 
 
-# ============================================================================ V14 monthly burden
+# ============================================================================ monthly burden
 
 class BurdenCategories:
-    """What counts as a monthly burden, declared rather than inferred (V14, decision Q15 revised).
+    """Which cost categories count as a monthly burden.
 
-    The definitional heart of the chart, in one documented place. *Recurring* flows are what a
-    household budgets for: debt service, energy, maintenance and fixed operation, taxes and
-    levies, minus the recurring credits (feed-in revenue, a received levy). Everything to do with
-    the year-0 financing event — the investment itself, planning, removal, the upfront support
-    and the loan disbursement — is excluded: it is not a monthly burden, the funding statement
-    shows it in full, and including it would put a 40,000 EUR "month" at the left edge of the
-    axis.
-
-    **Replacement years are excluded too** (Q15 as revised, after the owner reviewed the rendered
-    chart). A replacement is capital expenditure — the same economic object as the year-0
-    investment — so drawing it as a monthly burden while excluding year 0 was inconsistent, and
-    no bank's monthly advisory shows replacement spikes; it smooths them into a maintenance
-    reserve. `REPLACEMENT` therefore moves to the `REPLACEMENT` set below, whose equivalent annual
-    cost becomes the reserve overlay line. `REPLACEMENT_RESERVE` joins it: where a perspective
-    books an explicit sinking-fund payment, counting it in the bars *and* adding the derived
-    reserve on top would charge the same replacement twice.
+    Recurring flows are what a household budgets for: debt service, energy, maintenance and fixed operation, taxes and
+    levies, minus recurring credits (feed-in revenue, a received levy). The year-0 financing event (investment,
+    planning, removal, upfront support, loan disbursement) is excluded; it is shown in the funding statement.
+    Replacements are capital expenditure and excluded as well: the `REPLACEMENT` set, which includes
+    `REPLACEMENT_RESERVE` so a booked sinking fund is not counted twice, becomes the smoothed reserve line instead.
     """
 
     RECURRING = frozenset(
@@ -4234,18 +3463,12 @@ class BurdenCategories:
 
 @dataclass(frozen=True)
 class MonthlyBurden:
-    """The monthly recurring cost per year plus the smoothed replacement reserve (V14).
+    """The monthly recurring cost per year plus the smoothed replacement reserve.
 
-    Two figures that only make sense together after the Q15 revision: `series` is the recurring
-    burden the bars draw, year by year and slot-wise, and `replacement_reserve_per_month` is the
-    constant a prudent owner would put aside for the capital events those bars deliberately no
-    longer contain. The chart draws the second as a dashed line above the first, which is why
-    both travel in one object — a caller cannot pick up the bars and forget the reserve.
-
-    The reserve is the equivalent annual cost of the replacement flows divided by twelve: the
-    replacement categories' NPV multiplied by the parameters' annuity factor, the same capital
-    recovery factor the headline EAC KPI uses. It is zero for an evaluation that books no
-    replacement, in which case the chart omits the line rather than drawing a flat zero.
+    `series` is the recurring burden the bars draw, year by year and slot-wise; `replacement_reserve_per_month` is the
+    constant to set aside for the replacements the bars exclude, drawn as a dashed line. It is the replacement
+    categories' NPV times the annuity factor (the factor of the headline EAC), divided by twelve, and zero when nothing
+    is replaced.
     """
 
     series: List[UncertainValue]
@@ -4253,23 +3476,12 @@ class MonthlyBurden:
 
 
 def monthly_burden_series(result: LifecycleCostResult) -> MonthlyBurden:
-    """Recurring cost per month, year by year, plus the replacement reserve (V14).
+    """Return the recurring cost per month, year by year, plus the replacement reserve.
 
-    The recurring categories of `BurdenCategories` off the scoped timeline, slot-wise, divided by
-    twelve; index = year. Neither the year-0 financing event nor a replacement year appears,
-    because neither owns a recurring category — the rule is stated once on the namespace class
-    rather than as a year filter here. The replacements come back as
-    `replacement_reserve_per_month`, the equivalent annual cost of the replacement-category NPV
-    over twelve months, computed with `parameters.annuity_factor()` so it is the same smoothing
-    the headline EAC applies to everything else.
-
-    Reconciliation: `series[1]` is the recurring part of `monthly_cost_year1_in_euro` — the
-    published field is *already* a monthly figure, so the two are compared directly and the
-    difference between them is exactly year 1's non-recurring flows; the series times twelve
-    re-sums to the recurring subset of `annual_cost_series_nominal_in_euro`; and twelve times the
-    reserve divided by the annuity factor gives the replacement categories' NPV back. All three
-    are checked in the tests, and all three are true by construction because this is a filter and
-    a rescaling of the same entries.
+    The `BurdenCategories` recurring categories of the scoped timeline, slot-wise, divided by twelve; index = year.
+    Replacements return as `replacement_reserve_per_month`, using `parameters.annuity_factor()`. `series[1]` is the
+    recurring part of the monthly `monthly_cost_year1_in_euro`; twelve times the series is the recurring subset of
+    `annual_cost_series_nominal_in_euro`; the tests check both and the reserve.
     """
     horizon = result.parameters.observation_period_in_years
     per_year = [UncertainValue.exact(0.0) for _ in range(horizon + 1)]
@@ -4289,22 +3501,18 @@ def monthly_burden_series(result: LifecycleCostResult) -> MonthlyBurden:
 
 
 def _recurring_entries_by_year(result: LifecycleCostResult) -> List[List[CashFlowEntry]]:
-    """The scoped timeline's recurring flows, bucketed by year and clamped to the horizon (V14).
+    """Return the scoped timeline's recurring flows, bucketed by year 0..T.
 
-    The one place V14's *selection* lives — which categories are a monthly burden and which years
-    are on the axis. Both the total series and the per-group split are built from this, because
-    they are drawn on top of each other: the stacked bars are the whiskered totals split by
-    colour, and a split that filtered one category differently, or ran one year further, would
-    produce a stack that does not add up to the bar it fills. The two callers each divide by
-    `TimelineAggregation.MONTHS_PER_YEAR` themselves, since one sums bands and the other sums
-    best-estimate floats per category, but they select the same entries by construction.
+    The single selection of which categories count as a monthly burden and which years are on the axis. Both
+    `monthly_burden_series` and `monthly_burden_by_group` build on it, so the stacked bars add up to the totals they
+    fill; each divides by `TimelineAggregation.MONTHS_PER_YEAR` itself.
 
     Args:
         result: The perspective whose burden is drawn.
 
     Returns:
-        One list per year 0..T, index = year; a year with no recurring flow is an empty list
-        rather than a missing row, so the two views stay index-aligned.
+        One list per year, index = year; a year without recurring flows is an empty list, so the two views stay
+            index-aligned.
     """
     horizon = result.parameters.observation_period_in_years
     rows: List[List[CashFlowEntry]] = [[] for _ in range(horizon + 1)]
@@ -4317,13 +3525,10 @@ def _recurring_entries_by_year(result: LifecycleCostResult) -> List[List[CashFlo
 def monthly_burden_by_group(
     result: LifecycleCostResult, mapping: Mapping[CostCategory, GroupKey]
 ) -> List[Dict[GroupKey, float]]:
-    """The monthly burden split by display group, BEST_ESTIMATE slot — the stack behind the bars.
+    """Return the monthly burden split by display group, best-estimate slot, for the stacked bars.
 
-    The same filter as `monthly_burden_series` (V14) — literally the same, through
-    `_recurring_entries_by_year` — folded onto the caller's display groups so the chart can stack
-    the bars without adding anything itself. Row order is the year index, and a year with no
-    recurring flow folds to an empty dict rather than disappearing, so the two views stay
-    index-aligned.
+    Uses the same selection as `monthly_burden_series` (`_recurring_entries_by_year`) and folds it onto the caller's
+    groups. Row order is the year index; a year without recurring flows is an empty dict.
 
     Raises:
         CostDataError: If `mapping` declares no display group for a recurring category.
@@ -4340,37 +3545,19 @@ def monthly_burden_by_group(
     return fold_category_matrix(rows, mapping)
 
 
-# ============================================================================ V15 equity build-up
+# ============================================================================ equity build-up
 
 @dataclass(frozen=True)
 class AssetDebtSeries:
-    """Book value, outstanding debt and the equity between them, per year (V15).
+    """Book value, outstanding debt and the equity between them, per year, in the best-estimate slot.
 
-    Three year-indexed series in the BEST_ESTIMATE slot plus every interval in which equity is
-    negative — the "underwater" case a bank checks for. The book value is straight-line
-    depreciation of every install and replacement the timeline *charged*, on the same basis the
-    residual calculator uses, which is why `book_value_in_euro[-1]` equals the booked
-    residual-value credit exactly; that endpoint identity is the chart's audit weight.
-
-    `debt_in_euro` is the outstanding balance **clamped at zero**. A negative balance is an
-    overpayment artefact — a perspective whose booked principal repayments add up to more than its
-    disbursement — and it is not debt: the loan-free rule already reads any balance at or below
-    zero as repaid, so publishing the raw negative on the debt line while treating it as zero in
-    the equity calculation would have made `equity == book − debt` false on exactly those years.
-    With the clamp the identity holds everywhere, which is what lets the chart draw the gap
-    between two lines instead of a third series.
-
-    `underwater_intervals` is a list because negative equity can come and go: a loan drawn against
-    a fast-depreciating asset can dip under, recover after a repayment, and dip again at the next
-    replacement. One `(first, last)` pair spanning all of that would have claimed the recovery
-    never happened, so each maximal run of negative-equity years is reported separately and an
-    empty list means the equity never went negative.
-
-    `depreciation_life_by_subject` records the life each subject's *last* installation was
-    depreciated over. It is *derived from the booked events* — the residual credit and the
-    replacement spacing — never read from the catalog, for the same reason the component event
-    strip derives its spans that way: the chart has to show what the timeline charged, so that a
-    disagreement with the catalog is visible instead of being drawn away.
+    The book value is straight-line depreciation of every install and replacement the timeline charged, on the residual
+    calculator's basis, so `book_value_in_euro[-1]` equals the booked residual-value credit. `debt_in_euro` is the
+    outstanding balance clamped at zero (a negative balance is an overpayment, not debt), so `equity == book - debt`
+    holds in every year. `underwater_intervals` lists each maximal run of years with negative equity as `(first,
+    last)`, since equity can go negative, recover and go negative again; an empty list means never.
+    `depreciation_life_by_subject` is the life each subject's last installation was depreciated over, derived from the
+    booked events, not the catalog.
     """
 
     book_value_in_euro: List[float]
@@ -4384,39 +3571,21 @@ class AssetDebtSeries:
 def asset_debt_series(
     result: LifecycleCostResult, amortization: Optional[LoanAmortization] = None
 ) -> AssetDebtSeries:
-    """Asset book value against outstanding debt, and the equity gap between them (V15).
+    """Return asset book value against outstanding debt, and the equity between them.
 
-    Book value is built from the component event strip's events: every charged install or
-    replacement steps the curve up by its own amount and then declines linearly to zero over the
-    span that installation was actually in service. For the **last** event of a subject that span
-    is the depreciation life derived from what the timeline booked — from the residual credit
-    where there is one (`residual = amount × (install + life − T) / life`, the residual
-    calculator's own formula solved for the life), otherwise from the horizon, so that a subject
-    with no residual is fully written down at T. For every **earlier** event it is the shorter of
-    that life and the gap to its successor, because an installation that was replaced is off the
-    books from the replacement year on (`_write_off_span`). Debt is `loan_amortization_series`'s
-    outstanding balance, clamped at zero, reused rather than recomputed.
-
-    Applying the last event's life to every event was the defect this shape fixes: a subject with
-    an install and a replacement spaced closer together than that life kept book value from the
-    superseded unit all the way to the horizon, so the endpoint overshot the residual and the
-    check below refused to draw a chart that was correct in the engine. Engine timelines are
-    unaffected — the calculator re-invests at exactly the service life and books a residual for
-    the last unit only, so the gap *is* the derived life there and the curve is unchanged.
-
-    Reconciliation: the book value at the horizon equals the booked residual credit (validated
-    here), each install year steps the curve by exactly that event's charged amount, and equity
-    is the plain difference of the two published series.
+    Each charged install or replacement steps the book value up by its amount and then declines linearly to zero. The
+    last event of a subject declines over the life derived from its residual credit (`residual = amount * (install +
+    life - T) / life` solved for the life), or over the remaining horizon if it has no residual. An earlier event
+    declines over the shorter of that life and the gap to its successor (`_write_off_span`). Debt is the clamped
+    outstanding balance of `loan_amortization_series`. The view checks that the horizon book value equals the booked
+    residual credit.
 
     Args:
         result: The perspective whose book value and debt are built.
-        amortization: Its `loan_amortization_series`, when the caller already has it — the
-            equity section reads it to decide whether the perspective is financed at all, and
-            deriving the identical series a second line later is a second walk of the same
-            timeline for numbers already in hand. Omitted, it is derived here as before.
+        amortization: Its `loan_amortization_series`, if the caller already has it; derived here when omitted.
 
     Returns:
-        The two series, the equity between them and the runs where that equity is negative.
+        The two series, the equity between them and the runs of negative equity.
 
     Raises:
         CostDataError: If the horizon book value does not reproduce the booked residual credit.
@@ -4472,27 +3641,19 @@ def asset_debt_series(
 def _write_off_span(
     life: float, event: LifecycleEvent, successor: Optional[LifecycleEvent]
 ) -> float:
-    """How long one charged installation is written down over: its life, or until it is replaced.
+    """Return how long one charged installation is written down over: its life, or until it is replaced.
 
-    The last installation of a subject writes down over `life`, the life `_depreciation_life`
-    recovered from the residual booking. An earlier one writes down over the shorter of that life
-    and the years until its successor, because the two things that can end a unit's book life are
-    running out of life and being replaced, and the timeline records the second exactly.
-
-    The comparison is relative rather than exact on purpose. The engine re-invests at the rounded
-    service life, so the gap and the recovered life are the same number arrived at two ways and
-    differ by float residue; treating that residue as an early replacement would shorten every
-    engine-produced write-down by a few ulps and move a curve that is correct. Only a gap shorter
-    than the life by more than `ViewTolerances.DEPRECIATION_SPACING_RELATIVE_EPSILON` counts.
+    The last installation uses `life`; an earlier one the shorter of `life` and the years until its successor. A gap
+    counts as shorter only beyond `ViewTolerances.DEPRECIATION_SPACING_RELATIVE_EPSILON`, because the engine re-invests
+    at the rounded service life and the two values differ by float residue.
 
     Args:
         life: The subject's depreciation life, from `_depreciation_life`.
         event: The installation being written down.
-        successor: The next event on the same subject, or None for the last one.
+        successor: The next event of the same subject, or None for the last one.
 
     Returns:
-        The number of years to write the event off over; never below one year, which guards a
-        replacement booked in the year after its predecessor.
+        The number of years to write the event off over, at least one.
     """
     if successor is None:
         return life
@@ -4503,19 +3664,12 @@ def _write_off_span(
 
 
 def _depreciation_life(last_event: LifecycleEvent, residual_in_euro: float, horizon: int) -> float:
-    """The life the last charged installation is written down over, derived from the booking.
+    """Return the life the last charged installation is written down over, derived from the booking.
 
-    The *last* one, deliberately: this is the event the residual credit was computed for, so it is
-    the only one whose life the booking determines. Earlier events borrow it as an upper bound and
-    are cut short by their successor where the timeline replaced them sooner — see
-    `_write_off_span`, which is where that rule lives.
-
-    Inverts the residual calculator's own straight-line rule: it books
-    `residual = amount × (install + life − T) / life`, so a subject with a residual credit
-    determines its own life exactly, and the chart's endpoint then *is* that residual rather than
-    merely agreeing with it. A subject with no residual was written off inside the horizon, so it
-    depreciates over exactly the years that remain — which reproduces the zero the timeline
-    booked. The one-year floor guards the degenerate case of an installation at the horizon.
+    Inverts the residual calculator's straight-line rule `residual = amount * (install + life - T) / life`, so the
+    chart's endpoint equals the residual. Without a residual credit the installation depreciates over the years that
+    remain, reproducing the zero the timeline booked. The result is at least one year. Earlier installations are capped
+    by `_write_off_span`.
     """
     remaining_years = max(horizon - last_event.year, 0)
     ratio = residual_in_euro / last_event.amount_in_euro if last_event.amount_in_euro else 0.0
@@ -4524,24 +3678,17 @@ def _depreciation_life(last_event: LifecycleEvent, residual_in_euro: float, hori
     return max(float(remaining_years), 1.0)
 
 
-# ----- 9/9 views, the causes the story chapters state -----
+# ----- the causes the story chapters state -----
 
-# ================================================ the assumptions behind the numbers (Q26 F2)
+# ================================================ the assumptions behind the numbers
 
 
 class AssumptionKinds(str, enum.Enum):
-    """What kind of quantity an `AssumptionRow` carries, i.e. how it is to be printed (Q26 F2).
+    """What kind of quantity an `AssumptionRow` carries, which decides how it is printed.
 
-    The rows of the assumptions table are heterogeneous — a rate, a year, a count of years, a
-    working price, a kWh figure, the name of a CO2 price path — and each has a conventional
-    spelling a reader recognizes: a rate reads `3.00%`, a working price `0.2500 EUR/kWh`, an
-    energy quantity `15,000 kWh/a`. The kind names that convention and the *section* applies it,
-    which is the whole point of the split: a view returns numbers, presentation decides how many
-    digits they are shown with (rule: views compute, the report formats).
-
-    The physical unit is not part of the kind — it travels on the row's `unit` field and is
-    appended after the formatted number — so `PERCENT` serves both the interest rate (no unit)
-    and an escalation rate (`per year`) without a second member.
+    Example spellings: a rate `3.00%`, a working price `0.2500 EUR/kWh`, an energy quantity `15,000 kWh/a`. The view
+    returns numbers and the report section formats them. The physical unit is not part of the kind; it travels in the
+    row's `unit` field.
     """
 
     PERCENT = "percent"
@@ -4563,19 +3710,11 @@ class AssumptionKinds(str, enum.Enum):
 
 @dataclass(frozen=True)
 class AssumptionRow:
-    """One economic assumption: what it is, what it was, and where it came from (Q26 F2).
+    """One economic assumption: what it is, its value and where it came from.
 
-    The unit of the Assumptions section, and plain data throughout: `value` is the number itself,
-    `unit` the symbol printed after it and `kind` how the number is to be spelled — a rate to two
-    decimals with a percent sign, a working price to four, an energy quantity with thousands
-    separators. It used to carry the *formatted string*, which put `f"{rate:.2%}"` on the view
-    side of a seam whose whole rule is that views compute and the report formats; the digits a
-    reader sees were then decided in a module that may not decide anything a reader sees.
-
-    `source` is a citation where the data layer has one (a database file, the country escalation
-    defaults, a tariff contract id) and the literal "configuration" where the value is a run
-    parameter, which is a statement rather than a placeholder: it says nobody reviewed this
-    number, the run chose it.
+    Plain data: `value` is the number, `unit` the symbol printed after it, `kind` how the number is spelled. `source`
+    is a citation where the data layer has one (a database file, the country escalation defaults, a tariff contract
+    id), or the literal "configuration" when the value is a run parameter.
     """
 
     group: str
@@ -4591,13 +3730,11 @@ class AssumptionRow:
 
 
 class AssumptionGroups:
-    """The groups the assumptions table is banded into, in the order it prints them.
+    """The groups of the assumptions table, in print order.
 
-    Named constants so the section, the tests that check the table's completeness and any future
-    export agree on both the spelling and the order. The order is the order a reader reconstructs
-    a number in: first the money-over-time frame, then how prices move, then what energy costs,
-    then the physical quantities per-unit figures divide by, and last the macroeconomic shadow
-    price that only one chapter uses.
+    Shared by the section, the completeness tests and exports. The order follows how a reader rebuilds a number: the
+    discounting frame, price movement, energy prices, the physical quantities per-unit figures divide by, and the CO2
+    damage cost used by one chapter.
     """
 
     FRAME = "Calculation frame"
@@ -4611,38 +3748,23 @@ class AssumptionGroups:
 
 
 def economic_assumptions(results: Sequence[LifecycleCostResult]) -> List[AssumptionRow]:
-    """Every economic assumption this run was priced under, with value and source (Q26 F2).
+    """Return every economic assumption this run was priced under, with value and source.
 
-    The complete set of causes behind the report's consequences (rule 2.9): the interest rate,
-    the horizon and the price basis year they discount over; the annuity factor they imply,
-    marked as computed; every escalation rate that applied, with the step of the §3.2 fallback
-    chain that produced it; the working price, standing charge and feed-in rate of every carrier
-    billed; the building quantities the per-unit figures divide by; and the CO2 damage cost where
-    a perspective of this run priced one.
-
-    Nothing here is a constant of the view. The parameter half comes from `result.parameters`, the
-    resolved half from `result.assumptions`, which the evaluator filled from the cost database and
-    `EvaluationInputs`; a result stored before that record existed simply contributes no resolved
-    rows, and the section says which half is missing rather than inventing it.
-
-    **A property of the run, so it is given the run.** Every row but one is identical across the
-    evaluated perspectives — they are one set of prices and rates read once — and the exception is
-    the CO2 damage cost, which only a macroeconomic view applies. That row used to arrive as a
-    `co2_damage_priced` boolean the caller computed with a *second* predicate, so the table stated
-    the damage path only for callers who remembered to scan for it, and stated it from a signal
-    that could disagree with the one the story chapters classify by. Taking the run's results
-    instead lets the same `has_macroeconomic_accounting` decide both, here, where the decision is.
+    Covers the interest rate, horizon and price basis year; the annuity factor they imply (marked as computed); every
+    escalation rate that applied, with the step of the §3.2 fallback chain that produced it; the working price,
+    standing charge and feed-in rate of every billed carrier; the building quantities per-unit figures divide by; and
+    the CO2 damage cost when a perspective of the run priced one. Parameters come from `result.parameters`, resolved
+    values from `result.assumptions`; a result without that record contributes no resolved rows.
 
     Args:
-        results: The run's evaluated perspectives. The values are read from the first — the
-            assumption set is the run's — and the damage-cost row is added when any of them books
-            CO2 at its damage cost.
+        results: The run's evaluated perspectives; values are read from the first, and the damage-cost row is added
+            when any of them uses macroeconomic accounting (`has_macroeconomic_accounting`).
 
     Returns:
-        The rows in `AssumptionGroups.ORDER`, ready to be formatted and tabulated.
+        The rows in `AssumptionGroups.ORDER`.
 
     Raises:
-        CostDataError: If `results` is empty; there is no run to state the assumptions of.
+        CostDataError: If `results` is empty.
     """
     evaluated = list(results)
     if not evaluated:
@@ -4738,10 +3860,9 @@ def economic_assumptions(results: Sequence[LifecycleCostResult]) -> List[Assumpt
                                   areas.heated_floor_area_in_m2, configuration,
                                   AssumptionKinds.SQUARE_METERS, "m2"))
     heat_demand = assumptions.annual_heat_demand_in_kwh if assumptions is not None else None
-    # `is not None`, not truthiness: `EconomicContext` now refuses a declared zero, but a result
-    # archived before it may carry one, and dropping the row would present that run as one that
-    # never declared a demand. For a staged plan the figure is the equivalent annual heat of the
-    # horizon (`EconomicAssumptions`).
+    # `is not None`, not truthiness: a stored result may carry a declared zero demand, and dropping
+    # the row would present that run as one that never declared a demand. For a staged plan the
+    # figure is the equivalent annual heat of the horizon (`EconomicAssumptions`).
     if heat_demand is not None:
         rows.append(AssumptionRow(AssumptionGroups.QUANTITIES, "annual heat demand",
                                   heat_demand, configuration,
@@ -4793,11 +3914,7 @@ def economic_assumptions(results: Sequence[LifecycleCostResult]) -> List[Assumpt
 
 
 def _escalation_row_name(label: str) -> str:
-    """The reader's name for one escalation-rate key (`energy:electricity` -> "energy: electricity").
-
-    The keys are stable identifiers chosen by the evaluator; this is the only place they become
-    words, so a renamed key changes one line rather than every table that shows it.
-    """
+    """Return the reader's name for one escalation-rate key (`energy:electricity` -> "energy: electricity")."""
     if ":" not in label:
         return f"{label} prices"
     kind, subject = label.split(":", 1)
@@ -4805,11 +3922,10 @@ def _escalation_row_name(label: str) -> str:
 
 
 def _rate_source(rate: ResolvedRate, configuration: str) -> str:
-    """The citation for one resolved escalation rate, per the step of the chain that produced it.
+    """Return the citation for one resolved escalation rate, by the step of the chain that produced it.
 
-    A configured rate cites the run (`configuration`), a rate from the country defaults file cites
-    that file's registered sources, and a rate that fell through to the general one says so — the
-    three are genuinely different claims about how reviewed the number is.
+    A configured rate cites the run (`configuration`), a rate from the country defaults file cites that file's sources,
+    and a rate that fell back to the general one says so.
     """
     if rate.origin == RateOrigin.COUNTRY_DEFAULTS and rate.source_ids:
         return ", ".join(rate.source_ids)
@@ -4820,16 +3936,13 @@ def _rate_source(rate: ResolvedRate, configuration: str) -> str:
     return configuration
 
 
-# ============================================================ CO2 conversion factors (Q26 F3)
+# ============================================================ CO2 conversion factors
 
 
 class Co2FactorKinds(str, enum.Enum):
-    """The two kinds of CO2 factor row, named once for the view and its renderer.
+    """The two kinds of CO2 factor row: an operational carrier row and an embodied device row.
 
-    An enum rather than two string constants because `kind` decides which of the row's two
-    products is the one that must be filled in and how the section words the row: a plain `str`
-    field admitted any spelling and put that decision one typo away from silently rendering a
-    device as a carrier.
+    The kind decides which of the row's two products must be filled in and how the section words the row.
     """
 
     OPERATIONAL = "operational"
@@ -4838,20 +3951,12 @@ class Co2FactorKinds(str, enum.Enum):
 
 @dataclass(frozen=True)
 class Co2FactorRow:
-    """One line of the CO2 factors table: a mass and the multiplication that produced it (F3).
+    """One line of the CO2 factors table: a mass and the multiplication that produced it.
 
-    Two shapes in one record, because the table shows them side by side. An *operational* row is
-    a carrier: `factor_in_kg_per_unit` is kg per kWh, `quantity` the annualized kWh bought, and
-    `annual_mass_in_kg` their product — the mass that repeats every year. An *embodied* row is a
-    device: the factor is kg per size unit, the quantity is the installed size, and
-    `per_installation_in_kg` is their product, charged `installations` times within the horizon.
-
-    `total_in_kg` is the figure the chart above the table draws, so the two are checkable against
-    each other by eye, which is the whole purpose of the row — and `__post_init__` checks it by
-    arithmetic rather than leaving it to the eye, because a row whose multiplication does not come
-    out is worse than no row: it is a disclosure that quietly disagrees with the bar above it.
-    Both shapes are refused, and so is a row carrying the wrong one of the two products for its
-    kind, which is the state that made the check necessary in the first place.
+    An operational row is a carrier: `factor_in_kg_per_unit` in kg per kWh times `quantity` (annual kWh bought) gives
+    `annual_mass_in_kg`, repeated every year. An embodied row is a device: kg per size unit times the installed size
+    gives `per_installation_in_kg`, charged `installations` times within the horizon. `total_in_kg` is the figure the
+    chart draws; `__post_init__` checks that the multiplication produces it.
     """
 
     subject: str
@@ -4865,18 +3970,11 @@ class Co2FactorRow:
     installations: int = 1
 
     def __post_init__(self) -> None:
-        """Refuses a row whose stated multiplication does not produce its stated total.
-
-        Two claims per row, and both are the reader's: that the row carries the product its kind
-        is about — the annual mass for a carrier, the mass per installation for a device — and
-        that repeating that product `installations` times gives the total the chart draws. The
-        table prints all three numbers side by side under the heading "every mass as its own
-        multiplication", so a row that does not multiply out is a lie in the one section that
-        exists to make the masses reproducible.
+        """Refuse a row whose multiplication does not produce its stated total.
 
         Raises:
-            CostDataError: If the row carries neither or both of the two products, or if the
-                product times `installations` misses `total_in_kg`.
+            CostDataError: If the row carries neither or both of the two products, or if the product times
+                `installations` misses `total_in_kg`.
         """
         is_operational = self.kind == Co2FactorKinds.OPERATIONAL
         product = self.annual_mass_in_kg if is_operational else self.per_installation_in_kg
@@ -4904,25 +4002,14 @@ class Co2FactorRow:
 
 
 def co2_factor_rows(result: LifecycleCostResult) -> List[Co2FactorRow]:
-    """The conversions behind every CO2 mass the report publishes (Q26 F3, rule 2.9).
+    """Return the conversions behind every CO2 mass the report publishes.
 
-    Per carrier: emission factor x annualized kWh bought = the mass emitted per year, and that
-    times the horizon is the carrier total the chart draws. Per device: embodied factor x
-    installed size = the mass per installation, times the number of installations booked within
-    the horizon. Both are read from what the engine recorded while it computed the masses — the
-    price entry's factor and the device entry's per-unit figure — never re-derived by dividing a
-    mass by a quantity, which would reproduce the mass whatever the factor was.
-
-    A result stored before the factors were recorded contributes no rows, and the CO2 section then
-    renders as it did before rather than showing a table of divisions.
-
-    **The two sources have to be one quantity.** The mass comes from the CO2 accumulator, which
-    sums over the billing records of a carrier, and the kWh from
-    `annual_energy_quantities_by_carrier`, which the aggregation now sums over the same records
-    (it used to keep the last one, so a carrier billed by two meters published a mass that its own
-    published quantity could not reproduce). Since a carrier billed under two different emission
-    factors is refused at accumulation time, one factor times the summed kWh is exactly the summed
-    mass — which is why `Co2FactorRow` can insist on the identity rather than hope for it.
+    Per carrier: emission factor x annual kWh bought = mass per year, times the horizon = the carrier total. Per
+    device: embodied factor x installed size = mass per installation, times the installations within the horizon.
+    Factors are the ones the engine recorded while computing the masses, never a mass divided by a quantity. The CO2
+    accumulator and `annual_energy_quantities_by_carrier` sum over the same billing records, and a carrier billed under
+    two emission factors is refused earlier, so factor times kWh equals the mass exactly. A result without recorded
+    factors yields no rows.
 
     Args:
         result: The perspective whose CO2 accounting is stated.
@@ -4931,8 +4018,7 @@ def co2_factor_rows(result: LifecycleCostResult) -> List[Co2FactorRow]:
         Operational rows first, then embodied ones, each in the accounting's own order.
 
     Raises:
-        CostDataError: From `Co2FactorRow`, when a row's multiplication does not reproduce the
-            published mass — see its `__post_init__`.
+        CostDataError: From `Co2FactorRow`, when a row's multiplication does not reproduce the published mass.
     """
     co2 = result.lifecycle_co2_result
     horizon = result.parameters.observation_period_in_years
@@ -4968,29 +4054,23 @@ def co2_factor_rows(result: LifecycleCostResult) -> List[Co2FactorRow]:
     return rows
 
 
-# ----- 9/9 views, captions -----
+# ----- captions -----
 
-# =============================================== the cube seam, named once (rule 2.9 follow-up)
+# =============================================== the scenario cube interface, named once
 
 
 class ScenarioDefinitionView(Protocol):
-    """The expanded definition of one scenario cell, as the captions read it (seam 4).
+    """The expanded definition of one scenario cell, as the report's captions read it.
 
-    Presentation renders a scenario cube but may not import the module that builds one, so the
-    cube has always crossed this seam untyped — and a renamed attribute on `scenarios.Scenario`
-    would then have surfaced as an `AttributeError` inside a rendered report rather than as a type
-    error anywhere. These four protocols name exactly the attributes the report and the scenario
-    views read off a cube and nothing else, so the seam is *described* in one place: rename
-    anything on it and the type check fails here, at the description, instead of at render time.
-
-    The members are read-only properties rather than annotated attributes on purpose: a mutable
-    protocol attribute is invariant, which would reject the very `Dict` and `List` fields the real
-    cube declares.
+    Presentation may not import `scenarios`, so these four protocols name exactly the attributes the report reads off a
+    scenario cube; renaming one on `scenarios.Scenario` then fails the type check here instead of at render time.
+    Members are read-only properties, because a mutable protocol attribute would be invariant and reject the cube's
+    `Dict` and `List` fields.
     """
 
     @property
     def id(self) -> str:
-        """The cell's id — the key of every per-scenario mapping the report prints."""
+        """The cell's id, the key of every per-scenario mapping the report prints."""
 
     @property
     def parameter_overrides(self) -> Mapping[str, Any]:
@@ -5049,34 +4129,20 @@ class ScenarioCubeView(ScenarioSetView, Protocol):
 _ABSENT: Any = object()
 
 
-# ============================================= the heat-cost KPI as its own division (Q26 F6)
+# ============================================= the heat-cost KPI as its own division
 
 
 @dataclass(frozen=True)
 class LevelizedHeatCostDerivation:
-    """The heat-cost figure as its own division: numerator, denominator and the quotient (Q26 F6).
+    """The heat-cost figure written out as its division: numerator, denominator and quotient.
 
-    The engine publishes `system cost per unit of heat = equivalent annual cost / annual heat
-    demand`, and both of those figures are published beside it. Two things about the division are
-    invisible in the figure and are what this record exists to state.
-
-    First, the **attribution set**: there is none. The numerator is the perspective's *entire*
-    NPV — every subject and every category the perspective books, the PV system and the battery
-    included, not a heating-attributable subset — so on a multi-technology building the figure is
-    "what the whole installation costs per kWh of heat delivered", which is a defensible number
-    and not the one most readers assume. That is exactly why the KPI is no longer called a
-    levelized cost of heat (`results.HeatCostNaming`). Second, the equivalent form of the
-    denominator: dividing by the annuity factor is the same as dividing by the *discounted sum of
-    heat*, the annual demand repeated over the horizon and discounted, which is the form the LCOH
-    literature states. Both forms are given so a reader can reproduce the figure either way. For a
-    staged plan the recorded demand is already the equivalent annual heat of the horizon (each
-    year's heat from the stage active in it, discounted and annualized), so its discounted sum is
-    the plan's NPV of heat and the same two forms hold.
-
-    Every figure here is read off the result, never recomputed: the numerator is
-    `total_npv_in_euro`, the annualized numerator is the published
-    `equivalent_annual_cost_in_euro`, and the quotient is the published KPI. The derivation
-    *states* the division the engine did; it does not perform a second one that could disagree.
+    The engine publishes `system cost per unit of heat = equivalent annual cost / annual heat demand`. The numerator is
+    the perspective's entire NPV, every subject included (PV and battery too), so on a multi-technology building it is
+    what the whole installation costs per kWh of heat, which is why the KPI is not called a levelized cost of heat
+    (`results.HeatCostNaming`). Dividing by the annuity factor equals dividing by the discounted sum of heat over the
+    horizon, the form the LCOH literature uses; both forms are given. For a staged plan the recorded demand is already
+    the equivalent annual heat of the horizon, so the same forms hold. Every figure is read off the result, not
+    recomputed.
     """
 
     perspective_id: str
@@ -5095,12 +4161,10 @@ class LevelizedHeatCostDerivation:
     demand_inferred_from_published: bool = False
 
     def stated_figures(self) -> Tuple[Any, ...]:
-        """Everything the caption states *except* whose perspective it is.
+        """Return everything the caption states except the perspective's identity.
 
-        The section prints one sentence when every perspective's division is the same one and a
-        line per perspective when they are not; this is the comparison that decides which — the
-        record's content minus its identity, so "the same division" is a property of the figures
-        rather than of the object.
+        The section prints one sentence when all perspectives share the same division and one line per perspective
+        otherwise; this is the value it compares.
         """
         return (
             self.numerator_npv_in_euro,
@@ -5117,27 +4181,19 @@ class LevelizedHeatCostDerivation:
 def levelized_heat_cost_derivation(
     result: LifecycleCostResult,
 ) -> Optional[LevelizedHeatCostDerivation]:
-    """The division behind the published heat-cost KPI, or None when the run publishes none (F6).
+    """Return the division behind the published heat-cost KPI, or None when the run publishes none.
 
-    Recomputes nothing the engine did: the numerator is `total_npv_in_euro`, its annualization is
-    the published `equivalent_annual_cost_in_euro`, and the quotient is checked against the
-    published `levelized_cost_of_heat_in_euro_per_kwh` — a mismatch would mean the caption is
-    describing a different figure from the one the KPI table prints, which is exactly the failure
-    the rule-2.9 round is about.
-
-    **The archived path.** The heat demand is only on the result from Q26 F2 onward. Without it
-    the denominator can still be divided back out of the published figure — arithmetically the
-    same number, which keeps an archived result explainable — but it is then *derived from the
-    quotient it would be checked against*, so reconciling the two would check nothing at all. That
-    path therefore sets `demand_inferred_from_published` and skips the check, and the caption says
-    where the denominator came from rather than presenting it as an independently known figure.
+    The numerator is `total_npv_in_euro`, its annualization `equivalent_annual_cost_in_euro`, and the quotient is
+    checked against `levelized_cost_of_heat_in_euro_per_kwh`. A stored result without a recorded heat demand still gets
+    a derivation, with the demand divided back out of the published figure; it then sets
+    `demand_inferred_from_published`, skips the check (which would be circular), and the caption says where the
+    denominator came from.
 
     Args:
-        result: The perspective to explain. Returns None when it publishes no heat-cost figure
-            (no heat demand was declared, so none was computed).
+        result: The perspective to explain.
 
     Returns:
-        The derivation, or None.
+        The derivation, or None when the perspective publishes no heat-cost figure (no heat demand was declared).
 
     Raises:
         CostDataError: If the stated division does not reproduce the published figure.
@@ -5188,22 +4244,19 @@ def levelized_heat_cost_derivation(
 def levelized_heat_cost_derivations(
     matrix: EvaluationMatrix,
 ) -> Dict[str, LevelizedHeatCostDerivation]:
-    """One derivation per perspective that publishes the figure, in the matrix's order (F6).
+    """Return one heat-cost derivation per perspective that publishes the figure, in matrix order.
 
-    The KPI table publishes the heat figure once *per perspective*, so a caption written for the
-    first of them explains one row and silently mis-describes the others: the numerator is that
-    perspective's whole NPV, and every perspective books a different set of flows. This returns
-    the division behind each published figure and lets the section decide whether they agree.
+    Each perspective's numerator is its own whole NPV, so a caption for one would mis-describe the others; the section
+    decides whether they agree.
 
     Args:
         matrix: Every evaluated perspective.
 
     Returns:
-        `{perspective id: derivation}`, omitting the perspectives that publish no such figure.
+        `{perspective id: derivation}`, omitting perspectives without the figure.
 
     Raises:
-        CostDataError: If any perspective's stated division does not reproduce its published
-            figure — see `levelized_heat_cost_derivation`.
+        CostDataError: If any perspective's division does not reproduce its published figure.
     """
     derivations: Dict[str, LevelizedHeatCostDerivation] = {}
     for perspective_id, result in matrix.results.items():
@@ -5213,41 +4266,38 @@ def levelized_heat_cost_derivations(
     return derivations
 
 
-# ================================================== the anyway credit as a multiplication (F7)
+# ================================================== the anyway credit as a multiplication
 
 
 @dataclass(frozen=True)
 class AnywayCreditFact:
-    """One booked anyway credit as the three numbers behind it: share, basis and product (F7).
+    """One booked anyway credit as share, basis and product, so `share x basis = credit` can be checked.
 
-    A credit stated on its own is a figure to be trusted; `share x basis = credit` is one to be
-    checked. What the basis *is* differs by branch — the avoided like-for-like replacement of the
-    old asset, or the non-energy share of the new measure's own gross cost (Q7) — so the kind
-    travels with it and the caption words the multiplication accordingly instead of calling both
-    by the name of one.
+    The anyway credit is the avoided cost of work the building needed regardless. Its basis is either the avoided
+    like-for-like replacement of the old asset or the non-energy share of the new measure's gross cost; `kind` says
+    which, so the caption words it correctly.
     """
 
     subject: str
     share: float
-    #: The cost the share was applied to, or None for a result stored before the basis existed —
-    #: in which case the share is all that can honestly be stated.
+    #: The cost the share was applied to, or None for a stored result without a recorded basis,
+    #: in which case only the share can be stated.
     basis_in_euro: Optional[float]
-    #: What that basis is, from `results.AnywayBasisKinds`; `UNRECORDED` for a stored result that
-    #: predates the kind, where the basis is known but its name is not.
+    #: What that basis is, from `results.AnywayBasisKinds`; `UNRECORDED` for a stored result
+    #: without a recorded kind, where the basis is known but its name is not.
     basis_kind: str
     #: `share x basis`, or None when there is no basis to multiply.
     credit_in_euro: Optional[float]
 
 
 def anyway_credit_facts(result: LifecycleCostResult) -> Tuple[AnywayCreditFact, ...]:
-    """Every anyway credit this perspective booked, by subject, as a checkable product (F7).
+    """Return every anyway credit this perspective booked, by subject, as a checkable product.
 
     Args:
-        result: The perspective to read the recorded shares, bases and kinds off.
+        result: The perspective whose recorded shares, bases and kinds are read.
 
     Returns:
-        One fact per credited subject, sorted by subject; empty for a run that credits nothing,
-        which is most runs.
+        One fact per credited subject, sorted by subject; empty for a run that credits nothing.
     """
     bases = result.anyway_basis_by_subject
     kinds = result.anyway_basis_kind_by_subject
@@ -5269,18 +4319,16 @@ def anyway_credit_facts(result: LifecycleCostResult) -> Tuple[AnywayCreditFact, 
 def anyway_credit_facts_by_perspective(
     matrix: EvaluationMatrix,
 ) -> Dict[str, Tuple[AnywayCreditFact, ...]]:
-    """The booked anyway credits of every perspective, in the matrix's order (F7).
+    """Return the booked anyway credits of every perspective, in matrix order.
 
-    A perspective that books no investment at all books no anyway credit either, so "the credits
-    of this run" is not a property of the run but of each perspective — which is what lets the
-    caption say "in this run" truthfully: it states every perspective's credits, and collapses to
-    one sentence only when they are in fact the same.
+    A perspective without investment books no anyway credit, so credits are stated per perspective; the caption
+    collapses them into one sentence only when they agree.
 
     Args:
         matrix: Every evaluated perspective.
 
     Returns:
-        `{perspective id: facts}` for every perspective, the empty tuple included.
+        `{perspective id: facts}` for every perspective, including empty tuples.
     """
     return {
         perspective_id: anyway_credit_facts(result)
@@ -5288,22 +4336,16 @@ def anyway_credit_facts_by_perspective(
     }
 
 
-# ================================================ what each scenario row actually changed (F1)
+# ================================================ what each scenario row actually changed
 
 
 class CentralCase(str, enum.Enum):
-    """How the central case's value of a scenario field is known, or why it is not (Q26 F1).
+    """How the central case's value of a scenario field is known, or why it is not.
 
-    A scenario row pairs "what this cell was evaluated at" with "what the central case had", and
-    the second half is not always a number. It used to be a value or `None`, with `None` rendered
-    as "as shipped" — which collapsed three different situations into one sentence and stated the
-    wrong one in two of them: a dict key the run never configured, an optional parameter left
-    unset, and a path that is not on `EconomicParameters` at all were all reported as "the
-    shipped data files", a claim about data that only a *data overlay* can make.
-
-    Naming the four possibilities as an enum keeps the view free of wording (the section decides
-    how each reads) and makes the distinction the walk in `_central_case` draws visible in the
-    record rather than encoded in a sentinel.
+    A scenario row pairs the value a cell was evaluated at with the central case's value. The four members separate a
+    known value from a dict key the run never configured, an optional parameter left unset, and a path that is not on
+    `EconomicParameters` (a data-file field, the only case where "as shipped" is true). The section decides the
+    wording; `_central_case` decides the member.
     """
 
     #: A value was read off the base cell's parameters and travels in `central_value`.
@@ -5321,13 +4363,10 @@ class CentralCase(str, enum.Enum):
 
 @dataclass(frozen=True)
 class ScenarioAssumption:
-    """One field a scenario changed, with both of its values, as plain data (Q26 F1).
+    """One field a scenario changed, with both of its values, as plain data.
 
-    Plain data throughout, so the digits a reader sees are decided by the section and not here
-    (the same rule `AssumptionRow` sits on): `kind` says which conventional spelling the numbers
-    take, `scenario_band` carries the min/best_estimate/max of a data overlay when there is one,
-    and `key` is set only for the documented whole-dict override form, which renders one line per
-    key rather than as a dict repr.
+    `kind` says how the numbers are spelled, `scenario_band` carries the min/best_estimate/max of a data overlay when
+    there is one, and `key` is set only for a whole-dict override, which renders one line per key.
     """
 
     field_name: str
@@ -5344,19 +4383,11 @@ class ScenarioAssumption:
 
 
 class ScenarioValueKinds:
-    """Which quantity each scenario-addressable field carries, by declaration (Q26 F1).
+    """Which quantity each scenario-addressable field carries, declared per field.
 
-    Scenario axes address `EconomicParameters` fields by dotted path and data files by their own,
-    and the values behind those paths are rates, counts of years, a calendar year, a damage cost,
-    scenario names and price bands. Whether `0.05` reads as `5.00 %` or as `0.05` is a property of
-    the *field*, not of the number, so it is declared here rather than guessed from the field's
-    spelling: a name-suffix heuristic printed `5` and `0.05` identically for the same rate and
-    would have silently mis-read any future field whose name did not end the expected way.
-
-    `BY_PARAMETER` is complete over `EconomicParameters` — a test pins that — so a new parameter
-    field is a failing test rather than a value printed as an anonymous number. Data-overlay paths
-    reach into the data files instead, where no such enumeration exists; `PERCENT_LEAVES` names the
-    leaf fields there that are fractions of one, and everything else prints as a plain number.
+    Whether `0.05` prints as `5.00%` or `0.05` depends on the field, so it is declared rather than guessed from the
+    name. `BY_PARAMETER` covers every `EconomicParameters` field (a test checks this). For data-overlay paths,
+    `PERCENT_LEAVES` names the leaf fields that are fractions of one; everything else prints as a plain number.
     """
 
     BY_PARAMETER = {
@@ -5394,26 +4425,23 @@ class ScenarioValueKinds:
 def scenario_assumptions(
     scenario_cube: Optional[ScenarioSetView], base_result: LifecycleCostResult
 ) -> Dict[str, Tuple[ScenarioAssumption, ...]]:
-    """Per scenario id: the assumptions it changed, with both values (Q26 F1, rule 2.9).
+    """Return, per scenario id, the assumptions it changed with both values.
 
-    A scenario row labelled `interest=high` says what was varied but not to what, and the swing
-    beside it is then a number without a cause. This reads the cube's own expanded scenario
-    definitions — the overrides `evaluate_cube` applied — and pairs each with the central case's
-    value of the same field, so the row can read "interest_rate 5.00% (central case: 3.00%)".
+    A row labelled `interest=high` says what was varied but not to what. This pairs each override from the cube's
+    expanded definitions with the central case's value, so the row can read "interest_rate 5.00% (central case:
+    3.00%)".
 
     Args:
         scenario_cube: The evaluated cube, or None.
-        base_result: The central cell's result, read for the parameter values a scenario deviates
-            from.
+        base_result: The central cell's result, read for the values a scenario deviates from.
 
     Returns:
-        `{scenario id: assumptions}`, empty for the base cell and for any scenario whose
-        definition the cube did not keep.
+        `{scenario id: assumptions}`, empty for the base cell and for any scenario whose definition the cube did not
+            keep.
 
     Raises:
-        CostDataError: If a field declared as a fraction of one carries a value that is not one —
-            a `5` where `0.05` was meant would otherwise print as `500.00 %` or, worse, be
-            silently re-read as a percentage the run was never evaluated at.
+        CostDataError: If a field declared as a fraction of one carries a value outside [-1, 1] (e.g. `5` meant as
+            `0.05`).
     """
     if scenario_cube is None:
         return {}
@@ -5432,14 +4460,11 @@ def scenario_assumptions(
 def _scenario_assumptions_for(
     field_name: str, value: Any, base_result: LifecycleCostResult, overlay: bool
 ) -> List[ScenarioAssumption]:
-    """One override, as the one or more lines it states (F1).
+    """Return the line or lines one override states.
 
-    Three shapes reach here. A band — a data overlay carrying the universal `min`/`best_estimate`/
-    `max` value syntax of §3.1 — is one line stating the band. A whole dict assigned to a
-    dict-typed field is the documented merge form (`scenarios.apply_parameter_overrides` applies
-    it key by key), so it states one line per key, each against that key's own central value; the
-    alternative, printing the dict, states a `repr` no reader can check. Everything else is a
-    scalar and is one line.
+    A band (a data overlay in the §3.1 `min`/`best_estimate`/`max` syntax) is one line. A whole dict on a dict-typed
+    field is the merge form `scenarios.apply_parameter_overrides` applies key by key, so it gives one line per key,
+    each against that key's central value. Anything else is a scalar and one line.
     """
     if isinstance(value, dict):
         band = _value_band(value)
@@ -5469,12 +4494,10 @@ def _one_assumption(
     base_result: LifecycleCostResult,
     overlay: bool,
 ) -> ScenarioAssumption:
-    """One rendered line's worth of data: the changed value and the central case beside it (F1).
+    """Return one line's data: the changed value and the central case beside it.
 
-    `field_name` and `key` are what the line *reads* as — a dotted axis path keeps the spelling
-    the scenario declared it with, a merged dict names its key separately — while `path` is what
-    the central value and the kind are looked up under, which for both shapes is the full dotted
-    path.
+    `field_name` and `key` are what the line reads as; `path` is the full dotted path the central value and the kind
+    are looked up under.
     """
     kind = _scenario_value_kind(path)
     for component in band if band is not None else (value,):
@@ -5496,11 +4519,10 @@ def _one_assumption(
 
 
 def _value_band(value: Mapping[str, Any]) -> Optional[Tuple[float, float, float]]:
-    """`(min, best_estimate, max)` when this dict is the §3.1 band syntax, else None.
+    """Return `(min, best_estimate, max)` when this dict is the §3.1 band syntax, else None.
 
-    The one thing that separates a band overlay from the whole-dict merge form, and it is a
-    property of the keys: `UncertainValue.from_json` reads exactly these three, and no
-    dict-typed `EconomicParameters` field is keyed by them.
+    Those three keys are what `UncertainValue.from_json` reads, and no dict-typed `EconomicParameters` field uses them,
+    so they separate a band from the merge form.
     """
     keys = ("min", "best_estimate", "max")
     if not all(key in value for key in keys):
@@ -5509,7 +4531,7 @@ def _value_band(value: Mapping[str, Any]) -> Optional[Tuple[float, float, float]
 
 
 def _scenario_value_kind(field_name: str) -> AssumptionKinds:
-    """Which conventional spelling one scenario-addressable path's value takes (F1)."""
+    """Return which spelling one scenario-addressable path's value takes."""
     declared = ScenarioValueKinds.BY_PARAMETER.get(field_name.split(".", 1)[0])
     if declared is not None:
         return declared
@@ -5520,12 +4542,10 @@ def _scenario_value_kind(field_name: str) -> AssumptionKinds:
 
 
 def _refuse_non_fraction(field_name: str, value: Any, kind: AssumptionKinds) -> None:
-    """Refuses a percentage field whose value is not a fraction of one (F1).
+    """Refuse a percentage field whose value is not a fraction of one.
 
-    `interest_rate: 5` and `interest_rate: 0.05` are the same typo apart, and the engine reads the
-    first as a 500 % rate. A caption that printed it as `5.00 %` would state an assumption the run
-    was never evaluated under — the one thing this section exists not to do — so the field is
-    named and the render refused instead.
+    The engine reads `interest_rate: 5` as a 500 % rate, so printing it as `5.00%` would state an assumption the run
+    was not evaluated under.
 
     Raises:
         CostDataError: If `value` is a number outside [-1, 1] on a percentage field.
@@ -5547,15 +4567,11 @@ def _refuse_non_fraction(field_name: str, value: Any, kind: AssumptionKinds) -> 
 def _central_case(
     field_name: str, base_result: LifecycleCostResult
 ) -> Tuple[CentralCase, Any]:
-    """The central case's value of one dotted path, or the reason there is none (F1).
+    """Return the central case's value of one dotted path, or the reason there is none.
 
-    Walks the same path a scenario override writes to, over the *base cell's* parameters, so the
-    comparison is against what was actually priced rather than against the dataclass defaults.
-    Three things it deliberately keeps apart, which the previous single `None` return could not:
-    a key that is absent from a dict (the run configured no rate for that carrier, and the rate it
-    was priced at may still be on the result), a key that is present and set to `None` (an
-    optional parameter the engine resolves elsewhere), and a path that does not exist on
-    `EconomicParameters` at all (a data-file field, which has no central parameter by nature).
+    Walks the path a scenario override writes to, over the base cell's parameters, so it compares against what was
+    priced, not the defaults. It separates a key absent from a dict (the priced rate may still be recorded on the
+    result), a key present and set to None, and a path not on `EconomicParameters` at all.
     """
     parts = field_name.split(".")
     current: Any = base_result.parameters
@@ -5583,12 +4599,10 @@ def _central_case(
 
 
 def _recorded_rate(parts: List[str], base_result: LifecycleCostResult) -> Optional[float]:
-    """The escalation rate the run resolved for a dict path the parameters do not state (F1).
+    """Return the escalation rate the run resolved for a dict path the parameters do not state.
 
-    An axis on `energy_price_escalation_rates.ELECTRICITY` in a run that configured no explicit
-    rate for electricity would otherwise be compared against nothing, when the run in fact priced
-    electricity at the country defaults file's rate. That rate is on the result (Q26 F2), keyed
-    by carrier, so the central value is knowable and is used.
+    Example: an axis on `energy_price_escalation_rates.ELECTRICITY` in a run without an explicit electricity rate
+    compares against the country-default rate the run priced with, which the result records per carrier.
     """
     assumptions = base_result.assumptions
     if assumptions is None or len(parts) != 2:
@@ -5610,32 +4624,26 @@ def _recorded_rate(parts: List[str], base_result: LifecycleCostResult) -> Option
 
 
 def _key_name(key: Any) -> str:
-    """The name a dotted scenario path uses for a dict key (an enum's `name`, else its text)."""
+    """Return the name a dotted scenario path uses for a dict key: an enum's `name`, else its text."""
     return getattr(key, "name", str(key))
 
 
-# ============================================== why an axis that moved nothing was inert (R2)
+# ============================================== why an axis that moved nothing was inert
 
 
 class ZeroSwingCauses:
-    """What each scenario axis prices, so an inert axis can name its own cause (Q27 R2).
+    """What each scenario axis prices, so an axis with zero effect can name its cause.
 
-    A scenario row whose swing is exactly zero is the one row a reader cannot interpret: it looks
-    either like a bug in the cube or like a reassuring result ("carbon prices do not matter here"),
-    and neither is what it means. It means the axis moved a parameter that nothing in *this* run's
-    timeline depends on. This namespace holds the two field paths whose inert case is diagnosable
-    from a stored result, plus the honest refusal for every other one — the module states what it
-    observed in the booked flows and, when it observed nothing that explains the row, says exactly
-    that rather than offering a cause.
+    A zero swing means the axis moved a parameter nothing in this run's timeline depends on. This holds the two field
+    paths whose zero case can be diagnosed from a stored result, and the text used when no cause can be named.
     """
 
     #: The CO2-price scenario axis; inert when no carrier books a carbon-price flow.
     CO2_PRICE_FIELD = "co2_price_scenario"
     #: The per-carrier energy escalation axis; inert when that carrier is not billed at all.
     ENERGY_ESCALATION_STEM = "energy_price_escalation_rates"
-    #: Said when the booked flows explain nothing. A refusal, not a cause: the previous wording
-    #: ("no priced flow depends on this axis in this run") was a claim about every flow in the
-    #: run, which is more than the timeline of one perspective can support.
+    #: Said when the booked flows explain nothing. A refusal, not a cause: one perspective's
+    #: timeline cannot support a claim about every flow in the run.
     UNKNOWN = "no cause could be derived from the booked flows of this run"
 
 
@@ -5644,27 +4652,19 @@ def zero_swing_notes(
     base_result: LifecycleCostResult,
     swings: Mapping[str, float],
 ) -> Dict[str, str]:
-    """Per scenario id with an exactly-zero swing: why that axis did nothing here (Q27 R2).
+    """Return, per scenario with an exactly-zero swing, why that axis had no effect here.
 
-    The scenarios table publishes a swing per row; a `+0` row is read as either a bug or a
-    finding, and it is neither. This derives the cause from the base cell's own scoped timeline —
-    which flows the perspective actually books — never from a table of known axes, so a run whose
-    carbon price *is* priced gets no note and an axis this function cannot diagnose says it cannot
-    rather than inventing a reason.
-
-    Only exact zeros qualify, and that is now a statement about the arithmetic rather than about
-    the rendering: the table prints a small swing to three significant digits, so a 0.42 EUR/a
-    effect reads as `+0.42` and reaches nobody as an inert row. A row that says zero moved by
-    zero.
+    The cause is derived from the base cell's scoped timeline (which flows the perspective books), not from a table of
+    axes, so a run that does price carbon gets no note and an axis that cannot be diagnosed says so. Only exact zeros
+    qualify; the table prints small swings to three significant digits.
 
     Args:
         scenario_cube: The evaluated cube, or None.
-        base_result: The base cell's result for the reference perspective — the timeline the
-            causes are read from.
-        swings: Per-scenario swing of the headline KPI, base included, as the table prints them.
+        base_result: The base cell's result for the reference perspective.
+        swings: Per-scenario swing of the headline KPI, base included.
 
     Returns:
-        `{scenario id: cause}` for the zero-swing rows only; empty when the cube has none.
+        `{scenario id: cause}` for the zero-swing rows; empty when there are none.
     """
     if scenario_cube is None:
         return {}
@@ -5689,12 +4689,10 @@ def zero_swing_notes(
 
 
 def _billed_carriers(result: LifecycleCostResult) -> Tuple[str, ...]:
-    """The carriers this perspective books a bill entry for, upper-cased and sorted (R2).
+    """Return the carriers this perspective books a bill entry for, upper-cased and sorted.
 
-    The single observation both zero-swing causes are built from: a carbon-price axis names the
-    carriers whose bills carry no CO2-price entry, and an escalation axis asks whether its own
-    carrier is among them at all. Deriving it once means the two can never disagree about what
-    the run bills.
+    Both zero-swing causes use it: a carbon-price axis names the billed carriers without a CO2-price entry, and an
+    escalation axis checks whether its carrier is billed at all.
     """
     return tuple(
         sorted(
@@ -5709,7 +4707,7 @@ def _billed_carriers(result: LifecycleCostResult) -> Tuple[str, ...]:
 
 
 def _inert_axis_cause(field_name: str, billed: Tuple[str, ...], co2_priced: bool) -> str:
-    """The observed cause for one overridden field, or "" when it cannot be named (R2)."""
+    """Return the observed cause for one overridden field, or "" when it cannot be named."""
     if field_name == ZeroSwingCauses.CO2_PRICE_FIELD:
         return _co2_axis_cause(billed, co2_priced)
     if field_name.split(".")[0] == ZeroSwingCauses.ENERGY_ESCALATION_STEM and "." in field_name:
@@ -5720,13 +4718,10 @@ def _inert_axis_cause(field_name: str, billed: Tuple[str, ...], co2_priced: bool
 
 
 def _co2_axis_cause(billed: Tuple[str, ...], co2_priced: bool) -> str:
-    """Why a CO2-price axis is inert: no carbon-price flow is booked, and beside which bills (R2).
+    """Return why a CO2-price axis has no effect: no carbon-price flow is booked, beside which bills.
 
-    States the observation and stops there. The engine books an `ENERGY_CO2_PRICE` entry only for
-    a carrier whose price entry declares `co2_price_exposure > 0` (§3.5), which makes a zero
-    exposure the *likely* reason — but a stored result carries no price entry, so naming the
-    parameter would be an inference presented as a reading, in a footnote whose whole purpose is
-    that it never states more than the data says.
+    States only the observation. The engine books `ENERGY_CO2_PRICE` only for carriers with `co2_price_exposure > 0`
+    (§3.5), but a stored result has no price entry to confirm that, so the note does not name it.
     """
     if co2_priced or not billed:
         return ""

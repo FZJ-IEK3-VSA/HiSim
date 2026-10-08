@@ -1,27 +1,13 @@
-"""Data-driven subsidy engine: EU scheme modeling (cost_spec.md §5).
+"""Data-driven subsidy engine (cost_spec.md §5).
 
-Schemes live in ``hisim/subsidy_catalog/<COUNTRY>.json``. Eligibility is a small data-only
-predicate language over a typed context; unanswered questions yield tri-state eligibility
-(§5.7). The cumulation solver enumerates admissible combinations and picks the
-NPV-maximizing one on the BEST_ESTIMATE slot, then values it in all three slots (§5.4).
+Schemes live in ``hisim/subsidy_catalog/<COUNTRY>.json``. Eligibility conditions are a small data-only predicate
+language over a typed applicant and building context; an unanswered question makes a scheme UNDETERMINED rather than
+ineligible (§5.7). The cumulation solver picks the admissible scheme combination with the highest best-estimate value
+and values it in all three band slots (§5.4). The package returns abstract awards (`SubsidyDecision`);
+`calculators/subsidy_application.py` turns them into timeline entries.
 
-This module answers one question — *how much support does this measure get, from which schemes,
-and on what evidence* — and answers it entirely from data, so that adding a country or a funding
-programme is a catalog edit rather than a code change (§10.1: if the engine needs changing for a
-new country, the schema failed). It is split into two halves by the ``=== engine`` banner in the
-middle of the file: above it the inert catalog payload (schemes, benefits, conditions as data,
-the loader), below it everything that reads a *context* and decides anything (condition
-evaluation, eligibility assessment, cumulation solving, question derivation). The cut is
-deliberate and prepares the §2.5 package split into ``economics/data/`` and ``economics/engine/``.
-
-What the module deliberately does NOT own: cash flows, timelines, discounting policy, perspective
-types and VAT netting. It returns a :class:`SubsidyDecision` of abstract awards; turning those
-into signed timeline entries — and deciding *when* each payout kind lands — is
-``calculators/subsidy_application.py``, the only production caller of :func:`solve_cumulation`.
-The perspective's subsidy mode (§5.5) reaches the solver as a plain ``admits(scheme_id)``
-predicate for the same reason: this module must not depend on ``perspectives.py``. Its other
-consumers are ``validation.py`` (question-coverage and catalog CI, §9.6) and
-``serialization.py`` (round-tripping the context into ``economic_inputs.json``).
+``context`` holds the applicant and building facts, ``catalog`` the scheme data and its loader, ``assessment`` the
+condition evaluation and question derivation, ``solver`` the cumulation solver. This module re-exports them all.
 """
 
 
@@ -79,7 +65,7 @@ from hisim.economics.subsidies.context import (
     SubsidyPackageContext,
     question_targets,
 )
-from hisim.economics.subsidies.solver import _combination_awards, _eligible_cost_basis  # noqa: F401 — unit-tested directly
+from hisim.economics.subsidies.solver import _combination_awards, _eligible_cost_basis  # noqa: F401 — used by tests
 from hisim.economics.subsidies.solver import (
     CapRatios,
     CumulationLimits,

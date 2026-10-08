@@ -1,65 +1,15 @@
 """Matplotlib PNG companions of the lifecycle cost report.
 
-Two entry points, with two audiences. `write_report_plots` draws the report set for the
-LIFECYCLE_COST_REPORT postprocessing option, next to `lifecycle_report.html`; `write_audit_plots`
-draws the year × category ledger heatmap (V6) on **every** cost run, next to `cost_audit.csv`,
-because it answers the audit's question rather than the report's. Both take their display groups
-and colours from `presentation_style.py`, as the HTML report does, so a group keeps its hue across
-every output and this module no longer imports the `reporting` package (W4.7).
+`write_report_plots` draws the report set next to `lifecycle_report.html`, one set per perspective
+(`lifecycle_<chart>_<perspective_id>.png`) plus `lifecycle_perspective_costs.png` once; comparison charts are drawn
+only for the perspective the reference variant names. `write_audit_plots` draws the year × category ledger heatmap next
+to `cost_audit.csv` on every cost run, which makes matplotlib a dependency of the plain cost path. The PNGs are for
+pasting into documents; the HTML report is the full output.
 
-Like `reporting`, this module never computes: the numbers plotted come from `views.py` and
-`results.py`; the arithmetic here is bar geometry, ribbon geometry and axis scaling. The two
-captions that state a run's own figures in *both* renderings — the payback sentence and the
-treemap disclosure — are authored once in `report_prose.py` and printed from there, so the PNG
-and the HTML page cannot word the same figure differently.
-
-**Why raster images exist at all**, given that `lifecycle_report.html` already draws the same
-figures as inline SVG: a PNG can be dropped into the PDF report, a slide deck or an issue
-comment, which an HTML page cannot. They are companions, never the primary output — the set is a
-deliberate subset (thirteen charts out of the report's two dozen sections) and it carries no
-tables, no plausibility panel and no audit trail. A reviewer checking numbers should read the
-HTML; the PNGs are for pasting.
-
-**One set per perspective.** The per-perspective charts are drawn for *every* perspective of the
-matrix and carry its id in the file name (`lifecycle_<chart>_<perspective_id>.png`); the
-matrix-wide comparison of perspectives is drawn once, as `lifecycle_perspective_costs.png`. The
-charts that only exist as a difference — the payback curve, the NPV bridge, the fixed-interest
-benchmark, and the comparison forms of the swimlane's milestone and the fan's lower panel — need
-a reference variant and are drawn only for the perspective that comparison was computed for.
-Nothing is ever substituted: when the reference's perspective is absent from the matrix, those
-charts are skipped with a reason rather than drawn for a perspective the reader did not ask for,
-which is how a bridge, a fan and a benchmark used to end up describing three different parties
-on one page.
-
-**What the set is.** The five original charts — annual cash flows, the year-0 investment build-up,
-the perspective comparison, the per-component costs and the payback curve — plus the pasteable
-half of the visualization extension: the actor Sankey (V1), the liquidity fan (V2), the comparison
-bridge (V4), the cost treemap (V8), the lifecycle swimlane (V9), the sources-and-uses Sankey
-(V10), the fixed-interest benchmark (V13) and the monthly burden (V14). Everything else in that
-set is HTML-only. The ledger heatmap (V6) is `write_audit_plots`' single chart: it has the
-audit's audience, and it lives here rather than in `audit.py` because the seam-4 import lint keeps
-the verification modules free of renderers.
-
-**A chart that has nothing to draw writes no file and says why — to its caller.** Nothing here
-logs: every `plot_*` returns `None` instead of a path and records a `SkippedPlot` in the list its
-caller passed, and both writers return a `PlotsWritten` carrying the paths and those records. The
-engine-side callers decide what happens to them (`bridge.py` logs a line per skip and writes
-`lifecycle_plots_not_drawn.txt`; the CLI prints them), which is what keeps a renderer from being
-the module that decides how a run reports itself.
-
-**matplotlib is a hard dependency of the plain cost path**, not only of the report path, since
-the audit heatmap is drawn on every run. `bridge.compute_lifecycle_costs` and the `evaluate` CLI
-both check that this module imports *before* they write their first export, so a missing
-dependency is a refusal rather than a half-written directory.
-
-What the module does not own: which colour a display group has and which categories fall into
-it (`presentation_style.py`), any figure being plotted (`views.py`, `results.py`), the wording of
-the shared captions (`report_prose.py`), and the file naming/orchestration of the report as a
-whole (`__main__.py` and `bridge.py`). Unlike the HTML and markdown reports these outputs are
-deliberately *not* golden-tested — matplotlib rendering is not byte-stable across versions — so
-the guarantee that they agree with the report is structural, not pinned: both read the same view
-functions, and `tests/test_economics_report_plots.py` checks the files and that structural
-agreement.
+Nothing is computed here: figures come from `views.py` and `results.py`, colours and display groups from
+`presentation_style.py`, and the shared captions from `report_prose.py`. A chart with nothing to draw writes no file
+and returns a `SkippedPlot` to its caller; nothing here logs. The PNGs are not golden-tested, since matplotlib output
+is not byte-stable.
 """
 
 from __future__ import annotations
@@ -116,21 +66,15 @@ from hisim.economics.uncertainty import Slot  # noqa: E402
 
 @dataclass(frozen=True)
 class SkippedPlot:
-    """One chart that was not drawn, and why — the return value that replaced a log line.
+    """One chart that was not drawn, and why.
 
-    A hand-out short one figure is fine when the reason is "there was nothing to draw"; it is not
-    fine when nobody can tell that from the run. This module used to say so in the run log,
-    which put the decision of *how a run reports itself* inside a renderer: the CLI could not print
-    the skips it caused, the bridge could not put them in a file beside the PNGs, and a test could
-    only assert on captured stdout. The reason is data now, and the engine-side callers decide what
-    to do with it.
+    Callers decide how to report it: `bridge.py` logs it and writes `lifecycle_plots_not_drawn.txt`, the CLI prints it.
 
     Attributes:
         chart: The chart, named as a reader of the output directory would name it.
-        perspective_id: The perspective it would have been drawn for; empty for a skip that
-            belongs to no single perspective, such as the comparison charts of a run that has no
-            reference variant at all.
-        reason: One sentence, in the form "what was missing, and why that means no picture".
+        perspective_id: The perspective it would have been drawn for; empty for a skip that belongs to no single
+            perspective (e.g. comparison charts of a run without a reference variant).
+        reason: One sentence saying what was missing.
     """
 
     chart: str
@@ -138,7 +82,7 @@ class SkippedPlot:
     reason: str
 
     def as_line(self) -> str:
-        """`chart (perspective): reason`, the one-line form the log and the sidecar both print."""
+        """Return `chart (perspective): reason`, the line the log and the sidecar file print."""
         subject = f"{self.chart} ({self.perspective_id})" if self.perspective_id else self.chart
         return f"{subject}: {self.reason}"
 
@@ -147,43 +91,33 @@ class SkippedPlot:
 class PlotsWritten:
     """What a writer produced: the files on disk and the charts that drew nothing.
 
-    Both halves are needed by every caller. `paths` is what a run reports as written and, in the
-    bridge's case, removes again if the run fails later on; `skipped` is what it has to say out
-    loud, because an absent figure with no stated reason is indistinguishable from a renderer that
-    crashed and was swallowed.
+    `paths` lists what was written (the bridge removes them again if the run fails later); `skipped` lists what was not
+    drawn, so a missing figure always has a stated reason.
     """
 
     paths: List[str] = field(default_factory=list)
     skipped: List[SkippedPlot] = field(default_factory=list)
 
     def lines(self) -> List[str]:
-        """One `chart (perspective): reason` line per skip, in the order the charts were drawn."""
+        """Return one `chart (perspective): reason` line per skip, in drawing order."""
         return [skip.as_line() for skip in self.skipped]
 
 
 def _skip(
     collector: Optional[List[SkippedPlot]], chart: str, perspective_id: str, reason: str
 ) -> None:
-    """Records one skip in the caller's collector, if the caller is collecting.
+    """Record one skip in the caller's collector, if the caller passed one.
 
-    The collector is optional so a plot function stays callable on its own — from a test, from a
-    notebook, from a future caller that wants one chart and not the set — without having to build
-    a list it will not read. A skip nobody collects is simply not reported, which is the caller's
-    decision to make rather than this module's.
+    The collector is optional so a plot function can be called on its own, e.g. from a test.
     """
     if collector is not None:
         collector.append(SkippedPlot(chart=chart, perspective_id=perspective_id, reason=reason))
 
 
 class _Typography:
-    """Text metrics the two label-fitting rules share.
+    """Text metrics for estimating a string's width without a matplotlib draw.
 
-    Both the treemap's "does this label fit its tile" and the swimlane's "how much room does this
-    event label claim" estimate the width of a string without asking matplotlib to lay it out —
-    a real measurement needs a draw, and both rules run while deciding what to draw. The two
-    numbers behind that estimate are properties of the font and of the unit system, not of either
-    chart, and they were declared twice with the same values, which is one place too many for a
-    constant that has to stay the same in both.
+    Shared by the treemap's label-fit check and the swimlane's event-label spacing.
     """
 
     #: Width of an average character as a fraction of the font size — a standard DejaVu Sans
@@ -195,19 +129,10 @@ class _Typography:
 
 
 class _Palette:
-    """Neutral surface/ink colours of the matplotlib PNGs — the light half of `ChromeColors`.
+    """Neutral chrome colours (surface, ink, grid) of the PNGs: the light half of `ChromeColors`.
 
-    The chrome of a chart — background, text, gridlines — as opposed to the data colours, which
-    come from `PresentationStyle.GROUP_COLORS_LIGHT` so a display group keeps its hue across
-    every output. The four values are *not* written here: they are read from
-    `presentation_style.ChromeColors`, which the HTML report's `:root` block reads too, so a
-    report whose SVG gridlines are a different grey from its PNG gridlines cannot happen.
-
-    Only the LIGHT set is ever used, because a PNG has no theme: it is baked once and may end up
-    in a PDF or a slide, while the HTML report resolves the same four roles through CSS custom
-    properties that flip under `prefers-color-scheme: dark`. The class survives as four names
-    because every chart below reads them dozens of times and `_Palette.MUTED` is what a
-    matplotlib call can carry without wrapping.
+    Read from `presentation_style.ChromeColors`, which the HTML report uses too, so both outputs share the same greys;
+    data colours come from `PresentationStyle.GROUP_COLORS_LIGHT`. A PNG has no theme, so only the light set is used.
     """
 
     SURFACE = ChromeColors.LIGHT["surface"]
@@ -217,11 +142,10 @@ class _Palette:
 
 
 def _style_axis(axis) -> None:
-    """Applies the shared chart chrome to one matplotlib axis.
+    """Apply the shared chart chrome to one matplotlib axis.
 
-    Drops the top and right spines, mutes the remaining ones, and puts a horizontal grid behind
-    the marks. Called from `_figure` so every chart in the set is styled identically; charts
-    with a horizontal value axis override the grid direction afterwards.
+    Drops the top and right spines, mutes the others and puts a horizontal grid behind the marks; charts with a
+    horizontal value axis change the grid direction afterwards.
     """
     axis.set_facecolor(_Palette.SURFACE)
     for spine in ("top", "right"):
@@ -240,37 +164,21 @@ def _figure(
     panels: Tuple[int, int] = (1, 1),
     share_x: bool = False,
 ) -> Iterator[Tuple[Figure, List[Axes]]]:
-    """A styled figure and its axes at the report's fixed resolution, always closed.
+    """Yield a styled figure and its axes at the report's fixed resolution, and always close it.
 
-    The single constructor for every chart here, so all PNGs of a run share a DPI and the chrome
-    from `_style_axis` and can therefore be stacked in a document without looking like they came
-    from different tools. Callers pass a taller `height` for the horizontal charts, whose height
-    scales with the number of rows, and a `panels` grid for the three two-panel charts (the
-    liquidity fan, the treemap's gross/net pair and the benchmark's A/B pair) — those are one
-    figure with two axes rather than two files, because the pair *is* the statement.
-
-    It is a context manager because pyplot figures are held by a global registry until they are
-    closed: every plot function used to call `plt.close` as its last statement, so any exception
-    between creating the figure and that line — a malformed series, a missing key — leaked the
-    figure for the lifetime of the process, and a postprocessing run that writes plots per
-    building leaks one per failure. Closing in `finally` makes the cleanup a property of the
-    figure rather than of each function remembering to reach its last line, and `plt.subplots`
-    itself is inside the `try` so a failure *in the construction* is covered by the same rule.
-
-    The yielded axes are **always a flat list**, single-panel charts included, so a caller's
-    `axes[0]` means the same thing at every grid size. Yielding a bare axis for a 1×1 grid and a
-    list for anything else made the shape depend on an argument, which is a type a caller cannot
-    write down and a mistake mypy cannot catch.
+    Every chart is built with this, so all PNGs share a DPI and chrome. Two-panel charts (the liquidity fan, the
+    treemap pair, the benchmark pair) pass `panels`. Closing in `finally`, with `plt.subplots` inside the `try`, keeps
+    pyplot's global registry from leaking a figure when drawing fails.
 
     Args:
         width: Figure width in inches.
-        height: Figure height in inches; the horizontal charts scale it with their row count.
-        panels: `(rows, columns)` of the axes grid; the default is the single-axis chart.
-        share_x: Whether the panels share one x axis, which is what makes two stacked panels
-            read as one year axis rather than as two charts.
+        height: Figure height in inches; horizontal charts scale it with their row count.
+        panels: `(rows, columns)` of the axes grid.
+        share_x: Whether the panels share one x axis.
 
     Yields:
-        The figure and its styled axes in row-major order, as a list of length `rows * columns`.
+        The figure and its styled axes as a flat list of length `rows * columns` in row-major order, also for a single
+            panel.
     """
     rows, columns = panels
     figure: Optional[Figure] = None
@@ -296,32 +204,23 @@ def _stack_positive_negative(
     bar_size: float = 0.82,
     edge_width: float = 0.6,
 ) -> Tuple[List[float], List[float]]:
-    """Stacks one signed bar chart by display group, costs and credits on separate baselines.
+    """Stack one signed bar chart by display group, with costs and credits on separate baselines.
 
-    The shape three charts here share — the annual cash flows, the per-component costs and the
-    monthly burden — and the reason it is one function: each of them used to carry its own copy
-    of the same fifteen lines, including the two carried baselines and the "label only once" rule
-    that stops a group appearing twice in the legend when it has bars on both sides. Three copies
-    of a stacking rule is three places for the costs and the credits to start being netted against
-    each other, which is precisely what the two baselines exist to prevent: a year (or a subject)
-    with both shows both, and neither side shortens the other.
-
-    Groups are drawn in display-group order, and a group whose values are all zero is skipped
-    entirely rather than contributing an invisible segment and a legend entry.
+    A display group is one of the colour groups of `presentation_style`. Positive values stack from one baseline and
+    negative ones from another, so costs and credits are never netted. Groups are drawn in ascending index order; an
+    all-zero group draws nothing and gets no legend entry, and each group is labelled once.
 
     Args:
         axis: The axes to draw on.
-        positions: The bar positions — years for a vertical chart, row indices for a horizontal
-            one.
-        values_by_group: Display-group index -> one signed value per position. Keys are drawn in
-            ascending order, so the stacking order is the legend order.
-        horizontal: Draw with `barh` (values run left and right of zero) instead of `bar`.
+        positions: The bar positions: years for a vertical chart, row indices for a horizontal one.
+        values_by_group: Display-group index -> one signed value per position.
+        horizontal: Draw with `barh` instead of `bar`.
         bar_size: Bar thickness across the position axis, in position units.
-        edge_width: Width of the surface-coloured line that separates two stacked segments.
+        edge_width: Width of the surface-coloured line between two stacked segments.
 
     Returns:
-        The two baselines after the last group: the end of the positive stack and the end of the
-        negative stack per position, which is where a caller puts its per-bar annotation.
+        The positive and negative stack ends per position after the last group, where a caller places per-bar
+            annotations.
     """
     draw = axis.barh if horizontal else axis.bar
     baseline_keyword = "left" if horizontal else "bottom"
@@ -354,22 +253,14 @@ def _stack_positive_negative(
 def plot_annual_cash_flows(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """Stacked bars per year by display group (nominal), the timeline plausibility view.
+    """Draw stacked nominal bars per year by display group, the PNG of the cash-flow timeline section.
 
-    The PNG counterpart of the report's `ReportSections.CASH_FLOW_TIMELINE` section. It answers
-    "does the money arrive in the years it should": replacement spikes at the component lifetimes,
-    a residual-value credit at the horizon, an energy band that grows at a believable escalation
-    rate, and a year-0 bar that matches the investment. Costs stack above the zero line and
-    credits below it — the two stacks have separate baselines and are never netted against each
-    other, so a year with both shows both.
-
-    A perspective whose scoped timeline carries no money at all — an operating-only view of a
-    run with no operating flows, a party that pays nothing — is skipped rather than drawn: an
-    axis of empty years reads as "this was computed and came out flat", which is a different
-    statement from "there was nothing here to compute".
+    Costs stack above the zero line and credits below, never netted. Replacements should spike at component lifetimes,
+    the residual value appear at the horizon and the investment in year 0. A perspective whose scoped timeline carries
+    no money is skipped.
 
     Args:
-        result: The evaluated perspective to draw; the title carries its id and NPV.
+        result: The evaluated perspective; the title carries its id and NPV.
         path: Destination PNG path.
         skips: Collector for the skip record, if the caller is collecting.
 
@@ -414,19 +305,12 @@ def plot_annual_cash_flows(
 def plot_investment_waterfall(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """Year-0 build-up per subject: gross bars split into a net and a subsidy-covered segment.
+    """Draw the year-0 investment per subject, each bar split into the net and the subsidy-covered part.
 
-    One horizontal bar per component, split into what the owner pays and what the support
-    covers, so "how much of this measure is funded" is answerable per component rather than only
-    in total. Both figures come from `views.subsidy_share_of_gross`, including the
-    `min(subsidy, gross)` clamp that keeps the funded share inside [0, 1]; the same view feeds
-    the HTML report's subsidy composition bars, which is why the two cannot disagree. Subjects
-    without a positive gross investment are absent, and with no subjects at all the function
-    records the skip and writes no file.
-
-    The split is drawn as two stacked segments distinguished by colour — net investment in the
-    group-0 hue, the subsidy-covered part in the group-3 hue — with the net/gross figures printed
-    at the end of each bar. There is no hatching anywhere in this figure.
+    A subject is one costed item, such as a heat pump. Both figures come from `views.subsidy_share_of_gross` (subsidy
+    clamped to the gross), which also feeds the HTML report's subsidy bars. Net is drawn in the group-0 hue and the
+    subsidy share in the group-3 hue, with the net/gross figures at each bar's end. Subjects without positive gross
+    investment are left out; with none at all the chart is skipped.
 
     Args:
         result: The evaluated perspective whose year-0 investment is drawn.
@@ -473,18 +357,13 @@ def plot_investment_waterfall(
 
 
 def plot_perspective_costs(matrix: EvaluationMatrix, path: str) -> str:
-    """Equivalent annual cost per perspective as dot-with-whiskers (min/best_estimate/max).
+    """Draw the equivalent annual cost per perspective as dots with min/max whiskers.
 
-    The PNG counterpart of the report's `ReportSections.PERSPECTIVES` section, and the one chart
-    that shows the whole matrix at once: every perspective's headline KPI on a common axis, with
-    the §3.9 envelope drawn as whiskers around the BEST_ESTIMATE dot. It is what a reader uses to
-    sanity-check the perspective model itself — operating-only must sit below brownfield, a gross
-    view above its net counterpart, and the macroeconomic row should differ from the financial one
-    only by transfers and CO2 damage. The whiskers are an envelope of coherent worlds, not a
-    confidence interval, so overlap between two perspectives says nothing about significance.
+    The PNG of the perspectives section and the only chart covering the whole matrix. The whiskers are the §3.9
+    envelope of the low and high worlds, not a confidence interval.
 
     Args:
-        matrix: All evaluated perspectives, drawn in insertion order (top to bottom).
+        matrix: All evaluated perspectives, drawn top to bottom in insertion order.
         path: Destination PNG path.
 
     Returns:
@@ -537,26 +416,18 @@ _LABEL_RESERVE_SHARE = 0.30
 def _component_label_geometry(
     cost_ends: Sequence[float], credit_ends: Sequence[float], band_maxima: Sequence[float]
 ) -> Tuple[List[float], float, float]:
-    """Where each per-component row's net-NPV label starts, its gap, and the widest row extent.
+    """Return where each component row's net-NPV label starts, its gap, and the widest row extent.
 
-    A row of that chart draws three things — the cost stack, the credit stack and the net band's
-    marker with its whiskers — and the label used to be positioned from the end of the cost stack
-    alone. On every row whose net band reaches past the bars, which is most of them once residual
-    value and subsidies are in, the text was printed straight over the marker and its upper cap.
-    Taking the maximum of the stack end and the band's upper bound is what fixes it, and it is
-    pulled out here as arithmetic on plain floats so the rule can be checked without rendering
-    anything.
+    The label starts past the further of the cost stack's end and the net band's upper whisker, so it never overprints
+    the marker.
 
     Args:
-        cost_ends: End of each row's positive (cost) stack, the first baseline
-            `_stack_positive_negative` returns.
-        credit_ends: End of each row's negative (credit) stack, the second one; only its width
-            matters here, for the axis reserve on the left.
-        band_maxima: Upper bound of each row's net NPV band — the whisker cap the label must clear.
+        cost_ends: End of each row's positive (cost) stack, the first baseline `_stack_positive_negative` returns.
+        credit_ends: End of each row's negative (credit) stack; only its width matters, for the left axis reserve.
+        band_maxima: Upper bound of each row's net NPV band.
 
     Returns:
-        The x each row's label starts at, the gap to leave between that point and the text, and
-        the widest extent any row reaches, which sizes the axis reserve on both sides.
+        The x each row's label starts at, the gap to leave before the text, and the widest extent any row reaches.
     """
     label_starts = [
         max(cost_end, maximum, 0.0) for cost_end, maximum in zip(cost_ends, band_maxima)
@@ -566,18 +437,12 @@ def _component_label_geometry(
 
 
 def _legend_below_axes_anchor(figure_height_in_inches: float) -> float:
-    """The `bbox_to_anchor` y that drops a legend half an inch below the axes, at any height.
+    """Return the `bbox_to_anchor` y that places a legend half an inch below the axes at any figure height.
 
-    A diverging horizontal stack with one row per subject has no reliably empty corner — in the
-    heat-pump-only run the in-axes legend covered the ElectricityMeter row outright, and no amount
-    of `loc` guessing can guarantee otherwise on an arbitrary result. The legend therefore sits
-    outside the axes, and the offset is expressed in axes fractions computed from the figure
-    height, so it stays the same half inch whether the chart has three rows or fifteen and never
-    lands on the x-axis label.
+    A diverging horizontal stack has no reliably empty corner, so the component chart's legend goes outside the axes.
 
     Args:
-        figure_height_in_inches: The figure's height; the axes are what is left of it once the
-            title, the axis label and the margins have taken their share.
+        figure_height_in_inches: The figure's height.
 
     Returns:
         A negative y anchor, to be used with `loc="upper center"`.
@@ -589,20 +454,12 @@ def _legend_below_axes_anchor(figure_height_in_inches: float) -> float:
 def plot_component_costs(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """Per-subject NPV as diverging stacks (§7.4): costs right of 0, credits left, net marker.
+    """Draw per-subject NPV as diverging stacks (§7.4): costs right of 0, credits left, a net marker.
 
-    Credits (residual value, subsidies, feed-in, anyway credit) are never added onto the cost
-    side — the black marker with whiskers is the net NPV band, `net = costs - credits`. A result
-    that carries no component breakdowns records the skip and writes no file.
-
-    Two placement rules exist because the chart draws three things per row and they collided in
-    every run of the evaluation set. The net-NPV text starts past *everything* in its row — the end
-    of the cost stack and the upper whisker cap, whichever reaches further (`_component_label_
-    geometry`) — rather than past the stack alone, which overprinted the marker on every row whose
-    band exceeded the bars. And the legend sits below the axes rather than inside them
-    (`_legend_below_axes_anchor`), because a diverging horizontal stack has no reliably empty
-    corner. Both put text outside the data range, so the figure is saved with `bbox_inches="tight"`
-    to keep it in the PNG.
+    Credits (residual value, subsidies, feed-in, anyway credit) are never netted onto the cost side; the black marker
+    with whiskers is the net NPV band. Labels start past the stack and whisker (`_component_label_geometry`) and the
+    legend sits below the axes (`_legend_below_axes_anchor`), so the figure is saved with `bbox_inches="tight"`. A
+    result without component breakdowns is skipped.
 
     Args:
         result: The evaluated perspective whose subjects are drawn.
@@ -660,12 +517,9 @@ def plot_component_costs(
         axis.invert_yaxis()
         axis.xaxis.grid(True, color=_Palette.GRID, linewidth=0.6)
         axis.yaxis.grid(False)
-        # The labels are drawn in data coordinates, so the axis has to make room for them or the
-        # longest one is clipped at the frame; the reserve is proportional to the label width.
-        # The left limit clears the *furthest left thing in the row*, which is the net band's
-        # lower cap whenever the band reaches past the credit stack — as it does on every row
-        # whose residual value exceeds its credits. Sizing it from the stack alone cut the
-        # whisker off at the frame, the mirror image of the label bug above.
+        # The labels are drawn in data coordinates, so the axis makes room for them in proportion
+        # to the label width. The left limit clears the furthest-left mark in the row, which is
+        # the net band's lower cap whenever the band reaches past the credit stack.
         axis.set_xlim(min(list(lefts_neg) + [band.minimum for band in nets] + [0.0]) - gap,
                       max(label_starts) + gap + span * _LABEL_RESERVE_SHARE)
         axis.set_xlabel("NPV [EUR] — credits left of 0, costs right; marker = net NPV band",
@@ -679,16 +533,10 @@ def plot_component_costs(
 
 
 def _comparison_basis(reference: LifecycleCostResult, variant: LifecycleCostResult) -> str:
-    """The perspective a comparison chart is drawn on, worded for a title and an axis label.
+    """Return the perspective a comparison chart is drawn on, worded for a title and an axis label.
 
-    The report shows payback on more than one basis: every perspective gets its own swimlane, and
-    only one of them — the compared one, typically `brownfield_net` — carries the milestone that
-    the payback curve is about, while a reader holding two of those images has two answers in
-    front of them. Both are correct and they legitimately differ — a net basis pays back earlier —
-    so a chart that does not say which basis it uses invites the reader to call the disagreement a
-    bug. The three charts that carry a basis (this one's callers: the payback curve, the NPV
-    bridge and the fixed-interest benchmark) therefore name it, and when the two sides are not the
-    same perspective, both are named rather than one silently standing in for the other.
+    Payback differs between perspectives (a net basis pays back earlier), so the payback curve, the NPV bridge and the
+    benchmark name their basis; when the two sides are different perspectives, both are named.
 
     Args:
         reference: The baseline result.
@@ -705,19 +553,17 @@ def _comparison_basis(reference: LifecycleCostResult, variant: LifecycleCostResu
 def plot_payback_curve(
     reference: LifecycleCostResult, variant: LifecycleCostResult, path: str
 ) -> str:
-    """Cumulative discounted savings (reference - variant) per slot; zero-crossing = payback.
+    """Draw the cumulative discounted savings (reference minus variant) per band slot; the zero crossing is the payback.
 
-    The curves come from `results.cumulative_discounted_savings` — the same function the
-    printed payback year is derived from (W4.4). Title and y label name the perspective the
-    savings series is computed on (`_comparison_basis`), because the report prints payback years
-    on more than one basis and two correct answers that differ read as a contradiction otherwise.
+    The curves come from `results.cumulative_discounted_savings`, which also yields the printed payback year. Title and
+    y label name the basis via `_comparison_basis`.
     """
     curves = cumulative_discounted_savings(reference, variant)
     years = list(range(len(curves["best_estimate"])))
     with _figure(height=3.6) as (figure, axes):
         axis = axes[0]
         # Named by world, not as optimistic/pessimistic: which one pays back first depends on
-        # which uncertainty dominates the savings (renovisorissues #73).
+        # which uncertainty dominates the savings.
         styles = {"low": (":", 1.2, "LOW world"), "best_estimate": ("-", 2.2, "expected"),
                   "high": ("--", 1.2, "HIGH world")}
         for slot, (linestyle, linewidth, label) in styles.items():
@@ -738,19 +584,14 @@ def plot_payback_curve(
 
 # ---------------------------------------------------------------------------- Sankey machinery
 #
-# The Sankeys of the visualization set (V1 and V10 on the raster side) share one layout and one
-# ribbon primitive. `matplotlib.sankey` is deliberately not used: it draws a radial diagram with
-# fixed arrow stubs, which cannot express "three columns of nodes with proportional ribbons
-# between them" at all. Hand-drawn cubic Bézier patches can, in about eighty lines, with no
-# dependency.
+# The actor-flow and sources-and-uses Sankeys share one layout and one ribbon primitive.
+# `matplotlib.sankey` draws radial diagrams with fixed arrow stubs and cannot express columns of
+# nodes with proportional ribbons, so the ribbons are hand-drawn cubic Bézier patches.
 
 class _SankeyStyle:
-    """Rendering weights of the matplotlib Sankeys, on top of the shared geometry.
+    """Ribbon transparency and font sizes of the matplotlib Sankeys.
 
-    The node/column geometry itself lives on `presentation_style.SankeyLayout`, because the
-    inline-SVG report draws the same diagrams and the two must place a node identically. What is
-    left here is what only a raster chart has an opinion about: ribbon transparency and the two
-    font sizes.
+    Node and column geometry lives in `presentation_style.SankeyLayout`, shared with the SVG report.
     """
 
     NODE_WIDTH = SankeyLayout.NODE_WIDTH
@@ -758,27 +599,18 @@ class _SankeyStyle:
     RIBBON_ALPHA = 0.55
     LABEL_SIZE = 7.0
     VALUE_SIZE = 6.5
-    #: Artist label of a net-position stub plate (Q29 R7), so a reader of the axis — the geometry
-    #: tests above all — can tell a stub from a node rectangle without measuring it.
+    #: Artist label of a net-position stub plate, so a reader of the axis (the geometry tests)
+    #: can tell a stub from a node rectangle without measuring it.
     STUB_LABEL = "net-stub"
 
 
 def _draw_ribbon(
     axis, left: Tuple[float, float], right: Tuple[float, float], band_height: float, color: str,
 ) -> None:
-    """One Bézier ribbon between two vertical faces, as a single closed patch.
+    """Draw one Bézier ribbon between two vertical faces as a single closed `PathPatch`.
 
-    `left` and `right` are the (x, y_bottom) attachment points and `band_height` is the ribbon's
-    width — **one width for both ends**, because a ribbon is one flow and the diagram has one
-    global unit scale (rule 2.7). The patch is a cubic curve along the top, a straight drop down
-    the right face, the mirrored curve back along the bottom and a close — eight vertices, which
-    is why this is a `PathPatch` rather than a polygon approximation.
-
-    There is no credit variant. The parameter that used to select a hatched ribbon for "money
-    coming back" (V11's rule) was passed `False` by both Sankeys in the set — neither draws a
-    credit flow, because both are built from flows that are already signed by direction — so the
-    branch was a rendering mode nothing could reach, and a flag every caller sets to the same
-    value is a fact about the module, not an argument.
+    `left` and `right` are the `(x, y_bottom)` attachment points and `band_height` the ribbon's width, the same at both
+    ends because the diagram has one global euro scale.
     """
     x_left, y_left = left
     x_right, y_right = right
@@ -810,12 +642,11 @@ def _draw_ribbon(
 
 
 def _draw_net_stubs(axis, geometry, stub_labels: Optional[Dict[str, str]] = None) -> None:
-    """The net-position stubs of a Sankey's internal nodes, PNG side (Q29 R7).
+    """Draw the net-position stubs of a Sankey's internal nodes.
 
-    The raster twin of the report's stubs: a short flat plate off the face the node's ribbons do
-    not fill, labelled with the signed amount. It is drawn without a curve and in the muted ink so
-    it reads as a closing remainder rather than as a payment to an unnamed counterparty, and it is
-    what makes both faces of every node in the PNG tile at 100 % like the SVG's.
+    A stub is a short flat plate off the face the node's ribbons do not fill, labelled with the signed amount and drawn
+    in the muted ink, so it reads as a remainder rather than a payment. It makes both faces of every node fully
+    covered, as in the SVG version.
     """
     for stub in geometry.net_stubs:
         if stub.node not in geometry.boxes:
@@ -850,14 +681,11 @@ def _draw_sankey(
     node_labels: Optional[Dict[str, str]] = None,
     stub_labels: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Draws a column Sankey: node rectangles plus one ribbon per flow.
+    """Draw a column Sankey: node rectangles plus one ribbon per flow.
 
-    The shared renderer of the whole Sankey family. Ribbons leave a node's right face and arrive
-    at the next node's left face in the order they are given, stacking on each face, so a node's
-    rectangle is exactly filled by the ribbons it carries and no ribbon can overflow it. Every
-    ribbon keeps one width end to end, taken from the single global unit scale
-    `sankey_node_boxes` returns (rule 2.7). Labels sit outside the first and last columns and
-    above the middle ones, which is what keeps a three-column diagram readable at report width.
+    Ribbons leave a node's right face and arrive at the next node's left face in the given order, stacking so each face
+    is exactly filled. Every ribbon keeps one width, from the global euro scale `sankey_node_boxes` returns. Labels sit
+    outside the first and last columns and above the middle ones.
     """
     geometry = sankey_node_boxes(
         [list(column) for column in columns],
@@ -871,8 +699,8 @@ def _draw_sankey(
         if source not in boxes or target not in boxes:
             continue
         band_height = amount * geometry.unit_scale
-        # Q29 R7: a ribbon spanning more than one column gap is drawn as a chain of legs through
-        # the corridors the layout reserved, so it cannot cross an intervening node's rectangle.
+        # A ribbon spanning more than one column gap is drawn as a chain of legs through the
+        # corridors the layout reserved, so it cannot cross an intervening node's rectangle.
         for leg in geometry.ribbon_segments[index]:
             if leg.source not in boxes or leg.target not in boxes:
                 continue
@@ -909,36 +737,28 @@ def _draw_sankey(
 
 
 def _category_color(category: Optional[CostCategory]) -> str:
-    """Display-group hue of a category, muted grey for the folded "other" ribbon.
+    """Return the display-group colour of a category, or the muted grey for the folded "other" ribbon.
 
-    Colour is never chosen here — it is looked up through `presentation_style.group_of`, so a
-    ribbon, a bar and an HTML rect showing the same money carry the same hue. A folded ribbon has
-    no single category left and therefore gets the chrome's muted tone rather than an arbitrary
-    hue that would suggest it belonged to one group.
+    Looked up through `presentation_style.group_of`, so the same money has the same hue in every output.
     """
     if category is None:
         return _Palette.MUTED
     return PresentationStyle.GROUP_COLORS_LIGHT[group_of(category)]
 
 
-# ---------------------------------------------------------------------------- V1 actor flows
+# ---------------------------------------------------------------------------- actor flows
 
 def plot_actor_flows(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """V1: who pays whom over the horizon, as a three-column Sankey (nominal, best estimate).
+    """Draw who pays whom over the horizon as a column Sankey (nominal euros, best estimate).
 
-    Sources on the left, actors in the middle, sinks on the right, with the inter-actor transfer
-    (the §559e levy today) drawn as a payer-to-payer ribbon rather than as two external stubs —
-    which is the whole reason the chart exists for a landlord/tenant case. Ribbon widths are
-    lifetime nominal euros of the BEST_ESTIMATE slot; the band of the grand total is stated in
-    the title, because a banded Sankey is unreadable (Q2).
-
-    Skipped, with a reason, for a perspective with fewer than two actors: a single-payer Sankey
-    adds nothing the waterfall does not already show.
+    Sources on the left, one column per actor in the order of `actor_columns`, sinks on the right, so a transfer
+    between actors (the §559e levy) is an ordinary left-to-right ribbon. Ribbon widths are lifetime nominal euros of
+    the best-estimate slot; the band of the total is in the title. A perspective with fewer than two actors is skipped.
 
     Args:
-        result: The evaluated perspective; its FULL timeline is read, so every payer appears.
+        result: The evaluated perspective; its full timeline is read, so every payer appears.
         path: Destination PNG path.
         skips: Collector for the skip record, if the caller is collecting.
 
@@ -955,7 +775,7 @@ def plot_actor_flows(
         return None
 
     def node_key(node: str, is_target: bool) -> str:
-        """Column-qualified node id: a counterparty can be both a source and a sink."""
+        """Return a column-qualified node id, since a counterparty can be both a source and a sink."""
         if node in matrix.actors:
             return f"actor:{node}"
         return f"snk:{node}" if is_target else f"src:{node}"
@@ -979,14 +799,14 @@ def plot_actor_flows(
         axis = axes[0]
         _draw_sankey(
             axis,
-            # Q23: one column per party, in the order the view's topological sort puts them, so a
-            # transfer between two parties is an ordinary left-to-right ribbon here too.
+            # One column per party, in the order the view's topological sort puts them, so a
+            # transfer between two parties is an ordinary left-to-right ribbon.
             [[f"src:{node}" for node in matrix.sources]]
             + [[f"actor:{actor}" for actor in column] for column in matrix.actor_columns()]
             + [[f"snk:{node}" for node in matrix.sinks]],
             ribbons,
             labels,
-            # Q29 R7: the face-closing stub carries the view's own net, in its sign convention.
+            # The face-closing stub carries the view's own net, in its sign convention.
             stub_labels={f"actor:{actor}": f"net {net:,.0f} EUR" for actor, net in nets.items()},
         )
         band = matrix.total_band
@@ -1007,7 +827,7 @@ def plot_actor_flows(
     return path
 
 
-# ---------------------------------------------------------------------------- V2 liquidity fan
+# ---------------------------------------------------------------------------- liquidity fan
 
 def plot_liquidity_fan(
     result: LifecycleCostResult,
@@ -1015,35 +835,25 @@ def plot_liquidity_fan(
     comparison: Optional[VariantComparison] = None,
     skips: Optional[List[SkippedPlot]] = None,
 ) -> Optional[str]:
-    """V2: cumulative cash position over time, nominal and discounted, with the band as a fan.
+    """Draw the cumulative cash position over time as a fan, nominal above and discounted below.
 
-    Two panels on one year axis. The upper one is the cumulative *nominal* cost, cost-positive-up
-    (owner decision Q4), annotated with the deepest out-of-pocket position — the liquidity
-    reading is carried by that annotation rather than by flipping the axis. The lower one is the
-    discounted picture: for a single evaluation the cumulative discounted cost ending at the NPV,
-    and for a comparison the cumulative discounted savings whose zero crossings give the payback
-    *interval* rather than a single false-precision year.
-
-    Both panels draw the BEST_ESTIMATE slot as a line and the LOW/HIGH envelope as a fill; the
-    fill is an envelope of two coherent worlds, not an error bar.
-
-    Both panels are drawn over **one** explicit year range, the nominal series'. A comparison
-    whose savings curve has a different length is a comparison of two horizons, and the fan would
-    silently plot the shorter one against the wrong years; it raises instead.
+    The upper panel is the cumulative nominal cost (cost positive, upward), annotated with the deepest out-of-pocket
+    position. The lower panel is the cumulative discounted cost ending at the NPV, or with a comparison the cumulative
+    discounted savings, whose zero crossings give the payback interval. Each panel draws the best estimate as a line
+    and the low/high envelope as a fill, over the nominal series' year range.
 
     Args:
         result: The perspective whose position is drawn.
         path: Destination PNG path.
-        comparison: Optional comparison; turns the lower panel into the payback fan. It has to be
-            the comparison computed *for this perspective* — the caller picks it.
+        comparison: Optional comparison computed for this perspective; turns the lower panel into the payback fan.
         skips: Collector for the skip record, if the caller is collecting.
 
     Returns:
         `path` when the chart was written, None when it had nothing to draw.
 
     Raises:
-        views.CostDataError: If the comparison's savings curves do not span the same years as
-            this result's own cumulative series.
+        views.CostDataError: If the comparison's savings curves do not span the same years as this result's own
+            cumulative series.
     """
     nominal = views.cumulative_nominal_cost_series(result)
     years = list(range(len(nominal[Slot.BEST_ESTIMATE])))
@@ -1108,22 +918,17 @@ def plot_liquidity_fan(
     return path
 
 
-# ---------------------------------------------------------------------------- V4 bridge
+# ---------------------------------------------------------------------------- comparison bridge
 
 def plot_comparison_bridge(
     reference: LifecycleCostResult, variant: LifecycleCostResult, path: str
 ) -> str:
-    """V4: why the variant's NPV differs from the reference's, as a bridge waterfall.
+    """Draw why the variant's NPV differs from the reference's, as a bridge waterfall.
 
-    Anchor bar for the reference, one floating bar per display group, anchor bar for the variant.
-    The anchors carry a thin min/max whisker; the deltas deliberately do not, because
-    `high(variant − reference)` is not `high(variant) − high(reference)` and a whisker there
-    would be arithmetic that means nothing. Delta bars are coloured by display group rather than
-    red/green (owner decision Q6): whether a cost increase is bad depends on the payer.
-
-    The title names the basis through `_comparison_basis`, as the payback curve does: when the
-    two sides are not the same perspective, both are named rather than one standing in silently
-    for the other.
+    An anchor bar for the reference, one floating bar per display group, an anchor bar for the variant. Only the
+    anchors carry a min/max whisker, since the band of a difference is not the difference of the bands. Deltas are
+    coloured by display group, not red/green, because whether a cost increase is bad depends on the payer. The title
+    names the basis via `_comparison_basis`.
 
     Args:
         reference: The base result.
@@ -1146,9 +951,7 @@ def plot_comparison_bridge(
             axis.bar([index], [abs(step.delta_in_euro)], bottom=bottom, width=0.7,
                      color=PresentationStyle.GROUP_COLORS_LIGHT[step.group])
             # The connector a waterfall is read along: a horizontal step at the running total,
-            # from the right edge of the previous bar to the left edge of this one. It used to be
-            # drawn from a point to itself — zero length, invisible, and the bars therefore
-            # floated with nothing tying each to the total it starts from.
+            # from the right edge of the previous bar to the left edge of this one.
             axis.plot([index - 1 + 0.35, index - 0.35], [cursor, cursor],
                       color=_Palette.GRID, linewidth=0.8)
             axis.text(index, bottom + abs(step.delta_in_euro) + abs(base) * 0.01,
@@ -1174,22 +977,15 @@ def plot_comparison_bridge(
     return path
 
 
-# ---------------------------------------------------------------------------- V6 audit heatmap
+# ---------------------------------------------------------------------------- audit heatmap
 
 class _HeatmapStyle:
-    """Colour scale, annotation limits and caption layout of the year × category heatmap (V6).
+    """Colour scale, annotation limit and caption layout of the year × category ledger heatmap.
 
-    `LINEAR_THRESHOLD` is the euro amount below which the symlog colour scale behaves linearly
-    (owner decision Q10): a linear scale would let the single year-0 investment cell flatten
-    every operational-year cell into the same tone, and seeing that texture *is* the audit
-    purpose. `MAX_ANNOTATED_CELLS` decides when the rounded per-cell numbers still fit; above it
-    the colorbar has to carry the reading alone.
-
-    The caption constants exist because this chart carries the authored explanation the HTML
-    sections carry, and a PNG has no collapsible disclosure to put it in: `CAPTION_WRAP_WIDTH` is
-    the character count that fills the 9-inch figure at `CAPTION_FONT_SIZE` without reaching the
-    right margin, and `CAPTION_LINE_HEIGHT_IN_INCHES` is what the figure grows by per wrapped
-    line so the text never lands on top of the matrix.
+    `LINEAR_THRESHOLD` is the euro amount below which the symlog scale is linear, so the year-0 investment does not
+    flatten the operating years. `MAX_ANNOTATED_CELLS` is the largest matrix that still gets per-cell numbers.
+    `CAPTION_WRAP_WIDTH` fills the 9-inch figure at `CAPTION_FONT_SIZE`, and `CAPTION_LINE_HEIGHT_IN_INCHES` is how
+    much the figure grows per caption line.
     """
 
     LINEAR_THRESHOLD = 100.0
@@ -1202,33 +998,26 @@ class _HeatmapStyle:
 
     @classmethod
     def annotates(cls, cell_count: int) -> bool:
-        """Whether a matrix of this size still gets its per-cell euros printed.
+        """Return whether a matrix of this size gets its per-cell euros printed.
 
-        One predicate rather than two comparisons, because the drawing and the caption have to
-        agree: a chart that dropped its annotations while the caption still implied they were
-        there is a chart a reader silently mis-reads as "these cells are zero".
+        The drawing and the caption both use this, so they agree.
         """
         return cell_count <= cls.MAX_ANNOTATED_CELLS
 
 
 def _heatmap_caption_lines(dropped: int, cell_count: int) -> List[str]:
-    """The heatmap's caption, wrapped to the figure width: authored prose, then this run's facts.
+    """Return the heatmap caption wrapped to the figure width: the authored text, then this run's facts.
 
-    The authored *shows* paragraph of the ledger heatmap comes first and unchanged — it is the
-    same text a reader of the HTML report meets at the top of every section, and it is what makes
-    this PNG readable on its own when it is mailed around without the report. The sentences after
-    it are run-specific and stay run-specific: which reconciliations hold, how many cost
-    categories carried no flow at all in this evaluation, and — the part a reader cannot see for
-    themselves — whether the per-cell euros were printed. A large matrix drops them, and an
-    unannotated cell looks exactly like a cell whose number was too small to matter.
+    The authored "shows" paragraph of the ledger heatmap comes first, so the PNG reads on its own. Then the
+    run-specific sentences: which reconciliations hold, how many cost categories carried no flow, and whether per-cell
+    euros were printed.
 
     Args:
         dropped: How many `CostCategory` members are absent from the matrix.
-        cell_count: Rows times columns of the drawn matrix, which is what decides the
-            annotations.
+        cell_count: Rows times columns of the drawn matrix.
 
     Returns:
-        One string per rendered line, in order; the caller sizes the figure from their count.
+        One string per rendered line; the caller sizes the figure from their count.
     """
     prose = ReportProse.for_section(ReportProse.LEDGER_HEATMAP_SECTION_NAME)
     paragraphs = [
@@ -1248,17 +1037,13 @@ def _heatmap_caption_lines(dropped: int, cell_count: int) -> List[str]:
 
 
 def _symlog_norm(extent: float) -> SymLogNorm:
-    """The heatmap's colour normalization: diverging around zero, linear near it, log beyond.
+    """Return the heatmap's colour normalization: diverging around zero, linear near it, logarithmic beyond.
 
-    Its own function for one reason: `SymLogNorm.__init__` is generated at import time by
-    matplotlib's `make_norm_from_scale`, so no static analyser can see its parameters — pylint
-    reads the plain `Normalize` signature and calls every keyword here unexpected. Keeping the
-    construction in one three-line function keeps that exemption to one place instead of putting a
-    suppression comment in the middle of the plotting code.
+    A separate function because matplotlib generates `SymLogNorm.__init__` at import time and pylint cannot see its
+    keywords; this keeps that exemption in one place.
 
     Args:
-        extent: The largest absolute euro amount in the matrix; the scale runs symmetrically from
-            its negative to it, which is what centres the diverging colormap on zero.
+        extent: The largest absolute euro amount in the matrix; the scale runs from its negative to it.
 
     Returns:
         The norm to hand to `imshow`.
@@ -1272,30 +1057,13 @@ def _symlog_norm(extent: float) -> SymLogNorm:
 def plot_timeline_heatmap(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """V6: the whole ledger as a year × category matrix — the audit trail's visual twin.
+    """Draw the whole ledger as a year × category matrix, the visual twin of the audit table.
 
-    Every cost category that carries a flow, unfolded (not grouped), against every year, in
-    nominal euros of the BEST_ESTIMATE slot. The colour scale is **diverging** and centred on
-    zero, so a credit and a cost can never look alike, and **symlog**, so the year-0 investment
-    does not flatten the operating years. Rows are ordered by display group, then by category
-    order within the group, which makes the row blocks match the stacked-bar legend.
-
-    This is the one chart of the set that lives with the audit outputs rather than in the report
-    (owner decision Q9): same audience, same question — "does every category put money in the
-    years it should". It is written by `write_audit_plots` from the audit's own call sites,
-    because the seam-4 import lint forbids `audit.py` from importing a renderer.
-
-    Reconciliation: column sums equal `annual_cost_series_nominal_in_euro` (best-estimate slot);
-    row sums equal the per-category nominal totals of the audit table. Both are stated in the
-    caption.
-
-    **The caption.** Living outside the report costs this chart the four-part explanation every
-    HTML section opens with: a PNG has no `<details>` to hold a definition list. It therefore
-    carries the authored *shows* paragraph verbatim (with the emphasis markers stripped, the only
-    change a matplotlib caption allows) above the two run-specific reconciliation sentences, and
-    the figure grows by exactly the height the wrapped text needs so nothing is clipped. The
-    terms and the calculation of the ledger heatmap are not renderable here; they stay in
-    `ReportProse`, where the HTML report reads them.
+    Every cost category with a flow, unfolded, against every year, in nominal euros of the best-estimate slot. The
+    colour scale is diverging around zero and symlog. Rows are ordered by display group, then category order. Column
+    sums equal `annual_cost_series_nominal_in_euro` and row sums the audit table's per-category totals; the caption
+    states both under the authored "shows" paragraph, and the figure grows to fit it. Written by `write_audit_plots`,
+    because `audit.py` may not import a renderer.
 
     Args:
         result: The perspective to audit.
@@ -1367,32 +1135,19 @@ AUDIT_HEATMAP_FILE_NAME = "cost_audit_timeline_heatmap.png"
 
 
 def write_audit_plots(result: LifecycleCostResult, result_directory: str) -> PlotsWritten:
-    """Writes the audit-side figures next to `cost_audit.csv` (V6, owner decision Q9).
+    """Write the audit-side heatmap next to `cost_audit.csv`.
 
-    The audit's charts have the audit's audience, so they are written from the audit's own call
-    sites — `bridge.compute_lifecycle_costs` and the `evaluate` CLI command, the two places that
-    write `cost_audit.csv` — rather than from `write_report_plots`. That makes this the one part
-    of the module a **plain cost run** reaches, i.e. the reason matplotlib is a dependency of the
-    cost path and not only of the report path. It lives here and not in `audit.py` because the
-    seam-4 import lint keeps the verification module free of renderers: the dependency runs from
-    presentation to the engine's outputs, never back.
-
-    **A rendering failure is a skip, not a run failure.** Both call sites write their tabular
-    exports first and remove them again when the run fails afterwards; letting a matplotlib
-    exception out of here would therefore take a complete, correct `cost_audit.csv` off disk
-    because a picture beside it could not be drawn. The chart is a companion, so a failure to draw
-    it is recorded exactly like a chart that had nothing to draw — with the exception's type and
-    message as the reason — and the caller reports it. A half-written PNG is removed, because a
-    truncated image file is worse than no image file.
+    Called by `bridge.compute_lifecycle_costs` and the `evaluate` CLI command, the two writers of `cost_audit.csv`. A
+    rendering failure becomes a skip (with the exception's type and message as reason) rather than a run failure,
+    because a failed run removes its exports and the CSV must not be lost over a picture. A half-written PNG is
+    removed.
 
     Args:
-        result: The perspective the audit was built for (the first one of the run).
+        result: The perspective the audit was built for (the run's first).
         result_directory: Directory holding the audit CSVs; the PNG lands beside them.
 
     Returns:
-        The paths that exist on disk afterwards, so the caller can log exactly what was written
-        and, in the bridge's case, remove them again if the run fails later on, together with the
-        record of anything that was not drawn.
+        The paths that exist on disk afterwards and the record of anything not drawn.
     """
     written = PlotsWritten()
     path = os.path.join(result_directory, AUDIT_HEATMAP_FILE_NAME)
@@ -1417,12 +1172,9 @@ def write_audit_plots(result: LifecycleCostResult, result_directory: str) -> Plo
 
 
 def _remove_if_present(path: str) -> None:
-    """Deletes a half-written figure, and says nothing if there is nothing to delete.
+    """Delete a half-written figure, silently if there is none.
 
-    A `savefig` that raises part-way through has already opened the file, so the directory can be
-    left with a truncated PNG that every reader treats as a real one. Removal failures are
-    swallowed: this runs while a failure is already being reported, and a cleanup problem must not
-    become the reported one.
+    Removal errors are swallowed, since this runs while another failure is being reported.
     """
     try:
         if os.path.isfile(path):
@@ -1431,16 +1183,13 @@ def _remove_if_present(path: str) -> None:
         pass
 
 
-# ---------------------------------------------------------------------------- V8 treemap
+# ---------------------------------------------------------------------------- cost treemap
 
 class _TreemapLabels:
-    """How a treemap decides whether a tile can carry its label (V8).
+    """Font limits for deciding whether a treemap tile can carry its label.
 
-    Matplotlib will happily draw a two-line label centred on a rectangle three pixels wide, and
-    the result is two subjects writing across each other — which is what these numbers exist to
-    prevent. The label is measured against the tile in axes fractions, the font shrinks until it
-    fits, and below `MIN_FONT_SIZE` the tile simply goes unlabelled (the HTML variant keeps it
-    readable via hover, as the spec allows).
+    The label is measured against the tile, the font shrinks until it fits, and below `MIN_FONT_SIZE` the tile stays
+    unlabelled.
     """
 
     #: Starting font size, in points; the same size the other charts' in-plot labels use.
@@ -1451,8 +1200,8 @@ class _TreemapLabels:
     LINE_HEIGHT_RATIO = 1.35
     #: Fraction of the tile the text may occupy before it is considered not to fit.
     FILL_LIMIT = 0.92
-    #: Share of its half of the figure a panel's axes occupy once the margins are taken; used to
-    #: turn the figure size into the axes extent without forcing an early draw.
+    #: Share of its half of the figure a panel's axes occupy once the margins are taken; it
+    #: converts the figure size into the axes extent without forcing an early draw.
     PANEL_WIDTH_SHARE = 0.92
     #: Share of the figure height left for the axes after the suptitle and the caption band.
     PANEL_HEIGHT_SHARE = 0.72
@@ -1461,12 +1210,10 @@ class _TreemapLabels:
 def _fitting_font_size(
     lines: List[str], width: float, height: float, axis_width_in_points: float, axis_height_in_points: float
 ) -> Optional[float]:
-    """The largest font size at which a label fits inside its tile, or None if none does.
+    """Return the largest font size at which a label fits inside its tile, or None if none does.
 
-    Works in points on both axes — the tile's size in axes fractions is converted with the axes'
-    own extent — because a font size is a point measurement and comparing it against a fraction
-    is how labels end up overflowing. Returns None when even `_TreemapLabels.MIN_FONT_SIZE` would
-    overflow, which is the caller's signal to leave the tile unlabelled.
+    The tile's size in axes fractions is converted to points with the axes' own extent. None means even
+    `_TreemapLabels.MIN_FONT_SIZE` overflows and the tile stays unlabelled.
     """
     available_width = width * axis_width_in_points * _TreemapLabels.FILL_LIMIT
     available_height = height * axis_height_in_points * _TreemapLabels.FILL_LIMIT
@@ -1482,25 +1229,13 @@ def _fitting_font_size(
 def plot_cost_treemap(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """V8: lifetime cost composition as a treemap, gross and net-of-credits side by side.
+    """Draw the lifetime cost composition as treemaps, gross and net of credits side by side.
 
-    Both variants are rendered because a treemap cannot show credits and neither answer is the
-    whole truth (owner decision Q11). The left panel is **gross**: tile area is the positive NPV
-    per (display group, subject) cell, and the caption restates the excluded credit total, so the
-    picture can never be mistaken for the net answer. The right panel is **net of credits**: each
-    subject's credits are applied to that subject's own cost tiles across all groups, and the
-    subjects whose credits exceed their costs are clamped at zero and *named* in the caption
-    together with the euros the clamping erased — those are exactly the entries a reviewer should
-    ask about.
-
-    Labels are drawn only where they fit their own rectangle, shrinking down to
-    `_TreemapLabels.MIN_FONT_SIZE` and disappearing below it, so a thin tile never writes across
-    its neighbour. The two captions are `report_prose.treemap_disclosure`, the same function the
-    HTML report's cost-structure section prints, so the PNG and the page disclose the fold and the
-    clamp in identical words.
-
-    A perspective in which neither basis has a positive tile — every subject's credits reach its
-    costs — is skipped: a treemap has no negative area, so both panels would be empty frames.
+    A treemap cannot show credits, so both are drawn. Gross: tile area is the positive NPV per (display group,
+    subject); the caption states the excluded credit total. Net: each subject's credits are applied to its own cost
+    tiles, and subjects whose credits exceed their costs are clamped to zero and named in the caption. Both captions
+    are `report_prose.treemap_disclosure`, as in the HTML report. Labels shrink to fit their tile and vanish below
+    `_TreemapLabels.MIN_FONT_SIZE`. A perspective with no positive tile on either basis is skipped.
 
     Args:
         result: The perspective whose cost structure is drawn.
@@ -1574,15 +1309,13 @@ def plot_cost_treemap(
     return path
 
 
-# ---------------------------------------------------------------------------- V9 swimlane
+# ---------------------------------------------------------------------------- lifecycle swimlane
 
 class _SwimlaneStyle:
-    """Row geometry of the lifecycle swimlane (V9).
+    """Row geometry of the lifecycle swimlane.
 
-    A swimlane is readable exactly as long as its rows are tall enough to carry a label, so the
-    figure height scales with the lane count instead of the rows shrinking. `SPAN_HEIGHT` is the
-    fraction of a row a span bar fills; the rest is the gap that keeps two neighbouring lanes
-    apart.
+    The figure height scales with the lane count so rows stay tall enough for labels; `SPAN_HEIGHT` is the share of a
+    row a span bar fills.
     """
 
     ROW_HEIGHT_IN_INCHES = 0.62
@@ -1615,26 +1348,19 @@ def _draw_lane_events(
     horizon: int,
     years_per_character: float,
 ) -> None:
-    """Draws one lane's markers and stacks their labels so none is overprinted.
+    """Draw one swimlane lane's event markers and stack their labels so none overprints another.
 
-    Markers are cheap; labels are not. Each label claims a horizontal extent — its estimated text
-    width, not just its year — and is pushed down one row at a time until it finds a level whose
-    claimed extent it does not run into. That is what separates a replacement label from the
-    residual label at the horizon, which sit years apart and still collide because the first one
-    is wide. A lane prints at most `_SwimlaneStyle.MAX_LABELS_PER_CLUSTER` levels and summarizes
-    the rest as "+N more", so the chart degrades by naming what it dropped rather than by becoming
-    unreadable.
-
-    Labels that would run off the right edge are flipped to the left of their marker, since the
-    horizon is where the residual credit lives and cutting that label off is not an option.
+    Each label claims its estimated text width and is pushed down a level until it fits; past
+    `_SwimlaneStyle.MAX_LABELS_PER_CLUSTER` levels the rest is summarized as "+N more". Labels that would run off the
+    right edge are flipped left of their marker.
 
     Args:
         axis: The swimlane axes.
         position: The lane's y coordinate.
-        events: (year, label, amount) triples, in year order.
+        events: `(year, label, amount)` triples, in year order.
         color: The lane's marker colour.
-        horizon: The observation horizon, i.e. where the drawable area ends.
-        years_per_character: Width of one label character in year units, for the extent estimate.
+        horizon: The observation horizon, where the drawable area ends.
+        years_per_character: Width of one label character in year units.
     """
     occupied: Dict[int, float] = {}
     hidden = 0
@@ -1682,25 +1408,20 @@ def plot_lifecycle_swimlane(
     comparison: Optional[VariantComparison] = None,
     skips: Optional[List[SkippedPlot]] = None,
 ) -> str:
-    """V9: the life of the renovation on one page — assets, financing, support, milestones.
+    """Draw the life of the renovation on one page: assets, financing, support and milestones.
 
-    The report's opening figure, and deliberately a *composition*: every lane restates a figure
-    that exists in full elsewhere (V7's asset events, V5's amortization, V2's crossings), so the
-    overview cannot disagree with the detail charts. The payback milestone is drawn as a **range
-    bar** spanning the band's zero crossings rather than as a single year — a one-year payback
-    label would be exactly the false precision the whole set avoids — and appears only when a
-    comparison exists to define it. A lane with nothing on it is dropped, and recorded as a skip
-    of its own, instead of drawn as an empty row.
+    Every lane restates a figure shown in full elsewhere (asset events, amortization, payback crossings). The payback
+    milestone is a range bar between the band's zero crossings and appears only with a comparison. An empty lane is
+    dropped and recorded as a skip.
 
     Args:
         result: The perspective to summarize.
         path: Destination PNG path.
-        comparison: Optional comparison, which is what gives the payback range a meaning. It has
-            to be the comparison computed for *this* perspective; the caller picks it.
+        comparison: Optional comparison computed for this perspective; gives the payback range.
         skips: Collector for the dropped lanes, if the caller is collecting.
 
     Returns:
-        `path`, unchanged — the milestone lane always exists, so the chart is never skipped whole.
+        `path`, unchanged; the milestone lane always exists, so the chart is never skipped.
     """
     lanes = views.lifecycle_lanes(result, comparison)
     rows: List[Tuple[str, List[Tuple[int, Optional[int], str]], List[Tuple[int, str, Optional[float]]], str]] = []
@@ -1794,21 +1515,16 @@ def plot_lifecycle_swimlane(
     return path
 
 
-# ---------------------------------------------------------------------------- V10 sources & uses
+# ---------------------------------------------------------------------------- sources & uses
 
 def plot_sources_and_uses(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """V10: how year 0 is funded and what it buys, as a two-column Sankey.
+    """Draw how year 0 is funded and what it buys, as a two-column Sankey (sources and uses).
 
-    The project-finance statement ("Mittelherkunft und Mittelverwendung"): every subsidy scheme
-    as its own node — *state -> KfW 261 -> heat pump* reads very differently from one grey
-    "subsidies" node — the loan disbursement, and own capital as the balancing item, against the
-    gross year-0 uses. The two columns balance to the euro by construction, and the caption says
-    so, which is what makes this a statement rather than a picture.
-
-    Skipped, with a reason, for a pure own-capital purchase: a single ribbon says less than the
-    investment waterfall already does.
+    Each subsidy scheme is its own node (e.g. "state -> KfW 261 -> heat pump"), with the loan disbursement and own
+    capital as the balancing item, against the gross year-0 uses. Both columns balance to the euro, and the caption
+    says so. A pure own-capital purchase is skipped.
 
     Args:
         result: The perspective whose year 0 is drawn.
@@ -1863,23 +1579,17 @@ def plot_sources_and_uses(
     return path
 
 
-# ---------------------------------------------------------------------------- V13 benchmark
+# ---------------------------------------------------------------------------- bank benchmark
 
 def plot_wealth_benchmark(
     reference: LifecycleCostResult, variant: LifecycleCostResult, path: str
 ) -> str:
-    """V13: "or should I just leave the money in the bank?", for interest rates from 1 % to 10 %.
+    """Draw the bank benchmark: renovating against keeping the money in the bank at 1 % to 10 % interest.
 
-    Panel A draws the wealth advantage of renovating over time, one thin line per grid rate in a
-    light-to-dark ramp, with the evaluation's own discount rate highlighted and banded. Panel B
-    compresses those lines into the number people quote: the terminal advantage against the
-    interest rate, whose zero crossing is the break-even rate — "if your bank pays more than X %,
-    renovating loses".
-
-    Interest is nominal and pre-tax and the caption says so (owner decision Q14): capital-income
-    taxation is country-specific and this module is applied beyond Germany. The title names the
-    basis through `_comparison_basis`, as the bridge and the payback curve do, so a benchmark
-    drawn across two perspectives says which two.
+    Panel A shows the wealth advantage of renovating over time, one line per rate, with the evaluation's own discount
+    rate highlighted and banded. Panel B shows the terminal advantage against the rate; its zero crossing is the
+    break-even rate. Interest is nominal and pre-tax, as the caption says, because capital-income taxation is
+    country-specific. The title names the basis via `_comparison_basis`.
 
     Args:
         reference: The do-nothing baseline.
@@ -1890,10 +1600,8 @@ def plot_wealth_benchmark(
         `path`, unchanged.
     """
     benchmark = views.wealth_benchmark(reference, variant)
-    # The fan is the HTML section's fan, drawn a second time: the same ten ordered steps, out of
-    # `SequentialRamp.LIGHT` — the light theme, because a baked PNG has no theme to follow. Taking
-    # matplotlib's own "viridis" here would have made the two renderings of one chart disagree
-    # about which line is 9 %, which is exactly the kind of split a shared palette exists to stop.
+    # The same ten ordered steps as the HTML section's fan, from `SequentialRamp.LIGHT` (a baked
+    # PNG has no theme), so both renderings colour the same rate the same way.
     if len(benchmark.rates) > len(SequentialRamp.LIGHT):
         raise views.CostDataError(
             f"The benchmark carries {len(benchmark.rates)} rates but the sequential ramp declares "
@@ -1947,26 +1655,17 @@ def plot_wealth_benchmark(
     return path
 
 
-# ---------------------------------------------------------------------------- V14 monthly burden
+# ---------------------------------------------------------------------------- monthly burden
 
 def plot_monthly_burden(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """V14: what this costs per month, year by year, stacked by display group.
+    """Draw what this costs per month, year by year, stacked by display group.
 
-    The lay-reader counterpart of V2: the same flows, translated into the unit households budget
-    in. Recurring cost only — debt service, energy, maintenance, taxes and levies, minus
-    recurring credits. **All capital events are excluded**, the year-0 investment and the
-    replacement years alike (owner decision Q15 as revised): a replacement is the same economic
-    object as the initial investment, so showing one and hiding the other was inconsistent. They
-    return as the dashed "with replacement reserve" line — the equivalent annual cost of the
-    replacement flows over twelve months, the sinking fund a prudent owner pays into.
-
-    The whiskers on the monthly *total* are this chart's one banded mark.
-
-    A perspective with no recurring cost at all — a pure investment view, an operating-only view
-    of a run without operating flows — is skipped: bars of height zero and a reserve line of zero
-    say "we looked and found nothing", which is not what an empty view means.
+    Recurring cost only: debt service, energy, maintenance, taxes and levies, minus recurring credits. All capital
+    events are excluded, the year-0 investment and the replacements alike; the replacements return as a dashed reserve
+    line (their equivalent annual cost over twelve months). Only the monthly total carries a whisker. A perspective
+    with no recurring cost is skipped.
 
     Args:
         result: The perspective whose burden is drawn.
@@ -2025,9 +1724,8 @@ def plot_monthly_burden(
             fontsize=10, color=_Palette.INK, loc="left",
         )
         axis.legend(fontsize=7, frameon=False, ncol=3, labelcolor=_Palette.INK)
-        # The reserve sentence is printed only when the dashed line is drawn. An evaluation that
-        # books no replacement has no line and had the caption anyway, promising a mark the
-        # reader then hunted for — and "0 EUR/month" is a sentence about a decision nobody made.
+        # The reserve sentence is printed only when the dashed line is drawn, so the caption
+        # never promises a mark that is not there.
         notes = [
             "Excludes every capital event — the year-0 investment and its financing, and the "
             "replacement years; the funding statement and the cash-flow timeline show those."
@@ -2060,16 +1758,10 @@ SKIPPED_PLOTS_FILE_NAME = "lifecycle_plots_not_drawn.txt"
 
 
 def report_plot_file_name(chart: str, perspective_id: str) -> str:
-    """`lifecycle_<chart>_<perspective_id>.png` — one file name, in one place.
-
-    Every per-perspective chart of the report set is drawn for every perspective of the matrix,
-    so the perspective id is part of the name rather than an implied "the first one". Building the
-    name here rather than at each call site is what keeps the twelve names one convention: the
-    former set spelled each literal at its call, and the payback curve had at one point been
-    written under a name only the CLI knew.
+    """Return `lifecycle_<chart>_<perspective_id>.png`, the file name of a per-perspective chart.
 
     Args:
-        chart: The chart's stem, e.g. `"cash_flow"`, as it appears between the prefix and the id.
+        chart: The chart's stem, e.g. `"cash_flow"`.
         perspective_id: The perspective the chart was drawn for.
 
     Returns:
@@ -2086,8 +1778,8 @@ _PER_PERSPECTIVE_CHARTS: Sequence[Tuple[str, Callable[..., Optional[str]]]] = (
     ("annual_cash_flows", plot_annual_cash_flows),
     ("investment_waterfall", plot_investment_waterfall),
     ("component_costs", plot_component_costs),
-    # The visualization set's pasteable subset (owner decision Q1): V1, V2, V8, V10 and V14 per
-    # perspective; V4 and V13 need the reference and are in the table below.
+    # The pasteable subset of the visualization set per perspective; the bridge and the
+    # benchmark need the reference and are in the table below.
     ("actor_flows", plot_actor_flows),
     ("sources_and_uses", plot_sources_and_uses),
     ("cost_treemap", plot_cost_treemap),
@@ -2109,53 +1801,28 @@ def write_report_plots(
     reference_result: Optional[LifecycleCostResult] = None,
     comparison: Optional[VariantComparison] = None,
 ) -> PlotsWritten:
-    """Writes the report's PNG set: every perspective's charts, plus the comparison's.
+    """Write the report's PNG set: every perspective's charts, plus the comparison's.
 
-    The module's main public orchestration point: called by the `report` CLI and by `bridge.py`
-    right after the HTML and markdown reports are written, so the PNG set always accompanies a
-    report rather than being generated on its own. It owns the whole set, the payback curve
-    included: a caller that wrote one more PNG beside these had to know a file name only this
-    function otherwise uses.
-
-    **Every perspective gets its charts**, under `lifecycle_<chart>_<perspective_id>.png`. Drawing
-    only the matrix's first perspective made the set unreadable as soon as a run had more than
-    one: the file names claimed to be *the* cash flow, *the* treemap, while the report beside them
-    showed six perspectives, and the reader had no way to tell which one the picture was of. The
-    matrix-wide comparison of perspectives is the exception and is drawn once, as
-    `lifecycle_perspective_costs.png`, because it already contains every perspective.
-
-    **The comparison charts belong to one perspective and are drawn for that one only.** With a
-    reference, the variant side is this matrix's result for the reference's *own* perspective id;
-    when the matrix does not carry it, the payback curve, the NPV bridge and the fixed-interest
-    benchmark are skipped with a reason. They are never redrawn against a substitute: the fan, the
-    swimlane's milestone, the bridge and the benchmark used to fall back to the first perspective
-    independently, so one page could carry a bridge about the landlord, a fan about the household
-    and a benchmark about neither, all labelled as one comparison.
-
-    An empty matrix produces no files instead of an error, and the audit-side heatmap has its own
-    entry point, `write_audit_plots`, because it travels with `cost_audit.csv` rather than with
-    the report.
+    Called by the `report` CLI and by `bridge.py` after the HTML and markdown reports. Every perspective gets its
+    charts as `lifecycle_<chart>_<perspective_id>.png`; `lifecycle_perspective_costs.png` is drawn once. With a
+    reference, the comparison charts (payback curve, NPV bridge, benchmark, and the comparison forms of the liquidity
+    fan and swimlane) are drawn for the reference's own perspective id only; when the matrix lacks it, they are skipped
+    with a reason, never drawn for another perspective. An empty matrix writes nothing. The audit heatmap is
+    `write_audit_plots`.
 
     Args:
         matrix: The evaluated perspectives; each one gets the per-perspective charts.
-        result_directory: Directory the `lifecycle_*.png` files are written into (next to the
-            HTML report).
-        reference_result: When given, the baseline of a variant comparison; adds the payback
-            curve, the NPV bridge and the fixed-interest benchmark for the perspective it names,
-            and turns that perspective's liquidity fan and swimlane into their comparison forms.
-        comparison: The already-computed comparison, when the caller has one — the `report` CLI
-            builds it with the two directories as reference and variant ids, and recomputing it
-            here would relabel it with the defaults. Without it, and with a reference, it is
-            computed from the two results.
+        result_directory: Directory the `lifecycle_*.png` files are written into, next to the HTML report.
+        reference_result: The baseline of a variant comparison, or None for no comparison charts.
+        comparison: A comparison the caller already computed (the `report` CLI labels it with its directory ids);
+            computed from the two results when None and a reference is given.
 
     Returns:
-        The paths that actually exist on disk and one record per chart that drew nothing, so a
-        caller can report exactly what was written and exactly what was not.
+        The paths that exist on disk and one record per chart that drew nothing.
 
     Raises:
-        views.CostDataError: If a prebuilt `comparison` was computed for a different perspective
-            than the one the reference names — the charts would then plot two different parties
-            against each other under one title.
+        views.CostDataError: If a prebuilt `comparison` was computed for a different perspective than the reference
+            names.
     """
     written = PlotsWritten()
     if not matrix.results:
@@ -2190,12 +1857,7 @@ def write_report_plots(
 def _draw(
     written: PlotsWritten, renderer: Callable[..., Optional[str]], *arguments: Any, **keywords: Any
 ) -> None:
-    """Calls one renderer and files its result under the paths this run wrote.
-
-    The one-line body of every entry in the tables above. It exists so the orchestration reads as
-    a list of charts rather than as thirteen `if path is not None: written.append(path)` pairs,
-    which is where a chart quietly stopped being collected the last time this set grew.
-    """
+    """Call one renderer and record its path, if any, under the paths this run wrote."""
     path = renderer(*arguments, **keywords)
     if path is not None:
         written.paths.append(path)
@@ -2212,12 +1874,10 @@ def _comparison_side(
     comparison: Optional[VariantComparison],
     written: PlotsWritten,
 ) -> Tuple[Optional[str], Optional[VariantComparison]]:
-    """Which perspective the comparison charts are drawn for, and the comparison itself.
+    """Return which perspective the comparison charts are drawn for, and the comparison itself.
 
-    The rule is like-for-like or nothing: the variant side is this matrix's result for the
-    reference's own perspective id, and if the matrix does not carry that id there is no
-    comparison to draw — the alternative, substituting the first perspective, produces charts
-    that compare two different parties under a title naming one.
+    The variant side is the matrix's result for the reference's own perspective id; if the matrix lacks it, no
+    comparison chart is drawn and a skip is recorded.
 
     Args:
         matrix: The evaluated perspectives.

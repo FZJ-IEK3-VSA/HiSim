@@ -1,36 +1,15 @@
-"""The ``staged`` command's parameter vocabulary: the document's own ``parameters`` block.
+"""The staged command's parameter vocabulary: the `parameters` block of `economics_result.json`, read and written.
 
-``python -m hisim.economics staged`` used to read its ``--parameters`` file as the engine's own
-:class:`~hisim.economics.parameters.EconomicParameters` record, whose field names
-(``observation_period_in_years``, ``apply_subsidies``, …) are a different vocabulary from the one
-``economics_result.json`` publishes and the RenoVisor contract promises (``horizon_years``,
-``perspective_id``, ``financing``, ``subsidy_mode``). Two vocabularies for one thing was the
-defect: the backend's documented example block was rejected key by key, and a file that named no
-country silently inherited the engine's ``"DE"`` default and priced an Irish house with German
-prices.
-
-This module is the single table of keys both directions share. :meth:`StagedParameters.from_mapping`
-reads an input mapping in the *document's* shape onto the engine record, and
-:meth:`StagedParameters.to_document_block` writes the block back out in the same shape, so a reader
-can feed a document's assumptions back in unchanged and get the same run. Two rules hold throughout:
-
-* **No default country.** The country is the one the stages were priced under; a ``country`` in the
-  file is only *checked* against it. ``"DE"`` never appears unless a file or a stage wrote it.
-* **Every fault at once.** Nothing raises on the first bad key. Faults are collected as
-  :class:`ParameterProblem` rows, and the CLI writes all of them into ``problems.json`` with exit 2
-  rather than a traceback.
+`StagedParameters.from_mapping` reads a `--parameters` file in the document's own key names (`horizon_years`,
+`perspective_id`, `financing`, `subsidy_mode`, ...) onto the engine's `EconomicParameters`, and
+`StagedParameters.to_document_block` writes the block back in the same shape, so a document's block fed back in gives
+the same run. There is no default country: the country is the one the stages were priced under. Faults are collected as
+`ParameterProblem` rows rather than raised one at a time; the CLI writes them to `problems.json` with exit 2.
 
 Example::
 
-    parsed = StagedParameters.from_mapping(
-        {"horizon_years": 20, "interest_rate": 0.03, "perspective_id": "brownfield_net",
-         "financing": {"kind": "cash"}, "subsidy_mode": "full"},
-        stored=stage_parameters,
-    )
+    parsed = StagedParameters.from_mapping({"horizon_years": 20, "subsidy_mode": "full"}, stored=stage_parameters)
     parameters, perspective = parsed.applied_to(bundle_perspective)
-
-Specification: ``roadmap/renovisor/implementation/step13_staged_parameters.md`` §1, which settles
-the accepted keys, the country rule and the refusal codes.
 """
 
 from __future__ import annotations
@@ -50,12 +29,9 @@ from hisim.economics.uncertainty import UncertainValue
 class ParameterKeys:
     """Every key name the staged parameter block uses, on input and on output.
 
-    One class rather than two lists, because the reader and the writer must not drift: a rename
-    here changes what ``--parameters`` accepts and what ``economics_result.json`` publishes in the
-    same edit, which is the property that makes a document's ``parameters`` block a legal input
-    file. The names are the document's own (``horizon_years``, not
-    ``observation_period_in_years``); the mapping onto the engine record's field names lives in
-    :meth:`StagedParameters.from_mapping`.
+    One class serves the reader and the writer, so a rename changes what `--parameters` accepts and what
+    `economics_result.json` publishes together. The mapping onto the engine record's field names lives in
+    `StagedParameters.from_mapping`.
 
     Example::
 
@@ -77,7 +53,7 @@ class ParameterKeys:
     #: :func:`~hisim.economics.evaluator.effective_price_basis_year`).
     PRICE_BASIS_YEAR: ClassVar[str] = "price_basis_year"
 
-    #: The calendar year the plan starts in: year 0 of the horizon (renovisorissues #57). Every
+    #: The calendar year the plan starts in: year 0 of the horizon. Every
     #: calendar year the document publishes is this plus the relative year, and none is published
     #: without it. An assumption of the reader, not a fact of the stages.
     PLAN_START_YEAR: ClassVar[str] = "plan_start_year"
@@ -91,7 +67,7 @@ class ParameterKeys:
     #: Cash or one annuity loan per buying stage.
     FINANCING: ClassVar[str] = "financing"
 
-    #: The reader's quoted prices, one per measure of a stage (renovisorissues #53): a list of
+    #: The reader's quoted prices, one per measure of a stage: a list of
     #: ``{"stage", "measure_id", "amount_in_euro", "source"}``.
     INVESTMENT_OVERRIDES: ClassVar[str] = "investment_overrides"
 
@@ -110,7 +86,7 @@ class ParameterKeys:
     #: The escalation rates, as a nested block.
     ESCALATION: ClassVar[str] = "escalation"
 
-    #: The year-1 price terms stated per carrier, as a nested block (renovisorissues #52).
+    #: The year-1 price terms stated per carrier, as a nested block.
     ENERGY_PRICES: ClassVar[str] = "energy_prices"
 
     #: Where each echoed energy rate and price came from. Written by a document, accepted and
@@ -118,7 +94,7 @@ class ParameterKeys:
     ORIGINS: ClassVar[str] = "origins"
 
     #: Under :attr:`ORIGINS`: the years every amount of the document was escalated between, written
-    #: only when ``plan_start_year`` differs from ``price_basis_year`` (renovisorissues #62).
+    #: only when ``plan_start_year`` differs from ``price_basis_year``.
     PRICE_LEVEL: ClassVar[str] = "price_level"
 
     #: Under :attr:`PRICE_LEVEL`: the year the prices were read at, the price basis year.
@@ -134,8 +110,7 @@ class ParameterKeys:
 
     #: The year of the weather the stages were simulated with (the ``simulation_year`` of their
     #: ``economic_inputs.json``). Accepted and ignored on input: it is a fact of the stages, not an
-    #: assumption a caller may state. It dates nothing in the document (renovisorissues #57):
-    #: the weather year and the plan's calendar are different things, and the calendar is
+    #: assumption a caller may state. It dates nothing in the document; the plan's calendar is
     #: :attr:`PLAN_START_YEAR`.
     WEATHER_YEAR: ClassVar[str] = "weather_year"
 
@@ -191,9 +166,8 @@ class ParameterKeys:
         ORIGINS,
     )
 
-    #: Keys the top-level block no longer accepts under their old name, with the sentence that
-    #: says what became of them. Still refused as ``parameters.unknown_key``; only the message
-    #: differs, so a reader holding an older document learns where the key went.
+    #: Former key names of the top-level block, with the sentence that says what became of each.
+    #: They are refused as ``parameters.unknown_key`` with that sentence as the message.
     RENAMED: ClassVar[Mapping[str, str]] = {
         "simulation_year": (
             "'simulation_year' was renamed `weather_year` in schema version 5 (renovisorissues #57): "
@@ -234,12 +208,11 @@ class ParameterKeys:
 
 
 class StatedPriceBounds:
-    """The ranges a stated energy price must lie in: typo guards, not market limits (#52).
+    """The ranges a stated energy price must lie in: typo guards, not market limits.
 
-    Each bound is wide enough for any bill a household in the shipped countries could show and
-    narrow enough to catch the three typos that matter — a price in cents rather than euros, a
-    price per MWh, a monthly charge typed as an annual one the wrong way round. A value outside is
-    refused as ``parameters.energy_prices.<CARRIER>.<field>.invalid``.
+    Each bound is wide enough for any household bill in the shipped countries and narrow enough to catch a price in
+    cents instead of euros, a price per MWh, or a monthly charge typed as annual. A value outside is refused as
+    `parameters.energy_prices.<CARRIER>.<field>.invalid`.
 
     Example::
 
@@ -266,11 +239,10 @@ class StatedPriceBounds:
 
 
 class PlanYearBounds:
-    """The range ``plan_start_year`` must lie in: a typo guard, not a statement about plans (#57).
+    """The range `plan_start_year` must lie in: a typo guard, not a statement about plans.
 
-    Wide enough for a plan dated in the past (a retrospective) or far ahead, narrow enough to catch
-    a two-digit year, a year with a digit too many and a relative year typed where a calendar
-    year belongs. A value outside is refused as ``parameters.plan_start_year.invalid``.
+    It catches a two-digit year, a year with a digit too many and a relative year typed where a calendar year belongs.
+    A value outside is refused as `parameters.plan_start_year.invalid`.
 
     Example::
 
@@ -285,15 +257,13 @@ class PlanYearBounds:
 
 
 class EchoOrigin(enum.Enum):
-    """Where an echoed energy rate or price came from, as ``parameters.origins`` spells it.
+    """Where an echoed energy rate or price came from, as `parameters.origins` spells it.
 
-    Two vocabularies share the enum because they share the first word. A per-carrier escalation
-    rate is ``stated`` (the plan's assumptions name it), ``country_default`` (the country's
-    ``escalation_defaults_<COUNTRY>.json``) or ``general`` (the general escalation rate); a price
-    field is ``stated`` or ``database`` (the price entry at the price basis year). One more value
-    stands alone: ``plan_start_year`` under ``origins.price_basis_year``, written only when the
-    stages and the parameters stated no price basis year and the plan's start year supplied it
-    (clamped to the device data; renovisorissues #57). Otherwise that key is absent.
+    A per-carrier escalation rate is `stated` (the plan's assumptions name it), `country_default` (the country's
+    `escalation_defaults_<COUNTRY>.json`) or `general` (the general escalation rate). A price field is `stated` or
+    `database` (the price entry at the price basis year). `plan_start_year` appears only under
+    `origins.price_basis_year`, when neither the stages nor the parameters stated a price basis year and the plan's
+    start year supplied it.
 
     Example::
 
@@ -308,14 +278,14 @@ class EchoOrigin(enum.Enum):
 
     @classmethod
     def of_rate(cls, origin: RateOrigin) -> "EchoOrigin":
-        """The echo spelling of one step of the escalation fallback chain.
+        """Return the echo spelling of one step of the escalation fallback chain.
 
         Args:
             origin: The step that produced the rate.
 
         Returns:
-            ``STATED`` for a configured rate, ``COUNTRY_DEFAULT`` for the defaults file, ``GENERAL``
-            for the general-rate fallback.
+            `STATED` for a configured rate, `COUNTRY_DEFAULT` for the defaults file, `GENERAL` for the general-rate
+                fallback.
         """
         return {
             RateOrigin.CONFIGURATION: cls.STATED,
@@ -329,12 +299,11 @@ class EchoedPrice:
     """The year-1 price terms one carrier was priced at, as the document echoes them.
 
     Args:
-        working_price_in_euro_per_kwh: The all-in year-1 working price (carbon included), or for
-            ``ELECTRICITY_FEED_IN`` the feed-in rate; None when the echo does not know it.
-        working_price_origin: Where it came from.
-        standing_charge_in_euro_per_year: The fixed annual charge; None for the feed-in carrier and
-            when the echo does not know it.
-        standing_charge_origin: Where it came from.
+        working_price_in_euro_per_kwh: The all-in year-1 working price (carbon included), or the feed-in rate for
+            `ELECTRICITY_FEED_IN`; None when unknown.
+        working_price_origin: Where the working price came from.
+        standing_charge_in_euro_per_year: The fixed annual charge; None for the feed-in carrier and when unknown.
+        standing_charge_origin: Where the standing charge came from.
     """
 
     working_price_in_euro_per_kwh: Optional[UncertainValue] = None
@@ -356,16 +325,15 @@ class EchoedPrice:
 
 @dataclass(frozen=True)
 class EnergyEcho:
-    """The per-carrier escalation rates and year-1 prices a plan was priced with (#52, E1).
+    """The per-carrier escalation rates and year-1 prices a plan was priced with.
 
-    What ``parameters.escalation.energy``, ``parameters.energy_prices`` and ``parameters.origins``
-    publish: the values *actually used*, for every carrier a stage bills and every carrier the
-    plan named, and where each one came from. The staged evaluator resolves it against the cost
-    database (:meth:`~hisim.economics.staged.StagedEvaluator.evaluate`); :meth:`stated_only` is the
-    fallback for a caller holding parameters but no priced plan, which echoes what was stated.
+    This is what `parameters.escalation.energy`, `parameters.energy_prices` and `parameters.origins` publish: the
+    values actually used for every carrier a stage bills or the plan names, and where each came from. The staged
+    evaluator resolves it against the cost database; `stated_only` is the fallback for a caller with parameters but no
+    priced plan.
 
     Args:
-        rates: Carrier -> ``(nominal annual rate, origin)``.
+        rates: Carrier -> `(nominal annual rate, origin)`.
         prices: Carrier -> the echoed price terms.
     """
 
@@ -374,13 +342,13 @@ class EnergyEcho:
 
     @classmethod
     def stated_only(cls, parameters: EconomicParameters) -> "EnergyEcho":
-        """The echo of what the parameters state, with no database to resolve the rest.
+        """Return the echo of what the parameters state, without a database to resolve the rest.
 
         Args:
             parameters: The assumptions.
 
         Returns:
-            The stated per-carrier rates and the stated price fields, every one ``stated``.
+            The stated per-carrier rates and price fields, each with origin `stated`.
         """
         prices: Dict[EnergyCarrier, EchoedPrice] = {}
         for carrier, stated in parameters.energy_prices.items():
@@ -402,12 +370,10 @@ class EnergyEcho:
 
 
 class SubsidyModeName(enum.Enum):
-    """How a parameter file spells "apply the subsidy catalogue" and "do not".
+    """How a parameter file spells "apply the subsidy catalogue" (`full`) and "do not" (`none`).
 
-    The input vocabulary of :attr:`ParameterKeys.SUBSIDY_MODE`. It is deliberately narrower than
-    the engine's own :class:`~hisim.economics.perspectives.SubsidyModeKind`, which also has the two
-    list-carrying kinds ``ONLY`` and ``EXCLUDE``: a RenoVisor caller chooses whether the catalogue
-    runs, never which schemes it may contain — that is the catalogue's own eligibility question.
+    It is narrower than the engine's `SubsidyModeKind`, which also has `ONLY` and `EXCLUDE`: a RenoVisor caller chooses
+    whether the catalogue runs, not which schemes it contains.
 
     Example::
 
@@ -421,10 +387,8 @@ class SubsidyModeName(enum.Enum):
 class FinancingKindName(enum.Enum):
     """How a parameter file spells "paid from cash" and "paid from one annuity loan".
 
-    The discriminator of :attr:`ParameterKeys.FINANCING`. ``CASH`` means the perspective gets no
-    :class:`~hisim.economics.financing.FinancingPlan` at all, which is what "cash purchase" is in
-    the engine; ``LOAN`` means one annuity loan per buying stage, with the plan's remaining fields
-    at the engine's documented defaults unless the file states them.
+    `CASH` gives the perspective no `FinancingPlan` at all. `LOAN` means one annuity loan per buying stage, with fields
+    the file does not state at the engine's defaults.
 
     Example::
 
@@ -436,13 +400,10 @@ class FinancingKindName(enum.Enum):
 
 
 class ParameterProblemCodes:
-    """The five code shapes a refused parameter block reports, as format strings.
+    """The code templates a refused parameter block reports, as format strings taking the dotted `path`.
 
-    Each takes the dotted ``path`` of the offending value, so one template serves the top-level
-    block and its nested ``financing`` and ``escalation`` blocks alike:
-    ``"parameters.horizon_years.invalid"`` and ``"parameters.financing.kind.invalid"`` come out of
-    the same :attr:`INVALID`. They exist as a class rather than as literals at the call sites so
-    the set a backend branches on can be read in one place.
+    One template serves every block: `"parameters.horizon_years.invalid"` and `"parameters.financing.kind.invalid"`
+    both come from `INVALID`. Keeping them in one class shows the set a backend branches on.
 
     Example::
 
@@ -465,7 +426,7 @@ class ParameterProblemCodes:
     #: The ``--parameters`` file itself: not there, not JSON, or not a JSON object.
     UNREADABLE: ClassVar[str] = "{path}.unreadable"
 
-    #: A value naming something the plan does not have: a quote's stage index (#53).
+    #: A value naming something the plan does not have: a quote's stage index.
     UNKNOWN: ClassVar[str] = "{path}.unknown"
 
     #: A quote for a measure the stage does not carry out -- not among its measures, or carried
@@ -481,20 +442,17 @@ class ParameterProblemCodes:
 
 @dataclass(frozen=True)
 class ParameterProblem:
-    """One reason a ``--parameters`` block was refused, at one path.
+    """One reason a `--parameters` block was refused, at one path.
 
-    The row ``problems.json`` carries, in the same three-or-four-field shape the translator's
-    :class:`hisim.renovisor.request.Problem` uses, so a backend reads an economics refusal exactly
-    as it reads a request refusal. It is a separate type because the codes are a different set:
-    the translator's are the contract's §7 request codes, these are the ``parameters.*`` codes of
-    step 13 §1.3.
+    It is one row of `problems.json`, in the same shape as the translator's `hisim.renovisor.request.Problem`, so a
+    backend reads both refusals alike; the codes are the `parameters.*` set.
 
     Args:
-        path: The dotted path of the offending value, e.g. ``parameters.financing.kind``.
-        code: Which kind of problem it is, one of :class:`ParameterProblemCodes` filled in.
-        message: One sentence a person can read, naming the value and what is wrong with it.
-        accepted: The values or keys that would have been accepted, or ``None`` when listing them
-            would say nothing (a number out of range, a mismatch against the stages).
+        path: The dotted path of the offending value, e.g. `parameters.financing.kind`.
+        code: A filled-in `ParameterProblemCodes` template.
+        message: One readable sentence naming the value and what is wrong with it.
+        accepted: The values or keys that would have been accepted, or None when a list would not help (a number out of
+            range, a mismatch against the stages).
     """
 
     path: str
@@ -503,11 +461,10 @@ class ParameterProblem:
     accepted: Optional[Tuple[Any, ...]] = None
 
     def to_json(self) -> Dict[str, Any]:
-        """The problem as one row of the ``problems.json`` document.
+        """Return the problem as one row of `problems.json`.
 
         Returns:
-            ``{"path": …, "code": …, "message": …}``, plus ``"accepted"`` when the problem names
-            the values it would have taken.
+            `{"path": ..., "code": ..., "message": ...}`, plus `"accepted"` when the problem names accepted values.
         """
         row: Dict[str, Any] = {"path": self.path, "code": self.code, "message": self.message}
         if self.accepted is not None:
@@ -518,30 +475,24 @@ class ParameterProblem:
 class ParameterReader:
     """Reads one parameter block key by key, collecting faults instead of raising on the first.
 
-    A parameter file is written by hand or assembled by a frontend, so reporting one fault per
-    invocation would make fixing a five-key block a five-round conversation. Every accessor
-    therefore returns ``None`` for a key that is absent *or* wrong and appends a
-    :class:`ParameterProblem` in the second case; the caller checks the problem list once, at the
-    end. Booleans are rejected wherever a number is expected, because ``True`` is an ``int`` in
-    Python and ``{"horizon_years": true}`` is a mistake, not a horizon of one year.
+    Every accessor returns None for a key that is absent or wrong and appends a `ParameterProblem` when it is wrong;
+    the caller checks the problem list once at the end, so a file with five faults is reported in one run. Booleans are
+    refused wherever a number is expected (`True` is an `int` in Python).
 
     Example::
 
         problems: List[ParameterProblem] = []
-        reader = ParameterReader({"horizon_years": 20}, ParameterKeys.ROOT_PATH,
-                                 ParameterKeys.ACCEPTED, problems)
+        reader = ParameterReader({"horizon_years": 20}, ParameterKeys.ROOT_PATH, ParameterKeys.ACCEPTED, problems)
         reader.refuse_unknown_keys()
         horizon = reader.integer(ParameterKeys.HORIZON_YEARS, minimum=1)
 
     Args:
-        raw: The block as it was parsed from JSON.
-        path: The dotted path of the block itself, e.g. ``parameters`` or ``parameters.financing``.
-        accepted: The keys this block accepts, for :meth:`refuse_unknown_keys` and its message.
-        problems: The list every fault is appended to; shared with the other blocks of one file.
-        noun: What one key of this block is, for the unknown-key message ("energy carrier" for the
-            per-carrier escalation rates, whose keys are carrier names rather than parameters).
-        renamed: Former keys of this block and the message that says what became of each; they
-            are refused like any unknown key, with that message instead of the generic one.
+        raw: The block as parsed from JSON.
+        path: The dotted path of the block, e.g. `parameters` or `parameters.financing`.
+        accepted: The keys this block accepts.
+        problems: The list every fault is appended to, shared by all blocks of one file.
+        noun: What one key of this block is, for the unknown-key message (e.g. "energy carrier").
+        renamed: Former keys and the message saying what became of each; they are refused with that message.
     """
 
     def __init__(
@@ -562,13 +513,13 @@ class ParameterReader:
         self.renamed: Mapping[str, str] = renamed if renamed is not None else {}
 
     def path_of(self, key: str) -> str:
-        """The dotted path one key of this block is reported under.
+        """Return the dotted path one key of this block is reported under.
 
         Args:
             key: The key name.
 
         Returns:
-            ``"<this block's path>.<key>"``.
+            `"<block path>.<key>"`.
         """
         return f"{self.path}.{key}"
 
@@ -584,12 +535,11 @@ class ParameterReader:
 
         Args:
             key: The offending key, or the empty string for the block itself.
-            code: A template from :class:`ParameterProblemCodes`, still holding ``{path}``.
+            code: A `ParameterProblemCodes` template, still holding `{path}`.
             message: The sentence the caller reads.
             accepted: The values that would have been accepted, if listing them helps.
-            code_path: The path the *code* is built from, when it differs from the path the
-                problem is reported at — an unknown key is ``parameters.unknown_key``, one code
-                for the block, while the row still points at the key nobody claimed.
+            code_path: The path the code is built from when it differs from the reported path; an unknown key gets the
+                block's code `parameters.unknown_key` while the row points at the key.
         """
         path = self.path_of(key) if key else self.path
         self.problems.append(
@@ -604,9 +554,8 @@ class ParameterReader:
     def refuse_unknown_keys(self) -> None:
         """Refuse every key of this block that is not in its accepted set, one problem each.
 
-        A key nobody claims is a typo in an assumption file, and ignoring it would price the run
-        with a value the author believed they had overridden — the failure mode this whole module
-        exists to remove.
+        An unknown key is usually a typo; ignoring it would price the run with a value the author believed they had
+        overridden.
         """
         for key in sorted(set(self.raw) - set(self.accepted)):
             self.refuse(
@@ -618,13 +567,13 @@ class ParameterReader:
             )
 
     def has(self, key: str) -> bool:
-        """Whether the block states the key at all, however it is spelled.
+        """Return whether the block states the key at all.
 
         Args:
             key: The key name.
 
         Returns:
-            True when the key is present, even with a null or a wrong value.
+            True when the key is present, even with a null or wrong value.
         """
         return key in self.raw
 
@@ -701,11 +650,10 @@ class ParameterReader:
         at_least: Optional[float] = None,
         at_most: Optional[float] = None,
     ) -> Optional[UncertainValue]:
-        """One amount stated as a number or as a band ``{min, best, max}``; None when absent or refused.
+        """Read one amount stated as a number or as a band `{min, best, max}`; None when absent or refused.
 
-        A band is the document's own spelling of an amount, so a price echoed by a document reads
-        back here unchanged. Every slot is held to the same bounds as a bare number, and the slots
-        must be ordered: a band whose cheap end is dearer than its expensive end says nothing.
+        A band is the document's own spelling of an amount (minimum, best estimate, maximum), so an echoed price reads
+        back unchanged. Every slot is held to the same bounds as a bare number, and the slots must be ordered.
 
         Args:
             key: The key name.
@@ -714,7 +662,7 @@ class ParameterReader:
             at_most: An inclusive upper bound, or None.
 
         Returns:
-            The amount, exact for a bare number, or None.
+            The amount (exact for a bare number), or None.
         """
         if key not in self.raw:
             return None
@@ -761,10 +709,9 @@ class ParameterReader:
         return value
 
     def block(self, key: str) -> Optional[Mapping[str, Any]]:
-        """One nested object, or None when the key is absent or its value is refused.
+        """Read one nested object, or None when the key is absent or its value is refused.
 
-        A ``null`` is refused rather than read as "the default": a file that states a key states
-        something, and "no financing block" is written by leaving the key out.
+        A `null` is refused rather than read as the default; leaving the key out is how a file says "no block".
 
         Args:
             key: The key name.
@@ -787,19 +734,17 @@ class ParameterReader:
 
 @dataclass(frozen=True)
 class StatedQuote:
-    """One entry of ``investment_overrides`` as the file states it (renovisorissues #53).
+    """One entry of `investment_overrides`: a reader's quoted price for one measure of one stage.
 
-    Structurally checked by :meth:`StagedParameters.from_mapping`; whether the stage exists and
-    carries the measure out is checked against the stages by the staged command
-    (:meth:`StagedParameters.check_quotes`), which then resolves the measure to the subject it
-    prices.
+    `StagedParameters.from_mapping` checks its structure; `StagedParameters.check_quotes` checks it against the stages,
+    after which the staged command resolves the measure to the subject it prices.
 
     Args:
         stage: The stage index.
         measure_id: The catalogue measure.
-        amount_in_euro: The quoted total, installed, in euro: positive and exact.
+        amount_in_euro: The quoted installed total in euro, positive and exact.
         source: Where the quote comes from.
-        position: The entry's index in the list, for the problem paths.
+        position: The entry's index in the list, for problem paths.
     """
 
     stage: int
@@ -809,7 +754,7 @@ class StatedQuote:
     position: int = 0
 
     def to_json(self) -> Dict[str, Any]:
-        """The entry as the document echoes it, which is also how the file states it."""
+        """Return the entry as the document echoes it, which is also how the file states it."""
         return {
             ParameterKeys.OVERRIDE_STAGE: self.stage,
             ParameterKeys.OVERRIDE_MEASURE_ID: self.measure_id,
@@ -820,20 +765,13 @@ class StatedQuote:
 
 @dataclass(frozen=True)
 class StagedParameters:
-    """A parsed ``--parameters`` file of ``python -m hisim.economics staged``.
+    """A parsed `--parameters` file of `python -m hisim.economics staged`.
 
-    What the staged command needs out of one file: the engine parameter record to price with, the
-    perspective the caller named, the financing and subsidy overrides they asked for, and every
-    fault found along the way. :attr:`parameters` is ``None`` exactly when :attr:`problems` is
-    non-empty — a refused file produces no half-built assumption set — and the CLI turns the
-    problem list into ``problems.json`` with exit 2.
-
-    Accepted keys are :class:`ParameterKeys`; three of them are accepted and ignored.
-    :attr:`ParameterKeys.WEATHER_YEAR` is a fact of the stages rather than an assumption,
-    :attr:`ParameterKeys.SUBSIDY_CATALOG` documents which catalogue produced a document while the
-    catalogue actually used comes from the shipped directory or from ``--subsidy-catalog``, and
-    :attr:`ParameterKeys.ORIGINS` says where a document's echoed rates and prices came from. All
-    three are accepted so that a document's own ``parameters`` block is a legal input file.
+    It holds the engine parameter record to price with, the perspective the caller named, the financing and subsidy
+    overrides, and every fault found. `parameters` is None exactly when `problems` is non-empty; the CLI then writes
+    `problems.json` and exits 2. Three accepted keys are ignored when read: `weather_year` (a fact of the stages),
+    `subsidy_catalog` (the catalogue actually used comes from the shipped directory or `--subsidy-catalog`) and
+    `origins`. They are accepted so a document's own `parameters` block is a legal input file.
 
     Example::
 
@@ -842,16 +780,14 @@ class StagedParameters:
 
     Args:
         parameters: The engine record to price with, or None when the file was refused.
-        perspective_id: The perspective the file named, or None when it named none.
-        financing: The financing plan the file asked for: a plan for ``loan``, None for ``cash``
-            *and* None when the file said nothing — :attr:`financing_given` tells the two apart.
-        financing_given: Whether the file stated :attr:`ParameterKeys.FINANCING` at all.
-        subsidy_mode: The subsidy mode the file asked for, or None when it said nothing.
-        plan_start_year: The calendar year the plan starts in, or None when the file names none —
-            in which case the document dates nothing (renovisorissues #57).
-        investment_overrides: The reader's quotes, structurally checked (renovisorissues #53);
-            empty when the file states none.
-        problems: Every fault found, in the order they were found.
+        perspective_id: The perspective the file named, or None.
+        financing: The financing plan for `loan`; None for `cash` and when the file said nothing (`financing_given`
+            tells these apart).
+        financing_given: Whether the file stated `financing` at all.
+        subsidy_mode: The subsidy mode the file asked for, or None.
+        plan_start_year: The calendar year the plan starts in, or None, in which case the document dates nothing.
+        investment_overrides: The reader's quotes, structurally checked; empty when none are stated.
+        problems: Every fault found, in the order found.
     """
 
     #: The perspective a RenoVisor plan is priced under when neither the file nor ``--perspective``
@@ -878,36 +814,24 @@ class StagedParameters:
     ) -> "StagedParameters":
         """Read one parameter mapping in the document's shape onto the engine's record.
 
-        The whole input contract of ``staged`` in one call. Every accepted key of
-        :class:`ParameterKeys` is optional: what a file does not state is what the stages were
-        priced under (``stored``), and what the stages do not state either is the engine's
-        documented default — with one exception, the country, which has no default here at all.
-
-        The country rule (step 13 §1.2) is the reason this function takes ``stored`` rather than
-        just a mapping. The plan's country is the one the stages were priced under; a ``country``
-        in the file must equal it or the run is refused naming both; a file without ``country``
-        over stages without a stored one is refused too. ``price_basis_year`` follows the same
-        rule, because the stored inputs were priced at the stages' basis year, with one fallback:
-        stages and file stating none, a stated ``plan_start_year`` anchors the basis year, which
-        the record then leaves unset for :meth:`~hisim.economics.staged.StagedEvaluator.evaluate`
-        to resolve and clamp. Nothing here ever substitutes ``"DE"``.
+        Every key is optional: what the file does not state comes from what the stages were priced under (`stored`),
+        and otherwise from the engine's default, except the country, which has no default. A `country` in the file must
+        equal the stages' country or the run is refused naming both; no country anywhere is refused too.
+        `price_basis_year` follows the same rule, except that when neither the stages nor the file state one, a stated
+        `plan_start_year` supplies it (left unset on the record for `StagedEvaluator.evaluate` to resolve and clamp).
 
         Example::
 
             StagedParameters.from_mapping({"country": "IE"}, stored=None).parameters.country == "IE"
 
         Args:
-            raw: The parsed ``--parameters`` document; anything that is not a JSON object is one
-                problem rather than an exception.
-            stored: The parameters the stages were priced under (``read_stored_parameters`` of the
-                first stage that carries a stored evaluation), or None when no stage carries any.
-            stored_country: The one country the stages were priced for, resolved by the caller
-                over every source a stage has (its stored evaluation *and* its stored inputs,
-                which carry the country since step 13). None when no stage states one; when None
-                and ``stored`` is given, ``stored.country`` is used, since a stored evaluation is
-                itself a stage's statement of its country.
-            stored_price_basis_year: The one price basis year the stages were priced at, resolved
-                the same way over the same two sources, with the same fallback to ``stored``.
+            raw: The parsed `--parameters` document; anything other than a JSON object is one problem, not an
+                exception.
+            stored: The parameters the stages were priced under (from the first stage with a stored evaluation), or
+                None.
+            stored_country: The one country the stages were priced for, resolved by the caller over every stage source;
+                when None and `stored` is given, `stored.country` is used.
+            stored_price_basis_year: The one price basis year the stages were priced at, resolved the same way.
 
         Returns:
             The parsed result, carrying either the engine parameters or the problems.
@@ -978,17 +902,14 @@ class StagedParameters:
     def _read_investment_overrides(
         cls, reader: ParameterReader, problems: List[ParameterProblem]
     ) -> Tuple[StatedQuote, ...]:
-        """Read ``investment_overrides``: the reader's quoted prices (renovisorissues #53).
+        """Read `investment_overrides`, the reader's quoted prices.
 
-        A list of entries with exactly the four keys of :attr:`ParameterKeys.ACCEPTED_OVERRIDE`:
-        ``stage`` a whole number from 0, ``measure_id`` a string, ``amount_in_euro`` a number above
-        0 (a quote is exact, so a band is refused), ``source`` a non-empty string. A
-        second entry for the same stage and measure is refused as
-        ``parameters.investment_overrides.duplicate``. Each problem's path names the entry
-        (``parameters.investment_overrides[1].amount_in_euro``); its code names the key
-        (``parameters.investment_overrides.amount_in_euro.invalid``). Whether the stage exists and
-        carries the measure out, and whether the catalogue has it at all, is checked with the stages
-        (:meth:`check_quotes`).
+        A list of entries with exactly the keys `stage` (a whole number from 0), `measure_id` (a string),
+        `amount_in_euro` (a number above 0; a quote is exact, so a band is refused) and `source` (a non-empty string).
+        A second entry for the same stage and measure is refused as `parameters.investment_overrides.duplicate`. A
+        problem's path names the entry (`parameters.investment_overrides[1].amount_in_euro`); its code names the key
+        (`parameters.investment_overrides.amount_in_euro.invalid`). Whether the stage and measure exist is checked
+        later by `check_quotes`.
 
         Args:
             reader: The top-level block's reader.
@@ -1049,11 +970,11 @@ class StagedParameters:
         position: int,
         problems: List[ParameterProblem],
     ) -> Optional[StatedQuote]:
-        """Read one ``investment_overrides`` entry, or None when any of its keys is refused.
+        """Read one `investment_overrides` entry, or None when any of its keys is refused.
 
         Args:
             entry: The entry as parsed.
-            entry_path: Its path, ``parameters.investment_overrides[<position>]``.
+            entry_path: Its path, `parameters.investment_overrides[<position>]`.
             position: Its index.
             problems: The shared problem list.
 
@@ -1099,25 +1020,22 @@ class StagedParameters:
         costless_measures: Sequence[str],
         catalogue_measures: Sequence[str],
     ) -> List[ParameterProblem]:
-        """Check the quotes against the stages of the plan they are for (renovisorissues #53).
+        """Check the quotes against the stages of the plan they are for.
 
-        A quote for a stage index the plan does not have is
-        ``parameters.investment_overrides.stage.unknown``; one for a measure the catalogue does not
-        have is ``parameters.investment_overrides.measure_id.invalid``; one for a measure the stage does
-        not carry out is ``parameters.investment_overrides.measure_id.not_in_stage``; one for a
-        measure that costs nothing to carry out is
-        ``parameters.investment_overrides.measure_id.costless``. Every priced catalogue measure a
-        stage carries out accepts a quote, an unpriced one included.
+        The codes are `parameters.investment_overrides.stage.unknown` for a stage index the plan lacks,
+        `...measure_id.invalid` for a measure the catalogue lacks, `...measure_id.not_in_stage` for a measure the stage
+        does not carry out, and `...measure_id.costless` for a measure that costs nothing. Every priced catalogue
+        measure a stage carries out accepts a quote, an unpriced one included.
 
         Args:
             quotes: The structurally checked quotes.
-            stage_measures: Per stage, in stage order, the measures it carries out -- for a
-                RenoVisor plan the measures new in that stage, or the stage's own for stage 0.
+            stage_measures: Per stage, in order, the measures it carries out (for a RenoVisor plan the measures new in
+                that stage; stage 0's own).
             costless_measures: The measures that cost nothing to carry out.
             catalogue_measures: Every measure id of the catalogue.
 
         Returns:
-            One problem per refused quote, in file order; empty when every quote fits the plan.
+            One problem per refused quote, in file order; empty when every quote fits.
         """
         problems: List[ParameterProblem] = []
         for quote in quotes:
@@ -1172,17 +1090,16 @@ class StagedParameters:
 
     @classmethod
     def _read_plan_start_year(cls, reader: ParameterReader) -> Optional[int]:
-        """Read ``plan_start_year``, the calendar year of the plan's year 0 (renovisorissues #57).
+        """Read `plan_start_year`, the calendar year of the plan's year 0 (the year the first stage is bought).
 
-        A ``null`` says nothing, as for ``price_basis_year``: a document without a start year
-        writes ``null``, and its block has to read back. A stated year is a whole number within
-        :class:`PlanYearBounds`, refused as ``parameters.plan_start_year.invalid`` otherwise.
+        A `null` states nothing, so a document without a start year reads back. A stated year must be a whole number
+        within `PlanYearBounds`, else it is refused as `parameters.plan_start_year.invalid`.
 
         Args:
             reader: The top-level block's reader.
 
         Returns:
-            The year, or None when the file states none or states a refused one.
+            The year, or None when the file states none or a refused one.
         """
         if reader.raw.get(ParameterKeys.PLAN_START_YEAR) is None:
             return None
@@ -1192,11 +1109,10 @@ class StagedParameters:
 
     @classmethod
     def _read_horizon_and_interest(cls, reader: ParameterReader, overrides: Dict[str, Any]) -> None:
-        """Read ``horizon_years`` and ``interest_rate`` onto the two engine fields they rename.
+        """Read `horizon_years` and `interest_rate` onto the engine record's horizon and interest fields.
 
-        Both bounds are the engine record's own (a horizon below one year and an interest rate at
-        or below -100 % make the annuity and discounting formulas meaningless), checked here so the
-        caller is told which key is wrong instead of receiving the record's bare ``ValueError``.
+        The bounds are the engine record's own (horizon at least one year, interest rate above -100 %), checked here so
+        the problem names the key instead of surfacing the record's bare `ValueError`.
 
         Args:
             reader: The top-level block's reader.
@@ -1211,14 +1127,14 @@ class StagedParameters:
 
     @classmethod
     def _stages_country(cls, stored: Optional[EconomicParameters], stored_country: Optional[str]) -> Optional[str]:
-        """The country the stages were priced for, out of the caller's two ways of saying it.
+        """Return the country the stages were priced for, from either of the caller's two sources.
 
         Args:
-            stored: The stage parameters, whose ``country`` is itself a stage's statement.
+            stored: The stage parameters, whose `country` is itself a stage's statement.
             stored_country: The country the caller resolved over every stage source, if any.
 
         Returns:
-            The resolved country, or None when no stage states one.
+            The country, or None when no stage states one.
         """
         if stored_country is not None:
             return stored_country
@@ -1228,16 +1144,14 @@ class StagedParameters:
     def _read_country(
         cls, reader: ParameterReader, stored_country: Optional[str], overrides: Dict[str, Any]
     ) -> None:
-        """Resolve the country against the stages, with no default anywhere.
+        """Resolve the country against the stages, with no default.
 
-        The plan's price data and subsidy catalogue follow one country, and it is the one the
-        stages were priced under. A file may repeat it — that is a useful assertion — but may not
-        change it: a plan is not re-priceable into another country's prices, and the run that
-        silently did so published German costs for an Irish house.
+        A plan's price data and subsidy catalogue follow the country its stages were priced under. A file may repeat
+        that country but may not change it, since stored inputs cannot be re-priced into another country.
 
         Args:
             reader: The top-level block's reader.
-            stored_country: The country the stages were priced for, or None when none states one.
+            stored_country: The country the stages were priced for, or None.
             overrides: The engine-field overrides being assembled; written in place.
         """
         if not reader.has(ParameterKeys.COUNTRY):
@@ -1279,15 +1193,14 @@ class StagedParameters:
     def _stages_price_basis_year(
         cls, stored: Optional[EconomicParameters], stored_price_basis_year: Optional[int]
     ) -> Optional[int]:
-        """The price basis year the stages were priced at, out of the caller's two ways of saying it.
+        """Return the price basis year the stages were priced at, from either of the caller's two sources.
 
         Args:
-            stored: The stage parameters, whose ``price_basis_year`` is itself a stage's statement
-                — the *resolved* one, since a stored evaluation records what it actually used.
+            stored: The stage parameters, whose `price_basis_year` is the resolved year a stored evaluation used.
             stored_price_basis_year: The year the caller resolved over every stage source, if any.
 
         Returns:
-            The resolved year, or None when no stage states one.
+            The year, or None when no stage states one.
         """
         if stored_price_basis_year is not None:
             return stored_price_basis_year
@@ -1301,32 +1214,18 @@ class StagedParameters:
         overrides: Dict[str, Any],
         plan_start_year: Optional[int] = None,
     ) -> None:
-        """Resolve the price basis year against the stages, with no re-derivation anywhere.
+        """Resolve the price basis year (the year whose price level the inputs are read at) against the stages.
 
-        The stages were priced at one price level and a plan out of them is priced at that same
-        level: a file may repeat the year but not change it, because the stored inputs cannot be
-        re-based without being re-run. A ``null`` says nothing and takes the stages', so a
-        document whose block is fed back in round trips.
-
-        When no stage states a year and the file states none either, a stated
-        ``plan_start_year`` anchors the basis year (renovisorissues #57): the plan's own "today" is
-        the calendar year it starts in, which the caller has just named. The record's
-        ``price_basis_year`` is then left unset, and
-        :meth:`~hisim.economics.staged.StagedEvaluator.evaluate` resolves it through
-        :func:`~hisim.economics.evaluator.effective_price_basis_year` — clamped to the earliest
-        year the country's device data covers, exactly as a Python caller's plan is, so the CLI
-        and the API price one plan at one year. Without a start year the run is
-        **refused** rather than re-derived from the simulation year — the year of the stages'
-        weather, which says nothing about price levels. Re-deriving is the same class of silent
-        difference as a defaulted country: it produces a complete-looking plan priced at a year
-        none of its runs used, and nothing downstream can tell. A caller who has only such stages
-        — extracts written before the key existed — names ``price_basis_year`` or
-        ``plan_start_year`` in the file, or re-runs the jobs. Stages that do state a year keep it
-        whatever ``plan_start_year`` says: their stored inputs cannot be re-based.
+        A file may repeat the stages' year but not change it, because stored inputs cannot be re-based without
+        re-running. A `null` states nothing and takes the stages' year. When no stage and not the file states a year, a
+        stated `plan_start_year` supplies it: the record's year is left unset and `StagedEvaluator.evaluate` resolves
+        it via `effective_price_basis_year`, clamped to the earliest year of the country's device data. Without a start
+        year either, the run is refused rather than using the simulation (weather) year, which says nothing about price
+        levels. Stages that state a year keep it whatever `plan_start_year` says.
 
         Args:
             reader: The top-level block's reader.
-            stored_year: The year the stages were priced at, or None when none states one.
+            stored_year: The year the stages were priced at, or None.
             overrides: The engine-field overrides being assembled; written in place.
             plan_start_year: The calendar year the file says the plan starts in, or None.
         """
@@ -1370,14 +1269,13 @@ class StagedParameters:
 
     @classmethod
     def _read_subsidy_mode(cls, reader: ParameterReader) -> Optional[SubsidyModeName]:
-        """Read ``subsidy_mode``, the two-valued input spelling of "apply the catalogue".
+        """Read `subsidy_mode`, the two-valued input spelling of "apply the catalogue".
 
         Args:
             reader: The top-level block's reader.
 
         Returns:
-            The mode, or None when the file states none — in which case the perspective's own
-            subsidy mode stands.
+            The mode, or None when the file states none (the perspective's own subsidy mode then stands).
         """
         spelling = reader.text(ParameterKeys.SUBSIDY_MODE)
         if spelling is None:
@@ -1397,19 +1295,18 @@ class StagedParameters:
     def _read_financing(
         cls, reader: ParameterReader, problems: List[ParameterProblem]
     ) -> Tuple[bool, Optional[FinancingPlan]]:
-        """Read the ``financing`` block: a cash purchase, or one annuity loan per buying stage.
+        """Read the `financing` block: a cash purchase, or one annuity loan per buying stage.
 
-        The three loan fields are refused on a cash purchase rather than ignored: a file stating
-        ``{"kind": "cash", "term_in_years": 15}`` means something the engine cannot do, and
-        dropping the term would price a plan the caller did not describe.
+        Loan fields on a cash purchase are refused rather than ignored, since dropping them would price a plan the
+        caller did not describe.
 
         Args:
             reader: The top-level block's reader.
-            problems: The shared problem list, for the nested block's own reader.
+            problems: The shared problem list, for the nested block's reader.
 
         Returns:
-            ``(whether the file stated the key, the plan)``; the plan is None both for a cash
-            purchase and for a refused block, which is why the flag is returned beside it.
+            `(whether the file stated the key, the plan)`; the plan is None for a cash purchase and for a refused
+                block.
         """
         if not reader.has(ParameterKeys.FINANCING):
             return False, None
@@ -1460,14 +1357,13 @@ class StagedParameters:
 
     @classmethod
     def _read_loan(cls, nested: ParameterReader) -> Optional[FinancingPlan]:
-        """Build the annuity loan plan out of a ``financing`` block of kind ``loan``.
+        """Build the annuity loan plan from a `financing` block of kind `loan`.
 
-        Every field the input vocabulary does not carry — the repayment shape, a soft-loan scheme
-        id, a repayment grant — keeps the engine's default, because those are decided by the
-        subsidy catalogue rather than by a caller.
+        Fields the input vocabulary does not carry (repayment shape, soft-loan scheme id, repayment grant) keep the
+        engine's defaults; the subsidy catalogue decides them.
 
         Args:
-            nested: The financing block's own reader, already checked for unknown keys.
+            nested: The financing block's reader, already checked for unknown keys.
 
         Returns:
             The plan, or None when one of its fields was refused.
@@ -1489,16 +1385,14 @@ class StagedParameters:
     def _read_escalation(
         cls, reader: ParameterReader, problems: List[ParameterProblem], overrides: Dict[str, Any]
     ) -> None:
-        """Read the ``escalation`` block onto the four escalation fields of the engine record.
+        """Read the `escalation` block onto the four escalation fields of the engine record.
 
-        ``energy`` is a mapping of carrier to rate, keyed the way the document writes it (the
-        :class:`~hisim.economics.carriers.EnergyCarrier` member value); an empty mapping is the
-        statement "no per-carrier override", so every carrier falls back to the country's defaults
-        file and then to the general rate.
+        `energy` maps carrier (the `EnergyCarrier` value) to rate. An empty mapping states "no per-carrier override",
+        so every carrier falls back to the country's defaults file and then to the general rate.
 
         Args:
             reader: The top-level block's reader.
-            problems: The shared problem list, for the nested block's own reader.
+            problems: The shared problem list, for the nested block's reader.
             overrides: The engine-field overrides being assembled; written in place.
         """
         if not reader.has(ParameterKeys.ESCALATION):
@@ -1538,7 +1432,7 @@ class StagedParameters:
             if spelling == EnergyCarrier.ELECTRICITY_FEED_IN.value:
                 # The per-carrier table is read for what a carrier *costs*; the feed-in
                 # remuneration escalates with `escalation.feed_in` once its fixed period is over,
-                # so a rate here would be accepted and never read (#52).
+                # so a rate here would be accepted and never read.
                 energy.refuse(
                     spelling,
                     ParameterProblemCodes.INVALID,
@@ -1555,18 +1449,16 @@ class StagedParameters:
     def _read_energy_prices(
         cls, reader: ParameterReader, problems: List[ParameterProblem], overrides: Dict[str, Any]
     ) -> None:
-        """Read the ``energy_prices`` block onto ``EconomicParameters.energy_prices`` (#52).
+        """Read the `energy_prices` block onto `EconomicParameters.energy_prices`.
 
-        One entry per carrier, keyed by the :class:`~hisim.economics.carriers.EnergyCarrier`
-        value, stating the all-in year-1 ``working_price_in_euro_per_kwh`` and/or the
-        ``standing_charge_in_euro_per_year``; each a number or a band ``{min, best, max}``, within
-        :class:`StatedPriceBounds`. ``ELECTRICITY_FEED_IN`` states a working price only — the
-        feed-in rate. A block that is present replaces the stages' own stated prices as a whole,
-        exactly as ``escalation.energy`` replaces their per-carrier rates.
+        One entry per carrier (keyed by the `EnergyCarrier` value) states the all-in year-1
+        `working_price_in_euro_per_kwh` and/or `standing_charge_in_euro_per_year`, each a number or a band `{min, best,
+        max}` within `StatedPriceBounds`. `ELECTRICITY_FEED_IN` states only a working price, the feed-in rate. A
+        present block replaces the stages' stated prices as a whole.
 
         Args:
             reader: The top-level block's reader.
-            problems: The shared problem list, for the nested blocks' own readers.
+            problems: The shared problem list, for the nested blocks' readers.
             overrides: The engine-field overrides being assembled; written in place.
         """
         if not reader.has(ParameterKeys.ENERGY_PRICES):
@@ -1600,14 +1492,14 @@ class StagedParameters:
 
     @classmethod
     def _read_carrier_price(cls, carrier: EnergyCarrier, terms: ParameterReader) -> Optional[StatedEnergyPrice]:
-        """Read one carrier's stated price terms, within :class:`StatedPriceBounds`.
+        """Read one carrier's stated price terms, within `StatedPriceBounds`.
 
         Args:
             carrier: The carrier the terms are stated for.
             terms: The carrier's own reader.
 
         Returns:
-            The stated terms, or None when one of them was refused or none was stated.
+            The stated terms, or None when one was refused or none was stated.
         """
         before = len(terms.problems)
         terms.refuse_unknown_keys()
@@ -1654,22 +1546,18 @@ class StagedParameters:
     def reconciled_perspective_id(
         cls, in_file: Optional[str], on_command_line: Optional[str], problems: List[ParameterProblem]
     ) -> str:
-        """The one perspective id, out of the file's and the command line's.
+        """Return the one perspective id, reconciling the file's `perspective_id` and the `--perspective` flag.
 
-        Both spellings exist because the backend hands the frontend's economics block through
-        verbatim while the CLI has had a ``--perspective`` flag since before that block did. Two
-        sources that disagree have no right answer, so the run is refused rather than one of them
-        silently winning.
+        Two sources that disagree are refused rather than one silently winning.
 
         Args:
-            in_file: :attr:`ParameterKeys.PERSPECTIVE_ID` as the file stated it, or None.
-            on_command_line: The ``--perspective`` flag, or None.
+            in_file: `perspective_id` as the file stated it, or None.
+            on_command_line: The `--perspective` flag, or None.
             problems: The shared problem list; a disagreement is appended to it.
 
         Returns:
-            The id to price under: whichever source named one, or
-            :attr:`DEFAULT_PERSPECTIVE_ID` when neither did. On a disagreement the file's id is
-            returned, but the run is refused by the problem that was appended.
+            Whichever source named an id, or `DEFAULT_PERSPECTIVE_ID` when neither did. On a disagreement the file's id
+                is returned and the appended problem refuses the run.
         """
         if in_file is not None and on_command_line is not None and in_file != on_command_line:
             path = f"{ParameterKeys.ROOT_PATH}.{ParameterKeys.PERSPECTIVE_ID}"
@@ -1688,23 +1576,20 @@ class StagedParameters:
         return cls.DEFAULT_PERSPECTIVE_ID
 
     def applied_to(self, perspective: Perspective) -> Tuple[EconomicParameters, Perspective]:
-        """The engine record and the perspective the plan is actually priced under.
+        """Return the engine record and the perspective the plan is actually priced under.
 
-        Two of the accepted keys are properties of the *perspective* rather than of the parameter
-        record — ``financing`` and ``subsidy_mode`` — so they are applied here, by copying the
-        bundle's perspective with those two dimensions replaced. ``apply_subsidies`` on the record
-        is then set from whichever subsidy mode ends up in force, which is what keeps the
-        document's echo of it a statement about the run rather than about the file.
+        `financing` and `subsidy_mode` are perspective dimensions, so they are applied by copying the bundle's
+        perspective with those two replaced. `apply_subsidies` on the record is then set from the subsidy mode in
+        force, so the document's echo describes the run.
 
         Args:
             perspective: The perspective named by id, as the shipped bundle defines it.
 
         Returns:
-            ``(parameters, perspective)``, both ready to hand to the staged evaluator.
+            `(parameters, perspective)`, ready for the staged evaluator.
 
         Raises:
-            ValueError: If the file was refused, i.e. this result carries problems and no
-                parameters. Calling this then is a programming error in the CLI.
+            ValueError: If the file was refused (this result has problems and no parameters).
         """
         if self.parameters is None:
             raise ValueError("a refused parameter file has no parameters to price with.")
@@ -1719,19 +1604,16 @@ class StagedParameters:
 
     @classmethod
     def subsidy_mode_of(cls, perspective: Perspective) -> SubsidyModeName:
-        """How a document spells the subsidy mode a perspective actually ran under.
+        """Return how a document spells the subsidy mode a perspective ran under.
 
-        The document's vocabulary has two values, so this says whether the catalogue was applied at
-        all. The engine's two list-carrying kinds (``ONLY`` and ``EXCLUDE``, which the shipped
-        bundle does not use and no parameter file can ask for) admit some schemes and are therefore
-        reported as ``full``.
+        The document's vocabulary says only whether the catalogue was applied, so the engine's `ONLY` and `EXCLUDE`
+        kinds (which no parameter file can ask for) are reported as `full`.
 
         Args:
             perspective: The perspective the plan was priced under.
 
         Returns:
-            :attr:`SubsidyModeName.NONE` when nothing was admitted, :attr:`SubsidyModeName.FULL`
-            otherwise.
+            `SubsidyModeName.NONE` when nothing was admitted, `SubsidyModeName.FULL` otherwise.
         """
         if perspective.subsidy_mode.kind is SubsidyModeKind.NONE:
             return SubsidyModeName.NONE
@@ -1739,15 +1621,14 @@ class StagedParameters:
 
     @classmethod
     def financing_block(cls, plan: Optional[FinancingPlan]) -> Dict[str, Any]:
-        """How a document states the financing a plan ran under.
+        """Return how a document states the financing a plan ran under.
 
         Args:
             plan: The perspective's financing plan, or None for a cash purchase.
 
         Returns:
-            ``{"kind": "cash"}``, or ``{"kind": "loan", …}`` with the three loan fields the input
-            vocabulary carries. A plan's repayment shape and any soft-loan scheme behind it are
-            not stated: they are the catalogue's, not the caller's.
+            `{"kind": "cash"}`, or `{"kind": "loan", ...}` with the three loan fields of the input vocabulary; the
+                repayment shape and any soft-loan scheme are not stated.
         """
         if plan is None:
             return {ParameterKeys.FINANCING_KIND: FinancingKindName.CASH.value}
@@ -1770,44 +1651,30 @@ class StagedParameters:
         price_basis_year_origin: Optional[EchoOrigin] = None,
         investment_overrides: Sequence[Mapping[str, Any]] = (),
     ) -> Dict[str, Any]:
-        """The ``parameters`` block ``economics_result.json`` publishes.
+        """Return the `parameters` block `economics_result.json` publishes.
 
-        The output half of the one table of keys: every key here is one
-        :meth:`from_mapping` accepts, so a reader can copy this block out of a document, hand it
-        back as ``--parameters`` over the same stages, and get the same run. The three keys that
-        are statements about the run rather than assumptions — ``weather_year``,
-        ``subsidy_catalog`` and ``origins`` — are published for the reader and ignored when read
-        back. ``plan_start_year`` is an assumption and reads back as one; ``null`` when the plan
-        named none.
-
-        ``weather_year`` was ``simulation_year`` up to schema version 4 (renovisorissues #57): it is
-        the year of the weather the stages were simulated with and dates nothing in the document.
-
-        ``escalation.energy`` and ``energy_prices`` state the per-carrier rates and year-1 prices
-        the plan was *priced with* (renovisorissues #52, schema version 4): for every carrier a
-        stage bills and every carrier the plan named, stated or not, with ``origins`` saying which
-        was which. Fed back in, every one of them is then stated, so the second run prices the same
-        numbers and its ``origins`` say ``stated`` throughout.
+        Every key is one `from_mapping` accepts, so the block handed back as `--parameters` over the same stages gives
+        the same run. `weather_year` (the year of the stages' weather; it dates nothing), `subsidy_catalog` and
+        `origins` describe the run and are ignored when read back; `plan_start_year` is an assumption (`null` when the
+        plan named none). `escalation.energy` and `energy_prices` state the per-carrier rates and year-1 prices
+        actually used for every carrier a stage bills or the plan named, so a second run fed this block prices the same
+        numbers with every `origins` entry `stated`.
 
         Args:
             parameters: The engine record the plan was priced with.
-            perspective: The perspective it was priced under, after any override was applied.
+            perspective: The perspective it was priced under, after overrides.
             weather_year: The year of the weather the stages were simulated with, or None.
-            subsidy_catalog: The catalogue id in force, or None when the plan ran with none.
-            energy: The rates and prices the plan was priced with, as the staged evaluator resolved
-                them; None echoes only what ``parameters`` states (:meth:`EnergyEcho.stated_only`).
-            plan_start_year: The calendar year the plan starts in, or None when it named none.
-            price_basis_year_origin: :attr:`EchoOrigin.PLAN_START_YEAR` when the plan's start year
-                supplied ``parameters.price_basis_year``, written as ``origins.price_basis_year``;
-                None (the key absent) whenever the stages or the parameters stated the year.
-                ``origins.price_level`` (:meth:`price_level`) is derived from ``price_basis_year``
-                and ``plan_start_year`` and written whenever the two differ.
-            investment_overrides: The reader's quotes the plan was priced with, each in the shape
-                the file states it (:meth:`StatedQuote.to_json`); ``[]`` without any
-                (renovisorissues #53, schema version 6). Fed back in, they price the same plan.
+            subsidy_catalog: The catalogue id in force, or None.
+            energy: The rates and prices as the staged evaluator resolved them; None echoes only what `parameters`
+                states.
+            plan_start_year: The calendar year the plan starts in, or None.
+            price_basis_year_origin: `EchoOrigin.PLAN_START_YEAR` when the start year supplied the price basis year
+                (written as `origins.price_basis_year`); None otherwise. `origins.price_level` is written whenever the
+                basis year and the start year differ.
+            investment_overrides: The reader's quotes, each as `StatedQuote.to_json` writes it; empty without any.
 
         Returns:
-            The block, with the keys in the order the document writes them.
+            The block, keys in the order the document writes them.
         """
         echo = energy if energy is not None else EnergyEcho.stated_only(parameters)
         rates = sorted(echo.rates.items(), key=lambda item: item[0].value)
@@ -1853,22 +1720,20 @@ class StagedParameters:
 
     @staticmethod
     def price_level(price_basis_year: Optional[int], plan_start_year: Optional[int]) -> Optional[Dict[str, int]]:
-        """``origins.price_level``: the years the document's amounts were escalated between (#62).
+        """Return `origins.price_level`: the years the document's amounts were escalated between.
 
-        Prices are read at ``price_basis_year``; when the plan starts in another calendar year every
-        amount is escalated from it to ``plan_start_year`` -- de-escalated for an earlier start --
-        with the rate it escalates with in later years, except a reader's quote and a fixed-amount
-        grant (:class:`~hisim.economics.evaluator.YearZeroPriceLevel`). The echoed year-1 prices of
-        ``energy_prices`` stay the ones read at the price basis year, so the block still reads back
-        into the same run.
+        Prices are read at `price_basis_year`; when the plan starts in another year every amount is escalated (or
+        de-escalated, for an earlier start) to `plan_start_year` at its own escalation rate, except a reader's quote
+        and a fixed-amount grant. The echoed year-1 prices in `energy_prices` stay at the price basis year, so the
+        block reads back into the same run.
 
         Args:
             price_basis_year: The year the plan was priced at.
             plan_start_year: The calendar year of the plan's year 0, or None.
 
         Returns:
-            ``{"from_year": price_basis_year, "to_year": plan_start_year}``, or None when nothing
-            was escalated (no start year, or one equal to the price basis year).
+            `{"from_year": price_basis_year, "to_year": plan_start_year}`, or None when nothing was escalated (no start
+                year, or the same year).
         """
         if price_basis_year is None or plan_start_year is None or plan_start_year == price_basis_year:
             return None

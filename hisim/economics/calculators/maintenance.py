@@ -1,26 +1,9 @@
-"""Maintenance and fixed operation & maintenance cost (cost-spec-v2 §2.3).
+"""Maintenance and fixed operation cost of one subject over years 1..T (cost_spec.md §2.3, §3.6 rule 4).
 
-The §2.3 "maintenance & fixed O&M" calculator. Recurring, non-energy operating cost of one
-subject over years 1..T: a maintenance *rate* applied to the gross investment plus a flat
-fixed operation cost, both escalated with the general price escalation rate from their year-1
-level (cost_spec.md §3.6 rule 4).
-
-**§7 B2 — fixed 2026-08-12.** The two cost kinds used to be summed into a *single* entry whose
-category was decided by a heuristic (MAINTENANCE if the maintenance share was positive,
-FIXED_OPERATION otherwise). That mislabelled the fixed opex of every subject that has both, and
-it was not cosmetic: the DE2024 ruleset splits MAINTENANCE between landlord and tenant but
-treats FIXED_OPERATION as tenant-only (§6.2), so the heuristic moved real money between actors.
-They are now two separately categorized entries per year, each emitted only when it carries an
-amount.
-
-The module owns the *recurring non-energy* operating cost and nothing else: it does not price
-anything (the rate and the fixed fee come resolved from `context_resolution.py`), it never
-touches year 0, and energy is `energy.py`'s business. `evaluator.build_timeline` calls it once
-per cost subject, immediately after the investment schedule, and extends the timeline with the
-result.
-
-Realizes: cost_spec.md §3.6 rule 4, §3.2 (escalation), §6.2 (why the categories must be kept
-apart).
+A subject is one costed thing on the timeline, such as a heat pump or the building envelope. Each year it pays a
+maintenance rate times its gross investment plus a flat fixed operation cost, both escalated with the general price
+escalation rate. The two are kept as separate entries because the actor rules split them differently (§6.2).
+`evaluator.build_timeline` calls this once per subject; energy cost lives in `energy.py`.
 """
 
 from __future__ import annotations
@@ -39,37 +22,22 @@ def build_maintenance_entries(
     general_escalation_rate: float,
     horizon: int,
 ) -> List[CashFlowEntry]:
-    """Maintenance and fixed O&M entries for years 1..T (§3.6 rule 4).
+    """Return the maintenance and fixed operation entries of one subject for years 1..T (§3.6 rule 4).
 
-    Up to two entries per year, each carrying its own category (§7 B2):
-
-    * MAINTENANCE — `maintenance_rate * gross investment` band-wise;
-    * FIXED_OPERATION — the flat annual fixed operation cost.
-
-    Both are escalated with the general price escalation rate from their year-1 level. A cost
-    kind that is zero in every slot emits no entry at all (both bands are non-negative, so
-    `maximum != 0` is exactly "nonzero in some slot"), which is why a subject with only one of
-    the two produces exactly the same timeline as before.
-
-    Note that the maintenance base is the *original* gross investment, not the escalated
-    replacement price: a replacement resets nothing here, the rate simply keeps compounding with
-    the general escalation rate over the whole horizon. That is the §3.6 rule 4 formula
-    `(maintenance_rate * I_gross + fixed_operation_cost) * (1 + r_gen)**(t-1)`, and it is applied
-    to every subject including kept brownfield assets, which pay maintenance without ever having
-    been charged an investment.
+    Each year gets up to two entries: MAINTENANCE (`maintenance_rate * gross`) and FIXED_OPERATION (the flat annual
+    fee), both computed as `(maintenance_rate * I_gross + fixed_operation_cost) * (1 + r_gen)**(t-1)`. A kind that is
+    zero in every band slot (minimum, best estimate, maximum) emits no entry. The base is always the original gross
+    investment, not a replacement price, and kept existing assets pay maintenance too.
 
     Args:
-        costing: The subject's resolved costing — supplies `maintenance_rate` (a dimensionless
-            share of gross investment per year), `fixed_operation_cost` (euro per year, e.g.
-            chimney sweep or metering fee), the subject name and the provenance ids.
-        gross: `costing.gross_investment`, euro band at price-basis-year prices, cost-positive.
-        general_escalation_rate: Nominal annual rate as a fraction, applied from the year-1 level
-            (`EconomicParameters.general_price_escalation_rate`).
-        horizon: Observation period T in years; entries are emitted for years 1..T inclusive.
+        costing: The subject's resolved costing; supplies the maintenance rate (a share of gross investment per year),
+            the fixed operation cost in euro per year, the subject name and the provenance ids.
+        gross: The gross investment in euro at price-basis-year prices.
+        general_escalation_rate: Nominal annual escalation rate as a fraction.
+        horizon: Observation period T in years.
 
     Returns:
-        Cost-positive euro entries in year order, up to two per year, in nominal euros of their
-        own year (undiscounted).
+        Cost-positive entries in nominal euros of their own year, in year order, up to two per year.
     """
     entries: List[CashFlowEntry] = []
     annual_maintenance = costing.maintenance_rate.multiply_band(gross)

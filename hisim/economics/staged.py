@@ -1,27 +1,14 @@
 """The staged evaluator: one renovation plan spread over several years, priced once.
 
-The engine of :mod:`hisim.economics` prices **one** simulated state over one horizon with the
-whole investment in year 0. A RenoVisor plan is not that: the house is in state ``S0`` until
-year ``t1``, in ``S1`` until ``t2`` and so on, each stage's investment falls in its own year, and
-each earlier stage's equipment ages as an existing asset for the stages that follow. This module
-adds exactly that, without adding a second implementation of the money.
-
-How it does so is the design decision worth reading first: the plan's cash flows are a **splice**
-of per-stage evaluations, never a new calculation. Every stage is evaluated alone over the full
-horizon with the ordinary :class:`~hisim.economics.evaluator.EconomicEvaluator`; the plan's
-timeline then takes each year's operating flows from whichever stage is active in that year, and
-each stage's own investment-class flows moved to the year that stage starts in. A plan of one
-stage therefore equals a plain evaluation entry for entry by construction rather than by
-agreement between two code paths, which is the first of the five invariants
-``tests/economics/test_staged.py`` pins down.
-
-Ageing across stages is not a mechanism of this module either. Before stage ``k`` is evaluated,
-its :class:`~hisim.economics.evaluator.EvaluationInputs` gets a register that holds the house
-inventory *plus* one :class:`~hisim.economics.facts.ExistingAsset` per subject an earlier stage
-already paid for, installed in that earlier stage's year. Replacements, residual values, removal
-costs and the anyway-cost credit then fall in the right years through the brownfield machinery
-the engine already has (``cost_spec.md`` §4.1). The consequence is that stages are evaluated
-**in order** and stage ``k``'s inputs depend on every ``j < k``.
+A staged plan is a sequence of stages, each a simulated state of the house that the plan puts in place in a given year:
+the house is in stage 0 until year `t1`, in stage 1 until `t2`, and so on, and each stage's purchases are made in the
+year it starts. Year 0 of the plan is the calendar year the plan starts in. The plan's cash flows are a splice of
+per-stage evaluations: every stage is evaluated alone over the full horizon by `EconomicEvaluator`, then each year
+takes its operating flows from the stage active in it and each stage's investment flows are moved to the year the stage
+starts. A one-stage plan therefore equals a plain evaluation entry for entry. Equipment an earlier stage bought (kept
+equipment) enters the next stages' registers as existing assets, so replacements, residual values and removal costs
+fall in the right years through the engine's brownfield logic (cost_spec.md §4.1); stages are therefore evaluated in
+order. Staged plans use the full-cost method: no stage books an anyway credit for what it replaces.
 
 Example::
 
@@ -30,10 +17,6 @@ Example::
               Stage(heat_pump_inputs, 3, "stage 2", ("heating_system",))]
     result = StagedEvaluator(database).evaluate(stages, parameters, perspective, catalog)
     result.plan.total_npv_in_euro.best_estimate
-
-Specification: ``specs/economics-hisim-spec.md`` of the renovisorissues project §1 (the requirements) read
-together with ``roadmap/renovisor/implementation/step10_staged_economics.md`` §2 (the engine-side
-decisions), which wins where the two disagree.
 """
 
 from __future__ import annotations
@@ -106,32 +89,19 @@ from hisim.loadtypes import ComponentType
 
 
 class StagedEvaluationError(Exception):
-    """A plan that cannot be priced as stated, named rather than defaulted around.
+    """A plan that cannot be priced as stated: refused with a reason rather than defaulted around.
 
-    Every condition this is raised for is a statement about the *plan*, not about the engine: a
-    first stage that does not start in year 0, stage years that do not increase, a stage that
-    starts past the horizon, stages priced from simulations that do not describe the same year or
-    the same simulated period, an unknown perspective id, a country the cost database has no
-    price data for, or a plan stating neither a price basis year nor a start year (nothing then
-    says which calendar year its year 0 is). Each of them would otherwise be answered with a
-    plausible number for a different question, which ``economics-hisim-spec.md`` §0 forbids
-    ("fail loudly").
-
-    The CLI (``python -m hisim.economics staged``) turns it into exit code 2 with a
-    ``problems.json`` beside the requested output; an *engine* error — an unresolvable cost
-    subject, a missing data file — stays what it is and becomes exit code 3.
-
-    Most refusals are one sentence about one plan, which is what the message carries. A refused
-    ``--parameters`` file is the exception: it reports every offending key at once, so the rows
-    are carried alongside the message and become the ``problems.json`` rows verbatim. A raise
-    without them produces a one-row file worded from the message, which is what every existing
-    call site relies on.
+    Raised for statements about the plan, not the engine: a first stage not starting in year 0, decreasing stage years,
+    a stage starting past the horizon, stages simulated for different years or periods, an unknown perspective id, a
+    country without price data, or neither a price basis year nor a start year. The staged CLI turns it into exit code
+    2 with a `problems.json`; engine errors (an unresolvable subject, a missing data file) give exit code 3 instead. A
+    refused `--parameters` file reports every offending key at once through `problems`; without them the file has one
+    row worded from the message.
 
     Args:
         message: The refusal, in one sentence.
-        problems: The rows ``problems.json`` should carry, each already in its published shape
-            (``path``, ``code``, ``message`` and optionally ``accepted``); empty for a refusal
-            that is one sentence about the plan as a whole.
+        problems: The `problems.json` rows, each with `path`, `code`, `message` and optionally `accepted`; empty for a
+            refusal about the plan as a whole.
     """
 
     def __init__(self, message: str, problems: Sequence[Mapping[str, Any]] = ()) -> None:
@@ -141,80 +111,41 @@ class StagedEvaluationError(Exception):
 
 
 class StagedEngineError(RuntimeError):
-    """The engine contradicted itself while pricing a plan: never the caller's fault.
+    """The engine contradicted itself while pricing a plan; never the caller's fault.
 
-    Raised when the stages of one plan, priced under one parameter set against one database,
-    resolve a carrier's escalation rate or tariff differently — which the engine's own construction
-    rules out, so a disagreement is a defect to report rather than a plan to refuse. The CLI turns
-    it into exit code 3.
+    Raised when the stages of one plan, priced under one parameter set against one database, resolve a carrier's
+    escalation rate or tariff differently. The CLI turns it into exit code 3.
     """
 
 
 class StagedCategories:
-    """Which cost categories the splice takes from where (step 10 §2, E-spec §1.2).
+    """Which cost categories the splice takes from where; the only place the module names a `CostCategory`.
 
-    The splice has to decide, for every entry of every stage's own evaluation, whether it belongs
-    to the plan and in which year. Three answers exist and this class names the three sets they
-    are chosen by; nothing else in the module hard-codes a :class:`CostCategory`.
+    The splice decides for every entry of every stage's own evaluation whether it belongs to the plan and in which
+    year:
 
-    * :attr:`STAGE_START` — the flows a stage *causes when it starts*. They are read off the
-      stage's own year-0 entries, moved to the year that stage begins in, and escalated to that
-      year with the investment escalation rate -- except a reader's quote, taken as stated, and a
-      subsidy, which the stage's own evaluation already valued on the cost as the plan books it in
-      the stage's year (``booked_price_levels``, hisim-xnkp): a fixed amount is clamped to that
-      cost and a share of the cost follows it, so the splice books every award as it is, times
-      the share the stage pays. Only subjects the stage actually pays for are
-      taken (see :meth:`StagedEvaluator._charge_share`), so a device carried over from the
-      previous stage is never bought twice.
-    * :attr:`LOAN_SCHEDULE` — the debt service of a stage's loan. It is not a year-0 flow but it
-      belongs to the stage that borrowed. The splice does not move the stage's own schedule: it
-      takes the loan out again on what the stage actually books in its year (a quote as stated,
-      database prices escalated, grants as valued in the stage's year), dates it from the stage's start
-      year and drops anything falling past the horizon (:meth:`StagedEvaluator._stage_loan`).
-    * :attr:`OWN_PURCHASE_AGEING` — the REPLACEMENT entries of a subject the stage *pays for*.
-      A unit bought in the stage's own year 0 is bought in plan year ``from_year``, so it wears
-      out ``from_year`` years later than the stage's own evaluation says; the entries are shifted
-      by the stage's start year and escalated to it exactly like the purchase they follow (step 12
-      §2.1). The REPLACEMENT entries of a subject the stage merely *inherits* are not re-dated:
-      the stage's own register already installed them in the right year, and shifting them would
-      book them twice.
-    * a ``SUBSIDY`` entry after the stage's own year 0 -- a tax credit's instalments and an
-      operational payment (hisim-staged-tax-credit-placement-nvz7, owner principle 2026-09-27).
-      Both are dated from the stage's start: own year ``y`` is plan year ``from_year + y``, and one
-      falling past the horizon is dropped. A **tax credit** is a share of the cost the stage books,
-      which its evaluation already valued at the stage's price level (``booked_price_levels``), so
-      it is scaled by nothing but the share the stage pays -- never escalated again -- and every
-      instalment is kept, whichever stage is active when it is paid: the credit is owed for money
-      spent, not for the state the house is in. An **operational** payment is a fixed nominal rate
-      per kWh, never escalated, and is earned by the installation the stage bought: it is kept
-      while that installation is in the house and dropped from the year a later stage buys the
-      subject whole again or no longer has it (:attr:`_StageCharges.leaves_house_in`). A later
-      stage that merely keeps the installation books no award of its own, so without this rule
-      the payment would vanish the day an unrelated measure starts. Its amount stays the one the
-      earning stage valued on its own simulated kWh, except in a year whose active stage carries
-      its subject as a piece of an enlarged one: there each piece is paid on its size share of
-      that stage's energy (:meth:`StagedEvaluator._operational_rebasing`, owner decision
-      2026-10-01).
-    * everything else — the operating flows of E-spec §1.2 (energy, maintenance, fixed operation,
-      feed-in, CO2 price, levy, replacement reserve). All of them are taken from the stage that is
-      active in the entry's own year, which is what makes "year y of the plan is year y of
-      whichever state the house is in" literally true.
+    - `STAGE_START`: flows a stage causes when it starts. Taken from the stage's year-0 entries, only for subjects the
+      stage pays for (`StagedEvaluator._charged_subjects`), moved to the stage's start year and escalated to it at the
+      investment escalation rate. A reader's quote is taken as stated, and a subsidy as its stage valued it (on the
+      cost the plan books in the stage's year), times the share the stage pays.
+    - `LOAN_SCHEDULE`: the stage's loan, taken out anew on what the stage books in its year and dated from its start;
+      flows past the horizon are dropped (`StagedEvaluator._stage_loan`).
+    - `OWN_PURCHASE_AGEING`: REPLACEMENT entries of a subject the stage pays for, shifted by the stage's start year and
+      escalated like the purchase they follow. Replacements of an inherited subject are not shifted; the stage's
+      register already dates them.
+    - SUBSIDY entries after the stage's own year 0 (tax-credit instalments, per-kWh operational payments) are dated
+      from the stage's start (own year `y` is plan year `from_year + y`) and dropped past the horizon. A tax credit is
+      scaled only by the stage's share and kept whichever stage is active, since it is owed for money spent. An
+      operational payment is kept while the earning installation is in the house (`_StageCharges.leaves_house_in`), and
+      rebased to a piece's share of the energy where the active stage carries the subject in pieces
+      (`StagedEvaluator._operational_rebasing`).
+    - Everything else (energy, maintenance, fixed operation, feed-in, CO2 price, levy, replacement reserve) is taken
+      from the stage active in the entry's year.
 
-    Every stage's own evaluation is already in the money of the plan's year 0: the engine escalates
-    all of its amounts from the price basis year to ``plan_start_year`` before the splice sees them
-    (:class:`~hisim.economics.evaluator.YearZeroPriceLevel`, renovisorissues #62), with the same
-    exemptions, so the splice's own escalation is only the one from year 0 to the stage's year.
-    What a later stage's purchase decides is the exception, valued at the price level the plan
-    books that purchase at (:meth:`StagedEvaluator._booked_price_levels`): its subsidies, so a
-    fixed amount is clamped to the cost booked beside it and an eligible-cost cap in euro binds on
-    that cost, and its modernisation-levy basis (cost and anyway credit), so the grant is deducted
-    from the cost in the same money (hisim-xnkp).
-
-    ``RESIDUAL_VALUE`` is in none of the three sets, because no stage's residual entry is ever
-    taken: a stage writes its own purchase down from *its* year 0, which is the wrong year in a
-    plan, and a stage that ends the horizon holding an earlier stage's asset writes it down not at
-    all. The splice therefore computes every residual value itself from the spliced timeline
-    (:meth:`StagedEvaluator._residual_entries`).
+    Every stage's evaluation is already in the money of the plan's year 0 (`YearZeroPriceLevel`), so the splice only
+    escalates from year 0 to the stage's year. A later stage's subsidies and modernisation-levy basis are valued at the
+    price level the plan books its purchase at (`StagedEvaluator._booked_price_levels`). `RESIDUAL_VALUE` is in no set:
+    no stage's residual is taken, and the splice computes every residual itself (`StagedEvaluator._residual_entries`).
     """
 
     #: Booked in the year the stage starts, escalated to it, for the subjects the stage pays for.
@@ -248,17 +179,14 @@ class StagedCategories:
 
 @dataclass(frozen=True)
 class _SplicedTimeline:
-    """The plan's timeline and the stage every one of its entries came from.
+    """The plan's timeline together with the stage each of its entries came from.
 
-    Two results of one pass, returned together because the second is only derivable while the
-    first is being built: once the entries are on one timeline nothing on them says which stage
-    contributed them, and the document needs exactly that to attribute a debt-service payment to
-    the loan that is being repaid rather than to the loan of whichever stage happens to be active
-    in the payment year (step 12 §2.2). Internal to this module.
+    The stage map can only be built while splicing; the document needs it to attribute a debt-service payment to the
+    loan being repaid rather than to the stage active in the payment year.
 
     Attributes:
         timeline: The spliced, sign-validated timeline.
-        stage_by_entry: One stage index per entry of ``timeline``, in timeline order.
+        stage_by_entry: One stage index per entry of `timeline`, in timeline order.
     """
 
     timeline: CashFlowTimeline
@@ -267,13 +195,13 @@ class _SplicedTimeline:
 
 @dataclass(frozen=True)
 class _SpliceTerms:
-    """What the splice needs beyond the stages' own evaluations, per plan. Internal to this module.
+    """What the splice needs per plan beyond the stages' own evaluations.
 
     Attributes:
-        quoted_by_stage: Per stage, the subjects whose year-0 purchase is a reader's quote, booked
-            unescalated; empty for a plan without quotes.
-        financing: The perspective's financing plan, or ``None`` for a cash purchase. Each stage's
-            loan is taken out on what the stage books (:meth:`StagedEvaluator._stage_loan`).
+        quoted_by_stage: Per stage, the subjects whose year-0 purchase is a reader's quote, booked unescalated; empty
+            without quotes.
+        financing: The perspective's financing plan, or None for cash; each stage's loan is taken out on what the stage
+            books (`StagedEvaluator._stage_loan`).
     """
 
     quoted_by_stage: Tuple[FrozenSet[str], ...] = ()
@@ -282,33 +210,21 @@ class _SpliceTerms:
 
 @dataclass(frozen=True)
 class _StageCharges:
-    """What one stage pays for, and at what price level, as the splice needs to ask it.
-
-    Four facts the splice consults per entry, bundled so the decision reads as one question
-    instead of four parallel lookups. Internal to this module: the splice is the only caller.
+    """What one stage pays for and at what price level, bundled for the splice's per-entry decisions.
 
     Attributes:
         charged: Subject -> the share of its year-0 investment-class flows the stage pays.
-        carried_over: Subjects the stage inherits unchanged and must not pay for again.
-        rates: Subject -> its own investment escalation rate, for the subjects with an asset class.
-        default_rate: The general investment escalation rate, used for the synthetic subjects
-            (the replacement reserve) that no technology's learning curve applies to but whose
-            flows still move to the stage's year with everything else. The loan is not escalated:
-            it is taken out anew on the booked figures (:meth:`StagedEvaluator._stage_loan`).
-        quoted: Subjects whose year-0 purchase in this stage is a reader's quote -- the quoted
-            measure's main subject and its further subjects (renovisorissues #53). Their year-0
-            flows are booked in the stage's year exactly as stated, never escalated
-            (:meth:`stage_start_factor`).
-        operational: ``(subject, scheme id)`` -> the carrier paid on, of every OPERATIONAL award
-            of the stage's own evaluation: the SUBSIDY entries after year 0 that are per-kWh
-            payments rather than a tax credit's instalments.
-        operational_rebased: ``(subject, scheme id)`` -> plan year -> the factor an operational
-            payment is booked with in that year, for the years whose active stage carries the
-            subject as a piece of a split one (:meth:`StagedEvaluator._operational_rebasing`);
-            absent where the payment is booked as the stage valued it.
-        leaves_house_in: Subject -> the plan year a later stage buys it whole again or no longer
-            has it, which ends the operational payments the stage's purchase earns; absent for a
-            subject that stays to the horizon.
+        carried_over: Subjects the stage inherits unchanged and does not pay for again.
+        rates: Subject -> its own investment escalation rate, for subjects with an asset class.
+        default_rate: The general investment escalation rate, for synthetic subjects such as the replacement reserve.
+        quoted: Subjects whose year-0 purchase in this stage is a reader's quote (the measure's main and further
+            subjects); booked as stated, never escalated.
+        operational: `(subject, scheme id)` -> the carrier paid on, for every per-kWh (OPERATIONAL) award of the
+            stage's evaluation.
+        operational_rebased: `(subject, scheme id)` -> plan year -> the factor an operational payment is booked with,
+            for years whose active stage carries the subject in pieces; absent otherwise.
+        leaves_house_in: Subject -> the plan year a later stage buys it whole again or drops it, ending its operational
+            payments; absent for a subject that stays to the horizon.
     """
 
     charged: Dict[str, float]
@@ -321,33 +237,28 @@ class _StageCharges:
     leaves_house_in: Mapping[str, int] = field(default_factory=dict)
 
     def share_of(self, subject: str) -> float:
-        """How much of one subject's year-0 figure this stage pays: all of it or none."""
+        """Return how much of one subject's year-0 figure this stage pays: all of it or none."""
         if subject in self.charged:
             return self.charged[subject]
         return 0.0 if subject in self.carried_over else 1.0
 
     def escalation_factor(self, subject: str, from_year: int) -> float:
-        """The price level of the stage's year relative to year 0, for one subject."""
+        """Return the price level of the stage's year relative to year 0, for one subject."""
         return (1.0 + self.rates.get(subject, self.default_rate)) ** from_year
 
     def stage_start_factor(self, subject: str, from_year: int) -> float:
-        """The price level one subject's year-0 flows are booked at in the stage's year.
+        """Return the price level one subject's year-0 flows are booked at in the stage's year.
 
-        :meth:`escalation_factor`, except for a quoted purchase: a reader's quote is taken exactly
-        as stated, whatever year its stage starts in -- whoever quoted a price for that year has
-        already accounted for inflation (owner decision 2026-09-27). The quoted subject's later
-        replacements are database prices and still escalate.
+        This is `escalation_factor`, except that a reader's quote is taken as stated (its author already priced that
+        year). The quoted subject's later replacements are database prices and still escalate.
         """
         return 1.0 if subject in self.quoted else self.escalation_factor(subject, from_year)
 
     def booked_factor(self, entry: CashFlowEntry, from_year: int) -> float:
-        """The factor one of the stage's year-0 entries is booked with in the stage's year.
+        """Return the factor one of the stage's year-0 entries is booked with in the stage's year.
 
-        The share the stage pays times the price level: :meth:`stage_start_factor`, except for a
-        subsidy, which the stage's own evaluation valued on the cost at exactly that price level
-        (:meth:`StagedEvaluator._booked_price_levels`): a fixed amount clamped to the cost booked
-        beside it, a share of the cost following it (owner decision 2026-09-27, hisim-xnkp). Only
-        the share the stage pays applies to it.
+        The share the stage pays times `stage_start_factor`, except for a subsidy: the stage's evaluation already
+        valued it on the cost at that price level (`StagedEvaluator._booked_price_levels`), so only the share applies.
         """
         if entry.category is CostCategory.SUBSIDY:
             return self.share_of(entry.subject)
@@ -355,14 +266,12 @@ class _StageCharges:
 
 
 class LifeOrigin(str, enum.Enum):
-    """Where a subject's service life came from, as ``economics_result.json`` states it (schema 5).
+    """Where a subject's service life came from, as `economics_result.json` states it.
 
-    ``REQUEST`` is a ``lifetime_override_in_years`` on the subject's cost facts -- the lifetime
-    the calculation's own inputs state -- and ``COST_DATABASE`` the ``service_life_in_years`` of
-    the cost database's entry for the asset class at the plan's price basis year. The chain is the
-    engine's own (``calculators/context_resolution.py``): an override wins. ``ENGINE_FALLBACK`` is
-    an override that is the engine's fallback life, standing in where the database has no entry
-    for the class (``ComponentCostFacts.lifetime_is_engine_fallback``, hisim-ryw1; schema 7).
+    `REQUEST` is a `lifetime_override_in_years` on the subject's cost facts; `COST_DATABASE` is the database entry's
+    `service_life_in_years` for the asset class at the price basis year; an override wins, as in
+    `context_resolution.py`. `ENGINE_FALLBACK` is an override that is the engine's fallback life, used where the
+    database has no entry for the class (`ComponentCostFacts.lifetime_is_engine_fallback`).
     """
 
     REQUEST = "request"
@@ -372,24 +281,18 @@ class LifeOrigin(str, enum.Enum):
 
 @dataclass(frozen=True)
 class SubjectLife:
-    """The lifetime and the age one evaluation priced a cost subject with.
+    """The lifetime and age one evaluation priced a cost subject with.
 
-    What a reader needs to follow a replacement year on the document: the service life the
-    engine used and where it came from, and the year the subject counts as installed and where
-    that came from (renovisorissues #58). Nothing here is a second calculation: the life is read
-    by the chain the engine prices with (:meth:`StagedEvaluator._service_life`), and the year is
-    the register entry the engine ages a kept subject from, or the start of the stage that bought
-    it.
+    It lets a reader follow a replacement year in the document. The life is read by the engine's chain
+    (`StagedEvaluator._service_life`); the year is the register entry a kept subject is aged from, or the start of the
+    stage that bought it.
 
     Attributes:
-        service_life_years: The service life, in years.
+        service_life_years: The service life in years.
         service_life_origin: Where it came from.
-        installation_year: The calendar year the subject counts as installed in: a kept asset's
-            register year, or ``plan year 0 + from_year`` of the stage that bought it (the year
-            :meth:`StagedEvaluator._staged_inputs` ages a bought subject from; plan year 0 is
-            :meth:`StagedEvaluator.plan_year_zero`).
-        installation_year_origin: Where that year came from; ``None`` for a register entry whose
-            author did not say (a register written before the field existed).
+        installation_year: The calendar year the subject counts as installed: a kept asset's register year, or plan
+            year 0 (`StagedEvaluator.plan_year_zero`) plus `from_year` of the buying stage.
+        installation_year_origin: Where that year came from; None for a register entry that does not say.
     """
 
     service_life_years: float
@@ -399,13 +302,12 @@ class SubjectLife:
 
 
 class InvestmentOrigin(str, enum.Enum):
-    """Where a subject's year-0 investment came from, as ``economics_result.json`` states it (schema 6).
+    """Where a subject's year-0 investment came from, as `economics_result.json` states it.
 
-    ``READER_QUOTE`` is the reader's quote for the measure the subject is the main subject of
-    (renovisorissues #53); ``INCLUDED_IN_READER_QUOTE`` a further subject of that measure, bought at
-    zero in that stage because the quote covers the whole job; ``REQUEST`` an
-    ``investment_cost_override_in_euro`` the calculation's inputs state (an envelope measure priced
-    from the request's cost block); ``COST_DATABASE`` the cost database's entry for the asset class.
+    `READER_QUOTE`: the reader's quote, for the measure's main subject. `INCLUDED_IN_READER_QUOTE`: a further subject
+    of that measure, bought at zero since the quote covers the whole job. `REQUEST`: an
+    `investment_cost_override_in_euro` from the calculation's inputs (e.g. an envelope measure's cost block).
+    `COST_DATABASE`: the database entry for the asset class.
     """
 
     READER_QUOTE = "reader_quote"
@@ -416,24 +318,20 @@ class InvestmentOrigin(str, enum.Enum):
 
 @dataclass(frozen=True)
 class InvestmentOverride:
-    """The reader's quote for one measure of one stage, resolved to the subjects it prices (#53).
+    """The reader's quote for one measure of one stage, resolved to the subjects it prices.
 
-    A quote is a total in euro for one measure, installed. It replaces the year-0 investment --
-    investment, planning and removal -- of the measure's **main** subject in that stage; the
-    measure's other subjects in that stage are bought at zero, because the quote covers the whole
-    job, and keep their lifetimes and their later, database-priced replacements (owner decisions
-    of 2026-09-26). Which subject is the main one is the caller's to resolve (for a RenoVisor plan,
-    :class:`hisim.renovisor.economics.MainSubjects`); the evaluator only prices it.
+    A quote is an installed total in euro for one measure. It replaces the year-0 investment, planning and removal of
+    the measure's main subject in that stage; the measure's other subjects there are bought at zero and keep their
+    lifetimes and later database-priced replacements. The caller decides which subject is the main one (for RenoVisor,
+    `hisim.renovisor.economics.MainSubjects`).
 
     Args:
         stage: The index of the stage the quote is for.
-        measure_id: The catalogue measure it is a quote for.
-        amount_in_euro: The quote, a positive exact amount, booked nominal in the stage's year as
-            stated: never escalated, whatever year the stage starts in (owner decision 2026-09-27).
+        measure_id: The catalogue measure it quotes.
+        amount_in_euro: The quote, positive and exact, booked nominal in the stage's year as stated (never escalated).
         source: Where the quote comes from, as the reader stated it.
-        main_subject: The cost subject the quote prices. A subject the stage holds no cost facts
-            for -- the measure-named subject of a measure HiSim holds no price for -- is bought as
-            a :class:`~hisim.economics.facts.QuotedPurchase`.
+        main_subject: The cost subject the quote prices; one without cost facts in the stage (a measure HiSim holds no
+            price for) is bought as a `QuotedPurchase`.
         other_subjects: The measure's further subjects in that stage, bought at zero.
     """
 
@@ -451,12 +349,12 @@ class InvestmentOverride:
     INCLUDED_SOURCE: ClassVar[str] = "included in the reader's quote for {measure_id} (stage {stage}): {source}"
 
     def cited(self, main: bool) -> str:
-        """The source sentence for the main subject's price or for a further subject's zero."""
+        """Return the source sentence for the main subject's price or for a further subject's zero."""
         template = self.MAIN_SOURCE if main else self.INCLUDED_SOURCE
         return template.format(measure_id=self.measure_id, stage=self.stage, source=self.source)
 
     def covers(self, subject: str) -> Optional[bool]:
-        """Whether the quote prices a subject: True as its main subject, False as a further one."""
+        """Return True if the quote prices `subject` as main subject, False as a further one, else None."""
         if subject == self.main_subject:
             return True
         if subject in self.other_subjects:
@@ -465,14 +363,11 @@ class InvestmentOverride:
 
 
 class IncrementSubjects:
-    """The subject a later stage's enlargement of a kept subject is bought as (hisim-1y0m).
+    """Names the subject a later stage's enlargement of a kept subject is bought as (an increment).
 
-    A stage that enlarges something the house keeps -- a 5 kWp array grown to 8 kWp -- buys the
-    increment, 3 kWp, as a purchase of its own: priced as a new unit of that size, escalated to the
-    stage's year, with its own life and replacements, while the unit it enlarges keeps ageing on
-    its own schedule (owner decision 2026-09-28). The engine prices one subject per name, so the
-    increment gets a name of its own, formed here and nowhere else, and the document shows it as a
-    row of its own beside the subject it enlarges, with that subject's measure.
+    A stage that enlarges something the house keeps (a 5 kWp array grown to 8 kWp) buys the 3 kWp increment as a
+    purchase of its own, with its own life and replacements, while the original unit keeps ageing. The engine prices
+    one subject per name, so the increment gets its own name, formed only here.
     """
 
     #: What separates the enlarged subject from the stage in :attr:`NAME`.
@@ -483,38 +378,29 @@ class IncrementSubjects:
 
     @classmethod
     def name(cls, subject: str, stage: int) -> str:
-        """The subject of the increment stage ``stage`` adds to ``subject``."""
+        """Return the subject name of the increment stage `stage` adds to `subject`."""
         return cls.NAME.format(subject=subject, stage=stage)
 
     @classmethod
     def base_of(cls, subject: str) -> Optional[str]:
-        """The subject an increment enlarges, or ``None`` for a subject that is no increment."""
+        """Return the subject an increment enlarges, or None for a subject that is not an increment."""
         base, separator, stage = subject.rpartition(cls.SEPARATOR)
         return base if separator and base and stage.isdigit() else None
 
 
 @dataclass(frozen=True)
 class Stage:
-    """One state of the house, the year the plan puts it in, and what got it there.
+    """One stage of a plan: a simulated state of the house, the year the plan puts it in place, and its name.
 
-    A stage is a *completed simulation* seen through its stored ``economic_inputs.json`` plus the
-    two facts the simulation cannot know: when the plan intends to build it and what it is called.
-    ``stages[0]`` is the reference — the state the house is in today, held over the whole horizon —
-    and must therefore start in year 0.
+    `stages[0]` is the reference, the house as it is today held over the whole horizon, and starts in year 0.
 
     Args:
-        inputs: The stage's simulated state, as :func:`hisim.economics.serialization.read_inputs`
-            reads it back from a finished job's directory.
-        from_year: The year, relative to the start of the horizon, the stage becomes the state of
-            the house. 0 for the first stage and never decreasing afterwards; a stage sharing its
-            predecessor's year supersedes it immediately, which is the plain baseline-versus-
-            package plan.
-        label: What the frontend calls this stage ("baseline", "stage 1"). Opaque here: nothing in
-            the engine branches on it, and it is copied into the result document unchanged.
-        measures: Catalogue measure ids added *in* this stage. Provenance only — the money follows
-            from the simulated state, not from this tuple.
-        job_id: The backend's id of the job that produced ``inputs``, or ``None`` when the caller
-            did not name one. Carried into the document so a stage can be traced to its run.
+        inputs: The stage's simulated state, as `serialization.read_inputs` reads it from a finished job's directory.
+        from_year: The year, relative to the start of the horizon, the stage becomes the state of the house; 0 for the
+            first stage and never decreasing. A stage sharing its predecessor's year supersedes it immediately.
+        label: What the frontend calls this stage ("baseline", "stage 1"); copied to the document unchanged.
+        measures: Catalogue measure ids added in this stage; provenance only, the money follows the simulated state.
+        job_id: The backend's id of the job that produced `inputs`, or None.
     """
 
     inputs: EvaluationInputs
@@ -528,66 +414,38 @@ class Stage:
 class StagedResult:
     """One priced plan: its reference, its staged self, and the difference between them.
 
-    Everything the result document of E-spec §3 publishes is a filter or a pivot of the two
-    :class:`~hisim.economics.results.LifecycleCostResult` objects here, which is why they are
-    carried whole rather than reduced to KPIs. ``per_stage`` is kept for the same reason: the
-    per-subject figures of the document's investment build-up are read off the stage that paid for
-    the subject, and a reviewer checking the splice needs the pieces it was spliced from.
+    Every figure of the result document is a filter or pivot of the two `LifecycleCostResult` objects here. `per_stage`
+    is kept so per-subject figures can be read off the stage that paid for the subject.
 
     Attributes:
-        reference: ``stages[0]`` evaluated alone over the whole horizon — the "do nothing" case.
-        plan: The staged plan: one timeline spliced from ``per_stage``, aggregated exactly as an
-            ordinary evaluation is.
-        comparison: ``results.compare(reference, plan, "reference", "plan")``; deltas are
-            plan minus reference, slot-wise, so a negative NPV delta means the plan is cheaper.
-        stages: The stages as they were priced, in order: as given, except that a subject a stage
-            enlarges is carried as the unit it had plus one :class:`IncrementSubjects` subject per
-            enlargement (:meth:`StagedEvaluator.split_increments`, hisim-1y0m).
-        per_stage: Each stage evaluated alone over the full horizon, in stage order. Stage ``k``'s
-            evaluation already carries the merged ageing register of every stage before it. All of
-            them, and therefore ``reference`` and ``plan`` too, carry the *same* provenance ledger
-            (:attr:`ledger`), so an id means one record wherever in the result it appears.
-        charged_subjects_by_stage: Which cost subjects each stage pays for, and at which share of
-            the stage's own year-0 figure — 1.0 for a subject new in the stage, including the
-            increment of one that grew, which is a subject of its own (:class:`IncrementSubjects`),
-            and absent for a subject carried over unchanged.
-        active_stage_by_year: The index of the stage the house is in, one entry per horizon year
-            0..T. Computed once while the plan is priced and read back by
-            :meth:`stage_of_year`, so the supersession rule (the last stage whose ``from_year``
-            is at or below the year) exists in one place rather than two that can drift.
-        stage_by_entry: The index of the stage each entry of ``plan.timeline`` came from, in
-            timeline order. The document needs it for one thing the entry itself cannot say: a
-            debt-service payment belongs to the loan of the stage that *borrowed*, which is not
-            in general the stage active in the payment year (step 12 §2.2).
-        subsidy_catalog_id: The catalogue the plan was priced under, as
-            :meth:`StagedEvaluator.catalog_id` names it, or ``None`` for a plan priced with none —
-            and therefore with ``subsidy_mode: NONE``. Recorded by :meth:`StagedEvaluator.evaluate`
-            rather than supplied beside the result, so a document cannot name a catalogue the
-            figures were not priced with.
-        energy_echo: The per-carrier escalation rates and year-1 prices the plan was priced with,
-            for every carrier a stage bills and every carrier the plan named, with their origins
-            (renovisorissues #52). Resolved by :meth:`StagedEvaluator.evaluate` for the same reason
-            as the catalogue id; ``None`` for a result assembled by hand, whose document then
-            echoes only what its parameters state.
-        plan_start_year: The calendar year of the plan's year 0, as the caller stated it, or
-            ``None`` when it stated none (renovisorissues #57). The document dates its years from
-            this alone — never from the stages' ``simulation_year``, which is the year of their
-            weather — and dates none of them without it.
-        price_basis_year: The price basis year the plan was actually priced at, as
-            :meth:`StagedEvaluator.evaluate` resolved it — the one the document publishes, rather
-            than the caller's possibly unset ``parameters.price_basis_year``. ``None`` only for a
-            result assembled by hand.
-        price_basis_year_origin: :attr:`EchoOrigin.PLAN_START_YEAR` when the plan's start year
-            supplied the price basis year because nothing else stated one; ``None`` otherwise.
-        lives_by_stage: For each stage, in stage order, the :class:`SubjectLife` of every cost
-            subject of its evaluation (renovisorissues #58). Empty for a result assembled by hand,
-            whose document then states no lifetime and no installation year.
-        investment_overrides: The reader's quotes the plan was priced with, as resolved
-            (renovisorissues #53), in the order they were given; empty without any.
-        stage_start_share_by_stage: For each stage, in stage order, the share of each subject's
-            year-0 figures the stage pays, which every award and a subsidy row's maximum are booked
-            with, both being valued in the stage's year already (:meth:`subsidy_scale`). Empty for
+        reference: `stages[0]` evaluated alone over the whole horizon, the "do nothing" case.
+        plan: The staged plan: one timeline spliced from `per_stage`, aggregated as an ordinary evaluation.
+        comparison: `results.compare(reference, plan, "reference", "plan")`; deltas are plan minus reference per slot,
+            so a negative NPV delta means the plan is cheaper.
+        stages: The stages as priced: as given, except an enlarged subject is carried as its original unit plus one
+            `IncrementSubjects` subject per enlargement.
+        per_stage: Each stage evaluated alone over the full horizon, in stage order, with the merged register of the
+            stages before it; all share one provenance ledger (`ledger`).
+        charged_subjects_by_stage: Per stage, subject -> the share of its year-0 figure the stage pays (1.0 for a new
+            subject or an increment); carried-over subjects are absent.
+        active_stage_by_year: The stage the house is in for each horizon year 0..T (the last stage whose `from_year` is
+            at or below the year).
+        stage_by_entry: The stage each entry of `plan.timeline` came from, in timeline order, so a debt-service payment
+            can be attributed to the stage that borrowed.
+        subsidy_catalog_id: The catalogue the plan was priced under (`StagedEvaluator.catalog_id`), or None for a plan
+            priced without one (subsidy mode NONE).
+        energy_echo: The per-carrier escalation rates and year-1 prices used, with origins; None for a result assembled
+            by hand.
+        plan_start_year: The calendar year of plan year 0 as the caller stated it, or None; the document dates its
+            years from this alone.
+        price_basis_year: The price basis year actually used, as `StagedEvaluator.evaluate` resolved it; None only for
             a result assembled by hand.
+        price_basis_year_origin: `EchoOrigin.PLAN_START_YEAR` when the start year supplied the price basis year; None
+            otherwise.
+        lives_by_stage: Per stage, the `SubjectLife` of every cost subject; empty for a result assembled by hand.
+        investment_overrides: The resolved reader's quotes, in the order given; empty without any.
+        stage_start_share_by_stage: Per stage, the share of each subject's year-0 figures the stage pays, used for its
+            awards and subsidy maxima (`subsidy_scale`); empty for a result assembled by hand.
     """
 
     reference: LifecycleCostResult
@@ -609,55 +467,50 @@ class StagedResult:
 
     @property
     def ledger(self) -> Optional[ProvenanceLedger]:
-        """The one provenance ledger of the plan, which ``cost_provenance.json`` publishes.
+        """Return the plan's one provenance ledger, which `cost_provenance.json` publishes.
 
-        Every stage was evaluated into it, so it resolves the ids on the reference's timeline, on
-        each stage's and on the spliced plan's alike. ``None`` only for a result assembled by hand
-        without one.
+        Every stage was evaluated into it, so it resolves ids on the reference, each stage and the plan alike. None
+        only for a result assembled by hand without one.
         """
         return self.plan.ledger
 
     def stage_of_year(self, year: int) -> int:
-        """Index of the stage the house is in during one horizon year.
+        """Return the index of the stage the house is in during one horizon year.
 
         Args:
             year: A year index relative to the start of the horizon.
 
         Returns:
-            The index of the last stage whose ``from_year`` is at or below ``year``; 0 for a year
-            before any stage after the first has started, and for a year outside the horizon,
-            which no chart of the document asks about.
+            The last stage whose `from_year` is at or below `year`; 0 for a year outside the horizon.
         """
         if 0 <= year < len(self.active_stage_by_year):
             return self.active_stage_by_year[year]
         return 0
 
     def stage_of_timeline_entry(self, position: int) -> Optional[int]:
-        """Index of the stage the plan's ``position``-th timeline entry came from.
+        """Return the index of the stage the plan's `position`-th timeline entry came from.
 
         Args:
-            position: The entry's index in ``plan.timeline.entries``.
+            position: The entry's index in `plan.timeline.entries`.
 
         Returns:
-            The stage index, or ``None`` for a result built without the map — a plan priced by an
-            older evaluator, or one assembled by hand in a test.
+            The stage index, or None for a result built without the stage map (e.g. assembled by hand in a test).
         """
         if 0 <= position < len(self.stage_by_entry):
             return self.stage_by_entry[position]
         return None
 
     def stage_of_subject(self, subject: str) -> Optional[int]:
-        """Index of the stage that paid for one cost subject, or ``None`` when none did.
+        """Return the index of the last stage that paid for one cost subject, or None when none did.
 
-        The document stamps this on every ``by_subject`` row so the frontend can draw the
-        investment build-up per stage. A subject of the baseline that is never re-bought — a
-        boiler kept throughout — belongs to no stage and is reported as ``None``.
+        The document stamps this on every `by_subject` row; a baseline subject never re-bought (a boiler kept
+        throughout) belongs to no stage.
 
         Args:
             subject: The timeline subject name.
 
         Returns:
-            The index of the *last* stage that charged the subject, or ``None``.
+            The index of the last stage that charged the subject, or None.
         """
         found: Optional[int] = None
         for index, charged in enumerate(self.charged_subjects_by_stage):
@@ -666,30 +519,27 @@ class StagedResult:
         return found
 
     def subsidy_scale(self, stage: Optional[int], subject: str) -> float:
-        """The factor one stage's year-0 awards for one subject, and their maxima, are booked with.
+        """Return the factor one stage's year-0 awards for one subject, and their maxima, are booked with.
 
-        The share the stage pays alone. The stage's own evaluation valued its subsidies on the
-        cost as the plan books it in the stage's year, so a fixed amount is already clamped to
-        that cost and a share of it already follows it; no price level is applied on top, for any
-        kind of scheme (owner decision 2026-09-27, hisim-xnkp).
+        It is only the share the stage pays: the stage's evaluation already valued its subsidies on the cost as booked
+        in the stage's year, so no price level is applied on top.
 
         Args:
             stage: The stage, or None on the reference.
             subject: The measure's cost subject.
 
         Returns:
-            The factor; 1.0 on the reference and for a result that does not carry the factors.
+            The factor; 1.0 on the reference and for a result without the factors.
         """
         if stage is None or stage >= len(self.stage_start_share_by_stage):
             return 1.0
         return self.stage_start_share_by_stage[stage].get(subject, 1.0)
 
     def purchase_stage(self, subject: str, staged: bool) -> Optional[int]:
-        """The stage whose purchase of a subject a document row describes.
+        """Return the stage whose purchase of a subject a document row describes.
 
-        The plan's rows describe the last stage that charged the subject
-        (:meth:`stage_of_subject`) and, failing that, the last stage that has it at all; the
-        reference's rows describe stage 0.
+        On the plan, the last stage that charged the subject (`stage_of_subject`), else the last stage that has it; on
+        the reference, stage 0.
 
         Args:
             subject: The cost subject.
@@ -709,15 +559,15 @@ class StagedResult:
         return None
 
     def quote_of(self, subject: str, staged: bool) -> Optional[Tuple[InvestmentOverride, bool]]:
-        """The reader's quote that priced a subject's purchase, and whether it is the main subject.
+        """Return the reader's quote that priced a subject's purchase, and whether it is the main subject.
 
         Args:
             subject: The cost subject.
             staged: Whether the plan rather than the reference is asked about.
 
         Returns:
-            ``(the quote, True for its main subject / False for a further one)``, or None when the
-            purchase the row describes (:meth:`purchase_stage`) was not quoted.
+            `(quote, True for the main subject / False for a further one)`, or None when the described purchase
+                (`purchase_stage`) was not quoted.
         """
         stage = self.purchase_stage(subject, staged)
         for override in self.investment_overrides:
@@ -727,17 +577,16 @@ class StagedResult:
         return None
 
     def investment_origin(self, subject: str, staged: bool) -> Tuple[Optional[InvestmentOrigin], Optional[str]]:
-        """Where a subject's year-0 investment came from, and the source that states it (#53).
+        """Return where a subject's year-0 investment came from, and the source sentence that states it.
 
         Args:
             subject: The cost subject.
             staged: Whether the plan rather than the reference is asked about.
 
         Returns:
-            ``(origin, source)``: the reader's quote and its source, a request override and its
-            ``override_source``, or the cost database with no source sentence; ``(None, None)``
-            for a subject no stage holds cost facts for and no quote prices (a carrier, a
-            measure-only row).
+            `(origin, source)`: the quote and its source, a request override and its `override_source`, or the cost
+                database with no source; `(None, None)` for a subject without cost facts and without a quote (a
+                carrier, a measure-only row).
         """
         quote = self.quote_of(subject, staged)
         if quote is not None:
@@ -759,19 +608,18 @@ class StagedResult:
         return InvestmentOrigin.COST_DATABASE, None
 
     def life_of(self, subject: str, staged: bool) -> Optional[SubjectLife]:
-        """The lifetime and age one subject was priced with, on the reference or on the plan.
+        """Return the lifetime and age one subject was priced with, on the reference or on the plan.
 
-        The reference is stage 0's evaluation. On the plan a subject is read off the stage that
-        last charged it (:meth:`stage_of_subject`) -- the stage whose purchase the plan keeps --
-        and failing that off the last stage that has it at all.
+        The reference is stage 0's evaluation; on the plan the subject is read off the stage that last charged it, else
+        the last stage that has it.
 
         Args:
             subject: The cost subject.
             staged: Whether the plan rather than the reference is asked about.
 
         Returns:
-            The :class:`SubjectLife`, or ``None`` for a subject no stage prices as a device (a
-            carrier, a synthetic subject) or a result without lives.
+            The `SubjectLife`, or None for a subject no stage prices as a device (a carrier, a synthetic subject) or a
+                result without lives.
         """
         if not self.lives_by_stage:
             return None
@@ -787,22 +635,17 @@ class StagedResult:
 
 
 class StagedEvaluator:
-    """Prices a staged renovation plan by splicing per-stage evaluations (E-spec §1).
+    """Prices a staged renovation plan by splicing per-stage evaluations.
 
-    One instance binds a :class:`~hisim.economics.database.CostDatabase`; the assumptions, the
-    perspective and the subsidy catalogue are arguments of :meth:`evaluate`, because the same
-    stored stages are routinely re-priced under different assumptions and re-reading the data
-    files for each of them would dominate the runtime. Three stages evaluate in well under a
-    second: no simulation runs and no file is read inside the calculation.
+    One instance binds a `CostDatabase`; assumptions, perspective and subsidy catalogue are arguments of `evaluate`, so
+    stored stages can be re-priced under other assumptions without re-reading data files. No simulation runs inside the
+    calculation. The class holds no state between calls and mutates none of its arguments: a stage's `EvaluationInputs`
+    is copied before its register is replaced.
 
     Example::
 
         evaluator = StagedEvaluator(CostDatabase(None))
         result = evaluator.evaluate(stages, EconomicParameters(country="IE"), perspective, None)
-
-    The class holds no state between calls and mutates none of its arguments: a stage's
-    ``EvaluationInputs`` is copied before its register is replaced, so the caller's record still
-    describes the simulation it came from.
     """
 
     #: Message of the refusal raised when the first stage does not start the plan.
@@ -852,8 +695,7 @@ class StagedEvaluator:
         """Bind the evaluator to one cost database.
 
         Args:
-            cost_database: The device, price and escalation data every stage is priced against.
-                Held as given and never modified.
+            cost_database: The device, price and escalation data every stage is priced against; never modified.
         """
         self.database = cost_database
 
@@ -866,51 +708,37 @@ class StagedEvaluator:
         plan_start_year: Optional[int] = None,
         investment_overrides: Sequence[InvestmentOverride] = (),
     ) -> StagedResult:
-        """Price one plan: evaluate every stage, splice the timelines, compare against stage 0.
+        """Price one plan: evaluate every stage, splice the timelines, and compare against stage 0.
 
-        The seven steps of step 10 §2, in order: validate the plan, evaluate each stage over the
-        full horizon with the ageing register of the stages before it — every stage recording into
-        one shared provenance ledger, so the ids the splice carries over stay resolvable — splice
-        the operating flows by active year and the investment flows by stage start year, aggregate
-        the spliced timeline exactly as an ordinary evaluation aggregates its own, and compare the
-        result against ``stages[0]``.
+        The steps are: validate the plan; evaluate each stage over the full horizon with the register of the stages
+        before it, all recording into one shared provenance ledger; splice operating flows by active year and
+        investment flows by stage start year; aggregate the spliced timeline as an ordinary evaluation does; and
+        compare the result with `stages[0]`.
 
         Args:
-            stages: The plan, in ascending ``from_year`` order; at least one stage.
-            parameters: The assumptions every stage is priced under — one set for the whole plan,
-                because a plan whose stages disagree about the interest rate is not one plan.
-            perspective: The accounting frame (installation context, actor scope, subsidy mode,
-                financing, accounting) every stage is evaluated under.
-            catalog: The subsidy catalogue in force, or ``None`` for a plan priced with no
-                catalogue at all, where every scheme stays undetermined and the plan is priced
-                under :meth:`priced_under`'s ``subsidy_mode: NONE``.
-            plan_start_year: The calendar year the plan starts in, or ``None``. Recorded on the
-                result for the document's calendar years; the plan's year 0 every register asset
-                is aged at and every stage purchase is dated from (:meth:`plan_year_zero`); and —
-                when ``parameters`` states no ``price_basis_year`` — the year the price basis falls
-                back to instead of the stages' simulation year
-                (:func:`~hisim.economics.evaluator.effective_price_basis_year`).
-            investment_overrides: The reader's quotes (renovisorissues #53), each resolved to the
-                subjects it prices (:class:`InvestmentOverride`). A quoted stage is evaluated with
-                its main subject's year-0 purchase at the quote and the measure's other subjects'
-                at zero (``purchase_cost_override_in_euro``), and the stage pays the whole quote
-                (charge share 1), exactly as stated in the stage's year: the splice does not
-                escalate a quoted purchase. Everything after that purchase -- replacements,
-                maintenance, the later stages' registers -- is priced as without it.
+            stages: The plan in ascending `from_year` order; at least one stage.
+            parameters: The assumptions every stage is priced under (one set for the whole plan).
+            perspective: The accounting frame every stage is evaluated under.
+            catalog: The subsidy catalogue in force, or None, in which case every scheme stays undetermined and the
+                plan is priced with subsidy mode NONE (`priced_under`).
+            plan_start_year: The calendar year the plan starts in, or None. It dates the document's calendar years,
+                sets plan year 0 (`plan_year_zero`), and supplies the price basis year when `parameters` states none
+                (`effective_price_basis_year`).
+            investment_overrides: The reader's quotes, each resolved to the subjects it prices. A quoted stage is
+                evaluated with its main subject's year-0 purchase at the quote and the measure's other subjects at zero
+                (`purchase_cost_override_in_euro`); the stage pays the whole quote, unescalated, in its year.
+                Everything after that purchase is priced as without it.
 
         Returns:
-            The :class:`StagedResult`, carrying the id of ``catalog`` (:meth:`catalog_id`).
+            The `StagedResult`, carrying the catalogue id (`catalog_id`).
 
         Raises:
-            ValueError: When ``plan_start_year`` lies outside :class:`PlanYearBounds`, the range
-                ``staged --parameters`` refuses as ``parameters.plan_start_year.invalid``.
-            StagedEvaluationError: ``parameters.price_basis_year.missing`` when neither
-                ``parameters`` states a ``price_basis_year`` nor the plan a ``plan_start_year``
-                (:attr:`YEAR_ZERO_MESSAGE`): plan year 0 is never the weather year.
-            StagedEvaluationError: For any condition of the class docstring's list — a plan this
-                module refuses to price.
-            hisim.economics.evaluator.UnresolvableSubjectsError: When a stage declares a cost
-                subject nothing can price (D7). An engine error, deliberately not wrapped.
+            ValueError: If `plan_start_year` lies outside `PlanYearBounds`.
+            StagedEvaluationError: `parameters.price_basis_year.missing` when neither a `price_basis_year` nor a
+                `plan_start_year` is stated (`YEAR_ZERO_MESSAGE`), or any other plan this module refuses (see the
+                class).
+            hisim.economics.evaluator.UnresolvableSubjectsError: When a stage declares a cost subject nothing can
+                price; an engine error, not wrapped.
         """
         if plan_start_year is not None and not (
             PlanYearBounds.MINIMUM <= plan_start_year <= PlanYearBounds.MAXIMUM
@@ -925,7 +753,7 @@ class StagedEvaluator:
         self._validate(ordered, parameters)
         basis_year_origin: Optional[EchoOrigin] = None
         self._validate_overrides(ordered, overrides)
-        # An enlargement of a kept subject is bought as its own subject (hisim-1y0m); from here on
+        # An enlargement of a kept subject is bought as its own subject; from here on
         # every stage carries it so, and a quote for the enlarged subject prices the increment.
         ordered = self.split_increments(ordered)
         overrides = self._quotes_on_increments(ordered, overrides)
@@ -953,7 +781,7 @@ class StagedEvaluator:
             raise StagedEvaluationError(self.YEAR_ZERO_MESSAGE, [problem.to_json()])
         price_basis_year = parameters.price_basis_year
         year_zero = self.plan_year_zero(plan_start_year, price_basis_year)
-        # Full-cost method (owner decision 2026-09-27, hisim-ryw1): the reference pays every
+        # Full-cost method: the reference pays every
         # end-of-life renewal, so no stage books an anyway credit for what it replaces.
         evaluator = EconomicEvaluator(
             self.database, parameters, catalog, plan_year_zero=year_zero, book_anyway_credit=False
@@ -1035,23 +863,16 @@ class StagedEvaluator:
 
     @staticmethod
     def plan_year_zero(plan_start_year: Optional[int], price_basis_year: int) -> int:
-        """The calendar year of the plan's year 0 (owner decision 2026-09-26, hisim-dutz, hisim-nl6j).
+        """Return the calendar year of the plan's year 0.
 
-        ``plan_start_year`` when the plan states one, else the price basis year the plan is priced
-        at. It is the one anchor for every date of the plan's ageing: each register asset of the
-        house is aged at it (its replacement schedule and the book value a measure writes off),
-        and a subject a stage buys counts as installed in ``plan_year_zero + from_year``, which is
-        also the ``installation_year`` the document publishes for it. The document's
-        ``calendar_year`` is ``plan_start_year + year`` and null without a start year, so whenever
-        it is stated it agrees with this year. Prices are still read at the price basis year, and
-        every amount is escalated from it to this year with the rate it escalates with later
-        (renovisorissues #62, :class:`~hisim.economics.evaluator.YearZeroPriceLevel`), so year 0
-        is in its own calendar year's money; the stages' ``simulation_year`` is the year of their
-        weather and dates nothing, which is why :meth:`evaluate` refuses a plan that states neither
-        year. :meth:`evaluate` resolves it once and hands it to the engine and to every stage.
+        It is `plan_start_year` when the plan states one, else the price basis year. Every register asset is aged at
+        it, and a subject a stage buys counts as installed in `plan_year_zero + from_year` (also the published
+        `installation_year`). Prices are read at the price basis year and escalated from it to this year
+        (`YearZeroPriceLevel`), so year 0 is in its own calendar year's money. The stages' simulation (weather) year
+        dates nothing, which is why `evaluate` refuses a plan that states neither year.
 
         Args:
-            plan_start_year: The calendar year the plan starts in, or ``None``.
+            plan_start_year: The calendar year the plan starts in, or None.
             price_basis_year: The price basis year the plan is priced at, as resolved.
 
         Returns:
@@ -1070,15 +891,15 @@ class StagedEvaluator:
 
     @classmethod
     def catalog_id(cls, catalog: Optional[SubsidyCatalog], country: str) -> Optional[str]:
-        """How a priced plan names the subsidy catalogue it was priced under.
+        """Return how a priced plan names the subsidy catalogue it was priced under.
 
         Args:
-            catalog: The catalogue in force, or ``None`` when the plan ran with none, in which
-                case every subsidy row of the document is undetermined.
+            catalog: The catalogue in force, or None when the plan ran with none (every subsidy row is then
+                undetermined).
             country: The country the plan was priced for.
 
         Returns:
-            ``"IE@2026-09-19"``-style id, or ``None`` for a plan priced with no catalogue.
+            An id like `"IE@2026-09-19"`, or None without a catalogue.
         """
         if catalog is None:
             return None
@@ -1093,30 +914,21 @@ class StagedEvaluator:
         perspective: Perspective,
         catalog: Optional[SubsidyCatalog],
     ) -> Tuple[EconomicParameters, Perspective]:
-        """The assumptions and the perspective a plan is actually priced under, given its catalogue.
+        """Return the assumptions and perspective a plan is actually priced under, given its catalogue.
 
-        A plan with no catalogue is priced with ``subsidy_mode: NONE``, whatever the perspective
-        asked for, and the document states every scheme of such a plan as undetermined (step 10
-        §1). The lever is ``perspective.subsidy_mode``, which is what the engine reads;
-        ``apply_subsidies`` is only the document's echo of that mode
-        (:meth:`~hisim.economics.staged_parameters.StagedParameters.applied_to`) and is turned off
-        so the echo says what ran. The engine itself books nothing without a catalogue since the
-        §10.1 flat shim was retired, so the rewrite changes no figure; it keeps the ``parameters``
-        block from echoing a mode the plan did not run under (hisim-cyc.5). With a catalogue the
-        arguments are returned unchanged.
-
-        :meth:`evaluate` calls this, and so does
-        :class:`~hisim.economics.staged_document.StagedDocument` when the result it is given was
-        priced with no catalogue; the second call changes nothing.
+        Without a catalogue the plan is priced with subsidy mode NONE whatever the perspective asked, and
+        `apply_subsidies` (only the document's echo of the mode) is turned off so the `parameters` block says what ran.
+        No figure changes, since the engine books nothing without a catalogue. With a catalogue the arguments are
+        returned unchanged. `evaluate` calls this, and so does `StagedDocument`; a second call changes nothing.
 
         Args:
             parameters: The assumptions the caller resolved.
             perspective: The perspective the caller resolved.
-            catalog: The subsidy catalogue in force, or ``None``.
+            catalog: The subsidy catalogue in force, or None.
 
         Returns:
-            ``(parameters, perspective)``: unchanged with a catalogue; without one, the perspective
-            with ``SubsidyMode.none()`` and the record with ``apply_subsidies`` off.
+            `(parameters, perspective)`: unchanged with a catalogue; otherwise with `SubsidyMode.none()` and
+                `apply_subsidies` off.
         """
         if catalog is not None:
             return parameters, perspective
@@ -1128,19 +940,12 @@ class StagedEvaluator:
     # ------------------------------------------------------------------ validation
 
     def _validate(self, stages: Tuple[Stage, ...], parameters: EconomicParameters) -> None:
-        """Refuse a plan that cannot be put on one timeline, naming what is wrong with it.
+        """Refuse a plan that cannot be put on one timeline, naming what is wrong.
 
-        Checked in the order a reader would check them: is there a plan at all, does it start at
-        year 0, do the years run forwards, does every stage start inside the horizon, were the
-        stages simulated under comparable conditions, and does the country have price data. The
-        last one is asked of the database rather than of a country list, so a country whose files
-        are added tomorrow works with no code change.
-
-        Equal years are accepted although E-spec §1.1 says "strictly increasing": the E-spec's own
-        §3 example and step 10 §7's end-to-end plan both put the baseline and the first package
-        stage in year 0, and that is the ordinary "what does the package cost against doing
-        nothing" question. A stage sharing its predecessor's year supersedes it immediately, which
-        is what :meth:`_active_by_year` does with no special case.
+        Checked in order: a plan exists, it starts at year 0, years do not decrease, every stage starts inside the
+        horizon, the stages were simulated under comparable conditions, and the database has price data for the
+        country. Equal years are accepted: a stage sharing its predecessor's year supersedes it at once, which is the
+        ordinary "package versus doing nothing" plan.
 
         Args:
             stages: The plan as given.
@@ -1168,8 +973,8 @@ class StagedEvaluator:
                 )
         for index, stage in enumerate(stages):
             # `horizon + 1` is the first year outside the horizon and is accepted on purpose: a
-            # stage there never becomes active, which is the "equals the baseline alone" case
-            # E-spec §1.3 pins down. Anything beyond it prices nothing and says nothing.
+            # stage there never becomes active, so the plan equals the baseline alone. Anything
+            # beyond it prices nothing and says nothing.
             if stage.from_year > horizon + 1:
                 raise StagedEvaluationError(
                     self.HORIZON_MESSAGE.format(
@@ -1187,12 +992,8 @@ class StagedEvaluator:
     def _validate_comparable(self, stages: Tuple[Stage, ...]) -> None:
         """Refuse stages whose simulations describe different years or different periods.
 
-        Two figures must agree across a plan or the splice puts incomparable numbers next to each
-        other: ``simulation_year``, because it is the year of the weather every stage's flows were
-        simulated with and the year the price basis falls back to when neither the parameters nor
-        a plan start year state one, and ``simulated_period_fraction``, because it is the divisor that
-        turns a simulated period into a year. Everything else a stage carries is allowed to differ
-        — that is what makes it a different state of the house.
+        `simulation_year` (the weather year, and the price basis fallback) and `simulated_period_fraction` (the divisor
+        that turns a simulated period into a year) must agree across a plan; everything else may differ between stages.
 
         Args:
             stages: The plan as given.
@@ -1221,7 +1022,7 @@ class StagedEvaluator:
                         )
                     )
 
-    # ------------------------------------------------------------------ stated energy prices (#52)
+    # ------------------------------------------------------------------ stated energy prices
 
     #: Message of the refusal raised when a stated energy price cannot be priced as stated.
     STATED_PRICES_MESSAGE = (
@@ -1235,21 +1036,18 @@ class StagedEvaluator:
     def _validate_stated_prices(
         self, stages: Tuple[Stage, ...], parameters: EconomicParameters, price_basis_year: int
     ) -> None:
-        """Refuse stated energy prices the engine could only bill by reading them differently (#52).
+        """Refuse stated energy prices that need the stages and the database to check.
 
-        The checks the parameter parser cannot make, because they need the stages and the
-        database: a price stated for a carrier some stage bills under an explicit contract (the
-        contract's price signal may have driven that stage's simulation, so replacing its terms
-        afterwards would price a load the tariff did not produce), a carrier the country has no
-        price entry for (its emission factor, carbon exposure and tax share still come from one),
-        and an all-in working price below the year-1 carbon price booked on top of the working
-        price, which would leave a negative one. Every fault is reported at once, as
-        ``problems.json`` rows in the parameter block's own codes.
+        Refused are: a price for a carrier some stage bills under an explicit contract (its price signal may have
+        shaped that stage's simulation); a carrier the country has no price entry for (its emission factor, carbon
+        exposure and tax share come from one); and an all-in working price below the year-1 carbon price booked on top
+        of it, which would leave a negative working price. All faults are reported at once, in the parameter block's
+        codes.
 
         Args:
             stages: The plan as given.
             parameters: The assumptions, holding the stated prices.
-            price_basis_year: The economic "today" the year-1 carbon price is read at.
+            price_basis_year: The year the year-1 carbon price is read at.
 
         Raises:
             StagedEvaluationError: Carrying one row per offending carrier or field.
@@ -1314,32 +1112,27 @@ class StagedEvaluator:
         parameters: EconomicParameters,
         price_basis_year: int,
     ) -> EnergyEcho:
-        """The per-carrier rates and year-1 prices the plan was priced with, and their origins (#52, E1).
+        """Return the per-carrier rates and year-1 prices the plan was priced with, and their origins.
 
-        The rates of the carriers the stages bill are the union of the stages' own resolved
-        assumptions, which must agree — every stage is priced under one parameter set against one
-        database, so a disagreement is an engine defect (:class:`StagedEngineError`). A carrier the
-        plan named but no stage bills is resolved through the same fallback chain. Prices are the
-        contract each carrier is billed under
-        (:func:`~hisim.economics.calculators.energy.priced_contract`), checked against the stages'
-        billed tariffs, with the working price stated all-in: the database's working price plus the
-        year-1 carbon price booked beside it, or the stated price as it was stated. The feed-in rate
-        is echoed as ``ELECTRICITY_FEED_IN`` whenever the electricity contract pays one. A carrier
-        billed under an explicit contract has no flat price a plan could state, and is left out of
-        the prices.
+        Rates of billed carriers are the union of the stages' resolved assumptions, which must agree. A carrier the
+        plan named but no stage bills is resolved through the same fallback chain. Prices are each carrier's contract
+        (`priced_contract`), checked against the stages' billed tariffs, with the working price all-in (the database
+        price plus the year-1 carbon price, or the stated price). The feed-in rate is echoed as `ELECTRICITY_FEED_IN`
+        when the electricity contract pays one. A carrier billed under an explicit contract has no flat price and is
+        left out of the prices.
 
         Args:
             stages: The plan as given.
             per_stage: Each stage's own evaluation.
             parameters: The assumptions the plan was priced under.
-            price_basis_year: The economic "today".
+            price_basis_year: The price basis year.
 
         Returns:
             The echo, keyed by carrier in carrier order.
 
         Raises:
-            StagedEngineError: If two stages resolved one carrier's rate or tariff differently, or
-                the contract rebuilt here is not the one the stages billed.
+            StagedEngineError: If two stages resolved one carrier's rate or tariff differently, or the rebuilt contract
+                differs from the billed one.
         """
         billed_rates: Dict[EnergyCarrier, ResolvedRate] = {}
         billed_tariffs: Dict[EnergyCarrier, TariffAssumption] = {}
@@ -1391,19 +1184,19 @@ class StagedEvaluator:
         parameters: EconomicParameters,
         price_basis_year: int,
     ) -> EchoedPrice:
-        """One carrier's year-1 price terms as the plan was priced with them, the working price all-in.
+        """Return one carrier's year-1 price terms as the plan was priced with them, the working price all-in.
 
         Args:
             carrier: A carrier other than the feed-in one.
             billed: The tariff the stages billed it under, or None when no stage bills it.
             parameters: The assumptions.
-            price_basis_year: The economic "today".
+            price_basis_year: The price basis year.
 
         Returns:
             The echoed terms.
 
         Raises:
-            StagedEngineError: If the contract rebuilt here is not the one the stages billed.
+            StagedEngineError: If the rebuilt contract differs from the billed one.
         """
         contract = priced_contract(carrier, price_basis_year, self.database, parameters)
         if billed is not None and TariffAssumption.from_contract(contract) != billed:
@@ -1486,21 +1279,19 @@ class StagedEvaluator:
     def _quoted_inputs(
         inputs: EvaluationInputs, quotes: Sequence[InvestmentOverride]
     ) -> Tuple[EvaluationInputs, List[QuotedPurchase]]:
-        """One stage's inputs with the reader's quotes on its subjects' facts (renovisorissues #53).
+        """Return one stage's inputs with the reader's quotes on its subjects' facts.
 
-        The main subject's facts get the quote as ``purchase_cost_override_in_euro`` and each
-        further subject's a zero; the facts' ``override_source`` names the quote (after whatever
-        it already said, so a request-priced envelope subject still cites its cost block). A main
-        subject the stage has no cost facts for -- a measure HiSim holds no price for -- is bought
-        as a :class:`~hisim.economics.facts.QuotedPurchase` instead.
+        The main subject's facts get the quote as `purchase_cost_override_in_euro`, each further subject's a zero, and
+        `override_source` names the quote (after any existing source). A main subject without cost facts (a measure
+        HiSim holds no price for) is bought as a `QuotedPurchase` instead.
 
         Args:
-            inputs: The stage's inputs, with its ageing register already merged in.
+            inputs: The stage's inputs, with its register already merged in.
             quotes: The quotes for this stage.
 
         Returns:
-            A copy of the inputs carrying the quotes, and the stage's quoted purchases. The inputs
-            are returned unchanged when the stage has no quote.
+            A copy of the inputs carrying the quotes, and the stage's quoted purchases; the inputs unchanged when the
+                stage has no quote.
         """
         if not quotes:
             return inputs, []
@@ -1540,16 +1331,16 @@ class StagedEvaluator:
         evaluator: EconomicEvaluator,
         parameters: EconomicParameters,
     ) -> Dict[str, float]:
-        """The share of each of one stage's year-0 figures the stage pays, per subject.
+        """Return the share of each of one stage's year-0 figures the stage pays, per subject.
 
-        The factor the splice books a stage's subsidies with (:meth:`_StageCharges.booked_factor`),
-        and so the factor a subsidy row's maximum is moved into the plan by.
+        This is the factor the splice books the stage's subsidies with (`_StageCharges.booked_factor`), and so the
+        factor a subsidy row's maximum is moved into the plan by.
 
         Args:
             stages: The plan.
             index: The stage.
             charged: What the stage pays for.
-            evaluator: For the escalation rates the charges bundle carries.
+            evaluator: For the escalation rates in the charges bundle.
             parameters: For the general investment escalation rate.
 
         Returns:
@@ -1563,93 +1354,71 @@ class StagedEvaluator:
     def _booked_price_levels(
         inputs: EvaluationInputs, from_year: int, charges: "_StageCharges"
     ) -> Dict[str, float]:
-        """The price level the plan books each of a stage's year-0 purchases at, per subject.
+        """Return the price level the plan books each of a stage's year-0 purchases at, per subject.
 
-        :meth:`_StageCharges.stage_start_factor` in the stage's year: the subject's investment
-        escalation from year 0 to ``from_year``, 1.0 for a reader's quote. The stage's evaluation
-        values its subsidies on the cost at this level (``booked_price_levels``), so a fixed
-        amount is clamped, and an eligible-cost cap in euro binds, on the cost the splice books
-        beside it rather than on the year-0 cost (owner decision 2026-09-27, hisim-xnkp). Only the
-        levels other than 1.0 are listed, so a stage starting in year 0 and a plan without
-        investment escalation are evaluated exactly as before.
+        That is the subject's investment escalation from year 0 to `from_year` (`_StageCharges.stage_start_factor`),
+        1.0 for a reader's quote. The stage's evaluation values its subsidies on the cost at this level
+        (`booked_price_levels`), so fixed amounts and euro caps apply to the cost the splice books. Only levels other
+        than 1.0 are listed.
 
         Args:
             inputs: The stage's evaluation inputs, for its cost subjects.
             from_year: The stage's start year.
-            charges: The stage's charges bundle, for the rates and the quoted subjects.
+            charges: The stage's charges bundle, for the rates and quoted subjects.
 
         Returns:
-            Subject -> price level, for the subjects whose level is not 1.0.
+            Subject -> price level, for subjects whose level is not 1.0.
         """
         levels = {facts.subject: charges.stage_start_factor(facts.subject, from_year) for facts in inputs.cost_facts}
         return {subject: level for subject, level in levels.items() if level != 1.0}
 
     @classmethod
     def charged_subjects(cls, stages: Sequence[Stage], index: int) -> Dict[str, float]:
-        """Which subjects stage ``index`` pays for, and at what share (:meth:`_charged_subjects`).
+        """Return which subjects stage `index` pays for, and at what share (public form of `_charged_subjects`).
 
-        The public face of the rule, for a caller that has to know before pricing whether a stage
-        buys anything for a measure -- the staged command refusing a quote for a measure a stage
-        only carries over. Asked of the stages as given: a subject the stage enlarges is listed
-        under its own name, since the stage buys its increment (:class:`IncrementSubjects`).
+        For a caller that must know before pricing whether a stage buys anything for a measure, e.g. the staged command
+        refusing a quote for a measure a stage only carries over. Asked of the unsplit stages: a subject the stage
+        enlarges is listed under its own name, since the stage buys its increment.
 
         Args:
             stages: The plan, as given.
             index: The stage.
 
         Returns:
-            Subject name -> the share of its year-0 flows the stage pays.
+            Subject -> the share of its year-0 flows the stage pays.
         """
         charged = cls._charged_subjects(cls.split_increments(tuple(stages)), index)
         return {IncrementSubjects.base_of(subject) or subject: share for subject, share in charged.items()}
 
     @classmethod
     def split_increments(cls, stages: Sequence[Stage]) -> Tuple[Stage, ...]:
-        """The plan with every enlargement of a kept subject carried as a subject of its own (hisim-1y0m).
+        """Return the plan with every enlargement of a kept subject carried as a subject of its own.
 
-        A stage whose subject is larger than the stage before's, under the same asset class, not
-        newly replaced and not grown out of a size of zero (:meth:`_charged_subjects` buys those
-        whole), keeps the unit it had and buys the difference: its cost facts carry the subject at
-        the size it had and one :class:`IncrementSubjects` subject per enlargement, each at its
-        own size. Every later stage that holds the subject at that size carries the same pieces,
-        so each ages on its own schedule; a stage that no longer has the subject, replaces it or
-        shrinks it carries it whole again, as stated, and the increments leave the plan with it. A
-        subject shrunk and later grown again is split again: the regrowth is an increment of the
-        stage that regrows it.
+        An increment is the extra size a later stage adds to a subject it keeps (e.g. a larger PV array under the same
+        asset class, not newly replaced and not grown from zero). That stage keeps the unit it had at its old size and
+        buys one `IncrementSubjects` subject per enlargement at the increment's size. Later stages holding the subject
+        at that size carry the same pieces, so each ages on its own schedule; a stage that drops, replaces or shrinks
+        the subject carries it whole again. A subject shrunk and grown again is split again.
 
-        Each piece is priced as what it is, a purchase of its own stage:
+        Pricing of the pieces:
 
-        * The unit a stage enlarges, and every increment an earlier stage bought, keeps the facts
-          it was bought with -- the facts the subject (or the increment) carried in the stage
-          before -- so its replacements, its residual value and its embodied CO2 stay those of
-          the price that stage paid, whatever the enlarging stage states for the whole subject.
-          It is not bought in the enlarging stage, so a ``purchase_cost_override_in_euro`` it
-          carried is dropped.
-        * The new increment takes the enlarging stage's facts at its own size. A database-priced
-          subject is priced by the database's law for that size -- device cost ``specific x
-          size`` (or ``specific x size^exponent``) plus the entry's fixed installation and
-          planning cost, which a separate purchase incurs again. An
-          ``investment_cost_override_in_euro`` or embodied-CO2 override states the whole
-          subject's figure and no law, so the increment takes the stage's per-unit figure --
-          the override divided by the stage's whole size -- times its own size: the price the
-          stage states per unit, not the whole figure less what the earlier unit cost, which
-          would charge the increment for a change in the unit price of the unit bought earlier.
-          ``installation_cost_override_in_euro`` is a fixed cost per purchase, like the
-          database's, and ``purchase_cost_override_in_euro`` states the stage's year-0 purchase,
-          which is the increment alone: both go to the increment whole, and to no other piece.
+        - The unit being enlarged, and every earlier increment, keeps the facts it was bought with (so its
+          replacements, residual value and embodied CO2 stay those of its own purchase); a
+          `purchase_cost_override_in_euro` it carried is dropped.
+        - The new increment takes the enlarging stage's facts at its own size: a database-priced subject by the
+          database law for that size (device cost `specific x size` or `specific x size^exponent`, plus fixed
+          installation and planning cost). An `investment_cost_override_in_euro` or embodied-CO2 override is taken per
+          unit of the stage's whole size times the increment's size. `installation_cost_override_in_euro` and
+          `purchase_cost_override_in_euro` go to the increment whole.
 
-        Every piece of a split subject says which share of the energy the installation sells it
-        is paid per-kWh subsidies on, its size over the whole subject's
-        (``share_of_energy_sold``, owner decision 2026-10-01), and every increment says
-        ``own_register_entry``: it is bought new in the stage that adds it, and kept on its own
-        register entry after that.
+        Every piece states its share of the energy sold (`share_of_energy_sold`, its size over the whole), on which
+        per-kWh subsidies are paid, and every increment sets `own_register_entry`.
 
         Args:
             stages: The plan, as given.
 
         Returns:
-            The plan with the split cost facts; a stage with nothing split is returned as it was,
-            so a plan without enlargements is the plan as given.
+            The plan with split cost facts; a stage with nothing split is returned as it was.
         """
         split: List[Stage] = []
         held: Dict[str, List[SubjectCostFacts]] = {}
@@ -1687,10 +1456,9 @@ class StagedEvaluator:
 
     @staticmethod
     def _held_whole(before: ComponentCostFacts, facts: ComponentCostFacts, replaced: FrozenSet[ComponentType]) -> bool:
-        """Whether a subject the stage before also had is one unit again rather than grown pieces.
+        """Return whether a subject the stage before also had is one unit again rather than grown pieces.
 
-        Bought whole -- another class, a newly replaced class, grown out of a size of zero
-        (:meth:`_charged_subjects`) -- or shrunk, which leaves nothing an increment could describe.
+        True when it is bought whole (another class, a newly replaced class, grown from size zero) or shrunk.
         """
         return (
             before.asset_class != facts.asset_class
@@ -1701,16 +1469,16 @@ class StagedEvaluator:
 
     @staticmethod
     def _increment_facts(subject_facts: SubjectCostFacts, name: str, size_before: float) -> SubjectCostFacts:
-        """The increment one stage buys of a subject it enlarges, priced as :meth:`split_increments` says.
+        """Return the increment one stage buys of a subject it enlarges, priced as `split_increments` describes.
 
         Args:
             subject_facts: The enlarging stage's facts for the whole subject.
-            name: The increment's subject (:class:`IncrementSubjects`).
+            name: The increment's subject name (`IncrementSubjects`).
             size_before: The subject's size in the stage before.
 
         Returns:
-            The stage's facts at the increment's size, with the stage's whole-subject investment
-            and embodied-CO2 overrides taken per unit of size, and ``own_register_entry`` set.
+            The stage's facts at the increment's size, with whole-subject investment and embodied-CO2 overrides taken
+                per unit of size, and `own_register_entry` set.
         """
         facts = subject_facts.facts
         size = facts.size - size_before
@@ -1730,17 +1498,16 @@ class StagedEvaluator:
 
     @staticmethod
     def _piece_facts(subject_facts: SubjectCostFacts, pieces: List[SubjectCostFacts]) -> List[SubjectCostFacts]:
-        """One stage's facts for a subject as the pieces it is carried in (:meth:`split_increments`).
+        """Return one stage's facts for a subject as the pieces it is carried in (`split_increments`).
 
         Args:
             subject_facts: The stage's facts for the whole subject.
-            pieces: The pieces' facts, the unit the first increment enlarged first, each at its
-                own size; the sizes sum to the subject's. The last one is the stage's own
-                increment when the stage enlarges the subject.
+            pieces: The pieces' facts in order (the original unit first), each at its own size; the sizes sum to the
+                subject's. The last is the stage's own increment when it enlarges the subject.
 
         Returns:
-            The facts as given for a subject of one piece, else one facts record per piece, each
-            stating its share of the energy sold.
+            The facts unchanged for a one-piece subject, else one record per piece stating its share of the energy
+                sold.
         """
         if len(pieces) == 1:
             return [subject_facts]
@@ -1754,15 +1521,14 @@ class StagedEvaluator:
     def _quotes_on_increments(
         stages: Tuple[Stage, ...], overrides: Tuple[InvestmentOverride, ...]
     ) -> Tuple[InvestmentOverride, ...]:
-        """The quotes with every subject a stage enlarges replaced by that stage's increment (hisim-1y0m).
+        """Return the quotes with every subject a stage enlarges re-pointed to that stage's increment.
 
-        A quote is the stage's whole job for the measure, and what the stage buys of an enlarged
-        subject is its increment: the quote replaces the increment's price exactly, and the unit
-        it enlarges, bought earlier, is not re-priced.
+        A quote is the stage's whole job for the measure, and what the stage buys of an enlarged subject is the
+        increment; the earlier unit is not re-priced.
 
         Args:
-            stages: The plan, split (:meth:`split_increments`).
-            overrides: The quotes, validated.
+            stages: The plan, split (`split_increments`).
+            overrides: The validated quotes.
 
         Returns:
             The quotes, re-pointed where a subject is enlarged in the quote's stage.
@@ -1788,40 +1554,24 @@ class StagedEvaluator:
 
     @classmethod
     def _charged_subjects(cls, stages: Tuple[Stage, ...], index: int) -> Dict[str, float]:
-        """Which subjects stage ``index`` pays for, and at what share of its own year-0 figure.
+        """Return which subjects stage `index` pays for, and at what share of its own year-0 figure.
 
-        E-spec §1.2 item 2: a subject is charged when it is present in ``S_k`` and absent from
-        ``S_{k-1}`` under the same asset class. A subject carried over unchanged is not charged
-        again, and is absent from the returned mapping rather than present with a zero, so "did
-        this stage buy this" is one membership test. Asked of the split plan
-        (:meth:`split_increments`), where a subject the stage enlarges keeps the size it had and is
-        carried over, and the increment is a subject of its own, new in the stage and charged
-        whole (hisim-1y0m). That holds for every enlargement of a kept subject, also one shrunk in
-        an earlier stage and grown again: the regrowth is the regrowing stage's increment. No
-        subject of the split plan is larger than in the stage before unless it is bought whole.
+        A subject is charged when it is present in this stage and absent from the stage before under the same asset
+        class. A subject carried over unchanged is absent from the mapping (not present with zero). This is asked of
+        the split plan (`split_increments`), where an enlarged subject is carried over at its old size and its
+        increment is new and charged whole.
 
-        The increment is only for something the house *keeps* and enlarges. Anything the stage's
-        inventory declares *replaced*, where the stage before declared no such replacement
-        (:meth:`_newly_replaced_classes`), is a new purchase bought whole in this stage, however
-        large the old one was: a generator, a buffer, a cylinder, the emitters, a PV array, a
-        battery, a collector. The stage's own evaluation already prices it so -- the full new
-        price, the old one's removal, its written-off book value and the anyway credit
-        (``cost_spec.md`` §4.1) -- and charging only the size increment of that would book a
-        fraction of a replacement. A heating_system measure that replaces a 430-litre buffer with a
-        970-litre one buys a 970-litre vessel, not 540 litres of one (renovisorissues #48).
-
-        An owner decision of 2026-09-26 first limited this to the space-heating buffer; it was
-        reversed later that day, because under the increment rule every same-class replacement
-        of the same size or smaller was free -- a hot_water_system measure replacing a cylinder
-        with one of the same size, a heat pump replacing a heat pump.
+        Anything the stage's inventory newly declares replaced (`_newly_replaced_classes`) is bought whole, however
+        large the old one was: a heating measure replacing a 430-litre buffer with a 970-litre one buys a 970-litre
+        vessel. The stage's own evaluation already prices it so, with the old unit's removal and written-off book value
+        (cost_spec.md §4.1). Without this rule a same-class replacement of equal or smaller size would be free.
 
         Args:
             stages: The plan as given.
             index: The stage to answer for.
 
         Returns:
-            Subject name -> the share of that subject's year-0 investment-class flows the stage
-            pays: 1.0 for every subject it buys.
+            Subject -> the share of its year-0 investment-class flows the stage pays (1.0 for every subject it buys).
         """
         current = {facts.subject: facts.facts for facts in stages[index].inputs.cost_facts}
         if index == 0:
@@ -1844,16 +1594,14 @@ class StagedEvaluator:
 
     @classmethod
     def _newly_replaced_classes(cls, stages: Tuple[Stage, ...], index: int) -> FrozenSet[ComponentType]:
-        """The asset classes stage ``index``'s inventory replaces and the stage before did not.
+        """Return the asset classes stage `index`'s inventory replaces that the stage before did not.
 
-        A stage's inventory is the house as its translator declared it, and each entry names the
-        classes that replace it (``ExistingAsset.replaced_by_asset_classes``). A replacement that
-        the previous stage already declared was carried out there -- a plan's stages each carry
-        every measure before them -- so only the difference is this stage's own.
+        Each inventory entry names the classes that replace it (`ExistingAsset.replaced_by_asset_classes`). A plan's
+        stages each carry every measure before them, so only the difference to the previous stage is this stage's own.
 
         Args:
             stages: The plan as given.
-            index: The stage to answer for, at least 1.
+            index: The stage, at least 1.
 
         Returns:
             The asset classes this stage replaces for the first time.
@@ -1872,18 +1620,16 @@ class StagedEvaluator:
     def _carried_over_subjects(
         cls, stages: Tuple[Stage, ...], index: int, charged: Dict[str, float]
     ) -> Set[str]:
-        """Subjects stage ``index`` inherits from its predecessor without paying for them again.
+        """Return the subjects stage `index` inherits from its predecessor without paying for them again.
 
-        The complement of :meth:`_charged_subjects` among the stage's own cost subjects, and the
-        set the splice uses to decide what *not* to book. Everything else a stage's year-0 entries
-        mention — the synthetic ``financing`` subject, an entry filed under an asset the stage
-        tears out — is neither charged nor carried over, and is taken as the stage's own.
+        The complement of `_charged_subjects` among the stage's cost subjects; the splice uses it to decide what not to
+        book. Other subjects in a stage's year-0 entries (the synthetic `financing` subject, an entry filed under an
+        asset the stage tears out) are taken as the stage's own.
 
         Args:
             stages: The plan as given.
             index: The stage to answer for.
-            charged: What :meth:`_charged_subjects` said this stage pays for, passed in rather
-                than recomputed so the two answers cannot disagree.
+            charged: What `_charged_subjects` said this stage pays for, passed in so the two cannot disagree.
 
         Returns:
             The subject names carried over unchanged; empty for stage 0.
@@ -1904,40 +1650,26 @@ class StagedEvaluator:
         charged_by_stage: List[Dict[str, float]],
         plan_year_zero: int,
     ) -> EvaluationInputs:
-        """Stage ``index``'s inputs with the ageing register of every earlier stage merged in.
+        """Return stage `index`'s inputs with the register of every earlier stage's purchases merged in.
 
-        This is step 10 §2 item 4, and it is the whole of "ageing across stages": the register the
-        stage is evaluated with holds the house inventory *minus* whatever an earlier stage has
-        already torn out, *plus* one :class:`~hisim.economics.facts.ExistingAsset` per subject an
-        earlier stage paid for, installed in that stage's calendar year ``plan_year_zero +
-        from_year`` and marked with the origin ``STAGE``. The engine's brownfield machinery
-        then schedules the replacements, the residual values and the removal costs itself; this
-        module adds no second mechanism, only the one fact the engine cannot know: the age of
-        such a purchase (``stated_age_in_years``, hisim-4uv9). The engine measures a register
-        asset's age at plan year 0 and floors it, which makes a purchase of stage ``j`` new
-        whatever stage prices it. So this module states it: ``-from_year_j`` when this stage keeps
-        it (its replacements stay on the plan's years, so the first falls in
-        ``from_year_j + L``), ``from_year - from_year_j`` when this stage replaces it (the
-        write-off and the anyway-cost test are taken in the year this stage starts). The house's
-        own register is aged by the engine as ever.
-
-        Stage 0 is returned unchanged, and it contributes nothing to later registers either — it is
-        the reference, and its register is the inventory as
-        the translator declared it.
+        This is all of the ageing across stages. The register (the list of existing assets the engine treats as already
+        installed) holds the house inventory minus what an earlier stage tore out, plus one `ExistingAsset` with origin
+        `STAGE` per subject an earlier stage paid for, installed in that stage's calendar year `plan_year_zero +
+        from_year`. The engine's brownfield logic then schedules replacements, residual values and removal costs. The
+        one fact the engine cannot derive is such a purchase's age (`stated_age_in_years`), since it would otherwise
+        floor it to new: it is `-from_year_j` when this stage keeps the purchase of stage `j` (its first replacement
+        falls in `from_year_j + L`), and `from_year - from_year_j` when this stage replaces it. Stage 0 is returned
+        unchanged and adds nothing to later registers.
 
         Args:
             stages: The plan as given.
             index: The stage to build inputs for.
-            charged_by_stage: What every *earlier* stage charged, in stage order; this method is
-                called in order, so the list holds exactly ``index`` entries.
-            plan_year_zero: The calendar year of plan year 0 (:meth:`plan_year_zero`), which the
-                engine ages this stage's register at too. Never the stages' ``simulation_year``:
-                that is the year of their weather, and a purchase dated from it came out
-                ``price basis year - weather year`` years too old (hisim-dutz).
+            charged_by_stage: What every earlier stage charged, in stage order (exactly `index` entries).
+            plan_year_zero: The calendar year of plan year 0 (`plan_year_zero`), at which the engine ages the register;
+                never the stages' simulation (weather) year.
 
         Returns:
-            A copy of the stage's inputs carrying the merged register. The caller's record is not
-            modified.
+            A copy of the stage's inputs with the merged register; the caller's record is not modified.
         """
         stage = stages[index]
         if index == 0:
@@ -1969,7 +1701,7 @@ class StagedEvaluator:
                     # nothing ages into the next stage's register.
                     continue
                 if facts.own_register_entry:
-                    # An increment (hisim-1y0m) ages on an entry bound to it, beside the unit it
+                    # An increment ages on an entry bound to it, beside the unit it
                     # enlarged, which it neither hides nor replaces. It leaves with that unit: a
                     # stage that no longer carries it has replaced, shrunk or removed the subject.
                     if subject in facts_by_subject:
@@ -1996,7 +1728,7 @@ class StagedEvaluator:
                     installation_year_origin=InstallationYearOrigin.STAGE,
                     # Replaced: written off in the year this stage starts. Kept: its replacements
                     # stay on the plan's own years, so it is aged at plan year 0 -- negative, and
-                    # replaced one service life after it was bought (hisim-4uv9).
+                    # replaced one service life after it was bought.
                     stated_age_in_years=(
                         stage.from_year - stages[earlier].from_year if replaced else -stages[earlier].from_year
                     ),
@@ -2012,11 +1744,7 @@ class StagedEvaluator:
 
     @staticmethod
     def _inventory(inputs: EvaluationInputs) -> List[ExistingAsset]:
-        """The house inventory a stage was simulated with, as a fresh list.
-
-        A stage with no register at all — a greenfield job — contributes an empty inventory rather
-        than ``None``, so the merge below has one shape to handle.
-        """
+        """Return the house inventory a stage was simulated with, as a fresh list (empty for a greenfield stage)."""
         register = inputs.existing_assets
         return list(register.assets) if register is not None else []
 
@@ -2032,37 +1760,26 @@ class StagedEvaluator:
         active_by_year: Tuple[int, ...],
         terms: _SpliceTerms = _SpliceTerms(),
     ) -> "_SplicedTimeline":
-        """Build the plan's one timeline out of the per-stage timelines (step 10 §2 items 2-3).
+        """Build the plan's one timeline from the per-stage timelines (the splice).
 
-        Entries are appended stage by stage and, within a stage, in the order that stage's own
-        evaluation produced them. For a plan of one stage that reproduces the original timeline
-        entry for entry, which is invariant 1 of E-spec §1.3 and the reason the order is fixed
-        this way rather than by sorting.
-
-        Two things cannot be decided entry by entry and are therefore done in a second pass over
-        the result of the first (step 12 §2.1). The **residual values** are written down from the
-        plan's own last installation of each subject, which is only known once every stage's
-        purchases and re-dated replacements are on one timeline; each one is put back where the
-        stage that would have written it stood, so a plan of one stage still reproduces the
-        original order. The **replacement reserve** of the operating view is re-levelized from the
-        re-dated replacement schedule, because a stage's own reserve pays for replacements in the
-        years that stage would have had them rather than in the years the plan does.
+        Entries are appended stage by stage, each stage in its own evaluation's order, so a one-stage plan reproduces
+        its original timeline entry for entry. A second pass handles what cannot be decided entry by entry: residual
+        values are written down from the plan's own last installation of each subject and put back where the stage's
+        own residual stood, and the operating view's replacement reserve is re-levelized from the re-dated replacement
+        schedule.
 
         Args:
             stages: The plan as given.
             per_stage: Each stage's own evaluation, in stage order.
-            charged_by_stage: What each stage pays for, from :meth:`_charged_subjects`.
-            evaluator: The bound engine, for the per-asset-class investment escalation rates and
-                the price basis year the service lives are resolved at.
+            charged_by_stage: What each stage pays for, from `_charged_subjects`.
+            evaluator: The bound engine, for per-asset-class investment escalation rates and the price basis year of
+                the service lives.
             parameters: The assumptions, for the horizon and the general escalation rate.
-            active_by_year: Which stage is active in each horizon year, from
-                :meth:`_active_by_year`.
-            terms: The quotes and the financing plan
-                (:class:`_SpliceTerms`); the defaults for a cash plan without quotes.
+            active_by_year: Which stage is active in each horizon year (`_active_by_year`).
+            terms: The quotes and the financing plan; the defaults are a cash plan without quotes.
 
         Returns:
-            The spliced timeline, sign-validated like any engine timeline, together with the stage
-            each of its entries came from.
+            The spliced timeline, sign-validated like any engine timeline, with the stage each entry came from.
         """
         horizon = parameters.observation_period_in_years
         active_indices = set(active_by_year)
@@ -2118,22 +1835,19 @@ class StagedEvaluator:
         residuals: Dict[str, Tuple[int, CashFlowEntry]],
         reserve: UncertainValue,
     ) -> "_SplicedTimeline":
-        """Put the computed residuals into their slots and hand back one validated timeline.
+        """Put the computed residuals into their slots and return one validated timeline.
 
-        A slot is the position a stage's own ``RESIDUAL_VALUE`` entry stood at; the plan's residual
-        for that subject takes it, which is what keeps a one-stage plan in the original entry
-        order. A subject whose residual the splice computed but no stage wrote gets its entry
-        appended, in subject order so two runs of one plan produce the same bytes; a slot whose
-        subject earns nothing at the horizon is simply dropped.
+        A slot is the position a stage's own `RESIDUAL_VALUE` entry stood at; the plan's residual for that subject
+        takes it, keeping a one-stage plan in its original order. A residual no stage reserved a slot for is appended,
+        in subject order for reproducible output; a slot whose subject earns nothing is dropped.
 
         Args:
-            spliced: The first pass's entries, with ``None`` marking a reserved residual slot.
-            owners: The stage each position came from, parallel to ``spliced``.
-            residual_slots: Subject -> the position of the slot its residual goes into. Only the
-                last stage that reserved one for a subject is in the map.
-            residuals: Subject -> ``(stage, entry)`` for every residual the plan actually earns.
-            reserve: The plan's re-levelized annual replacement-reserve payment, written into the
-                ``REPLACEMENT_RESERVE`` entries the stages contributed.
+            spliced: The first pass's entries, with None marking a residual slot.
+            owners: The stage each position came from, parallel to `spliced`.
+            residual_slots: Subject -> the position of its slot; only the last stage that reserved one counts.
+            residuals: Subject -> `(stage, entry)` for every residual the plan earns.
+            reserve: The plan's re-levelized annual replacement-reserve payment, written into the stages'
+                `REPLACEMENT_RESERVE` entries.
 
         Returns:
             The assembled timeline and its stage map.
@@ -2173,18 +1887,18 @@ class StagedEvaluator:
         parameters: EconomicParameters,
         quoted: FrozenSet[str] = frozenset(),
     ) -> "_StageCharges":
-        """What one stage pays for and at which price level, as the splice has to ask it.
+        """Return what one stage pays for and at which price level, as the splice needs it.
 
         Args:
             stages: The plan as given.
             index: The stage.
-            charged: What :meth:`_charged_subjects` already said about this stage.
-            evaluator: The bound engine, for the per-asset-class escalation rates.
+            charged: What `_charged_subjects` said about this stage.
+            evaluator: The bound engine, for per-asset-class escalation rates.
             parameters: The assumptions, for the general investment escalation rate.
             quoted: The stage's subjects whose year-0 purchase is a reader's quote.
 
         Returns:
-            The bundle :meth:`_spliced_entry` consults.
+            The bundle `_spliced_entry` consults.
         """
         return _StageCharges(
             charged=charged,
@@ -2203,14 +1917,11 @@ class StagedEvaluator:
         charges: "_StageCharges",
         active_by_year: Tuple[int, ...],
     ) -> List[Tuple[int, UncertainValue]]:
-        """One stage's replacement schedule, re-dated exactly as its REPLACEMENT entries are.
+        """Return one stage's replacement schedule, re-dated exactly as its REPLACEMENT entries are.
 
-        The operating view charges no capital at all and instead levelizes the replacements into a
-        sinking fund (``cost_spec.md`` §4.2), which means the reserve has to follow the years the
-        *plan* replaces things in and not the years a stage on its own would have. The flows are
-        the ones the investment calculator collected
-        (:attr:`~hisim.economics.results.LifecycleCostResult.replacement_flows`), which exist under
-        every perspective, including the operating one where the entries themselves are suppressed.
+        The operating view charges no capital and levelizes replacements into a reserve (a sinking fund, cost_spec.md
+        §4.2), so the reserve must follow the plan's replacement years. The flows come from
+        `LifecycleCostResult.replacement_flows`, which exist under every perspective.
 
         Args:
             result: The stage's own evaluation.
@@ -2220,7 +1931,7 @@ class StagedEvaluator:
             active_by_year: Which stage is active in each horizon year.
 
         Returns:
-            ``(plan year, nominal amount)`` per replacement this stage contributes to the plan.
+            `(plan year, nominal amount)` per replacement this stage contributes.
         """
         horizon = len(active_by_year) - 1
         flows: List[Tuple[int, UncertainValue]] = []
@@ -2242,39 +1953,27 @@ class StagedEvaluator:
         evaluator: EconomicEvaluator,
         parameters: EconomicParameters,
     ) -> Dict[str, Tuple[int, CashFlowEntry]]:
-        """The residual value of every subject, written down from the plan's own last purchase.
+        """Return the residual value of every subject, written down from the plan's own last purchase.
 
-        Step 12 §2.1 rule 2. No stage can compute this: a stage prices its purchase as if it
-        happened in year 0, so it writes down an asset that is older than the plan's ever gets,
-        and a stage that merely *inherits* an earlier stage's equipment writes it down not at all
-        (``calculators/investment.py`` §3.6 rule 3: an installation that predates year 0 earns
-        nothing). Both mistakes disappear when the write-down is taken from the spliced timeline,
-        where each subject's last ``INVESTMENT``/``PLANNING``/``REPLACEMENT`` entry is the
-        installation the plan actually charged and its amount is already escalated to that year.
-
-        The entry is a copy of that installation — same subject, same payer, same provenance —
-        with the year moved to the horizon, the category changed and the amount mirrored into a
-        revenue, so a reader tracing the credit lands on the purchase it belongs to. Payer is
-        carried rather than re-derived because ``INVESTMENT``, ``REPLACEMENT`` and
-        ``RESIDUAL_VALUE`` are one allocation class in every shipped ruleset
-        (:class:`hisim.economics.actors` ``LANDLORD_CATEGORIES``).
-
-        An increment (:class:`IncrementSubjects`) that the stage active at the horizon no longer
-        carries has left the house with the subject it enlarged and earns nothing.
+        A single stage cannot compute this: it prices its purchase as if made in year 0, and a stage that inherits
+        equipment writes it down not at all. On the spliced timeline each subject's last
+        `INVESTMENT`/`PLANNING`/`REPLACEMENT` entry is the installation the plan charged, already escalated to its
+        year. The residual entry copies it (subject, payer, provenance), moved to the horizon, recategorized and
+        mirrored into a revenue. An increment that the stage active at the horizon does not carry left the house with
+        its base subject and earns nothing.
 
         Args:
-            placed: The first pass's entries with the stage each came from, in timeline order.
+            placed: The first pass's entries with each one's stage, in timeline order.
             stages: The plan as given, for the cost facts the service lives come from.
             evaluator: The bound engine, for the price basis year of the database lookup.
             parameters: The assumptions, for the horizon and the country.
 
         Returns:
-            Subject -> ``(stage, entry)``; a subject that earns nothing at the horizon is absent.
+            Subject -> `(stage, entry)`; a subject that earns nothing at the horizon is absent.
 
         Raises:
-            hisim.economics.database.CostDataError: If a subject states no service life of its own
-                and the cost database has no entry to take one from. An engine failure, not a bad
-                plan: the stage's own evaluation could not have priced the subject either.
+            hisim.economics.database.CostDataError: If a subject states no service life and the cost database has none
+                either (an engine failure, not a bad plan).
         """
         horizon = parameters.observation_period_in_years
         facts_by_subject = {}
@@ -2298,7 +1997,7 @@ class StagedEvaluator:
             if facts.own_register_entry and subject not in in_house:
                 # An increment a later stage removed again -- by shrinking, replacing or dropping
                 # the subject -- left the house with it; its book value is not written off
-                # separately, so it earns no residual value at the horizon (hisim-1y0m).
+                # separately, so it earns no residual value at the horizon.
                 continue
             year = last_install[subject]
             life, _origin = self._service_life(facts, price_basis_year, parameters)
@@ -2329,24 +2028,20 @@ class StagedEvaluator:
     def _service_life(
         self, facts: ComponentCostFacts, price_basis_year: int, parameters: EconomicParameters
     ) -> Tuple[float, LifeOrigin]:
-        """One subject's service life in years and where it came from, by the engine's chain.
+        """Return one subject's service life in years and where it came from, by the engine's chain.
 
-        An explicit ``lifetime_override_in_years`` wins, exactly as it does in
-        ``calculators/context_resolution.py``; otherwise the cost database's entry for the
-        subject's asset class at the plan's price basis year states it -- or the entry of
-        ``lifetime_of_asset_class``, the class whose system the subject is part of. The splice needs the same
-        number the stage's own schedule was built from, so it must not read the database when an
-        override exists.
+        An explicit `lifetime_override_in_years` wins, as in `context_resolution.py`; otherwise the cost database entry
+        for the subject's asset class (or for `lifetime_of_asset_class`, the class of the system it is part of) at the
+        price basis year states it. The splice must use the same number the stage's own schedule was built from.
 
         Args:
             facts: The subject's cost facts.
-            price_basis_year: The economic "today" of this plan, as the engine resolved it.
+            price_basis_year: The plan's price basis year, as the engine resolved it.
             parameters: The assumptions, for the country whose device file is read.
 
         Returns:
-            ``(years, origin)``: the service life, and :attr:`LifeOrigin.REQUEST` for the override
-            or :attr:`LifeOrigin.COST_DATABASE` for the database's entry -- decided in the same
-            branch that picks the number, so the two cannot disagree.
+            `(years, origin)`, with `LifeOrigin.REQUEST` for the override or `LifeOrigin.COST_DATABASE` for the
+                database.
 
         Raises:
             hisim.economics.database.CostDataError: If neither source states one.
@@ -2354,7 +2049,7 @@ class StagedEvaluator:
         if facts.lifetime_override_in_years is not None:
             origin = LifeOrigin.ENGINE_FALLBACK if facts.lifetime_is_engine_fallback else LifeOrigin.REQUEST
             return float(facts.lifetime_override_in_years), origin
-        # A subject renewed with another's system lives that class's life (renovisorissues #77).
+        # A subject renewed with another's system lives that class's life.
         entry = self.database.get_device_entry(
             facts.lifetime_of_asset_class or facts.asset_class, price_basis_year, parameters.country
         )
@@ -2371,28 +2066,25 @@ class StagedEvaluator:
         price_basis_year: int,
         plan_year_zero: int,
     ) -> Dict[str, SubjectLife]:
-        """The lifetime and installation year of every cost subject one stage is evaluated with.
+        """Return the lifetime and installation year of every cost subject one stage is evaluated with.
 
-        The life is :meth:`_service_life`'s, the chain the engine prices with. The year is the
-        start of this stage for a subject the stage buys -- one it charges, when it is not the
-        reference -- and otherwise what the engine's own installation verdict
-        (:func:`~hisim.economics.calculators.context_resolution.installation_verdict`) says: a
-        kept asset's register year, which is the year its replacement is scheduled from, or this
-        stage's start for a subject the register does not hold (bought new in year 0).
+        The life is `_service_life`'s. The installation year is the stage's start for a subject the stage buys
+        (charges, outside the reference); otherwise it is what `installation_verdict` says: a kept asset's register
+        year, or the stage's start for a subject the register does not hold.
 
         Args:
-            inputs: The stage's inputs, with the ageing register already merged in.
+            inputs: The stage's inputs, with the register already merged in.
             from_year: The stage's start year, relative to the horizon.
             index: The stage's index.
-            charged: What the stage pays for (:meth:`_charged_subjects`).
-            perspective: For the installation context the verdict is taken under.
+            charged: What the stage pays for (`_charged_subjects`).
+            perspective: For the installation context of the verdict.
             parameters: For the country the database is read for.
             price_basis_year: The plan's price basis year, for the service life.
-            plan_year_zero: The calendar year of plan year 0 (:meth:`plan_year_zero`); a subject
-                this stage buys is installed in ``plan_year_zero + from_year``.
+            plan_year_zero: The calendar year of plan year 0; a subject this stage buys is installed in `plan_year_zero
+                + from_year`.
 
         Returns:
-            Subject -> its :class:`SubjectLife`.
+            Subject -> its `SubjectLife`.
         """
         start = plan_year_zero + from_year
         lives: Dict[str, SubjectLife] = {}
@@ -2421,11 +2113,11 @@ class StagedEvaluator:
 
     @staticmethod
     def _active_by_year(stages: Tuple[Stage, ...], horizon: int) -> Tuple[int, ...]:
-        """For every horizon year 0..T, the index of the stage the house is in.
+        """Return, for every horizon year 0..T, the index of the stage the house is in.
 
-        A stage is active from its own ``from_year`` until the next stage's, the last one to the
-        end of the horizon; a stage starting past the horizon is never active, which is how the
-        degenerate plan of E-spec §1.3 invariant 2 comes out equal to its baseline.
+        A stage is active from its `from_year` until the next stage's; the last one to the end of the horizon. A stage
+        starting past the horizon is never active, so a plan whose later stages all start past the horizon equals its
+        baseline.
 
         Args:
             stages: The plan as given, in ascending year order.
@@ -2445,24 +2137,20 @@ class StagedEvaluator:
 
     @staticmethod
     def _escalation_rates(stage: Stage, evaluator: EconomicEvaluator) -> Dict[str, float]:
-        """The investment escalation rate to apply to each of a stage's subjects.
+        """Return the investment escalation rate for each of a stage's subjects.
 
-        A stage's year-0 figures are prices of year 0; booking them in year ``t`` means paying
-        year-``t`` prices, so they are escalated by that subject's own investment escalation rate
-        (§3.2's fallback chain: explicit parameter, then the country defaults file, then the
-        general rate). Subjects with no asset class of their own — the replacement reserve — get
-        the general rate, because there is no technology whose learning curve would apply to them.
+        A stage's year-0 figures are year-0 prices; booking them in year `t` means paying year-`t` prices, so each is
+        escalated at its subject's own investment escalation rate (§3.2: explicit parameter, then the country defaults
+        file, then the general rate).
 
         Args:
-            stage: The stage whose subjects are being rated.
+            stage: The stage whose subjects are rated.
             evaluator: The bound engine, which owns the fallback chain.
 
         Returns:
-            Subject name -> nominal annual rate, for every subject with cost facts. A subject
-            absent from the mapping — the replacement reserve — is escalated at the plan's
-            *general investment escalation rate* rather than at zero, because
-            :meth:`_StageCharges.escalation_factor` falls back to it. The loan needs no rate: its
-            principal is the booked year-0 figures themselves (:meth:`_stage_loan`).
+            Subject -> nominal annual rate, for every subject with cost facts. A subject absent from the mapping (the
+                replacement reserve) is escalated at the general investment escalation rate by
+                `_StageCharges.escalation_factor`.
         """
         return {
             facts.subject: evaluator.investment_escalation_rate(facts.facts.asset_class)
@@ -2478,22 +2166,18 @@ class StagedEvaluator:
         active_by_year: Tuple[int, ...],
         horizon: int,
     ) -> Optional[CashFlowEntry]:
-        """One source entry's place in the plan, or ``None`` when it has none.
+        """Return one source entry's place in the plan, or None when it has none.
 
-        The decision of :class:`StagedCategories`, applied to one entry. A stage-start entry is
-        kept only for the subjects the stage pays for, moved to the stage's year and escalated to
-        it (:meth:`_StageCharges.booked_factor`); the stage's own loan flows never reach here, the
-        splice takes the loan out anew (:meth:`_stage_loan`); a replacement of a subject the stage *buys* is
-        shifted and escalated with the purchase it follows and then kept only while the stage is
-        still the state of the house, so the stage that supersedes it schedules the rest from its
-        own register instead of the two booking the same re-purchase twice; a later subsidy
-        payment -- a tax credit's instalment, an operational payment -- is dated from the stage's
-        start (:meth:`_later_subsidy_entry`); everything else is kept only when the entry's own
-        year belongs to this stage.
+        This applies `StagedCategories` to one entry:
 
-        A shifted replacement that lands exactly on the horizon is dropped, which is the engine's
-        own rule for the unshifted ones (``calculators/investment.py``: the observation period ends
-        at T, so a unit due then is not bought).
+        - a stage-start entry is kept only for subjects the stage pays for, moved to and escalated to the stage's year
+          (`_StageCharges.booked_factor`);
+        - the stage's own loan flows never reach here; the splice takes the loan out anew (`_stage_loan`);
+        - a replacement of a subject the stage buys is shifted and escalated with its purchase and kept only while the
+          stage is active (`_replacement_entry`);
+        - a later subsidy payment (a tax-credit instalment, an operational payment) is dated from the stage's start
+          (`_later_subsidy_entry`);
+        - everything else is kept only when its year belongs to this stage.
 
         Args:
             entry: One entry of the stage's own evaluation.
@@ -2504,7 +2188,7 @@ class StagedEvaluator:
             horizon: The last year index of the horizon.
 
         Returns:
-            The entry as it appears on the plan's timeline, or ``None``.
+            The entry as it appears on the plan's timeline, or None.
         """
         if entry.category in StagedCategories.STAGE_START and entry.year == 0:
             return self._stage_start_entry(entry, from_year, charges, horizon)
@@ -2520,7 +2204,7 @@ class StagedEvaluator:
     def _stage_start_entry(
         entry: CashFlowEntry, from_year: int, charges: "_StageCharges", horizon: int
     ) -> Optional[CashFlowEntry]:
-        """One of a stage's year-0 flows, moved to the stage's year and escalated to it.
+        """Return one of a stage's year-0 flows, moved to the stage's year and escalated to it.
 
         Args:
             entry: The stage's own year-0 entry.
@@ -2529,11 +2213,9 @@ class StagedEvaluator:
             horizon: The last year index of the horizon.
 
         Returns:
-            The entry in the stage's year, scaled by the share the stage pays and by the price
-            level of that year (none for a quoted purchase or a subsidy, which is valued in the
-            stage's year already: :meth:`_StageCharges.booked_factor`);
-            ``None`` for a subject the stage inherits or a stage that never
-            starts inside the horizon.
+            The entry in the stage's year, scaled by the stage's share and by that year's price level (not for a quoted
+                purchase or a subsidy, which are valued in the stage's year already); None for a subject the stage
+                inherits or a stage that never starts inside the horizon.
         """
         if charges.share_of(entry.subject) <= 0.0 or from_year > horizon:
             return None
@@ -2544,25 +2226,22 @@ class StagedEvaluator:
     def _later_subsidy_entry(
         entry: CashFlowEntry, from_year: int, charges: "_StageCharges", horizon: int
     ) -> Optional[CashFlowEntry]:
-        """A subsidy the stage's award pays after its own year 0, in its plan year (:class:`StagedCategories`).
+        """Return a subsidy payment the stage's award makes after its own year 0, in its plan year.
 
-        Own year ``y`` is plan year ``from_year + y``; a payment past the horizon is dropped, as
-        the engine drops one past its own. A tax credit's instalment is a share of the cost the
-        stage books and was valued on that cost at the stage's price level already, so only the
-        share the stage pays applies, and it is kept whichever stage is active. An operational
-        payment is a nominal rate per kWh, never escalated, kept while the installation that earns
-        it is in the house (:attr:`_StageCharges.leaves_house_in`), and paid on the piece's share
-        of the energy in a year whose active stage splits its subject
-        (:attr:`_StageCharges.operational_rebased`).
+        Own year `y` is plan year `from_year + y`; a payment past the horizon is dropped. A tax-credit instalment was
+        valued at the stage's price level already, so only the stage's share applies, and it is kept whichever stage is
+        active. An operational payment (a nominal rate per kWh, never escalated) is kept while the earning installation
+        is in the house (`_StageCharges.leaves_house_in`), and paid on the piece's share of the energy when the active
+        stage splits its subject (`_StageCharges.operational_rebased`).
 
         Args:
             entry: The stage's own SUBSIDY entry of a year after 0.
             from_year: The stage's start year.
-            charges: What the stage pays for, and which of its awards are operational.
+            charges: What the stage pays for and which of its awards are operational.
             horizon: The last year index of the horizon.
 
         Returns:
-            The entry in its plan year, or ``None``.
+            The entry in its plan year, or None.
         """
         year = entry.year + from_year
         if year > horizon:
@@ -2582,7 +2261,7 @@ class StagedEvaluator:
 
     @staticmethod
     def _operational_awards(result: LifecycleCostResult) -> Dict[Tuple[str, str], EnergyCarrier]:
-        """``(subject, scheme id)`` -> carrier of every OPERATIONAL award one stage's evaluation booked."""
+        """Return `(subject, scheme id)` -> carrier of every per-kWh (OPERATIONAL) award of one stage."""
         return {
             (decision.measure_subject, award.scheme_id): award.operational_carrier
             for decision in result.subsidy_decisions
@@ -2592,7 +2271,7 @@ class StagedEvaluator:
 
     @staticmethod
     def _annual_energy_sold(inputs: EvaluationInputs) -> Dict[EnergyCarrier, float]:
-        """Carrier -> the energy one stage sells a year, as the subsidy application annualizes it."""
+        """Return carrier -> the energy one stage sells a year, as the subsidy application annualizes it."""
         sold: Dict[EnergyCarrier, float] = {}
         for determinants in inputs.billing:
             if determinants.energy_sold_in_kwh:
@@ -2609,28 +2288,23 @@ class StagedEvaluator:
         operational: Mapping[Tuple[str, str], EnergyCarrier],
         active_by_year: Tuple[int, ...],
     ) -> Dict[Tuple[str, str], Dict[int, float]]:
-        """How one stage's per-kWh payments are booked in the years a later stage splits their subject.
+        """Return how one stage's per-kWh payments are booked in years where a later stage splits their subject.
 
-        Owner decision 2026-10-01 (hisim-1y0m): each piece of a subject a staged plan split -- the
-        unit a later stage enlarges and each increment -- is paid on its size share of the energy
-        the enlarged installation sells (``ComponentCostFacts.share_of_energy_sold``), each at its
-        own scheme's rate and in its own years, so the same kWh is never paid twice. The stage
-        that buys a piece values its payment so already. The unit an earlier stage bought whole
-        was valued on all of that stage's energy, and every piece on the energy of the stage that
-        bought it; in a year whose active stage carries the subject in pieces, each payment is paid
-        on the piece's share of the active stage's energy instead, so the pieces' payments add up
-        to one payment on the whole. In every other year -- the subject whole, or the stage that
-        bought the piece active -- the payment stays what that stage valued.
+        When a later stage enlarges a subject, each piece (the original unit and each increment) is paid on its size
+        share of the energy the enlarged installation sells (`ComponentCostFacts.share_of_energy_sold`), at its own
+        scheme's rate, so no kWh is paid twice. In a year whose active stage carries the subject in pieces, a payment
+        valued on a whole stage's energy is rebased to the piece's share of the active stage's energy; in other years
+        it stays as the stage valued it.
 
         Args:
-            stages: The plan, split (:meth:`split_increments`).
+            stages: The plan, split (`split_increments`).
             index: The stage whose payments are asked about.
-            operational: Its operational awards (:meth:`_operational_awards`).
+            operational: Its operational awards (`_operational_awards`).
             active_by_year: Which stage is active in each horizon year.
 
         Returns:
-            ``(subject, scheme id)`` -> plan year -> the factor on the stage's own amount; only the
-            awards and years that are rebased.
+            `(subject, scheme id)` -> plan year -> factor on the stage's own amount, for the rebased awards and years
+                only.
         """
 
         def share(stage: int, subject: str) -> Optional[float]:
@@ -2662,11 +2336,10 @@ class StagedEvaluator:
     def _leaving_years(
         stages: Tuple[Stage, ...], index: int, charged_by_stage: Tuple[Dict[str, float], ...]
     ) -> Dict[str, int]:
-        """For each of a stage's subjects, the plan year its installation leaves the house, if it does.
+        """Return, for each of a stage's subjects, the plan year its installation leaves the house, if it does.
 
-        The start year of the first later stage that no longer has the subject or buys it whole
-        again (charges it at 1.0): from then on the stage's purchase is not what runs. A later
-        stage that keeps the subject, or only enlarges it, leaves the installation in place.
+        That is the start year of the first later stage that drops the subject or buys it whole again (charges it at
+        1.0). A later stage that keeps or only enlarges it leaves the installation in place.
 
         Args:
             stages: The plan.
@@ -2674,7 +2347,7 @@ class StagedEvaluator:
             charged_by_stage: What every stage charges.
 
         Returns:
-            Subject -> that plan year, for the subjects that leave inside the plan.
+            Subject -> plan year, for subjects that leave inside the plan.
         """
         leaving: Dict[str, int] = {}
         for facts in stages[index].inputs.cost_facts:
@@ -2687,10 +2360,10 @@ class StagedEvaluator:
 
     @staticmethod
     def _is_loan_flow(entry: CashFlowEntry) -> bool:
-        """Whether an entry is a flow of the stage's own loan, which the splice takes out anew.
+        """Return whether an entry is a flow of the stage's own loan, which the splice takes out anew.
 
-        The disbursement, the debt service and a soft loan's repayment grant, which is the one
-        SUBSIDY entry booked under the synthetic financing subject.
+        These are the disbursement, the debt service and a soft loan's repayment grant (the SUBSIDY entry under the
+        synthetic financing subject).
         """
         return (
             entry.category is CostCategory.LOAN_DISBURSEMENT
@@ -2707,29 +2380,24 @@ class StagedEvaluator:
         financing: Optional[FinancingPlan],
         horizon: int,
     ) -> List[CashFlowEntry]:
-        """The stage's loan, taken out on what the stage books in its year, dated from that year.
+        """Return the stage's loan, taken out on what the stage books in its year and dated from that year.
 
-        The principal is the financed share of the stage's year-0 net investment *as the plan
-        books it* (:meth:`_stage_start_entry`): a reader's quote as stated, database prices
-        escalated to the stage's year, grants as valued in the stage's year, and only the share of each
-        subject the stage pays. Scaling the stage's own loan by one escalation factor would
-        finance a quote at more than it states (owner decision 2026-09-27). The loan terms are
-        the stage's own (:func:`resolve_loan_plan` on its subsidy decisions), and the schedule is
-        laid out by the engine's own :func:`build_financing_flows`, so a soft loan's repayment
-        grant is a share of this principal too, and a slot in which the stage's grants exceed
-        what it books finances nothing rather than a negative loan (renovisorissues #66). A
-        payment in year T is kept: it is paid inside the period rather than at its edge.
+        The principal is the financed share of the stage's year-0 net investment as the plan books it
+        (`_stage_start_entry`): quotes as stated, database prices escalated to the stage's year, grants as valued
+        there, and only the stage's share of each subject. The terms are the stage's own (`resolve_loan_plan`) and the
+        schedule comes from `build_financing_flows`, so a soft loan's repayment grant is a share of this principal; a
+        slot where grants exceed the booked cost finances nothing. A payment in year T is kept.
 
         Args:
             result: The stage's own evaluation.
             from_year: The stage's start year.
             charges: What the stage pays for and at which price level.
-            financing: The perspective's financing plan, or ``None`` for a cash purchase.
+            financing: The perspective's financing plan, or None for a cash purchase.
             horizon: The last year index of the horizon.
 
         Returns:
-            The loan's entries in their plan years, in the engine's order; empty for a cash
-            purchase, a stage that never starts inside the horizon or nothing left to finance.
+            The loan's entries in their plan years, in the engine's order; empty for cash, a stage that never starts
+                inside the horizon, or nothing to finance.
         """
         if financing is None or from_year > horizon:
             return []
@@ -2758,24 +2426,22 @@ class StagedEvaluator:
         active_by_year: Tuple[int, ...],
         horizon: int,
     ) -> Optional[CashFlowEntry]:
-        """The re-purchase of something the stage bought, moved by the stage's start year.
+        """Return the re-purchase of something the stage bought, moved by the stage's start year.
 
-        Step 12 §2.1 rule 1. It is dropped once another stage is the state of the house, because
-        that stage schedules the subject's remaining replacements from its own register entry and
-        the two would otherwise book the same re-purchase twice. A replacement landing exactly on
-        the horizon is dropped, which is the engine's rule for the unshifted ones: the observation
-        period ends at T, so a unit due then is not bought.
+        It is dropped once another stage is active, since that stage schedules the remaining replacements from its own
+        register and would otherwise book the same re-purchase twice. A replacement landing exactly on the horizon is
+        dropped, as the engine does: a unit due at T is not bought.
 
         Args:
             entry: The stage's own REPLACEMENT entry.
             index: The stage's index.
             from_year: The stage's start year.
-            charges: For the escalation rate of the subject.
+            charges: For the subject's escalation rate.
             active_by_year: Which stage is active in each horizon year.
             horizon: The last year index of the horizon.
 
         Returns:
-            The re-purchase in its plan year, or ``None``.
+            The re-purchase in its plan year, or None.
         """
         year = entry.year + from_year
         if year >= horizon or active_by_year[year] != index:
@@ -2795,28 +2461,24 @@ class StagedEvaluator:
         active: Tuple[int, ...],
         ledger: ProvenanceLedger,
     ) -> LifecycleCostResult:
-        """Turn the spliced timeline into a result, exactly as an ordinary evaluation does.
+        """Turn the spliced timeline into a result, as an ordinary evaluation does.
 
-        The KPIs come from :func:`~hisim.economics.calculators.aggregation.aggregate_timeline`, the
-        same function :meth:`hisim.economics.evaluator.EconomicEvaluator.evaluate` calls, so the
-        plan's NPV, annuity, category pivot, per-subject breakdown and liquidity series are filters
-        of the spliced timeline and nothing else. What cannot come from a timeline — the CO2 masses
-        and the subsidy decisions — is composed in :meth:`_splice_co2` and by concatenating the
-        stages' decisions; the physical context (areas, period, energy volumes) is taken from the
-        stage that is active where it is read, which is named per field below.
+        The KPIs come from `aggregate_timeline`, the same function `EconomicEvaluator.evaluate` calls, so every figure
+        is a filter of the spliced timeline. CO2 masses (`_splice_co2`) and subsidy decisions (concatenated) cannot
+        come from a timeline; physical context (areas, period, energy volumes) is taken from the stage active where it
+        is read.
 
         Args:
             stages: The plan as given.
             per_stage: Each stage's own evaluation.
             timeline: The spliced timeline.
-            perspective: The accounting frame, for the id and the actor scope.
+            perspective: The accounting frame, for the id and actor scope.
             parameters: The assumptions.
-            active: Which stage is active in each horizon year, from :meth:`_active_by_year`.
-            ledger: The one provenance ledger every stage recorded into, which every id on the
-                spliced timeline points into.
+            active: Which stage is active in each horizon year (`_active_by_year`).
+            ledger: The provenance ledger every stage recorded into, which every timeline id points into.
 
         Returns:
-            The plan's :class:`~hisim.economics.results.LifecycleCostResult`.
+            The plan's `LifecycleCostResult`.
         """
         horizon = parameters.observation_period_in_years
         # Year 1 is where the document's energy table and the monthly figure are read, so the
@@ -2897,29 +2559,21 @@ class StagedEvaluator:
     def _equivalent_annual_heat(
         stages: Tuple[Stage, ...], active: Tuple[int, ...], parameters: EconomicParameters
     ) -> Optional[float]:
-        """The plan's heat as one annual figure: the annuity of its discounted per-year heat.
+        """Return the plan's heat as one annual figure: the annuity of its discounted per-year heat.
 
-        Decision A of the PR #812 review: the plan's levelized cost of heat is the textbook
-        NPV(costs) / NPV(heat), and each horizon year's heat is the heat of the stage active in that
-        year. The aggregation divides `total_npv x annuity` by the figure returned here, so it is
-        `annuity x sum_y heat_active[y] x df_y` over the years 1..T the energy flows are booked in,
-        with the discount factors `CashFlowTimeline.npv` applies to those flows; the annuity cancels
-        and the quotient is NPV(costs) / NPV(heat). Dividing by the last stage's heat, as before,
-        charged the whole horizon's costs to the insulated house's demand alone.
-
-        When every year's heat is the same figure — a plan whose stages all start in year 0, or
-        whose stages all state the same heat — it is returned as it is: the annuity factor is the
-        reciprocal of the discount sum, so the arithmetic would reproduce it only up to rounding,
-        and the unstaged evaluation divides by exactly this figure.
+        The plan's levelized cost of heat is NPV(costs) / NPV(heat), with each year's heat that of the stage active in
+        it. The aggregation divides `total_npv x annuity` by this figure, `annuity x sum_y heat_active[y] x df_y` over
+        years 1..T with the discount factors `CashFlowTimeline.npv` uses, so the annuity cancels. When every year's
+        heat is the same, that figure is returned unchanged, to avoid rounding and match the unstaged evaluation.
 
         Args:
             stages: The plan as given.
-            active: Which stage is active in each horizon year, from :meth:`_active_by_year`.
-            parameters: The assumptions: the interest rate, the horizon and the annuity factor.
+            active: Which stage is active in each horizon year (`_active_by_year`).
+            parameters: The assumptions: interest rate, horizon and annuity factor.
 
         Returns:
-            The equivalent annual heat in kWh/a, or None when any stage active in the horizon
-            states no heat — the plan's heat-cost figure is then omitted, as a stage's own is.
+            The equivalent annual heat in kWh/a, or None when any active stage states no heat (the heat-cost figure is
+                then omitted).
         """
         years = range(1, parameters.observation_period_in_years + 1)
         stated = [stages[active[year]].inputs.annual_heat_demand() for year in years]
@@ -2937,17 +2591,10 @@ class StagedEvaluator:
     ) -> LifecycleCo2Result:
         """Compose the plan's CO2 accounting from the stages', by the same active-year rule.
 
-        Masses are not cash flows, so they cannot be read off the spliced timeline and are
-        composed here instead. Operational emissions of year ``y`` are the active stage's own
-        year-``y`` emissions; embodied emissions are the sum over stages of what each stage's
-        evaluation attributes to the subjects that stage installed, where "installed" is read off
-        the stage's register rather than off the charge shares, because a stage's embodied mass is
-        booked per subject by ``calculators/co2.py``.
-
-        The per-carrier totals are apportioned by active years: the engine holds emission factors
-        constant over the horizon (:class:`~hisim.economics.results.LifecycleCo2Result`), so a
-        stage's carrier total divided by the horizon and multiplied by the years that stage is
-        active is the exact figure, not an estimate.
+        Masses are not cash flows, so they are composed here. Operational emissions of year `y` are the active stage's;
+        embodied emissions sum, over stages, what each stage's evaluation attributes to the subjects that stage
+        installed (read off its register). Per-carrier totals are apportioned by active years, which is exact because
+        emission factors are constant over the horizon.
 
         Args:
             per_stage: Each stage's own evaluation.

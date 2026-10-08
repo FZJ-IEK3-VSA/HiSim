@@ -1,32 +1,13 @@
 """Tariff contracts and the pure billing engine (cost_spec.md §8).
 
-One :class:`TariffContract` per carrier is the single source of truth: the in-simulation
-price provider (``hisim/components/tariff_provider.py``) and the postprocessing billing
-engine both read it; neither carries its own price data.
+One :class:`TariffContract` per energy carrier is the single price source for both the in-simulation price provider
+(``hisim/components/tariff_provider.py``) and the billing engine, so a controller never optimizes against a different
+price than the one billed (§8.1). The module bills one year of one carrier (:func:`apply_tariff`); escalation over the
+horizon lives in ``calculators/energy.py``.
 
-That rule exists because of the consistency problem §8.1 opens with: if an energy management
-system optimizes against one price signal and the evaluation bills against another, the resulting
-"savings from smart control" are an artifact of the mismatch rather than a result. Everything in
-this module therefore serves one of two roles — describing a contract (the §8.2 schema, its
-loaders, the spot series) or *applying* it (:func:`apply_tariff`, plus the price-selection
-functions the simulation side calls per timestep) — and the two halves are separated by the
-``=== engine`` banner, in preparation for the §2.5 package split.
-
-What this module deliberately does NOT own: the horizon projection and escalation of a bill
-(§8.5 lives in ``calculators/energy.py``, which also builds the default flat contract from a §3.5
-price entry), the CO2 price component, the timeline, and any notion of who pays. It bills exactly
-one year of one carrier from measured determinants and returns a :class:`Year1Bill`; that bill is
-then decomposed, escalated and booked elsewhere.
-
-**Source ids and the `inline:` convention (W2.4).** Every contract must cite sources (§3.10).
-A contract loaded from ``cost_database/tariffs/*.json`` must name entries of the cost
-database's ``sources.json``; citing a source in prose as ``inline:<citation>`` is a
-validation *error* there (`validation.validate_tariff_contracts`), because a prose citation
-cannot be reviewed, deduplicated or checked for staleness. Contracts constructed **in
-memory** — worked examples, test fixtures, the provider's ``SYNTHETIC_TEST`` contract — have
-no registry behind them and keep using ``inline:<citation>``: it is rendered verbatim as an
-``INLINE`` source at a report leaf (`results.LifecycleCostResult.explain`) and never enters a
-shipped data file. That is the whole scope of the convention; catalog data does not use it.
+Contracts loaded from ``cost_database/tariffs/*.json`` must cite ids from ``sources.json``. Contracts built in memory
+(tests, worked examples, the provider's ``SYNTHETIC_TEST``) cite sources as ``inline:<citation>``, which is rendered
+verbatim as an INLINE source and never appears in shipped data.
 """
 
 from __future__ import annotations
@@ -45,21 +26,16 @@ from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
 # =========================================================================== data
-# Contract data, the §8.2 schema and catalog loading. This half moves to `economics/data/`
-# in the §2.5 package split; it knows nothing about bills. (`TariffContract`'s own
-# `marginal_purchase_price_components` stays with the data: it is a derived property of the
-# contract's own fields, and both halves read it.)
+# Contract data, the §8.2 schema and catalog loading; this half knows nothing about bills. `TariffContract`'s
+# `marginal_purchase_price_components` stays here because it is derived from the contract's own fields.
 
 
 class SupplyKind(str, enum.Enum):
-    """Supply price structures (§8.2).
+    """How the energy part of the price varies over time (§8.2).
 
-    How the energy part of the price varies over time, which is the single most consequential
-    choice in a tariff because it decides what a bill can even see: FLAT needs annual kWh only,
-    TIME_OF_USE needs kWh per band, and DYNAMIC needs the integral of load times the spot series at
-    native resolution. The kind therefore selects both the price-selection rule
-    (:func:`energy_price_in_euro_per_kwh`) and which billing determinants the meter must have
-    produced — the whole reason §8.4 extends the meters at all.
+    FLAT needs annual kWh only, TIME_OF_USE needs kWh per time-of-use band, and DYNAMIC needs the integral of load
+    times the spot price series at native resolution. The kind selects the price rule
+    (:func:`energy_price_in_euro_per_kwh`) and which billing determinants the meter must produce.
     """
 
     FLAT = "FLAT"
@@ -68,13 +44,10 @@ class SupplyKind(str, enum.Enum):
 
 
 class CapacityChargeKind(str, enum.Enum):
-    """Capacity charge structures (§8.2).
+    """Which power peaks a capacity (demand) charge bills (§8.2).
 
-    Capacity (demand) charges bill *power* rather than energy, which is what makes peak shaving
-    worth money and is why the engine models them explicitly. The kinds differ only in which peaks
-    are counted: the single annual maximum, one per month, or only those inside declared
-    high-load windows. In every case a peak is the mean power over the billing interval, never an
-    instantaneous timestep value (§8.4).
+    The single annual maximum, one peak per month, or only peaks inside declared high-load windows. A peak is always
+    the mean power over the billing interval, never an instantaneous value (§8.4).
     """
 
     NONE = "NONE"
@@ -84,14 +57,11 @@ class CapacityChargeKind(str, enum.Enum):
 
 
 class FeedInKind(str, enum.Enum):
-    """Feed-in remuneration structures (§8.2).
+    """How exported energy is paid for (§8.2).
 
-    How exported energy is paid for, which matters over a 20-year horizon mostly through the
-    escalation it implies: a fixed statutory tariff stays *nominally* constant for its contract
-    duration — and therefore loses real value every year — while a spot-referenced direct-marketing
-    revenue follows the market. The kind selects how the year-1 revenue is computed here; the
-    projection in ``calculators/energy.py`` then holds that revenue nominally fixed for
-    ``duration_in_years`` and escalates it only afterwards (§8.5, spec Q10).
+    A fixed statutory tariff stays nominally constant for its contract duration; spot-referenced direct marketing
+    follows the market. ``calculators/energy.py`` holds the year-1 revenue nominally fixed for ``duration_in_years``
+    and escalates it only afterwards (§8.5).
     """
 
     NONE = "NONE"
@@ -100,13 +70,10 @@ class FeedInKind(str, enum.Enum):
 
 
 class ControllabilityKind(str, enum.Enum):
-    """§14a-EnWG-style controllability discount structures (§8.2).
+    """How a grid operator pays for the right to curtail a dimmable device, as under §14a EnWG (§8.2).
 
-    How a grid operator pays for the right to curtail a dimmable device: not at all, as a fixed
-    annual credit against the standing charge, or as a percentage off the grid-fee component. The
-    kind selects which of the two amount fields of :class:`ControllabilityDiscount` is read, so a
-    value outside this set would leave both unread and the discount would silently be worth
-    nothing — which is why it is an enum rather than the free string it used to be.
+    Not at all, as a fixed annual credit against the standing charge, or as a percentage off the grid fee. The kind
+    selects which amount field of :class:`ControllabilityDiscount` is read.
     """
 
     NONE = "NONE"
@@ -116,15 +83,11 @@ class ControllabilityKind(str, enum.Enum):
 
 @dataclass
 class TimeOfUseBand:
-    """One ToU band: weekday/hour masks with a working price.
+    """One time-of-use band: a named set of weekday/hour masks with its own working price.
 
-    A band is a named set of hours (day/night, peak/off-peak) with its own energy price, and the
-    name is load-bearing: the meter reports energy *per band name*, so a band renamed on one side
-    and not the other stops matching. That mismatch is refused rather than absorbed —
-    :func:`apply_tariff` rejects determinants naming a band the contract does not define, instead
-    of letting its energy fall through to the fallback band at the wrong price. Masks may overlap
-    — the first declared match wins (:func:`time_of_use_band_for`) — which makes a broad catch-all
-    band declared last a valid way to express "everything else".
+    The name must match the band names the meter reports energy under; :func:`apply_tariff` refuses energy filed under
+    a name the contract does not define. Masks may overlap and the first declared match wins
+    (:func:`time_of_use_band_for`), so a catch-all band declared last expresses "everything else".
     """
 
     name: str  # must match the key the meter reports energy under
@@ -135,16 +98,12 @@ class TimeOfUseBand:
 
 @dataclass
 class TariffSupply:
-    """Supply side of a contract; non-energy components kept separate (§8.2).
+    """Supply side of a contract: what one purchased kWh costs (§8.2).
 
-    Everything that prices a purchased kWh, split into the time-varying energy part (flat price,
-    bands, or spot series times a factor) and three per-kWh components that do *not* vary with the
-    moment — supplier markup, grid fee, taxes and levies. The split is not cosmetic: §8.2 keeps the
-    components separate so that the macroeconomic view (§4.5) can strip taxes and levies, a §14a
-    discount can reduce the grid fee alone, and the flexibility decomposition can attribute value
-    to the energy part only. Of those, the grid-fee discount and the decomposition are wired today;
-    the macroeconomic view currently strips taxes via the §3.5 price entry's ``tax_and_levy_share``
-    rather than through these fields.
+    The time-varying energy part (flat price, bands, or spot series times a factor) is kept apart from three per-kWh
+    components that do not vary with time: supplier markup, grid fee, and taxes and levies. The split lets a §14a
+    discount reduce the grid fee alone and lets the flexibility decomposition use the energy part only. The
+    macroeconomic view strips taxes via the price entry's ``tax_and_levy_share``, not via these fields.
     """
 
     kind: SupplyKind
@@ -161,13 +120,11 @@ class TariffSupply:
 
 @dataclass
 class CapacityCharge:
-    """Capacity charge terms; peaks are billing-interval means, never instantaneous (§8.4).
+    """Capacity charge terms: a price per kW applied to the measured peaks (§8.4).
 
-    The power-based part of a bill: a price per kW applied to the peaks the meter measured. The
-    billing interval is part of the contract because it decides what "a peak" means — a 15-minute
-    mean is a very different number from a one-minute spike, and billing the latter would reward
-    peak shaving that no supplier actually pays for. That interval must be a whole multiple of the
-    simulation timestep, checked before the run by :func:`validate_billing_interval`.
+    Peaks are mean power over the billing interval, never instantaneous; a 15-minute mean is very different from a
+    one-minute spike. The interval must be a whole multiple of the simulation timestep, checked before the run by
+    :func:`validate_billing_interval`.
     """
 
     kind: CapacityChargeKind = CapacityChargeKind.NONE
@@ -179,17 +136,11 @@ class CapacityCharge:
 
 @dataclass
 class FeedIn:
-    """Feed-in remuneration terms.
+    """Feed-in remuneration terms: what each sold kWh earns, for how long, and on what basis.
 
-    The export side of the contract: what the building is paid per kWh it sells, for how long, and
-    whether that payment is a fixed tariff or spot-referenced direct marketing. It sits on the
-    contract rather than in a separate price entry so that one object answers both "what does a kWh
-    cost" and "what does a kWh earn" — the two the PV/battery economics turn on.
-
-    Under ``SPOT_REFERENCED`` the payment is `spot_factor` times the natively integrated spot
-    revenue plus `markup_in_euro_per_kwh` per kWh sold: the factor is the share of the spot
-    proceeds the direct marketer passes on (1.0 = all of it), and it applies to the spot term
-    alone, the markup being agreed independently of the price.
+    Under ``SPOT_REFERENCED`` the payment is `spot_factor` times the natively integrated spot revenue plus
+    `markup_in_euro_per_kwh` per kWh sold. The factor is the share of the spot proceeds the direct marketer passes on
+    (1.0 = all) and applies to the spot term only.
     """
 
     kind: FeedInKind = FeedInKind.NONE
@@ -201,13 +152,11 @@ class FeedIn:
 
 @dataclass
 class ControllabilityDiscount:
-    """§14a-EnWG-style grid-fee discount, as data only (v1, spec Q19).
+    """Grid-fee discount for dimmable devices under §14a EnWG, money side only.
 
-    German §14a EnWG grants operators of dimmable devices (heat pumps, wallboxes) a reduced grid
-    fee in exchange for accepting curtailment — either as a fixed annual credit or as a percentage
-    off the grid-fee component. Only the *money* side is modeled in v1: the dimming events
-    themselves are a control-side work item, so a run claims the discount without ever simulating
-    the curtailment it is paid for, which overstates the benefit and is flagged as such in the spec.
+    Operators of heat pumps or wallboxes get a fixed annual credit or a percentage off the grid fee in exchange for
+    accepting curtailment. The curtailment itself is not simulated, so a run that claims the discount overstates its
+    benefit.
     """
 
     kind: ControllabilityKind = ControllabilityKind.NONE
@@ -215,13 +164,7 @@ class ControllabilityDiscount:
     grid_fee_reduction_share: float = 0.0  # GRID_FEE_SHARE: fraction taken off the grid fee
 
     def __post_init__(self) -> None:
-        """Accepts the kind as its own string value, the way `ComponentCostFacts` accepts a number.
-
-        A catalog reader, a test or a worked-example runner may hand over the plain
-        `"GRID_FEE_SHARE"` this field carried before it became an enum. Coercing here keeps every
-        such call site working *and* validates it in the same step, which is the point of the enum:
-        an unknown kind raises now instead of leaving both amount fields unread and the discount
-        silently worth nothing.
+        """Coerce a plain string kind such as ``"GRID_FEE_SHARE"`` to `ControllabilityKind`.
 
         Raises:
             ValueError: If the kind names no `ControllabilityKind` member.
@@ -231,19 +174,13 @@ class ControllabilityDiscount:
 
 @dataclass
 class TariffContract:
-    """One tariff contract per carrier (§8.2). Data-driven, referenced by id.
+    """One tariff contract for one energy carrier, referenced by id (§8.2).
 
-    The complete commercial relationship for one energy carrier — supply price structure, standing
-    charge, capacity charge, feed-in terms and any controllability discount — in one object that
-    both the simulation and the billing engine read. This is the answer to §8.1: a contract is
-    referenced by id from a scenario or a RenoVisor request, loaded once, and handed to both sides,
-    so no price can exist in one of them without existing in the other.
-
-    Contracts come from three places: ``cost_database/tariffs/<id>.json`` (the file name *is* the
-    id, which is how :func:`load_tariff_contract` resolves it), an in-memory construction in tests
-    and worked examples, or — when a carrier has no contract at all — a default flat contract
-    generated from the §3.5 price entries by ``calculators/energy.default_contract``, which is
-    behaviorally identical to the plain price lookup and is marked ``is_default_contract``.
+    Holds the supply price structure, standing charge, capacity charge, feed-in terms and any controllability discount;
+    both the simulation and the billing engine read the same object. Contracts come from
+    ``cost_database/tariffs/<id>.json`` (the file name is the id), from in-memory construction in tests and examples,
+    or, for a carrier without a contract, from ``calculators/energy.default_contract``, which builds a flat contract
+    from the §3.5 price entries and sets ``is_default_contract``.
     """
 
     #: Default location of shipped tariff contracts.
@@ -270,14 +207,10 @@ class TariffContract:
 
     @classmethod
     def default_contract_id(cls, country: str, carrier: EnergyCarrier, year: int) -> str:
-        """The id a contract synthesized from the §3.5 price entries carries.
+        """Return the id of a contract synthesized from the §3.5 price entries.
 
-        The format lives here, next to the flag such a contract sets, because two unrelated places
-        need to agree on it: `calculators/energy.contract_from_price_entry`, which mints it, and
-        `serialization.contracts_from_json`, which has to recognize one in an archived file whose
-        contracts were stored as bare ids. That second reader used to re-derive the format from a
-        substring split and a hardcoded list of countries, so a synthesized contract for any third
-        country was looked up as a catalog file and failed.
+        `calculators/energy.contract_from_price_entry` mints it and `serialization.contracts_from_json` recognizes it
+        in an archived file, so the format lives in one place.
 
         Args:
             country: Country code the price entries were read for.
@@ -291,14 +224,11 @@ class TariffContract:
 
     @classmethod
     def is_default_contract_id(cls, contract_id: str) -> bool:
-        """Whether the id is one :meth:`default_contract_id` would mint.
+        """Return whether the id has the shape :meth:`default_contract_id` mints.
 
-        Needed because a synthesized default contract has no catalog file — it is regenerated from
-        the price entries at the price basis year, which is what keeps scenario price overlays
-        effective — so a reader holding nothing but its id cannot load it and check
-        `is_default_contract`. The match is on the whole shape (country, the reserved infix, a real
-        carrier value, a numeric year) rather than on the infix alone, so a catalog contract that
-        happens to contain the word is not mistaken for a synthesized one.
+        A synthesized contract has no catalog file, so a reader holding only its id needs this to recognize it. The
+        whole shape is checked (country, reserved infix, a real carrier value, a numeric year), so a catalog id that
+        merely contains the infix is not mistaken for one.
 
         Args:
             contract_id: The id to classify.
@@ -312,28 +242,23 @@ class TariffContract:
 
     @classmethod
     def from_json(cls, raw: dict, registry: Optional[SourceRegistry] = None) -> "TariffContract":
-        """Parses a tariff contract JSON (§8.2 schema).
+        """Parse a tariff contract from its JSON form (§8.2 schema).
 
-        The one parser for the contract schema, used by the file loader, by the round-trip in
-        ``serialization.py`` and by the data-file CI. Every monetary field goes through
-        `UncertainValue.from_json`, so a contract may state either an exact number or a min/best_estimate/max
-        band (§3.1) without the parser branching. Almost all keys are optional with neutral
-        defaults — absent blocks mean "no capacity charge", "no feed-in", "no discount" — which
-        keeps a simple flat contract a handful of lines; the exceptions are ``supply``, ``carrier``
-        and ``source_ids``, the last because §3.10 admits no unsourced datapoint.
+        Used by the file loader, by ``serialization.py`` and by the data-file checks. Monetary fields may be an exact
+        number or a min/best_estimate/max band. Only ``supply``, ``carrier`` and ``source_ids`` are required; an absent
+        block means no capacity charge, no feed-in or no discount.
 
         Args:
             raw: The parsed contract JSON.
-            registry: Optional source registry; when given, the cited ids are resolved against it
-                immediately so a dangling citation fails here rather than at report time.
+            registry: Optional source registry; when given, cited ids are resolved immediately.
 
         Returns:
             The parsed contract.
 
         Raises:
             CostDataError: If ``source_ids`` is empty or a cited id is unknown to the registry.
-            KeyError / ValueError: On a structurally invalid document (missing ``supply`` or
-                ``carrier``, unknown enum member).
+            KeyError / ValueError: On a structurally invalid document (missing ``supply`` or ``carrier``, unknown enum
+                member).
         """
         contract_id = raw.get("id", "<missing id>")
         source_ids = tuple(raw.get("source_ids", ()))
@@ -406,17 +331,11 @@ class TariffContract:
         )
 
     def marginal_purchase_price_components(self) -> UncertainValue:
-        """Additive non-spot per-kWh components (markup + grid fee + taxes), §8.4.
+        """Return the per-kWh components charged regardless of time: markup + grid fee + taxes, in EUR/kWh (§8.4).
 
-        In euro per kWh: everything that is charged on each purchased kWh regardless of *when* it
-        was purchased, with a ``GRID_FEE_SHARE`` controllability discount already applied to the
-        grid-fee part (and only to it, per §14a). Isolating these is what lets an uncertainty band
-        on a tariff component shift a whole bill by ``E × Δcomponent`` without re-integrating the
-        spot series per slot — the §8.4 rule that keeps three-slot billing cheap and exact.
-
-        It lives on the contract, on the data side of the module, because it is a derived property
-        of the contract's own fields; both the in-simulation price provider and
-        :func:`apply_tariff` add it to the time-varying energy price.
+        A ``GRID_FEE_SHARE`` controllability discount is already applied to the grid-fee part. Keeping these apart lets
+        an uncertain component shift a whole bill by ``E × Δcomponent`` without re-integrating the spot series. Both
+        the price provider and :func:`apply_tariff` add it to the time-varying energy price.
         """
         grid_fee = self.supply.grid_fee_in_euro_per_kwh
         if self.controllability_discount.kind == ControllabilityKind.GRID_FEE_SHARE:
@@ -425,11 +344,10 @@ class TariffContract:
 
 
 def contract_to_json(contract: TariffContract) -> dict:
-    """Serializes a contract in the §8.2 catalog schema — the exact inverse of `from_json`.
+    """Serialize a contract in the §8.2 catalog schema, the exact inverse of `TariffContract.from_json`.
 
-    Used to embed contracts in `economic_inputs.json` (cost-spec-v2 §2.1, W1.4) so re-pricing a
-    stored result needs no catalog lookup and in-memory contracts survive the round trip. One
-    schema, one parser: the output is a valid `cost_database/tariffs/*.json` file.
+    Embeds contracts in ``economic_inputs.json`` so a stored result can be re-priced without a catalog lookup.
+    The output is a valid ``cost_database/tariffs/*.json`` file.
     """
     supply = contract.supply
     raw: Dict[str, Any] = {
@@ -486,13 +404,10 @@ def contract_to_json(contract: TariffContract) -> dict:
 
 
 def load_tariff_contract(contract_id: str, base_path: Optional[str] = None) -> TariffContract:
-    """Loads one contract JSON by id from the tariffs directory.
+    """Load one contract by id from the tariffs directory.
 
-    Contracts are resolved by file name, so the id in the document and the name of the file that
-    holds it must agree — the data-file CI checks exactly that, because a mismatch would make a
-    contract referenced by a scenario silently unfindable. Note that no source registry is passed
-    here, so citations are not resolved on this path; ``validation.validate_tariff_contracts`` is
-    where the shipped catalog's sources are checked.
+    The id must equal the file's base name. No source registry is passed, so citations are not resolved here;
+    ``validation.validate_tariff_contracts`` checks the shipped catalog's sources.
 
     Args:
         contract_id: The contract id, equal to the file's base name.
@@ -513,25 +428,13 @@ def load_tariff_contract(contract_id: str, base_path: Optional[str] = None) -> T
 
 
 def load_spot_series(series_id: str, base_path: Optional[str] = None) -> List[float]:
-    """Loads a spot price series (EUR/kWh, hourly) from the cost database.
+    """Load an hourly spot price series in EUR/kWh from ``cost_database/spot_series/<id>.csv``.
 
-    Series are versioned CSVs under ``cost_database/spot_series/<id>.csv`` with one price per
-    line (header allowed). A documented loader for user-supplied CSVs (spec Q16).
-
-    A DYNAMIC contract names its series by id and the simulation-side price provider reads it to
-    publish a per-timestep price; the billing engine never opens a series itself, it consumes the
-    integral the meter produced. Real EPEX series are not shipped for licensing reasons, so this
-    exists mainly so that a user can drop their own hourly file in place — hence the tolerant
-    shape handling: it takes the last comma-separated token of each line, so a plain one-column
-    file and a ``timestamp,price`` file both work, and it skips blank lines and a non-numeric
-    first line (the column header). Prices are in EUR/kWh (not EUR/MWh) and the series is expected
-    to be hourly, i.e. 8760 values for a full year.
-
-    What it does *not* do any more is skip whatever else fails to parse (issue #25a). A corrupt
-    value in the middle of a user's file used to vanish, shortening the series by one hour and
-    silently shifting every later price to the wrong hour of the year — a dynamic-tariff bill
-    computed against a shifted price series is wrong in a way nothing downstream can detect. Such
-    a line now fails the load, with the line number to go and look at.
+    A DYNAMIC contract names its series by id and the simulation-side price provider reads it. Real EPEX series are not
+    shipped for licensing reasons, so users supply their own file. The last comma-separated token of each line is read,
+    so a one-column file and a ``timestamp,price`` file both work; blank lines and a non-numeric first line (header)
+    are skipped. Expect 8760 values for a full year. Any other unparsable line fails the load, because dropping it
+    would shift every later price by one hour.
 
     Args:
         series_id: The series id, equal to the CSV's base name.
@@ -541,8 +444,8 @@ def load_spot_series(series_id: str, base_path: Optional[str] = None) -> List[fl
         The prices in file order, in EUR/kWh.
 
     Raises:
-        CostDataError: If the file is missing, contains no parsable value, or holds a non-empty
-            line past the header that is not a price (message names file and line number).
+        CostDataError: If the file is missing, holds no parsable value, or has a non-empty line past the header that is
+            not a price (the message names file and line).
     """
     base = base_path or os.path.join(os.path.dirname(TariffContract.DEFAULT_PATH), "spot_series")
     path = os.path.join(base, f"{series_id}.csv")
@@ -569,21 +472,16 @@ def load_spot_series(series_id: str, base_path: Optional[str] = None) -> List[fl
 
 
 def synthetic_reference_spot_series(mean_price: float = 0.08, amplitude: float = 0.04) -> List[float]:
-    """A synthetic hourly reference profile for tests (spec Q16 fallback).
+    """Return a synthetic hourly spot price profile for tests: a daily sine with morning and evening structure.
 
-    A daily sine with morning/evening structure; deterministic, mean ≈ `mean_price`.
-
-    Real day-ahead series cannot be shipped for licensing reasons, so this stands in wherever a
-    DYNAMIC contract must be exercised without user data: the shipped ``DE_DYNAMIC_SYNTHETIC_2024``
-    contract, the price provider's ``SYNTHETIC_TEST`` contract (whose ``spot_series`` is the
-    sentinel ``"__synthetic__"``), and the dynamic-tariff tests. Being a closed formula rather than
-    a stored file makes it reproducible bit for bit across machines, which is what lets tests
-    assert exact bills; it is a *fixture*, not data, and must never back a published result.
+    It backs the shipped ``DE_DYNAMIC_SYNTHETIC_2024`` contract, the price provider's ``SYNTHETIC_TEST`` contract
+    (series id ``"__synthetic__"``) and the dynamic-tariff tests. It is a deterministic fixture, not data, and must not
+    back a published result.
 
     Args:
         mean_price: Mean level of the profile in EUR/kWh.
-        amplitude: Half-swing of the daily shape in EUR/kWh; a seasonal term of 20 % of it is
-            superimposed, and prices are floored at zero (so a large amplitude biases the mean up).
+        amplitude: Half-swing of the daily shape in EUR/kWh; a seasonal term of 20 % of it is added, and prices are
+            floored at zero (so a large amplitude raises the mean).
 
     Returns:
         8760 hourly prices in EUR/kWh, starting at hour 0 of January 1.
@@ -598,12 +496,9 @@ def synthetic_reference_spot_series(mean_price: float = 0.08, amplitude: float =
 
 
 def validate_billing_interval(seconds_per_timestep: int, contract: TariffContract) -> None:
-    """`seconds_per_timestep` must divide the billing interval, else pre-check fails (§8.4).
+    """Check that `seconds_per_timestep` divides the contract's billing interval (§8.4).
 
-    A contract-data pre-check, not billing: it confronts the contract's declared billing
-    interval with a *simulation* parameter before a run starts, which is why it sits on the data
-    side of the §2.5 cut with the schema and the loaders. Its caller is the simulation-side
-    price provider.
+    A pre-run check called by the simulation-side price provider; a mismatch fails before the run starts.
     """
     if contract.capacity_charge.kind == CapacityChargeKind.NONE:
         return
@@ -616,29 +511,21 @@ def validate_billing_interval(seconds_per_timestep: int, contract: TariffContrac
 
 
 # =========================================================================== engine
-# The pure year-1 billing engine and the price selection it defines. This half moves to
-# `economics/engine/` in the §2.5 package split. Default-contract *construction* from a §3.5
-# price entry used to live here as `TariffContract.default_from_price_entry`; it is engine
-# behavior and now lives with its only caller, `calculators/energy.default_contract`.
+# The pure year-1 billing engine and the price selection it defines. Building a default contract from a §3.5
+# price entry lives with its only caller, `calculators/energy.default_contract`.
 
 
 @dataclass
 class Year1Bill:
-    """apply_tariff output: year-1 costs by category, each a slot band (§8.4).
+    """One carrier's bill for one year, by category, as bands (§8.4); the output of :func:`apply_tariff`.
 
-    One carrier's bill for one year, in euro, split into the categories the timeline books
-    separately — working (energy) cost, standing charge, capacity charge and feed-in revenue —
-    because each escalates at its own rate over the horizon. Absent categories mean "this contract
-    does not have that component" rather than zero, so a reader can tell a contract without a
-    capacity charge from one whose peaks happened to be zero.
+    Categories are working (energy) cost, standing charge, capacity charge and feed-in revenue, kept apart because each
+    escalates at its own rate. An absent category means the contract has no such component, not zero. Costs are
+    positive; feed-in revenue is negative (mirrored with ``as_revenue``).
 
-    The three scalar fields are the §8.5 decomposition, all on the BEST_ESTIMATE slot and all
-    informational except ``flexibility_value_in_euro``: the projection in ``calculators/energy.py``
-    escalates the volume part with the carrier rate and the flexibility part with the (separately
-    configurable) spread rate, because the value of load shifting is expected to grow with spot
-    spreads rather than with the price level. Sign convention: costs positive, feed-in revenue
-    negative and revenue-mirrored (``as_revenue``), while ``flexibility_value_in_euro`` is a
-    positive *saving* that the projection subtracts.
+    The three scalar fields are the §8.5 decomposition on the best-estimate slot. Only ``flexibility_value_in_euro`` is
+    used downstream: ``calculators/energy.py`` escalates it with the spot spread rate and subtracts it as a positive
+    saving.
     """
 
     by_category: Dict[CostCategory, UncertainValue] = field(default_factory=dict)
@@ -648,12 +535,9 @@ class Year1Bill:
     mean_energy_price_in_euro_per_kwh: float = 0.0
 
     def total(self) -> UncertainValue:
-        """Signed sum of all categories.
+        """Return the signed sum of all categories; a building that exports a lot can total below zero.
 
-        The whole year-1 bill as one band: costs positive, feed-in revenue negative, so a
-        self-consuming PV building can legitimately total below zero. Used mainly for the tariff
-        counterfactual and for reporting; the timeline itself always books the categories
-        separately, since it is their different escalation that the projection depends on.
+        Used for the tariff counterfactual and for reporting; the timeline books the categories separately.
         """
         return UncertainValue.sum(self.by_category.values())
 
@@ -661,14 +545,11 @@ class Year1Bill:
 def time_of_use_band_for(
     supply: TariffSupply, weekday: Optional[int] = None, hour: Optional[int] = None
 ) -> Optional[TimeOfUseBand]:
-    """The ToU band that prices one moment — the single band-selection rule (§8.4).
+    """Return the time-of-use band that prices one moment (§8.4).
 
-    First declared match wins. When nothing matches, or when the moment is unknown, the **first**
-    band applies: that is the rule `apply_tariff` bills *unbanded* energy with — energy the meter
-    assigned to no band at all — so the price a controller reacts to and the price the bill charges
-    cannot disagree. It is not a rule for energy filed under an unknown band *name*, which
-    `apply_tariff` refuses outright. `None` only when the contract declares no bands at all (a data
-    error the billing engine reports).
+    The first declared match wins. When nothing matches, or the moment is unknown, the first band applies;
+    :func:`apply_tariff` uses the same rule for energy the meter assigned to no band, so the controller's price and the
+    billed price agree. Returns None only when the contract declares no bands.
     """
     if not supply.bands:
         return None
@@ -685,27 +566,21 @@ def energy_price_in_euro_per_kwh(
     hour: Optional[int] = None,
     spot_price_in_euro_per_kwh: Optional[float] = None,
 ) -> UncertainValue:
-    """The energy-only price of one kWh at one moment, before the additive components (§8.4).
+    """Return the energy-only price of one kWh at one moment, before the additive components (§8.4).
 
-    FLAT reads the working price, TIME_OF_USE the band covering the moment, DYNAMIC the passed
-    spot price times the contract's `spot_factor` (the caller supplies the series value; this
-    module does not read series).
-
-    Keeping the *energy-only* price separate from the full marginal price is what makes the
-    macroeconomic view and the flexibility decomposition possible at all — only this part varies
-    with the moment, and only this part is what a controller can shift its consumption into.
+    FLAT reads the working price, TIME_OF_USE the band covering the moment, DYNAMIC the given spot price times the
+    contract's `spot_factor`. Only this part varies with time, which is what the flexibility decomposition needs.
 
     Args:
         contract: The contract to price from.
-        weekday: 0 = Monday; together with `hour` it selects the ToU band. Both may be None, in
-            which case the first band applies (the same fallback the price provider uses).
+        weekday: 0 = Monday; with `hour` it selects the time-of-use band. Both may be None, and then the first band
+            applies.
         hour: Clock hour of the day, 0..23.
-        spot_price_in_euro_per_kwh: The series value of this moment, required for DYNAMIC supply.
+        spot_price_in_euro_per_kwh: The spot price of this moment, required for DYNAMIC supply.
 
     Returns:
-        EUR/kWh as a band. DYNAMIC returns an exact value: the spot series is simulation input and
-        stays exact per §3.9, so a dynamic contract's uncertainty lives entirely in its additive
-        components.
+        EUR/kWh as a band. DYNAMIC returns an exact value: the spot series is simulation input and stays exact (§3.9),
+            so a dynamic contract's uncertainty is all in its additive components.
 
     Raises:
         CostDataError: If a DYNAMIC contract is priced without a spot price.
@@ -730,13 +605,10 @@ def marginal_purchase_price_in_euro_per_kwh(
     hour: Optional[int] = None,
     spot_price_in_euro_per_kwh: Optional[float] = None,
 ) -> UncertainValue:
-    """What one more kWh costs at one moment: energy price plus the additive components (§8.4).
+    """Return what one more kWh costs at one moment: energy price plus the additive components (§8.4).
 
-    **One price-selection rule for both sides of the module boundary.** The in-simulation
-    provider (`components/tariff_provider.py`) publishes this figure per timestep and controllers
-    optimize against it; `apply_tariff` prices the resulting aggregates with the same function.
-    They used to be two implementations of FLAT/ToU/DYNAMIC selection, which is exactly the kind
-    of duplication that lets a control decision and its bill drift apart (cost-spec-v2 §2.2).
+    The price provider publishes this per timestep and :func:`apply_tariff` bills with the same rule, so a control
+    decision and its bill cannot drift apart.
     """
     return energy_price_in_euro_per_kwh(
         contract, weekday, hour, spot_price_in_euro_per_kwh
@@ -744,57 +616,34 @@ def marginal_purchase_price_in_euro_per_kwh(
 
 
 def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) -> Year1Bill:
-    """The billing engine: one pure function (§8.4).
+    """Bill one year of one carrier under a contract (§8.4).
 
-    Property-tested invariants: a flat contract reproduces kWh x price exactly; the capacity
-    charge is monotone in every peak. Uncertain additive components shift each slot's bill by
-    ``E x delta`` without re-integrating the spot series (§8.4).
+    This pure function (no database, ledger or state) is the only place where measured consumption becomes money, so it
+    also re-prices stored results and bills hypothetical contracts (:func:`tariff_counterfactual`). A flat contract
+    reproduces kWh × price exactly, and the capacity charge is monotone in every peak.
 
-    This is where measured consumption becomes money, and it is deliberately the *only* such
-    place: every carrier of every perspective is billed through this one function, so a pricing
-    rule cannot exist in two versions. Being pure — no database, no ledger, no clock, no state —
-    is what makes it property-testable and what lets the same call re-price a stored result years
-    later or bill a load profile under a hypothetical contract (:func:`tariff_counterfactual`).
+    Inputs: ``determinants`` describe one full year of one carrier: energy in kWh (bought, sold, and per band name),
+    the integrated dynamic cost and revenue in euro, peaks in kW as billing-interval means, and the unweighted mean
+    spot price in EUR/kWh. A shorter simulation must be annualized first.
 
-    Units of the inputs. ``determinants`` describes **one full year of one carrier**: energy in
-    kWh (bought, sold, and per ToU band name), the natively integrated ``cost_integrated_in_euro``
-    and ``revenue_integrated_in_euro`` in euro for dynamic supply, peaks in **kW** as
-    billing-interval mean power (never instantaneous), and the unweighted mean spot price in
-    EUR/kWh. A shorter simulation must be annualized *before* this call — the function has no
-    notion of a period. The contract supplies EUR/kWh, EUR/kW and EUR/year figures as bands.
-
-    What the returned :class:`Year1Bill` contains, per uncertainty slot:
-    ``ENERGY_WORKING`` (energy plus the additive per-kWh components, positive),
-    ``ENERGY_STANDING`` (the annual standing charge, reduced by a FIXED_ANNUAL controllability
-    credit), ``ENERGY_CAPACITY_CHARGE`` (price per kW times the summed relevant peaks — present
-    only if the contract has one) and ``FEED_IN_REVENUE`` (negative, revenue-mirrored, present only
-    if something was sold) — plus the §8.5 decomposition scalars on the BEST_ESTIMATE slot. Prices are
-    taken as stated: VAT is never added or removed here, and ``supply.vat_rate`` currently has no
-    consumer at all — the macroeconomic view strips taxes using the price entry's
-    ``tax_and_levy_share`` instead (``calculators/energy.py``).
-
-    Three billing paths, one per supply kind. FLAT multiplies the marginal price by annual energy.
-    TIME_OF_USE prices each band's energy with its own price and bills whatever the meter did not
-    attribute to *any* band — the annual total minus the banded sum — at the fallback band's price,
-    the same fallback the price provider uses, so unattributed energy is never free. Energy filed
-    under a band name the contract does not define is a different case and is refused: it would
-    otherwise be priced at the fallback band, which is a wrong bill rather than a defaulted one.
-    DYNAMIC refuses to work from annual totals at all: it requires the integral the meter computed
-    at native resolution, because kWh times average price is precisely the error a dynamic tariff
-    exists to exploit. Only DYNAMIC can report a non-zero flexibility value, and only when the
-    meter also supplied the unweighted mean spot price.
+    Billing per supply kind: FLAT multiplies the marginal price by annual energy. TIME_OF_USE prices each band's energy
+    at its own price and bills energy assigned to no band at the fallback (first) band's price; energy under an unknown
+    band name is refused. DYNAMIC requires the integral computed at native resolution, since kWh times the average
+    price is exactly the error a dynamic tariff exploits. Only DYNAMIC reports a flexibility value, and only when the
+    mean spot price is given. VAT is never added or removed; ``supply.vat_rate`` has no effect on the bill.
 
     Args:
-        determinants: One carrier's annual billing determinants (§8.4), already annualized.
+        determinants: One carrier's annual billing determinants, already annualized.
         contract: The tariff contract to bill under.
 
     Returns:
-        The year-1 bill by category, with the §8.5 decomposition attached.
+        The year-1 bill: ``ENERGY_WORKING`` (positive), ``ENERGY_STANDING`` (less a FIXED_ANNUAL controllability
+            credit), ``ENERGY_CAPACITY_CHARGE`` (only if the contract has one), ``FEED_IN_REVENUE`` (negative, only if
+            something was sold), plus the §8.5 decomposition.
 
     Raises:
-        CostDataError: For a TIME_OF_USE contract without bands, for a TIME_OF_USE contract whose
-            determinants name a band it does not define, or for a DYNAMIC contract whose
-            determinants carry no integrated cost.
+        CostDataError: For a TIME_OF_USE contract without bands or whose determinants name an unknown band, or a
+            DYNAMIC contract whose determinants carry no integrated cost.
     """
     bill = Year1Bill()
     energy_bought = determinants.energy_bought_in_kwh
@@ -828,10 +677,9 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
             total = total + band.price_in_euro_per_kwh.scale(band_energy)
         unbanded = energy_bought - banded_energy
         if unbanded > 1e-6:
-            # Energy the meter assigned to no band at all (total minus the banded sum) — a
-            # modelled default, not a mismatch: it is billed at the fallback band, the same
-            # fallback the price provider applies to an unmatched moment. Energy filed under a
-            # band name the contract does not know was rejected above instead.
+            # Energy the meter assigned to no band at all (total minus the banded sum) is billed at the
+            # fallback band, as the price provider does for an unmatched moment. Energy under an unknown band
+            # name was rejected above.
             fallback = time_of_use_band_for(supply)
             assert fallback is not None  # bands were checked above
             total = total + fallback.price_in_euro_per_kwh.scale(unbanded)
@@ -909,21 +757,11 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
 def tariff_counterfactual(
     determinants: BillingDeterminants, active: TariffContract, flat: TariffContract
 ) -> Dict[str, UncertainValue]:
-    """Bills the *same* load profile under a flat contract (§8.5 counterfactual 1).
+    """Bill the same load profile under a flat contract to show what the tariff choice earned (§8.5).
 
-    Answers "what did the tariff choice earn, given unchanged behavior": the simulated load profile
-    is re-billed under `flat`, and the difference to the active contract's bill is attributed to
-    the tariff. The counterfactual is therefore *to a different contract, not to a different
-    building or controller* — the load profile, the control strategy and every physical quantity
-    are held fixed, which is what makes it free (no second simulation) and also what limits it.
-
-    The complementary question — what the tariff *and* a price-reactive controller earn together —
-    is §8.5's behavioral counterfactual and needs a second simulation with a flat tariff and a
-    price-blind EMS, compared as an ordinary `VariantComparison`. Re-pricing carries that caveat
-    generally — it is why a *scenario* that overlays energy prices consumed by the simulation must
-    opt in via ``EconomicParameters.allow_counterfactual_billing`` (§4.6); this function is an
-    explicit request and is not gated, so the honest reading of its output is "the tariff
-    difference on this fixed behavior", not "the savings a household would realize".
+    Load profile, control and all physics are held fixed, so no second simulation is needed; the result reads as "the
+    tariff difference on this fixed behavior", not as the savings a household would realize with a price-reactive
+    controller. That joint effect needs a second simulation compared as a `VariantComparison`.
 
     Args:
         determinants: The measured annual determinants, billed unchanged under both contracts.
@@ -931,8 +769,8 @@ def tariff_counterfactual(
         flat: The flat comparison contract.
 
     Returns:
-        The two totals and their difference, all as bands; ``tariff_advantage_in_euro`` is positive
-        when the active contract is cheaper than the flat one.
+        The two totals and their difference as bands; ``tariff_advantage_in_euro`` is positive when the active contract
+            is cheaper.
     """
     active_bill = apply_tariff(determinants, active)
     flat_bill = apply_tariff(determinants, flat)

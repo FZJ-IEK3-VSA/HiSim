@@ -1,35 +1,12 @@
-"""Financing application: loan flows onto the timeline (cost-spec-v2 §2.3, W3.2).
+"""Lay the loan flows of a perspective's financing plan onto the timeline (cost_spec.md §2.3, §4.4).
 
-The §2.3 "financing" calculator — the *application half*. The closed-form loan mathematics
-stays in `financing.py` (`loan_flows`), which is already pure; this module decides what is
-financed and lays the resulting flows out: a LOAN_DISBURSEMENT that offsets the year-0 outflow,
-the optional repayment grant, and the interest/principal schedule truncated at the observation
-horizon (cost_spec.md §4.4).
+The loan mathematics is in `financing.loan_flows`. This module computes what is financed (the year-0 investment net of
+upfront grants), applies a soft-loan scheme's terms to the plan (§5.3), and emits a LOAN_DISBURSEMENT offsetting the
+year-0 outflow, the optional repayment grant, and the interest and principal schedule truncated at the horizon.
 
-**W3.2 — what changed and what deliberately did not.** `_apply_financing` used to be a timeline
-*rewriter* with two hidden ordering dependencies: it derived the principal by re-scanning
-already-emitted year-0 entries, and it read the subsidy `decisions` list that another phase had
-filled in. Both are now arguments:
-
-* `compute_year0_net_investment(timeline)` produces a typed :class:`Year0NetInvestment`, which
-  the orchestrator computes and hands in. The category set is the documented, shared
-  `FINANCING_YEAR0_PRINCIPAL_CATEGORIES` and the sum is folded in entry order, so the figure is
-  bit-identical to the former inline scan;
-* `resolve_loan_plan(plan, decisions)` applies a SOFT_LOAN scheme's LOAN_TERMS override to the
-  plan before any flow is emitted.
-
-The *ordering* is unchanged, and so is every number: this is a signature change, not a
-semantic one.
-
-.. warning::
-
-   **§7 B3 is preserved, unfixed.** `subsidies.py` values a repayment grant on the gross measure
-   cost while this module applies `repayment_grant_share` to the *principal* — they disagree
-   whenever `financed_share < 1`. Currently masked because the shipped KfW rate is 0.0. Also
-   note the resulting SUBSIDY entry is emitted *after* the subsidy total was closed, which is
-   half of §7 W3.4. Both belong to the next package.
-
-Realizes: cost_spec.md §4.4 (financing), §5.3 (soft loans); known defects §7 B3, W3.4.
+Known discrepancy: the subsidy solver values a repayment grant on the gross measure cost, while this module applies
+`repayment_grant_share` to the loan principal, so the two differ whenever `financed_share < 1`. The shipped KfW
+repayment grant rate is 0.0, so no shipped run is affected.
 """
 
 from __future__ import annotations
@@ -47,11 +24,8 @@ from hisim.economics.uncertainty import UncertainValue
 class FinancingConstants:
     """Labels of the financing flows (§4.4).
 
-    A loan is taken out against the investment as a whole, not against any one device, so its
-    flows cannot be attributed to a component and are booked under a synthetic subject instead.
-    The name is published — it shows up as a row in `cash_flow_timeline.csv`, in the per-subject
-    breakdowns and in the report's amortization chart — which is why it is a named constant rather
-    than a literal repeated at the four emit sites below.
+    A loan finances the investment as a whole, so its flows are booked under one synthetic subject. The name appears in
+    `cash_flow_timeline.csv`, the per-subject breakdowns and the report's amortization chart.
     """
 
     #: Timeline subject the loan flows are booked under (they belong to no single component).
@@ -60,47 +34,33 @@ class FinancingConstants:
 
 @dataclass(frozen=True)
 class Year0NetInvestment:
-    """The year-0 investment net of upfront support — what a loan share is taken of (§4.4).
+    """The year-0 investment net of upfront support: what a loan share is taken of (§4.4).
 
-    A one-field wrapper on purpose: the figure it carries is easy to confuse with three
-    neighbours (gross investment, the levy basis, the NPV of investment), and a distinct type
-    makes the W3.2 signature say which one financing actually consumes. "Net" means net of
-    *upfront* subsidies only, because those are the ones that reduce what the borrower has to
-    raise on the day; support arriving later does not shrink the principal.
-
-    Units: a cost-positive euro band in year-0 money, undiscounted. It is produced by
-    :func:`compute_year0_net_investment` from the finished year-0 section of the timeline and
-    consumed only by :func:`build_financing_flows`.
+    A cost-positive euro band in year-0 money, undiscounted. Only upfront subsidies are netted, because only they
+    reduce what the borrower has to raise on the day. Produced by :func:`compute_year0_net_investment` and consumed by
+    :func:`build_financing_flows`; the separate type keeps it from being confused with the gross investment or the levy
+    basis.
     """
 
     amount: UncertainValue
 
     @property
     def is_financeable(self) -> bool:
-        """Whether there is anything left to finance after upfront support.
+        """Whether anything is left to finance after upfront support, tested on the band maximum.
 
-        Tested on the band *maximum*, i.e. "financeable in at least the expensive world". Grants
-        can in principle exceed the investment in the cheap world, and taking a loan out on a
-        negative principal would emit a nonsensical disbursement; testing the maximum keeps
-        "is there a loan at all" a single decision covering all three slots (§3.9: one plan,
-        valued in three worlds) and errs toward financing whenever any world has something left
-        to finance.
+        A band has three slots (minimum, best estimate, maximum), one per price world. Testing the maximum makes "is
+        there a loan" one decision for all three slots and finances whenever any world has something left.
         """
         return self.amount.maximum > 0
 
     @property
     def financed_basis(self) -> UncertainValue:
-        """The amount a loan can be taken out on: the net investment, never below zero per slot.
+        """The amount a loan can be taken out on: the net investment, clamped to zero per slot.
 
-        A loan finances what is left to pay, and in a world where upfront grants cover the whole
-        investment nothing is left, so that slot's basis is zero rather than a negative loan. That
-        world is not rare: a grant capped at the eligible cost is mirrored as a revenue (§3.9), so
-        the LOW slot pairs the *largest* grant with the *cheapest* investment and the net figure
-        dips below zero whenever a cap binds in one world and not in the other (renovisorissues
-        #66: EUR 8,000 wall grant and EUR 3,500 floor grant against EUR 6,000 and EUR 1,600 of
-        LOW-world investment, a net of EUR -3,900). Clamping each slot on its own keeps the band
-        ordered, because ``max(0, x)`` is monotone, and it leaves every slot that was already
-        non-negative bit for bit as it was -- a signed zero included.
+        Example: upfront grants of EUR 11,500 against EUR 7,600 of investment in the cheap world give a net of EUR
+        -3,900, so that slot's basis is 0. This happens because grants are revenue-mirrored, so the cheap slot pairs
+        the largest grant with the cheapest investment. Clamping each slot keeps the band ordered and leaves
+        non-negative slots unchanged.
 
         Returns:
             A cost-positive band whose three slots are each ``max(0, net)``.
@@ -118,26 +78,19 @@ class Year0NetInvestment:
 
 
 def compute_year0_net_investment(timeline: CashFlowTimeline) -> Year0NetInvestment:
-    """Sums the year-0 investment categories, net of upfront subsidies (§4.4).
+    """Sum the year-0 investment categories net of upfront subsidies (§4.4).
 
-    SUBSIDY belongs to the category set on purpose: subsidy entries are negative, so including
-    them makes this the *net* figure. See `calculators/categories.py` for how this set differs
-    from the other two and why (W3.3). The fold is in entry order, as float addition is not
-    associative.
-
-    Reading the figure off the timeline rather than re-deriving it from the cost facts is what
-    guarantees the principal matches what the timeline actually charges at year 0, across all
-    subjects at once — including the removal costs and planning fees that a per-device
-    reconstruction is easy to forget. `evaluator.build_timeline` calls it after every subject has
-    been costed and hands the result to :func:`build_financing_flows`.
+    SUBSIDY entries are negative, so including them makes the figure net (see `calculators/categories.py`). The sum
+    runs in entry order. Reading it off the timeline makes the principal match what the timeline charges at year 0,
+    removal and planning costs included. `evaluator.build_timeline` calls this after every subject is costed.
 
     Args:
-        timeline: The timeline as built so far. Only year-0 entries in
-            `FINANCING_YEAR0_PRINCIPAL_CATEGORIES` are read; everything else is ignored.
+        timeline: The timeline so far; only year-0 entries in `FINANCING_YEAR0_PRINCIPAL_CATEGORIES` are read.
 
     Returns:
-        The net year-0 outflow as a cost-positive euro band, undiscounted. It can be zero or
-        negative if upfront grants cover the investment — see `Year0NetInvestment.is_financeable`.
+        The net year-0 outflow as a cost-positive euro band, undiscounted; zero or negative when upfront grants cover
+            the
+        investment.
     """
     total = UncertainValue.exact(0.0)
     for entry in timeline.entries:
@@ -147,31 +100,21 @@ def compute_year0_net_investment(timeline: CashFlowTimeline) -> Year0NetInvestme
 
 
 def resolve_loan_plan(plan: FinancingPlan, decisions: List[SubsidyDecision]) -> FinancingPlan:
-    """Applies a subsidized-loan scheme's LOAN_TERMS award to the plan (§5.3).
+    """Apply a soft-loan scheme's LOAN_TERMS award to the financing plan (§5.3).
 
-    A soft loan (KfW-style) is a subsidy whose benefit is not cash but *terms*: a lower nominal
-    interest rate, a longer term, and possibly a repayment grant (Tilgungszuschuss) that writes
-    off a share of the principal. The subsidy solver decides whether the scheme applies, this
-    function transcribes its award onto the financing plan, and only then is a single euro of loan
-    flow computed — which is the W3.2 point that the ordering dependency between the subsidy phase
-    and the financing phase is now an argument instead of a shared mutable list.
-
-    Only an award whose scheme is the plan's `subsidized_by_scheme_id` applies. When several
-    match, the last one wins — as before.
+    A soft loan (KfW-style) is a subsidy whose benefit is better terms: a lower rate, a longer term, and possibly a
+    repayment grant (Tilgungszuschuss) that writes off a share of the principal. Only an award whose scheme is the
+    plan's `subsidized_by_scheme_id` applies; when several match, the last one wins.
 
     Args:
-        plan: The perspective's financing plan (financed share, rate, term, loan type).
-        decisions: The subsidy decisions of this perspective, in the order the subjects were
-            costed; only their `applied` awards of kind LOAN_TERMS are read.
+        plan: The perspective's financing plan.
+        decisions: The perspective's subsidy decisions in subject order; only applied LOAN_TERMS awards are read.
 
     Returns:
-        The plan itself when no award matches, otherwise a new `FinancingPlan` with the award's
-        rate, term and repayment-grant share substituted in. All three fields follow one rule,
-        `is not None`: a field the award states overrides the plan's, a field it leaves unset
-        inherits the plan's. The distinction is not cosmetic — an award's *stated* 0.0 % interest
-        is the entire point of a zero-interest soft loan and must not fall back to the plan's
-        market rate, and an award that says nothing about a Tilgungszuschuss must not erase a
-        repayment grant the plan already carried.
+        The plan itself when no award matches, otherwise a new plan with the award's rate, term and repayment-grant
+            share.
+        Each field the award states (is not None) overrides the plan's, so a stated 0.0 % rate is kept; an unset field
+        keeps the plan's value.
     """
     loan_plan = plan
     for decision in decisions:
@@ -203,33 +146,23 @@ def build_financing_flows(
     year0_net: Year0NetInvestment,
     horizon: int,
 ) -> List[CashFlowEntry]:
-    """Loan flows replacing (a share of) the year-0 outflow (§4.4).
+    """Return the loan flows that replace a share of the year-0 outflow (§4.4).
 
-    Nothing is emitted when there is no net investment left to finance. A slot in which upfront
-    grants exceed the investment finances nothing (:attr:`Year0NetInvestment.financed_basis`), so
-    the disbursement is never a payment to the bank and the debt service never a refund. The
-    schedule stops at the observation horizon, so a term longer than the horizon leaves the
-    remaining debt implicitly outstanding (unchanged behavior).
-
-    The layout half of financing: the closed-form annuity or interest-only schedule comes from
-    `financing.loan_flows`, and this function decides what it is applied to (a share of the year-0
-    net investment) and where the results land. Note what financing does and does not move — it
-    barely changes the NPV, only via the spread between the loan rate and the discount rate, but
-    it transforms the nominal annual series completely, which is exactly the "can I afford this"
-    question §4.3 keeps separate from "is this worth it".
+    Nothing is emitted when nothing is left to finance. A slot in which upfront grants exceed the investment finances
+    nothing (:attr:`Year0NetInvestment.financed_basis`). The schedule stops at the horizon, so debt from a longer term
+    is left outstanding. Financing barely changes the NPV but reshapes the nominal annual series, which answers "can I
+    afford this" (§4.3).
 
     Args:
-        loan_plan: The plan after :func:`resolve_loan_plan` — financed share, nominal rate, term,
-            loan type and any repayment-grant share.
-        year0_net: The year-0 investment net of upfront subsidies, from
-            :func:`compute_year0_net_investment`.
+        loan_plan: The plan after :func:`resolve_loan_plan`.
+        year0_net: The year-0 investment net of upfront subsidies.
         horizon: Observation period T in years; schedule rows beyond it are dropped.
 
     Returns:
-        A LOAN_DISBURSEMENT at year 0 (revenue-mirrored, i.e. negative, offsetting the year-0
-        outflow), optionally a negative SUBSIDY entry for the repayment grant (see the module's
-        §7 B3 warning), and cost-positive LOAN_INTEREST / LOAN_PRINCIPAL entries per year, each
-        emitted only when non-zero. All nominal euros of their own year, undiscounted.
+        A negative LOAN_DISBURSEMENT at year 0, optionally a negative SUBSIDY entry for the repayment grant, and
+        cost-positive LOAN_INTEREST and LOAN_PRINCIPAL entries per year, each only when non-zero; nominal euros of
+            their
+        year, undiscounted.
     """
     if not year0_net.is_financeable:
         return []
@@ -245,7 +178,7 @@ def build_financing_flows(
         )
     )
     if loan_plan.repayment_grant_share > 0:
-        # §7 B3: the solver valued this grant on the gross measure cost, not on the principal.
+        # The subsidy solver valued this grant on the gross measure cost, not on the principal.
         grant = principal.scale(loan_plan.repayment_grant_share)
         entries.append(
             CashFlowEntry(

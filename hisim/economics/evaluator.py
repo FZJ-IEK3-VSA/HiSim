@@ -1,28 +1,11 @@
 """The economic evaluator: facts -> cash flows -> results (cost_spec.md §3, §4).
 
-A pure function of ``(facts, flows, cost_db, subsidy_catalog, econ_params, perspective)``.
-No config mutation, no file I/O inside the calculation.
-
-This module owns the *orchestration* of a lifecycle cost evaluation and almost nothing else.
-`EconomicEvaluator.build_timeline` sequences the domain calculators of
-`hisim/economics/calculators/` into the one canonical `CashFlowTimeline` of a perspective, and
-`EconomicEvaluator.evaluate` turns that timeline into a `LifecycleCostResult` by allocating
-payers (§6) and discounting/pivoting it (§3.7). Every euro is produced by a calculator, every
-number read comes from `CostDatabase` / `SubsidyCatalog` / `EconomicParameters`, and every
-published figure is a filter or a pivot of the timeline (§3.1) — so what this file actually
-decides is *order*, not money.
-
-It additionally owns the two policies that must be settled before any lookup happens and that no
-single calculator could own: which price basis year the database is read at
-(`effective_price_basis_year`, cost-spec-v2 W1.2), and whether the declared facts can be priced
-at all (`resolve_check` / `require_resolvable_subjects`, §9.3 and decision D7).
-
-Deliberately *not* here: reading a finished simulation (`bridge.py`), the data files
-(`database.py`), presentation (`reporting.py`, `exports.py`) and the per-mechanism arithmetic
-(`calculators/`). The evaluator touches no simulation object; its entire input is the plain
-`EvaluationInputs` record, which is exactly what `economic_inputs.json` stores. That is the
-cost-spec-v2 seam-1 contract, and it is what makes an archived run re-priceable years later
-without HiSim.
+`EconomicEvaluator.build_timeline` runs the calculators of `hisim/economics/calculators/` in order to build one
+perspective's `CashFlowTimeline`; `evaluate` allocates payers (§6) and discounts and pivots the timeline into a
+`LifecycleCostResult` (§3.7). The evaluator is a pure function of `EvaluationInputs` (the plain record stored in
+`economic_inputs.json`), the cost database, the subsidy catalog, the economic parameters and the perspective, so an
+archived run can be re-priced without HiSim. It also decides the price basis year and whether the extract can be priced
+at all (§9.3).
 """
 
 from __future__ import annotations
@@ -123,12 +106,10 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 class SubjectCostFacts:
     """A component's cost facts together with its timeline subject name.
 
-    The subject is the key every cash flow, pivot, breakdown and export row of this component is
-    filed under — in practice the HiSim component name assigned by `bridge.py`, or a free-form
-    name for cost subjects that are not simulation components at all (envelope measures are
-    injected by whoever defines the variant, README §3.2b). Pairing the name with the facts here
-    keeps `ComponentCostFacts` free of any identity of its own, so the same facts can be declared
-    by a component, injected by a system setup, or read back from `economic_inputs.json`.
+    The subject is the key every cash flow, pivot and export row of this component is filed under: the HiSim component
+    name assigned by `bridge.py`, or a free name for subjects that are not simulation components, such as envelope
+    measures. Keeping the name here leaves `ComponentCostFacts` without an identity, so the same facts can come from a
+    component, a system setup or `economic_inputs.json`.
     """
 
     subject: str
@@ -137,18 +118,11 @@ class SubjectCostFacts:
 
 @dataclass
 class UnresolvedSubject:
-    """A cost subject the *extraction* could not describe, carried into the resolution check (D7).
+    """A cost subject whose facts the extraction could not establish, carried into the resolution check.
 
-    The counterpart of `SubjectCostFacts` for the failure case, and the record that closes the
-    silent-omission hole of issue #2: a component the adapter recognizes but whose facts came out
-    empty — a boiler burning a fuel with no asset class, a meter whose configured load type maps
-    to no carrier — used to disappear from the cost model while still counting as priced. It is
-    now extracted as one of these, written into `economic_inputs.json` like everything else the
-    simulation yielded, and turned into a blocking `ResolutionProblem` by `resolve_check`.
-
-    It is deliberately a *finding*, not an exception: the extraction pass records everything it
-    found wrong and the D7 check reports all of it at once, in the same bullet list as the
-    subjects the cost database cannot price.
+    Examples: a boiler burning a fuel with no asset class, or a meter whose load type maps to no carrier. It is written
+    into `economic_inputs.json` and turned into a blocking `ResolutionProblem` by `resolve_check`, so all such subjects
+    are reported together with the ones the cost database cannot price.
     """
 
     subject: str
@@ -157,12 +131,9 @@ class UnresolvedSubject:
 
 
 class _PriceBasisYearWarnings:
-    """Warn-once bookkeeping for `effective_price_basis_year`.
+    """Warn-once bookkeeping for `effective_price_basis_year`, so a scenario sweep logs each warning only once.
 
-    Log noise only, never semantics. The basis-year policy is re-resolved on every evaluation —
-    once per perspective, and again for every cell of a scenario cube — so a simulation year the
-    shipped data does not cover would otherwise log the identical warning thousands of times in a
-    sweep. The seen keys live at class level so the deduplication also holds across separately constructed evaluators.
+    The seen keys are class-level, so deduplication holds across separately constructed evaluators.
     """
 
     WARNED: set = set()
@@ -174,30 +145,20 @@ def effective_price_basis_year(
     simulation_year: int,
     plan_start_year: Optional[int] = None,
 ) -> int:
-    """The price basis year used for every database lookup (cost-spec-v2 §2.1, W1.2).
+    """Return the price basis year used for every database lookup (§2.1).
 
-    An explicit ``EconomicParameters.price_basis_year`` always wins. Otherwise the year it falls
-    back to is ``plan_start_year`` when the caller states one, and the simulation year when it does
-    not; in either case, when the shipped database starts later than that year the earliest covered
-    year is picked explicitly (with a warning) instead, since the engine itself is strict (§3.5:
-    hard error on uncovered years) and a silent fallback is what this policy exists to avoid.
-
-    ``plan_start_year`` is the staged plan's (renovisorissues #57): the calendar year a plan
-    starts in is its economic "today", and the simulation year is the year of the stages' weather.
-    Only :class:`~hisim.economics.staged.StagedEvaluator` passes it. Every other path — the
-    postprocessing bridge, ``evaluate``/``report``/``explain``, an unstaged evaluation — keeps the
-    simulation year, which for HiSim today is also the weather year; separating the simulated
-    calendar year from the weather year is HiSim core's, not this function's.
-
-    This policy lives downstream of `economic_inputs.json` so that the postprocessing bridge and
-    the re-pricing CLI derive the same year from the same file (they used to differ).
+    The price basis year is the year whose prices the cost database is read at. An explicit
+    `EconomicParameters.price_basis_year` wins. Otherwise it is `plan_start_year` when given, else the simulation year;
+    if the shipped database starts later than that year, its earliest covered year is used and a warning is logged,
+    since the database itself refuses uncovered years (§3.5). Only `StagedEvaluator` passes `plan_start_year`. The
+    bridge and the re-pricing CLI both call this, so they derive the same year from the same file.
 
     Args:
-        parameters: The assumptions; their ``price_basis_year`` wins when it is set.
+        parameters: The assumptions; their `price_basis_year` wins when set.
         database: The cost database, for the earliest year it prices the country's devices at.
-        simulation_year: The ``simulation_year`` of the evaluated inputs.
-        plan_start_year: The calendar year a staged plan starts in, or None outside a staged plan
-            or when the plan names none.
+        simulation_year: The `simulation_year` of the evaluated inputs.
+        plan_start_year: The calendar year a staged plan starts in, or None outside a staged plan or when the plan
+            names none.
 
     Returns:
         The price basis year.
@@ -224,52 +185,32 @@ def effective_price_basis_year(
 
 @dataclass
 class EvaluationInputs:
-    """Everything the pure evaluator needs about one simulated variant.
+    """Everything the pure evaluator needs about one simulated variant, serialized to `economic_inputs.json` (§4.6).
 
-    Serialized to `economic_inputs.json` for post-hoc re-pricing (§4.6).
+    Plain data only, with no component objects or prices, so an archived run can be re-priced under new assumptions
+    without re-running the simulation. `bridge.py` fills it from a finished simulation and the setup's
+    `EconomicContext`; `serialization.py` round-trips it. It is written before the resolution check, so it stays
+    complete even when nothing in it can be priced.
 
-    This is the seam-1 contract of cost-spec-v2 §2.1: plain data only — no component objects, no
-    callables, nothing that needs a running HiSim to interpret — so the boundary between "wrong
-    physical quantities went in" and "they were priced wrong" is a file, not a matter of reading
-    code. `bridge.py` fills the record from a finished simulation (merged with the
-    setup-declared `EconomicContext`), `serialization.py` round-trips it, and `EconomicEvaluator`
-    is a pure function of it plus the cost database, the subsidy catalog, the economic parameters
-    and one `Perspective`. Because none of the prices live here, re-pricing an archived run under
-    new assumptions never re-runs the building simulation (§4.6).
-
-    Faithfulness is the property the file is written for: it is emitted *before* the resolution
-    check runs, so it stays a complete extract even when nothing in it can be priced
-    (cost-spec-v2 W1.1, decision D7).
-
-    The fields worth a word: `cost_facts` lists every priced subject, including ones that are not
-    simulation components (envelope measures, README §3.2b); `billing` carries one record per
-    meter, i.e. per carrier flow that crossed the system boundary (§3.4); `existing_assets` being
-    None means greenfield, and its presence is what activates the brownfield/status-quo
-    perspectives (§4.1); `subsidy_context` holds the applicant/building answers the §5.3
-    eligibility conditions resolve against, where an unanswered field stays *undetermined* rather
-    than false (§5.7). All energy quantities are the ones actually simulated — annualization to a
-    full year happens in the engine via `simulated_period_fraction`, never here.
-
-    `unresolved_subjects` is the one field that records a *failure* of the extraction rather than
-    a fact about the system. Faithfulness cuts both ways: a component the extraction could not
-    describe belongs in the file just as much as one it could, so that the reason survives into
-    the archived record instead of living only in a log line (issue #2, decision D7).
+    `cost_facts` lists every priced subject, including non-components such as envelope measures; `billing` has one
+    record per meter, i.e. per carrier flow across the system boundary (§3.4); `existing_assets` None means greenfield,
+    and its presence enables the brownfield and status-quo perspectives (§4.1); `subsidy_context` holds the applicant
+    and building answers the eligibility conditions read, where an unanswered field stays undetermined (§5.7);
+    `unresolved_subjects` lists components the extraction could not describe. Energy quantities are as simulated; the
+    engine annualizes them with `simulated_period_fraction`.
     """
 
     simulation_year: int
     simulated_period_fraction: float  # simulated seconds / seconds of a full year
     cost_facts: List[SubjectCostFacts] = field(default_factory=list)
     billing: List[BillingDeterminants] = field(default_factory=list)
-    # Subjects the extraction recognized but could not describe (issue #2); they block the D7
-    # resolution check exactly like a subject the cost database cannot price.
+    # Subjects the extraction recognized but could not describe; they block the resolution
+    # check exactly like a subject the cost database cannot price.
     unresolved_subjects: List[UnresolvedSubject] = field(default_factory=list)
-    #: Subject -> energy-balance role (`EnergyFlowRole.value`) -> energy of the *simulated
-    #: period* in kWh, as positive magnitudes (the role says which way it flows). Additive and
-    #: optional: the extraction fills it from the component output columns the adapter's
-    #: `DeviceEnergySpecs` table names (`bridge._device_energy_flows`), and nothing prices it —
-    #: the engine only annualizes it onto the result, where the household energy balance reads it
-    #: and skips itself when it carries no device flows. A file written before the field existed
-    #: loads with an empty map.
+    #: Subject -> energy-balance role (`EnergyFlowRole.value`) -> energy of the simulated period
+    #: in kWh, as positive magnitudes (the role says the direction). Filled from the columns the
+    #: adapter's `DeviceEnergySpecs` names; never priced, only annualized onto the result for the
+    #: household energy balance. Older files load with an empty map.
     energy_attribution_by_subject_in_kwh: Dict[str, Dict[str, float]] = field(default_factory=dict)
     existing_assets: Optional[ExistingAssetRegister] = None
     subsidy_context: SubsidyContext = field(default_factory=SubsidyContext)
@@ -290,34 +231,19 @@ class EvaluationInputs:
     heated_floor_area_in_m2: Optional[float] = None
     living_area_in_m2: Optional[float] = None
     current_cold_rent_in_euro_per_m2_month: Optional[float] = None
-    #: Subject -> the KPI source (``roadmap/kpi_address_spec.md``) of every component the run
-    #: simulated, keyed by its component name, which is the subject its cost facts carry. It is
-    #: what tells a cost subject that is a HiSim component (a ``by_subject`` row's ``source``)
-    #: from one that is not (an envelope measure, a carrier, a synthetic subject), which nothing
-    #: else in this record says.
-    #:
-    #: ``{}`` and ``None`` say different things. ``{}`` is a known fact: these inputs were built in
-    #: code with no simulated component behind them (a test, a synthetic stage, a re-pricing that
-    #: assembles subjects itself), so every subject truly is a non-component and a ``by_subject``
-    #: row's ``source`` is rightly ``null``. ``None`` is an unknown: the inputs were read from an
-    #: ``economic_inputs.json`` written before the field existed, so whether a subject was a
-    #: component cannot be said, and a reader that needs the sources refuses it
-    #: (``StagedDocument``) rather than calling every subject a non-component. ``{}`` is the
-    #: default because a record constructed in code knows its own components -- the bridge fills
-    #: the map from the simulation, and code that names none has none -- while only the reader of
-    #: an old file can produce ``None``, which it sets explicitly.
+    #: Component name -> KPI source of every component the run simulated; tells a subject that is
+    #: a HiSim component from one that is not (envelope measure, carrier, synthetic subject).
+    #: ``{}`` means no simulated components (inputs built in code), so every subject is a
+    #: non-component. ``None`` means unknown: the inputs came from an older ``economic_inputs.json``
+    #: without the field, and a reader that needs the sources (``StagedDocument``) refuses it.
     component_sources: Optional[Dict[str, KpiSource]] = field(default_factory=dict)
 
     def annual_heat_demand(self) -> Optional[float]:
-        """The kWh a year the levelized cost of heat divides by, or None when nothing states it.
+        """Return the annual heat in kWh the levelized cost of heat divides by, or None when nothing states it.
 
-        A figure the setup declared wins: the author may know the demand better than the model,
-        and `EconomicContext` has always carried it. Otherwise the useful heat the simulation
-        measured is annualized with `simulated_period_fraction`, exactly as its energy bills are
-        (decision on hisim-4p86, 2026-09-23), through the same `annualize_optional` the integrated
-        bill figures use. The measured heat is rooms plus hot water because the costs above the
-        line pay for both. A non-positive fraction states nothing to annualize with; the energy
-        calculator refuses such a record before any figure divides by this one.
+        A heat demand declared in `EconomicContext` wins. Otherwise the useful heat the simulation measured (rooms plus
+        hot water) is annualized with `simulated_period_fraction`, like the energy bills, through `annualize_optional`.
+        A non-positive fraction yields None; the energy calculator refuses such a record anyway.
         """
         if self.annual_heat_demand_in_kwh is not None:
             return self.annual_heat_demand_in_kwh
@@ -326,13 +252,11 @@ class EvaluationInputs:
         return annualize_optional(self.useful_heat_of_simulated_period_in_kwh, self.simulated_period_fraction)
 
     def heat_cost_omits_hot_water(self) -> bool:
-        """True when the heat-cost figure divides by the rooms' measured heat and no hot water.
+        """Return True when the heat-cost figure divides by the rooms' measured heat and no hot water.
 
-        That is a run with a building and no hot-water source `adapter.UsefulHeatSources` lists,
-        pricing by the heat it measured rather than by a declared demand. The costs above the line
-        still pay for heating the water, so the figure reads too high by the hot water's share.
-        The bridge logs it and the plausibility panel carries it into the report; hisim-4wlu
-        surveys the hot-water components the table does not list yet.
+        That is a run with a building, no hot-water source listed in `adapter.UsefulHeatSources`, and no declared
+        demand. The costs still pay for heating the water, so the heat cost reads too high by the hot water's share;
+        the bridge logs it and the plausibility panel reports it.
         """
         by_kind = self.useful_heat_of_simulated_period_by_kind_in_kwh
         return (
@@ -347,9 +271,8 @@ class EvaluationInputs:
 class ResolutionProblem:
     """One problem found by `EconomicEvaluator.resolve_check` (§9.3).
 
-    Structured so consumers can decide per subject instead of matching message substrings
-    (cost-spec-v2 §2.1, W1.1). `subject` is the cost-facts subject the problem belongs to and
-    None for problems that are not subject-scoped (e.g. a missing carrier price entry).
+    `subject` is the cost-facts subject the problem belongs to, or None for problems that are not per subject (e.g. a
+    missing carrier price), so consumers can act per subject without matching message text.
     """
 
     message: str
@@ -359,22 +282,19 @@ class ResolutionProblem:
     blocks_evaluation: bool = True
 
     def __str__(self) -> str:
-        """The message, so log formatting stays as readable as with plain strings."""
+        """Return the message, so log formatting reads as with plain strings."""
         return self.message
 
 
 class UnresolvableSubjectsError(CostDataError):
-    """Something in the extract cannot be priced, so nothing is priced (cost-spec-v2 §8, D7).
+    """Raised when part of the extract cannot be priced; no partial cost results are produced (§8).
 
-    Owner decision D7 overrides the earlier drop-and-continue: an unresolvable cost subject is a
-    hard error in the postprocessing bridge and in the CLI alike — there are no partial cost
-    results. The check runs *after* `economic_inputs.json` has been written, so the faithful
-    extract (§2.1, W1.1) is unaffected and can be inspected or re-priced against a fixed
-    database. `problems` carries the structured `ResolutionProblem`s for programmatic consumers.
+    Raised in the postprocessing bridge and in the CLI alike, after `economic_inputs.json` is written, so the extract
+    can still be inspected or re-priced against a fixed database. `problems` holds the structured `ResolutionProblem`s.
     """
 
     def __init__(self, problems: Sequence[ResolutionProblem]) -> None:
-        """Renders one bullet per blocked subject; unscoped blockers are labelled by kind."""
+        """Render one bullet per blocked subject; blockers without a subject are labelled by kind."""
         self.problems: Tuple[ResolutionProblem, ...] = tuple(problems)
         bullets = "\n".join(
             f"  - {problem.subject if problem.subject is not None else '<' + (problem.kind or 'unscoped') + '>'}"
@@ -390,27 +310,20 @@ class UnresolvableSubjectsError(CostDataError):
 
 
 def require_resolvable_subjects(inputs: EvaluationInputs, evaluator: "EconomicEvaluator") -> None:
-    """Fails fast when the cost database cannot price part of the extract (D7).
+    """Raise if the cost database cannot price part of the extract; return silently otherwise.
 
-    The downstream half of the extraction seam (cost-spec-v2 §2.1, W1.1): `economic_inputs.json`
-    records the *full* simulation extract and is written first, so the file never depends on
-    cost-database state; every consumer of that file then runs this check before evaluating and
-    refuses to produce a result at all if any declared fact is unresolvable. Non-blocking
-    problems (e.g. an override without `override_source`) keep their warning behavior. Blockers
-    without a subject — a missing energy price entry for a billed carrier — are included: they
-    already aborted the evaluation deep inside the database lookup, here they abort it early and
-    with the same typed error. The inputs are never modified.
+    Every consumer of `economic_inputs.json` runs this before evaluating. Non-blocking problems (e.g. an override
+    without `override_source`) only warn. Blockers without a subject, such as a missing energy price for a billed
+    carrier, are included. The inputs are not modified.
 
     Args:
         inputs: The simulation extract to check.
-        evaluator: The evaluator whose cost database, country and price basis year decide what
-            "resolvable" means here; only `resolve_check` is called on it.
+        evaluator: Its cost database, country and price basis year decide what is resolvable; only `resolve_check` is
+            called.
 
     Raises:
-        UnresolvableSubjectsError: as soon as any blocking problem exists — one bullet per
-            blocked subject (the first reason found for it) plus every unscoped blocker. It is a
-            `CostDataError`, which the CLI turns into exit code 2 and the postprocessing bridge
-            lets propagate into its existing guard, so legacy outputs are unaffected.
+        UnresolvableSubjectsError: If any blocking problem exists; it lists the first reason per blocked subject plus
+            every blocker without a subject. The CLI turns it into exit code 2.
     """
     problems = evaluator.resolve_check(inputs, strict=False)
     for problem in problems:
@@ -431,18 +344,14 @@ def require_resolvable_subjects(inputs: EvaluationInputs, evaluator: "EconomicEv
 
 @dataclass
 class ModernizationLevyBasis:
-    """The parts the §6.4 modernization levy is computed from, as the timeline build saw them.
+    """The parts the §6.4 modernization levy is computed from, as nominal, undiscounted euro bands.
 
-    Units (W3.4, decided 2026-08-12): all three are **nominal, undiscounted euro bands**.
-    `subsidies` is the nominal sum of *every* SUBSIDY entry on the finished timeline — §559 BGB
-    deducts the support actually received — so it is complete by construction and recoverable
-    from the timeline (§5.1).
-
-    `by_subject` is the same money attributed to the measure that produced it, which §559e made
-    necessary: the heating measures of a package are levied at a different rate and under a
-    different cap than its envelope measures (§6.4, D27). It always covers the aggregates exactly
-    — support that belongs to no single measure (the financing repayment grant) is carried by a
-    record whose asset class is `None` — and `AllocationContext` re-checks that when it is built.
+    The modernization levy is the share of a landlord's modernization cost that may be passed on to the tenant as a
+    rent increase (§559 BGB). `subsidies` is the sum of every SUBSIDY entry on the finished timeline, since §559
+    deducts the support actually received. `by_subject` attributes the same money to the measure that produced it,
+    because §559e levies heating measures at a different rate and cap than envelope measures; support belonging to no
+    single measure (the financing repayment grant) has a record with asset class None, so `by_subject` always adds up
+    to the aggregates, which `AllocationContext` checks.
     """
 
     modernization_cost: UncertainValue
@@ -457,27 +366,20 @@ def _levy_basis_by_subject(
     modernization_cost: Dict[str, UncertainValue],
     avoided_maintenance: Dict[str, UncertainValue],
 ) -> List[ModernizationLevySubjectBasis]:
-    """Attributes the §6.4 levy basis to the measures that produced it (D27).
+    """Split the §6.4 levy basis into one record per measure.
 
-    The §559/§559e split needs the basis per measure, and two of its three parts are already
-    per-measure when the build loop ends; the third — support received — is read off the finished
-    timeline for the same reason the aggregate is (W3.4): only there is it complete, financing
-    repayment grant included. SUBSIDY entries are grouped by their `subject`, so an award keeps
-    the measure it was granted for.
-
-    Support whose subject is not a costed measure (the financing grant's synthetic subject) is
-    kept as its own record with no asset class rather than dropped, which is what makes this
-    breakdown add up to the aggregate figure exactly — the property `AllocationContext` checks.
+    Modernization cost and the anyway credit are already per measure; support received is read from the finished
+    timeline's SUBSIDY entries, grouped by subject, so it includes the financing repayment grant. Support whose subject
+    is not a costed measure gets its own record with asset class None, so the records add up to the aggregate exactly.
 
     Args:
         timeline: The finished, pre-allocation timeline; read only.
         asset_classes: `ComponentType` name per costed subject.
         modernization_cost: Allocatable modernization cost per costed subject.
-        avoided_maintenance: Anyway-cost credit per costed subject.
+        avoided_maintenance: Anyway credit per costed subject (the avoided cost of a replacement that was due anyway).
 
     Returns:
-        One record per costed subject in costing order, followed by one record per unattributed
-        support subject in timeline order.
+        One record per costed subject in costing order, then one per unattributed support subject in timeline order.
     """
     signed_subsidies: Dict[str, UncertainValue] = {}
     for entry in timeline.entries:
@@ -505,12 +407,10 @@ def _levy_basis_by_subject(
 
 @dataclass
 class TimelineBuildResult:
-    """What one timeline build produces: the timeline and the four outputs that bypass it.
+    """What one timeline build produces: the timeline plus four outputs that are not cash flows.
 
-    The timeline alone is not a sufficient contract between the calculators and the
-    orchestrator (cost-spec-v2 §2.3): the subsidy `decisions` record, the parallel CO2 mass
-    accounting, the written-off `sunk_cost` and the modernization-levy `basis` legitimately do
-    not appear as cash flows. Internal API — `evaluate` is the only consumer.
+    The four are the subsidy `decisions`, the CO2 mass accounting, the written-off `sunk_cost` and the
+    modernization-levy `basis`. Internal; `evaluate` is the only consumer.
     """
 
     timeline: CashFlowTimeline
@@ -540,58 +440,42 @@ class TimelineBuildResult:
 
 @dataclass
 class YearZeroPriceLevel:
-    """Carries one timeline from the price basis year's money into the money of its year 0 (#62).
+    """Moves one timeline from the price basis year's money into the money of its year 0.
 
-    Prices are read at the price basis year. When a staged plan's year 0 is a different calendar
-    year (``plan_start_year``, cmf 2026-09-27), every amount is escalated by the
-    ``years = year 0 - price basis year`` years in between, each with the rate it already
-    escalates with in later years, so year 0 is in the money of the year every date is counted
-    from. It is one shift of the escalation exponent, ``(1 + r)**(n + years)`` for every flow whose
-    year-``n`` amount is ``(1 + r)**n`` times a basis-year price, applied here as the factor
-    ``(1 + r)**years`` on the finished amounts instead of at the dozen sites that compute them:
+    Prices are read at the price basis year. When a staged plan's year 0 (`plan_start_year`) is another calendar year,
+    every amount is multiplied by `(1 + r)**years`, with `years = year 0 - price basis year` and `r` the rate that
+    amount escalates with in later years:
 
-    * the year-0 purchase (investment, planning, removal), its replacements, its residual value
-      and a coupled-cost anyway credit: the subject's investment rate;
-    * a like-for-like anyway credit: the replaced asset's investment rate, which escalates it;
-    * maintenance, fixed operation and the standing charge: the general rate; the capacity charge:
-      the grid-fee rate; the working price: the carrier rate on the volume effect and the spread
-      rate on the flexibility correction, exactly as the energy calculator splits them; feed-in
-      revenue: the feed-in rate once its nominal-fixed duration is over, nothing before;
-    * the CO2 price: the path is read ``years`` later, since it is a calendar trajectory;
-    * the CO2 damage cost: nothing, it is a flat shadow price.
+    - year-0 purchase, its replacements, its residual value and a coupled-cost anyway credit: the subject's investment
+      rate;
+    - a like-for-like anyway credit: the replaced asset's investment rate;
+    - maintenance, fixed operation and the standing charge: the general rate; the capacity charge: the grid-fee rate;
+      the working price: the carrier rate on the volume and the spread rate on the flexibility correction; feed-in
+      revenue: the feed-in rate once its fixed-price period is over;
+    - the CO2 price: the price path is read `years` later; the CO2 damage cost: unchanged.
 
-    Exempt, as in the splice: a stated purchase price (a reader's quote, the subjects bought
-    within it and a quoted purchase with no cost facts), with the residual value and the
-    coupled-cost credit computed from it. Subsidies are not shifted here at all: the solver is
-    given the measure's cost already in year-0 money (:meth:`purchase`), so a share-of-cost grant
-    follows its escalated cost, while a fixed nominal amount (:attr:`FIXED_AMOUNT_BENEFITS`) stays
-    as stated and is clamped to the cost of the year it is paid in, not to the basis year's
-    (renovisorissues #65: EUR 8,000 clamped to a basis-year cost of 7,000 beside a year-0 cost of
-    7,140); an eligible-cost cap in euro is nominal too. The maxima come out of the same valuation.
-    ``years`` may be negative, a plan starting before the year
-    its prices are read at: the same law de-escalates. ``years == 0`` -- no plan start year, or
-    one equal to the price basis year -- touches nothing, so such a timeline is bit-identical to
-    one built without this class. The loan is taken out afterwards on the shifted year-0 net
-    investment, and the levy basis is shifted with the flows it sums.
+    Not shifted: a stated purchase price (a reader's quote) and the residual value and credit computed from it.
+    Subsidies are not shifted here; the solver already gets the cost in year-0 money (`purchase`), so a share-of-cost
+    grant follows it and a fixed amount is clamped to the year-0 cost. `years` may be negative (de-escalation); `years
+    == 0` changes nothing. The loan is computed afterwards on the shifted net investment.
 
     Attributes:
-        years: The shift, ``year 0 - price basis year``; 0 leaves every amount as it is.
+        years: The shift, `year 0 - price basis year`; 0 leaves every amount as it is.
         parameters: The general, grid-fee, spread and feed-in rates.
         database: For the carrier rates, resolved by the energy calculator's own chain.
         price_basis_year: Where the CO2 price path is read for year 1.
-        subject_rates: Subject -> its investment escalation rate, filled per costed subject.
+        subject_rates: Subject -> its investment escalation rate.
         credit_factors: Subject -> the factor its anyway credit (and the credit's basis) is shifted by.
         stated: Subjects whose year-0 purchase is a stated price, never shifted.
         stated_residuals: Subjects whose residual value is written down from that stated price.
         carriers: Carrier subject -> (carrier rate, spread rate, flexibility value in euro).
-        feed_in: Revenue subject -> (feed-in rate, nominal-fixed duration in years).
+        feed_in: Revenue subject -> (feed-in rate, fixed-price duration in years).
     """
 
     #: Benefit kinds that pay a fixed nominal amount (in total, per unit of size, or per kWh): a
-    #: grant of EUR 6,500 is EUR 6,500 in whichever year it is paid (owner decision 2026-09-27).
-    #: The other kinds are a share of a cost and follow it. Nothing branches on the list: the
-    #: rule follows from valuing every subsidy on the cost in the money of the year it is booked
-    #: (:meth:`purchase`, and a staged plan's ``booked_price_levels``).
+    #: grant of EUR 6,500 is EUR 6,500 in whichever year it is paid. The other kinds are a share
+    #: of a cost and follow it. Nothing branches on the list: the rule follows from valuing every
+    #: subsidy on the cost in the money of the year it is booked.
     FIXED_AMOUNT_BENEFITS: ClassVar[FrozenSet[BenefitKind]] = frozenset(
         {BenefitKind.LUMP_SUM, BenefitKind.PER_UNIT, BenefitKind.TIERED_PER_UNIT, BenefitKind.OPERATIONAL}
     )
@@ -681,12 +565,11 @@ class YearZeroPriceLevel:
         return shifted
 
     def entry(self, entry: CashFlowEntry) -> CashFlowEntry:
-        """One entry in year-0 money, by the rate its category escalates with (class docstring).
+        """Return one entry in year-0 money, scaled by the rate its category escalates with (see the class).
 
         Raises:
-            ValueError: For a category this shift does not know: the loan, the levy and the
-                replacement reserve are built after it, from shifted figures, so meeting one here
-                is a defect.
+            ValueError: For a category the shift does not handle (loan, levy, replacement reserve); those are built
+                after the shift, so meeting one here is a defect.
         """
         category, subject, params = entry.category, entry.subject, self.parameters
         if category in (CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REMOVAL):
@@ -719,10 +602,10 @@ class YearZeroPriceLevel:
         return replace(entry, amount_in_euro=entry.amount_in_euro.scale(factor))
 
     def _working(self, entry: CashFlowEntry) -> CashFlowEntry:
-        """The working-price entry: the volume effect at the carrier rate, the correction at the spread rate.
+        """Shift the working-price entry: the volume part at the carrier rate, the correction at the spread rate.
 
-        The calculator books ``V (1+c)**(t-1) - F (1+s)**(t-1)``; shifted, that is
-        ``(1+c)**d`` times the entry plus ``F (1+s)**(t-1) ((1+c)**d - (1+s)**d)``.
+        The calculator books `V (1+c)**(t-1) - F (1+s)**(t-1)`; shifted by `d` years, that is `(1+c)**d` times the
+        entry plus `F (1+s)**(t-1) ((1+c)**d - (1+s)**d)`.
         """
         rate, spread, flexibility = self.carriers[entry.subject]
         amount = entry.amount_in_euro.scale(self.factor(rate))
@@ -741,14 +624,10 @@ class YearZeroPriceLevel:
 
 
 def _levy_summary(outcome: Optional[ModernizationLevyOutcome]) -> Optional[ModernizationLevySummary]:
-    """The result-side record of a ruleset's levy outcome, or None when there is no levy.
+    """Return the result-side summary of a ruleset's levy outcome, or None when there is no levy.
 
-    The ruleset's outcome is an engine object carrying the uncapped legs and the resolved caps;
-    what the result has to carry is the smaller, serializable statement a reader needs beside the
-    levy amount — the two legs, whether a ceiling decided the figure and which mechanism decided
-    it in each world. Converting here rather than at the call site keeps `evaluate` a sequence of
-    named steps, and gives the "no levy at all" case one spelling: an owner-occupier ruleset that
-    knows no levy and a levied ruleset whose levy came out at zero both yield None.
+    Keeps what a reader needs beside the levy amount: the two legs, whether a ceiling decided the figure and which
+    mechanism decided it in each band slot. A ruleset without a levy and a levy of zero both yield None.
 
     Args:
         outcome: What `AllocationRuleset.modernization_levy_outcome` returned.
@@ -771,39 +650,18 @@ def _levy_summary(outcome: Optional[ModernizationLevyOutcome]) -> Optional[Moder
 
 
 class EconomicEvaluator:
-    """Builds the canonical timeline and evaluates perspectives against it.
+    """Builds the canonical cash flow timeline and evaluates perspectives against it; the core of the cost engine.
 
-    The core of the lifecycle cost engine, and the class to read first. It is a **pure function
-    of its inputs**: given an `EvaluationInputs` extract, a `CostDatabase`, an optional
-    `SubsidyCatalog`, `EconomicParameters` and one `Perspective` it yields a
-    `LifecycleCostResult` — no simulation object is consulted, no file is read or written inside
-    the calculation, no configuration is mutated. That purity is not an aesthetic preference: it
-    is what lets an evaluation be reproduced from `economic_inputs.json` alone (cost-spec-v2
-    seam 1, §2.1), what makes a 10,000-cell scenario sweep affordable (§4.6), and what allows a
-    reviewer to check the economics without ever running HiSim.
+    A pure function: from an `EvaluationInputs` extract, a `CostDatabase`, an optional `SubsidyCatalog`,
+    `EconomicParameters` and one `Perspective` (a named combination of installation context, actor scope, subsidy mode,
+    financing and accounting, §4) it yields a `LifecycleCostResult`, reading no simulation object and no file. So an
+    evaluation can be reproduced from `economic_inputs.json` alone, and scenario sweeps stay cheap.
 
-    One evaluation has two stages. `build_timeline` composes the calculators of
-    `hisim/economics/calculators/` into a single canonical `CashFlowTimeline` — investment,
-    replacements and residual value, the replaced asset's sunk cost and anyway-cost credit,
-    maintenance and fixed operation, subsidies, energy bills, the operating view's replacement
-    reserve, macroeconomic CO2 damage, and financing — in an order that is load-bearing and
-    documented at that method. `evaluate` then has the §6 allocation ruleset stamp a payer on
-    every entry and hands the finished timeline to `calculators/aggregation.py`, which discounts
-    and pivots it into every published figure. Nothing downstream of the timeline invents a cash
-    flow, so totals, category pivots, per-component breakdowns and the liquidity series reconcile
-    by construction rather than by agreement between separate code paths (§3.1 principle 3).
-
-    The three uncertainty slots of §3.9 are not three passes. Every amount on the timeline is an
-    `UncertainValue` (LOW / BEST_ESTIMATE / HIGH), all arithmetic is slot-wise, and one build therefore
-    yields the optimistic, the expected and the pessimistic world at once, at negligible extra
-    cost. What the engine *chooses* rather than computes — the subsidy cumulation combination
-    (§5.4), the tariff counterfactual (§8.5) — is decided once on the BEST_ESTIMATE slot and then
-    valued in all three, so the published band always describes one consistent physical and
-    contractual plan.
-
-    Callers: `bridge.py` (postprocessing), `scenarios.py` (the evaluation cube) and the
-    `python -m hisim.economics` CLI; `evaluate_matrix` runs a whole perspective bundle (§4)
-    against the same extract.
+    `build_timeline` composes the calculators into one timeline; `evaluate` lets the §6 allocation ruleset assign a
+    payer to every entry and aggregates the timeline into every published figure, so totals and pivots reconcile by
+    construction (§3.1). Every amount is an `UncertainValue` band with LOW, BEST_ESTIMATE and HIGH slots (§3.9),
+    computed slot-wise in one pass; choices such as the subsidy combination (§5.4) are made on BEST_ESTIMATE and valued
+    in all three slots. Callers: `bridge.py`, `scenarios.py` and the `python -m hisim.economics` CLI.
     """
 
     def __init__(
@@ -814,30 +672,21 @@ class EconomicEvaluator:
         plan_year_zero: Optional[int] = None,
         book_anyway_credit: bool = True,
     ) -> None:
-        """The catalog is optional: without one no subsidy is booked (the §10.1 flat shim is retired).
+        """Hold the database, parameters and optional subsidy catalog; without a catalog no subsidy is booked.
 
-        All arguments are held as given and never modified, so an evaluator is a cheap,
-        reusable handle over one dataset and one parameter set. `scenarios.evaluate_cube` relies
-        on that and constructs a fresh evaluator per scenario cell, over the overlaid copy of the
-        database that the scenario asked for (§4.6).
+        The arguments are never modified, so an evaluator is a cheap reusable handle; `scenarios.evaluate_cube` builds
+        one per scenario cell.
 
-        `plan_year_zero` is the calendar year of year 0 of the timeline, the year every kept or
-        replaced register asset is aged at. Only the staged evaluator states it, resolved once
-        (:meth:`hisim.economics.staged.StagedEvaluator.plan_year_zero`: its `plan_start_year`,
-        else its price basis year; hisim-dutz, hisim-nl6j). It is also the year whose money the
-        timeline is in: every amount is escalated from the price basis year to it
-        (`YearZeroPriceLevel`, renovisorissues #62). `None`, every other path, ages and prices at
-        the price basis year exactly as before.
-
-        `book_anyway_credit` decides whether the anyway-cost credit of a replaced asset (§4.1) is
-        booked as an ``ANYWAY_COST_CREDIT`` flow of the evaluation. It is on for a standalone
-        evaluation, whose only counterfactual is that credit. The staged evaluator turns it off
-        (owner decision 2026-09-27, full-cost method, hisim-ryw1): its plan is compared against a
-        reference that pays every end-of-life renewal itself, so the avoided renewal is already
-        in the comparison, and crediting it on the plan too counted it twice. Off, the credit is
-        still computed and still enters the modernisation-levy basis
-        (`ModernizationLevyBasis.avoided_maintenance` and its per-subject split), where the
-        avoided maintenance share is a legal deduction and not a flow of the plan.
+        Args:
+            cost_database: Device, energy price and default-rate data.
+            parameters: The economic assumptions.
+            subsidy_catalog: The subsidy schemes, or None for no subsidies.
+            plan_year_zero: The calendar year of the timeline's year 0, at which register assets are aged and whose
+                money the timeline is in (`YearZeroPriceLevel`). Only the staged evaluator sets it; None ages and
+                prices at the price basis year.
+            book_anyway_credit: Whether the anyway credit of a replaced asset (§4.1; the avoided cost of a replacement
+                that was due anyway) is booked as an `ANYWAY_COST_CREDIT` flow. The staged evaluator turns it off
+                because its reference already pays every renewal; the credit still enters the modernization-levy basis.
         """
         self.database = cost_database
         self.book_anyway_credit = book_anyway_credit
@@ -848,52 +697,42 @@ class EconomicEvaluator:
     # ------------------------------------------------------------------ rate resolution
 
     def carrier_escalation_rate(self, carrier: EnergyCarrier) -> float:
-        """Fallback chain: explicit parameter -> country defaults file -> general rate (§3.2).
+        """Return a carrier's nominal annual price escalation rate (§3.2).
 
-        Thin delegation to `calculators/escalation.py`, which owns both fallback chains since
-        W3.1; it stays a method because the chain needs the evaluator's parameters *and* its
-        database. The returned nominal annual rate is what the energy calculator escalates a
-        carrier's year-1 bill with over the horizon (§3.6 rule 5).
+        Fallback chain: explicit parameter, then the country defaults file, then the general rate; delegated to
+        `calculators/escalation.py`. The energy calculator escalates a carrier's year-1 bill with it (§3.6 rule 5).
         """
         return resolve_carrier_escalation_rate(carrier, self.parameters, self.database).rate
 
     def investment_escalation_rate(self, asset_class: ComponentType) -> float:
-        """Fallback chain for per-asset-class investment escalation (learning curves, §3.2).
+        """Return an asset class's annual investment price escalation rate (§3.2).
 
-        Same delegation as `carrier_escalation_rate`, for the rate at which the *purchase price*
-        of an asset class moves; it may legitimately be negative (PV and batteries get cheaper).
-        `build_timeline` resolves it once per subject and passes it to the investment calculator,
-        which uses it for replacements and for the residual value (§3.6 rules 2-3).
+        Same fallback chain as `carrier_escalation_rate`. May be negative (PV and batteries get cheaper). Used for
+        replacements and the residual value (§3.6 rules 2-3).
         """
         return resolve_investment_escalation_rate(asset_class, self.parameters, self.database).rate
 
     def price_basis_year(self, inputs: EvaluationInputs) -> int:
-        """Price basis year for database lookups (see `effective_price_basis_year`).
+        """Return the price basis year for database lookups (see `effective_price_basis_year`).
 
-        The economic "today": every device entry, energy price entry and asset age in this
-        evaluation is resolved against this year, which need not be the simulated weather year.
-        It is resolved once at the top of `build_timeline` and threaded into every calculator, so
-        a single evaluation can never mix price levels.
+        Every device entry, energy price and asset age in one evaluation is resolved against this year, which need not
+        be the simulated weather year.
         """
         return effective_price_basis_year(self.parameters, self.database, inputs.simulation_year)
 
     def _year_zero(self, price_basis_year: int) -> int:
-        """The calendar year of the timeline's year 0, given the resolved price basis year.
+        """Return the calendar year of the timeline's year 0.
 
-        The year every register asset is aged at and whose money the timeline is in: the
-        staged plan's year 0 when the evaluator was given one, else the price basis year. The
-        years every amount is escalated by, ``year 0 - price basis year`` (#62), are therefore 0
-        on every path but a staged plan starting in another year than its prices are read at,
-        and negative for one starting before it, which de-escalates by the same law
-        (:class:`YearZeroPriceLevel`).
+        That is the staged plan's year 0 if the evaluator was given one, else the price basis year. Register assets are
+        aged at this year and the timeline is in its money; `year 0 - price basis year` is the shift
+        `YearZeroPriceLevel` applies.
         """
         return price_basis_year if self._plan_year_zero is None else self._plan_year_zero
 
     def effective_parameters(self, inputs: EvaluationInputs) -> EconomicParameters:
-        """The parameters as actually used, with the resolved price basis year filled in.
+        """Return the parameters as used, with the resolved price basis year filled in.
 
-        Reports and audits read the basis year off the result, so the resolved value is recorded
-        there instead of being back-written into the caller's parameters (W1.2).
+        Reports read the basis year off the result, so the caller's parameters are not modified.
         """
         if self.parameters.price_basis_year is not None:
             return self.parameters
@@ -902,35 +741,21 @@ class EconomicEvaluator:
     # ------------------------------------------------------------------ pre-run resolution check (§9.3)
 
     def resolve_check(self, inputs: EvaluationInputs, strict: bool = True) -> List[ResolutionProblem]:
-        """Dry-resolves every declared fact against the database; returns structured problems.
+        """Dry-resolve every declared fact against the database and return the problems found (§3.10, §9.3).
 
-        Runs before the timestep loop so a missing database entry fails in seconds. The same
-        pass populates the provenance ledger during evaluation (§3.10, §9.3). Problems carry the
-        cost-facts subject they belong to (None for carrier-level problems) so consumers can act
-        on them by exact subject instead of matching message substrings (W1.1).
-
-        Four things are checked, and they are of two different severities. A subject the
-        *extraction* already gave up on (`inputs.unresolved_subjects`, issue #2) is reported first
-        and verbatim, since no database lookup can rescue a component whose facts were never
-        established. A missing device entry and a `size_unit` that disagrees with the entry's
-        `per_unit` mean the subject cannot be priced at all; a missing energy price entry means a
-        billed carrier cannot be priced; all of these set `blocks_evaluation` (decision D7 turns
-        them into a hard error via `require_resolvable_subjects`). Cost overrides without an
-        `override_source` are a
-        documentation defect under §3.10 — the facts still price — and are reported
-        non-blocking. Facts that override *both* investment cost and lifetime need no database
-        entry at all and skip the two device checks (they are still checked for `override_source`).
+        Blocking problems (`blocks_evaluation`): subjects the extraction already gave up on
+        (`inputs.unresolved_subjects`, reported first and verbatim), a missing device entry, a `size_unit` that
+        disagrees with the entry's `per_unit`, and a missing energy price for a billed carrier. Non-blocking: a cost
+        override without `override_source`. Facts that override both investment cost and lifetime skip the device
+        checks.
 
         Args:
-            inputs: The extract to dry-resolve; never modified.
-            strict: In strict mode the §3.10 override-without-source defect is *returned* as a
-                non-blocking problem, otherwise it is only logged as a warning. It does not
-                affect any of the blocking checks.
+            inputs: The extract to check; never modified.
+            strict: If True, the override-without-source problem is returned (non-blocking); if False, it is only
+                logged.
 
         Returns:
-            All problems found, in subject order then carrier order; empty when everything
-            resolves. Callers decide what to do with them — `require_resolvable_subjects` raises,
-            `validation`/`audit` report.
+            All problems in subject order, then carrier order; empty when everything resolves.
         """
         problems: List[ResolutionProblem] = []
         year = self.price_basis_year(inputs)
@@ -1004,87 +829,35 @@ class EconomicEvaluator:
         quoted_purchases: Sequence[QuotedPurchase] = (),
         booked_price_levels: Mapping[str, float] = MappingProxyType({}),
     ) -> TimelineBuildResult:
-        """Builds the canonical timeline for one perspective, plus its non-cash outputs.
+        """Build the canonical timeline for one perspective, plus its non-cash outputs.
 
-        Pure composition (cost-spec-v2 §2.3): every euro is produced by a calculator in
-        `hisim/economics/calculators/`, in the order they must run —
+        The calculators run in this order: per subject, context resolution -> investment schedule -> replaced-asset
+        outcome -> maintenance -> subsidies; then energy bills per carrier; the replacement reserve; the macroeconomic
+        CO2 damage; financing. Entry order is observable (float sums fold in insertion order), so the accumulators stay
+        here. The constraints:
 
-        1. per subject: context resolution -> investment schedule -> replaced-asset outcome
-           -> maintenance -> subsidies;
-        2. energy bills for every carrier;
-        3. the replacement reserve, which needs *all* subjects' replacement flows;
-        4. the macroeconomic CO2 damage, which needs the operational emissions of (2);
-        5. financing, which needs the year-0 entries of (1) and the awards of (1.5).
-
-        The accumulators below stay in the orchestrator because their fold order across
-        subjects is observable (float addition is not associative); calculators return ordered
-        addends rather than folding themselves.
-
-        **The ordering constraints, and why they bind** (each is verifiable in the body below):
-
-        * *Subsidies before financing.* `build_subsidy_flows` prices a scheme off the resolved
-          costing's gross investment (§5.2), and its year-0 entries must already sit on the
-          timeline when financing runs, because `compute_year0_net_investment` sums the year-0
-          INVESTMENT/PLANNING/REMOVAL **and SUBSIDY** entries — subsidy entries are negative — to
-          obtain the principal *net of upfront grants* (§4.4, `calculators/categories.py`).
-          Financing is therefore the last money-producing step of the build.
-        * *The anyway-cost credit is interleaved into the investment schedule.* The §4.1 credit is
-          emitted between the schedule's year-0 entries and its replacement/residual entries,
-          which is why `schedule.add_to(timeline)` is called after the §4.1 block instead of
-          right after `build_investment_schedule`. Entry order is observable — the timeline keeps
-          insertion order and every NPV, pivot and CSV row folds in it.
-        * *The replacement reserve needs every subject.* It levelizes all subjects' replacement
-          flows into one sinking fund (§4.2), so it can only run once the per-subject loop is
-          finished; the flows themselves are collected even under OPERATING_ONLY, where the
-          REPLACEMENT entries are suppressed.
-        * *CO2 damage after the energy bills.* `build_co2_damage_entries` prices the operational
-          emissions that `accumulate_operational_emissions` folded in from the energy result
-          (§4.5); running it earlier would price an empty mass accounting.
-        * *The levy basis is read off the finished timeline.* `nominal_support_from_entries` runs
-          after financing so a soft loan's repayment grant counts as support received (W3.4,
-          §6.4) — the figure is complete by construction instead of accumulated as entries are
-          emitted.
-
-        Which calculator produces what, and why each was extracted (cost-spec-v2 §2.3 — the
-        1,093-line evaluator was the concentration of review risk):
-        `calculators/context_resolution.py` decides *which* numbers a subject is priced from and
-        what the installation context does to it; `investment.py` owns the VDI 2067-1
-        replacement/residual convention; `maintenance.py` the recurring non-energy operating
-        cost; `subsidy_application.py` the award-to-cash-flow step (the eligibility and
-        cumulation logic stays in `subsidies.py`); `energy.py` the tariff application and the
-        per-component escalation of a year-1 bill; `reserve.py` the operating view's sinking
-        fund; `co2.py` the parallel mass accounting and the macroeconomic damage entries; and
-        `financing_application.py` the loan layout (the closed-form annuity mathematics stays in
-        `financing.py`). Each is separately reviewable against a hand-computed example, which the
-        inline version was not.
+        - Subsidies before financing: the loan principal is the year-0 investment net of upfront grants (§4.4).
+        - The anyway credit is emitted between the schedule's year-0 entries and its replacement and residual entries.
+        - The replacement reserve needs every subject's replacement flows (§4.2), so it runs after the subject loop.
+        - CO2 damage prices the operational emissions of the energy bills (§4.5), so it runs after them.
+        - The levy basis is read off the finished timeline, so a loan's repayment grant counts as support (§6.4).
 
         Args:
-            inputs: The variant's extract; read only, never modified.
-            perspective: Supplies the three switches this method acts on — the installation
-                context (`include_investment` under everything but OPERATING_ONLY), the
-                accounting mode (`macro`, which suppresses subsidies and adds CO2 damage, §4.5)
-                and the subsidy mode (§5.5) — plus the optional financing plan.
-            ledger: Provenance ledger; **mutated** — every database lookup made along the way
-                records itself here, which is what makes `LifecycleCostResult.explain` possible
-                (§3.10).
-            quoted_purchases: Purchases with no cost facts, priced whole by a stated amount
-                (:class:`~hisim.economics.facts.QuotedPurchase`): one year-0 INVESTMENT entry each,
-                in the levy basis, before financing; empty on every path but a staged plan with a
-                reader's quote for a measure HiSim holds no price for (renovisorissues #53).
-            booked_price_levels: Subject -> the price level, relative to year 0, at which the caller
-                books that subject's year-0 purchase: a staged plan books a later stage's purchase
-                in the stage's year, escalated to it (:meth:`hisim.economics.staged._StageCharges.stage_start_factor`).
-                The subject's subsidies are valued on the cost at that level, so a fixed amount is
-                clamped to the cost the plan books beside it and a share of the cost follows it,
-                and the levy basis states the subject's cost and anyway credit at the same level
-                (hisim-xnkp). The caller then books the subsidies as they are. A subject absent, or
-                at 1.0, is valued in year-0 money as before; empty on every path but a staged plan.
+            inputs: The variant's extract; never modified.
+            perspective: Supplies the installation context, the accounting mode (macroeconomic suppresses subsidies and
+                adds CO2 damage, §4.5), the subsidy mode (§5.5) and the optional financing plan.
+            ledger: Provenance ledger; mutated: every database lookup records itself here, which
+                `LifecycleCostResult.explain` reads (§3.10).
+            quoted_purchases: Purchases with no cost facts, priced by a stated amount (`facts.QuotedPurchase`): one
+                year-0 INVESTMENT entry each, included in the levy basis and before financing. Empty except for a
+                staged plan.
+            booked_price_levels: Subject -> the price level, relative to year 0, at which the caller books its year-0
+                purchase (a later stage's purchase is booked in the stage's year). Subsidies and the levy basis are
+                valued at that level. Missing or 1.0 means year-0 money. Empty except for a staged plan.
 
         Returns:
-            A `TimelineBuildResult`: the timeline in nominal, undiscounted euro bands (discounting
-            happens once, in `calculators/aggregation.py`), plus the four outputs that legitimately
-            are not cash flows — the subsidy decisions, the CO2 mass accounting, the written-off
-            sunk cost and the modernization-levy basis.
+            A `TimelineBuildResult`: the timeline in nominal, undiscounted euro bands, plus the subsidy decisions, the
+                CO2 mass accounting, the written-off sunk cost and the levy basis.
         """
         params = self.parameters
         price_basis_year = self.price_basis_year(inputs)
@@ -1099,7 +872,7 @@ class EconomicEvaluator:
         anyway_share_by_subject: Dict[str, float] = {}
         anyway_basis_by_subject: Dict[str, float] = {}
         anyway_basis_kind_by_subject: Dict[str, str] = {}
-        # Per-measure levy basis for the §559/§559e split (§6.4, D27): asset class, modernization
+        # Per-measure levy basis for the §559/§559e split (§6.4): asset class, modernization
         # cost and anyway credit per subject; the subsidy leg is read off the finished timeline.
         levy_asset_classes: Dict[str, str] = {}
         levy_cost_by_subject: Dict[str, UncertainValue] = {}
@@ -1111,8 +884,8 @@ class EconomicEvaluator:
         replacement_flows_for_reserve: List[Tuple[int, UncertainValue]] = []
         replacement_flows_by_subject: List[Tuple[str, int, UncertainValue]] = []
         subsidy_context = self._with_package(inputs, context)
-        # Year 0 in the money of its own calendar year (#62): every amount below is computed at the
-        # price basis year, and the side figures are shifted as they are summed; the entries are
+        # Year 0 in the money of its own calendar year: every amount below is computed at the
+        # price basis year, the side figures are shifted as they are summed, and the entries are
         # shifted once, after the energy bills. Zero years shifts nothing.
         level = YearZeroPriceLevel(
             years=ageing_reference_year - price_basis_year,
@@ -1143,7 +916,7 @@ class EconomicEvaluator:
             # --- year-0 investment, replacements and residual value (§3.6 rules 1-3)
             schedule = build_investment_schedule(costing, gross, asset_rate, horizon, include_investment)
             level.add_subject(costing, asset_rate, replaced=bool(schedule.reserve_flows))
-            # The price level the caller books this purchase at (a later stage's year, hisim-xnkp).
+            # The price level the caller books this purchase at (a later stage's year).
             booked = booked_price_levels.get(subject, 1.0)
             timeline.extend(schedule.year_zero_entries)
             for addend in schedule.modernization_cost_addends:
@@ -1156,15 +929,10 @@ class EconomicEvaluator:
             accumulate_embodied_co2(co2_result, subject, schedule.embodied_co2_addends)
             size = costing.facts.size * costing.facts.count
             if schedule.embodied_co2_addends and size:
-                # The factor and the size behind the mass just accumulated, so the CO2 section
-                # states `factor x size = kg` per installation rather than a bare total.
-                # `costing.embodied_co2_kg` is the mass of one installation with size and count
-                # already applied, so the factor is the per-unit figure it was built from — always
-                # that quotient, including for an entry that states an absolute mass with no
-                # `per_unit`. A size of zero is the one case with no such quotient, and a mass
-                # that is not a multiple of a size cannot be published as one, so no basis record
-                # is written; the section then prints the mass without the multiplication rather
-                # than a factor of zero that does not reproduce it.
+                # The factor and size behind the mass, so the CO2 section can state
+                # `factor x size = kg`. The factor is the quotient of the installation's mass and
+                # its size; for a size of zero there is none, so no basis record is written and the
+                # section prints the bare mass.
                 co2_result.embodied_basis_by_subject[subject] = EmbodiedCo2Basis(
                     factor_in_kg_per_unit=costing.embodied_co2_kg / size,
                     size=size,
@@ -1209,11 +977,8 @@ class EconomicEvaluator:
                         )
                     if self.book_anyway_credit:
                         anyway_share_by_subject[subject] = replaced_outcome.anyway_share
-                        # The cost the share was applied to, so the credit is a visible
-                        # multiplication rather than a figure with a percentage beside it — and
-                        # what that cost *is*, because the two branches (§4.1 like-for-like, Q7
-                        # coupled) credit different quantities and a caption that names only the
-                        # first describes the wrong one in half the runs.
+                        # The cost the share was applied to and what that cost is: the
+                        # like-for-like and the coupled-cost branch credit different quantities.
                         anyway_basis_by_subject[subject] = replaced_outcome.credit_basis_in_euro
                         anyway_basis_kind_by_subject[subject] = replaced_outcome.credit_basis_kind
                     # The levy basis keeps the credit whether or not the evaluation books it: the
@@ -1223,7 +988,7 @@ class EconomicEvaluator:
                         levy_credit = levy_credit.scale(booked)
                     anyway_credit_total = anyway_credit_total + levy_credit
                     levy_credit_by_subject[subject] = levy_credit_by_subject[subject] + levy_credit
-            # Replacements and the residual value are appended only now, so the §4.1 credit sits
+            # Replacements and the residual value are appended here, after the §4.1 credit, so it sits
             # between them and the year-0 entries; timeline insertion order is observable.
             schedule.add_to(timeline)
 
@@ -1258,7 +1023,7 @@ class EconomicEvaluator:
                     decisions.append(subsidy_result.decision)
                 timeline.extend(subsidy_result.entries)
 
-        # --- purchases priced whole by a stated amount, with no cost facts behind them (#53)
+        # --- purchases priced whole by a stated amount, with no cost facts behind them
         if include_investment:
             for purchase in quoted_purchases:
                 level.stated.add(purchase.subject)
@@ -1301,7 +1066,7 @@ class EconomicEvaluator:
         timeline.extend(energy_result.entries)
         accumulate_operational_emissions(energy_result, co2_result, horizon)
 
-        # --- year 0 in its own calendar year's money (#62): the one shift of every entry so far;
+        # --- year 0 in its own calendar year's money: the one shift of every entry so far;
         # the reserve, the CO2 damage and the loan below are built from shifted figures.
         level.add_energy(energy_result.tariffs_applied, energy_result.raw_flexibility_value_by_carrier)
         timeline = level.timeline(timeline)
@@ -1316,18 +1081,16 @@ class EconomicEvaluator:
         if macro:
             timeline.extend(build_co2_damage_entries(co2_result, params, horizon))
 
-        # --- financing (§4.4). W3.2: what financing depends on — the year-0 net investment
-        # already on the timeline and the LOAN_TERMS award the subsidy phase decided — is
-        # resolved here and passed in, instead of being re-derived inside the calculator.
+        # --- financing (§4.4): the year-0 net investment already on the timeline and the
+        # LOAN_TERMS award the subsidy phase decided are passed in.
         if perspective.financing is not None and include_investment:
             loan_plan = resolve_loan_plan(perspective.financing, decisions)
             year0_net = compute_year0_net_investment(timeline)
             timeline.extend(build_financing_flows(loan_plan, year0_net, params.observation_period_in_years))
 
         finalize_total_co2(co2_result)
-        # --- modernization-levy basis (§6.4). W3.4: the support figure is read off the finished
-        # timeline — after financing, so the repayment grant counts — instead of accumulated
-        # while entries are emitted. Nominal euros received, per the §6.4 decision.
+        # --- modernization-levy basis (§6.4): the support figure is read off the finished
+        # timeline after financing, so the repayment grant counts. Nominal euros received.
         return TimelineBuildResult(
             timeline=timeline,
             decisions=decisions,
@@ -1353,27 +1116,19 @@ class EconomicEvaluator:
 
     @staticmethod
     def _with_package(inputs: EvaluationInputs, context: InstallationContext) -> SubsidyContext:
-        """The subsidy context with ``package.*`` stating what this evaluation installs.
+        """Return the subsidy context with `package` listing what this evaluation installs.
 
-        One pass over the cost subjects with the §4.1 rule the pricing itself applies
-        (:func:`~hisim.economics.calculators.context_resolution.installation_verdict`), before
-        anything is priced, so a scheme conditioned on a co-installed measure -- SEAI's
-        central-heating grant beside a heat pump -- sees the whole evaluation whichever subject
-        it is assessed for. Neither the ledger nor the caller's inputs are touched.
-
-        A subject whose facts say it is not installed (size 0,
-        :meth:`~hisim.economics.facts.ComponentCostFacts.is_not_installed`) installs nothing and is
-        not listed: the bridge drops such facts before they reach an extract, but an extract built
-        another way can carry them, and a 0 kWp array must not satisfy a condition on a
-        co-installed array.
+        Uses the same §4.1 rule as the pricing (`context_resolution.installation_verdict`) before anything is priced,
+        so a scheme conditioned on a co-installed measure (e.g. SEAI's central-heating grant beside a heat pump) sees
+        the whole evaluation. Subjects whose facts say not installed (size 0) are left out.
 
         Args:
-            inputs: The variant's extract.
+            inputs: The variant's extract; not modified.
             context: The perspective's installation context.
 
         Returns:
-            A copy of ``inputs.subsidy_context`` whose ``package`` lists the ``ComponentType``
-            values of every new investment, sorted.
+            A copy of `inputs.subsidy_context` whose `package` lists the `ComponentType` values of every new
+                investment, sorted.
         """
         installed = sorted(
             {
@@ -1401,45 +1156,31 @@ class EconomicEvaluator:
         quoted_purchases: Sequence[QuotedPurchase] = (),
         booked_price_levels: Mapping[str, float] = MappingProxyType({}),
     ) -> LifecycleCostResult:
-        """Evaluates one perspective: timeline -> allocation -> discounting -> result.
+        """Evaluate one perspective: build the timeline, allocate payers, discount and aggregate into a result.
 
-        The engine's main entry point and the second half of an evaluation: it builds the timeline
-        (`build_timeline`), lets the country's allocation ruleset stamp a payer on every entry
-        whenever the perspective is actor-scoped (§6), and hands the finished timeline to
-        `calculators/aggregation.aggregate_timeline`, which derives the NPV, the equivalent annual
-        cost, the category/component/payer pivots, the per-subject breakdowns, the nominal
-        liquidity series and the LCOH from it. Nothing is computed twice: what the result carries
-        beyond that aggregation is the build's non-cash output (subsidy decisions, CO2 masses,
-        sunk cost) and the physical context presentation needs (W4.2, W4.6).
-
-        Allocation is the one step that can *create* money movements rather than only re-tag them
-        — the §6.4 modernization levy mints a tenant/landlord transfer pair from the levy basis
-        the build recorded (W3.6). The result's `timeline` is therefore always the *full*
-        allocated timeline, every payer included, so the §6.5 zero-sum invariant stays checkable;
-        the flows this perspective actually reports on are `scope_payer` plus `scoped_timeline()`.
+        The engine's main entry point. When the perspective is actor-scoped, the country's allocation ruleset assigns a
+        payer to every entry (§6); the §6.4 modernization levy may add a tenant/landlord transfer pair.
+        `calculators/aggregation.aggregate_timeline` then derives NPV, equivalent annual cost, pivots, per-subject
+        breakdowns, the nominal liquidity series and the levelized cost of heat. The result's `timeline` holds every
+        payer, so the §6.5 zero-sum check stays possible; the perspective's own flows are `scoped_timeline()`.
 
         Args:
-            inputs: The variant's extract (see `EvaluationInputs`); never modified.
-            perspective: The five dimensions being evaluated — installation context, actor scope,
-                subsidy mode, financing and accounting (§4).
-            ledger: Provenance ledger to record into; a fresh one is created when omitted. It is
-                stored on the result either way, which is what makes `explain()` work without
-                extra plumbing (§3.10).
-            quoted_purchases: Purchases with no cost facts, priced whole by a stated amount; see
-                `build_timeline`. Empty on every path but a staged plan's.
-            booked_price_levels: Subject -> the price level its year-0 purchase is booked at,
-                relative to year 0; see `build_timeline`. Empty on every path but a staged plan's.
+            inputs: The variant's extract; never modified.
+            perspective: The installation context, actor scope, subsidy mode, financing and accounting to evaluate
+                (§4).
+            ledger: Provenance ledger to record into; a fresh one when None. Stored on the result for `explain()`
+                (§3.10).
+            quoted_purchases: Purchases priced by a stated amount; see `build_timeline`.
+            booked_price_levels: Subject -> the price level its year-0 purchase is booked at; see `build_timeline`.
 
         Returns:
-            The `LifecycleCostResult` for this perspective. Every monetary field is a
-            LOW/BEST_ESTIMATE/HIGH band (§3.9), and `parameters` is the *effective* parameter set, with
-            the resolved price basis year filled in so reports need not re-derive it (W1.2).
+            The `LifecycleCostResult`; every money field is a LOW/BEST_ESTIMATE/HIGH band (§3.9) and `parameters`
+                carries the resolved price basis year.
         """
-        # Same values as self.parameters, but with the resolved price basis year recorded (W1.2).
+        # Same values as self.parameters, but with the resolved price basis year recorded.
         params = self.effective_parameters(inputs)
         # `is None`, not `or`: `ProvenanceLedger` defines `__len__`, so a caller-supplied but
-        # still-empty ledger is falsy and used to be silently replaced by a fresh one — the
-        # caller then held an object nothing ever recorded into.
+        # still-empty ledger is falsy and must not be replaced by a fresh one.
         ledger = ledger if ledger is not None else ProvenanceLedger()
         build = self.build_timeline(inputs, perspective, ledger, quoted_purchases, booked_price_levels)
         timeline = build.timeline
@@ -1499,7 +1240,7 @@ class EconomicEvaluator:
             source_resolver=self._source_resolver(),
             scope_payer=aggregation.scope_payer,
             # Physical context of the evaluation, so the derived views and the plausibility
-            # report never have to reach back into `EvaluationInputs` (W4.2):
+            # report never read `EvaluationInputs`:
             annual_energy_quantities_by_carrier=annual_energy_quantities(
                 inputs.billing, inputs.simulated_period_fraction
             ),
@@ -1516,7 +1257,7 @@ class EconomicEvaluator:
             simulated_period_fraction=inputs.simulated_period_fraction,
             simulation_year=inputs.simulation_year,
             # Diagnostics rather than result: the pre-clamp §8.5 flexibility value, which the
-            # plausibility panel warns about when it is negative (issue #25b).
+            # plausibility panel warns about when it is negative.
             raw_flexibility_value_by_carrier=build.raw_flexibility_value_by_carrier,
             # The Sowieso share behind each anyway credit, so the report can state it beside the
             # credit rather than leaving a reader to guess at the basis.
@@ -1536,22 +1277,15 @@ class EconomicEvaluator:
     def _resolve_assumptions(
         self, inputs: EvaluationInputs, build: TimelineBuildResult
     ) -> EconomicAssumptions:
-        """The assumption set behind the run, resolved once per evaluation.
+        """Return the economic assumptions behind this run, with value and source, for the report.
 
-        The report has to publish every economic assumption with its value *and* its source, and
-        three of those groups are only knowable inside the engine: an escalation rate is the
-        outcome of a three-step fallback chain against the country defaults file, the tariff terms
-        are whichever contract the energy calculator ended up billing under (an explicit one or
-        the flat contract generated from the price entries), and the heat demand lives in
-        `EvaluationInputs`, which presentation may not read. Resolving them here and carrying the
-        answer on the result is the same W4.2 move the reference areas made.
-
-        Only rates that actually applied to this run are recorded: one per billed carrier, one per
-        asset class among the cost subjects, plus the three general rates. A table of every rate
-        the parameter object *could* express would be longer and less true.
+        Escalation rates come from a fallback chain, tariff terms from the contract the energy calculator billed under,
+        and the heat demand from `EvaluationInputs`, which presentation may not read, so they are resolved here. Only
+        rates that applied are recorded: one per billed carrier, one per asset class among the subjects, and the three
+        general rates.
 
         Args:
-            inputs: The variant's extract — billed carriers, cost subjects, heat demand.
+            inputs: The variant's extract: billed carriers, cost subjects, heat demand.
             build: The finished timeline build, read for the contracts the energy calculator used.
 
         Returns:
@@ -1588,12 +1322,9 @@ class EconomicEvaluator:
         )
 
     def _source_resolver(self) -> Dict[str, ResolvedSource]:
-        """Every registry a result's provenance can cite: cost database *and* subsidy catalog.
+        """Return every source registry a result's provenance can cite: the cost database's and the subsidy catalog's.
 
-        The two registries are separate files with disjoint id spaces; before W2.4 only the cost
-        database's was handed to the result, so a subsidy-derived record could never resolve its
-        sources at a report leaf. Cost-database entries win a (never observed) id collision, since
-        that registry backs the bulk of the records.
+        The two have disjoint id spaces; the cost database wins a collision.
         """
         resolver: Dict[str, ResolvedSource] = {}
         if self.subsidy_catalog is not None:
@@ -1608,23 +1339,18 @@ class EconomicEvaluator:
         inputs: EvaluationInputs,
         perspectives: List[Perspective],
     ) -> EvaluationMatrix:
-        """Evaluates a set of perspectives against the same simulation results (§4).
+        """Evaluate several perspectives against the same simulation extract (§4).
 
-        The standard way the engine is driven: one simulation extract, the default nine-row
-        perspective bundle (`cost_database/perspectives_default.json`, §7.1), and one independent
-        evaluation each — a perspective is a *view* of the same variant, never a different
-        variant, so there is nothing to share between them but the inputs. Each row gets its own
-        provenance ledger, since each resolves its own parameters.
+        Usually the default nine-row bundle (`cost_database/perspectives_default.json`, §7.1). Each perspective is
+        evaluated independently with its own provenance ledger.
 
         Args:
             inputs: The variant's extract; never modified.
-            perspectives: The bundle to evaluate, already pruned by the caller via
-                `perspectives.select_applicable` — greenfield rows drop out when an existing-asset
-                register is present, brownfield/status-quo rows when there is none.
+            perspectives: The bundle, already pruned by `perspectives.select_applicable` (greenfield rows drop out when
+                an existing-asset register is present, brownfield and status-quo rows when there is none).
 
         Returns:
-            An `EvaluationMatrix` keyed by `Perspective.id`, in the order given — the object the
-            exports, the reports and the KPI layer all read.
+            An `EvaluationMatrix` keyed by `Perspective.id`, in the given order.
         """
         matrix = EvaluationMatrix()
         for perspective in perspectives:

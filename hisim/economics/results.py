@@ -1,23 +1,10 @@
 """Typed result objects of the lifecycle cost engine (cost_spec.md §3.7, §3.8, §7).
 
-CSV/JSON are export formats, never an internal API.
-
-This module owns the seam-4 contract of cost-spec-v2 §2.4: everything the engine publishes about
-one evaluation, in typed form, together with the *comparison arithmetic* that turns two of those
-into a differential statement. `LifecycleCostResult` is what `EconomicEvaluator.evaluate`
-returns and what every downstream consumer reads — the exports, the KPI layer, the audit, the
-CLI's `explain`, the derived views and the HTML/markdown reports. The enforceable rule on
-the other side of the seam is *presentation never computes*: if a report needs a number, it is
-either a field here or a function here (`compare`, `cumulative_discounted_savings`), never a loop
-in a template.
-
-What the module deliberately does not own: building the timeline (`evaluator.py`), discounting
-and pivoting it into these fields (`calculators/aggregation.py`), and writing any file
-(`exports.py`, `reporting.py`). Two things a reviewer should carry into the classes below —
-every monetary field is a LOW/BEST_ESTIMATE/HIGH band (`UncertainValue`, §3.9) whose bounds are
-*envelopes* rather than quantiles, and signs are uniform across the package: cost positive,
-revenue and support negative, with the display figures that mirror support back to positive
-saying so in their names (W3.4).
+`LifecycleCostResult` is what `EconomicEvaluator.evaluate` returns and what every exporter, view, report and CLI
+command reads; CSV and JSON are export formats, never an internal API. The module also holds the comparison arithmetic
+between two results (`compare`, `cumulative_discounted_savings`), because presentation never computes. Every money
+field is a LOW/BEST_ESTIMATE/HIGH band (`UncertainValue`, §3.9) whose bounds are envelopes, not quantiles. Signs: cost
+positive, revenue and support negative; display figures that show support as positive say so in their names.
 """
 
 from __future__ import annotations
@@ -51,20 +38,13 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 @dataclass
 class ComponentCostBreakdown:
-    """Per-subject cost breakdown: a pure pivot of the canonical timeline (§3.7, §7.4).
+    """Costs of one timeline subject, pivoted from the canonical timeline (§3.7, §7.4).
 
-    One record per timeline subject — a component, an energy carrier, or one of the synthetic
-    subjects the engine books cross-cutting flows under (`financing`, `replacement reserve`,
-    `co2 damage`). Because every cash-flow entry carries its subject, this is a pivot and not a
-    second calculation: the breakdowns sum exactly to the perspective totals, by construction
-    rather than by agreement between two code paths, which is what makes the stacked-bar frontends
-    and the §9.5 audit table trustworthy.
-
-    It carries both views of the same money on purpose. `npv_by_category` and the two NPV totals
-    are *discounted and signed* (support and residual values negative); the three fields below
-    them are *undiscounted display figures* answering "what does buying this thing cost", where
-    support is reported positive and separately from the gross investment. The two subsidy fields
-    exist because that figure has two legitimate units and mixing them was a real defect (W3.4).
+    A subject is what a cash-flow entry is booked under: a component, an energy carrier, or a synthetic subject such as
+    `financing`, `replacement reserve` or `co2 damage`. Because it is a pivot, the breakdowns sum exactly to the
+    perspective totals. `npv_by_category` and the two NPV totals are discounted and signed (support and residual values
+    negative); the three fields after them are undiscounted display figures where support is positive and separate from
+    the gross investment.
     """
 
     subject: str  # component name, or carrier for energy subjects
@@ -76,21 +56,17 @@ class ComponentCostBreakdown:
     equivalent_annual_cost_in_euro: UncertainValue
     # Undiscounted display figures for "what does X cost to buy" views:
     investment_gross_in_euro: UncertainValue
-    #: Support received for this subject, **nominal** euros summed across years, positive band
-    #: (W3.4). The same unit the §6.4 levy basis deducts.
+    #: Support received for this subject, **nominal** euros summed across years, positive band.
+    #: The same unit the §6.4 levy basis deducts.
     subsidies_nominal_in_euro: UncertainValue
     #: The same support **discounted** to present value, positive band — the exact mirror of
-    #: `npv_by_category[SUBSIDY]`, which is negative-signed (W3.4).
+    #: `npv_by_category[SUBSIDY]`, which is negative-signed.
     subsidies_npv_in_euro: UncertainValue
     annual_cost_series_nominal_in_euro: List[UncertainValue]
     lifecycle_co2_in_kg: float
 
     def to_json(self) -> dict:
-        """Serialization for component_costs.json (§7.4).
-
-        Every band is written through `UncertainValue.to_json`, so a consumer of the file sees the
-        same min/best_estimate/max triplet the engine computed with, never a collapsed average.
-        """
+        """Serialize for component_costs.json (§7.4); every band keeps its min/best_estimate/max triplet."""
         return {
             "subject": self.subject,
             "subject_kind": self.subject_kind.value,
@@ -113,23 +89,11 @@ class ComponentCostBreakdown:
 class EmbodiedCo2Basis:
     """The multiplication behind one subject's embodied CO2: factor x size, once per installation.
 
-    The embodied mass of a device is a data factor times the size that was installed, charged
-    again at every replacement, and a report that prints only the product asks the reader to
-    trust it. This record carries the three numbers the product is made of so the CO2 section can
-    state `factor x size = kg per installation` and multiply that by the number of installations
-    booked within the horizon.
-
-    `size` is the installed size the mass was computed for — `facts.size x facts.count`, so a
-    fleet of three identical devices is one record of three units rather than three records — and
-    `factor_in_kg_per_unit` is always the quotient `per_installation_in_kg / size`. There is no
-    second branch: an entry that states an absolute mass without a `per_unit` is divided by that
-    same size like any other, so the factor is a derived per-unit figure rather than the data
-    file's own. `installations` counts the year-0 installation plus every replacement within the
-    horizon, i.e. exactly the events the mass was accumulated for.
-
-    The identity is enforced rather than documented (see `__post_init__`): a record whose three
-    numbers do not multiply out is worse than no record, because the CO2 section prints it *as*
-    the multiplication and a reader would check the arithmetic and find the engine wrong.
+    Lets the CO2 section print `factor x size = kg per installation` and multiply by the number of installations.
+    `size` is the installed size (`facts.size x facts.count`, so three identical devices are one record of three
+    units). `factor_in_kg_per_unit` is always `per_installation_in_kg / size`, also when the data states an absolute
+    mass. `installations` counts the year-0 installation plus every replacement within the horizon. `__post_init__`
+    enforces the identity, since the section prints it as a multiplication a reader can check.
     """
 
     #: Tolerance of the `factor x size = per installation` check, in kg. Absolute rather than
@@ -144,7 +108,7 @@ class EmbodiedCo2Basis:
     installations: int = 1
 
     def __post_init__(self) -> None:
-        """Refuses a record whose factor, size and mass do not multiply out.
+        """Refuse a record whose factor, size and mass do not multiply out.
 
         Raises:
             ValueError: If `abs(factor_in_kg_per_unit * size - per_installation_in_kg)` exceeds
@@ -160,7 +124,7 @@ class EmbodiedCo2Basis:
             )
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json."""
+        """Serialize for lifecycle_costs.json."""
         return {
             "factor_in_kg_per_unit": self.factor_in_kg_per_unit,
             "size": self.size,
@@ -183,22 +147,13 @@ class EmbodiedCo2Basis:
 
 @dataclass
 class LifecycleCo2Result:
-    """Parallel, undiscounted CO2 accounting (§3.8).
+    """Lifecycle CO2 masses of one evaluation, undiscounted and in kilograms (§3.8).
 
-    The CO2 *damage cost* (macroeconomic) and the CO2 *price* (a real cash flow) are distinct
-    and must never be added together.
-
-    Everything in this object is a **mass in kilograms**, never a euro, and nothing in it is
-    discounted — discounting a physical quantity would be meaningless, and a lifecycle emission
-    figure is reported as the sum over the horizon. It runs alongside the money in one build:
-    `calculators/investment.py` contributes the embodied mass at installation and at every
-    replacement, `calculators/energy.py` the operational mass per carrier, and
-    `calculators/co2.py` folds both in and closes the total.
-
-    Held on `LifecycleCostResult` and consumed by the lifecycle-CO2 KPIs, the report's §3.8
-    section and the per-subject breakdowns. Note that v1 holds emission factors constant over the
-    horizon — grid decarbonization is not modelled — which a reviewer reading a 20-year
-    electricity figure should be aware of.
+    Runs alongside the money in one build: `calculators/investment.py` adds the embodied mass at installation and every
+    replacement, `calculators/energy.py` the operational mass per carrier, and `calculators/co2.py` adds them up.
+    Nothing is discounted, because a physical quantity is summed over the horizon. The CO2 damage cost (a macroeconomic
+    euro figure) and the CO2 price (a real cash flow) are on the timeline and are never added together. Emission
+    factors are constant over the horizon; grid decarbonization is not modelled.
     """
 
     embodied_co2_in_kg: float = 0.0  # install + replacements, no discounting
@@ -215,11 +170,10 @@ class LifecycleCo2Result:
     embodied_basis_by_subject: Dict[str, "EmbodiedCo2Basis"] = field(default_factory=dict)
 
     def to_json(self) -> dict:
-        """Serialization.
+        """Serialize for lifecycle_costs.json.
 
-        Note the two operational fields carry different units of aggregation: the by-year array is
-        kg *per year* indexed 0..T (year 0 stays zero), the by-carrier map is kg over the *whole*
-        horizon.
+        The operational by-year array is kg per year indexed 0..T (year 0 is zero); the by-carrier map is kg over the
+        whole horizon.
         """
         return {
             "embodied_co2_in_kg": self.embodied_co2_in_kg,
@@ -236,35 +190,33 @@ class LifecycleCo2Result:
 
 @dataclass(frozen=True)
 class AnnualEnergyQuantities:
-    """One carrier's *annualized* energy volumes, as the engine priced them (W4.1/W4.2).
+    """One carrier's annualized energy volumes, as the engine priced them.
 
-    Extensive simulation quantities scaled to a full year by the §3.6 rule-5 annualization
-    (`calculators/annualization.py`), so per-unit figures derived from them — effective
-    EUR/kWh, EUR/m²a — are per-year figures like every other engine output. Carried on the
-    result because the derived views and the plausibility checks need them *without* reaching
-    back into `EvaluationInputs` (cost-spec-v2 W4.2).
+    Simulated quantities scaled to a full year (§3.6 rule 5, `calculators/annualization.py`), so per-unit figures
+    derived from them (EUR/kWh, EUR/m²a) are per year. Carried on the result so views and plausibility checks need not
+    read `EvaluationInputs`.
     """
 
     bought_in_kwh: float
     sold_in_kwh: float = 0.0
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json."""
+        """Serialize for lifecycle_costs.json."""
         return {"bought_in_kwh": self.bought_in_kwh, "sold_in_kwh": self.sold_in_kwh}
 
 
 def _slot_from_json(name: str, context: str) -> Slot:
-    """Parses one `Slot` value out of a stored map key.
+    """Parse one `Slot` value from a stored map key.
 
     Args:
-        name: The key as the file spells it (`low` / `best_estimate` / `high`).
-        context: Dotted path of the field being parsed, so the error names the map.
+        name: The key as the file spells it (`low`, `best_estimate` or `high`).
+        context: Dotted path of the field being parsed, used in the error message.
 
     Returns:
         The slot the key names.
 
     Raises:
-        ValueError: If the key is not a slot this package knows.
+        ValueError: If the key is not a known slot.
     """
     try:
         return Slot(name)
@@ -277,26 +229,14 @@ def _slot_from_json(name: str, context: str) -> Slot:
 
 
 class LevyBindingMechanism:
-    """The vocabulary of the per-world levy verdicts.
+    """The wording of the per-slot verdicts on what decided a German modernization levy.
 
-    "The levy is 1,847 EUR a year" is two different statements depending on what produced it: at a
-    ceiling the figure is fixed by law and the same renovation costing more would yield the same
-    rent, below it the figure is a percentage and every extra euro spent raises the rent. The
-    ruleset already knew which of the two applied; the constants here are what let it *say* so, in
-    one spelling, for each of the three worlds separately.
-
-    It lives here rather than beside the ruleset that writes the verdicts because both sides need
-    it: `actors.DE2024Ruleset` composes the sentences and `ModernizationLevySummary` reads one
-    back to answer "did a ceiling decide the headline figure". A vocabulary owned by the writer
-    alone would leave the reader matching literals.
-
-    Two caps can cut the same world — the §559e ceiling on the heating leg and the §559 Abs. 3a
-    ceiling on the two legs together — so the verdict is a *composition*: each cap that removed
-    euros is named, joined by `BOTH_CAPS_JOINER` when both did. That keeps `startswith` on either
-    cap constant a true test of "this cap bound", whichever other cap also bound.
-
-    `SLOT_NAMES` maps the band's own field names onto the `Slot` vocabulary the rest of the
-    package uses, so the verdict map is keyed like every other per-slot map.
+    The modernization levy is the rent increase a landlord may charge after a modernization (§559/§559e BGB). Below a
+    statutory ceiling it is a percentage of the cost; at a ceiling the figure is fixed by law, and spending more would
+    not raise the rent. `actors.DE2024Ruleset` writes one verdict per band slot and `ModernizationLevySummary` reads it
+    back, so both use these constants. Two caps can cut the same slot (the §559e ceiling on the heating part and the
+    §559 Abs. 3a ceiling on both together); each cap that bound is named, joined by `BOTH_CAPS_JOINER`, so `startswith`
+    on either cap constant tests whether that cap bound. `SLOT_NAMES` maps band field names to `Slot` names.
     """
 
     GENERAL_CAP = "§559 general cap"
@@ -316,14 +256,11 @@ class LevyBindingMechanism:
     def names_a_cap(verdict: str) -> bool:
         """Whether this verdict says a statutory ceiling decided the levy.
 
-        The one place a verdict sentence is classified. The alternative — every reader testing the
-        prefixes itself — is how the three spellings drift apart.
-
         Args:
             verdict: One value of `ModernizationLevySummary.binding_mechanism_by_slot`.
 
         Returns:
-            True for a verdict naming either cap (or both), False for the rate verdict.
+            True for a verdict naming either cap or both; False for the rate verdict.
         """
         return verdict.startswith(
             (LevyBindingMechanism.HEATING_CAP, LevyBindingMechanism.GENERAL_CAP)
@@ -332,20 +269,12 @@ class LevyBindingMechanism:
 
 @dataclass(frozen=True)
 class ModernizationLevySummary:
-    """The §559/§559e rent increase as the report has to state it.
+    """The §559/§559e modernization levy facts the report states beyond its euro amount.
 
-    The levy's euro amount is on the timeline as a transfer pair, but two facts a landlord reading
-    the statement needs are not derivable from a cash flow: whether a statutory ceiling decided the
-    figure, and which ceiling. Below the cap the levy scales with what was spent on the
-    modernization; at the cap it does not, and the same renovation costing 20 % more would produce
-    the identical rent increase — economically a completely different situation, invisible in the
-    number itself.
-
-    Carried on the result rather than recomputed in a view for the same reason the areas are: a
-    stored `lifecycle_costs.json` has to be enough to render the report, and a second
-    implementation of §559 Abs. 3a inside the presentation layer is precisely the duplication the
-    seam-4 rule forbids. It is `None` for every perspective that has no levy — an owner-occupier
-    run, a country whose ruleset knows none.
+    The levy's amount is on the timeline as a transfer between tenant and landlord, but whether a statutory ceiling
+    decided it, and which, is not visible in a cash flow. At the cap, the same renovation costing 20 % more yields the
+    same rent increase. Carried on the result so a stored `lifecycle_costs.json` is enough to render the report. `None`
+    for every perspective without a levy (an owner-occupier run, a country whose ruleset has none).
     """
 
     annual_amount_in_euro: UncertainValue
@@ -363,22 +292,17 @@ class ModernizationLevySummary:
 
     @property
     def cap_binding_in_best_estimate(self) -> bool:
-        """Whether a statutory ceiling decided the headline figure (the BEST_ESTIMATE slot).
-
-        Derived rather than stored: the per-slot verdicts already say which mechanism set each
-        world's levy, and a second field repeating one of them for the headline world is a copy
-        that can disagree with its original. Readers that want the one-line "did a ceiling decide
-        this" answer read this property, so there is one expression of it in the package.
+        """Whether a statutory ceiling decided the best-estimate levy.
 
         Returns:
-            True when the best-estimate verdict names a cap; False when it names the statutory
-            rate, and False when there is no verdict at all (no living area, no cap evaluated).
+            True when the best-estimate verdict names a cap; False when it names the rate or when there is no verdict
+                (no living area, no cap evaluated).
         """
         verdict = self.binding_mechanism_by_slot.get(Slot.BEST_ESTIMATE)
         return verdict is not None and LevyBindingMechanism.names_a_cap(verdict)
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json."""
+        """Serialize for lifecycle_costs.json."""
         return {
             "annual_amount_in_euro": self.annual_amount_in_euro.to_json(),
             "general_leg_in_euro": self.general_leg_in_euro.to_json(),
@@ -394,9 +318,7 @@ class ModernizationLevySummary:
         """Inverse of `to_json`; `None` stays `None` (a run without a levy).
 
         Raises:
-            ValueError: If a verdict is filed under a slot name this package does not know. The
-                map is read by slot, so an unknown key is a verdict nobody would ever see — the
-                silent kind of data loss the round trip exists to prevent.
+            ValueError: If a verdict is filed under an unknown slot name, which no reader would ever see.
         """
         if not raw:
             return None
@@ -413,14 +335,10 @@ class ModernizationLevySummary:
 
 
 class RateOrigin(str, enum.Enum):
-    """The three steps of the §3.2 escalation fallback chain, as the values `ResolvedRate` carries.
+    """The step of the §3.2 escalation fallback chain that produced a rate.
 
-    An enum rather than free strings because both the evaluator that records the origin and the
-    report that renders it have to agree on the spelling, and a fourth spelling would show up as
-    an uncited assumption rather than as an error. It is `str`-valued, so the serialized form is
-    the same word it always was and a stored `lifecycle_costs.json` round-trips unchanged; what
-    changed is that a file carrying a word outside this set is now refused at load time instead of
-    reaching a renderer that silently treats it as "configuration".
+    The chain is: an explicit `EconomicParameters` entry, then the country's defaults table, then the general rate. The
+    values are the serialized words, and a stored file with any other word is refused at load time.
     """
 
     CONFIGURATION = "configuration"
@@ -430,17 +348,11 @@ class RateOrigin(str, enum.Enum):
 
 @dataclass(frozen=True)
 class ResolvedRate:
-    """One escalation rate as the run actually resolved it, with the step of the chain that won.
+    """One escalation rate as the run resolved it, with the step of the fallback chain that won (§3.2).
 
-    An escalation rate reaches the engine through a three-step fallback — an explicit
-    `EconomicParameters` entry, the country's `escalation_defaults_<COUNTRY>.json` table, then the
-    general rate (§3.2) — and the rate alone does not say which step produced it. The assumptions
-    table has to cite a source for every value it publishes, so the winning step travels with the
-    number instead of being re-derived by a renderer that has no database.
-
-    `origin` is a `RateOrigin`; `source_ids` are the §3.10 registry ids of the defaults file when
-    that is what won, and empty for a configured or fallback rate, which the report renders as
-    "configuration".
+    The assumptions table must cite a source for every value, so the step travels with the number. `source_ids` are the
+    §3.10 registry ids of the defaults file when that step won, and empty for a configured or general rate, which the
+    report shows as "configuration".
     """
 
     rate: float
@@ -448,7 +360,7 @@ class ResolvedRate:
     source_ids: List[str] = field(default_factory=list)
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json."""
+        """Serialize for lifecycle_costs.json."""
         return {"rate": self.rate, "origin": self.origin.value, "source_ids": list(self.source_ids)}
 
     @staticmethod
@@ -456,9 +368,7 @@ class ResolvedRate:
         """Inverse of `to_json`.
 
         Raises:
-            ValueError: If `origin` is not a step of the §3.2 chain. An unknown step would be
-                rendered as a configured rate — the most reviewed of the three — which is the one
-                misreading that overstates how well sourced the number is.
+            ValueError: If `origin` is not a step of the §3.2 chain.
         """
         origin = raw.get("origin", RateOrigin.CONFIGURATION.value)
         try:
@@ -478,23 +388,13 @@ class ResolvedRate:
 
 @dataclass(frozen=True)
 class TariffAssumption:
-    """The commercial terms one carrier was billed under, as the assumptions table states them.
+    """The tariff terms one carrier was billed under, as the assumptions table states them.
 
-    The three prices a reader needs to reproduce an energy bill by hand — the per-kilowatt-hour
-    working price, the fixed annual standing charge and the rate paid per exported kilowatt hour —
-    plus the contract they came from. Carried on the result for the same reason the reference
-    areas are (W4.2): a stored `lifecycle_costs.json` has to be enough to render the report, and
-    the tariff contracts live in `EvaluationInputs`, which presentation may not read.
-
-    `contract_id` is the tariff contract's id; for a carrier billed under the generated flat
-    contract of `calculators/energy.py` it is that contract's synthetic id and
-    `is_default_contract` is True, which the report states as "database price entry" rather than
-    pretending a contract file was read.
-
-    `feed_in_kind` is the contract's own `FeedInKind`, and the rate beside it is present exactly
-    when that kind is not `NONE` — the assumptions table renders the two as one row ("feed-in rate
-    (FIXED_TARIFF)"), so a kind with no rate would publish a heading over an empty cell and a rate
-    with kind `NONE` would publish a price nothing was ever paid at. `__post_init__` refuses both.
+    Holds the working price per kWh, the annual standing charge and the feed-in rate per exported kWh, plus the
+    contract they came from, so a reader can reproduce an energy bill. Carried on the result because the contracts live
+    in `EvaluationInputs`, which presentation may not read. For a carrier billed under the flat contract generated by
+    `calculators/energy.py`, `contract_id` is its synthetic id and `is_default_contract` is True, shown as "database
+    price entry". The feed-in rate is present exactly when `feed_in_kind` is not `NONE`; `__post_init__` enforces this.
     """
 
     carrier: str
@@ -507,11 +407,10 @@ class TariffAssumption:
     source_ids: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        """Refuses a feed-in kind and a feed-in rate that do not agree.
+        """Refuse a feed-in kind and a feed-in rate that do not agree.
 
         Raises:
-            ValueError: If a remunerated kind carries no rate, or a rate is carried under
-                `FeedInKind.NONE`.
+            ValueError: If a remunerated kind carries no rate, or a rate is carried under `FeedInKind.NONE`.
         """
         has_rate = self.feed_in_rate_in_euro_per_kwh is not None
         remunerated = self.feed_in_kind != FeedInKind.NONE
@@ -526,17 +425,11 @@ class TariffAssumption:
 
     @staticmethod
     def from_contract(contract: TariffContract) -> "TariffAssumption":
-        """The assumption record for one billed contract — the only place it is built.
-
-        The engine bills under a `TariffContract` and the report publishes a `TariffAssumption`;
-        this is the single copy between the two. Written here rather than in the evaluator so that
-        the record and the rule that fills it live together: the feed-in half in particular is a
-        pair of fields that has to be filled consistently, and a hand copy at the call site is
-        where the pair comes apart.
+        """Build the assumption record for one billed contract; the only place it is built.
 
         Args:
-            contract: The contract `calculators/energy.py` actually billed the carrier under —
-                an authored one or the flat contract generated from the price entries.
+            contract: The contract `calculators/energy.py` billed the carrier under, authored or generated from the
+                price entries.
 
         Returns:
             The record for `EconomicAssumptions.tariffs`, keyed by the carrier's value.
@@ -555,7 +448,7 @@ class TariffAssumption:
         )
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json."""
+        """Serialize for lifecycle_costs.json."""
         return {
             "carrier": self.carrier,
             "contract_id": self.contract_id,
@@ -576,8 +469,7 @@ class TariffAssumption:
         """Inverse of `to_json`.
 
         Raises:
-            ValueError: If `feed_in_kind` is not a `FeedInKind`, or if the kind and the rate
-                disagree (`__post_init__`).
+            ValueError: If `feed_in_kind` is not a `FeedInKind`, or the kind and the rate disagree.
         """
         feed_in = raw.get("feed_in_rate_in_euro_per_kwh")
         kind = raw.get("feed_in_kind", FeedInKind.NONE.value)
@@ -603,27 +495,18 @@ class TariffAssumption:
 
 @dataclass(frozen=True)
 class EconomicAssumptions:
-    """Every economic assumption the evaluation ran on that is not already on the parameters.
+    """The economic assumptions the evaluation resolved inside the engine, for the report's assumptions section.
 
-    The data half of the report's assumptions section: the escalation rates *as resolved* through
-    their fallback chains, the tariff terms per carrier, and the annual heat demand the heat-cost
-    figure divides by. What `EconomicParameters` already states — interest rate, horizon, price
-    basis year, CO2 damage cost — is not copied here; the section reads both, and duplicating a
-    parameter would let the two drift.
+    Holds the escalation rates as resolved through their fallback chains, the tariff terms per carrier, and the annual
+    heat demand the heat-cost figure divides by. These are resolved against the cost database and `EvaluationInputs`,
+    which presentation may not read. Values already on `EconomicParameters` (interest rate, horizon, price basis year)
+    are not copied.
 
-    It exists because those three groups are resolved *inside* the engine against the cost
-    database and `EvaluationInputs`, neither of which presentation may reach (seam 4). Without
-    this record the only honest assumptions table would be the empty one.
-
-    Keys: escalation rates are keyed by a stable label — `general`, `investment`, `feed-in`,
-    `energy:<carrier value>`, `investment:<asset class name>` — and the tariffs by carrier value,
-    the same string the timeline uses as the subject of that carrier's energy entries.
-
-    `annual_heat_demand_in_kwh` is the figure the heat-cost KPI divided by: for one evaluation the
-    declared demand or the useful heat the run measured, annualized; for a staged plan the
-    *equivalent annual heat*, the annuity factor times the discounted sum of each horizon year's
-    heat from the stage active in that year (`StagedEvaluator._equivalent_annual_heat`), which is
-    one stage's demand only when a single stage covers the whole horizon.
+    Escalation rates are keyed `general`, `investment`, `feed-in`, `energy:<carrier value>` or `investment:<asset class
+    name>`; tariffs are keyed by carrier value. `annual_heat_demand_in_kwh` is, for one evaluation, the declared demand
+    or the measured useful heat, annualized; for a staged plan it is the equivalent annual heat (the annuity factor
+    times the discounted sum of each year's heat from the stage active then,
+    `StagedEvaluator._equivalent_annual_heat`).
     """
 
     escalation_rates: Dict[str, ResolvedRate] = field(default_factory=dict)
@@ -631,7 +514,7 @@ class EconomicAssumptions:
     annual_heat_demand_in_kwh: Optional[float] = None
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json."""
+        """Serialize for lifecycle_costs.json."""
         return {
             "escalation_rates": {label: rate.to_json() for label, rate in self.escalation_rates.items()},
             "tariffs": {carrier: tariff.to_json() for carrier, tariff in self.tariffs.items()},
@@ -640,7 +523,7 @@ class EconomicAssumptions:
 
     @staticmethod
     def from_json(raw: Optional[dict]) -> Optional["EconomicAssumptions"]:
-        """Inverse of `to_json`; `None` stays `None` (a result written before the field existed)."""
+        """Inverse of `to_json`; `None` stays `None` (a result without the field)."""
         if not raw:
             return None
         return EconomicAssumptions(
@@ -658,25 +541,19 @@ class EconomicAssumptions:
 class ReferenceAreas:
     """The building areas per-area KPIs divide by (§6.3); both optional, both in m².
 
-    Two areas rather than one because the two questions differ: heated floor area is the physics
-    reference the building model works in, living area is the legal reference German rent and
-    levy rules use (§6.4). Carried on the result so that a stored `lifecycle_costs.json` is enough
-    to render every EUR/m²a figure, with no reach-back into `EvaluationInputs` (W4.2). Both may be
-    absent, in which case per-area figures are simply not reported.
+    Heated floor area is the physics reference of the building model; living area is the legal reference of German rent
+    and levy rules (§6.4). When both are absent, per-area figures are not reported.
     """
 
     heated_floor_area_in_m2: Optional[float] = None
     living_area_in_m2: Optional[float] = None
 
     def preferred(self) -> Optional[float]:
-        """The area per-area figures use: living area when known, else heated floor area.
-
-        The precedence the reports have always used (`reporting.py:263` before W4.2).
-        """
+        """Return the area per-area figures use: living area when known, else heated floor area."""
         return self.living_area_in_m2 or self.heated_floor_area_in_m2
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json."""
+        """Serialize for lifecycle_costs.json."""
         return {
             "heated_floor_area_in_m2": self.heated_floor_area_in_m2,
             "living_area_in_m2": self.living_area_in_m2,
@@ -684,50 +561,31 @@ class ReferenceAreas:
 
 
 class AnywayBasisKinds:
-    """What the *basis* of an anyway credit is, on each of the two branches that produce one.
+    """Names for the basis of an anyway credit, one per way a credit arises.
 
-    An anyway credit is `share x basis = credit` (§4.1), and the basis is one of two different
-    quantities depending on the measure. For a genuine like-for-like replacement it is the
-    escalated cost of replacing the old asset with its own kind — money the building would have
-    caused regardless. For a coupled measure (spec Q7, `energy_related_cost_share < 1`) it is
-    instead the non-energy share of the *new* measure's gross cost: the scaffolding, render and
-    standard glazing that a facade job would have cost even without the insulation. The two are
-    mutually exclusive by construction, and calling both by the name of the first — which every
-    caption did until this record existed — describes the wrong quantity in half the runs.
-
-    The kind travels with the basis on the result so the captions can word the multiplication
-    correctly from a stored file alone, and `UNRECORDED` is what a result written before the
-    field existed says: the basis is known, its name is not, and the caption then calls it what
-    it is without claiming which branch produced it.
+    An anyway credit is the cost a measure avoids because the building would have paid it anyway (§4.1): `share x basis
+    = credit`. For a like-for-like replacement the basis is the escalated cost of replacing the old asset with its own
+    kind. For a coupled measure (`energy_related_cost_share < 1`) it is the non-energy share of the new measure's gross
+    cost, such as the scaffolding and render a facade job needs even without insulation. The kind travels with the
+    basis so captions can word it from a stored file. `UNRECORDED` is what a result without the field says.
     """
 
     #: The escalated like-for-like replacement cost of the asset being replaced.
     LIKE_FOR_LIKE = "like-for-like cost"
-    #: The non-energy share of the new measure's own gross cost (the Q7 coupled-cost branch).
+    #: The non-energy share of the new measure's own gross cost (a coupled measure).
     NON_ENERGY_SHARE = "non-energy share of the measure's gross cost"
     #: A stored result that carries a basis but no name for it.
     UNRECORDED = "basis"
 
 
 class HeatCostNaming:
-    """What the heat-cost figure is *called* wherever a reader sees it (owner decision Q27 R1).
+    """The display names of the heat-cost figure.
 
-    The figure divides a perspective's whole NPV — every subject it books, the PV system and the
-    battery included — by the heat delivered, so it is not the levelized cost of heat the
-    literature publishes: an LCOH counts heating-attributable cost only, and this evaluation has
-    no heating-only attribution. Calling it one over-promised, so every user-visible occurrence
-    now reads "system cost per unit of heat": the KPI name in `lifecycle_kpis.json` and the report
-    KPI table, the perspectives-table column in both renderings, the plausibility-check row and
-    the derivation caption. The names live here, next to the field they name, so a future
-    re-wording is one edit rather than a grep across the four modules that print them —
-    `exports.py`, `plausibility.py`, `reporting/summary.py` and `reporting/assembly.py` — on
-    both sides of seam 4.
-
-    The **field** name `LifecycleCostResult.levelized_cost_of_heat_in_euro_per_kwh` deliberately
-    stays: it is the serialization key of every stored `lifecycle_costs.json`, and renaming it
-    would either break archived results or force an alias that buys nothing — the display name is
-    what a reader reads, and no reader reads the key. Docstrings keep saying LCOH where they
-    explain *why* this figure is not one.
+    The figure divides a perspective's whole NPV (PV and battery included) by the heat delivered, so it is not a
+    levelized cost of heat (LCOH), which counts heating-related cost only. Every place a reader sees it says "system
+    cost per unit of heat": the KPI in `lifecycle_kpis.json`, the report KPI and perspectives tables, the plausibility
+    row and the derivation caption. The field `LifecycleCostResult.levelized_cost_of_heat_in_euro_per_kwh` keeps its
+    name because it is the serialization key of stored results.
     """
 
     #: The published KPI name and the caption's lead-in.
@@ -742,26 +600,14 @@ class HeatCostNaming:
 class LifecycleCostResult:
     """The evaluation of one variant under one perspective (§3.7).
 
-    The engine's headline object: one simulated variant, seen through one of the nine default
-    perspectives (§7.1), with every euro figure as a LOW/BEST_ESTIMATE/HIGH band (§3.9). It is produced
-    by `EconomicEvaluator.evaluate` and consumed by everything downstream — `exports.py`,
-    `audit.py`, `views.py`, `reporting.py`, the KPI layer and the CLI — which is why it carries
-    not just the KPIs but also the raw material behind them: the full `timeline`, the provenance
-    `ledger` and its `source_resolver`, the subsidy `decisions`, the CO2 masses, and the physical
-    context (energy quantities, reference areas, simulated period fraction, simulation year) that
-    presentation would otherwise have to fetch from `EvaluationInputs` (W4.2, W4.6).
-
-    Every KPI on it is a filter, a pivot or a discounting of `timeline`, so the fields reconcile
-    with each other by construction (§3.1); `explain()` exploits exactly that to answer "where
-    does this number come from" down to the citation. Note what is deliberately *not* netted into
-    the decision KPIs: `sunk_cost_written_off_in_euro` is reported because researchers want to see
-    it, and excluded from NPV because a sunk cost must not distort a forward-looking comparison
-    (§4.1).
-
-    Scope is the one subtlety. `timeline` always holds the *full* allocated timeline so that the
-    §6.5 zero-sum invariant stays checkable, while the perspective itself reports on `scope_payer`
-    — every scoped figure goes through `scoped_timeline()`, which is also what `explain()`
-    filters on (§7 B4).
+    A perspective is one accounting frame, such as the tenant's view with subsidies (§7.1). Every euro figure is a
+    LOW/BEST_ESTIMATE/HIGH band (§3.9). Besides the KPIs the result carries what they are made of: the full `timeline`,
+    the provenance `ledger` and `source_resolver`, the subsidy `decisions`, the CO2 masses, and the physical context
+    (energy quantities, reference areas, simulated period fraction, simulation year), so presentation never reads
+    `EvaluationInputs`. Every KPI is a filter, pivot or discounting of `timeline`, which is what `explain()` relies on.
+    `sunk_cost_written_off_in_euro` is reported but excluded from NPV, since a sunk cost must not distort a
+    forward-looking comparison (§4.1). `timeline` holds the full allocated timeline so the zero-sum check of §6.5 stays
+    possible; the perspective's figures use `scoped_timeline()`, filtered to `scope_payer`.
     """
 
     perspective_id: str
@@ -769,7 +615,7 @@ class LifecycleCostResult:
     total_npv_in_euro: UncertainValue  # net present cost over the horizon
     equivalent_annual_cost_in_euro: UncertainValue  # NPV x annuity factor — the headline KPI
     #: The equivalent annual cost over `TimelineAggregation.MONTHS_PER_YEAR`: an even monthly spread
-    #: of that yearly payment, not a monthly annuity, and the headline monthly figure (hisim-cyc.6). Not
+    #: of that yearly payment, not a monthly annuity, and the headline monthly figure. Not
     #: `monthly_cost_year1_in_euro`, which is year 1's cash and carries whatever that year replaces.
     monthly_equivalent_cost_in_euro: UncertainValue
     npv_by_category: Dict[CostCategory, UncertainValue]
@@ -792,22 +638,21 @@ class LifecycleCostResult:
     # present "this perspective's flows" must filter by this payer — see `scoped_timeline()`.
     scope_payer: Actor = Actor.SYSTEM
     #: Annualized energy volumes per carrier (key = `EnergyCarrier.value`, the timeline subject
-    #: name), so effective prices are derivable from the result alone (W4.2).
+    #: name), so effective prices are derivable from the result alone.
     annual_energy_quantities_by_carrier: Dict[str, AnnualEnergyQuantities] = field(default_factory=dict)
-    #: Building reference areas for per-area figures (W4.2).
+    #: Building reference areas for per-area figures.
     reference_areas: ReferenceAreas = field(default_factory=ReferenceAreas)
     #: Share of a year the simulation covered; the divisor behind the quantities above (§3.6).
     simulated_period_fraction: float = 1.0
     #: The year the simulation this result prices was run for — the report header's "Simulation
-    #: year" and the fallback price basis of the degenerate-band note. Carried here (W4.6) so
+    #: year" and the fallback price basis of the degenerate-band note. Carried here so
     #: presentation needs no `EvaluationInputs`.
     simulation_year: Optional[int] = None
     #: Per-subject **annualized** energy attribution: subject -> energy-balance role
     #: (`EnergyFlowRole.value`) -> kWh per year as a positive magnitude. The name says
     #: `annual_` because the field of the same shape on `EvaluationInputs` holds the *simulated
-    #: period*, and the two were spelled identically while differing by the §3.6 annualization
-    #: divisor — a short run's chart would then have been compared against a year's meter table.
-    #: Additive and optional: it is filled from the component output columns
+    #: period*, which differs by the §3.6 annualization divisor.
+    #: Optional: it is filled from the component output columns
     #: `adapter.DeviceEnergySpecs` names and stays empty everywhere else, including for results
     #: serialized before it existed. Only the household energy balance reads it, and that chart
     #: skips itself rather than drawing a partial picture when the map carries fewer than two
@@ -816,7 +661,7 @@ class LifecycleCostResult:
     #: Per-carrier §8.5 flexibility value of the year-1 bill *before* the clamp the projection
     #: applies (key = `EnergyCarrier.value`). Diagnostics, not a published figure: a negative
     #: entry means the load was timed worse than a flat profile and is what the plausibility
-    #: panel's flexibility check reads (issue #25b).
+    #: panel's flexibility check reads.
     raw_flexibility_value_by_carrier: Dict[str, float] = field(default_factory=dict)
     #: The Sowieso share each anyway credit was computed at (subject -> share). A credit is
     #: `share x like-for-like cost`, and a reader looking at a credit against an insulation
@@ -832,8 +677,8 @@ class LifecycleCostResult:
     #: existed, in which case the caption states the share alone as it did before.
     anyway_basis_by_subject: Dict[str, float] = field(default_factory=dict)
     #: What each of those bases *is*, per subject, from `AnywayBasisKinds`: the avoided
-    #: like-for-like replacement, or the non-energy share of the measure's own gross cost on the
-    #: Q7 coupled-cost branch. The captions word the multiplication from this rather than calling
+    #: like-for-like replacement, or the non-energy share of the measure's own gross cost for a
+    #: coupled measure. The captions word the multiplication from this rather than calling
     #: both by the name of one. Empty for a result serialized before the field existed, where the
     #: basis is stated without a name for it.
     anyway_basis_kind_by_subject: Dict[str, str] = field(default_factory=dict)
@@ -855,21 +700,15 @@ class LifecycleCostResult:
     replacement_flows: List[Tuple[str, int, UncertainValue]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        """Checks that the three anyway-credit records describe the same set of credits.
+        """Check that the three anyway-credit maps describe the same set of credits.
 
-        `share`, `basis` and `basis_kind` are one fact split over three maps, and the captions
-        multiply them together: a basis or a kind under a subject that booked no credit would be
-        rendered against a share that is not there, and a kind without its basis names a quantity
-        the report cannot show. Both are corruption of a stored file rather than legitimate input,
-        so they are refused where the record is built instead of being discovered in a caption.
-
-        The check is deliberately one-directional for the third map: a result written before the
-        kind existed carries shares and bases and no kinds at all, which is the archived case
-        every reader of these fields already handles, and is not an error.
+        `share`, `basis` and `basis_kind` are one fact split over three maps, and captions multiply them. A result
+        without kinds at all is valid (such files exist); a basis or kind without a share, or a kind without a basis,
+        is a corrupt file.
 
         Raises:
-            ValueError: If a basis or a kind is recorded for a subject with no share, or a kind
-                for a subject with no basis.
+            ValueError: If a basis or a kind is recorded for a subject with no share, or a kind for a subject with no
+                basis.
         """
         orphans = (
             set(self.anyway_basis_by_subject) | set(self.anyway_basis_kind_by_subject)
@@ -888,47 +727,35 @@ class LifecycleCostResult:
             )
 
     def scoped_timeline(self) -> CashFlowTimeline:
-        """The flows this perspective actually reports on (filtered by `scope_payer`).
+        """Return the flows this perspective reports on, filtered by `scope_payer`.
 
-        The single definition of scoping, shared with `calculators/aggregation.py` and with
-        `explain()` — having two would let a KPI and its explanation disagree, which is exactly
-        the defect §7 B4 records. A SYSTEM-scope result returns everything, so callers need not
-        special-case the unallocated view.
+        The one definition of scoping, shared with `calculators/aggregation.py` and `explain()`, so a KPI and its
+        explanation agree. A SYSTEM-scope result returns everything.
         """
         return self.timeline.scoped_to(self.scope_payer)
 
     # ------------------------------------------------------------------ provenance (§3.10)
 
     def explain(self, value_path: str) -> ProvenanceReport:
-        """Lineage of any result value: a filter of timeline entries plus their parameters.
+        """Explain where a result value comes from: its timeline entries and their parameters (§3.10).
 
-        Accepted paths: ``total_npv_in_euro``, ``equivalent_annual_cost_in_euro``,
-        ``npv_by_category[CATEGORY]``, ``npv_by_component[subject]``, ``npv_by_payer[actor]``.
-        (`_entries_for_path` additionally resolves ``monthly_cost_year1_in_euro``, which is the
-        same scoped entry set as the NPV.)
-
-        This is the §3.10 traceability guarantee in code: because every published figure is a
-        pivot of the timeline, its lineage is a set union rather than a second mechanism. The
-        report walks value -> contributing cash-flow entries -> the `ParameterProvenance` records
-        those entries were built from -> the resolved sources with citation, url and retrieval
-        date. It is what backs `python -m hisim.economics explain`, and it works offline on an
-        archived result directory years later, since ledger and result are stored side by side.
-
-        Source ids of the form ``inline:…`` do not live in any registry — they are values the
-        engine itself introduced (a scenario overlay, an override's `override_source`) — and are
-        materialized as `INLINE` sources rather than dropped, so no leaf of the report is silently
-        empty.
+        Accepted paths: ``total_npv_in_euro``, ``equivalent_annual_cost_in_euro``, ``npv_by_category[CATEGORY]``,
+        ``npv_by_component[subject]``, ``npv_by_payer[actor]`` (and ``monthly_cost_year1_in_euro``, which has the NPV's
+        entries). The report goes from the value to the contributing entries, to the `ParameterProvenance` records they
+        were built from, to the resolved sources with citation, URL and retrieval date. It backs `python -m
+        hisim.economics explain` and works on archived results, since ledger and result are stored together. Source ids
+        ``inline:...`` are values the engine introduced (a scenario overlay, an override's `override_source`) and
+        appear as `INLINE` sources.
 
         Args:
-            value_path: One of the paths above. Addressing uses the result field names, the same
-                names the exports use; there is no separate query language.
+            value_path: One of the paths above, using the result's field names.
 
         Returns:
-            A `ProvenanceReport` renderable as text or JSON. Its `value` is None when the path is
-            valid but the result carries no such key (e.g. a category that never occurred).
+            A `ProvenanceReport`, renderable as text or JSON. Its `value` is None when the path is valid but the result
+                has no such key (e.g. a category that never occurred).
 
         Raises:
-            KeyError: on an unknown container or an unknown value path.
+            KeyError: On an unknown container or value path.
         """
         entries = self._entries_for_path(value_path)
         value = self._value_for_path(value_path)
@@ -969,15 +796,11 @@ class LifecycleCostResult:
         return report
 
     def _entries_for_path(self, value_path: str) -> List[CashFlowEntry]:
-        """The entries a result value is made of — scoped exactly as the value itself is (B4).
+        """Return the entries a result value is made of, scoped as the value itself is.
 
-        Every KPI except `npv_by_payer` is derived from the perspective's **scoped** timeline
-        (`calculators/aggregation.aggregate_timeline`), so explaining one has to filter the same
-        flows: until this was fixed, `explain("total_npv_in_euro")` on an actor-scoped
-        perspective listed the whole allocated timeline, including entries the KPI never
-        contained. `npv_by_payer` is the one pivot taken over *all* payers — it exists to show
-        the split — and it stays on the full timeline, which for a given payer is the same set
-        of entries either way.
+        Every KPI except `npv_by_payer` comes from the scoped timeline (`calculators/aggregation.aggregate_timeline`),
+        so its entries are filtered the same way. `npv_by_payer` is taken over all payers to show the split, so it uses
+        the full timeline.
         """
         scoped = self.scoped_timeline()
         bracket = re.match(r"(\w+)\[(.+)\]$", value_path)
@@ -997,13 +820,10 @@ class LifecycleCostResult:
         raise KeyError(f"Unknown result value path {value_path!r}.")
 
     def _value_for_path(self, value_path: str) -> Optional[UncertainValue]:
-        """The value a path addresses, or None when the result has no such key or field.
+        """Return the value a path addresses, or None when the result has no such key or field.
 
-        The lenient half of `explain`: unlike `_entries_for_path` it never raises, because by the
-        time it runs the path has already been validated by the entry lookup — a container key
-        that is simply absent from this perspective (a category that never occurred) is a legal
-        answer of "no value", not an error. Only `UncertainValue` attributes are returned, so a
-        path pointing at a non-monetary field yields None rather than an untyped object.
+        Never raises: `_entries_for_path` has already validated the path, and an absent key is a valid "no value". Only
+        `UncertainValue` attributes are returned.
         """
         bracket = re.match(r"(\w+)\[(.+)\]$", value_path)
         if bracket:
@@ -1018,15 +838,10 @@ class LifecycleCostResult:
         return attribute if isinstance(attribute, UncertainValue) else None
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json (without the ledger — stored separately).
+        """Serialize for lifecycle_costs.json, without the ledger and the timeline.
 
-        The ledger goes to its own `cost_provenance.json` because it is large and is addressed by
-        (perspective, field) rather than embedded per value (§3.10) — a KPI payload for the webtool
-        must stay small, and `explain` resolves against the stored ledger instead. The timeline is
-        likewise omitted here: it has its own `cash_flow_timeline.csv`.
-
-        Growth of this payload has been strictly additive (the W4.2 physical quantities, the W4.6
-        scope and simulation year), so a consumer written against an older file keeps working.
+        The ledger goes to `cost_provenance.json` and the timeline to `cash_flow_timeline.csv`, which keeps the KPI
+        payload small. Fields have only been added over time, so consumers of older files keep working.
         """
         return {
             "perspective": self.perspective_id,
@@ -1052,78 +867,63 @@ class LifecycleCostResult:
             "component_breakdowns": {
                 subject: breakdown.to_json() for subject, breakdown in self.component_breakdowns.items()
             },
-            # Additive since W4.2 — the physical quantities the derived views and the
-            # plausibility report are computed from:
+            # The physical quantities the derived views and the plausibility report are computed
+            # from:
             "annual_energy_quantities_by_carrier": {
                 carrier: quantities.to_json()
                 for carrier, quantities in self.annual_energy_quantities_by_carrier.items()
             },
             "reference_areas": self.reference_areas.to_json(),
             "simulated_period_fraction": self.simulated_period_fraction,
-            # Additive with the visualization extension: the per-subject energy attribution the
-            # household energy balance needs. Written even when empty so the schema is stable.
+            # The per-subject energy attribution the household energy balance needs. Written even
+            # when empty so the schema is stable.
             "annual_energy_attribution_by_subject_in_kwh": {
                 subject: dict(by_role)
                 for subject, by_role in self.annual_energy_attribution_by_subject_in_kwh.items()
             },
-            # Additive with the Sowieso share behind every anyway credit on the timeline, and the
-            # like-for-like cost that share was applied to.
+            # The Sowieso share behind every anyway credit on the timeline, and the cost that share
+            # was applied to.
             "anyway_share_by_subject": dict(self.anyway_share_by_subject),
             "anyway_basis_by_subject": dict(self.anyway_basis_by_subject),
             "anyway_basis_kind_by_subject": dict(self.anyway_basis_kind_by_subject),
-            # Additive: the levy the landlord statement reports on.
+            # The levy the landlord statement reports on.
             "modernization_levy": self.modernization_levy.to_json() if self.modernization_levy else None,
-            # Additive: the resolved assumptions the assumptions section publishes.
+            # The resolved assumptions the assumptions section publishes.
             "assumptions": self.assumptions.to_json() if self.assumptions else None,
-            # Additive since W4.6 — the scope and the simulation year presentation needs so it
-            # can render from a stored result alone (W4.5).
+            # The scope and the simulation year presentation needs to render from a stored
+            # result alone.
             "scope_payer": self.scope_payer.value,
             "simulation_year": self.simulation_year,
             # Diagnostics travelling with the result so a stored evaluation can be re-checked
-            # without re-pricing it (issue #25b):
+            # without re-pricing it:
             "raw_flexibility_value_by_carrier": dict(self.raw_flexibility_value_by_carrier),
         }
 
 
 @dataclass
 class EvaluationMatrix:
-    """{perspective -> LifecycleCostResult} for one variant (§3.1).
+    """All perspective results of one variant: {perspective -> LifecycleCostResult} (§3.1).
 
-    The unit of output of one run: `EconomicEvaluator.evaluate_matrix` fills it with one entry per
-    applicable perspective, and it is what `exports.py` writes and `reporting.py` renders. The
-    rows are independent evaluations of the *same* variant, so comparing two rows compares two
-    accounting frames (owner vs. tenant, with vs. without subsidies), never two buildings —
-    comparing buildings is `compare()` below, across two matrices.
+    `EconomicEvaluator.evaluate_matrix` fills one entry per applicable perspective; `exports.py` writes it and the
+    reports render it. Rows compare accounting frames of the same building; comparing two buildings is `compare()`.
     """
 
     results: Dict[str, LifecycleCostResult] = field(default_factory=dict)
 
     def to_json(self) -> dict:
-        """Serialization for lifecycle_costs.json.
-
-        Insertion order is the bundle order, which is what makes the report's perspective tables
-        and whisker charts stable across runs.
-        """
+        """Serialize for lifecycle_costs.json, in bundle order, so report tables and charts are stable across runs."""
         return {perspective: result.to_json() for perspective, result in self.results.items()}
 
 
 @dataclass
 class VariantComparison:
-    """Differential analysis of two variants (§3.7): the RenoVisor base-vs-measures case.
+    """The difference between two variants under one perspective (§3.7), such as a building before and after retrofit.
 
-    The answer to "is the retrofit worth it", which is a *difference* question and not a totals
-    question: what matters is variant minus reference, under one and the same perspective and one
-    and the same economic world. Produced by `compare()`, consumed by the report's comparison
-    section (delta waterfall, payback curve, warm-rent change) and by the scenario layer's
-    robustness statements.
-
-    Sign and slot conventions, which every field below follows: deltas are **variant − reference**
-    and slot-wise, so a *negative* NPV delta means the variant is cheaper; payback and
-    warm-rent-neutrality are reported per slot (`"low"`, `"best_estimate"`, `"high"`) because a
-    retrofit can pay back in one world and never in another, and saying so is the honest
-    statement. Which slot pays back first depends on which uncertainty dominates the savings, so
-    a *range* of payback years is read by value from :attr:`discounted_payback_envelope`, never
-    positionally from the slots (renovisorissues #73).
+    Produced by `compare()` and read by the report's comparison section (delta waterfall, payback curve, warm-rent
+    change). Deltas are variant minus reference, per slot, so a negative NPV delta means the variant is cheaper.
+    Payback and warm-rent neutrality are given per slot (`"low"`, `"best_estimate"`, `"high"`), since a retrofit can
+    pay back in one world and not another. A payback range is read by value from :attr:`discounted_payback_envelope`,
+    not from the slots in order.
     """
 
     reference_id: str
@@ -1131,7 +931,7 @@ class VariantComparison:
     perspective_id: str
     npv_delta_in_euro: UncertainValue  # variant - reference, slot-wise
     equivalent_annual_cost_delta_in_euro: UncertainValue
-    #: The equivalent annual cost delta over `TimelineAggregation.MONTHS_PER_YEAR` (hisim-cyc.6).
+    #: The equivalent annual cost delta over `TimelineAggregation.MONTHS_PER_YEAR`.
     monthly_equivalent_cost_delta_in_euro: UncertainValue
     npv_delta_by_subject: Dict[str, UncertainValue]
     # Discounted payback per slot; each independently None-able ("never within horizon"):
@@ -1139,12 +939,12 @@ class VariantComparison:
     warm_rent_change_per_month_in_euro: Optional[UncertainValue] = None
     warm_rent_neutral_per_slot: Dict[str, bool] = field(default_factory=dict)
     #: The payback *curve* per slot: cumulative discounted savings (reference - variant) for
-    #: years 0..T, index = year (W4.4). `discounted_payback_years` is its zero-crossing, so the
+    #: years 0..T, index = year. `discounted_payback_years` is its zero-crossing, so the
     #: curve a report draws and the number it prints cannot disagree.
     cumulative_discounted_savings_in_euro: Dict[str, List[float]] = field(default_factory=dict)
 
     def to_json(self) -> dict:
-        """Serialization."""
+        """Serialize the comparison."""
         return {
             "reference": self.reference_id,
             "variant": self.variant_id,
@@ -1163,19 +963,15 @@ class VariantComparison:
 
     @property
     def discounted_payback_envelope(self) -> "PaybackEnvelope":
-        """The payback years of the three worlds as one range ordered by value (#73)."""
+        """Return the payback years of the three worlds as one range ordered by value."""
         return PaybackEnvelope.of(self.discounted_payback_years)
 
 
 def _subject_alignment_key(result: LifecycleCostResult, subject: str) -> str:
-    """Aligns subjects across variants by (asset_class, subject) (§3.7).
+    """Return the key that aligns a subject across two variants: its asset class and its name (§3.7).
 
-    Two variants name their subjects independently, so the per-subject delta needs a rule for
-    deciding what is "the same thing" on both sides. Keying on the asset class *and* the subject
-    name — rather than on the name alone — is what lets the frontend show "which component drives
-    the difference" without name-matching heuristics, and it keeps a heat pump from being aligned
-    with a boiler that happens to share a component name. Subjects present in only one variant
-    still get a row, compared against an explicit zero in `compare`.
+    Keying on both keeps a heat pump from being aligned with a boiler that shares a component name. Subjects present in
+    only one variant still get a row, compared against zero in `compare`.
     """
     breakdown = result.component_breakdowns.get(subject)
     asset_class = breakdown.asset_class.value if breakdown and breakdown.asset_class else ""
@@ -1183,10 +979,9 @@ def _subject_alignment_key(result: LifecycleCostResult, subject: str) -> str:
 
 
 class _SlotAccessors:
-    """The three evaluation worlds as (slot name, band accessor).
+    """The three evaluation worlds as (slot name, band accessor), in the order comparisons report them.
 
-    Listed in the order comparisons report them. The names match
-    `VariantComparison.discounted_payback_years`.
+    The names match `VariantComparison.discounted_payback_years`.
     """
 
     BY_SLOT = (
@@ -1199,15 +994,11 @@ class _SlotAccessors:
 def cumulative_discounted_savings(
     reference: LifecycleCostResult, variant: LifecycleCostResult
 ) -> Dict[str, List[float]]:
-    """The payback curve per slot: cumulative discounted (reference - variant) per year (W4.4).
+    """Return the payback curve per slot: cumulative discounted (reference - variant) per year.
 
-    Index = year 0..T; the last value equals the NPV saving of that slot. Discounting goes
-    through the canonical `timeline.discount_factor` (W4.3). Missing years — a shorter series
-    on either side — count as zero flow, as they did before this moved out of `compare`.
-
-    Replaces the loops in `results.compare` (was `results.py:303-323`), `reporting._payback_svg`
-    (`reporting.py:882-895`) and `report_plots.plot_payback_curve` (`report_plots.py:216-229`),
-    which each re-derived it.
+    Index is year 0..T; the last value is the slot's NPV saving. Discounting uses `timeline.discount_factor`. Years
+    missing on either side count as zero flow. Reports draw the curve from this, so the curve and the payback year
+    agree.
     """
     interest = variant.parameters.interest_rate
     horizon = variant.parameters.observation_period_in_years
@@ -1227,20 +1018,16 @@ def cumulative_discounted_savings(
 
 
 def discounted_payback_year(cumulative_savings: List[float]) -> Optional[int]:
-    """First year > 0 at which a payback curve reaches zero; None = never within the horizon.
+    """Return the first year after 0 at which a payback curve reaches zero, or None if never within the horizon.
 
-    The zero-crossing of the curve `cumulative_discounted_savings` produced, which is why the two
-    live next to each other: a report that draws the curve and prints the year cannot show a
-    crossing the number contradicts (W4.4). Year 0 is excluded because that is the investment year
-    itself — a variant that costs nothing extra up front would otherwise "pay back" immediately.
+    Year 0 is excluded because it is the investment year; a variant costing nothing extra would otherwise pay back at
+    once. Only the first crossing counts, so a later dip below zero (a large replacement) is not reflected.
 
-    Only the *first* crossing is reported: a curve that dips back below zero later (a big
-    replacement inside the horizon) is not reflected here, which is the usual convention and the
-    reason the payback figure is a coarse robustness indicator rather than a decision KPI.
+    Args:
+        cumulative_savings: One slot's curve from :func:`cumulative_discounted_savings`.
 
     Returns:
-        The year, or None when the curve never reaches zero within the horizon — a legitimate
-        result that the band reports per slot, so "pays back in one world only" is expressible.
+        The year, or None when the curve never reaches zero within the horizon.
     """
     for year, value in enumerate(cumulative_savings):
         if year > 0 and value >= 0:
@@ -1250,24 +1037,18 @@ def discounted_payback_year(cumulative_savings: List[float]) -> Optional[int]:
 
 @dataclass(frozen=True)
 class PaybackEnvelope:
-    """The payback years of the three worlds as one ordered range (renovisorissues #73).
+    """The payback years of the three worlds as one range ordered by value.
 
-    Which world pays back first is not a property of its slot. Savings are reference minus variant
-    per slot, and the LOW slot prices *both* variants cheap: where the energy bill dominates the
-    uncertainty, the LOW world saves least and pays back last; where the plan's investment
-    dominates, the LOW world is the cheap-investment world and pays back first. A band written
-    positionally (LOW -> min) is therefore reversed in the first case, which is what production
-    refused as ``11/9/9``. The range is taken by value instead:
+    Which world pays back first does not follow from its slot. The LOW slot prices both variants cheaply: where the
+    energy bill dominates, the LOW world saves least and pays back last; where the investment dominates, it pays back
+    first. The range is therefore taken by value:
 
-    * ``earliest`` -- the first year any world has paid back; None when no world does;
-    * ``central`` -- the best-estimate world's year, None when it never pays back;
-    * ``latest`` -- the year every world has paid back; None as soon as one world never does,
-      because "never within the horizon" is the latest answer there is (None reads as +infinity).
+    - ``earliest``: the first year any world has paid back; None when none does.
+    - ``central``: the best-estimate world's year; None when it never pays back.
+    - ``latest``: the year every world has paid back; None as soon as one never does.
 
-    With None as +infinity, ``earliest <= central <= latest`` holds by construction. Per-slot
-    years stay on :attr:`VariantComparison.discounted_payback_years`, where each slot's curve is
-    drawn; every place that *states* a payback range reads this, and :meth:`of` is the only way the
-    per-slot years of :func:`discounted_payback_year` become a stated range.
+    Reading None as +infinity, ``earliest <= central <= latest`` always holds. Per-slot years stay on
+    :attr:`VariantComparison.discounted_payback_years`; every stated payback range reads this, built by :meth:`of`.
     """
 
     earliest: Optional[int]
@@ -1276,20 +1057,17 @@ class PaybackEnvelope:
 
     @classmethod
     def of(cls, payback_by_slot: Mapping[str, Optional[int]]) -> "PaybackEnvelope":
-        """The envelope of per-slot payback years keyed ``low``/``best_estimate``/``high``.
+        """Build the envelope from per-slot payback years keyed ``low``, ``best_estimate`` and ``high``.
 
         Args:
-            payback_by_slot: One payback year per world, None meaning never within the horizon,
-                as :func:`discounted_payback_year` gives it slot by slot. All three worlds must
-                be present.
+            payback_by_slot: One payback year per world, None meaning never within the horizon; all three must be
+                present.
 
         Returns:
             The range by value.
 
         Raises:
-            ValueError: A world is missing from the mapping. None is an answer ("never within
-                the horizon"), so a missing world is not read as one: it would state an open
-                range the per-slot years do not support.
+            ValueError: If a world is missing; a missing world is not read as "never".
         """
         missing = [slot for slot, _getter in _SlotAccessors.BY_SLOT if slot not in payback_by_slot]
         if missing:
@@ -1306,7 +1084,7 @@ class PaybackEnvelope:
         )
 
     def to_band(self) -> Dict[str, Optional[int]]:
-        """The document's band: ``min`` earliest, ``best`` central, ``max`` latest; None = never."""
+        """Return the document's band: ``min`` earliest, ``best`` central, ``max`` latest; None means never."""
         return {"min": self.earliest, "best": self.central, "max": self.latest}
 
 
@@ -1316,39 +1094,26 @@ def compare(
     reference_id: str = "reference",
     variant_id: str = "variant",
 ) -> VariantComparison:
-    """Differential NPV, differential annuity, discounted payback, warm-rent change (§3.7, §6.5).
+    """Compare two variants: NPV and annuity deltas, discounted payback and warm-rent change (§3.7, §6.5).
 
-    All deltas are slot-wise: reference and variant are compared within the same
-    LOW/BEST_ESTIMATE/HIGH world, so shared cost uncertainty cancels.
-
-    **Why slot-wise and not on averages, and not on the bands as intervals.** The two variants
-    share most of their uncertain inputs — the same gas price band, the same maintenance rates,
-    often the same devices. Differencing the *averages* would throw the band away and report a
-    single number as if it were certain; differencing the bands as intervals would add the two
-    widths and inflate a delta that is largely common-mode. Comparing within one slot keeps each
-    world internally consistent (both variants priced with gas at its high end, say), so what
-    remains in the delta band is the uncertainty the two variants genuinely do *not* share. The
-    caveat is stated in §3.9 and is worth repeating: slot-wise deltas are three coherent
-    scenarios, not an outer envelope of the difference — an extremal delta could occur in a mixed
-    world (gas at max *while* the heat pump comes in cheap), and cross-parameter questions of that
-    kind belong to the scenario axes and the break-even search (§4.6).
-
-    The same reasoning drives the two derived figures: the discounted payback is the zero-crossing
-    of each slot's own savings curve (each slot independently "never"; the range across them is
-    taken by value, :meth:`PaybackEnvelope.of`), and
-    warm-rent neutrality is evaluated per slot, where neutrality in the HIGH slot — "neutral even
-    if everything comes in expensive" — is the robust policy statement (§6.5).
+    All deltas are per slot: both variants are evaluated within the same LOW, BEST_ESTIMATE or HIGH world, so shared
+    uncertainty (the same gas price band, the same devices) cancels and the delta band shows only what the variants do
+    not share. Differencing averages would discard the band, and differencing intervals would add two widths. The slots
+    are three coherent scenarios, not an outer envelope of the difference; a mixed world (gas expensive while the heat
+    pump is cheap) belongs to the scenario axes (§4.6). Payback is the zero crossing of each slot's own savings curve,
+    with the range taken by value (:meth:`PaybackEnvelope.of`). Warm-rent neutrality is evaluated per slot; neutrality
+    in HIGH is the robust statement (§6.5).
 
     Args:
-        reference: The "do nothing" / base variant's result.
-        variant: The measures variant's result, evaluated under the *same* perspective; its
-            `parameters` supply the interest rate, horizon and annuity factor used throughout.
+        reference: The base variant's result.
+        variant: The measures variant's result under the same perspective; its `parameters` supply the interest rate,
+            horizon and annuity factor.
         reference_id: Label for the reference, carried into the comparison and its exports.
         variant_id: Label for the variant.
 
     Returns:
-        A `VariantComparison`. The warm-rent fields stay None unless *both* results carry a TENANT
-        payer NPV, i.e. unless the perspective is one of the rented ones (§6.5).
+        A `VariantComparison`. The warm-rent fields stay None unless both results carry a TENANT payer NPV, i.e. the
+            perspective is a rented one (§6.5).
     """
     # Imported here because the aggregation calculator imports this module for its record types.
     from hisim.economics.calculators.aggregation import (  # pylint: disable=import-outside-toplevel

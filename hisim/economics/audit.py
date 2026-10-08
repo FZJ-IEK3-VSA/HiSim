@@ -1,37 +1,10 @@
-"""Cost audit report and legacy-parity harness (cost_spec.md §9.5, §9.7).
+"""Cost audit table and legacy-parity harness (cost_spec.md §9.5, §9.7).
 
-The audit is the eager, tabular summary of the same ledger the `explain` API queries on
-demand: review one table instead of 46 files. The parity harness compares the legacy path's
-already-computed results (read-only, from its CSVs) against the new facts->engine path.
-
-**This module is verification, not presentation** (cost-spec-v2 §2.4, W4.6). It computes by
-design — that is the whole point of a parity harness — so it sits on the engine side of the
-seam-4 lint and may import the database and the evaluator. What it must *not* do is import
-`reporting`/`report_plots`: the flow goes the other way. `build_input_audit` resolves every
-declared fact against the cost database **once**, into a typed `InputAuditReport`, which the
-CSV writer here and the HTML report's input-audit section both merely render. Before W4.6 the
-override precedence was implemented twice — a third time, counting the report — and the two
-implementations disagreed in an edge case (see `ResolvedInputRow.origin_kind`).
-
-**The two halves, and why they are in one file.** Both answer "is the new path telling the truth",
-just about different things. `cost_audit.csv` audits the *inputs*: one row per declared cost
-subject with its asset class, size, resolved unit price and band, lifetime, the origin and sources
-of that price, the resulting gross investment and the subsidies with their binding caps. It is
-where a mis-sized component, a kW/m² mix-up or an uncited override is caught — errors that leave
-every downstream number arithmetically perfect and completely wrong (§9.5). `cost_parity_report.csv`
-audits the *output*: legacy value vs. new value vs. delta, per component.
-
-**The parity report is the evidence base for the cutover decision, and this is explicit.** During
-the parallel phase the legacy `get_cost_capex`/`get_cost_opex` path remains the sole source of all
-published numbers (§10.0 rule 5); the new engine runs beside it in shadow mode on every run where
-both are active. This harness reads the legacy CSVs **read-only** — it never calls a legacy cost
-method, because `get_cost_capex` mutates component configs and calling it again would corrupt the
-very calculation it must leave bit-identical (§10.0 rule 4) — and diffs them against the facts the
-new engine captured *before* the legacy path ran. The accumulated report across the golden scenario
-suite and real RenoVisor runs is what §10 Phase 7 checks before removing the old implementation:
-zero unexplained deltas is an exit criterion. Every remaining discrepancy is either a migration
-mistake or a latent bug in the old code, and is documented in `cost_module_issues.md` rather than
-silently fixed.
+`cost_audit.csv` audits the inputs: one row per declared cost subject with asset class, size, resolved unit price and
+band, lifetime, price origin and sources, gross investment and subsidies with binding caps; it catches mis-sized
+components and unit mix-ups. `cost_parity_report.csv` compares the legacy `get_cost_capex` results, read only from
+their CSVs, against the new engine per component; it is the evidence for the cutover decision (§10). This is
+verification code on the engine side: it may import the database and evaluator, never the report modules.
 """
 
 from __future__ import annotations
@@ -55,35 +28,18 @@ from hisim.loadtypes import Units
 
 
 class AuditFileNames:
-    """Names of the audit files written next to the results.
-
-    Both are new files nothing legacy reads (§10.0 rule 3): the input audit of §9.5 and the parity
-    report of §9.7. They are the two files a reviewer opens first — one to check what went into the
-    calculation, one to check whether it agrees with the path being replaced.
-    """
+    """Names of the audit files written next to the results: the input audit (§9.5) and the parity report (§9.7)."""
 
     COST_AUDIT_FILE_NAME = "cost_audit.csv"
     PARITY_REPORT_FILE_NAME = "cost_parity_report.csv"
 
 
 class AuditThresholds:
-    """Bounds the audit flags declared facts against (§9.5).
+    """Size bounds above which the audit flags a declaration as a likely wiring mistake (§9.5).
 
-    The audit's job includes catching wiring mistakes that are perfectly valid arithmetic, so it
-    carries a small number of "this cannot be what you meant" bounds. They only ever produce a flag
-    in the audit row — never an error, never a changed number — because the threshold is a heuristic
-    and the engine's own validation (`ComponentCostFacts.__post_init__`, the resolution check) is
-    what actually rejects impossible declarations.
-
-    The size bound is **per unit**, because one number cannot be a heuristic for five quantities: a
-    single flat bound of 10,000 was loose enough to pass a 5,000 kW heat pump — the very example
-    §9.5 and the report's section 1 use to explain what the audit catches — while being tight
-    enough to flag a perfectly ordinary 30,000 l heating-oil tank. The bounds below are each set
-    where a *residential* declaration stops being believable: a thousand kW, kWh or m² is already
-    an apartment block rather than a house, a hundred thousand litres is a tank farm, and a
-    unitless count of ten thousand devices is a typo. They are deliberately generous — a flag is a
-    prompt to look, so a false positive costs a reader a glance while a false negative costs them
-    the whole report.
+    A flag is only a note in the audit row, never an error or a changed number. Bounds are per size unit and set where
+    a residential declaration stops being believable: a thousand kW, kWh or m² is an apartment block, a hundred
+    thousand litres a tank farm, ten thousand unitless devices a typo.
     """
 
     #: Size above which a declaration is almost certainly a wiring mistake, per size unit (§9.5).
@@ -98,12 +54,7 @@ class AuditThresholds:
 
     @classmethod
     def implausible_size(cls, size_unit: Units) -> float:
-        """The bound for one size unit, falling back to the unitless one.
-
-        A unit added to `ComponentCostFacts.SUPPORTED_SIZE_UNITS` without a bound here falls back to
-        the ANY bound rather than raising: the audit's contract is that a heuristic never breaks a
-        run, so an un-tuned bound has to degrade to a looser one, not to a KeyError in the middle of
-        writing the report.
+        """Return the size bound for one unit, falling back to the unitless bound for a unit without its own.
 
         Args:
             size_unit: The unit the declared size is stated in.
@@ -120,34 +71,26 @@ def build_input_audit(
     parameters: EconomicParameters,
     result: Optional[LifecycleCostResult] = None,
 ) -> InputAuditReport:
-    """Resolves every declared fact against the cost database, once (§9.5, W4.6).
+    """Resolve every declared fact against the cost database once, into the typed input audit (§9.5).
 
-    Walks the declared cost subjects and, per subject, answers the audit's central question: which
-    unit price did this actually resolve to, and from where — a per-field config override (which
-    wins whether or not a database entry exists), a cost-database entry with its `valid_from_year`
-    key and source ids, or nothing at all. It then attaches the resulting gross investment and the
-    subsidy outcome from the evaluated result, and flags what looks wrong: a missing database entry,
-    an override without an `override_source`, a size above the bound
-    `AuditThresholds.implausible_size` sets for that size's unit.
-
-    "Once" is the design point (W4.6). The same question used to be answered independently by the
-    CSV writer here and by the HTML report's input-audit section, and the two implementations
-    disagreed — the report dropped an override's unit price whenever the asset class had no database
-    entry. Both now render this one typed `InputAuditReport`, which is also persisted so a report
-    can be rebuilt from an archived directory with no cost database present (W4.5).
+    Per subject it determines which unit price applied and where it came from: a per-field config override (which wins
+    whether or not a database entry exists), a database entry with its `valid_from_year` key and source ids, or
+    nothing. It adds the gross investment and subsidy outcome from the evaluated result and flags a missing database
+    entry, an override without `override_source`, and a size above `AuditThresholds.implausible_size`. The CSV writer
+    and the HTML report both render this one report, and it is persisted so a report can be rebuilt without a cost
+    database.
 
     Args:
-        inputs: The declared facts, normally straight from `economic_inputs.json`.
-        database: The cost database to resolve against; the price basis year is derived from it
-            and `inputs.simulation_year` via the one shared policy.
-        parameters: Economic parameters — used for the country and an explicit price basis year.
-        result: One evaluated perspective, supplying the gross investment and the subsidy decisions
-            per subject. Optional: without it the audit still reports origins, prices and flags,
-            just no resulting amounts.
+        inputs: The declared facts, normally from `economic_inputs.json`.
+        database: The cost database to resolve against; the price basis year comes from it and
+            `inputs.simulation_year`.
+        parameters: Economic parameters, for the country and an explicit price basis year.
+        result: One evaluated perspective, supplying gross investment and subsidy decisions per subject. Without it the
+            audit has origins, prices and flags but no amounts.
 
     Returns:
-        A typed `InputAuditReport` with the resolved price basis year, one row per declared subject
-        and the §3.10 source registry entries this evaluation cited.
+        An `InputAuditReport` with the price basis year, one row per declared subject and the §3.10 source registry
+            entries the evaluation cited.
     """
     year = effective_price_basis_year(parameters, database, inputs.simulation_year)
     decisions_by_subject = (
@@ -207,10 +150,8 @@ def build_input_audit(
                 subsidies_nominal_in_euro=breakdown.subsidies_nominal_in_euro if breakdown else None,
                 subsidy_scheme_ids=[award.scheme_id for award in decision.applied] if decision else [],
                 caps_binding_by_scheme=caps,
-                # The Sowieso share behind this subject's anyway credit, so the audit table
-                # states the credit's basis instead of only its euro amount, and the cost the
-                # share was applied to, so the audited credit is a multiplication the reader can
-                # carry out rather than a percentage in isolation.
+                # The anyway (Sowieso) share behind this subject's anyway credit and the cost it
+                # was applied to, so the audited credit is a multiplication the reader can check.
                 anyway_share=(
                     result.anyway_share_by_subject.get(subject_facts.subject) if result else None
                 ),
@@ -226,12 +167,10 @@ def build_input_audit(
 def _referenced_sources(
     database: CostDatabase, result: Optional[LifecycleCostResult]
 ) -> List[ResolvedSource]:
-    """The §3.10 registry entries this evaluation cited, resolved and sorted by id.
+    """Return the §3.10 source entries this evaluation cited, resolved and sorted by id.
 
-    Two registries feed it: the cost database's (whatever data files were touched, tracked by
-    `SourceRegistry.referenced_ids`) and — via the result's ledger and `source_resolver` — the
-    subsidy catalog's, whose ids could not be shown while subsidy provenance was fabricated as
-    `inline:` pseudo-sources (W2.4).
+    Combines the cost database's referenced ids (`SourceRegistry.referenced_ids`) and the subsidy catalog's, found
+    through the result's ledger and `source_resolver`.
     """
     referenced = set(database.sources.referenced_ids())
     resolver = dict(result.source_resolver or {}) if result is not None else {}
@@ -248,15 +187,10 @@ def _referenced_sources(
 
 
 def _csv_origin(row: ResolvedInputRow) -> str:
-    """The CSV's spelling of `origin_kind`.
+    """Return the CSV's wording for a row's `origin_kind`.
 
-    Formatting, not logic: the precedence decision was already made in `build_input_audit`, and each
-    renderer only chooses words for it (the HTML report spells the same three outcomes its own way).
-    The two resolved wordings are preserved verbatim from before the W4.6 refactor so that diffing
-    `cost_audit.csv` across it shows no change — the file is reviewed as a diff on golden scenarios
-    (§9.5), so churn in it is expensive. The third, UNRESOLVED, used to fall through to the bare
-    string "database entry" and so reported an unpriceable component as if the database had priced
-    it; it now says so, which is the one wording change this function has seen.
+    The wording is kept stable because `cost_audit.csv` is diffed on golden scenarios (§9.5). UNRESOLVED says so
+    instead of claiming a database price.
     """
     if row.origin_kind == OriginKind.ORIGIN_OVERRIDE:
         return f"config override ({row.override_source or 'no source given'})"
@@ -266,23 +200,13 @@ def _csv_origin(row: ResolvedInputRow) -> str:
 
 
 def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
-    """Writes cost_audit.csv: one row per component with origins, sources and bands (§9.5).
+    """Write `cost_audit.csv`: one semicolon-separated row per declared subject (§9.5).
 
-    Pure rendering of an already-resolved `InputAuditReport` — semicolon-separated, one row per
-    declared subject, with the whole chain from declaration to money in one line: what was declared,
-    where its price came from, which sources back it, the unit price and gross investment as
-    min/best_estimate/max, the lifetime, the applied subsidy schemes and which of their caps bound in which
-    slot. This is the "review one table instead of 46 files" deliverable.
-
-    "Unit price" is not one quantity across rows, which is why "Price basis" sits in front of those
-    three columns: a database-priced row states euro per unit of its size, an override states an
-    absolute euro amount, and reading the second as the first understates a subject by orders of
-    magnitude. The column names the basis explicitly rather than leaving it to be inferred from the
-    origin string.
-
-    Its second job is being a *diff*: a PR that changes cost data produces a reviewable delta of
-    this file on the golden scenario suite, so price updates surface as explicit changes rather than
-    silent drift (§9.5). That is why the column set and the origin wording are kept stable.
+    Each row carries the declaration, the price origin and sources, unit price and gross investment as
+    min/best_estimate/max, the lifetime, the applied subsidy schemes and which caps bound in which slot. "Price basis"
+    precedes the unit-price columns because a database price is euro per size unit while an override is an absolute
+    amount. The column set and wording are kept stable so data changes show up as a reviewable diff on golden
+    scenarios.
 
     Args:
         audit: The resolved report from `build_input_audit`.
@@ -314,8 +238,7 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
         "Subsidy max [EUR]",
         "Caps binding (slots)",
         "Anyway share",
-        # The share alone cannot be checked: the credit is share x basis, and without the basis a
-        # reader auditing "30 %" has no second number to multiply it by.
+        # The credit is share x basis; the basis is the second number a reader needs to check it.
         "Anyway basis [EUR]",
     ]
     for row in audit.rows:
@@ -357,12 +280,8 @@ def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
 class LegacyCsvStatus(enum.Enum):
     """Why a legacy cost CSV produced no table.
 
-    The two reasons are not the same finding and must not read as one. ABSENT is the ordinary
-    state of a run with `COMPUTE_CAPEX` off — there is nothing to compare against and nothing is
-    wrong. UNREADABLE means the file is there and this harness could not parse it, which is a
-    defect in the harness, in the legacy writer or in the file, and silently reporting it as "not
-    present (COMPUTE_CAPEX off)" is how a broken parity check looks exactly like a disabled one —
-    on the report whose whole purpose is to be the evidence base for the cutover decision.
+    ABSENT is normal for a run with `COMPUTE_CAPEX` off. UNREADABLE means the file exists but could not be parsed, a
+    defect that must not read like a disabled check.
     """
 
     ABSENT = "absent"
@@ -370,13 +289,9 @@ class LegacyCsvStatus(enum.Enum):
 
 
 def _read_legacy_csv(path: str) -> Union[pd.DataFrame, LegacyCsvStatus]:
-    """Reads one legacy cost CSV, or says which way it failed.
+    """Read one legacy cost CSV, read-only, or say why there is none (§10.0 rule 4).
 
-    The single point at which this package touches legacy output, and it is strictly read-only
-    (§10.0 rule 4). Every failure mode is non-fatal on purpose: the parity report is diagnostic
-    evidence, and a missing or malformed legacy file must never turn into an error on a run whose
-    legacy results are fine. Which failure it was, however, reaches the caller — see
-    `LegacyCsvStatus`.
+    Failures are not fatal, since the parity report is diagnostic, but the reason reaches the caller.
 
     Args:
         path: The legacy CSV to read.
@@ -399,53 +314,29 @@ def write_parity_report(
     parameters: EconomicParameters,
     result_directory: str,
 ) -> Optional[str]:
-    """Shadow-mode parity: legacy CSV values vs the new facts->engine path (§9.7).
+    """Write the shadow-mode parity report: legacy CSV values against the new engine (§9.7).
 
-    Parity is checked against the BEST_ESTIMATE slot with legacy-equivalent formulas
-    (investment / lifetime * simulated fraction). Discrepancies are evidence, not errors:
-    each is either a migration mistake or a latent legacy bug (documented in
-    cost_module_issues.md), and this report is the primary input for the cutover decision.
+    Reads the legacy `investment_cost_co2_footprint.csv` (read-only) by component name and, per declared subject,
+    compares the gross device investment and the investment for the simulated period (investment / lifetime * simulated
+    fraction, the legacy annualization) in the best-estimate slot. A row is flagged `DISCREPANCY` when the delta
+    exceeds 1 % of the legacy value, floored at one cent. A subject unknown to the legacy CSV is reported as `not in
+    legacy CSV`; a subject with neither override nor database entry is skipped. Origin, unit price and lifetime are
+    read from `build_input_audit`'s rows. Discrepancies are evidence of a migration mistake or a bug in the old path,
+    not errors.
 
-    **Why the gross investment is recomputed here** (cost-spec-v2 W4.6 asked whether it could
-    read `ComponentCostBreakdown.investment_gross_in_euro` instead; measured 2026-08-12: it
-    cannot, and the two are not value-identical in general). The breakdown's gross is the sum
-    of the year-0 INVESTMENT **plus PLANNING plus REMOVAL** entries of the *scoped* timeline;
-    the legacy CSV column this diffs against is the bare device investment. They coincide on
-    every shipped data file only because `planning_cost_in_euro` and `removal_cost_in_euro` are
-    0 throughout — a data PR setting either would silently turn every row of this report into a
-    false discrepancy. Recomputing the legacy formula is this harness's purpose, so the
-    duplication stays, deliberately, and only here.
-
-    **What it actually compares.** The legacy `investment_cost_co2_footprint.csv` is read (read-only,
-    §10.0 rule 4) and indexed by component name; for every declared cost subject two figures are
-    diffed against it — the gross device investment and the "investment for the simulated period"
-    (investment / lifetime × simulated fraction, the legacy annualization). A row is flagged
-    ``DISCREPANCY`` when the delta exceeds 1 % of the legacy value, floored at one cent so a
-    near-zero legacy value does not flag on float noise. A subject the legacy CSV does not
-    know at all is reported as ``not in legacy CSV`` rather than as a delta — during the parallel
-    phase that usually means a component the legacy path never priced. Subjects that resolve to
-    neither an override nor a database entry are skipped: there is no new value to compare.
-
-    Because the migrated database entries are degenerate bands (min = best_estimate = max), checking the
-    BEST_ESTIMATE slot checks all three.
-
-    **Where the new value comes from.** Which origin won, what that origin's unit price is and which
-    lifetime applies are all read off `build_input_audit`'s rows rather than decided again here.
-    This function used to re-derive all three, and its override branch had already drifted: it took
-    the override as the whole subject's investment while the engine and the database branch both
-    multiply by `facts.count`, so every multi-unit subject with an override was reported as a
-    discrepancy that did not exist.
+    The gross investment is recomputed with the legacy formula rather than taken from
+    `ComponentCostBreakdown.investment_gross_in_euro`, which also includes planning and removal and so would differ as
+    soon as those are non-zero.
 
     Args:
-        inputs: The declared facts, read back from `economic_inputs.json` so they provably predate
-            the legacy run that produced the CSVs.
+        inputs: The declared facts, read from `economic_inputs.json` so they predate the legacy run.
         database: Cost database to price the new path against.
-        parameters: Economic parameters; country and price basis year policy.
+        parameters: Economic parameters: country and price basis year.
         result_directory: Directory holding the legacy CSVs and receiving the report.
 
     Returns:
-        The path of `cost_parity_report.csv`, or None when the legacy capex CSV is absent (i.e.
-        COMPUTE_CAPEX was off and there is nothing to compare against) or could not be read.
+        The path of `cost_parity_report.csv`, or None when the legacy capex CSV is absent (COMPUTE_CAPEX off) or
+            unreadable.
     """
     legacy_path = os.path.join(result_directory, "investment_cost_co2_footprint.csv")
     legacy_csv = _read_legacy_csv(legacy_path)
@@ -461,16 +352,12 @@ def write_parity_report(
         return None
     capex_df = legacy_csv
     path = os.path.join(result_directory, AuditFileNames.PARITY_REPORT_FILE_NAME)
-    # The audit resolves override-vs-database precedence, the unit price and the lifetime once, and
-    # this harness reads them off its rows instead of deciding them a second time: the two answers
-    # disagreeing is precisely the class of defect W4.6 removed, and it would show up here as a
-    # fabricated discrepancy in the report the cutover decision rests on. No result is passed --
-    # parity compares declarations against the legacy CSV and needs no evaluated perspective.
+    # Precedence, unit price and lifetime are read from the audit's rows rather than decided again,
+    # so the parity report cannot disagree with the audit. No result is passed: parity compares
+    # declarations with the legacy CSV.
     audit = build_input_audit(inputs, database, parameters)
-    # Paired by subject, never by position: the audit builds one row per declared fact today, but a
-    # harness that silently relied on that would report subject A's origin and lifetime against
-    # subject B's legacy figures the day `build_input_audit` filters or reorders anything -- a
-    # wrong parity row that looks exactly like a real discrepancy.
+    # Paired by subject, never by position, so a reordered or filtered audit cannot pair one
+    # subject's origin with another's legacy figures.
     rows_by_subject = {row.subject: row for row in audit.rows}
     fraction = inputs.simulated_period_fraction
     rows: List[List[Any]] = []
@@ -484,8 +371,8 @@ def write_parity_report(
                 "investment_period": float(row["Investment for simulated period [EUR]"]),
             }
         except (KeyError, TypeError, ValueError) as err:
-            # Named, not swallowed: a renamed legacy column silently turns every component into a
-            # "not in legacy CSV" row, i.e. into a report that looks complete and compares nothing.
+            # Named, not swallowed: a renamed legacy column would otherwise turn every component into a
+            # "not in legacy CSV" row.
             log.warning(
                 f"Parity harness could not read the legacy capex row for component '{name}' in "
                 f"{legacy_path}: {type(err).__name__}: {err}. The component is reported as not "

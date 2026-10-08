@@ -1,56 +1,15 @@
 """Postprocessing bridge: runs the lifecycle cost engine after a simulation (cost_spec.md §10).
 
-Activation is opt-in via ``PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS`` and side-effect
-free: it only writes *new* files (lifecycle_costs.json, component_costs.*,
-cash_flow_timeline.csv, cost_audit.csv, cost_audit_timeline_heatmap.png,
-cost_parity_report.csv, lifecycle_kpis.json, economic_inputs.json,
-cost_provenance.json). It never calls the legacy cost methods.
+The only place where `hisim.economics` meets the rest of HiSim. Opt-in via
+`PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS`, it walks a finished simulation's components, outputs and results
+frame, builds `EvaluationInputs`, merges the setup's `EconomicContext`, evaluates every applicable perspective and
+writes the export set. It decides no economics and never calls the legacy cost methods. `economic_inputs.json` is
+written first, so it stays a faithful extract of the simulation.
 
-**This is the only place where `hisim.economics` meets the rest of HiSim.** Everything else in
-the package is a pure function of `EvaluationInputs` plus data files; this module is what walks a
-*finished* simulation — its wrapped components, its output declarations and its results DataFrame
-— and turns them into that input record. It owns extraction and orchestration: collecting facts
-and billing determinants, merging in what only the system setup can know (`EconomicContext`),
-calling the evaluator once per perspective, and writing the export set. It deliberately owns no
-economics at all: no price lookup, no discounting, no subsidy decision, and — since cost-spec-v2
-W1.2 — not even the choice of price basis year, which is resolved downstream in
-`evaluator.effective_price_basis_year` so the postprocessing path and the `evaluate` CLI derive
-the same year from the same file.
-
-**What breaks a run and what does not.** Computing lifecycle costs is opt-in, and asking for it
-means asking for an answer: a fleet the cost model cannot describe therefore *fails the run*. The
-`UnresolvableSubjectsError` of decision D7 — raised for an undeclared component (§9.2), for a
-recognized component whose facts do not build, for a meter whose declared output column this run
-does not contain, and for a declared fact the database cannot price — propagates out of
-`postprocessing_main.py` and out of `hisim_main`. That guard used to be a
-bare ``except Exception`` that logged ``"Lifecycle cost engine failed (legacy outputs are
-unaffected): …"`` and continued, which meant the deliberate fail-fast of D7 arrived as a log line
-in the middle of a successful run; it now re-raises `CostDataError` (of which
-`UnresolvableSubjectsError` is one) and swallows only the accidents, so an incomplete cost model
-cannot be mistaken for a complete one.
-
-**Nothing the run asked for degrades into something else.** Four failures now abort rather than
-continue, and they are all the same failure: the run asked a question and would otherwise have got
-a *different* question's answer with a log line to explain it.
-
-- A **cost database** that will not load — a wrong path must not turn "compute my lifecycle costs"
-  into a run with no cost files.
-- A **subsidy catalog** that will not load. It used to log an error and leave `catalog` at None,
-  which silently continues without any subsidy: a run configured with a catalog would then
-  publish subsidy figures that have nothing to do with it. The failure is wrapped into a
-  `CostDataError` carrying the path and the original exception.
-- A **scenario cube** the setup declared and that fails to evaluate. It used to log ``"… (base
-  results unaffected)"`` and leave the base exports in place, which is true and beside the point:
-  the report then silently lacks the sensitivity section it was asked for.
-- Anything failing **part-way through writing the exports**. The files already written are removed
-  (`_remove_partial_exports`) before the exception propagates, so a half-written set cannot be read
-  as a complete one — `postprocessing_main` deliberately logs and continues for a non-cost error,
-  and without the cleanup that run finishes green over a partial cost report. `economic_inputs.json`
-  is kept: it is the extract of the *simulation* and stays true whatever the engine did next.
-
-The bridge is also the only consumer of `adapter.py`, and the reason `economic_inputs.json` is
-written before any economics happens: the file must be a faithful extract of the simulation,
-independent of cost-database state (cost-spec-v2 W1.1).
+A run that asked for lifecycle costs fails rather than degrading: an unresolvable subject
+(`UnresolvableSubjectsError`), a cost database or subsidy catalog that will not load, and a declared scenario cube that
+fails all propagate as `CostDataError`. Export files written before a failure are removed; `economic_inputs.json` is
+kept.
 """
 
 from __future__ import annotations
@@ -103,41 +62,34 @@ if TYPE_CHECKING:  # The renderer is imported lazily; only its record type is ne
     from hisim.economics.report_plots import SkippedPlot
 
 
-#: The length of a reference year, used to turn a simulation's start/end dates into
-#: `EvaluationInputs.simulated_period_fraction` — the factor the engine later uses to annualize a
-#: partial-year run (§8.5). A flat 365-day year is deliberate: the fraction scales energy
-#: quantities, so a leap day's worth of difference is far below the uncertainty band of any price
-#: it is multiplied with.
+#: The length of a reference year, used to turn a run's start/end dates into
+#: `EvaluationInputs.simulated_period_fraction`, the factor that annualizes a partial-year run
+#: (§8.5). A flat 365-day year: a leap day is far below the uncertainty of any price.
 SECONDS_PER_YEAR = 365 * 24 * 3600
 
 
 @dataclass(frozen=True)
 class CostlessPart:
-    """A simulation component that is part of another's system (`EconomicContext.costless_subjects`).
+    """A simulation component that is part of another component's purchase (`EconomicContext.costless_subjects`).
 
-    The battery's energy-management controller (renovisorissues #77, owner decisions of
-    2026-09-28): a cost subject of its own, but a costless one, renewed exactly when the device it
-    belongs to is.
+    Example: the battery's energy-management controller. It stays a cost subject of its own, but costs nothing and is
+    renewed when the device it belongs to is.
 
     Attributes:
         reason: Why the subject costs nothing, recorded as its overrides' source (§3.10).
-        lifetime_of_asset_class: The class whose service life the subject is renewed on, or None
-            to keep its own.
+        lifetime_of_asset_class: The class whose service life the subject is renewed on, or None to keep its own.
     """
 
     reason: str
     lifetime_of_asset_class: Optional[ComponentType] = None
 
     def applied_to(self, facts: ComponentCostFacts) -> ComponentCostFacts:
-        """The adapter's facts overridden to cost nothing of their own and to live the system's life.
+        """Return the facts overridden to cost nothing and to live the life of `lifetime_of_asset_class`.
 
-        Every monetary field the engine prices a device with is overridden to an exact zero -- the
-        investment and the installation (so a replacement costs nothing either), the maintenance
-        rate and the fixed operation cost -- and so is the embodied CO2. Planning and removal costs
-        are not overridable; they are the cost database's for the class, zero for the
-        energy-management controller this exists for. The asset class and the size stay what the
-        adapter extracted, so the subject is still registered; its service life is the one of
-        :attr:`lifetime_of_asset_class` (``ComponentCostFacts.lifetime_of_asset_class``).
+        Investment, installation, maintenance rate, fixed operation cost and embodied CO2 are overridden to zero, so a
+        replacement costs nothing either. Planning and removal costs cannot be overridden; they come from the cost
+        database (zero for the energy-management controller). Asset class and size stay as extracted, so the subject is
+        still registered.
 
         Args:
             facts: The adapter's facts.
@@ -160,78 +112,48 @@ class CostlessPart:
 
 @dataclass
 class EconomicContext:
-    """Everything a system setup can declare beyond what the simulation knows itself.
+    """Everything a system setup can declare about the decision situation beyond what the simulation knows.
 
-    Attach via ``simulation_parameters.set_economic_context(...)``. With an existing-asset
-    register present, the default perspective bundle switches from greenfield to the full
-    brownfield set (owner/landlord/tenant, macroeconomic, ...); with a subsidy context and
-    ``EconomicParameters.subsidy_catalog_path`` set, the subsidy engine prices support; without a
-    catalog none is booked. See system_setups/economic_example/ for a complete worked example.
+    The simulation knows device sizes and metered kWh, but not what stood in the cellar before, who applies for which
+    grant, whether the building is rented, or which envelope measures belong to the package. Attach it with
+    `simulation_parameters.set_economic_context(...)`; `_merge_context` adds it to the simulation-derived
+    `EvaluationInputs` and never overwrites a simulated quantity. Every field is optional. See
+    system_setups/economic_example/ for a worked example.
 
-    **The design question it answers**: a HiSim simulation models physics, so it can say how big
-    the heat pump is and how many kWh crossed the meter, but it can say nothing about the *decision
-    situation* — what stood in the cellar before, who is applying for which grant, whether the
-    building is rented, which non-simulated envelope measures are part of the same package. Those
-    facts are neither derivable from the results frame nor sensible to hard-code in the engine, so
-    they are declared once by whoever defines the variant and merged into the simulation-derived
-    `EvaluationInputs` by `_merge_context`. Everything here is therefore optional and additive:
-    the context never overwrites a simulated quantity, it only supplies what the simulation left
-    unset.
+    - `existing_assets`: an `ExistingAssetRegister` of the pre-measure system. Its presence switches the perspective
+      bundle from greenfield to brownfield and status quo (`perspectives.select_applicable`) and enables kept assets,
+      residual values, removal costs and the anyway credit (§4.1).
+    - `subsidy_context`: the applicant and building answers the §5.3 eligibility conditions read; unanswered fields
+      stay undetermined (§5.7).
+    - `extra_cost_facts`: `SubjectCostFacts` for subjects that are not simulation components, such as envelope measures
+      sized in m².
+    - `technical_attributes_by_subject`: per-subject values merged into the extracted facts for subsidy conditions
+      (SCOP, refrigerant, achieved U-value).
+    - `costless_subjects`: components that are part of another's purchase (`CostlessPart`).
+    - `living_area_in_m2`, `heated_floor_area_in_m2`, `current_cold_rent_in_euro_per_m2_month`,
+      `building_specific_emissions_in_kg_per_m2_a`: what the §6.3 CO2 split and the §6.4 modernization levy need to
+      divide costs between landlord and tenant.
+    - `annual_heat_demand_in_kwh`: overrides the measured useful heat as the denominator of the cost per unit of heat;
+      must be positive.
+    - `scenario_set`: triggers the §4.6 scenario cube evaluation and the report's scenario section.
 
-    **What a system-setup author can put in it**, roughly in order of impact:
-
-    - `existing_assets` — an `ExistingAssetRegister` describing the pre-measure system. This is the
-      single most consequential field: its mere presence switches the evaluated perspective bundle
-      from greenfield to brownfield/status-quo (see `perspectives.select_applicable`) and turns on
-      kept-asset accounting, residual values, removal costs and the anyway-cost credit (§4.1).
-    - `subsidy_context` — the applicant/building answers the §5.3 eligibility conditions resolve
-      against (income, dwelling units, heritage status, existing heating, iSFP). Unanswered fields
-      stay *undetermined* rather than false (§5.7), which is reported rather than silently denied.
-    - `extra_cost_facts` — `SubjectCostFacts` for cost subjects that are not simulation components
-      at all, above all the building-envelope measures of README §3.2b (insulation, windows, doors),
-      sized in m² of the respective element.
-    - `technical_attributes_by_subject` — per-subject key/value pairs merged into the facts the
-      adapter derived, for subsidy conditions the adapter cannot know (SCOP, refrigerant, achieved
-      U-value).
-    - `costless_subjects` — simulation components that are part of another component's purchase
-      (the energy-management controller of a battery): each stays a cost subject, but its facts
-      are overridden to cost nothing -- no investment, installation, maintenance, fixed operation
-      or embodied CO2 of its own -- with the stated reason as the overrides' source, and it is
-      renewed on the life of the class it is part of (`CostlessPart`).
-    - the actor-model context (`living_area_in_m2`, `heated_floor_area_in_m2`,
-      `current_cold_rent_in_euro_per_m2_month`, `building_specific_emissions_in_kg_per_m2_a`), which
-      the §6.3/§6.4 CO2 split and modernization levy need to allocate costs between landlord and
-      tenant;
-    - `annual_heat_demand_in_kwh`, the denominator of the system-cost-per-unit-of-heat KPI, which
-      overrides the useful heat the simulation measured (`adapter.UsefulHeatSources`) and must be
-      positive: a house with no heat demand has no cost per unit of heat, and the way to say so
-      is to leave the field unset;
-    - `scenario_set`, which additionally triggers the §4.6 cube evaluation into
-      scenario_cube.csv/json and the report's scenario section.
-
-    **What happens if you attach nothing at all** (the default): the run stays valid and produces
-    lifecycle costs, but only the greenfield perspectives are evaluated — every device is charged as
-    a new purchase into an empty building, nothing is credited as already existing, no sunk cost or
-    anyway-cost applies. No subsidy is booked without a catalog, actor splits have no
-    allocation basis, and the LCOH KPI divides by the useful heat the simulation measured
-    (`adapter.UsefulHeatSources`), or is omitted when the run contains no component that table
-    lists, or when the heat it measured sums to zero. That is the correct
-    answer to a question nobody asked in more detail — not a degraded one — but it is a *greenfield*
-    answer, which is the thing to check first when brownfield figures are missing from a result set.
+    Without a context, only the greenfield perspectives are evaluated: every device is a new purchase, no subsidy is
+    booked without a catalog, and the cost of heat divides by the measured useful heat (or is omitted when none is
+    measured).
     """
 
     # Brownfield: what is already installed, and which measures replace what (§4.1).
     existing_assets: Optional[ExistingAssetRegister] = None
     # Applicant/building facts for the subsidy engine (§5.3).
     subsidy_context: Optional[SubsidyContext] = None
-    # Additional cost subjects that are not simulation components — envelope measures (Q7).
+    # Additional cost subjects that are not simulation components, such as envelope measures.
     extra_cost_facts: List[SubjectCostFacts] = field(default_factory=list)
     # Technical attributes merged into component-derived facts by subject name (subsidy
     # conditions like SCOP/refrigerant that the adapter cannot know):
     technical_attributes_by_subject: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    # Subjects that are part of another subject's system, by subject name: they stay cost
-    # subjects of their own, but every amount the engine would price for them is zero, and they
-    # live that system's life (renovisorissues #77: the controller that comes with a battery).
+    # Subjects that are part of another subject's system, by subject name (e.g. the controller
+    # that comes with a battery): they stay cost subjects, priced at zero, and live that system's
+    # life.
     costless_subjects: Dict[str, CostlessPart] = field(default_factory=dict)
     # Actor-model context (§6.3, §6.4):
     living_area_in_m2: Optional[float] = None
@@ -254,23 +176,15 @@ class EconomicContext:
     )
 
     def __post_init__(self) -> None:
-        """Refuses a negative quantity at declaration time, where the author can see it.
+        """Refuse a negative quantity at declaration time, so the error names the field.
 
-        Every scalar here is an area, a rent, an emission intensity or a demand — none of them can
-        be negative, and none of them is checked anywhere downstream: a negative living area
-        silently produces a negative EUR/m² KPI, a negative heat demand a negative system cost
-        per unit of heat, and both look like results rather than like the typo they are. Checking here means
-        the refusal names the field while the system setup that declared it is on screen, rather
-        than in a KPI table hours later.
-
-        The heat demand is held to more than that: it is a denominator, so a declared zero would
-        divide by zero and a NaN or an infinity would publish a KPI of NaN or of zero. A house with
-        no heat demand is stated by leaving the field unset (the KPI is then omitted, or divides by
-        the heat the simulation measured), not by declaring zero.
+        None of these values is checked downstream, and a negative area or demand would produce plausible-looking
+        negative KPIs. The heat demand is a denominator, so zero and non-finite values are refused too; a house with no
+        heat demand leaves the field unset.
 
         Raises:
-            ValueError: If any of `NON_NEGATIVE_FIELDS` is set to a negative number, or
-                `annual_heat_demand_in_kwh` to zero or to a non-finite number.
+            ValueError: If any of `NON_NEGATIVE_FIELDS` is negative, or `annual_heat_demand_in_kwh` is zero or not
+                finite.
         """
         negative = [
             name
@@ -294,13 +208,10 @@ class EconomicContext:
 def _output_column_and_unit(
     component_name: str, field_name: str, all_outputs: List[Any], results: pd.DataFrame
 ) -> Optional[Tuple[pd.Series, str]]:
-    """One output's per-timestep column together with the unit it was declared in.
+    """Return one output's per-timestep column with the unit it was declared in, or None if there is no such output.
 
-    The results DataFrame has no named columns the engine could rely on, so an output is located
-    positionally: `all_outputs` and the frame's columns are in the same order, and this is the one
-    place in the bridge that knows it. The declared unit travels with the column because the energy
-    balance reads channels that are sometimes power and sometimes energy, so it has to see what the
-    component declared rather than assume the Wh the meter contract fixes.
+    The results frame's columns are in the same order as `all_outputs`, so the output is located by position. The unit
+    travels with the column because some channels are power and some are energy.
     """
     for index, output in enumerate(all_outputs):
         if output.component_name == component_name and output.field_name == field_name:
@@ -312,34 +223,22 @@ def _output_column_and_unit(
 def _output_column(
     component_name: str, field_name: str, all_outputs: List[Any], results: pd.DataFrame
 ) -> Optional[pd.Series]:
-    """One output's per-timestep column, or None when the run declares no such output.
+    """Return one output's per-timestep column, or None when the run declares no such output.
 
-    Returning None rather than an empty series for a missing output is what lets the callers
-    distinguish "this meter measured nothing" from "this meter's declared field does not exist" —
-    the second is a broken extraction and they refuse the run over it.
+    None, rather than an empty series, lets callers tell "measured nothing" from "the declared field does not exist";
+    they refuse the run on the second.
     """
     found = _output_column_and_unit(component_name, field_name, all_outputs, results)
     return None if found is None else found[0]
 
 
 class EnergyUnitConversion:
-    """Factors that turn a summed output column into kilowatt hours, keyed by its declared unit.
+    """Factors that turn a summed output column into kWh, keyed by its declared unit.
 
-    HiSim components publish power and energy channels side by side — a PV system has both
-    `ElectricityOutput` in W and `ElectricityEnergyOutput` in Wh — so every summing path reads the
-    *declared* unit of the column it found instead of assuming one. `WATT` needs the timestep
-    length as well, which is why it is a callable rather than a number.
-
-    **One table, both paths.** The billing side (`_sum_output_column`, which turns a meter column
-    into the kilowatt hours a carrier is charged for) and the energy-balance side
-    (`_device_energy_flows`) convert through this same table, so a column can never be worth one
-    number on the bill and another on the chart. The billing side used to carry its own hardcoded
-    `* 1e-3`, which was right only because every meter column happens to be declared in Wh.
-
-    A unit not in this table is not converted at all, and that is a refusal rather than a guess:
-    the caller reports the column as an unresolved subject and the run stops, because a
-    mis-declared output silently converted is a number three orders of magnitude wrong on a chart
-    or on a bill.
+    Components publish power and energy channels side by side (a PV system has `ElectricityOutput` in W and
+    `ElectricityEnergyOutput` in Wh), so the declared unit is always read. `WATT` needs the timestep length, so it is a
+    callable. Billing (`_sum_output_column`) and the energy balance (`_device_energy_flows`) both use this table, so
+    bill and chart agree. A unit not in the table is refused, not guessed.
     """
 
     WATT_HOURS_PER_KWH = 1000.0
@@ -356,17 +255,16 @@ class EnergyUnitConversion:
 
     @staticmethod
     def to_kwh(total: float, unit: str, seconds_per_timestep: int, column: str) -> float:
-        """Converts one summed column to kWh by the unit it was declared in.
+        """Convert one summed column to kWh by the unit it was declared in.
 
         Args:
-            total: The summed column, in its declared unit (a power column integrates by the
-                timestep, so its sum is W-timesteps).
+            total: The summed column in its declared unit (a power column sums to W-timesteps).
             unit: The declared unit's value, as `_output_column_and_unit` reports it.
             seconds_per_timestep: The simulation's resolution, needed for a power column.
             column: `component.field` of the column, for the error message.
 
         Returns:
-            The same quantity in kilowatt hours.
+            The same quantity in kWh.
 
         Raises:
             CostDataError: If the unit is neither an energy nor a power unit this table converts.
@@ -388,37 +286,26 @@ def _device_energy_flows(
     results: pd.DataFrame,
     seconds_per_timestep: int,
 ) -> Dict[str, float]:
-    """One component's energy-balance flows over the simulated period, as role -> kWh.
+    """Return one component's energy-balance flows over the simulated period, as role -> kWh.
 
-    The physical counterpart of `_billing_determinants`, and the data behind the household energy
-    balance: for every `adapter.DeviceEnergySpec` this component's class declares, the named output
-    column is located positionally, summed, converted to kWh by its own declared unit and filed
-    under the spec's role. A battery's signed AC-power channel is split by sign so charging and
-    discharging come out as two roles rather than one net number that would hide the round trip.
-
-    Nothing here is priced and nothing here crosses the system boundary, which is why it is
-    separate from the billing path: the flows of a component that is free of cost or not declared
-    at all are just as real, and dropping them would leave the balance unattributed.
+    For each `adapter.DeviceEnergySpec` of the component's class, the named column is located, summed, converted to kWh
+    by its declared unit and filed under the spec's role. A battery's signed AC power is split by sign into charge and
+    discharge. Nothing here is priced; components that are free of cost or undeclared still contribute.
 
     Args:
-        component: The finished simulation's component; its class name and `component_name` are
-            read.
+        component: The finished simulation's component; its class name and `component_name` are read.
         all_outputs: The run's output declarations, in the frame's column order.
         results: The per-timestep results frame.
-        seconds_per_timestep: Needed to integrate the columns declared in W.
+        seconds_per_timestep: Needed to integrate columns declared in W.
 
     Returns:
-        Role value -> kWh over the simulated period, positive magnitudes, zero-valued roles
-        omitted. Empty for a class whose table row is explicitly empty, and for a class that moves
-        no electricity at all.
+        Role value -> kWh, positive magnitudes, zero roles omitted. Empty for a class with an explicitly empty row or
+            one that moves no electricity.
 
     Raises:
-        CostDataError: For a table row naming a constant the class does not declare, for a
-            declared column this run did not produce, for a column in a unit the conversion table
-            does not know, and for a class the table does not mention at all that nevertheless
-            publishes electricity in a convertible unit. All four used to be a warning and a
-            dropped flow, which is a balance that looks complete and is not; `build_evaluation_inputs`
-            turns each of them into an `UnresolvedSubject` and the D7 check stops the run.
+        CostDataError: For a row naming a constant the class does not declare, a declared column this run did not
+            produce, a column in a unit the conversion table does not know, or a class with no row that publishes
+            electricity in a convertible unit. `build_evaluation_inputs` turns each into an `UnresolvedSubject`.
     """
     specs = adapter.resolve_device_energy_flows(component)
     if specs is None:
@@ -459,22 +346,18 @@ def _device_energy_flows(
 
 
 def _require_no_unplaced_electricity(component: Any, all_outputs: List[Any]) -> None:
-    """Refuses a component class the energy-balance table has never been asked about.
+    """Refuse a component class that publishes electricity but has no row in the energy-balance table.
 
-    `adapter.DeviceEnergySpecs` is meant to be the one statement of who is in the household
-    balance, which only holds if a class outside it is outside it *on purpose*. A class that
-    publishes electricity in a unit the collector could convert and has no row at all is the case
-    nobody decided: it might be a device whose flow belongs on the chart, or a controller whose
-    watts are an instruction rather than a flow, and only a maintainer can say which. Before this
-    check it was silently the second.
+    `adapter.DeviceEnergySpecs` is complete only if every class outside it was left out on purpose; whether such a
+    class's watts are a flow or a controller's instruction needs a maintainer's decision.
 
     Args:
         component: The wrapped component; its class name and `component_name` are read.
         all_outputs: The run's output declarations, scanned for this component's own.
 
     Raises:
-        CostDataError: If the class publishes at least one `LoadTypes.ELECTRICITY` output in a
-            unit `EnergyUnitConversion` converts.
+        CostDataError: If the class publishes at least one `LoadTypes.ELECTRICITY` output in a unit
+            `EnergyUnitConversion` converts.
     """
     columns = [
         output.field_name
@@ -501,13 +384,10 @@ def _sum_output_column(
     results: pd.DataFrame,
     seconds_per_timestep: int,
 ) -> Optional[float]:
-    """Sums one output column to kWh by its declared unit; None if the output does not exist.
+    """Sum one output column to kWh by its declared unit; None if the output does not exist.
 
-    Routed through `EnergyUnitConversion` rather than the `* 1e-3` it used to hardcode, so the
-    kilowatt hours a carrier is billed for and the kilowatt hours the energy balance draws are the
-    same conversion of the same column. Every meter column is declared in Wh, so no bill moves;
-    what changes is that a meter column redeclared in kW or kWh would now be converted correctly
-    instead of by a factor of a thousand.
+    Uses `EnergyUnitConversion`, so the kWh a carrier is billed for and the kWh the energy balance shows are the same
+    conversion of the same column.
 
     Args:
         component_name: The meter's runtime name.
@@ -532,18 +412,15 @@ def _sum_output_column(
 
 
 class UsefulHeatExtraction:
-    """The numerical tolerance of reading useful heat off the columns `adapter.UsefulHeatSources` names.
+    """The numerical tolerance for reading useful heat off the columns `adapter.UsefulHeatSources` names.
 
-    Each source states its heat with a sign convention, and a timestep of the other sign is refused
-    rather than folded in: heat flowing the wrong way is not heat the house used. The tolerance
-    keeps that refusal from firing on rounding noise, and only on it.
+    A timestep against the source's sign convention is refused, because heat flowing the wrong way is not heat the
+    house used; the tolerance keeps rounding noise from triggering that refusal.
     """
 
     #: Largest wrong-signed energy one timestep may carry and still count as zero, in kWh (1 mWh).
-    #: The building clips its heating half at exactly zero, so its only wrong-signed values are
-    #: float noise, of the order of 1e-12 of a timestep's Wh. The smallest physical hot-water draw
-    #: is some Wh (one litre warmed by 1 K is 1.16 Wh), three orders of magnitude above this bound,
-    #: so a genuine reverse flow still exceeds it while rounding never does.
+    #: Rounding noise is of the order of 1e-12 of a timestep's Wh; the smallest physical hot-water
+    #: draw is some Wh (one litre warmed by 1 K is 1.16 Wh), well above this bound.
     SIGN_TOLERANCE_IN_KWH: ClassVar[float] = 1e-6
 
 
@@ -553,24 +430,22 @@ def _useful_heat_of_component(
     results: pd.DataFrame,
     seconds_per_timestep: int,
 ) -> Optional[Tuple[str, float]]:
-    """One component's useful heat over the simulated period, as (`UsefulHeatKind` value, kWh).
+    """Return one component's useful heat over the simulated period, as (`UsefulHeatKind` value, kWh).
 
     Args:
-        component: The finished simulation's component; its class name and `component_name` are
-            read.
+        component: The finished simulation's component; its class name and `component_name` are read.
         all_outputs: The run's output declarations, in the frame's column order.
         results: The per-timestep results frame.
-        seconds_per_timestep: Passed to the unit conversion, which needs it for a power column.
+        seconds_per_timestep: Passed to the unit conversion, needed for a power column.
 
     Returns:
-        The kind and the heat in kWh (positive by the source's sign convention), or None for a
-        class `adapter.UsefulHeatSources` does not list.
+        The kind and the heat in kWh (positive by the source's sign convention), or None for a class
+            `adapter.UsefulHeatSources` does not list.
 
     Raises:
-        CostDataError: For a row naming a constant the class does not declare, for a listed column
-            this run did not produce, for a column in a unit the conversion table does not know,
-            and for a timestep whose heat runs against the source's sign convention beyond
-            `UsefulHeatExtraction.SIGN_TOLERANCE_IN_KWH`, or is not a finite number.
+        CostDataError: For a row naming a constant the class does not declare, a listed column this run did not
+            produce, a column in an unknown unit, or a timestep that is not finite or runs against the sign convention
+            beyond `UsefulHeatExtraction.SIGN_TOLERANCE_IN_KWH`.
     """
     source = adapter.resolve_useful_heat_source(component)
     if source is None:
@@ -608,27 +483,21 @@ def _useful_heat_by_kind(
     results: pd.DataFrame,
     seconds_per_timestep: int,
 ) -> Tuple[Dict[str, float], List[UnresolvedSubject]]:
-    """The useful heat of the simulated period by kind, and the listed sources that failed to state it.
+    """Return the simulated period's useful heat by kind, and the listed sources that failed to state it.
 
-    Every component of `adapter.UsefulHeatSources` contributes its kind, a zero included, so the
-    record says which kinds the run *has* as well as how much heat each delivered: a building with
-    no hot-water source is the gap `EvaluationInputs.heat_cost_omits_hot_water` reports.
-
-    A listed source whose column is missing, unconvertible or wrong-signed is not dropped with a
-    warning: a sum missing a source would publish a cost per kWh that is too high. It comes back as
-    an `UnresolvedSubject` naming the component and the column, which `build_evaluation_inputs`
-    adds to the others, so the D7 check aborts the evaluation exactly as it does for an
-    energy-balance flow that cannot be placed.
+    Every component listed in `adapter.UsefulHeatSources` contributes its kind, a zero included, so the record also
+    shows which kinds the run has (a missing hot-water source is what `EvaluationInputs.heat_cost_omits_hot_water`
+    reports). A listed source whose column is missing, unconvertible or wrong-signed comes back as an
+    `UnresolvedSubject`, since a partial sum would overstate the cost per kWh.
 
     Args:
         wrapped_components: The simulator's `ComponentWrapper` list.
         all_outputs: The run's output declarations, in the frame's column order.
         results: The per-timestep results frame.
-        seconds_per_timestep: Passed to the unit conversion, which needs it for a power column.
+        seconds_per_timestep: Passed to the unit conversion, needed for a power column.
 
     Returns:
-        `UsefulHeatKind` value -> kWh of the simulated period, not yet annualized
-        (`EvaluationInputs.annual_heat_demand` does that), and the failures.
+        `UsefulHeatKind` value -> kWh of the simulated period, not annualized, and the failures.
     """
     by_kind: Dict[str, float] = {}
     failures: List[UnresolvedSubject] = []
@@ -648,12 +517,10 @@ def _useful_heat_by_kind(
 def _power_series(
     component_name: str, field_name: str, all_outputs: List[Any], results: pd.DataFrame
 ) -> Optional[pd.Series]:
-    """The raw per-timestep column of one output (W), unaggregated and unscaled.
+    """Return the raw per-timestep power column of one output in W, or None if the run did not produce it.
 
-    Unlike `_sum_output_column` this does not aggregate or rescale: capacity charges are billed on
-    peaks, not on sums, so the whole series is handed to `_peaks_from_power_series`. None means the
-    meter declared a `power_field` that the run did not produce, which the caller refuses the run
-    over rather than billing the carrier without its capacity charge.
+    Capacity charges are billed on peaks, so the whole series goes to `_peaks_from_power_series`. The caller refuses
+    the run on None rather than billing without the capacity charge.
     """
     return _output_column(component_name, field_name, all_outputs, results)
 
@@ -661,34 +528,22 @@ def _power_series(
 def _peaks_from_power_series(
     series: pd.Series, seconds_per_timestep: int, billing_interval_minutes: int = 15
 ) -> tuple:
-    """Billing-interval mean peaks (kW) per month plus the annual peak (§8.4).
+    """Return the monthly and annual peaks in kW of the billing-interval mean power (§8.4).
 
-    Capacity charges are not billed on instantaneous power but on the highest *mean* power over a
-    metering interval (15 minutes in the German grid-fee regime), so the series is first averaged
-    into intervals and only then maximized — over each month for MONTHLY_PEAK tariffs and over the
-    whole series for ANNUAL_PEAK ones. This is the one billing determinant that cannot be recovered
-    from an energy total, which is why the extraction side has to compute it while the full
-    time series is still in memory.
-
-    Two deliberate simplifications: a timestep that does not divide the billing interval evenly
-    yields no peaks at all (empty list, 0.0) rather than a subtly wrong number from a ragged
-    grouping — and says so in the log, because a carrier silently billed without its capacity
-    charge is a bill that is wrong by a component nobody can see is missing — and "months" are
-    blocks of intervals rather than calendar months, which is accurate
-    enough for a charge that only ever reads the maxima. The block width is the interval count
-    divided by twelve, rounded *up*, so every interval is billed by exactly one block and the last
-    block is the short one when twelve does not divide the count — a partial-year run keeps the
-    peak of its final days instead of losing it to a truncated tail. That also means fewer than
-    twelve blocks for such a run; there are never more.
+    Capacity charges are billed on the highest mean power over a metering interval (15 minutes in Germany), so the
+    series is averaged into intervals before taking maxima per month (MONTHLY_PEAK) and over the whole series
+    (ANNUAL_PEAK). If the timestep does not divide the interval evenly, no peaks are returned (empty list, 0.0) and a
+    warning is logged. "Months" are blocks of `ceil(intervals / 12)` intervals, so every interval is in one block; a
+    partial-year run has fewer than twelve blocks.
 
     Args:
-        series: Per-timestep power in W (not energy).
-        seconds_per_timestep: The simulation's resolution, used to size the interval grouping.
-        billing_interval_minutes: Metering interval the tariff bills on; 15 by default.
+        series: Per-timestep power in W.
+        seconds_per_timestep: The simulation's resolution.
+        billing_interval_minutes: Metering interval the tariff bills on.
 
     Returns:
-        ``(monthly_peaks_in_kw, annual_peak_in_kw)`` — at most twelve monthly values, and the
-        maximum interval mean over the whole series.
+        `(monthly_peaks_in_kw, annual_peak_in_kw)`: at most twelve monthly values, and the maximum interval mean over
+            the whole series.
     """
     interval_seconds = billing_interval_minutes * 60
     if interval_seconds % seconds_per_timestep != 0:
@@ -708,7 +563,7 @@ def _peaks_from_power_series(
         return [], 0.0
     annual_peak = float(interval_means.max())
     # Ceil division, so twelve blocks of this width always cover the whole series and the last
-    # block absorbs the remainder; floor division plus a [:12] truncation used to drop the tail.
+    # block absorbs the remainder.
     intervals_per_month = max(1, -(-len(interval_means) // 12))
     monthly_peaks = [
         float(interval_means.iloc[start:start + intervals_per_month].max())
@@ -718,28 +573,18 @@ def _peaks_from_power_series(
 
 
 def _capacity_billing_intervals(wrapped_components: List[Any]) -> Dict[EnergyCarrier, int]:
-    """The billing interval each carrier's capacity charge is metered on, from the run's providers.
+    """Return the metering interval of each carrier's capacity charge, read from the run's tariff providers.
 
-    A capacity charge is billed on the highest *mean* power over the contract's metering interval
-    (§8.4), and that interval is a property of the contract — 15 minutes in the German grid-fee
-    regime, but not everywhere and not for every carrier. `_peaks_from_power_series` used to be
-    called with its 15-minute default whatever the run's tariff said, so a contract billing on
-    another interval was silently metered on the wrong one and its peaks, and therefore its
-    capacity bill, were wrong by a factor nobody could see.
-
-    The contract is read off the components themselves: a `TariffProvider` in the run holds the
-    very `TariffContract` the postprocessing billing engine bills with, which is the whole point of
-    §8.1. It is duck-typed (`contract.capacity_charge.billing_interval_in_minutes`) rather than
-    imported, so the bridge keeps knowing nothing about individual component classes.
+    The interval belongs to the contract (§8.4). A `TariffProvider` holds the `TariffContract` the billing engine bills
+    with, read duck-typed (`contract.capacity_charge.billing_interval_in_minutes`) so the bridge imports no component
+    class.
 
     Args:
         wrapped_components: The simulator's wrapped components, in registration order.
 
     Returns:
-        Carrier -> billing interval in minutes, for every carrier a provider in this run declares a
-        contract for. A carrier missing from the map is metered on the default interval; when two
-        providers declare the same carrier the first one registered wins, and the second is a
-        configuration a run should not have in the first place.
+        Carrier -> billing interval in minutes, for every carrier a provider declares a contract for. A missing carrier
+            uses the default interval; if two providers declare the same carrier, the first registered wins.
     """
     intervals: Dict[EnergyCarrier, int] = {}
     for wrapper in wrapped_components:
@@ -759,43 +604,29 @@ def _billing_determinants(
     simulation_parameters: Any,
     billing_intervals: Optional[Dict[EnergyCarrier, int]] = None,
 ) -> Optional[BillingDeterminants]:
-    """One component's carrier flows: the adopted §3.4 hook first, the adapter's MeterSpec second.
+    """Return one component's carrier flows: its own §3.4 hook first, the adapter's `MeterSpec` second.
 
-    The energy-side mirror of the precedence `adapter.extract_cost_facts` applies to cost facts
-    (§9.1), and what wired up `Component.get_energy_flow_facts` (issue #18): a meter that declares
-    its own boundary is believed, and the class-name table is consulted only for the meters that
-    have not adopted the hook. Before this, the hook was declared and implemented but never
-    called, so the meter boundary existed twice with nothing keeping the two in agreement.
-
-    **The one thing the hook cannot say, and what happens to it.** `EnergyFlowFacts` carries a
-    carrier, integrated kWh and optionally a simulated cost/revenue, but no capacity peaks. That
-    is not expressible in the record, so peaks keep coming from the `MeterSpec` when the component
-    also has a table entry, read from its `power_field`. Nothing else the hook declares is touched:
-    the kWh it reports are the kWh that get billed, for every carrier, because a fuel quoted per
-    ton or per liter is converted on the price side instead (D26). A hook-only meter with no table
-    entry therefore gets no peaks and must declare `cost_relevance = METER` itself for the bridge
-    to reach it at all.
+    A meter that declares its own flows (`get_energy_flow_facts`) is believed; the class-name table is used only for
+    meters without the hook. `EnergyFlowFacts` carries no capacity peaks, so peaks come from the `MeterSpec`'s
+    `power_field` when the component also has a table entry. The kWh are billed as reported for every carrier; fuels
+    quoted per ton or liter are converted on the price side. A hook-only meter must declare `cost_relevance = METER`
+    itself to be reached.
 
     Args:
-        component: The component to read; non-meters yield None from both paths.
+        component: The component to read; non-meters yield None.
         all_outputs: The run's output declarations (positional column index).
         postprocessing_results: The per-timestep results frame.
         simulation_parameters: For `seconds_per_timestep`, which sizes the peak intervals.
-        billing_intervals: Carrier -> capacity-charge billing interval in minutes, from the run's
-            tariff providers (`_capacity_billing_intervals`). A carrier that is not in the map is
-            metered on `_peaks_from_power_series`' default.
+        billing_intervals: Carrier -> capacity-charge interval in minutes (`_capacity_billing_intervals`); a missing
+            carrier uses `_peaks_from_power_series`' default.
 
     Returns:
-        The billing determinants for this component's carrier, or None when it meters nothing. A
-        component answering through the hook owns that judgement itself, and a zero it reports is
-        taken as a measured zero.
+        The billing determinants for this component's carrier, or None when it meters nothing. A zero reported through
+            the hook is taken as a measured zero.
 
     Raises:
-        CostDataError: If a column the meter's class declares — bought energy, sold energy or the
-            power series the peaks come from — is not among this run's outputs. It used to warn
-            and leave the carrier unbilled (or the peaks at zero), which published a bill missing
-            a flow; `build_evaluation_inputs` now turns it into an unresolved subject and the
-            evaluation aborts (D7).
+        CostDataError: If a column the meter's class declares (bought energy, sold energy or power) is not among this
+            run's outputs; `build_evaluation_inputs` turns it into an unresolved subject.
     """
     meter_spec = adapter.get_meter_spec(component)
     flows = adapter.get_energy_flow_facts(component, all_outputs, postprocessing_results)
@@ -849,27 +680,18 @@ def _billing_determinants(
 
 
 def _non_zero_energy_flows(determinants: Optional[BillingDeterminants]) -> Tuple[str, ...]:
-    """The energy figures a set of billing determinants reports as non-zero, named (D7).
+    """Return the names of the energy figures in a set of billing determinants that are non-zero.
 
-    The check behind the adapter's zero-size rule. `adapter._resolved_or_not_installed` excludes a
-    component configured at zero size from pricing on the grounds that such a device moves no
-    energy and its output columns sum to zero of their own accord — a plausible claim about every
-    component that exists today, but a claim, and one whose failure mode is silent: a device
-    excluded from capex whose meter still reports kilowatt-hours would have its energy billed
-    while its hardware is free. This turns the claim into evidence the bridge can act on.
-
-    Only the *energy* determinants are inspected, since they are what a bill is raised on: energy
-    bought and sold, the per-band split a time-of-use contract is billed by, and the integrated
-    cost and revenue a dynamic contract carries instead of a price lookup. Peaks are deliberately
-    not included — a capacity peak is derived from a power series and is a shape, not a quantity
-    that crossed the boundary — and neither is the mean spot price, which is a price.
+    Checks the adapter's assumption that a component excluded as zero-size moves no energy; if its meter still reports
+    energy, the bridge refuses the run instead of billing energy for absent hardware. Only energy figures count: energy
+    bought and sold, the time-of-use split, and integrated cost and revenue. Peaks and the mean spot price are not
+    quantities that crossed the boundary.
 
     Args:
         determinants: The component's determinants, or None when it meters nothing.
 
     Returns:
-        The names of the non-zero figures, in a fixed order, for the refusal message; empty when
-        the component metered nothing or metered exactly zero.
+        The names of the non-zero figures in a fixed order; empty when nothing or exactly zero was metered.
     """
     if determinants is None:
         return ()
@@ -892,61 +714,28 @@ def build_evaluation_inputs(
     postprocessing_results: pd.DataFrame,
     simulation_parameters: Any,
 ) -> EvaluationInputs:
-    """Collects facts and billing determinants from a finished simulation.
+    """Collect cost facts and billing determinants from a finished simulation into `EvaluationInputs`.
 
-    The extraction half of the cost-spec-v2 seam-1 cut: it walks every wrapped component once and
-    asks four questions — which energy-balance flows does it publish (`_device_energy_flows`); is
-    this component priced, free of cost or a meter (`effective_cost_relevance`); what are its
-    `ComponentCostFacts`; and, for meters, what crossed the boundary (`_billing_determinants`,
-    hook first and `MeterSpec` second). A component can answer more than one of them: a meter with
-    capex contributes billing determinants, cost facts *and* the grid import/export flows, which
-    is why the branches below are sequential rather than exclusive. The energy question is asked
-    first and unconditionally, because the household energy balance is physics rather than
-    accounting — a free-of-cost PV system and an undeclared load profile move real kilowatt hours.
-    The result is the plain-data record that `write_inputs` persists and the evaluator prices — no
-    prices, no perspective, no economics of any kind are decided here.
+    Each component is asked, in order: its energy-balance flows (`_device_energy_flows`, always, since the balance is
+    physics); its cost relevance (`effective_cost_relevance`); its `ComponentCostFacts`; and, for meters, what crossed
+    the boundary (`_billing_determinants`). A meter with capex answers several. No prices are decided here.
 
-    Six things it also decides, and none of them is silent. A component whose **energy-balance
-    flows cannot be placed** becomes an `UnresolvedSubject`: a class the `DeviceEnergySpecs` table
-    has never been asked about that nevertheless publishes electricity, a listed class whose
-    declared column this run did not produce, and a column in a unit the conversion table does not
-    know. All three used to warn and drop the flow, which publishes a household balance whose
-    residual node has silently swallowed a terminal. An `UNDECLARED` component becomes an
-    `UnresolvedSubject` naming its class: §9.2 makes the declaration mandatory, so a component
-    that reaches the cost engine without one is a defect in that component, not a component
-    outside the cost model, and the downstream D7 check aborts the evaluation on it. A component
-    the adapter *does* recognize but cannot describe — a registered extractor that yielded
-    nothing, a meter whose configured fuel maps to no carrier — becomes an `UnresolvedSubject` the
-    same way (issues #2 and #3), rather than quietly missing from the cost report. So does a meter
-    whose class declares an output column this run does not contain: it used to warn and leave the
-    carrier unbilled, which published a bill missing a flow. So does a component excluded from
-    pricing as *not installed* whose meter nevertheless reported energy (`_non_zero_energy_flows`):
-    the zero-size exclusion rests on the claim that such a device moves no energy, and where the
-    determinants contradict it, billing the flows of a device the result says is absent is not an
-    answer this layer may pick. So does a source of useful heat (`adapter.UsefulHeatSources`)
-    whose column is missing, unconvertible or runs against its sign convention: the levelized cost
-    of heat would otherwise divide by a partial sum (`_useful_heat_by_kind`). A run with no meter
-    flows *at all* stays a warning, because a
-    system with nothing metered is a legitimate — if unpriced — configuration rather than a broken
-    meter (§3.4). And the simulated
-    period is converted into `simulated_period_fraction`, which the engine uses to annualize; runs
-    longer than a year are clamped to one full year with a warning (cost_module_issues.md #15).
-
-    Finally, the setup-declared `EconomicContext` — if `simulation_parameters` carries one — is
-    merged in, so what the simulation knows and what only the author knows arrive as one record.
+    These become an `UnresolvedSubject`, which later aborts the evaluation: energy-balance flows that cannot be placed;
+    an `UNDECLARED` component (§9.2); a recognized component whose facts cannot be built; a meter whose declared column
+    is missing; a not-installed component whose meter reported energy (`_non_zero_energy_flows`); a useful-heat source
+    whose column is missing, unconvertible or wrong-signed. A run with no metered flows at all only warns (§3.4). The
+    simulated period becomes `simulated_period_fraction`; runs longer than a year are clamped to one year with a
+    warning. Finally the setup's `EconomicContext`, if any, is merged in.
 
     Args:
         wrapped_components: The simulator's `ComponentWrapper` list, in registration order.
-        all_outputs: The run's `ComponentOutput` declarations; their order matches the frame's
-            columns and is what makes the positional column lookup work.
-        postprocessing_results: The in-memory results DataFrame (per-timestep values), read
-            directly rather than via the exported CSVs.
-        simulation_parameters: The run's `SimulationParameters`, for the year, the timestep, the
-            simulated period and the optional `economic_context` attachment.
+        all_outputs: The run's `ComponentOutput` declarations, in the order of the frame's columns.
+        postprocessing_results: The in-memory per-timestep results frame.
+        simulation_parameters: The run's `SimulationParameters`: year, timestep, simulated period and optional
+            `economic_context`.
 
     Returns:
-        A fully populated `EvaluationInputs` — the exact record that gets written to
-        `economic_inputs.json`.
+        The `EvaluationInputs` that gets written to `economic_inputs.json`.
     """
     cost_facts: List[SubjectCostFacts] = []
     billing: List[BillingDeterminants] = []
@@ -962,10 +751,9 @@ def build_evaluation_inputs(
         component = wrapper.my_component
         subject = component.component_name
         component_sources[subject] = component.kpi_source()
-        # The energy balance is a physical record, not a cost classification: it is collected for
-        # every component, before and independently of the cost-relevance branch below, because a
-        # PV system that is FREE_OF_COST or a load profile that is UNDECLARED still moves the
-        # kilowatt hours the household balance is made of.
+        # The energy balance is a physical record: it is collected for every component, before
+        # the cost-relevance branch, because a FREE_OF_COST PV system or an UNDECLARED load
+        # profile still moves kilowatt hours.
         try:
             energy_flows = _device_energy_flows(
                 component,
@@ -974,9 +762,8 @@ def build_evaluation_inputs(
                 simulation_parameters.seconds_per_timestep,
             )
         except CostDataError as err:
-            # A device whose flow cannot be placed is the same kind of failure as a subject whose
-            # cost cannot be resolved: the answer the run asked for would come out incomplete, and
-            # a chart missing a terminal reads as a house that does not use that energy.
+            # A flow that cannot be placed is treated like a cost that cannot be resolved: the
+            # balance would come out incomplete.
             unresolved.append(UnresolvedSubject(subject=subject, reason=str(err)))
             continue
         if energy_flows:
@@ -984,9 +771,8 @@ def build_evaluation_inputs(
         try:
             relevance = adapter.effective_cost_relevance(component)
             if relevance == CostRelevance.UNDECLARED:
-                # §9.2 makes the declaration mandatory, so this is a defect in the component, not
-                # a component outside the cost model: it becomes an unresolved subject and the D7
-                # check below refuses to price the rest of the fleet around the hole.
+                # §9.2 makes the declaration mandatory, so this is a defect in the component: it
+                # becomes an unresolved subject and the resolution check refuses to price the rest.
                 unresolved.append(
                     UnresolvedSubject(subject=subject, reason=describe_undeclared_class(type(component)))
                 )
@@ -999,18 +785,15 @@ def build_evaluation_inputs(
             # Meters can also be PRICED devices (the meter hardware itself has capex).
             extraction = adapter.extract_cost_facts(component)
         except CostDataError as err:
-            # A configuration the adapter cannot map to a carrier or an asset class (issue #3):
-            # the component becomes an unresolved subject instead of being billed at a guessed
-            # price, and the D7 check downstream refuses to produce partial results.
+            # A configuration the adapter cannot map to a carrier or an asset class: the component
+            # becomes an unresolved subject instead of being billed at a guessed price.
             unresolved.append(UnresolvedSubject(subject=subject, reason=str(err)))
             continue
         flows = _non_zero_energy_flows(determinants) if extraction.not_installed_reason else ()
         if flows:
-            # A component excluded from capex as "not installed" that nevertheless metered energy
-            # is a contradiction, not a skip: the adapter's zero-size rule rests on a zero-size
-            # device moving no energy, and here it moved some. Billing it would charge a device
-            # the result says does not exist; not billing it would drop measured energy off the
-            # boundary. Both are wrong answers, so the run refuses (D7) and names the flows.
+            # A component excluded as "not installed" that metered energy contradicts the
+            # zero-size rule; billing or dropping the energy would both be wrong, so the run
+            # refuses and names the flows.
             unresolved.append(
                 UnresolvedSubject(
                     subject=subject,
@@ -1028,18 +811,14 @@ def build_evaluation_inputs(
         if extraction.facts is not None:
             cost_facts.append(SubjectCostFacts(subject=subject, facts=extraction.facts))
         elif extraction.unresolved_reason is not None:
-            # Registered class, no facts: not an undeclared component and not a priced one either
-            # — the §9.2 hole issue #2 closed.
+            # Registered class, no facts: neither undeclared nor priced; an unresolved subject.
             unresolved.append(UnresolvedSubject(subject=subject, reason=extraction.unresolved_reason))
         elif extraction.not_installed_reason is not None:
             # Configured at zero size and, per the check above, metering nothing: absent from the
-            # building, so absent from the cost model - a skip, not a failure. It is a warning
-            # rather than a note because an asset that silently leaves the cost model is exactly
-            # the omission a reader has to notice.
+            # cost model. A warning, because an asset leaving the cost model must be noticed.
             not_installed.append(f"{subject}: {extraction.not_installed_reason}")
     # The heat the levelized cost of heat divides by. A listed source that cannot state it is an
-    # unresolved subject like any other, so the D7 check below aborts rather than dividing by a
-    # partial sum.
+    # unresolved subject, so the evaluation aborts rather than dividing by a partial sum.
     useful_heat_by_kind, heat_failures = _useful_heat_by_kind(
         wrapped_components, all_outputs, postprocessing_results, simulation_parameters.seconds_per_timestep
     )
@@ -1070,11 +849,9 @@ def build_evaluation_inputs(
         )
         fraction = 1.0
     elif fraction < 1.0:
-        # The short-run case, which is the common one and used to pass without a word: every
-        # energy quantity and every bill is divided by this fraction to reach a year, so a one-day
-        # run multiplies its measurements by 365 and publishes the product as a lifecycle figure.
-        # Saying so at warning level is the least that owes the reader; the plausibility panel
-        # carries the same statement into the outputs themselves (see compute_lifecycle_costs).
+        # A short run: every energy quantity and bill is divided by this fraction to reach a year,
+        # so a one-day run is multiplied by 365. Warned here, and the plausibility panel carries
+        # the same statement into the outputs.
         log.warning(
             f"Lifecycle cost engine: this run simulates {duration_seconds / 86400.0:.3g} day(s), "
             f"which is {fraction:.4g} of a year, so year-1 energy quantities and bills are "
@@ -1100,10 +877,9 @@ def build_evaluation_inputs(
     if context is not None:
         _merge_context(inputs, context)
     if inputs.heat_cost_omits_hot_water():
-        # hisim-4wlu: `adapter.UsefulHeatSources` lists only SimpleDHWStorage as a hot-water source
-        # so far, so a combi boiler or an electric water heater leaves the denominator at the
-        # rooms' heat. The plausibility panel carries the same statement into the report
-        # (`compute_lifecycle_costs`); this line is for whoever reads the log.
+        # `adapter.UsefulHeatSources` lists only SimpleDHWStorage as a hot-water source, so a
+        # combi boiler or an electric water heater leaves the denominator at the rooms' heat. The
+        # plausibility panel carries the same statement into the report.
         log.warning(
             "Lifecycle cost engine: the run has a building but no hot-water source of "
             "adapter.UsefulHeatSources, so the system cost per unit of heat divides by the rooms' "
@@ -1113,20 +889,11 @@ def build_evaluation_inputs(
 
 
 def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
-    """Merges the setup-declared EconomicContext into the simulation-derived inputs.
+    """Merge the setup-declared `EconomicContext` into the simulation-derived inputs, in place.
 
-    The merge is deliberately one-directional and non-destructive: the register, the subsidy context
-    and the extra cost subjects are *added*, technical attributes are *updated into* the facts the
-    adapter derived (so a declared SCOP joins the extracted size instead of replacing the facts),
-    and every scalar fills a gap rather than overruling a value the extraction already established.
-    That ordering is what keeps the seam-1 promise that `economic_inputs.json` never contradicts
-    the simulation it came from.
-
-    "Declared" is `is not None`, not truthiness. The scalars used to be merged with
-    ``context.x or inputs.x``, which silently dropped a declared **0.0** — a rent-free unit, an
-    emission intensity of zero — and left whatever the extraction
-    had instead. A zero is a statement, and the difference between "nobody said" and "somebody said
-    none" is exactly what this merge exists to preserve.
+    The register, the subsidy context and the extra cost subjects are added; technical attributes are updated into the
+    extracted facts; each scalar fills a gap and never overrides an extracted value. "Declared" means `is not None`, so
+    a declared 0.0 (a rent-free unit) is kept.
 
     Args:
         inputs: The simulation-derived record, mutated in place.
@@ -1154,8 +921,7 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
     unmatched = sorted(set(context.technical_attributes_by_subject) - matched_subjects)
     if unmatched:
         # A subject name that matches nothing is a typo or a renamed component, and its attributes
-        # — a SCOP, a refrigerant, an achieved U-value — are exactly what a subsidy condition
-        # resolves against. Dropping them silently turns "the grant was denied" into a mystery.
+        # (SCOP, refrigerant, U-value) are what subsidy conditions read, so it is refused.
         log.warning(
             "Lifecycle cost engine: EconomicContext.technical_attributes_by_subject names "
             f"subject(s) that no extracted cost subject matches, so their attributes were not "
@@ -1163,9 +929,8 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
         )
     unmatched_costless = sorted(set(context.costless_subjects) - zeroed_subjects)
     if unmatched_costless:
-        # The same typo on the other map costs money instead of a grant: a part declared to be
-        # part of another purchase that matches no subject is not zeroed, and if it exists under
-        # another name its price is booked a second time without anything saying so.
+        # The same typo here would leave a part unzeroed and, if it exists under another name,
+        # book its price twice.
         log.warning(
             "Lifecycle cost engine: EconomicContext.costless_subjects names subject(s) that no "
             f"extracted cost subject matches, so those parts were not zeroed: "
@@ -1180,22 +945,16 @@ def _merge_context(inputs: EvaluationInputs, context: EconomicContext) -> None:
 
 #: Modules the cost path needs before it writes anything, because it draws the audit heatmap on
 #: every run: the renderer and, through it, matplotlib. `__main__.AuditLayerProbe` makes the same
-#: check for the CLI; both exist because the alternative is an ImportError four export files in.
+#: check for the CLI.
 _PLOT_LAYER_MODULES = ("matplotlib", "hisim.economics.report_plots")
 
 
 def _require_plot_layer() -> None:
-    """Raises unless the PNG layer is importable, before the first export is written.
+    """Raise unless the plotting layer (matplotlib) is importable, before the first export is written.
 
-    The ledger heatmap travels with `cost_audit.csv`, so a cost run draws a figure whether or not
-    a report was asked for, and the renderer is imported lazily at that point — four export files
-    into the run. An installation without matplotlib therefore failed *after* those files existed,
-    and the cleanup below removed a set that was otherwise complete and correct. Asking first
-    turns that into a refusal with a name in it: nothing is written, and the message says which
-    module is missing.
-
-    It uses `importlib.util.find_spec`, so it costs a path lookup and imports nothing; the lazy
-    imports at the use sites stay where they are.
+    The ledger heatmap is drawn beside `cost_audit.csv` on every cost run, after other exports exist; checking first
+    means a missing dependency writes nothing instead of half a set. Uses `importlib.util.find_spec`, so nothing is
+    imported.
 
     Raises:
         CostDataError: If either module is absent.
@@ -1213,22 +972,12 @@ def _require_plot_layer() -> None:
 
 
 def _remove_partial_exports(written: List[str]) -> None:
-    """Deletes the export files this run wrote before it failed.
+    """Delete the export files this run wrote before it failed.
 
-    The engine writes its export set file by file, so a failure part-way through leaves a directory
-    holding *some* of it — a `lifecycle_costs.json` with no `cash_flow_timeline.csv` beside it, or a
-    KPI file whose matrix never finished. Nothing downstream distinguishes that from a complete set:
-    `postprocessing_main` deliberately logs and continues for a non-cost error, the run finishes
-    green, and the half-written files are read later as the answer. Removing them makes the absence
-    of the cost set the signal that the cost set is absent.
-
-    `economic_inputs.json` is deliberately **not** in the list a caller builds: it is the faithful
-    extract of the simulation (W1.1), it is written before any economics happens, and the D7
-    refusal message promises it survives an abort. It says what the run contained, not what the
-    engine concluded, so it is still true after the engine failed.
-
-    Removal failures are swallowed on purpose: this runs while another exception is propagating,
-    and turning a cleanup problem into the reported error would hide the failure that mattered.
+    A half-written set looks like a complete one to later readers, and postprocessing continues after non-cost errors,
+    so the absence of the files is the signal. Callers leave `economic_inputs.json` out of the list: it is the
+    simulation extract and stays true. Removal errors are swallowed, since this runs while another exception
+    propagates.
 
     Args:
         written: Paths the engine wrote in this run, in the order it wrote them.
@@ -1253,12 +1002,9 @@ def _remove_partial_exports(written: List[str]) -> None:
 
 
 def _resolve_economic_parameters(simulation_parameters: Any) -> EconomicParameters:
-    """The run's `EconomicParameters`: what the setup attached, else the country's defaults.
+    """Return the run's `EconomicParameters`: what the setup attached, else the country's defaults.
 
-    Both entry points of this module need them and both used to derive them with the same four
-    lines, which is three lines too many for a fallback that decides which cost database is read
-    and which country's data is priced against: the two copies drifting would mean the parity
-    report compares a run against a differently-parameterized version of itself.
+    Shared by both entry points of this module so they read the same cost database and country.
 
     Args:
         simulation_parameters: The run's parameters, optionally carrying `economic_parameters`.
@@ -1279,96 +1025,58 @@ def compute_lifecycle_costs(
     simulation_parameters: Any,
     generate_report: bool = False,
 ) -> None:
-    """The COMPUTE_LIFECYCLE_COSTS entry point, called from postprocessing (additive).
+    """Run the lifecycle cost engine from postprocessing (option COMPUTE_LIFECYCLE_COSTS).
 
-    ``generate_report`` (option LIFECYCLE_COST_REPORT) additionally writes the
-    human-readable outputs: cost_summary.md, lifecycle_report.html and the PNG set — one set of
-    charts per evaluated perspective.
+    Steps: resolve the economic parameters, load the cost database, extract `EvaluationInputs`, write
+    `economic_inputs.json`, load the subsidy catalog if configured, run the resolution check, select the applicable
+    perspectives, evaluate them into one `EvaluationMatrix` and write the exports. It runs before the legacy
+    COMPUTE_CAPEX block, because `get_cost_capex` mutates component configs (§10.0 rule 4); the parity report is a
+    separate pass (`write_parity_from_stored_inputs`).
 
-    **matplotlib is required on the plain cost path**, not only with a report: the audit's ledger
-    heatmap is drawn beside `cost_audit.csv` on every run. `_require_plot_layer` checks for it
-    before the first export file is written, so a missing dependency refuses the run instead of
-    aborting it half-written. A heatmap that fails to *render* is the opposite case and is
-    tolerated: it is recorded as a skipped chart, and the tabular exports stay.
-
-    This is the whole run, in order: resolve the economic parameters (falling back to defaults for
-    the simulation's country when the setup attached none), load the cost database, extract
-    `EvaluationInputs` from the finished simulation, persist that faithful extract *before* anything
-    economic touches it (W1.1), load the subsidy catalog if one is configured, run the D7 resolution
-    check, select the applicable perspectives from the default bundle, evaluate them all into one
-    `EvaluationMatrix`, and write the export set. Ordering is not cosmetic here: it runs before the
-    legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks because `get_cost_capex` mutates component configs as a
-    side effect and would contaminate the facts this function reads (§10.0 rule 4), which is also
-    why the parity report is a separate second pass (`write_parity_from_stored_inputs`).
-
-    Files written on a plain COMPUTE_LIFECYCLE_COSTS run: `economic_inputs.json` first — before any
-    pricing, so it exists even when the resolution check then aborts — then `lifecycle_costs.json`,
-    `component_costs.json`/`.csv`,
-    `cash_flow_timeline.csv`, `cost_provenance.json`, `lifecycle_kpis.json`, `cost_audit.csv`,
-    `cost_audit.json` and the audit's own `cost_audit_timeline_heatmap.png`. With a declared
-    scenario set additionally `scenario_cube.csv`/`.json`, and with ``generate_report``
-    additionally `cost_summary.md`, `lifecycle_report.html` and the report's PNG set — the
-    per-perspective charts as `lifecycle_<chart>_<perspective_id>.png` plus the one matrix-wide
-    `lifecycle_perspective_costs.png`. A run in which any chart drew nothing also writes
-    `lifecycle_plots_not_drawn.txt`, one line per chart with the reason. No legacy file is read,
-    written or otherwise touched.
-
-    Failure behaviour (see the module docstring): everything propagates. A cost database or a
-    subsidy catalog that will not load, a declared scenario cube that will not evaluate and the D7
-    `UnresolvableSubjectsError` all abort the evaluation as a `CostDataError`, which postprocessing
-    re-raises rather than logging, so a run that asked for lifecycle costs and cannot have them
-    fails instead of finishing with a cost report missing a component, a subsidy engine or a
-    section. Whatever the failure, the export files this call had already written are removed
-    first, so no reader can mistake a partial set for a whole one; `economic_inputs.json` is
-    written before any of it and deliberately survives.
-
-    Raises:
-        CostDataError: If the cost database or a configured subsidy catalog cannot be loaded, if a
-            declared scenario cube cannot be evaluated, or if any cost subject is unresolvable
-            (D7).
+    Files: `economic_inputs.json` (before any pricing), `lifecycle_costs.json`, `component_costs.json`/`.csv`,
+    `cash_flow_timeline.csv`, `cost_provenance.json`, `lifecycle_kpis.json`, `cost_audit.csv`, `cost_audit.json` and
+    `cost_audit_timeline_heatmap.png`; with a scenario set also `scenario_cube.csv`/`.json`; with `generate_report`
+    also `cost_summary.md`, `lifecycle_report.html`, the PNG set (`lifecycle_<chart>_<perspective_id>.png` and
+    `lifecycle_perspective_costs.png`) and, if a chart was not drawn, `lifecycle_plots_not_drawn.txt`. No legacy file
+    is touched. matplotlib is required even without a report, for the heatmap; a heatmap that fails to render is
+    recorded as a skipped chart. On any failure the exports already written are removed, except `economic_inputs.json`.
 
     Args:
         wrapped_components: The simulator's wrapped components.
         all_outputs: The run's output declarations (column order of the results frame).
         postprocessing_results: The in-memory per-timestep results.
-        simulation_parameters: The run's parameters; optionally carrying `economic_parameters`
-            and `economic_context`.
-        generate_report: Whether option LIFECYCLE_COST_REPORT was set as well.
+        simulation_parameters: The run's parameters, optionally carrying `economic_parameters` and `economic_context`.
+        generate_report: Whether option LIFECYCLE_COST_REPORT is set too.
+
+    Raises:
+        CostDataError: If the cost database or a configured subsidy catalog cannot be loaded, a declared scenario cube
+            cannot be evaluated, or a cost subject is unresolvable.
     """
-    # First of all, and before a single file: this run will draw the audit's ledger heatmap, so a
-    # missing renderer has to be a refusal rather than a rollback of files that were written
-    # correctly — the failure used to arrive from a lazy import four exports in.
+    # First, before any file: this run draws the audit's ledger heatmap, so a missing renderer
+    # must refuse the run rather than roll back files already written.
     _require_plot_layer()
     result_directory = simulation_parameters.result_directory
     parameters = _resolve_economic_parameters(simulation_parameters)
     # A database that will not load is a CostDataError and propagates: a run that asked for
-    # lifecycle costs with an unreadable cost database must fail, not finish without cost files
-    # and a line in the log (same principle as the D7 abort below).
+    # lifecycle costs must fail, not finish without cost files.
     database = CostDatabase(parameters.cost_database_path)
     inputs = build_evaluation_inputs(wrapped_components, all_outputs, postprocessing_results, simulation_parameters)
-    # The faithful extract goes to disk before anything economic touches it (W1.1): what the
-    # payload contains depends on the simulation only, never on cost-database state. Two
-    # statements travel beside it, and both are facts about this run rather than assumptions a
-    # later caller may change: the country, and the price basis year the run actually priced at.
-    # A consumer of this file alone — the staged evaluator pricing a plan out of finished jobs —
-    # has no other way of learning either, and would answer both from a default. The basis year
-    # is resolved here, by the one function that owns the policy, because that resolution is what
-    # the run used; it is the only reason this line touches the database at all.
+    # The faithful extract goes to disk before anything economic touches it; its content depends
+    # on the simulation only. It also records the country and the price basis year the run priced
+    # at, which a consumer of this file alone (the staged evaluator) cannot learn otherwise; the
+    # basis year is resolved by the one function that owns the policy.
     write_inputs(
         inputs,
         result_directory,
         country=parameters.country,
         price_basis_year=effective_price_basis_year(parameters, database, inputs.simulation_year),
     )
-    # A configured catalog that will not load — or whose path does not resolve — is not a
-    # degradation, it is a different calculation: evaluation would silently fall back to booking
-    # no subsidy and publish subsidy figures that have nothing to do with the catalog the run asked
-    # for. `load_configured` is the one place that decision lives, shared with the CLI so both
-    # paths refuse identically, and it raises the `CostDataError` postprocessing re-raises.
+    # A configured catalog that will not load, or whose path does not resolve, raises
+    # `CostDataError` instead of silently booking no subsidy. `load_configured` is shared with the
+    # CLI.
     catalog = SubsidyCatalog.load_configured(parameters.country, parameters.subsidy_catalog_path)
     evaluator = EconomicEvaluator(database, parameters, catalog)
-    # D7 (cost-spec-v2 §8): an unresolvable subject aborts the whole cost evaluation — no partial
-    # results. postprocessing_main catches it and logs an error; the legacy outputs are unaffected.
+    # An unresolvable subject aborts the whole cost evaluation (§8): no partial results.
     require_resolvable_subjects(inputs, evaluator)
     perspectives = select_applicable(load_default_bundle(), has_register=inputs.existing_assets is not None)
     written: List[str] = []
@@ -1385,15 +1093,13 @@ def compute_lifecycle_costs(
         first_result = next(iter(matrix.results.values()), None)
         input_audit = None
         if first_result is not None:
-            # Resolved once (W4.6): cost_audit.csv and the report's section 1 are two renderings.
+            # Resolved once: cost_audit.csv and the report's section 1 are two renderings.
             input_audit = build_input_audit(inputs, database, parameters, first_result)
             written.append(write_cost_audit(input_audit, result_directory))
             written.append(write_input_audit(input_audit, result_directory))
             # The year x category ledger heatmap is the visual twin of the audit table, so it is
-            # written here, beside `cost_audit.csv`, rather than with the report's PNG set — and
-            # from here rather than from `audit.py`, which the seam-4 import lint keeps free of
-            # renderers. It joins `written` like every other export, so a failure further down
-            # removes the PNG together with the CSVs it belongs to.
+            # written here beside `cost_audit.csv` (audit.py imports no renderer). It joins
+            # `written`, so a later failure removes it with the CSVs.
             from hisim.economics.report_plots import write_audit_plots
 
             audit_plots = write_audit_plots(first_result, result_directory)
@@ -1415,9 +1121,8 @@ def compute_lifecycle_costs(
             except CostDataError:
                 raise
             except Exception as err:
-                # A declared scenario set is a requested section of the answer, not a bonus. A
-                # report missing the very sensitivity analysis it was asked for, with nothing but a
-                # log line to say so, is a report a reader takes for complete.
+                # A declared scenario set is a requested section of the answer, so a failure
+                # propagates rather than leaving the report silently without it.
                 raise CostDataError(
                     "Lifecycle cost engine: the scenario cube the setup declared could not be "
                     f"evaluated ({type(err).__name__}: {err}), so scenario_cube.csv/json and the "
@@ -1441,10 +1146,9 @@ def compute_lifecycle_costs(
                 write_lifecycle_report,
             )
 
-            # The simulated fraction goes in so the §8.5 extrapolation of a short run is a row of
-            # the plausibility panel, i.e. visible in cost_summary.md and in the HTML report,
-            # rather than only in a log the reader of those files never sees.
-            # The same holds for a heat-cost figure that divides by the rooms' heat alone.
+            # The simulated fraction goes in so the §8.5 extrapolation of a short run, and a
+            # heat-cost figure that divides by the rooms' heat alone, appear in the plausibility
+            # panel of cost_summary.md and the HTML report.
             plausibility = run_plausibility_checks(
                 matrix,
                 simulated_period_fraction=inputs.simulated_period_fraction,
@@ -1469,10 +1173,8 @@ def compute_lifecycle_costs(
             log.information(
                 "Lifecycle cost report: wrote cost_summary.md, lifecycle_report.html and PNG charts."
             )
-        # The renderers hand back what they could not draw instead of logging it themselves, so
-        # this is where a skipped figure becomes visible: once in the run log, and once in a file
-        # beside the PNGs — a reader who finds twelve images where the report names thirteen is
-        # rarely the person reading the log.
+        # The renderers return what they could not draw; it is logged and written to a file
+        # beside the PNGs.
         sidecar = _write_skipped_plots_note(plot_skips, result_directory)
         if sidecar is not None:
             written.append(sidecar)
@@ -1483,11 +1185,9 @@ def compute_lifecycle_costs(
 
 
 def _write_skipped_plots_note(skips: List["SkippedPlot"], result_directory: str) -> Optional[str]:
-    """Logs every chart this run did not draw and leaves the same lines in a file beside the PNGs.
+    """Log every chart this run did not draw and write the same lines to `lifecycle_plots_not_drawn.txt`.
 
-    Written only when there is something to say: an empty `lifecycle_plots_not_drawn.txt` in every
-    result directory would be one more file to explain, and its absence is the ordinary case. The
-    file is part of the export set, so a failure later in the run removes it with the rest.
+    The file is written only when a chart was skipped; it belongs to the export set, so a later failure removes it.
 
     Args:
         skips: The `report_plots.SkippedPlot` records both writers returned.
@@ -1511,20 +1211,12 @@ def _write_skipped_plots_note(skips: List["SkippedPlot"], result_directory: str)
 
 
 def write_parity_from_stored_inputs(simulation_parameters: Any) -> None:
-    """Writes the §9.7 parity report after the legacy cost path has produced its CSVs.
+    """Write the §9.7 parity report (`cost_parity_report.csv`) after the legacy cost path has written its CSVs.
 
-    Runs as a separate postprocessing step because the engine must capture its facts *before*
-    the legacy `get_cost_capex` mutates component configs, while the parity comparison needs
-    the CSVs that same legacy path writes. Reads the facts back from `economic_inputs.json`.
-
-    Reading the extract back from disk rather than keeping it in memory between the two blocks is
-    the point, not an inconvenience: it proves the comparison used facts that predate the legacy
-    run, so legacy config mutation cannot fake agreement. The resulting `cost_parity_report.csv` is
-    the primary evidence for the Phase-7 cutover decision (§9.7, §10).
-
-    Only invoked when COMPUTE_CAPEX is active as well — without the legacy CSVs there is nothing to
-    compare against. A missing or unreadable `economic_inputs.json` is not an error: it warns and
-    returns, since the parity report is diagnostic output and its absence must not affect a run.
+    A separate step because the engine must read its facts before legacy `get_cost_capex` mutates configs, while the
+    comparison needs the legacy CSVs. The facts are read back from `economic_inputs.json`, which proves they predate
+    the legacy run. Only called when COMPUTE_CAPEX is active. A missing or unreadable `economic_inputs.json` only
+    warns, since the report is diagnostic.
     """
     from hisim.economics.serialization import read_inputs
 
@@ -1536,6 +1228,6 @@ def write_parity_from_stored_inputs(simulation_parameters: Any) -> None:
         log.warning(f"Parity report skipped: could not read stored economic inputs: {err}")
         return
     database = CostDatabase(parameters.cost_database_path)
-    # The price basis year is resolved inside the engine/audit layer (W1.2); the bridge no
-    # longer mutates the caller's parameters.
+    # The price basis year is resolved inside the engine and audit layer; the caller's parameters
+    # are not modified.
     write_parity_report(inputs, database, parameters, result_directory)

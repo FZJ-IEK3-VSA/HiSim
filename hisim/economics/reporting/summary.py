@@ -1,11 +1,7 @@
 """The markdown cost summary and the plausibility-panel rendering (cost_spec.md §7.2, §7.4).
 
-`build_cost_summary_markdown`/`write_cost_summary` produce the reviewer-facing text
-summary, and `render_plausibility_findings` turns the panel's findings into displayable
-rows shared by the markdown, the HTML report and — from stack part 8/8 on — the bridge's log
-warnings. Split out of
-the former single-module `reporting.py` (PR-3 review); the package `__init__` re-exports
-everything, so `from hisim.economics.reporting import ...` is unchanged.
+`build_cost_summary_markdown` and `write_cost_summary` produce `cost_summary.md`; `render_plausibility_findings` turns
+plausibility findings into the display rows shared by the markdown, the HTML report and the bridge's log warnings.
 """
 
 
@@ -32,11 +28,8 @@ from hisim.economics.uncertainty import UncertainValue
 class ReportFileNames:
     """Names of the report files written next to the results.
 
-    Collected in one namespace because these names are part of the package's public output
-    surface: the `report` CLI writes them (and `bridge.py` will, from stack part 8/8), the golden
-    tests read them, and the README lists them among the files the engine adds without touching
-    the legacy path (§10).
-    They are plain names, not paths — the result directory is always supplied by the caller.
+    The `report` CLI writes them and the golden tests read them. They are plain file names; the caller supplies the
+    directory.
     """
 
     COST_SUMMARY_FILE_NAME = "cost_summary.md"
@@ -44,33 +37,21 @@ class ReportFileNames:
 
 
 def _fmt(value: float) -> str:
-    """Compact euro formatting — the report's house rounding, under its house name.
+    """Format a euro figure with the report's rounding rule.
 
-    The rule itself is `report_prose.format_euro`: precision by magnitude, cents below 100 EUR,
-    thousands above 100k, and never a derived number. It moved there when the treemap disclosure
-    and the payback sentence became captions both renderers print: those sentences have to come
-    out byte-identical in the HTML report and in the matplotlib PNG, which a second rounding rule
-    in a second module cannot guarantee.
-
-    This name stays because every table and caption in the package reads it, and because the
-    seam-4 statement belongs here: rounding for display is the only arithmetic this module does.
+    The rule is `report_prose.format_euro` (precision by magnitude: cents below 100 EUR, thousands above 100k), shared
+    so the HTML report and the PNG captions print identical text. Rounding for display is the only arithmetic this
+    module does.
     """
     return format_euro(value)
 
 
 def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:
-    """`best_estimate [min | max] unit` rendering of a band.
+    """Render a band as `best_estimate [min | max] unit`.
 
-    The house format for every monetary figure in both reports, so a reader learns to read one
-    shape and knows that the bracketed pair is the §3.9 LOW/HIGH *envelope* (the coherent
-    cheap and expensive worlds), not a confidence interval. An exact band collapses to a single
-    figure rather than repeating itself three times, which is why a run on the 1:1-migrated
-    legacy data reads as ordinary numbers — see `all_bands_degenerate`, which explains that
-    absence to the reader instead of leaving it looking like a bug.
-
-    A None band renders as `-`; the `unit` is appended verbatim and is the caller's way of
-    distinguishing EUR from EUR/a, EUR/mo and EUR/kWh, which is otherwise the easiest thing to
-    misread in a table of similar-looking numbers.
+    A band is an `UncertainValue` whose bracketed pair is the §3.9 envelope of the cheap and expensive worlds, not a
+    confidence interval. An exact band collapses to a single figure, and None renders as `-`. `unit` is appended
+    verbatim (EUR, EUR/a, EUR/mo, EUR/kWh).
     """
     if band is None:
         return "-"
@@ -79,13 +60,9 @@ def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:
     return f"{_fmt(band.best_estimate)} [{_fmt(band.minimum)} | {_fmt(band.maximum)}] {unit}"
 
 
-#: How each kind of assumption value is spelled, in the conventional form for its quantity: a
-#: rate to two decimals with a percent sign, a working price to four, a euro figure and an energy
-#: quantity with thousands separators. The views return the numbers and this decides their digits
-#: — the formatting half of the seam `views.AssumptionRow` and `views.ScenarioAssumption` both sit
-#: on. It lives in this module rather than beside either table because the assumptions table
-#: (`sections`) and the scenarios table (`assembly`) print by the same vocabulary, and two copies
-#: of one rounding rule agree only by luck.
+#: How each kind of assumption value is spelled: a rate to two decimals with a percent sign, a
+#: working price to four, a euro figure and an energy quantity with thousands separators. The
+#: assumptions table (`sections`) and the scenarios table (`assembly`) both print through it.
 _ASSUMPTION_VALUE_FORMATS = {
     views.AssumptionKinds.PERCENT: "{value:.2%}",
     views.AssumptionKinds.YEARS: "{value:g}",
@@ -102,20 +79,17 @@ _ASSUMPTION_VALUE_FORMATS = {
 
 
 def _value_by_kind(kind: "views.AssumptionKinds", value: object) -> str:
-    """One value spelled the way its kind is conventionally written.
+    """Spell one value in the conventional form for its kind.
 
-    An unknown kind falls back to printing the value as it stands, which is what a new kind would
-    want before anyone has decided how it reads — and is never silently empty. So does a value the
-    kind's format cannot take: a scenario axis may legitimately carry a name where a number is the
-    rule (`co2_price_scenario`), and a caption that raised there would take a whole report down
-    over a string it could simply have printed.
+    An unknown kind, or a value its format cannot take (a scenario name where a number is usual, e.g.
+    `co2_price_scenario`), is printed as it stands rather than raising.
 
     Args:
         kind: The quantity kind, from `views.AssumptionKinds`.
-        value: The number (or text) to spell.
+        value: The number or text to spell.
 
     Returns:
-        The value text, unescaped — the caller escapes it like every other cell.
+        The value text, unescaped; the caller escapes it.
     """
     template = _ASSUMPTION_VALUE_FORMATS.get(kind, "{value}")
     try:
@@ -125,15 +99,12 @@ def _value_by_kind(kind: "views.AssumptionKinds", value: object) -> str:
 
 
 def _award_amount_str(presentation: "views.AwardPresentation") -> str:
-    """What one applied award is worth, in one phrase — band, terms, or both.
+    """Describe what one applied award is worth in one phrase: band, terms, or both.
 
-    The single rendering of `views.describe_award` shared by the markdown decision list, the HTML
-    decision cards in `sections.py` and the awards table, so the three cannot say different things
-    about the same award again. An award with a euro amount reads as the house band format,
-    followed by its payout note when the payout is not a plain year-0 grant ("tax credit paid over
-    3 years"); an award that carries no euro amount at all — loan terms, an operational rate, a
-    VAT reduction — reads as its terms alone, because a "0 EUR" would be a false statement about
-    an applied award whose value is booked by the financing or energy calculators.
+    Shared by the markdown decision list, the HTML decision cards and the awards table. An award with a euro amount
+    reads as a band, followed by its payout note when it is not a plain year-0 grant ("tax credit paid over 3 years").
+    An award without a euro amount (loan terms, an operating rate, a VAT reduction) reads as its terms alone, since its
+    value is booked by the financing or energy calculators and "0 EUR" would be false.
 
     Args:
         presentation: The award as `views.describe_award` valued it.
@@ -148,61 +119,53 @@ def _award_amount_str(presentation: "views.AwardPresentation") -> str:
 
 
 def _award_arithmetic_str(presentation: "views.AwardPresentation") -> str:
-    """The award's own arithmetic and cap verdict, as one appended phrase (Q26 F8).
+    """Return the award's rate, basis and cap verdict as one appended phrase.
 
-    An award amount that states no rate and no basis cannot be checked, and the cap verdict is the
-    difference between "spending more would earn more" and "this measure has hit its ceiling" -
-    the two conclusions a reader draws a plan from. Both come from the solver's recorded decision
-    data via `views.describe_award`; this only joins them.
+    The cap verdict tells a reader whether spending more would earn more or the measure has hit its ceiling. Both parts
+    come from the solver's recorded decision via `views.describe_award`.
 
     Args:
         presentation: The award as `views.describe_award` valued it.
 
     Returns:
-        The parenthesized phrase, or the empty string for a form that states no rate and declares
-        no cap — where `payout_note` already carries the form's own terms.
+        The parenthesized phrase, or the empty string for a form that states no rate and no cap (its `payout_note`
+            already carries its terms).
     """
     parts = [part for part in (presentation.arithmetic, presentation.cap_verdict) if part]
     return f" ({'; '.join(parts)})" if parts else ""
 
 
 def _scheme_markdown(display_name: Optional[str], scheme_id: str) -> str:
-    """A subsidy scheme named for a human, with its raw id in a trailing parenthesis (Q20).
+    """Name a subsidy scheme for a human, with its raw id in a trailing parenthesis.
 
-    The report used to print `DE_BEG_EM_HP_SPEED_2024` wherever a scheme appears, which is a
-    database key, not a name: a reader could not tell a speed bonus from an income bonus without
-    opening the catalog. Markdown has no hover, so the id follows the name in a parenthesis rather
-    than in a tooltip; the id has to stay visible for the one reader who needs it, the reviewer
-    grepping `cost_audit.csv` or the catalog for that exact string.
+    Markdown has no hover, so the id is printed after the name; reviewers grep `cost_audit.csv` and the catalog for it.
 
     Args:
-        display_name: The catalog's friendly name, or None/empty when it declared none.
+        display_name: The catalog's friendly name, or None/empty when it declares none.
         scheme_id: The raw id.
 
     Returns:
-        "name (id)", or the bare id when the catalog declares no friendly name.
+        "name (id)", or the bare id when there is no friendly name.
     """
     if not display_name or display_name == scheme_id:
         return scheme_id
     return f"{display_name} ({scheme_id})"
 
 
-# ---------------------------------------------------------------------------- plausibility (B)
+# ---------------------------------------------------------------------------- plausibility
 
 
 #: The three statuses the panel can render. The markdown's icon table is keyed by them and the
-#: HTML writes them straight into a CSS class (`.status.PASS` and its two siblings), so a fourth
-#: spelling is not a new state — it is an unstyled cell and a KeyError.
+#: HTML writes them into a CSS class (`.status.PASS` and its siblings).
 PANEL_STATUSES = frozenset({CheckStatus.PASS, CheckStatus.WARN, CheckStatus.FAIL})
 
 
 @dataclass
 class PlausibilityCheck:
-    """One check **rendered** for the panel: the display row, all strings.
+    """One plausibility finding rendered as a panel row: four display strings.
 
-    The check itself is a `plausibility.PlausibilityFinding` produced engine-side (W4.2);
-    this is only its presentation. Kept as a small record because both the markdown table and
-    the HTML panel print the same four columns.
+    The finding itself is a `plausibility.PlausibilityFinding`; the markdown table and the HTML panel print the same
+    four columns from this record.
     """
 
     name: str
@@ -212,18 +175,13 @@ class PlausibilityCheck:
     detail: str = ""
 
     def __post_init__(self) -> None:
-        """Refuses a status neither renderer can display.
+        """Refuse a status neither renderer can display.
 
-        `status` is a plain string because `plausibility.CheckStatus` serializes verbatim into the
-        findings JSON, the markdown and the HTML — and a plain string is exactly what lets a typo or
-        a status invented engine-side travel all the way into the output: the markdown table looks
-        it up in an icon map and raises a bare `KeyError` in the middle of writing a report, while
-        the HTML emits `class='status Passed'`, which matches no rule and renders as unstyled text
-        that reads like an ordinary row. Refusing at construction names the offending value and the
-        three that exist instead.
+        The markdown looks the status up in an icon map and the HTML writes it into a CSS class, so an unknown status
+        would raise mid-report or render as an unstyled row.
 
         Raises:
-            ValueError: If `status` is not one of PASS, WARN or FAIL.
+            ValueError: If `status` is not PASS, WARN or FAIL.
         """
         if self.status not in PANEL_STATUSES:
             raise ValueError(
@@ -232,16 +190,13 @@ class PlausibilityCheck:
             )
 
 
-#: Reader hints per check kind — prose, so it lives with the presentation. Checks whose hint
-#: quotes numbers read them off the finding's `context`; see `_finding_detail`.
+#: Reader hints per check kind. Checks whose hint quotes numbers read them from the finding's
+#: `context`; see `_finding_detail`.
 class _CheckHints:
     """Reader hints shown next to a flagged check, keyed by check id.
 
-    A check can say a number is out of range; only prose can say what usually causes that, and
-    "usually caused by" is editorial judgement rather than engine output, so it lives on the
-    presentation side. Keyed by `CheckIds` so a check can be re-worded or re-scoped without
-    orphaning its hint. Hints that need to quote figures cannot live in this static map and are
-    built in `_finding_detail` from the finding's `context`; a check with no hint renders an
+    Hints say what usually causes a flagged value; that is editorial prose, so it lives on the presentation side. Hints
+    that quote figures are built in `_finding_detail` from the finding's `context`; a check without a hint gets an
     empty note cell.
     """
 
@@ -259,15 +214,11 @@ class _CheckHints:
 
 
 def _finding_detail(finding: PlausibilityFinding) -> str:
-    """The reader hint shown next to a flagged check.
+    """Return the reader hint ("Note" column) for one finding.
 
-    Turns a finding into the "Note" column of the panel: the two checks whose hint is only
-    useful with numbers in it (the effective price, which wants the bill and the quantity it
-    came from; the band width, which wants the horizon) are formatted from the finding's
-    `context` map, everything else falls back to the static hint in `_CheckHints`. The context
-    keys read here are fixed per check id and documented at the producing call site in
-    `plausibility.py`, which is why the lookups are unguarded — a missing key means the engine
-    changed a check's contract without updating its renderer.
+    The effective-price and band-width hints are formatted from the finding's `context`; every other check uses its
+    static hint in `_CheckHints`. The context keys are fixed per check id in `plausibility.py`, so a missing key
+    raises.
     """
     if finding.check_id == CheckIds.CHECK_EFFECTIVE_PRICE:
         return (
@@ -282,20 +233,14 @@ def _finding_detail(finding: PlausibilityFinding) -> str:
     return _CheckHints.BY_CHECK_ID.get(finding.check_id, "")
 
 
-# One return per check kind is the mapping this function exists to be; collapsing them into a
-# table would move the formatting decisions away from the kind they belong to.
+# One return per check kind keeps each kind's formatting next to its kind.
 def _render_finding(finding: PlausibilityFinding) -> PlausibilityCheck:  # pylint: disable=too-many-return-statements
-    """Formats one typed finding into its panel row (no arithmetic beyond rounding).
+    """Format one finding into its panel row, with no arithmetic beyond rounding.
 
-    Each check kind has its own idea of what "value" and "expected" mean — a reconciliation
-    reports a delta against zero, a band-ordering check has no single value at all and prints
-    the band it rejected, a range check prints a figure against its bounds — so this dispatches
-    on `check_id` rather than trying to format all findings uniformly. The dispatch is
-    deliberately explicit and falls through to the generic range rendering, so a check kind
-    added engine-side still renders sensibly instead of raising.
-
-    The catch-all branch switches precision at 100 for the same reason `_fmt` does: a ratio of
-    0.043 and an EAC of 12,400 EUR/m2a cannot share a format.
+    Dispatches on `check_id`, since each kind means something different by "value" and "expected": a reconciliation
+    prints a delta against zero, a band-ordering check prints the rejected band, a range check a figure against its
+    bounds. Unknown kinds fall through to the generic range rendering, whose precision switches at 100 so a ratio of
+    0.043 and 12,400 EUR/m2a both read well.
     """
     detail = _finding_detail(finding)
     if finding.check_id == CheckIds.CHECK_RESULTS_PRESENT:
@@ -338,49 +283,35 @@ def _render_finding(finding: PlausibilityFinding) -> PlausibilityCheck:  # pylin
 
 
 def render_plausibility_findings(report: PlausibilityReport) -> List[PlausibilityCheck]:
-    """The panel rows of a plausibility report, in report order.
+    """Return the panel rows of a plausibility report, in the order `run_plausibility_checks` produced them.
 
-    The rendering half of section 0, and the module's public entry point for it: both report
-    formats and, from stack part 8/8, `bridge.py`'s log warnings go through here, so the panel a
-    reader sees in the HTML, the table in `cost_summary.md` and the lines in the simulation log
-    are the same rows with the same wording. Order is preserved exactly as `run_plausibility_checks` produced it
-    (structural findings first, then magnitudes), which is what makes the golden panel stable.
+    Both report formats and `bridge.py`'s log warnings use this, so all three show the same rows with the same wording.
     """
     return [_render_finding(finding) for finding in report.findings]
 
 
 def all_bands_degenerate(matrix: EvaluationMatrix) -> bool:
-    """True when every perspective's headline NPV band is exact (min = best_estimate = max).
+    """Return True when every perspective's total NPV band is exact (minimum = best estimate = maximum).
 
-    Only `total_npv_in_euro` is examined, not every band in every result: the headline NPV is the
-    proxy the reports use, and it is a sound one because a band anywhere in a run's cost data
-    propagates into it. The reverse does not strictly hold — a run could in principle carry a band
-    that cancels out of the total — so read this as "the reports have no whiskers to draw", which is
-    the question the note it gates actually answers.
-
-    That is the expected state when the price basis year resolves to the 1:1-migrated legacy
-    data (deliberately degenerate for parity, §10.1 Phase 1); banded AI-estimate data ships
-    for 2026 and 2035. The reports surface this so missing whiskers read as a data property,
-    not a bug.
+    Only `total_npv_in_euro` is examined; any band in the cost data propagates into it, so the answer means "the
+    reports have no whiskers to draw". It holds when the price basis year resolves to the 1:1-migrated legacy data,
+    which is exact on purpose (§10.1); banded data ships for 2026 and 2035.
     """
     return all(result.total_npv_in_euro.is_exact() for result in matrix.results.values())
 
 
 def _reference_result(matrix: EvaluationMatrix) -> LifecycleCostResult:
-    """The matrix's reference perspective — its first — refusing an empty matrix by name.
+    """Return the matrix's reference perspective, its first, refusing an empty matrix.
 
-    Every report is built around one reference result: the run parameters in its header, the
-    single-result sections, the price basis year of the degenerate-band note. Reaching for it with
-    `next(iter(...))` on a matrix that evaluated nothing raised a bare `StopIteration` from four
-    different places, which surfaces to a caller as an exception with no message and no hint that
-    the *input* was empty — and an empty matrix is a perfectly reachable state (every perspective
-    filtered out, an evaluation that failed upstream), not a programming error.
+    Every report is built around this result: the header's run parameters, the single-result sections and the
+    degenerate-band note. An empty matrix is reachable (every perspective filtered out, an upstream failure), so it
+    gets a clear error.
 
     Args:
         matrix: The evaluated perspectives.
 
     Returns:
-        The first result, which every builder treats as the reference.
+        The first result.
 
     Raises:
         ValueError: If the matrix holds no evaluated perspective.
@@ -395,12 +326,10 @@ def _reference_result(matrix: EvaluationMatrix) -> LifecycleCostResult:
 
 
 def _degenerate_note(matrix: EvaluationMatrix) -> str:
-    """The prose shown when `all_bands_degenerate` holds: why there are no whiskers.
+    """Return the note shown when `all_bands_degenerate` holds, explaining why there are no whiskers.
 
-    An absent uncertainty band looks like a broken feature, so both reports lead with an
-    explanation instead: it is a property of the price basis year's data, and the note names the
-    year in question and the two ways out (pick a banded basis year, or add bands to that year's
-    entries as a data PR). Shared by the markdown and HTML headers so the two cannot drift.
+    It names the price basis year and the two remedies (choose a banded year, or add bands to that year's data). Shared
+    by the markdown and HTML headers.
     """
     reference = _reference_result(matrix)
     basis = reference.parameters.price_basis_year or reference.simulation_year
@@ -413,7 +342,7 @@ def _degenerate_note(matrix: EvaluationMatrix) -> str:
     )
 
 
-# ---------------------------------------------------------------------------- markdown (C)
+# ---------------------------------------------------------------------------- markdown
 
 
 def build_cost_summary_markdown(
@@ -421,29 +350,20 @@ def build_cost_summary_markdown(
     plausibility: PlausibilityReport,
     comparison: Optional[VariantComparison] = None,
 ) -> str:
-    """`cost_summary.md`: compact, greppable, git-diffable (the §9.5 review workflow).
+    """Build `cost_summary.md`, the compact, diffable text report for checking data changes (§9.5).
 
-    The text sibling of the HTML report, and the artefact the data-review workflow actually runs
-    on: golden scenarios keep a committed copy, so a PR that changes a price entry, a lifetime
-    or a subsidy scheme shows up as an explicit line-level delta in the KPIs it moved instead of
-    as silent drift (§9.5). Everything a reviewer needs to judge that delta is here — the run's
-    parameters, the plausibility panel, one row per perspective, the cost structure and the
-    per-subject figures, the subsidy decisions and, when comparing, the variant deltas.
+    Golden scenarios keep a committed copy, so a data change shows up as line-level deltas in the KPIs it moved. It
+    holds the run parameters, the plausibility panel, one row per perspective, the cost structure, per-subject figures,
+    subsidy decisions and, when comparing, the variant deltas.
 
-    Diffability is what dictates the formatting choices below, which otherwise look arbitrary:
-    rows follow the insertion order of `matrix.results` and `component_breakdowns` rather than
-    being sorted by value, since a value-sorted table reorders itself whenever a number moves,
-    turning a one-line change into a whole-table diff (the deliberate exception is the variant
-    comparison's per-subject deltas, where the ranking *is* the message); figures go through
-    `_fmt`/`_band_str`, whose
-    rounding is a pure function of the value; zero-valued display groups are skipped so an
-    unused category never appears and disappears; and the only run-dependent text is the
-    generation date in the footer, which the golden test normalizes. Adding a timestamp, a
-    duration or a path here would make every diff dirty.
+    For diffability, rows keep the insertion order of `matrix.results` and `component_breakdowns` (except the variant
+    comparison's per-subject deltas, which are ranked), rounding depends only on the value, zero-valued display groups
+    are skipped, and the only run-dependent text is the generation date in the footer, which the golden test
+    normalizes.
 
     Args:
-        matrix: The evaluated perspectives. Its first entry is the "reference" perspective whose
-            cost structure and per-subject tables are shown; the perspective table covers all.
+        matrix: The evaluated perspectives. The first is the reference whose cost structure and per-subject tables are
+            shown; the perspective table covers all.
         plausibility: The panel from `run_plausibility_checks`, rendered as the first table.
         comparison: Optional variant-vs-reference comparison; adds the final section.
 
@@ -451,7 +371,7 @@ def build_cost_summary_markdown(
         The complete markdown document, newline-terminated.
 
     Raises:
-        ValueError: If the matrix holds no evaluated perspective (see `_reference_result`).
+        ValueError: If the matrix holds no evaluated perspective.
     """
     checks = render_plausibility_findings(plausibility)
     reference = _reference_result(matrix)
@@ -523,11 +443,9 @@ def build_cost_summary_markdown(
         lines.append("## Subsidy decisions")
         lines.append("")
         for decision, perspective_ids in decisions:
-            # Every applied award, at its total amount and under its friendly name: filtering on a
-            # non-zero *upfront* amount printed "applied none" for a measure the HTML report listed
-            # as APPLIED, because a scheduled tax credit pays out over years and its upfront amount
-            # is zero by construction. `views.describe_award` is the same source the awards table
-            # and the decision cards read.
+            # Every applied award at its total amount: a scheduled tax credit has a zero upfront
+            # amount, so filtering on the upfront amount would print "applied none".
+            # `views.describe_award` is the source the awards table and decision cards read too.
             applied = ", ".join(
                 f"{_scheme_markdown(presentation.display_name, presentation.scheme_id)} "
                 f"({_award_amount_str(presentation)}{_award_arithmetic_str(presentation)})"
@@ -580,13 +498,7 @@ def write_cost_summary(
     result_directory: str,
     comparison: Optional[VariantComparison] = None,
 ) -> str:
-    """Writes cost_summary.md.
-
-    The thin filesystem wrapper around `build_cost_summary_markdown`: rendering and writing are
-    separate so tests and the golden oracle can compare the document without a directory, while
-    the `report` CLI (and `bridge.py`, from stack part 8/8) gets a one-call side effect. UTF-8 is
-    explicit because the document contains non-ASCII text and the postprocessing may run under any
-    locale.
+    """Write `cost_summary.md` into the result directory, as UTF-8.
 
     Args:
         matrix: Evaluated perspectives.
@@ -595,7 +507,7 @@ def write_cost_summary(
         comparison: Optional variant comparison section.
 
     Returns:
-        The path written, for logging and for the caller's list of produced files.
+        The path written.
     """
     path = os.path.join(result_directory, ReportFileNames.COST_SUMMARY_FILE_NAME)
     with open(path, "w", encoding="utf-8") as file:
@@ -603,43 +515,16 @@ def write_cost_summary(
     return path
 
 
-# ---------------------------------------------------------------------------- SVG helpers (A)
-#
-# Everything below draws charts by emitting SVG source directly. That is not a stylistic
-# preference: the report must survive being mailed around, opened from a network share and
-# archived next to the results, so it may not load a single external asset — no charting
-# library, no web font, no image file. Hand-written inline SVG is the only way to get real
-# charts under that rule, and it buys two further properties the report depends on: marks can
-# be coloured with the CSS custom properties defined in `_ReportCss` (so charts follow the
-# reader's light/dark theme, which a rasterized chart cannot), and a `<title>` child gives every
-# mark a native browser tooltip with no JavaScript at all.
-#
-# **The coordinate convention**, which the chart builders assume everywhere and never restate:
-# SVG user units are pixels of the `viewBox`, x grows right and **y grows downward** from the
-# top-left origin. So a taller bar has a *smaller* y, a value axis is inverted relative to
-# intuition, and every chart below computes a baseline y and subtracts. The `<text>` y is the
-# glyph baseline, not the top of the text, which is why label positions carry a `+ 4`-ish
-# nudge to sit optically centred on a row. Each chart derives its own `scale` (user units per
-# euro) from the widest or tallest value it has to fit, guarded with a `1e-9` floor so an
-# all-zero series cannot divide by zero.
+# ---------------------------------------------------------------------------- subsidy decisions
 
 
 def _decision_content_key(decision) -> Tuple:
-    """Everything about a decision a reader of the report would notice.
+    """Return a key holding everything about a subsidy decision a reader would notice.
 
-    Two perspectives that reached the same conclusion about a measure should be reported once;
-    two that reached different conclusions must both be reported. This key is where that line is
-    drawn: the measure, and for every scheme the solver touched its id, its outcome and the detail
-    that outcome carries — the amount and payout of an award, the reason of a rejection, the
-    unanswered fields of an open question. Amounts are rounded to the cent so that float noise in
-    the last digits cannot split one decision into two.
-
-    Deliberately renderer-independent: every rendering now shows an award's total
-    (`views.award_total_amount`), but the upfront amount stays in the key beside it. Two awards can
-    share a total and differ in when it is paid — an upfront grant and a scheduled tax credit of
-    the same size are not the same decision to anyone reading the report — and keying on both is
-    what keeps the cards, the awards table and the markdown grouping identically whatever any one
-    of them chooses to print.
+    Perspectives with the same key are reported once. The key holds the measure and, per scheme the solver touched, its
+    id, outcome and detail: an award's amount and payout, a rejection's reason, an open question's unanswered fields.
+    Amounts are rounded to the cent so float noise cannot split a decision. The upfront amount is keyed beside the
+    total, since an upfront grant and a scheduled tax credit of the same size are different decisions.
     """
     return (
         decision.measure_subject,
@@ -664,18 +549,14 @@ def _decision_content_key(decision) -> Tuple:
 
 
 def _decisions_by_content(matrix: EvaluationMatrix) -> List[Tuple]:
-    """The distinct subsidy decisions of the run, each with the perspectives that reached it.
+    """Return the distinct subsidy decisions of the run, each with the perspectives that reached it.
 
-    Perspectives differ in subsidy mode and installation context, so they do not have to agree
-    about a measure — a net perspective applies what a gross one never asks for, and a brownfield
-    context can fail an eligibility condition a greenfield one passes. Grouping by
-    `_decision_content_key` rather than by measure name is what lets the report show every distinct
-    outcome: the previous de-duplication kept the first perspective's decision per measure and
-    dropped the rest unseen, which is at its worst exactly when it matters, a measure whose support
-    depends on the view taken.
+    Perspectives can disagree about a measure (a net perspective applies what a gross one never asks for; a brownfield
+    context can fail a condition a greenfield one passes), so decisions are grouped by `_decision_content_key`, not by
+    measure name.
 
     Returns:
-        `(decision, perspective_ids)` pairs in first-seen order, with the ids in matrix order.
+        `(decision, perspective_ids)` pairs in first-seen order, ids in matrix order.
     """
     grouped: Dict[Tuple, Tuple] = {}
     for perspective_id, result in matrix.results.items():
@@ -689,13 +570,10 @@ def _decisions_by_content(matrix: EvaluationMatrix) -> List[Tuple]:
 
 
 def _perspectives_note(perspective_ids: List[str], matrix: EvaluationMatrix) -> str:
-    """How to name the perspectives sharing one decision, without listing five ids every time.
+    """Name the perspectives sharing one decision: a phrase when it is all of them, else the ids.
 
-    The common case by far is that every perspective which decided anything decided the same
-    thing, and spelling all of them out on each card would bury the case worth noticing — a
-    decision only some perspectives reached. So a group covering all of them collapses to a phrase,
-    and only a partial group is enumerated. The two phrasings are kept apart because "all
-    perspectives" would be untrue on a run where a gross perspective produced no decision at all.
+    "All perspectives with subsidy decisions" covers every perspective that decided something; a partial group is
+    listed by id.
     """
     deciding = [
         perspective_id

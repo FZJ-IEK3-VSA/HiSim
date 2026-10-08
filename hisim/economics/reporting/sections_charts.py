@@ -1,32 +1,11 @@
-"""Report sections of the visualization set — the charts that answer a reader's own questions.
+"""Report sections of the visualization set: the charts that answer a reader's own questions.
 
-One function per chart of the visualization extension: the lifecycle overview the report opens
-with, how year 0 is funded, who pays whom (the actor Sankey and the landlord's income statement
-drawn as one), the four per-party statements the story chapters open with, the cash curve, the
-loan and what credit costs, the household's energy balance, the uncertainty drivers, the cost
-structure and the cost shapes, the equity build-up, the monthly burden, the component lifetimes,
-the NPV bridge and the fixed-interest benchmark. They live beside `sections.py` rather than
-inside it because the split is by question rather than by size — `sections.py` walks the
-calculation chain a reviewer checks, this module answers what a reader came for.
-
-Like every other section they open with `scaffold._explanation_html`, i.e. with the four
-authored parts held in `report_prose.ReportProse` (rule 2.6): the report has to be understandable
-by a reader who has never seen a Sankey or a bridge waterfall, and because the explanations are
-part of the golden-tested HTML they are reviewed and frozen like any number. What stays in the
-functions below is the run-specific half a golden-stable text cannot carry: the captions and
-annotations that state this run's amounts and perspectives. A section that cannot be drawn at
-all records its reason on the `_ChapterContext` and returns nothing; the document prints those
-reasons under its table of contents, because a reader who notices a missing section is never the
-person reading the log.
-
-All four party statements — the owner's, the tenant's, society's and the landlord's (Q21) — are
-one section builder rather than four, because `views.StatementPartitions` already carries the
-words each party's two sides are called by: the society statement reads "real resource costs" /
-"transfers" where the household ones read "cash flows" / "accounting credits", and the renderer
-never learns which party it is drawing. What differs per party is passed in — the sentence its
-absence is recorded with, the paragraph stating this run's own figures, and, for the landlord,
-the §559 levy verdict opening that paragraph, the short side words "cash" / "accounting" its
-table has used since before the partitions existed, and the income Sankey below it.
+One builder per chart: lifecycle overview, year-0 funding, who pays whom, the four party statements, cash curve, loan
+and cost of credit, energy balance, uncertainty drivers, cost structure and shapes, equity, monthly burden, component
+lifetimes, NPV bridge and bank benchmark. Each opens with `scaffold._explanation_html` (the authored text of
+`report_prose.ReportProse`) and adds the captions that state this run's figures. A section that cannot be drawn records
+its reason on the `_ChapterContext` and returns nothing; the document lists those reasons. The four party statements
+share one builder, `_statement_section_html`, since `views.StatementPartitions` carries each party's wording.
 """
 
 
@@ -35,9 +14,8 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from hisim.economics import views
-# The refusal type of the view layer, reached through `views` because that is the surface
-# seam 4 opens to presentation (`tests/test_economics_import_lint.py`): a report that cannot
-# tell which perspective it is drawing refuses with the same error a view would.
+# The refusal type of the view layer, reached through `views`, the surface presentation may
+# import (`tests/test_economics_import_lint.py`).
 from hisim.economics.views import CostDataError
 from hisim.economics.presentation_style import PresentationStyle, SequentialRamp, group_of
 # The two captions this module shares with `report_plots.py`: the payback sentence under the
@@ -80,9 +58,7 @@ from hisim.economics.reporting.scaffold import (
 
 #: One lane of `charts._gantt_svg`: `(label, spans, events, colour)`, where a span is `(start
 #: year, end year or None for "to the horizon", span label)` and an event is `(year, label,
-#: amount in euro or None)`. Named here because two sections build these rows — the lifetimes
-#: strip and the lifecycle overview — and the tuple is long enough that spelling it twice is how
-#: the two drift apart.
+#: amount in euro or None)`. Built by the lifetimes strip and the lifecycle overview.
 _GanttRow = Tuple[
     str,
     List[Tuple[int, Optional[int], str]],
@@ -94,16 +70,10 @@ _GanttRow = Tuple[
 def _first_result_where(
     matrix: EvaluationMatrix, predicate: Callable[[LifecycleCostResult], bool]
 ) -> Optional[LifecycleCostResult]:
-    """The first perspective of the matrix that satisfies a predicate, or None.
+    """Return the first perspective of the matrix that satisfies a predicate, or None.
 
-    Most single-result sections of this report render the matrix's *first* perspective, which is
-    the reference view of the run. Several charts of the visualization set cannot: the actor
-    Sankey needs a perspective that actually has two actors, the loan panel and the cost of
-    credit need a financed one. Rendering them for the first perspective would drop them from
-    every run whose first row happens to be an unallocated cash view — even though the run
-    evaluated a landlord and a financed row right below it. Picking the first perspective that
-    *has* the data keeps the section, and the heading names which perspective it is showing, so
-    nothing is ambiguous.
+    Some charts need a perspective with particular data (two actors, a loan), so they pick the first that has it
+    instead of the matrix's first perspective; the heading names the perspective shown.
 
     Args:
         matrix: Every evaluated perspective, in evaluation order.
@@ -119,13 +89,10 @@ def _first_result_where(
 
 
 def _has_year_zero_funding(result: LifecycleCostResult) -> bool:
-    """Whether year 0 carries support or a loan — the cheap predicate behind the funding chart.
+    """Return whether year 0 books a subsidy or a loan disbursement.
 
-    Deliberately a scan of the timeline rather than a call to a view that assembles the funding
-    picture: such a view validates and raises, and choosing which perspective to draw must not
-    depend on a validation that is only meaningful once the perspective has been chosen. It
-    belongs with `_first_result_where`, the other half of the same "pick a perspective that has
-    the data" pattern.
+    A plain timeline scan rather than the funding view, which validates and raises; choosing a perspective must not
+    depend on that validation.
 
     Args:
         result: The perspective to test.
@@ -145,19 +112,14 @@ def _lifecycle_overview_section_html(
     comparison: Optional[VariantComparison],
     context: _ChapterContext,
 ) -> str:
-    """At a glance: assets, financing, support and milestones on one year axis.
+    """Return the lifecycle overview: assets, financing, support and milestones on one year axis.
 
-    Answers "what happens when, over the life of this renovation" — what was built, how it is
-    financed, what support and obligations run alongside it, and when the project pays off. It is
-    the report's first figure because it is the only one that shows the whole story at once; every
-    lane is a compressed restatement of a chart further down, which is also what makes it safe, as
-    it introduces no new numbers and only a shared axis.
+    Every lane restates a chart further down on a shared axis and introduces no new numbers.
 
     Args:
         result: The perspective whose lanes are drawn.
-        comparison: The variant comparison whose band crossings carry the payback milestone, or
-            None — payback is a statement about a difference between two variants, so without one
-            the milestone is absent and the caption says why.
+        comparison: The variant comparison that supplies the payback milestone, or None; without one the milestone is
+            absent and the caption says why.
         context: The chapter this section is being rendered into.
 
     Returns:
@@ -182,10 +144,8 @@ def _lifecycle_overview_section_html(
             color,
         ))
     rows.extend(_event_strip_rows(lanes.assets))
-    # An empty lane is stated beside the chart rather than in the log, for the same reason a
-    # skipped section is stated under the contents: the reader who notices the gap is looking at
-    # the drawing, not at the process output. It is not a `context.skip` because the section
-    # itself *is* drawn — one row of it is missing, which the reader can only see here.
+    # An empty lane is stated beside the chart, not in the log, so the reader sees why a row is
+    # missing. It is not a `context.skip` because the section itself is drawn.
     note = "" if not skipped else (
         f"<p class='sub'>The {_esc(' and '.join(skipped))} lane"
         f"{'s are' if len(skipped) > 1 else ' is'} empty for perspective "
@@ -203,20 +163,13 @@ def _lifecycle_overview_section_html(
 
 
 def _event_strip_rows(strips: List[views.EventStripRow]) -> List[_GanttRow]:
-    """One Gantt lane per subject of an event strip, residual marker included.
+    """Return one Gantt lane per subject of an event strip, including the residual write-down marker.
 
-    Both the lifetimes section and the asset lanes of the lifecycle overview are this loop over
-    a `views.EventStripRow` list, which is the point of the overview: it restates charts that
-    exist in full elsewhere on a shared axis, so a lane that disagrees with the strip further
-    down would be a defect rather than a second opinion. Written twice, the two were free to
-    disagree about exactly that — which is what a second copy of a loop *is*.
-
-    The residual write-down is appended as an event because the view carries it beside the events
-    rather than among them — it is not something that was *done* to the asset, it is what the
-    horizon did to its book value.
+    Shared by the lifetimes section and the asset lanes of the lifecycle overview, so the two always agree. The
+    residual write-down is appended as an event because the view carries it separately.
 
     Args:
-        strips: The rows `views.lifecycle_lanes` collected, or `views.component_event_strip`'s.
+        strips: The rows `views.lifecycle_lanes` or `views.component_event_strip` returned.
 
     Returns:
         One `(label, spans, events, colour)` lane per subject, in the view's order.
@@ -238,21 +191,17 @@ def _event_strip_rows(strips: List[views.EventStripRow]) -> List[_GanttRow]:
 
 
 def _sources_uses_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """Funding: how year 0 is paid for and what it buys, balanced to the euro.
+    """Return the funding Sankey: how year 0 is paid for and what it buys, balanced to the euro.
 
-    Answers the first question a bank or a funding advisor asks, and it is the one place the
-    subsidy scheme id earns its keep: "state -> KfW 261 -> heat pump" reads very differently from
-    one grey subsidies node. The two column totals are equal by construction — the view validates
-    the double entry before this runs — so the caption can state the balance as a fact.
+    Subsidies are shown per scheme id ("state -> KfW 261 -> heat pump"). The view validates that both column totals are
+    equal, so the caption states the balance as a fact.
 
     Args:
-        result: The perspective whose year 0 is stated; `_has_year_zero_funding` is the caller's
-            skip check.
+        result: The perspective whose year 0 is stated; the caller checks `_has_year_zero_funding`.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when year 0 is funded entirely from own capital — the
-        investment waterfall shows that case better than a one-ribbon Sankey would.
+        The section, or the empty string when year 0 is funded entirely from own capital.
     """
     statement = views.funding_sources_and_uses(result)
     if not statement.has_external_funding():
@@ -274,7 +223,7 @@ def _sources_uses_section_html(result: LifecycleCostResult, context: _ChapterCon
               for node in statement.sources}
     labels.update({f"use:{node.label}": f"{node.label} ({_fmt(node.amount_in_euro)} EUR)"
                    for node in statement.uses})
-    # Q20: the node reads as the scheme's friendly name and the raw id lives in the tooltip.
+    # The node reads as the scheme's friendly name and the raw id lives in the tooltip.
     tooltips = dict(labels)
     tooltips.update({
         f"src:{node.label}": f"{labels[f'src:{node.label}']} — scheme id {node.scheme_id}"
@@ -300,26 +249,14 @@ def _liquidity_section_html(
     comparison: Optional[VariantComparison],
     context: _ChapterContext,
 ) -> str:
-    """The cash curve: the cumulative cash position as a fan, nominal above and discounted below.
+    """Return the cash curve: the cumulative cash position as a fan, nominal above and discounted below.
 
-    Answers "how deep does this go, and when do I get it back": the running out-of-pocket
-    position with its uncertainty band, so the worst year and the payback both read as ranges
-    rather than as single numbers.
-
-    Without a reference variant there is no payback question at all, and the lower panel shows
-    the cumulative discounted cost instead — whose end point is the reported NPV, which is what
-    makes the panel worth keeping in a single-variant run.
-
-    **One perspective, one story.** With a comparison the whole section — the heading, both
-    panels and the payback sentence — is one perspective's, and it is the comparison's own: a
-    `VariantComparison` is computed for exactly one perspective, so a payback sentence drawn from
-    it under some other perspective's cash curve is two runs' figures presented as one. The
-    section refuses that combination rather than rendering it, because it is invisible in the
-    output: both halves are plausible, they just belong to different parties.
+    With a comparison the lower panel shows the cumulative discounted savings and the payback sentence; without one it
+    shows the cumulative discounted cost, which ends at the NPV. A `VariantComparison` belongs to one perspective, so
+    the section refuses to pair it with another perspective's cash curve.
 
     Args:
-        result: The perspective whose liquidity is drawn; with a comparison it must be the one
-            the comparison was computed for.
+        result: The perspective whose liquidity is drawn; with a comparison it must be the comparison's perspective.
         comparison: The variant comparison whose savings curve carries the payback, or None.
         context: The chapter this section is being rendered into.
 
@@ -386,13 +323,7 @@ def _liquidity_section_html(
 def _savings_curve(
     curves: Dict[str, List[float]], slot: str, comparison: VariantComparison
 ) -> List[float]:
-    """One slot's cumulative savings curve, named in the refusal when it is not there.
-
-    The three curves are the whole lower panel: the band is drawn from two of them and the
-    payback sentence reads a crossing off each. A missing slot used to be a `KeyError` from a
-    subscript deep inside the section, or — worse, had anyone reached for `.get` — a silently
-    flat curve that reads as "no savings in that world". Naming the slot and the comparison turns
-    it into a sentence a reader of the traceback can act on.
+    """Return one band slot's cumulative savings curve, raising a named error when it is missing.
 
     Args:
         curves: The comparison's `cumulative_discounted_savings_in_euro`.
@@ -415,19 +346,17 @@ def _savings_curve(
 
 
 def _uncertainty_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The uncertainty drivers: which subjects make the total NPV band as wide as it is.
+    """Return the uncertainty drivers: which subjects make the total NPV band as wide as it is.
 
-    Answers "which inputs are worth arguing about". It is an *attribution* of the existing band,
-    not a sensitivity analysis — nothing is re-evaluated — and the prose says so, because the
-    chart looks exactly like an OAT tornado and would otherwise be read as one.
+    This attributes the existing band; nothing is re-evaluated, so it is not a sensitivity analysis, and the prose says
+    so.
 
     Args:
         result: The perspective whose band is attributed.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when the total NPV band is degenerate and there is no
-        width to attribute.
+        The section, or the empty string when the total NPV band has no width.
     """
     total = result.total_npv_in_euro
     if total.is_exact():
@@ -457,23 +386,18 @@ def _uncertainty_section_html(result: LifecycleCostResult, context: _ChapterCont
 
 
 def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """Who pays whom over the whole horizon, one column per party.
+    """Return the who-pays-whom Sankey over the whole horizon, one column per party.
 
-    Answers the question a landlord/tenant case makes unavoidable: the levy, the subsidy and the
-    energy bills all cross actor boundaries, and until now that structure was visible only as
-    rows of a pivot table.
-
-    Since Q23 every internal party has a column of its own, ordered by `actor_columns` so that a
-    payment between two of them — the §559e levy — runs left to right like every other ribbon
-    instead of looping out of a shared column and back into it.
+    Shows the levy, subsidies and energy bills crossing actor boundaries. Every internal party has its own column,
+    ordered by `actor_columns`, so a payment between two of them (the §559e levy) runs left to right like every other
+    ribbon.
 
     Args:
         result: The perspective whose flows are drawn; it needs at least two actor nodes.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string for a perspective with a single actor — there is no
-        who-pays-whom story in a view where one party pays everything.
+        The section, or the empty string for a perspective with a single actor.
     """
     matrix = views.actor_flow_matrix(result)
     if len(matrix.actors) < 2:
@@ -485,7 +409,7 @@ def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterConte
     nets = matrix.net_by_actor()
 
     def key(node: str, is_target: bool) -> str:
-        """The node's key, namespaced by side so an actor and an external node never collide."""
+        """Return the node's key, namespaced by side so an actor and an external node never collide."""
         if node in matrix.actors:
             return f"actor:{node}"
         return f"snk:{node}" if is_target else f"src:{node}"
@@ -498,7 +422,7 @@ def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterConte
     labels = {f"actor:{actor}": f"{actor} (net {_fmt(nets[actor])} EUR)" for actor in matrix.actors}
     labels.update({f"src:{node}": node for node in matrix.sources})
     labels.update({f"snk:{node}": node for node in matrix.sinks})
-    # Q23: one column per party, ordered by the view so payments between them run left to right;
+    # One column per party, ordered by the view so payments between them run left to right;
     # external sources stay leftmost and external sinks rightmost, and a ribbon may skip columns.
     columns = (
         [[f"src:{node}" for node in matrix.sources]]
@@ -510,8 +434,8 @@ def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterConte
         + _explanation_html(ReportSections.WHO_PAYS_WHOM, context)
         + "<p class='sub'>This chart shows the best-estimate scenario only; the band of the grand "
         f"total is {_esc(_band_str(matrix.total_band))}.</p>"
-        # Q29 R7: the stub that closes an actor's face is labelled with the view's own net, in the
-        # view's own sign convention (cost positive), so it cannot contradict the node beside it.
+        # The stub closing an actor's face is labelled with the view's own net, in its sign
+        # convention (cost positive), so it cannot contradict the node beside it.
         + _sankey_svg(
             columns, ribbons, labels,
             stub_labels={f"actor:{actor}": f"net {_fmt(net)} EUR" for actor, net in nets.items()},
@@ -525,23 +449,16 @@ def _actor_flow_section_html(result: LifecycleCostResult, context: _ChapterConte
 def _statement_table_html(
     statement: views.PerspectiveStatement, side_labels: Optional[Tuple[str, str]] = None
 ) -> str:
-    """The two-sided table every party statement shares (Q21, Q26 F4).
+    """Return the two-sided table every party statement shares.
 
-    One row per category with its present value and the side it sits on, then the two subtotals
-    and the net position. The side column is labelled from the statement's own partition, so the
-    society statement reads "real resource costs" / "transfers" where the household ones read
-    "cash flows" / "accounting credits", without this function knowing which party it is drawing.
-
-    The subtotals are printed even when a side is empty — the tenant's credit side always is —
-    because a stated zero is the answer to "where is my credit side?" and a missing row is not.
+    One row per category with its present value and side, then the two subtotals and the net position. The side column
+    uses the partition's own labels (e.g. "real resource costs" / "transfers" for society). Subtotals are printed even
+    when a side is empty, as an explicit zero.
 
     Args:
         statement: The partition `views.perspective_statement` returned.
-        side_labels: What the *side* column calls the two sides, when that is not the partition's
-            own pair of labels. The landlord statement (Q21) is the one caller that differs: its
-            rows have said "cash" and "accounting" since before the partitions existed, while its
-            subtotal rows spell the labels out like everyone else's, and this parameter is what
-            keeps that table identical to the byte while it is drawn by the shared builder.
+        side_labels: Labels for the side column when they differ from the partition's own; the landlord statement
+            passes "cash" and "accounting".
 
     Returns:
         The table, rows in the statement's own order.
@@ -570,18 +487,14 @@ def _statement_table_html(
 
 
 def _statement_caption(statement: views.PerspectiveStatement, lead: str = "", trail: str = "") -> str:
-    """The run's own two subtotals under a party statement, in the partition's own words.
-
-    The prose says what the two sides *are*; this says what they came to here, which is the half a
-    reader cannot get from anywhere else on the page.
+    """Return the caption stating the run's two subtotals under a party statement, in the partition's words.
 
     Args:
         statement: The partition `views.perspective_statement` returned.
-        lead: Text opening the same paragraph, for a party that states something before its
-            subtotals — the landlord's §559 levy verdict. Inserted verbatim, like `charts._table`'s
-            cells: it carries its own `<b>` emphasis and escapes whatever it interpolates.
-        trail: Text closing it, for a party that qualifies them afterwards — the landlord's
-            reminder that only the cash half of an advantage ever reaches an account. Verbatim too.
+        lead: Text opening the paragraph, inserted verbatim (it carries its own markup and escaping), e.g. the
+            landlord's §559 levy verdict.
+        trail: Text closing the paragraph, inserted verbatim, e.g. the landlord's note that only the cash half reaches
+            an account.
 
     Returns:
         The caption paragraph.
@@ -606,36 +519,28 @@ def _statement_section_html(
     after_table: Callable[[views.PerspectiveStatement], str] = lambda _statement: "",
     side_labels: Optional[Tuple[str, str]] = None,
 ) -> str:
-    """The skeleton all four party statements are drawn on (Q21, Q26 F4).
+    """Return a party statement section: heading, explanation, the run's figures, the two-sided table.
 
-    Every one of them is the same document: the section's heading and its authored explanation,
-    then this run's own figures in prose, then the two-sided table, and — for the landlord — the
-    same statement drawn again as an income Sankey. Only the words differ, and the words are
-    already data: `views.StatementPartitions` carries what each party's two sides are called, so
-    the four builders left here are their arguments, not four renderings.
-
-    They were four copies until this existed, and the landlord's had already drifted: it carried
-    its own table builder and its own caption, so a change to the shared pair reached three
-    statements out of four. That is the failure a fourth copy is for.
+    Shared by the owner, tenant, society and landlord statements; only the wording and the extras differ, and
+    `views.StatementPartitions` carries the wording.
 
     Args:
-        section: The `(anchor, name)` pair of `ReportSections` this party's statement is.
+        section: The `(anchor, name)` pair of `ReportSections` for this party.
         result: The perspective to state.
         partition: Which two sides to split it into, and what to call them.
         context: The chapter this section is being rendered into.
-        no_flows_reason: The sentence recorded under "Not drawn for this run" when the
-            perspective books nothing at all — each party phrases its own absence.
-        note: This run's own figures, as the paragraph(s) between the explanation and the table.
-        after_table: Anything drawn below the table; only the landlord uses it, for the Sankey.
-        side_labels: Passed through to `_statement_table_html` — the landlord's short side words.
+        no_flows_reason: The sentence recorded under "Not drawn for this run" when the perspective books nothing.
+        note: Builds the paragraph(s) with this run's figures, between the explanation and the table.
+        after_table: Builds anything drawn below the table; only the landlord uses it, for the Sankey.
+        side_labels: Passed through to `_statement_table_html`.
 
     Returns:
-        The section, or the empty string when the perspective books no flow at all, its reason
-        recorded on the context.
+        The section, or the empty string when the perspective books no flow at all (its reason recorded on the
+            context).
 
     Raises:
-        CostDataError: From `views.perspective_statement`, if the two sides do not sum to the
-            perspective's NPV, or if a transfer partition is asked for on a scoped perspective.
+        CostDataError: From `views.perspective_statement`, if the two sides do not sum to the perspective's NPV, or if
+            a transfer partition is asked for on a scoped perspective.
     """
     statement = views.perspective_statement(result, partition)
     if not statement.cash_lines and not statement.accounting_lines:
@@ -651,17 +556,12 @@ def _statement_section_html(
 
 
 def _owner_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The owner-occupier's two-sided statement (owner decision Q26 F4, rule 2.9).
+    """Return the owner-occupier's two-sided statement.
 
-    The owner rows of the perspectives table were single numbers until here. This decomposes them
-    into the money that moved — investment net of subsidies, bills, maintenance, replacements,
-    feed-in revenue and the loan flows where the financed view applies — and the value that was
-    merely booked: the residual worth of the hardware and the anyway credit. The caption states
-    how much of the result is each, because a strongly negative owner NPV carried by book value
-    is a different proposition from the same figure carried by cash.
-
-    Every figure comes from `views.perspective_statement`, which validates that the two sides sum
-    to the perspective's NPV before this runs, so the table and the headline cannot disagree.
+    Splits the owner's NPV into money that moved (investment net of subsidies, bills, maintenance, replacements,
+    feed-in, loan flows) and value that was only booked (residual value and the anyway credit, the avoided cost of a
+    replacement that was due anyway). The caption states how much of the result is each. `views.perspective_statement`
+    validates that the sides sum to the NPV.
 
     Args:
         result: The owner perspective to state.
@@ -682,20 +582,12 @@ def _owner_statement_section_html(result: LifecycleCostResult, context: _Chapter
 
 
 def _tenant_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The tenant's statement: everything paid because of the renovation, nothing received (F4).
+    """Return the tenant's statement: everything paid because of the renovation, nothing received.
 
-    The tenant's side of the rented-out story, decomposed into the levy set by law and the energy
-    and apportioned operating costs set by physics and prices — the split the fairness question
-    turns on. The credit side is deliberately empty and its subtotal is printed as the zero it is:
-    a tenant receives nothing back in this ledger, and a lower energy bill shows up as a smaller
-    cost line rather than as income.
-
-    The caption states that the levy is the exact counterpart of the landlord statement's levy
-    income, and that identity is *checked* rather than asserted: `assembly._rented_chapter_html`
-    runs `views.levy_transfer_reconciles` over the two statements before either is drawn, and
-    refuses the chapter when the two halves of the transfer differ. The check lives there because
-    it needs both parties, and this section only ever sees one of them — which is precisely how
-    the sentence came to be printed under a comparison nobody was making.
+    Splits the tenant's cost into the modernization levy and the energy and apportioned operating costs. The credit
+    side is empty and printed as zero; a lower energy bill appears as a smaller cost line. The caption calls the levy
+    the counterpart of the landlord's levy income; `assembly._rented_chapter_html` checks that with
+    `views.levy_transfer_reconciles` before either statement is drawn.
 
     Args:
         result: The tenant perspective to state.
@@ -716,11 +608,7 @@ def _tenant_statement_section_html(result: LifecycleCostResult, context: _Chapte
 
 
 def _tenant_levy_note(statement: views.PerspectiveStatement) -> str:
-    """How much of the tenant's position is the levy, and the counterpart it is the half of.
-
-    The one figure of this statement a reader is looking for, stated before the table so the rest
-    of it reads as "and the rest is energy". The identity the sentence claims is verified by
-    `views.levy_transfer_reconciles` in the chapter builder (see the section's docstring).
+    """Return the paragraph stating how much of the tenant's position is the levy.
 
     Args:
         statement: The tenant's statement.
@@ -745,20 +633,12 @@ def _tenant_levy_note(statement: views.PerspectiveStatement) -> str:
 
 
 def _society_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The macroeconomic statement: real resources against transfers that cancel (Q26 F4).
+    """Return the macroeconomic statement: real resource costs against transfers that cancel.
 
-    The proof of what "macroeconomic" means rather than the word: the resource categories keep
-    their values, the transfers appear with both halves and an explicit zero-sum line, and CO2
-    enters at its damage cost rather than at any price a household pays. On the shipped
-    macroeconomic perspective every transfer has already been removed at source (§4.5), so the
-    transfer rows are the zeros that statement makes checkable — which is stated in the caption
-    rather than left as an empty side.
-
-    Only ever rendered for a SYSTEM-scoped perspective: the society partition reads its transfer
-    side off the full timeline and its resource side off the scoped one, so any other scope is
-    refused by the view. `views.story_perspectives` classifies on exactly that condition, which is
-    what keeps a landlord-scoped macroeconomic view — a legal perspective — out of this chapter
-    instead of taking the report down with a reconciliation error here.
+    Resource categories keep their values, transfers appear with both halves and a zero-sum line, and CO2 enters at its
+    damage cost. On the shipped macroeconomic perspective the transfers are already removed (§4.5), so the transfer
+    rows are zeros, and the caption says so. Only drawn for a SYSTEM-scoped perspective; `views.story_perspectives`
+    keeps other scopes out of this chapter, since the view refuses them.
 
     Args:
         result: The macroeconomic perspective to state.
@@ -781,12 +661,7 @@ def _society_statement_section_html(result: LifecycleCostResult, context: _Chapt
 def _society_transfer_note(
     statement: views.PerspectiveStatement, result: LifecycleCostResult
 ) -> str:
-    """What the transfer side came to, and at what price CO2 entered this view.
-
-    The society statement's two claims, in the run's own figures: that the transfers cancel, and
-    that the CO2 in the resource column is priced at a damage cost rather than at anything a
-    household pays. The second is read off the result rather than the statement because the
-    damage cost is a parameter of the run, and the row it produced is one of the resource lines.
+    """Return the paragraph stating what the transfer side came to and the CO2 damage cost used.
 
     Args:
         statement: The society statement being drawn.
@@ -815,22 +690,11 @@ def _society_transfer_note(
 
 
 def _landlord_statement_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The landlord's two-sided statement plus the income Sankey of the same numbers (Q21, Q25).
+    """Return the landlord's two-sided statement plus an income Sankey of the same numbers.
 
-    Answers the question the landlord row of the perspectives table cannot: a strongly negative
-    net position reads as a gain, but part of it is the residual book value of the hardware and
-    the avoided cost of a renovation the building needed anyway — value, not income. The table
-    states the cash side and the accounting side separately before combining them, and the Sankey
-    below it draws the same statement the way an income statement is drawn: what arrives from the
-    left, what leaves to the right, and the ribbon left over is the bottom line.
-
-    Every number comes from `views.landlord_statement`, which validates that the two sides sum to
-    the perspective's NPV before this ever runs, so the table, the picture and the headline figure
-    cannot disagree.
-
-    The one statement with something to say both above and below its table, which is why the
-    shared skeleton has an `after_table` at all: the levy verdict opens the caption and the Sankey
-    closes the section.
+    The table states the cash side and the accounting side (residual value and the anyway credit) separately before
+    combining them; the Sankey draws the same statement as an income statement. `views.landlord_statement` validates
+    that the sides sum to the NPV. The levy verdict opens the caption and the Sankey closes the section.
 
     Args:
         result: The landlord perspective to state.
@@ -853,13 +717,10 @@ def _landlord_statement_section_html(result: LifecycleCostResult, context: _Chap
 
 
 def _landlord_statement_caption(statement: views.PerspectiveStatement) -> str:
-    """The run's own figures under the landlord statement: levy, cap verdict, the two subtotals.
+    """Return the caption under the landlord statement: the levy, the cap verdict and the two subtotals.
 
-    The prose says what the two sides *are*; this says what they came to here, which is the half a
-    reader cannot get from anywhere else. The levy clause states whether a statutory ceiling
-    decided the rent increase, because below the cap the levy scales with what was spent and at
-    the cap it does not — the same renovation costing more would then produce the identical
-    increase, which is a completely different business case and invisible in the amount itself.
+    The levy clause says whether a statutory cap set the rent increase: below the cap the levy scales with spending, at
+    the cap it does not.
 
     Args:
         statement: The partition `views.landlord_statement` returned.
@@ -892,19 +753,14 @@ def _landlord_statement_caption(statement: views.PerspectiveStatement) -> str:
 
 
 def _levy_world_verdicts(levy: Any) -> str:
-    """Which mechanism set the levy in each of the three worlds (owner decision Q26 F5).
+    """Return which mechanism set the levy in each of the three worlds.
 
-    The caps are applied per slot, so "the cap binds" is a best-estimate-slot statement that can
-    be false in the cheap world and true in the expensive one — two economically different answers
-    to the question a landlord actually asks, which is whether spending more would raise the rent.
-    The ruleset records the verdict per world; this states them, and collapses them into one
-    sentence when all three agree, because three identical clauses read as a defect.
+    The caps apply per band slot, so the cap can bind in the expensive world and not in the cheap one. Identical
+    verdicts collapse into one sentence.
 
     Args:
-        levy: The `results.ModernizationLevySummary` of the perspective; its
-            `binding_mechanism_by_slot` is empty for a result stored before the verdicts were
-            recorded, and nothing is added. Untyped because `results` publishes it only through
-            the statement this caption is built from.
+        levy: The perspective's `results.ModernizationLevySummary`; an empty `binding_mechanism_by_slot` (older stored
+            results) adds nothing. Typed `Any` because `results` exposes it only through the statement.
 
     Returns:
         A sentence to append to the levy note, or the empty string.
@@ -921,18 +777,12 @@ def _levy_world_verdicts(levy: Any) -> str:
 
 
 def _landlord_statement_sankey(statement: views.PerspectiveStatement) -> str:
-    """The statement as an income Sankey: income left, expenses right, the leftover is the result.
+    """Return the landlord statement as an income Sankey: income left, expenses right, the leftover is the result.
 
-    The earnings-statement convention (Q25). Income ribbons arrive at the landlord node from the
-    left and expense ribbons leave it to the right; whatever is left over runs on into a terminal
-    node labelled with the net position, so the bottom line is a ribbon rather than a number
-    somebody has to add up. Accounting credits are drawn in the report's credit style — outlined,
-    translucent and dashed where cash is solid — so the split the table states is visible in the
-    picture rather than only stated beside it.
-
-    Both signs are handled: when the renovation is a net cost for the landlord the leftover cannot
-    leave, so the net position enters from the left instead, and the caption says which way round
-    the drawing is.
+    Income ribbons enter the landlord node from the left, expenses leave to the right, and the remainder runs into a
+    terminal node labelled with the net position. Accounting credits use the credit style (outlined, translucent,
+    dashed). When the renovation is a net cost the net position enters from the left instead, and the caption says
+    which way round it is.
 
     Args:
         statement: The partition `views.landlord_statement` returned.
@@ -981,25 +831,17 @@ def _landlord_statement_sankey(statement: views.PerspectiveStatement) -> str:
 
 
 def _loan_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The debt service per year, one block per financed perspective.
+    """Return the debt service per year, one block per financed perspective of the chapter.
 
-    Answers "what does the loan actually look like over time" — falling interest against rising
-    principal for an annuity, a bullet spike for interest-only. It is its own section rather than
-    a chart buried in the cash-flow timeline because the loan is a separate story from the
-    timeline it replaces, and because the cost-of-credit section beside it is the second half of
-    the same question.
-
-    Rendered per story chapter, over that chapter's own perspectives: the owner's loan is not the
-    landlord's, and a chapter that showed the other party's debt service would be answering a
-    question about somebody else's money.
+    An annuity shows falling interest against rising principal, an interest-only loan a final bullet. Rendered per
+    story chapter over that chapter's own perspectives.
 
     Args:
         matrix: The chapter's perspectives; one block each, in matrix order.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when nobody in this chapter's story borrows — a chapter
-        of cash purchases produces no section at all rather than an empty box.
+        The section, or the empty string when nobody in this chapter borrows.
     """
     blocks = []
     for perspective_id, result in matrix.results.items():
@@ -1021,14 +863,10 @@ def _loan_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> st
 
 
 def _effective_rate_text(credit: views.TotalCostOfCredit) -> str:
-    """The Effektivzins as the panel prints it, including why there is none.
+    """Return the effective annual rate (Effektivzins) as the panel prints it.
 
-    A loan whose flows do not define a rate is not the same statement as a loan the report forgot
-    to price, and "n/a" alone leaves the reader unable to tell the two apart.
-    `TotalCostOfCredit.effective_annual_rate_note` carries the short reason — a term reaching past
-    the observation horizon, a repayment grant larger than the debt service — and it is non-empty
-    exactly when the rate is None and the view knows why, so it is printed in brackets beside the
-    "n/a" rather than dropped.
+    When the rate is None, `TotalCostOfCredit.effective_annual_rate_note` gives the reason when known (e.g. a term past
+    the horizon, a repayment grant larger than the debt service), printed in brackets after "n/a".
 
     Args:
         credit: The disclosure to render the rate cell of.
@@ -1044,25 +882,17 @@ def _effective_rate_text(credit: views.TotalCostOfCredit) -> str:
 
 
 def _cost_of_credit_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """The loan's companion: the total cost of credit and the effective annual rate.
+    """Return the total cost of credit and the effective annual rate, one block per financed perspective.
 
-    Answers the question every loan document answers on its first page — "what does borrowing
-    this money actually cost me" — from the same amortization series the debt-service chart in
-    the loan section stacks.
-
-    One block per financed perspective, over exactly the set the loan section draws, and each
-    block names the perspective it belongs to. It used to disclose the *first* financed
-    perspective only, which is a silent half-answer in the common bundle where a gross and a net
-    view are both financed: the reader saw one effective rate, with nothing to say that a second
-    one existed and differed. Like the loan section it draws, it is rendered per story chapter,
-    over that chapter's own perspectives.
+    Built from the same amortization series as the loan section, over the same perspectives of the chapter; each block
+    names its perspective.
 
     Args:
         matrix: The chapter's perspectives; the financed ones get a block, in matrix order.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when nobody in this chapter's story borrows.
+        The section, or the empty string when nobody in this chapter borrows.
     """
     blocks = []
     for perspective_id, result in matrix.results.items():
@@ -1089,15 +919,11 @@ def _cost_of_credit_section_html(matrix: EvaluationMatrix, context: _ChapterCont
 def _cost_of_credit_block_html(
     result: LifecycleCostResult, amortization: views.LoanAmortization
 ) -> str:
-    """One financed perspective's disclosure: the rate, the stacked bar, the table, the balance.
-
-    Split from the section itself because the section is now a loop over the financed
-    perspectives and the block is what one iteration of it renders — a per-perspective block that
-    is half section and half chart is exactly the shape that grows a second, divergent copy.
+    """Return one financed perspective's credit disclosure: the rate, the stacked bar, the table and the balance.
 
     Args:
         result: The financed perspective to disclose.
-        amortization: Its amortization series, already read by the caller to select it.
+        amortization: Its amortization series, already read by the caller.
 
     Returns:
         The block's HTML.
@@ -1137,18 +963,16 @@ def _cost_of_credit_block_html(
 
 
 def _component_events_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """The lifetimes strip: when each component is bought, replaced and written down.
+    """Return the lifetimes strip: when each component is bought, replaced and written down.
 
-    Answers the *schedule* question per device, and makes the residual-value rule auditable: a
-    residual marker on a row with no purchase before it is a defect you can see.
+    A residual marker on a row with no purchase before it is visibly a defect.
 
     Args:
-        result: The perspective whose components are stripped out.
+        result: The perspective whose components are drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string for a carriers-only evaluation with no component
-        subject to put on a row.
+        The section, or the empty string for an evaluation without component subjects.
     """
     rows = views.component_event_strip(result)
     if not rows:
@@ -1171,18 +995,10 @@ def _comparison_bridge_section_html(
     comparison: VariantComparison,
     context: _ChapterContext,
 ) -> str:
-    """The NPV bridge: why the variant's NPV differs from the reference's, by cost group.
+    """Return the NPV bridge: why the variant's NPV differs from the reference's, by cost group.
 
-    Answers the decision question one level deeper than the total does: not "is it cheaper" but
-    "what makes it cheaper", which is what a reader needs to judge whether the answer rests on
-    one assumption or on many.
-
-    The net figure under the chart is the comparison's own `npv_delta_in_euro`, printed rather
-    than recomputed: the report used to subtract the two totals here, which is the engine's
-    arithmetic done a second time in the renderer (seam 4) and free to disagree with the delta
-    every other section of the report quotes. The steps still have to *sum* to it — that is the
-    reconciliation the bridge exists for, and reading two published numbers to check they agree
-    is not computing either of them.
+    The net figure printed is the comparison's own `npv_delta_in_euro`, not a recomputed difference; the steps must sum
+    to it.
 
     Args:
         reference: The baseline result the comparison was computed against.
@@ -1222,13 +1038,10 @@ def _wealth_benchmark_section_html(
     variant: LifecycleCostResult,
     context: _ChapterContext,
 ) -> str:
-    """The bank benchmark: renovating against banking the money at 1-10 % interest.
+    """Return the bank benchmark: renovating against banking the money at 1-10 % interest.
 
-    Answers the question every homeowner actually asks, and it turns the discount rate from an
-    opaque parameter into something a reader can interrogate: the rate at which the terminal
-    advantage crosses zero is the return the renovation has to beat. The upper panel is the whole
-    rate fan over time with the evaluation's own parameter rate drawn heavier and banded; the
-    lower one is the terminal advantage against the rate, whose zero crossings are the break-even
+    The upper panel shows the advantage over time for each rate, with the evaluation's own discount rate drawn heavier
+    and banded; the lower panel shows the terminal advantage against the rate, whose zero crossings are the break-even
     rates the caption states.
 
     Args:
@@ -1248,11 +1061,9 @@ def _wealth_benchmark_section_html(
             "CSS variable the stylesheet does not define and would come out black. Extend "
             "`presentation_style.SequentialRamp` alongside `views.WealthBenchmarkGrid.RATES`."
         )
-    # The ten rates are one ordered quantity, so they are drawn in the sequential ramp the
-    # stylesheet declares from `SequentialRamp`: 1 % lightest, 10 % darkest. The categorical
-    # group palette has eight entries and was being cycled, which coloured 9 % and 10 % exactly
-    # like 1 % and 2 % — two lines of the fan indistinguishable from the two furthest from them.
-    # The variables also re-resolve in dark mode, which a baked light hex cannot.
+    # The ten rates are one ordered quantity, so they use the sequential ramp the stylesheet
+    # declares from `SequentialRamp` (1 % lightest, 10 % darkest) rather than the eight-colour
+    # group palette, which would repeat colours. The variables also re-resolve in dark mode.
     series: List[Tuple[str, List[Tuple[float, float]], str, float, str]] = [
         (f"{rate:.0%}", _points(years, benchmark.series_by_rate[rate]), f"var(--ramp{index})",
          1.0, "3 3")
@@ -1293,17 +1104,9 @@ def _wealth_benchmark_section_html(
 
 
 def _points(years: List[int], values: List[float]) -> List[Tuple[float, float]]:
-    """A year-indexed series as the `(x, y)` point list `charts._xy_lines_svg` takes.
+    """Return a year-indexed series as the `(x, y)` point list `charts._xy_lines_svg` takes.
 
-    The benchmark draws twelve series and two band edges off the same year axis, and writing the
-    zip out at each of them is how one of them ends up plotted against a different axis than its
-    neighbours.
-
-    A length mismatch is refused rather than zipped away. `zip` stops at the shorter list, so a
-    series one year short of its axis used to be drawn as a curve that simply ended early — a
-    complete-looking line whose last point is at the wrong year, which is the reading a chart
-    cannot recover from. Both lists come from the same horizon, so a disagreement is a defect
-    upstream and says so here.
+    A length mismatch is refused instead of truncated by `zip`, which would draw a curve ending at the wrong year.
 
     Args:
         years: The x values, in plotting order.
@@ -1326,25 +1129,18 @@ def _points(years: List[int], values: List[float]) -> List[Tuple[float, float]]:
 
 
 def _treemap_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """Cost structure: the composition of lifetime cost, gross and net of credits side by side.
+    """Return the cost structure: treemaps of lifetime cost, gross and net of credits, side by side.
 
-    Answers "what is this made of" in an area encoding that survives a glance. Both bases are
-    rendered because a treemap cannot draw a credit and neither variant alone is the whole truth
-    (owner decision Q11): the gross panel states the credits it leaves out, the net panel states
-    the subjects whose credits exceeded their costs and were clamped to nothing.
-
-    A basis on which every subject's credits reach its costs has no positive area at all, and
-    that panel is replaced by the sentence saying so rather than drawn: a "0 EUR" heading over an
-    empty box is a chart that failed, not a composition that came to nothing. When both bases are
-    empty there is no composition to show under either heading and the section skips itself.
+    A treemap cannot draw a credit, so both bases are shown: the gross panel states the credits it leaves out, the net
+    panel the subjects clamped to zero because their credits exceed their costs. A basis with no positive area is
+    replaced by a sentence saying so.
 
     Args:
         result: The perspective whose composition is drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, with the panels that have an area and the disclosure each basis owes, or the
-        empty string when neither basis has one.
+        The section, or the empty string when neither basis has a positive area.
     """
     panels: List[str] = []
     captions: List[str] = []
@@ -1394,21 +1190,18 @@ def _treemap_section_html(result: LifecycleCostResult, context: _ChapterContext)
 
 
 def _subject_flows_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """Cost shapes: which subject causes which *kind* of cost, cost and credit kept apart.
+    """Return the cost shapes: which subject causes which kind of cost, with cost and credit kept apart.
 
-    Answers the technology-comparison question a composition chart structurally hides: a gas
-    boiler is cheap to install and expensive to run, a heat pump the reverse, and PV feeds revenue
-    back. Cost and credit ribbons are separate flows rather than one netted number, which is why a
-    subject's node is taller than the net figure the component breakdown publishes — the caption
-    states that arithmetic on this run's widest block.
+    E.g. a gas boiler is cheap to install and expensive to run, a heat pump the reverse. Cost and credit ribbons are
+    separate flows, so a subject's node is taller than its net figure; the caption works this through on the widest
+    block.
 
     Args:
         result: The perspective whose flows are drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string for a single-subject perspective — there is no
-        cross-link story in a chart with one row, and the treemap covers that case.
+        The section, or the empty string for a single-subject perspective.
     """
     flows = views.subject_category_flows(result, PresentationStyle.CATEGORY_TO_GROUP)
     subjects = sorted({flow.subject for flow in flows})
@@ -1438,7 +1231,7 @@ def _subject_flows_section_html(result: LifecycleCostResult, context: _ChapterCo
         [f"sub:{subject}" for subject in subjects],
         [f"grp:{group}:0" for group in groups_cost] + [f"grp:{group}:1" for group in groups_credit],
     ]
-    # Q28 R6: every node states the amounts its extent is made of, every ribbon its exact euros.
+    # Every node states the amounts its extent is made of, every ribbon its exact euros.
     margins = views.subject_flow_margins(flows)
     sublabels, tooltips = _subject_flow_node_labels(margins, labels, groups_cost, groups_credit)
     ribbon_tooltips = [
@@ -1462,14 +1255,11 @@ def _subject_flow_node_labels(
     groups_cost: List[Any],
     groups_credit: List[Any],
 ) -> Tuple[Dict[str, Tuple[str, str]], Dict[str, str]]:
-    """Amount lines and hover texts for the cost-shapes nodes (Q28 R6).
+    """Return the amount lines and hover texts for the cost-shapes Sankey nodes.
 
-    A subject node states both sides of what its extent is made of ("costs X | credits -Y", the
-    credit half omitted when there is none) and a group node its signed total, negative for the
-    credit groups so the sign a reader is looking for is on the label rather than only in the
-    dashing. The compact form of each pair is the node's own total, drawn where the node is too
-    short for two lines; the tooltip always carries the full split to the cent, so a degraded
-    label loses the breakdown and never the number.
+    A subject node states "costs X | credits -Y" (the credit half omitted when zero), a group node its signed total,
+    negative for credit groups. The compact form is the node's total, used where the node is too short for two lines;
+    the tooltip always carries the full split to the cent.
 
     Args:
         margins: The per-node sums `views.subject_flow_margins` returned.
@@ -1478,8 +1268,7 @@ def _subject_flow_node_labels(
         groups_credit: The display groups carrying credit ribbons.
 
     Returns:
-        The `(full, compact)` amount line per node and the hover text per node, in the shapes
-        `charts._sankey_svg` takes them.
+        The `(full, compact)` amount line per node and the hover text per node, as `charts._sankey_svg` takes them.
     """
     sublabels: Dict[str, Tuple[str, str]] = {}
     tooltips: Dict[str, str] = {}
@@ -1508,19 +1297,16 @@ def _subject_flow_node_labels(
 
 
 def _subject_flow_caption(margins: views.SubjectFlowMargins) -> str:
-    """The reconciliation the cost-shapes blocks need, on the run's own widest block (Q28 R6).
+    """Return the caption working through the cost-shapes arithmetic on the run's widest block.
 
-    The rule — solid side is the component breakdown's cost column, dashed side its credits, the
-    block is the two stacked — is authored prose and is printed above by `_explanation_html`. This
-    caption is the arithmetic of that rule for *this* run, on the largest block, because the
-    complaint the round is answering ("the chart does not add up") is only answered by numbers a
-    reader can look up in the breakdown table two sections earlier.
+    States that the block's solid side is the component breakdown's cost column and its dashed side the credits, with
+    this run's numbers, so a reader can match them against the breakdown table.
 
     Args:
         margins: The per-node sums `views.subject_flow_margins` returned.
 
     Returns:
-        The caption paragraph, or the empty string when there is no subject to work through.
+        The caption paragraph, or the empty string when there is no subject.
     """
     subject = margins.widest_subject()
     if subject is None:
@@ -1538,21 +1324,18 @@ def _subject_flow_caption(margins: views.SubjectFlowMargins) -> str:
 
 
 def _energy_balance_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """Energy balance: where the house's electricity came from and where it went, in year-1 kWh.
+    """Return the energy balance: where the house's electricity came from and went, in year-1 kWh.
 
-    Answers the question an energy-system tool exists to answer, in the picture every PV dashboard
-    already shows its owner: sources on the left, the house's electricity bus in the middle, sinks
-    on the right, with money only as an annotation on the two nodes that cross a billing boundary.
-    Whatever the drawn terminals do not account for is an explicit `losses / unattributed` node
-    rather than a silent imbalance.
+    Sources on the left, the house's electricity bus in the middle, sinks on the right, with money annotated only on
+    the two nodes that cross a billing boundary. Energy the drawn terminals do not account for goes to an explicit
+    `losses / unattributed` node.
 
     Args:
         result: The perspective whose year-1 balance is drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when the result carries fewer than two device flows — a
-        meter talking to itself is not a balance.
+        The section, or the empty string when the result carries fewer than two device flows.
     """
     if not views.has_energy_balance(result):
         return context.skip(
@@ -1593,23 +1376,16 @@ def _energy_balance_section_html(result: LifecycleCostResult, context: _ChapterC
 
 
 def _energy_balance_caption(flows: views.EnergyBalanceFlows) -> str:
-    """The derived figures of the balance, plus everything the diagram could not place.
+    """Return the derived figures of the energy balance and everything the diagram could not place.
 
-    Self-consumption and self-sufficiency are the two shares a PV owner reads a balance for, and
-    the battery's round-trip loss is what makes it a lossy pass-through rather than a store. The
-    two remainders are stated for the same reason they exist at all: the residual terminal is
-    energy the drawn devices do not account for, and `unattributed_roles_in_kwh` is energy whose
-    role name this reader's vocabulary cannot place at all. The latter has no side of the bus, so
-    it cannot become a terminal without inventing a direction — but a diagram quietly missing it
-    looks exactly like a diagram that never had it, which is why it is named here instead.
+    States self-consumption, self-sufficiency and the battery's round-trip loss, the residual terminal, and the energy
+    in `unattributed_roles_in_kwh` whose role name has no side of the bus and is therefore not drawn.
 
     Args:
         flows: The balance `views.energy_balance_flows` returned.
 
     Returns:
-        The caption paragraph, or the empty string when there is nothing to state — a balance
-        with no PV and no attributed consumption has no share to report, and a caption of a bare
-        full stop is worse than no caption.
+        The caption paragraph, or the empty string when there is nothing to state.
     """
     shares = []
     if flows.self_consumption_share is not None:
@@ -1643,20 +1419,11 @@ def _energy_balance_caption(flows: views.EnergyBalanceFlows) -> str:
 
 
 def _monthly_burden_section_html(result: LifecycleCostResult, context: _ChapterContext) -> str:
-    """Monthly burden: what this costs per month, year by year — the unit households budget in.
+    """Return the monthly burden: what this costs per month, year by year.
 
-    Answers the cash curve's question in the lay reader's unit. The definitional decision — every
-    capital event excluded, the replacements smoothed into a reserve line — is stated in the
-    authored prose, because a monthly figure whose scope is unstated is the easiest number in the
-    report to misread.
-
-    A perspective with no recurring cost in any month of any world is skipped. That is a real
-    case — a scope that books only the year-0 investment and its residual credit — and it is the
-    one the emptiness test has to be written against: the series is always one entry per year of
-    the horizon, so `if not burden.series` could only ever fire on a horizon of zero years and
-    the all-capital perspective it was meant to catch went through it into a chart of a bare
-    axis. The reserve is deliberately not part of the test: a reserve without a single recurring
-    month is a dashed line over nothing, which is the picture this skip exists to prevent.
+    Capital events are excluded and replacements are smoothed into a reserve line; the authored prose states that
+    scope. A perspective with no recurring cost in any month of any world is skipped (e.g. one that books only the
+    year-0 investment and its residual credit); the reserve alone does not count.
 
     Args:
         result: The perspective whose recurring burden is drawn.
@@ -1692,18 +1459,15 @@ def _monthly_burden_section_html(result: LifecycleCostResult, context: _ChapterC
 
 
 def _year_spans(intervals: List[Tuple[int, int]]) -> str:
-    """Name a list of maximal year runs the way a caption would read them aloud.
+    """Name a list of year runs as a caption would read them, e.g. "years 3-7 and 12-14".
 
-    `views.asset_debt_series` reports every maximal run of negative equity, because a dip, a
-    recovery and a second dip are three facts and one (first, last) pair would have claimed the
-    recovery never happened. A single-year run is named as one year rather than as a range from
-    itself to itself.
+    `views.asset_debt_series` reports every maximal run of negative equity; a one-year run is named as a single year.
 
     Args:
-        intervals: The (first year, last year) pairs, in order; assumed non-empty by the caller.
+        intervals: The (first year, last year) pairs, in order; the caller ensures it is non-empty.
 
     Returns:
-        The runs as plain text, e.g. "years 3-7 and 12-14"; the caller escapes it.
+        The runs as plain text; the caller escapes it.
     """
     spans = [
         f"year {start}" if start == end else f"years {start}-{end}" for start, end in intervals
@@ -1714,30 +1478,18 @@ def _year_spans(intervals: List[Tuple[int, int]]) -> str:
 
 
 def _equity_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Equity build-up: asset book value against outstanding debt — the lender's solvency picture.
+    """Return the equity build-up: asset book value against outstanding debt.
 
-    Answers "how much of the installation do I own", and carries audit weight beyond that: the
-    book-value line is the same depreciation basis the residual calculator uses, so a defect in it
-    is visible along the whole curve rather than only at the horizon, where the two are checked
-    against each other.
-
-    The amortization read to decide whether the perspective is financed is handed on to
-    `views.asset_debt_series`, which needs exactly that series for its debt line — the section
-    used to build it, test it and throw it away, and the view then walked the same timeline again
-    for the same numbers.
-
-    It takes the chapter's whole matrix and picks the financed perspective out of it, like the
-    loan and cost-of-credit sections it belongs beside: the three are one question — what does the
-    borrowing look like — and a chapter either has a financed perspective for all three or for
-    none of them.
+    The book value uses the same depreciation basis as the residual calculator, so a defect shows along the whole
+    curve. The first financed perspective of the chapter is drawn, like the loan and cost-of-credit sections; its
+    amortization is passed on to `views.asset_debt_series`.
 
     Args:
         matrix: The chapter's perspectives; the first financed one is drawn.
         context: The chapter this section is being rendered into.
 
     Returns:
-        The section, or the empty string when this chapter's story is unfinanced — with no debt
-        line there is no gap to draw and no solvency story to tell.
+        The section, or the empty string when this chapter has no financed perspective.
     """
     result = _first_result_where(
         matrix, lambda candidate: views.loan_amortization_series(candidate).has_flows()

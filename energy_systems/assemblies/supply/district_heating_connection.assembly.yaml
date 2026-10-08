@@ -1,12 +1,17 @@
 # The district heating network's connection (the one provider of district heat) and its heat meter (spec §5.1): one
 # supply per carrier (owner, 2026-10-07), the shape of supply/oil_tank. The provision names its carrier and its meter,
 # `provides: {connection: {carrier: district_heat, meter: FuelMeter}}`: every consuming output a bound consumer's carrier
-# need names lands at the meter's `{$port: connection}` placeholder as the feed the meter's class declares for it (D30),
-# DistrictHeating's ThermalOutputShEnergy and ThermalOutputDhwEnergy, whose EnergyPort names district heat.
+# need names lands at the meter's `{$port: connection}` placeholder as the feed the meter's class declares for it,
+# written explicitly (D30): DistrictHeating's ThermalOutputShEnergy and ThermalOutputDhwEnergy, whose EnergyPort names
+# district heat. That feed is the heat link, and the meter the district-heat port's balance peer.
 #
-# The meter's fuel_loadtype and its two fuel constants stay with its preset's laws, copied from the facts of the one
-# connection in the file, as in household_district_heating_building_sizer, which writes no line for them (D28:
-# overrides only).
+# The meter's fuel_loadtype and its two fuel constants stay with its preset's laws, copied from the energy_carrier,
+# heating-value and density facts of the one provider of those facts in the file, heating/district_heating's
+# DistrictHeating, as in household_district_heating_building_sizer, which writes no line for them (D28: overrides only).
+# A second energy_carrier provider of any value leaves the laws no one provider to read, and sizing refuses the file
+# (§5.1, D30; pinning the meter's facts from its provider is hisim-lt0b.17). DistrictHeating is itself an
+# energy_carrier provider, as every burner is, so a file with district heating beside a boiler is refused at sizing
+# until hisim-lt0b.17 is done.
 
 schema_version: 4
 kind: assembly

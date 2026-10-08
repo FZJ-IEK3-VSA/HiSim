@@ -196,8 +196,10 @@ def test_heat_pump_hplib_new() -> None:
     # Simulation
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
     # Check
-    assert p_th_set == stsv.values[heatpump.p_th_sh.global_index]
-    assert 7074.033573088874 == stsv.values[heatpump.p_el_sh.global_index]
+    # hplib answers 10 kW at a 0.476 kg/s flow (its own 4200 J/(kg K) over 5 K); the heat pump books the heat that
+    # flow carries at 4180 J/(kg K), 0.4762 * 4180 * (52 - 47) = 9952.38 W, and its electricity at hplib's COP.
+    assert 9952.380952380952 == stsv.values[heatpump.p_th_sh.global_index]
+    assert 7040.347698931308 == stsv.values[heatpump.p_el_sh.global_index]
     assert 1.4136206588052005 == stsv.values[heatpump.cop.global_index]
     assert t_out == stsv.values[heatpump.t_out_sh.global_index]
     assert 0.47619047619047616 == stsv.values[heatpump.m_dot_sh.global_index]

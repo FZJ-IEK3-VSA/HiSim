@@ -147,8 +147,9 @@ def test_heat_pump_hplib_new() -> None:
     # Simulation
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
     # Check
-    assert p_th_set == stsv.values[heatpump.p_th_sh.global_index]
-    assert stsv.values[heatpump.p_el_sh.global_index] == pytest.approx(7074.033573088874)
+    # The booked heat is what hplib's flow carries at 4180 J/(kg K): 0.4762 * 4180 * (52 - 47) W, not its 10 kW.
+    assert stsv.values[heatpump.p_th_sh.global_index] == pytest.approx(9952.380952380952)
+    assert stsv.values[heatpump.p_el_sh.global_index] == pytest.approx(7040.347698931308)
     assert stsv.values[heatpump.cop.global_index] == pytest.approx(1.4136206588052005)
     assert t_out == stsv.values[heatpump.t_out_sh.global_index]
     assert stsv.values[heatpump.m_dot_sh.global_index] == pytest.approx(0.47619047619047616)

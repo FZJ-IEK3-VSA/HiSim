@@ -1,8 +1,10 @@
 """Hydronics: the water arithmetic every hydronic circuit and every fully mixed node shares (hisim-fxix.2).
 
 This module is stage A of the hydronic coupling spec (``roadmap/hydronic_coupling_spec.md``, PR #878, §9.5 A):
-a pure numerical library, used by no component yet. Later stages (C and D) replace the storages' own mixing,
-booking and loss code in ``hisim/components/simple_water_storage.py`` with the functions here: the mass mixing of
+a pure numerical library. Its one user so far is the hplib heat pump
+(``hisim/components/more_advanced_heat_pump_hplib.py``), which books the thermal power of its circuits with
+:func:`circuit_power_w`. Later stages (C and D) replace the storages' own mixing, booking and loss code in
+``hisim/components/simple_water_storage.py`` with the functions here: the mass mixing of
 ``calculate_mean_water_temperature_in_water_storage`` becomes :meth:`MixedNode.step`, the inflow heat booked
 against the start temperature becomes ``NodeStep.heat_in_j_per_inflow`` (booked against the step mean), the
 outlet at the start temperature becomes ``NodeStep.t_mean_c``, and the loss subtracted after the step from
@@ -29,8 +31,9 @@ return temperature (°C). Its heat over a step of ``dt`` seconds is derived, nev
 
 ``Q = m c (T_sup - T_ret) dt``  (:func:`circuit_heat_j`, §3.5)
 
-positive when the supply owner heats the receiving side, negative for a cooling circuit with ``T_sup < T_ret``
-(§3.4); nothing is mirrored. :func:`kilowatt_hours` is the same number in kWh, the unit of the energy balance.
+and its heat flow is ``m c (T_sup - T_ret)`` (:func:`circuit_power_w`), positive when the supply owner heats the
+receiving side, negative for a cooling circuit with ``T_sup < T_ret`` (§3.4); nothing is mirrored.
+:func:`kilowatt_hours` is the same number in kWh, the unit of the energy balance.
 
 The mixed node (§4.1, §4.2)
 ---------------------------
@@ -211,20 +214,47 @@ def relaxation_mean_factor(a: float) -> float:
     return -math.expm1(-a) / a
 
 
+def circuit_power_w(mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float) -> float:
+    """The heat flow of a circuit, ``m c (T_sup - T_ret)`` in W (§3.5); negative when cooling (§3.4).
+
+    This is the thermal power a component books for a circuit it owns: the heat its water carries, nothing
+    else. For example, 0.4 kg/s leaving at 35.0 °C with a return of 30.04 °C carries
+    ``0.4 * 4180 * 4.96 = 8293.12`` W. :func:`circuit_heat_j` is this power times the step, evaluated in the same
+    order, so the power a component books and the heat the energy balance derives from the same three values
+    agree to the last bit.
+
+    Args:
+        mass_flow_kg_per_s: The circuit's mass flow, kg/s, at least 0.
+        t_supply_c: The supply temperature, °C: the water leaving the supply owner.
+        t_return_c: The return temperature, °C: the water coming back to it.
+
+    Returns:
+        The heat flow in W.
+
+    Raises:
+        NonFiniteValueError: If any argument is NaN or infinite, or the power overflows the float range.
+        NegativeMassFlowError: If the mass flow is negative.
+    """
+    mass_flow = _mass_flow("mass_flow_kg_per_s", mass_flow_kg_per_s)
+    t_supply = _finite("t_supply_c", t_supply_c)
+    t_return = _finite("t_return_c", t_return_c)
+    lift = _finite_result("The circuit's lift t_supply_c - t_return_c", t_supply - t_return)
+    power = mass_flow * WATER_SPECIFIC_HEAT_J_PER_KG_K * lift
+    return _finite_result("The circuit power m c (T_sup - T_ret)", power)
+
+
 def circuit_heat_j(mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float) -> float:
     """The heat of a circuit over one step, ``m c (T_sup - T_ret) dt`` in J (§3.5); negative when cooling (§3.4).
+
+    It is :func:`circuit_power_w` times ``dt_s``.
 
     Raises:
         NonFiniteValueError: If any argument is NaN or infinite, or the heat overflows the float range.
         NegativeMassFlowError: If the mass flow is negative.
         NonPositiveTimestepError: If ``dt_s`` is not positive.
     """
-    mass_flow = _mass_flow("mass_flow_kg_per_s", mass_flow_kg_per_s)
-    t_supply = _finite("t_supply_c", t_supply_c)
-    t_return = _finite("t_return_c", t_return_c)
     dt = _timestep("dt_s", dt_s)
-    lift = _finite_result("The circuit's lift t_supply_c - t_return_c", t_supply - t_return)
-    heat = mass_flow * WATER_SPECIFIC_HEAT_J_PER_KG_K * lift * dt
+    heat = circuit_power_w(mass_flow_kg_per_s, t_supply_c, t_return_c) * dt
     return _finite_result("The circuit heat m c (T_sup - T_ret) dt", heat)
 
 

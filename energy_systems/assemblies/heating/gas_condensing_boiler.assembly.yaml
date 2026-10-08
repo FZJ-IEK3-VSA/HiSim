@@ -19,7 +19,8 @@ description: Condensing gas boiler with a modulating controller and a parallel s
 parameters:
   power_in_watt:
     {type: float, unit: WATT, default: AUTO, range: {min: 5000, max: 40000},
-     description: Maximal thermal output; AUTO is the class law from the heating load and the apartments.}
+     description: 'Maximal fuel input power (the heat delivered is this times the combustion efficiency); AUTO
+       is the class law, sized from the heating load and the apartments.'}
      # range: wall-hung condensing boilers of a flat (5 kW) up to a floor-standing one of a large old house (40 kW)
   heating_threshold_in_celsius:
     {type: float, unit: CELSIUS, default: 18.0, range: {min: 10.0, max: 22.0},

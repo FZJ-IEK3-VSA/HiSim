@@ -22,7 +22,8 @@ description: Wood-chip boiler with an on/off controller and a parallel space-hea
 parameters:
   power_in_watt:
     {type: float, unit: WATT, default: AUTO, range: {min: 15000, max: 60000},
-     description: Maximal thermal output; AUTO is the class law from the heating load and the apartments.}
+     description: 'Maximal fuel input power (the heat delivered is this times the combustion efficiency); AUTO
+       is the class law, sized from the heating load and the apartments.'}
      # range: wood-chip boilers of a large house (15 kW) up to a farmhouse (60 kW)
   heating_threshold_in_celsius:
     {type: float, unit: CELSIUS, default: 18.0, range: {min: 10.0, max: 22.0},

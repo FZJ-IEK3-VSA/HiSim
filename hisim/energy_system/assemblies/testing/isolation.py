@@ -207,35 +207,90 @@ def add_fact_providers(
         partners.append(partner.name)
 
 
+def brought_by_circuit_end(
+    need: str,
+    alternatives: Tuple[ServedKey, ...],
+    circuit_ends: Mapping[Tuple[str, Tuple[ServedKey, ...]], TestPartner],
+    assembly: str,
+) -> Optional[TestPartner]:
+    """The partner of a need's class that a circuit end of the assembly brings, or ``None`` when none brings one.
+
+    Example: the need ``cylinder_temperature`` of ``heating/solar_thermal`` names the class
+    ``SimpleDHWStorage``, and the ``solar_coil`` circuit end brings ``SolarCylinder``, a
+    ``SimpleDHWStorage``: the need binds ``SolarCylinder``. Only a ``("partner", class)``
+    alternative is matched, by the short class name of each brought partner's component, the first
+    alternative with a match deciding. One partner brought by two circuit ends is one candidate.
+
+    Args:
+        need: The port that needs the partner, for the message.
+        alternatives: What would serve the port, in order.
+        circuit_ends: The partner each active circuit end brings, keyed by the end's port name and its alternatives.
+        assembly: The assembly under test, for the message.
+
+    Raises:
+        TestPartnerRegistryError: When two circuit ends bring two different partners of the class:
+            the binding is ambiguous, as the engine's default rule refuses two candidates.
+    """
+    for key in alternatives:
+        if key[0] != "partner":
+            continue
+        brought: Dict[str, Tuple[str, TestPartner]] = {}
+        for (port, _), partner in circuit_ends.items():
+            if partner.component["class"].rsplit(".", 1)[-1] == key[1]:
+                brought.setdefault(partner.name, (port, partner))
+        if len(brought) > 1:
+            candidates = " and ".join(f"'{end.name}' through the port '{port}'" for port, end in brought.values())
+            raise TestPartnerRegistryError(
+                f"the port '{need}' of '{assembly}' needs a partner of the class {key[1]}, and {len(brought)} circuit "
+                f"ends bring one: {candidates}. The binding is ambiguous, as the engine's default rule refuses two "
+                "candidates."
+            )
+        if brought:
+            return next(iter(brought.values()))[1]
+    return None
+
+
 def isolation_document(
     assembly: ResolvedAssembly, values: Mapping[str, Any], registry: TestPartnerRegistry
 ) -> Dict[str, Any]:
     """The energy-system document of one isolation system.
 
+    A need binds the partner of its class that an active circuit end of the same assembly brings,
+    if there is one: the cylinder a collector charges is the cylinder its controller reads, as the
+    engine's default rule binds the one candidate in scope. Example: ``heating/solar_thermal``'s
+    ``cylinder_temperature`` need names ``SimpleDHWStorage``; its ``solar_coil`` circuit end brings
+    the partner ``SolarCylinder`` of that class, so the need binds ``SolarCylinder`` instead of the
+    registry's own ``SimpleDHWStorage`` partner, and the system holds one cylinder.
+
     Raises:
         EnergySystemAssemblyError: When the parameters do not fit the assembly (a bug of the sampler).
         TestPartnerMissingError: When an active port has no registered test partner.
+        TestPartnerRegistryError: When a need's partner class is brought by two circuit ends as two
+            different partners: the binding is ambiguous, as the engine's default rule refuses two
+            candidates.
     """
     model = assembly.model
     selection = select(model, assembly.label, values, f"the isolation system of '{assembly.path}'")
     classes = {name: member.entry.class_path.rsplit(".", 1)[-1] for name, member in selection.members.items()}
     partners: List[str] = []
     verbs: Dict[str, Dict[str, str]] = {"bind": {}, "optional-bind": {}}
-    # A need binds the partner of its class that a circuit end of the assembly brings: the cylinder a collector
-    # charges is the cylinder its controller reads, as the engine's default rule binds the one candidate in scope.
-    ends: Dict[str, TestPartner] = {}
-    for name, port in model.ports.items():
-        if port.kind == PortKind.CIRCUIT and selection.state(port) != PortState.INACTIVE:
-            for alternatives in partners_needed(port, classes):
-                end = registry.find(alternatives, f"the port '{name}'", assembly.path)
-                ends[end.component["class"].rsplit(".", 1)[-1]] = end
+    # The partners the active circuit ends bring, found once: a need reads them below (see the docstring).
+    circuit_ends = {
+        (name, alternatives): registry.find(alternatives, f"the port '{name}'", assembly.path)
+        for name, port in model.ports.items()
+        if port.kind == PortKind.CIRCUIT and selection.state(port) != PortState.INACTIVE
+        for alternatives in partners_needed(port, classes)
+    }
     for name, port in model.ports.items():
         state = selection.state(port)
         if state == PortState.INACTIVE:
             continue
         for alternatives in partners_needed(port, classes):
-            brought = next((ends[key[1]] for key in alternatives if key[0] == "partner" and key[1] in ends), None)
-            partner = brought or registry.find(alternatives, f"the port '{name}'", assembly.path)
+            partner = (
+                circuit_ends.get((name, alternatives))
+                or brought_by_circuit_end(name, alternatives, circuit_ends, assembly.path)
+                or registry.find(alternatives, f"the port '{name}'", assembly.path)
+            )
             partners.append(partner.name)
             if (
                 port.kind in (PortKind.NEED, PortKind.CIRCUIT, PortKind.FACT)

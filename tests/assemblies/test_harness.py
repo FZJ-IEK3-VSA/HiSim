@@ -432,8 +432,9 @@ def test_a_partner_registered_for_a_fact_its_class_does_not_contribute_is_refuse
 def test_a_need_binds_the_partner_of_its_class_a_circuit_end_brings() -> None:
     """The collector's controller reads the cylinder the collector charges, never the heat pump's cylinder.
 
-    The registry serves the need's class, SimpleDHWStorage, by the dhw circuit's cylinder, which requires a generator;
-    the solar_dhw circuit end brings a cylinder of that class, so the need binds it and the system holds one.
+    The registry serves the need's class, SimpleDHWStorage, by DHWStorage, the cylinder at the other end of a
+    generator's dhw circuit, which requires only UTSPConnector; the solar_dhw circuit end brings SolarCylinder, a
+    cylinder of the same class, so the need binds it and the system holds one cylinder.
     """
     library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
     resolver = AssemblyResolver([library])
@@ -444,6 +445,51 @@ def test_a_need_binds_the_partner_of_its_class_a_circuit_end_brings() -> None:
     assert classes.count("SimpleDHWStorage") == 1 and "SolarCylinder" in document["components"]
     assert document["imports"][SUBJECT]["bind"]["cylinder_temperature"] == "SolarCylinder"
     assert registry.served[("partner", "SimpleDHWStorage")].name == "DHWStorage"
+
+
+def circuit_end(name: str, circuit: str) -> TestPartner:
+    """A mock cylinder registered as the end of one circuit whose other end is a mock boiler."""
+    return TestPartner(
+        name=name,
+        serves=(("circuit", circuit, frozenset({"MockBoiler"})),),
+        requires=(),
+        component={"class": f"{MOCKS}.MockCylinder", "preset": "standard"},
+        origin="inline",
+    )
+
+
+def test_a_need_two_circuit_ends_bring_partners_of_its_class_for_is_refused_naming_both(tmp_path: Path) -> None:
+    """Catches a need silently binding one of two cylinders its assembly's circuit ends bring.
+
+    Two boilers are the ends of two circuits, and each circuit's other end is a MockCylinder of its own. A need
+    for a MockCylinder has two candidates; the harness refuses, as the engine's default rule does, naming both ports.
+    """
+    library = Library(tmp_path)
+    library.add(
+        "sampled/two_ends",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/two_ends
+        description: Two boilers, each charging a cylinder of its own, and a need for a cylinder.
+        components:
+          First: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: first}}]}}
+          Second: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: second}}]}}
+        interface:
+          needs:
+            cylinder: {{into: [First], partner: MockCylinder}}
+          provides:
+            first: {{circuit: dhw, member: First}}
+            second: {{circuit: solar_dhw, member: Second}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    assembly = library.resolver().resolve("sampled/two_ends", "test")
+    registry = TestPartnerRegistry([circuit_end("CylinderA", "dhw"), circuit_end("CylinderB", "solar_dhw")], [])
+    with pytest.raises(TestPartnerRegistryError, match="the class MockCylinder") as refusal:
+        isolation_document(assembly, {}, registry)
+    assert "'CylinderA' through the port 'first'" in str(refusal.value)
+    assert "'CylinderB' through the port 'second'" in str(refusal.value)
 
 
 @pytest.mark.assemblies

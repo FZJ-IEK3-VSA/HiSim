@@ -1413,7 +1413,9 @@ class GenericBoilerController(Component):
             ComponentConnection(
                 GenericBoilerController.WaterTemperatureInputFromDHWStorage,
                 storage_classname,
-                SimpleDHWStorage.WaterTemperatureToHeatGenerator,
+                # the tank's start-of-step temperature T0: the controller decides on a value the step's
+                # iteration does not move
+                SimpleDHWStorage.WaterMeanTemperatureInStorage,
             )
         )
         return connections

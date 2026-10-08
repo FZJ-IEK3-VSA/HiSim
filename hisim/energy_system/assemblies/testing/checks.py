@@ -1,7 +1,7 @@
 """What is checked on an isolation run and across a sweep (``assemblies_spec.md`` §9.4, D24).
 
 Every check raises :class:`AssemblyCheckFailure` naming the assembly, the sample, the check and its
-subject — ``mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [0, 20000]: …`` —
+subject — ``pv/array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [-100, 33000]: …`` —
 and a check that needs a finished run fails, naming why, when the run did not finish.
 
 - **The run**: it raised nothing but an ``EnergyBalanceError`` (a failure names the innermost raising

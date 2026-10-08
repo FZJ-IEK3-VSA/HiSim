@@ -63,7 +63,7 @@ from hisim.energy_system.assemblies.testing.samples import (
 from hisim.energy_system.model import ComponentEntry
 from hisim.postprocessing.kpi_computation import tolerances
 from scripts import golden_kpis
-from tests.assemblies.helpers import MOCKS, Library, Mocks
+from tests.assemblies.helpers import MOCKS, Library, Mocks, Real
 from tests.assemblies.mock_components import MockHeater
 
 #: A parameter box for the sampler: two numbers (one an integer), an enum, a boolean.
@@ -96,7 +96,7 @@ def box(tmp_path: Path, constraints: str = "") -> ParameterSpace:
 
 
 def mock(path: str, root: Path = Mocks.LIBRARY) -> Tuple[ResolvedAssembly, ParameterSpace]:
-    """One mock assembly and its parameter space."""
+    """One assembly of a library (the mock one unless given) and its parameter space."""
     assembly = AssemblyResolver([root]).resolve(path, "test")
     return assembly, ParameterSpace(assembly.model)
 
@@ -139,8 +139,8 @@ def test_an_exactly_one_of_splits_the_box_into_its_branches(tmp_path: Path) -> N
 
 @pytest.mark.assemblies
 def test_the_deterministic_samples_cover_boundaries_values_and_variants_within_the_constraints() -> None:
-    """The heater's boundaries, values and options; the array's share at its minimum states it, so the power is none."""
-    _, heater = mock("mock/electric_heater")
+    """The heater's boundaries, values and options; the array's share at its minimum states it, the power stays AUTO."""
+    _, heater = mock("mock/variant_heater")
     origins = [origin for sample in deterministic_samples(heater) for origin in sample.origins]
     for origin in (
         "defaults",
@@ -152,13 +152,17 @@ def test_the_deterministic_samples_cover_boundaries_values_and_variants_within_t
         "variant thermostat: none",
     ):
         assert origin in origins, origin
-    _, array = mock("mock/pv_array")
-    (sample,) = [sample for sample in deterministic_samples(array) if "min of share_of_roof" in sample.origins]
-    assert sample.values["share_of_roof"] == 0.0 and sample.values["power_in_watt"] is None
+    _, array = mock("pv/array", Real.LIBRARY)
+    (sample,) = [
+        sample for sample in deterministic_samples(array) if "min of share_of_maximum_pv_potential" in sample.origins
+    ]
+    assert sample.values["share_of_maximum_pv_potential"] == 0.0 and sample.values["power_in_watt"] == "AUTO"
     assert ParameterChecks.is_stated(0.0) and not ParameterChecks.is_stated("AUTO")
     swept = sweeps(array, deterministic_samples(array), array.model.tests.monotone[0])  # type: ignore[union-attr]
-    assert all(base.values["power_in_watt"] is not None for base, _ in swept)
-    assert [point["power_in_watt"] for point in swept[0][1]] == pytest.approx([0.0, 20000 / 3, 40000 / 3, 20000.0])
+    assert swept and all(ParameterChecks.is_stated(base.values["power_in_watt"]) for base, _ in swept)
+    assert all(not ParameterChecks.is_stated(base.values["share_of_maximum_pv_potential"]) for base, _ in swept)
+    points = [point["power_in_watt"] for point in swept[0][1]]
+    assert points == pytest.approx([500.0, 500 + 29500 / 3, 500 + 59000 / 3, 30000.0])
 
 
 @pytest.mark.assemblies
@@ -228,21 +232,48 @@ def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
 
 @pytest.mark.assemblies
 def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly_computes() -> None:
-    """A gas provider and a cylinder for the boiler, a consumer for the connection, a controller for the battery."""
-    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
-    for path, components, verbs in (
-        ("mock/gas_boiler", ["GasMeter", "Occupancy", "Cylinder"], {"bind": {"dhw": "Cylinder"}}),
-        ("mock/gas_connection", ["Occupancy", "GasCylinder", "GasBoiler"], {}),
+    """The site and both circuit ends for a boiler, a consumer for a connection, an array and a manager for a battery.
+
+    The real library's assemblies and partners, and the mock heater for the ports a variant switches.
+    """
+    real = AssemblyResolver([Real.LIBRARY])
+    registries = {
+        Real.LIBRARY: TestPartnerRegistry.from_directories(real.directories),
+        Mocks.LIBRARY: TestPartnerRegistry.from_directories([Mocks.LIBRARY]),
+    }
+    heating_site = ["Weather", "UTSPConnector", "Building", "HeatDistributionController"]
+    for path, root, components, verbs in (
         (
-            "mock/electric_heater",
+            "heating/gas_condensing_boiler",
+            Real.LIBRARY,
+            heating_site + ["DHWStorage", "GasMeter", "HeatDistributionSystem"],
+            {
+                "bind": {
+                    "weather": "Weather",
+                    "flow_temperature": "HeatDistributionController",
+                    "dhw_temperature": "DHWStorage",
+                    "space_heating": "HeatDistributionSystem",
+                    "dhw": "DHWStorage",
+                }
+            },
+        ),
+        (
+            "supply/gas_connection",
+            Real.LIBRARY,
+            heating_site + ["GasBoilerController", "HeatDistributionSystem", "GasBuffer", "GasCylinder", "GasBoiler"],
+            {},
+        ),
+        ("storage/battery", Real.LIBRARY, ["Weather", "UTSPConnector", "Building", "PVArray", "EnergyManager"], {}),
+        ("supply/electricity_grid", Real.LIBRARY, ["UTSPConnector"], {}),
+        (
+            "mock/variant_heater",
+            Mocks.LIBRARY,
             ["Occupancy", "Tank", "Ems"],
             {"bind": {"tank_temperature": "Tank"}, "optional-bind": {"ems_modifier": "Ems"}},
         ),
-        ("mock/home_battery", ["Weather", "PVArray", "EnergyManager"], {"bind": {"pv_power": "PVArray"}}),
-        ("mock/electricity_grid", ["Occupancy"], {}),
     ):
-        assembly, space = mock(path)
-        document = isolation_document(assembly, space.defaults(), registry)
+        assembly, space = mock(path, root)
+        document = isolation_document(assembly, space.defaults(), registries[root])
         assert list(document["components"]) == components, path
         entry = document["imports"][SUBJECT]
         assert {verb: entry[verb] for verb in ("bind", "optional-bind") if verb in entry} == verbs, path
@@ -520,12 +551,12 @@ def test_a_need_two_circuit_ends_bring_partners_of_its_class_for_is_refused_nami
 
 @pytest.mark.assemblies
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> None:
-    """An empty registry: the array's weather port names MockWeather."""
-    assembly, space = mock("mock/pv_array")
+    """An empty registry: the array's weather port names Weather."""
+    assembly, space = mock("pv/array", Real.LIBRARY)
     with pytest.raises(
         TestPartnerMissingError,
-        match="the port 'weather' of 'mock/pv_array' needs a test partner, a "
-        "partner of the class MockWeather, and no test_partners.yaml serves it",
+        match="the port 'weather' of 'pv/array' needs a test partner, a "
+        "partner of the class Weather, and no test_partners.yaml serves it",
     ):
         isolation_document(assembly, space.defaults(), TestPartnerRegistry([], []))
 
@@ -676,7 +707,7 @@ def test_the_contracts_collect_without_xdist() -> None:
 @pytest.mark.assemblies
 def test_a_column_a_bounds_entry_cannot_compare_fails_by_name(tmp_path: Path) -> None:
     """Catches a bounds entry passing on a column of text, or one holding a value that is not finite."""
-    assembly, _ = mock("mock/electric_heater")
+    assembly, _ = mock("mock/variant_heater")
     declaration = assembly.model.tests.bounds[0]  # type: ignore[union-attr]
 
     class Output:  # pylint: disable=too-few-public-methods  # the one output the check looks up
@@ -695,7 +726,7 @@ def test_a_column_a_bounds_entry_cannot_compare_fails_by_name(tmp_path: Path) ->
     ):
         run = IsolationRun(
             "x",
-            "mock/electric_heater",
+            "mock/variant_heater",
             tmp_path,
             results=pd.DataFrame({"Heater power": column}),
             outputs=[Output()],
@@ -715,7 +746,7 @@ def test_a_run_whose_component_raises_names_where_it_raised(tmp_path: Path, monk
         raise RuntimeError("the heater broke")
 
     monkeypatch.setattr(MockHeater, "i_simulate", _raise)
-    assembly, space = mock("mock/electric_heater")
+    assembly, space = mock("mock/variant_heater")
     registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
     run = run_isolation(assembly, space.defaults(), registry, AssemblyResolver([Mocks.LIBRARY]), tmp_path / "r", "h s0")
     line = _raise.__code__.co_firstlineno + 1
@@ -764,7 +795,7 @@ def test_a_member_refusing_its_configuration_is_handled_and_any_other_error_fail
     finds it as the cause, and every check raises ``SampleRefused``. The same constructor raising a
     plain ``ValueError`` is a failure of every check, named.
     """
-    assembly, space = mock("mock/electric_heater")
+    assembly, space = mock("mock/variant_heater")
     registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
     resolver = AssemblyResolver([Mocks.LIBRARY])
     tests = assembly.model.tests
@@ -815,7 +846,7 @@ def test_a_monotone_sweep_drops_the_points_a_member_refuses(tmp_path: Path, monk
     are dropped and the first two still rise; refused above 1000 W one point remains and the sweep is
     skipped (``SampleRefused``), naming the dropped points.
     """
-    assembly, space = mock("mock/electric_heater")
+    assembly, space = mock("mock/variant_heater")
     registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
     resolver = AssemblyResolver([Mocks.LIBRARY])
     (defaults, *_) = deterministic_samples(space)
@@ -833,7 +864,7 @@ def test_a_monotone_sweep_drops_the_points_a_member_refuses(tmp_path: Path, monk
     refusing_heater(monkeypatch, 1000.0, ConfigurationRefusedError)
     with pytest.raises(
         checks.SampleRefused,
-        match=re.escape("mock/electric_heater sweep of power_in_watt from s000: a member refuses 3 of 4 points"),
+        match=re.escape("mock/variant_heater sweep of power_in_watt from s000: a member refuses 3 of 4 points"),
     ):
         checks.evaluate_monotone(run_point, space, defaults, tests.monotone[0])
     assert not list(tmp_path.glob("*")), "every sweep point's run is released, refused or not"

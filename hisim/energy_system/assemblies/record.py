@@ -13,7 +13,7 @@ file it produces, neither part of the file, so a file without imports stays byte
 
 A realized record's ``metadata`` carries both, and an error a later stage raises about a component
 the expansion produced carries that component's entry: ``pv-east-PVSystem (import pv, instance east,
-house.energy_system.yaml:12 → mock/pv_array.assembly.yaml:20)``.
+house.energy_system.yaml:12 → pv/array.assembly.yaml:29)``.
 """
 
 from __future__ import annotations

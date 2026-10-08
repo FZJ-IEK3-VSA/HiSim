@@ -2,15 +2,16 @@
 # contracts (tests/assemblies/test_library_contracts.py) place beside an assembly they run in isolation, one
 # for every port whose binding changes what the assembly computes. Read by
 # hisim/energy_system/assemblies/testing/partners.py, which documents the format; every partner is a site
-# entry as an energy-system file writes it.
+# entry as an energy-system file writes it. The partners are those of the mock assemblies and of the inline
+# assemblies of tests/assemblies/test_harness.py.
 partners:
   # --------------------------------------------------------------------------- partners of needs
   Weather:
     serves: {partner: MockWeather}
     component: {class: tests.assemblies.mock_components.MockWeather, preset: standard}
   Occupancy:
-    # The residents; the manager ranks their consumption and the meter measures it.
-    serves: [{partner: MockOccupancy}, {observed_by: MockEnergyManager}, {observed_by: MockElectricityMeter}]
+    # The residents, who draw hot water from a tank.
+    serves: {partner: MockOccupancy}
     component: {class: tests.assemblies.mock_components.MockOccupancy, preset: standard}
   Ems:
     serves: {partner: MockEms}
@@ -35,64 +36,6 @@ partners:
       inputs: [Occupancy, {$port: heat}]
       ports:
         heat: {partner: MockHeater}
-  EnergyManager:
-    # The controller an energy-manager need binds and a battery's controllable output is ranked by; it
-    # observes what its class declares.
-    serves: [{partner: MockEnergyManager}, {controls: MockBattery}]
-    component:
-      class: tests.assemblies.mock_components.MockEnergyManager
-      preset: optimize_own_consumption
-      observes: declared
-
-  # ------------------------------------------------------------------------ the other circuit ends
-  Cylinder:
-    # The cylinder end of the dhw circuit, for an assembly whose end is a boiler.
-    serves: {circuit: dhw, other_end: [MockBoiler]}
-    requires: [Occupancy]
-    component:
-      class: tests.assemblies.mock_components.MockCylinder
-      preset: standard
-      inputs: [Occupancy, {$port: dhw}]
-      ports:
-        dhw: {circuit: dhw}
-  Boiler:
-    # The boiler end of the dhw circuit, for an assembly whose end is a cylinder.
-    serves: {circuit: dhw, other_end: [MockCylinder]}
-    component:
-      class: tests.assemblies.mock_components.MockBoiler
-      preset: condensing
-      inputs: [{$port: dhw}]
-      ports:
-        dhw: {circuit: dhw}
-
-  # ------------------------------------------------------------------- carriers and their consumers
-  GasMeter:
-    # The natural-gas connection a fuel need binds; its meter observes the consumers' feeds.
-    serves: {carrier: natural_gas}
-    component:
-      class: tests.assemblies.mock_components.MockGasMeter
-      preset: standard
-      inputs: [{$port: gas}]
-      ports:
-        gas: {carrier: natural_gas}
-  GasBoiler:
-    # A consumer of the natural gas an assembly provides: a boiler burning it, charging its own cylinder.
-    serves: {consumes: natural_gas}
-    requires: [GasCylinder]
-    component:
-      class: tests.assemblies.mock_components.MockBoiler
-      preset: condensing
-      inputs: [GasCylinder]
-      ports:
-        fuel: {carrier: natural_gas, outputs: [FuelUse]}
-  GasCylinder:
-    # Joins only as GasBoiler's requirement, so it reads the boiler without requiring it back: the
-    # requirements of a registry form no cycle.
-    requires: [Occupancy]
-    component:
-      class: tests.assemblies.mock_components.MockCylinder
-      preset: standard
-      inputs: [Occupancy, GasBoiler]
 
   # ------------------------------------------------------------------------------------------ facts
   PVArray:

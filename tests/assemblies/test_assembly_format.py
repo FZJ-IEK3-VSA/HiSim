@@ -15,7 +15,7 @@ from hisim.energy_system.assemblies.schema import AssemblySchemaBuilder, assembl
 from hisim.energy_system.errors import EnergySystemFormatError
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind
 from hisim.energy_system.loader import dump_energy_system, parse_energy_system
-from tests.assemblies.helpers import EMPTY_CONTRACT, OCCUPANCY, WEATHER, Library, Mocks, read_system, site
+from tests.assemblies.helpers import EMPTY_CONTRACT, OCCUPANCY, WEATHER, Library, Mocks, Real, read_system, site
 
 #: A group's component carrying ``order:``, which only a top-level entry or an import may.
 ORDERED_OCCUPANCY = OCCUPANCY.replace("}", ", order: 1}")
@@ -52,7 +52,7 @@ def test_a_version_4_file_round_trips_with_its_imports_verbs_ports_and_placehold
 def test_a_version_3_file_that_imports_is_refused() -> None:
     """Catches a flat file silently gaining imports without declaring the version that reads them."""
     with pytest.raises(EnergySystemFormatError, match="EF-01") as refusal:
-        read_system("schema_version: 3\nname: x\nimports: {pv: {assembly: mock/pv_array}}\n")
+        read_system("schema_version: 3\nname: x\nimports: {pv: {assembly: pv/array}}\n")
     assert "imports" in str(refusal.value)
 
 
@@ -74,7 +74,7 @@ def test_an_authored_hyphenated_name_is_refused() -> None:
 @pytest.mark.parametrize(
     ("construct", "text"),
     [
-        ("imports", MINIMAL + "imports: {inner: {assembly: mock/pv_array}}\n"),
+        ("imports", MINIMAL + "imports: {inner: {assembly: pv/array}}\n"),
         ("presets", MINIMAL + "presets: {standard: {}}\n"),
         ("from", MINIMAL + "interface: {needs: {demand: {from: tank.hot_water_demand}}}\n"),
         ("internal", MINIMAL + "interface: {internal: {link: {bind: [a, b]}}}\n"),
@@ -101,12 +101,12 @@ def test_every_cut_construct_of_an_assembly_is_refused_by_name(construct: str, t
 @pytest.mark.parametrize(
     ("construct", "text"),
     [
-        ("preset", site(WEATHER, imports="pv: {assembly: mock/pv_array, preset: south}")),
-        ("order", site(WEATHER, imports="pv: {assembly: mock/pv_array, instances: {east: {order: 1}}}")),
+        ("preset", site(WEATHER, imports="pv: {assembly: pv/array, preset: south}")),
+        ("order", site(WEATHER, imports="pv: {assembly: pv/array, instances: {east: {order: 1}}}")),
         ("order", site(WEATHER) + f"groups:\n  extra:\n    enabled: true\n    components: {{{ORDERED_OCCUPANCY}}}\n"),
-        ("actuates", site(WEATHER, imports="pv: {assembly: mock/pv_array, actuates: {}}")),
-        ("$switch", site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {tilt_in_degree: {$switch: a}}}")),
-        ("preset", site(WEATHER, imports="pv: {assembly: mock/pv_array, instances: {east: {preset: south}}}")),
+        ("actuates", site(WEATHER, imports="pv: {assembly: pv/array, actuates: {}}")),
+        ("$switch", site(WEATHER, imports="pv: {assembly: pv/array, parameters: {tilt_in_degree: {$switch: a}}}")),
+        ("preset", site(WEATHER, imports="pv: {assembly: pv/array, instances: {east: {preset: south}}}")),
     ],
 )
 def test_every_cut_construct_of_an_energy_system_file_is_refused_by_name(construct: str, text: str) -> None:
@@ -121,7 +121,7 @@ def test_every_cut_construct_of_an_energy_system_file_is_refused_by_name(constru
 def test_an_order_that_is_no_integer_is_refused(value: str) -> None:
     """Catches ``order: true`` or ``order: 1.5`` being read as a position."""
     with pytest.raises(EnergySystemFormatError, match="EF-07") as refusal:
-        read_system(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, order: {value}}}"))
+        read_system(site(WEATHER, imports=f"pv: {{assembly: pv/array, order: {value}}}"))
     assert "imports.pv.order" in str(refusal.value)
 
 
@@ -207,7 +207,7 @@ def test_every_port_kind_is_read_with_the_fields_it_lowers_by(tmp_path: Path) ->
     assert (ports["connection"].meter, ports["connection"].is_fuel_provision) == ("Meter", True)
     assert ports["flows"].selection is not None
     assert ports["flows"].selection.text() == "[{component_type: PV, BATTERY}, {output: FuelUse}]"
-    text = site(WEATHER, imports="later: {assembly: mock/pv_array, observes: [{component_type: PV}]}")
+    text = site(WEATHER, imports="later: {assembly: pv/array, observes: [{component_type: PV}]}")
     observes = read_system(text)[0].imports["later"].observes
     assert observes is not None and observes.to_document() == [{"component_type": ["PV"]}]
 
@@ -228,9 +228,13 @@ def test_both_committed_schemas_are_current() -> None:
 
 
 @pytest.mark.assemblies
-@pytest.mark.parametrize("path", sorted(Mocks.LIBRARY.rglob("*.assembly.yaml")), ids=lambda path: path.stem)
-def test_every_mock_assembly_validates_against_the_assembly_schema(path: Path) -> None:
-    """Catches the assembly schema refusing a file the reader accepts."""
+@pytest.mark.parametrize(
+    "path",
+    sorted(Real.LIBRARY.rglob("*.assembly.yaml")) + sorted(Mocks.ROOT.rglob("*.assembly.yaml")),
+    ids=lambda path: f"{path.parent.name}/{path.stem.removesuffix('.assembly')}",
+)
+def test_every_assembly_of_both_libraries_validates_against_the_assembly_schema(path: Path) -> None:
+    """Catches the assembly schema refusing a file the reader accepts, in the real library or among the mocks."""
     jsonschema.validate(yaml.safe_load(path.read_text(encoding="utf-8")), AssemblySchemaBuilder().build())
 
 
@@ -239,7 +243,7 @@ def test_every_mock_assembly_validates_against_the_assembly_schema(path: Path) -
     "extra",
     [
         "presets: {standard: {}}\n",
-        "imports: {inner: {assembly: mock/pv_array}}\n",
+        "imports: {inner: {assembly: pv/array}}\n",
         "constraints: [{requires: {a: [b]}}]\n",
     ],
 )

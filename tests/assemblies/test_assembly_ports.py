@@ -11,19 +11,19 @@ from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.errors import EnergySystemAssemblyError
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
-from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Mocks, expand_text, site
+from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Mocks, Real, expand_text, site
 
-TANK = "tank: {assembly: mock/hot_water_tank"
-HEATER = "heater: {assembly: mock/electric_heater"
+TANK = "tank: {assembly: mock/wired_tank"
+HEATER = "heater: {assembly: mock/variant_heater"
 MONITOR = f"""
 Monitor:
   class: {Mocks.CLASSES}.MockBareDevice
   preset: standard
   inputs: [{{$port: pv}}]
   ports:
-    pv: {{partner: MockPVSystem, wires: {{TemperatureOutside: ElectricityOutput}}}}
+    pv: {{partner: PVSystem, wires: {{TemperatureOutside: ElectricityOutput}}}}
 """
-PV_PAIR = "pv: {assembly: mock/pv_array, instances: {east: {azimuth_in_degree: 90}, west: {azimuth_in_degree: 270}}"
+PV_PAIR = "pv: {assembly: pv/array, instances: {east: {azimuth_in_degree: 90}, west: {azimuth_in_degree: 270}}"
 
 
 def switched(verb: str = "optional-bind", enabled: bool = True) -> str:
@@ -88,7 +88,7 @@ def test_a_bind_to_an_instance_an_import_does_not_have_is_refused_whatever_the_v
         "ElectricityOutput}}", "ElectricityOutput}, optional: true}"
     )
     refused(
-        site(monitor, WEATHER, imports=PV_PAIR + "}"),
+        site(monitor, Real.WEATHER, imports=PV_PAIR + "}"),
         "EF-7D",
         "pv.south",
         "east",
@@ -191,7 +191,7 @@ def test_a_bind_to_a_partner_of_another_class_is_refused() -> None:
 def test_a_bind_to_an_import_with_several_matching_instances_is_refused() -> None:
     """Catches a bind to ``pv`` choosing one of its two arrays."""
     message = refused(
-        site(MONITOR.replace("ports:", "bind: {pv: pv}\n  ports:"), WEATHER, imports=PV_PAIR + "}"),
+        site(MONITOR.replace("ports:", "bind: {pv: pv}\n  ports:"), Real.WEATHER, imports=PV_PAIR + "}"),
         "EF-7B",
         "pv-east-PVSystem",
         "pv-west-PVSystem",
@@ -209,21 +209,21 @@ def test_a_bind_to_an_import_with_several_matching_instances_is_refused() -> Non
         ),
         (
             "Monitor: "
-            f"{{class: {Mocks.CLASSES}.MockBareDevice, preset: standard, ports: {{pv: {{partner: MockPVSystem}}}}}}",
+            f"{{class: {Mocks.CLASSES}.MockBareDevice, preset: standard, ports: {{pv: {{partner: PVSystem}}}}}}",
             ("{$port: pv}",),
         ),
     ],
 )
 def test_a_site_placeholder_and_its_port_belong_together(entry: str, names: Tuple[str, ...]) -> None:
     """Catches a site placeholder naming no port, and a site port with nowhere to land."""
-    refused(site(entry, WEATHER, imports=PV_PAIR + "}"), "EF-7J", *names)
+    refused(site(entry, Real.WEATHER, imports=PV_PAIR + "}"), "EF-7J", *names)
 
 
 @pytest.mark.assemblies
 def test_a_site_port_binds_to_one_instance_and_lowers_to_its_wires() -> None:
     """Catches a bind to ``<import>.<instance>`` landing anywhere but its placeholder, or as a bare name."""
     flat, record = expand_text(
-        site(MONITOR.replace("ports:", "bind: {pv: pv.west}\n  ports:"), WEATHER, imports=PV_PAIR + "}")
+        site(MONITOR.replace("ports:", "bind: {pv: pv.west}\n  ports:"), Real.WEATHER, imports=PV_PAIR + "}")
     )
     assert flat.components["Monitor"].inputs == (
         ExplicitWire(source="pv-west-PVSystem", input="TemperatureOutside", output="ElectricityOutput"),

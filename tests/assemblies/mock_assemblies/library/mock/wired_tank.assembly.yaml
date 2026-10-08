@@ -1,8 +1,10 @@
-# Mock: a hot-water tank the residents draw from, heated by whatever the importer binds to its heat
-# port; the heat arrives over explicit wires, so the port can be bound to a provided output.
+# Mock, for a shape the real library cannot show: a need with explicit `wires:` that an importer binds to another
+# import's provided output (`bind: {heat: heater.heat}`), so the binding names an output the wires must read. No real
+# need is bound to a provided output. A hot-water tank the residents draw from, heated by whatever the importer binds
+# to its heat port.
 schema_version: 4
 kind: assembly
-name: mock/hot_water_tank
+name: mock/wired_tank
 description: A mock hot-water tank.
 
 parameters:

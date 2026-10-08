@@ -1,8 +1,11 @@
-# Mock: an electric heater with or without its own thermostat (an internal variant), which an energy
-# manager may raise; the thermostat reads a tank only where it is fitted.
+# Mock, for shapes the real library cannot show: an internal variant `selected_by` a bool parameter, a port
+# `required_when` and an optional port `active_when` that variant's option is selected, and an enum parameter that
+# selects a member's preset (`preset: {$param: control}`). No real assembly has a variant, a conditional port or an
+# enum parameter. The heater has or has not its own thermostat; an energy manager may raise the thermostat's set point,
+# and the thermostat reads a tank only where it is fitted.
 schema_version: 4
 kind: assembly
-name: mock/electric_heater
+name: mock/variant_heater
 description: A mock electric heater and its thermostat.
 
 parameters:

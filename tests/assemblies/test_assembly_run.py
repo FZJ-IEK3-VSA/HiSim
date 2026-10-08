@@ -46,8 +46,8 @@ def test_a_mock_house_runs_records_its_imports_and_its_record_reruns(
     assert imports["instances"][3]["quote"]["source"] == "mock"
     source_map = record["metadata"]["source_map"]
     assert source_map["tank-Tank"]["inputs[1]"]["chain"] == [
-        "house.energy_system.yaml:33",
-        "mock/hot_water_tank.assembly.yaml:20",
+        "house.energy_system.yaml:35",
+        "mock/wired_tank.assembly.yaml:22",
     ]
 
     kpis = KpiFinder(json.loads((first / "all_kpis.json").read_text(encoding="utf-8")))

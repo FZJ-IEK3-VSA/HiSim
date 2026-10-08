@@ -347,7 +347,7 @@ class IsolationRun:
     """What one isolation run produced; the checks read it, and :meth:`release` drops it.
 
     Attributes:
-        label: How a failure names the run: ``mock/pv_array sample s003``.
+        label: How a failure names the run: ``pv/array sample s003``.
         assembly: The assembly's library path.
         directory: The run's directory, holding its system, parameters, records and KPIs.
         error: What the run raised, or ``None`` when it finished.

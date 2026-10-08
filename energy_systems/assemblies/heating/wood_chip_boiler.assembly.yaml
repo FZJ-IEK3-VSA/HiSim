@@ -30,11 +30,13 @@ parameters:
      # range: heating limits of German practice, 10 °C for a passive house up to 22 °C for an unrenovated one
   minimum_runtime_in_seconds:
     {type: float, unit: SECONDS, default: 3600.0, range: {min: 1800.0, max: 7200.0},
-     description: Shortest burn once the controller switched the burner on.}
+     description: 'Shortest burn once the controller switched the burner on, in whole timesteps rounded down:
+       a value below one timestep has no effect.'}
      # range: a wood-chip fire burns for half an hour at least, and up to two hours
   minimum_resting_time_in_seconds:
     {type: float, unit: SECONDS, default: 1800.0, range: {min: 900.0, max: 3600.0},
-     description: Shortest pause once the controller switched the burner off.}
+     description: 'Shortest pause once the controller switched the burner off, in whole timesteps rounded
+       down: a value below one timestep has no effect.'}
      # range: from a quarter of an hour up to an hour between two ignitions
 
 components:

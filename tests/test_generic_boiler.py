@@ -353,3 +353,40 @@ def test_solid_fuel_setups_keep_the_timings_of_their_deleted_factories(
     assert controller["preset"] == "on_off"
     assert controller["config"]["minimum_runtime_in_seconds"] == expected_runtime
     assert controller["config"]["minimum_resting_time_in_seconds"] == expected_resting
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ["runtime_in_seconds", "resting_time_in_seconds", "warned_fields"],
+    [
+        (600, 1800, ["minimum_runtime_in_seconds"]),
+        (900, 300, ["minimum_resting_time_in_seconds"]),
+        (1800, 900, []),
+        (0, 0, []),
+    ],
+)
+def test_a_minimum_time_shorter_than_one_timestep_warns_once_and_a_whole_one_does_not(
+    runtime_in_seconds: float,
+    resting_time_in_seconds: float,
+    warned_fields: list,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catches a minimum time that rounds down to zero timesteps without a word, or a warning for a whole one.
+
+    At 900 s per timestep the controller counts 600 s or 300 s as zero timesteps, so that field has no effect;
+    900 s and 1800 s are whole timesteps, and zero is no minimum at all.
+    """
+    warnings: list = []
+    monkeypatch.setattr(generic_boiler.log, "warning", warnings.append)
+    config = GenericBoilerControllerConfig.preset_on_off("OnOffBoilerController").resolve(
+        SizingContext(maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000)
+    )
+    config.minimum_runtime_in_seconds = runtime_in_seconds
+    config.minimum_resting_time_in_seconds = resting_time_in_seconds
+    controller = GenericBoilerController(
+        SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900), config, DisplayConfig()
+    )
+    assert [field_name for field_name in warned_fields if any(field_name in text for text in warnings)] == warned_fields
+    assert len(warnings) == len(warned_fields)
+    assert controller.minimum_runtime_in_timesteps == int(runtime_in_seconds // 900)
+    assert controller.minimum_resting_time_in_timesteps == int(resting_time_in_seconds // 900)

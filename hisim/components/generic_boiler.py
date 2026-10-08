@@ -18,6 +18,7 @@ from enum import Enum, unique
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from hisim import log
 from hisim import loadtypes as lt
 from hisim.components.configuration import (
     PhysicsConfig,
@@ -1153,7 +1154,12 @@ class GenericBoilerControllerConfig(ConfigBase):
     #: Upper end of the boiler's power band; copied from the boiler this controller regulates.
     maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MAXIMAL_THERMAL_POWER_IN_WATT)
     set_temperature_difference_for_full_power: float = 5.0
+    #: Shortest burn once an on/off controller switched the burner on. The controller counts it in
+    #: whole timesteps, rounded down: 1500 s at 900 s per timestep is one timestep, and a value
+    #: shorter than one timestep has no effect (the controller warns at construction).
     minimum_runtime_in_seconds: float = field(default=1800, metadata={"unit": lt.Units.SECONDS})
+    #: Shortest pause once an on/off controller switched the burner off, in whole timesteps rounded
+    #: down as :attr:`minimum_runtime_in_seconds` is.
     minimum_resting_time_in_seconds: float = field(default=1800, metadata={"unit": lt.Units.SECONDS})
     with_domestic_hot_water_preparation: bool = False
     #: If used as secondary heat generator for DHW in hybrid mode.
@@ -1283,11 +1289,11 @@ class GenericBoilerController(Component):
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
         self.warm_water_temperature_aim_in_celsius: float = 60.0
 
-        self.minimum_runtime_in_timesteps = int(
-            self.config.minimum_runtime_in_seconds / self.my_simulation_parameters.seconds_per_timestep
+        self.minimum_runtime_in_timesteps = self.whole_timesteps(
+            "minimum_runtime_in_seconds", self.config.minimum_runtime_in_seconds
         )
-        self.minimum_resting_time_in_timesteps = int(
-            self.config.minimum_resting_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
+        self.minimum_resting_time_in_timesteps = self.whole_timesteps(
+            "minimum_resting_time_in_seconds", self.config.minimum_resting_time_in_seconds
         )
 
         self.state: GenericBoilerControllerState = GenericBoilerControllerState(0, 0, 0, 0)
@@ -1356,6 +1362,30 @@ class GenericBoilerController(Component):
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+
+    def whole_timesteps(self, field_name: str, seconds: float) -> int:
+        """A minimum time of the configuration in whole timesteps, rounded down; warns when it has no effect.
+
+        Example: 1500 s at 900 s per timestep is one timestep; 600 s is zero timesteps, so the
+        controller logs one warning that the field has no effect at this resolution. Rounding down
+        keeps a pause or burn from being stretched beyond what was configured, which at a coarse
+        timestep would cost heat production.
+
+        Args:
+            field_name: The configuration field, named in the warning.
+            seconds: Its value.
+
+        Returns:
+            The whole timesteps the controller holds the burner's state for.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        if 0 < seconds < seconds_per_timestep:
+            log.warning(
+                f"{self.component_name}: {field_name} = {seconds} s is shorter than one timestep of "
+                f"{seconds_per_timestep} s, so it has no effect at this resolution (the controller counts "
+                "minimum times in whole timesteps, rounded down)."
+            )
+        return int(seconds / seconds_per_timestep)
 
     def get_default_connections_from_simple_hot_water_storage(
         self,

@@ -105,6 +105,9 @@ tests:
     - {output: Buffer.ThermalPowerFromHeatGenerator, unit: WATT, min: -50000, max: 50000}
     - {output: Buffer.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -50000, max: 50000}   # zero here
   monotone:
+    - {parameter: power_in_watt, kpi: Standby heat loss of Hot water storage, member: Buffer,
+       direction: increasing}
+      # the buffer's volume follows the boiler's power (SIZE_ACCORDING_TO_GAS_HEATER): a larger vessel has more surface
     - {parameter: heating_threshold_in_celsius, kpi: Total Gas consumption (energy), member: Boiler,
        direction: increasing}
       # a higher heating limit heats on more days, never on fewer; on the test day (1 January) every limit of the

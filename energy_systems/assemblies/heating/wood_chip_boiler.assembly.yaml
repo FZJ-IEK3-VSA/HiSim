@@ -1,0 +1,135 @@
+# The wood-chip boiler with its on/off L1 controller and its space-heating buffer (D12 b, D25: the assembly WITH the
+# buffer), charging a DHW cylinder through its `dhw` circuit (D29: this assembly serves DHW). One assembly per fuel
+# (owner, 2026-10-07): the shape of heating/gas_condensing_boiler, the boiler at the class's `wood_chips` preset (a
+# conventional boiler down to a twelfth of its power), the controller at `on_off` with the twin's minimum runtime and
+# resting time. Control is hardcoded here (D21): the Controller switches the burner on the buffer temperature against
+# the flow temperature the site's HeatDistributionController asks for, and on the cylinder temperature; it reads no
+# energy manager, so the assembly offers no `ems_modifier`.
+#
+# The members expand as one block in the order their lines stand here, the twin's ConventionalWoodChipBoiler,
+# WoodChipBoilerController, SimpleHotWaterStorage. The sizing facts the members read from the site (heating load, number
+# of apartments) bind their one provider by the engine's bare-fact rule (§6, D29); the controller and the buffer read
+# the boiler's power band inside the block; the buffer is sized by the wood-chip law, as the twin's is. The burner's
+# fuel goes to the one wood-chip provider of the file (§5.1), whose meter observes both fuel outputs. The defaults
+# reproduce household_wood_chips_building_sizer (D9): a parameter at its preset's value, AUTO or none writes no config
+# line (G9).
+
+schema_version: 4
+kind: assembly
+name: heating/wood_chip_boiler
+description: Wood-chip boiler with an on/off controller and a parallel space-heating buffer, for space heating and DHW.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, range: {min: 15000, max: 60000},
+     description: 'Maximal fuel input power (the heat delivered is this times the combustion efficiency); AUTO
+       is the class law, sized from the heating load and the apartments.'}
+     # range: wood-chip boilers of a large house (15 kW) up to a farmhouse (60 kW)
+  heating_threshold_in_celsius:
+    {type: float, unit: CELSIUS, default: 18.0, range: {min: 10.0, max: 22.0},
+     description: Daily mean outside temperature above which the controller stops space heating.}
+     # range: heating limits of German practice, 10 °C for a passive house up to 22 °C for an unrenovated one
+  minimum_runtime_in_seconds:
+    {type: float, unit: SECONDS, default: 3600.0, range: {min: 1800.0, max: 7200.0},
+     description: 'Shortest burn once the controller switched the burner on, in whole timesteps rounded down:
+       a value below one timestep has no effect.'}
+     # range: a wood-chip fire burns for half an hour at least, and up to two hours
+  minimum_resting_time_in_seconds:
+    {type: float, unit: SECONDS, default: 1800.0, range: {min: 900.0, max: 3600.0},
+     description: 'Shortest pause once the controller switched the burner off, in whole timesteps rounded
+       down: a value below one timestep has no effect.'}
+     # range: from a quarter of an hour up to an hour between two ignitions
+
+components:
+  Boiler:
+    class: hisim.components.generic_boiler.GenericBoiler
+    preset: wood_chips
+    config:
+      maximal_thermal_power_in_watt: {$param: power_in_watt}
+    inputs:
+      - Controller                                          # ControlSignal, OperatingMode, TemperatureDelta
+      - {$port: dhw}                                        # WaterInputTemperatureDhw, the cylinder's return leg
+      - Buffer                                              # WaterInputTemperatureSh
+  Controller:
+    class: hisim.components.generic_boiler.GenericBoilerController
+    preset: on_off
+    config:
+      set_heating_threshold_outside_temperature_in_celsius: {$param: heating_threshold_in_celsius}
+      with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
+      minimum_runtime_in_seconds: {$param: minimum_runtime_in_seconds}
+      minimum_resting_time_in_seconds: {$param: minimum_resting_time_in_seconds}
+    inputs:
+      - {$port: weather}                                    # DailyAverageOutsideTemperature
+      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
+      - Buffer                                              # WaterTemperatureInputFromWaterStorage
+  Buffer:
+    class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+    preset: buffer
+    config:
+      sizing_option: SIZE_ACCORDING_TO_WOOD_CHIP_HEATING     # sized from the boiler's maximal thermal power
+    inputs:
+      - {$port: space_heating}                              # the distribution's return temperature and mass flow
+      - Boiler                                              # WaterOutputTemperatureSh, WaterOutputMassFlowSh
+
+interface:
+  needs:
+    weather:          {into: [Controller], partner: Weather}
+    flow_temperature: {into: [Controller], partner: HeatDistributionController}   # a set-point need (G1)
+    dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
+                      # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
+    fuel:             {carrier: wood_chips, outputs: [Boiler.EnergyDemandSh, Boiler.EnergyDemandDhw]}
+  provides:
+    space_heating:    {circuit: space_heating, member: Buffer}
+                      # the site's HeatDistribution owns pump and return leg, the buffer the supply leg
+    dhw:              {circuit: dhw, member: Boiler}
+                      # the boiler owns pump and supply leg, the cylinder the return leg
+
+tests:
+  # One day at 900 s beside the site partners (an unheated building, its heat distribution, the cylinder, the wood-chip
+  # store). The burner's fuel input is bounded by the largest rating of the box (60 kW, the maximal power is the fuel
+  # side: the heat is at most 90 % of it), per-step energies by 60 kW x 0.25 h = 15 kWh, both with a 25 % margin.
+  # Water stays liquid; the boiler supplies at most 70 °C to the cylinder. The controller's one temperature output is
+  # the gap between set and actual water temperature.
+  bounds:
+    - {output: Boiler.TotalFuelConsumption, unit: WATT, min: 0, max: 75000}
+    - {output: Boiler.EnergyDemandSh, unit: WATT_HOUR, min: 0, max: 18750}
+    - {output: Boiler.EnergyDemandDhw, unit: WATT_HOUR, min: 0, max: 18750}
+    - {output: Boiler.ThermalOutputPowerSh, unit: WATT, min: 0, max: 75000}
+    - {output: Boiler.ThermalOutputEnergySh, unit: WATT_HOUR, min: 0, max: 18750}
+    - {output: Boiler.ThermalOutputPowerDhw, unit: WATT, min: 0, max: 75000}
+    - {output: Boiler.ThermalOutputEnergyDhw, unit: WATT_HOUR, min: 0, max: 18750}
+    - {output: Boiler.CombustionHeatLoss, unit: WATT, min: 0, max: 37500}
+      # the fuel the heat does not take: at most 40 % of 60 kW at the part-load efficiency 0.6 (measured 6.0 kW)
+    - {output: Boiler.WaterOutputTemperatureSh, unit: CELSIUS, min: 0, max: 100}
+    - {output: Boiler.WaterOutputTemperatureDhw, unit: CELSIUS, min: 0, max: 100}
+    - {output: Controller.TemperatureDelta, unit: KELVIN, min: -20, max: 80}
+      # set minus actual: a cold buffer below a 60 °C cylinder target is at most about 60 K (measured -2.2 to 24 K)
+    - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}
+    - {output: Buffer.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 450000}
+      # the wood-chip law's 50 l/kW at 60 kW is 3000 l, 349 kWh at 100 °C (measured 117 kWh)
+    - {output: Buffer.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -18750, max: 18750}
+    - {output: Buffer.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -18750, max: 18750}  # zero here
+    - {output: Buffer.ThermalEnergyFromHeatDistribution, unit: WATT_HOUR, min: -18750, max: 18750}
+    - {output: Buffer.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -37500, max: 37500}
+    - {output: Buffer.StandbyHeatLoss, unit: WATT, min: -2500, max: 2500}
+      # 3000 l lose about 340 W at 35 °C, six times that near 100 °C; negative while colder than the room
+      # (measured 0 to 338 W)
+    - {output: Buffer.ThermalPowerConsumptionHeatDistribution, unit: WATT, min: -75000, max: 75000}
+    - {output: Buffer.ThermalPowerFromHeatGenerator, unit: WATT, min: -75000, max: 75000}
+    - {output: Buffer.ThermalPowerFromSecondaryHeatGenerator, unit: WATT, min: -75000, max: 75000}   # zero here
+  monotone:
+    - {parameter: power_in_watt, kpi: Standby heat loss of Hot water storage, member: Buffer,
+       direction: increasing}
+      # the buffer's volume follows the boiler's power (SIZE_ACCORDING_TO_WOOD_CHIP_HEATING): a larger vessel
+      # has more surface
+    - {parameter: heating_threshold_in_celsius, kpi: Total WoodChips consumption (energy), member: Boiler,
+       direction: increasing}
+      # a higher heating limit heats on more days, never on fewer; on the test day (1 January) every limit of the
+      # range lies above the daily mean, so the sweep is flat
+  expect:
+    - {kpi: Total WoodChips consumption (energy), member: Boiler, min: 170, max: 235}
+      # 201.1 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW

@@ -599,6 +599,116 @@ class MockBareDevice(MockComponent):
         """Nothing."""
 
 
+# ------------------------------------------------------------------------------- two sizing facts
+
+
+@dataclass_json
+@dataclass
+class MockLoadReaderConfig(ConfigBase):
+    """A device sized from two facts of the site: the heating load and the number of apartments."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockLoadReader"
+
+    component_id: ComponentID
+    #: The heating load it is sized to, from the site's heating-load fact.
+    heating_load_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT, unit=lt.Units.WATT)
+    #: The apartments it serves, from the site's apartment-count fact.
+    apartments: Sizable[float] = sized_field(rule=Size.NUMBER_OF_APARTMENTS, unit=lt.Units.ANY)
+
+    @preset
+    @classmethod
+    def preset_sized(cls, name: str) -> "MockLoadReaderConfig":
+        """Both fields left to their laws."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class MockLoadReader(MockComponent):
+    """Reads two sizing facts and computes nothing; stands in for a member whose laws read the site."""
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockLoadReaderConfig) -> None:
+        """Builds the component; it has no ports."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Nothing."""
+
+
+@dataclass_json
+@dataclass
+class MockHouseFactsConfig(ConfigBase):
+    """A site component contributing both facts :class:`MockLoadReader` reads."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockHouseFacts"
+
+    component_id: ComponentID
+    heating_load_in_watt: float = field(default=8000.0, metadata={UNIT: lt.Units.WATT})
+    apartments: float = field(default=1.0, metadata={UNIT: lt.Units.ANY})
+
+    #: The heating load and the number of apartments, as a building contributes them.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=("heating_load_in_watt", "number_of_apartments"),
+            compute=lambda config, ctx: {
+                "heating_load_in_watt": config.heating_load_in_watt,
+                "number_of_apartments": config.apartments,
+            },
+        ),
+    )
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "MockHouseFactsConfig":
+        """An 8 kW house of one apartment."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class MockHouseFacts(MockComponent):
+    """Contributes two sizing facts and computes nothing."""
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockHouseFactsConfig) -> None:
+        """Builds the component; it has no ports."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Nothing."""
+
+
+@dataclass_json
+@dataclass
+class MockApartmentCountConfig(ConfigBase):
+    """A site component contributing the number of apartments alone."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockApartmentCount"
+
+    component_id: ComponentID
+    apartments: float = field(default=1.0, metadata={UNIT: lt.Units.ANY})
+
+    #: The number of apartments.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(
+            facts=("number_of_apartments",),
+            compute=lambda config, ctx: {"number_of_apartments": config.apartments},
+        ),
+    )
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "MockApartmentCountConfig":
+        """One apartment."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class MockApartmentCount(MockComponent):
+    """Contributes the number of apartments and computes nothing."""
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockApartmentCountConfig) -> None:
+        """Builds the component; it has no ports."""
+        super().__init__(my_simulation_parameters, config)
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Nothing."""
+
+
 # --------------------------------------------------------------------------------- the dhw circuit
 
 #: The ``dhw`` circuit's three outputs (``assemblies_spec.md`` §11.1).

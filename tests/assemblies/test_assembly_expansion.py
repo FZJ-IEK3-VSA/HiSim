@@ -29,7 +29,7 @@ def expand_house():
 
 
 #: Every committed energy-system file that imports nothing; a composed file is checked by its gate
-#: (``tests/assemblies/test_heatpump_twin_gate.py``).
+#: (``tests/assemblies/test_twin_gates.py``).
 FLAT_FILES = [
     path
     for path in sorted((REPOSITORY / "energy_systems").rglob("*.energy_system.yaml"))

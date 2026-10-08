@@ -9,7 +9,11 @@ the assembly provides a consumer, a fact need a provider of the fact, an observe
 it observes, and a ``controllable: {target_input}`` output the controller ranking it. A sizing fact
 a member's class reads that no member provides and no fact port names crosses the boundary by the
 engine's bare-fact rule, as it does in the system that imports the assembly (§6), so it gets the
-registered provider of that fact as well (:func:`facts_needed`). Optional
+registered provider of that fact as well (:func:`add_fact_providers`, which recomputes what is
+still needed after each provider joins), unless a partner already in the
+system contributes it by its class, as the consumer of a fuel contributes the carrier its meter
+copies: the engine binds the fact there, and sizing refuses a second provider of the fact, of any
+value, since the meter's law then has no one provider to read. Optional
 ports are bound like required ones, so the run exercises the whole interface the parameters offer;
 the verb is written out (``bind:`` for a required port, ``optional-bind:`` for an optional one)
 wherever the format has one. A port no partner serves refuses the build by name.
@@ -37,7 +41,7 @@ import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, Collection, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 import pandas as pd
 import yaml
@@ -47,7 +51,7 @@ from hisim.config.contributions import declared_facts_of
 from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.parameters import select
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
-from hisim.energy_system.assemblies.testing.partners import ServedKey, TestPartnerRegistry
+from hisim.energy_system.assemblies.testing.partners import ServedKey, TestPartnerRegistry, TestPartnerRegistryError
 from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.executor import run_energy_system
@@ -97,17 +101,103 @@ def partners_needed(  # pylint: disable=too-many-return-statements  # one return
     return []
 
 
-def facts_needed(port_facts: Sequence[str], members: Mapping[str, MemberTemplate]) -> List[Tuple[ServedKey, ...]]:
-    """The facts the members' classes read that no member provides and no fact port names, each as its alternatives.
+def facts_declared_by(config_classes: Iterable[type]) -> Set[str]:
+    """The sizing facts any of the configuration classes declares it contributes.
+
+    Example: ``{GenericBoilerConfig}`` gives ``energy_carrier``, the fuel's heating value and
+    density, and the boiler's power band.
+
+    Args:
+        config_classes: Configuration dataclasses.
+
+    Returns:
+        The union of their declared facts.
+    """
+    return {fact for config_class in config_classes for fact in declared_facts_of(config_class)}
+
+
+def facts_needed(
+    port_facts: Collection[str], members: Mapping[str, MemberTemplate], partner_facts: Collection[str]
+) -> List[Tuple[ServedKey, ...]]:
+    """The facts the members' classes read that no member, no fact port and no partner present provides.
+
+    Example: a battery member whose law reads ``pv_peak_power_in_watt``, with no fact port and no
+    array among the partners, needs ``(("fact", "pv_peak_power_in_watt"),)``; with an array partner
+    it needs nothing.
 
     Args:
         port_facts: The facts the assembly's active fact ports name.
         members: The members present with the sample's parameters.
+        partner_facts: The facts the classes of the partners already in the system contribute.
+
+    Returns:
+        Each fact still to be provided, as its alternatives, in the order the members read them.
     """
     classes = [ClassBinder.config_class_of(name, member.entry) for name, member in members.items()]
-    provided = {fact for config_class in classes for fact in declared_facts_of(config_class)}
+    provided = facts_declared_by(classes)
     read = dict.fromkeys(fact for config_class in classes for fact in facts_read_by(config_class))
-    return [(("fact", fact),) for fact in read if fact not in provided and fact not in port_facts]
+    return [
+        (("fact", fact),)
+        for fact in read
+        if fact not in provided and fact not in port_facts and fact not in partner_facts
+    ]
+
+
+def facts_of_partners(registry: TestPartnerRegistry, names: Sequence[str]) -> Set[str]:
+    """The sizing facts the classes of the partners and of every partner they require contribute.
+
+    Example: an oil boiler partner contributes ``energy_carrier``, so a fuel meter beside it reads
+    its carrier from it and needs no provider of its own.
+
+    Args:
+        registry: The test partners.
+        names: The partners in the system so far.
+
+    Returns:
+        The union of the facts their classes declare.
+    """
+    return facts_declared_by(registry.config_class_of(name) for name in registry.closure(names))
+
+
+def add_fact_providers(
+    partners: List[str],
+    port_facts: Collection[str],
+    members: Mapping[str, MemberTemplate],
+    registry: TestPartnerRegistry,
+    assembly: str,
+) -> None:
+    """Appends to ``partners`` the registered provider of each fact still unprovided, until none is.
+
+    The facts are recomputed after each provider joins, because a provider's class may contribute
+    more than the fact it was found for: a building found for the heating load also contributes
+    the number of apartments, so the partner registered for that fact is never added beside it:
+    sizing refuses a fact with two providers.
+
+    Args:
+        partners: The partners in the system so far; extended in place.
+        port_facts: The facts the assembly's active fact ports name.
+        members: The members present with the sample's parameters.
+        registry: The test partners.
+        assembly: The assembly under test, for the messages.
+
+    Raises:
+        TestPartnerMissingError: When no partner is registered for a fact still needed.
+        TestPartnerRegistryError: When the partner registered for a fact does not contribute it.
+    """
+    added: Set[str] = set()
+    while True:
+        needed = facts_needed(port_facts, members, facts_of_partners(registry, partners))
+        if not needed:
+            return
+        fact = needed[0][0][1]
+        partner = registry.find(needed[0], f"the fact read '{fact}'", assembly)
+        if fact in added:
+            raise TestPartnerRegistryError(
+                f"the test partner '{partner.name}' is registered as the provider of the fact {fact} "
+                f"({partner.origin}), but its class does not contribute it."
+            )
+        added.add(fact)
+        partners.append(partner.name)
 
 
 def isolation_document(
@@ -143,8 +233,7 @@ def isolation_document(
         for port in model.ports.values()
         if port.kind == PortKind.FACT and port.fact and selection.state(port) != PortState.INACTIVE
     ]
-    for alternatives in facts_needed(port_facts, selection.members):
-        partners.append(registry.find(alternatives, f"the fact read '{alternatives[0][1]}'", assembly.path).name)
+    add_fact_providers(partners, port_facts, selection.members, registry, assembly.path)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
     return {

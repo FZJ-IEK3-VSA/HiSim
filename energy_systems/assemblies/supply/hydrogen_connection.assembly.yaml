@@ -1,0 +1,48 @@
+# The hydrogen grid connection (the one provider of hydrogen) and its meter (spec §5.1): one supply per fuel (owner,
+# 2026-10-07), the shape of supply/gas_connection. Its meter is a GasMeter, as in
+# household_hydrogen_boiler_building_sizer: the FuelMeter refuses hydrogen, which the gas meter measures beside natural
+# gas. The provision names its carrier and its meter, `provides: {connection: {carrier: hydrogen, meter: GasMeter}}`:
+# every consuming output a bound consumer's fuel need names lands at the meter's `{$port: connection}` placeholder as
+# the feed the meter's class declares for it, written explicitly (D30): GenericBoiler's EnergyDemandSh and
+# EnergyDemandDhw, whose EnergyPort names hydrogen. That feed is the fuel link, and the meter the fuel port's balance
+# peer.
+#
+# The meter's gas_loadtype stays with its preset's law, copied from the energy_carrier fact of the one provider of that
+# fact in the file, the burner, as in the twin, which writes no line for it (D28: overrides only). A second
+# energy_carrier provider of any value, a second burner of the same fuel included, leaves the law no one provider to
+# read, and sizing refuses the file (§5.1, D30).
+
+schema_version: 4
+kind: assembly
+name: supply/hydrogen_connection
+description: Hydrogen grid connection with its meter.
+
+components:
+  GasMeter:
+    class: hisim.components.gas_meter.GasMeter
+    preset: standard
+    inputs:
+      - {$port: connection}                                 # one feed per consuming output of every bound consumer
+
+interface:
+  provides:
+    connection: {carrier: hydrogen, meter: GasMeter}
+
+tests:
+  # One day at 900 s beside the consumer partner of hydrogen, the twin's condensing hydrogen boiler sized to the
+  # building (at most about 40 kW of fuel): per-step energies <= 40 kW x 0.25 h = 10 kWh, the day <= 40 kW x 24 h =
+  # 960 kWh, both with a 25 % margin. A consumer-only house produces nothing.
+  bounds:
+    - {output: GasMeter.GasAvailable, unit: WATT, min: -12500, max: 12500}
+      # production minus consumption of the step, negative while burning; the class labels it W, its value is the
+      # step's watt-hours (measured -2.1 kWh)
+    - {output: GasMeter.GasFromGrid, unit: WATT_HOUR, min: 0, max: 12500}
+    - {output: GasMeter.GasConsumption, unit: WATT_HOUR, min: 0, max: 12500}
+    - {output: GasMeter.GasProduction, unit: WATT_HOUR, min: 0, max: 12500}                 # zero here
+    - {output: GasMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1200000}
+    - {output: GasMeter.CumulativeProduction, unit: WATT_HOUR, min: 0, max: 1200000}       # zero here
+  monotone: []                                              # no numeric parameter: nothing to sweep
+  expect:
+    - {kpi: Total gas consumption, member: GasMeter, min: 110, max: 150}
+      # 129.7 kWh measured: the boiler partner's day (1 January, Aachen), the boiler assembly's own figure; the gas
+      # meter names every carrier it measures gas

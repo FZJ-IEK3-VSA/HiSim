@@ -1,20 +1,20 @@
-# The composed file of the heat-pump twin (assemblies_spec.md §8, §13 step 4): the site with the twin's site values plus
-# the six imports from energy_systems/assemblies/ that reproduce household_heatpump_building_sizer.energy_system.yaml,
-# the recorded twin of system_setups/household_heatpump_building_sizer.py (the option ems_with_battery of its grouped
-# file). tests/assemblies/test_twin_gates.py expands it, renames the members to the twin's names and asserts the
-# twin outside the intended differences, and runs both for one day: every result column equal.
+# The composed file of the heating oil twin (assemblies_spec.md §8, §13 step 5): the site with the twin's site values
+# plus the seven imports from energy_systems/assemblies/ that reproduce household_oil_building_sizer.energy_system.yaml,
+# the recorded twin of system_setups/household_oil_building_sizer.py (the option ems_with_battery of its grouped file).
+# tests/assemblies/test_twin_gates.py expands it, renames the members to the twin's names and asserts the twin outside
+# the intended differences, and runs both for one day: every result column equal.
 #
 # Site component names are the twin's; a site entry carries a `ports:` block only where an import binds to it, and
 # `{$port: <port>}` in its inputs marks where the bound port's items land. `order:` is the evaluation order within a
-# time step (spec §2.3): Building 1, UTSPConnector 2, Weather 3, pv 4, HeatDistributionController 5, heating 6
-# (ControllerSH, ControllerDHW, HeatPump, Buffer), dhw 9, HeatDistributionSystem 11, grid 12, battery 13, control 14.
-# Against the twin, the buffer before the cylinder is a neutral swap (dry run §9.1). Without an energy manager (the
-# twin's metered_directly) the file drops `control`, `battery`, the grid's `observes:` line and the `optional-bind:`
-# lines naming `control`.
+# time step (spec §2.3): Building 1, UTSPConnector 2, Weather 3, pv 4, HeatDistributionController 5, heating 6 (Boiler,
+# Controller, Buffer), dhw 9, HeatDistributionSystem 10, oil 11, grid 12, battery 13, control 14: the twin evaluates its
+# FuelMeter after the distribution and before the electricity meter. Against the twin, the buffer before the cylinder is
+# a neutral swap (dry run §9.1). The oil tank is the one provider of heating oil, so the boiler's fuel need binds it by
+# default.
 
 schema_version: 4
-name: household_heatpump_building_sizer
-description: Basic household new system setup.
+name: household_oil_building_sizer
+description: Household system setup with an oil-based heating system (building-sizer variant).
 
 components:
   Building:
@@ -60,7 +60,7 @@ components:
       temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
     optional-bind: {temperature_modifier: control}
   HeatDistributionSystem:
-    order: 11
+    order: 10
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived
     inputs:
@@ -73,12 +73,14 @@ components:
 imports:
   heating:
     order: 6
-    assembly: heating/air_source_heat_pump
-    optional-bind: {ems_modifier: control, ems_modifier_dhw: control}
+    assembly: heating/oil_boiler
   dhw:
     order: 9
     assembly: dhw/indirect_cylinder
     bind: {circuit: heating.dhw}
+  oil:
+    order: 11
+    assembly: supply/oil_tank
   pv:
     order: 4
     assembly: pv/array

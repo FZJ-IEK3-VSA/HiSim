@@ -351,8 +351,9 @@ class DistrictHeating(Component):
             load_type=LoadTypes.DISTRICTHEATING,
             unit=Units.WATT_HOUR,
             output_description=(
-                "Heat taken from the district heating network in this timestep, what the meter bills: "
-                "ThermalOutputShEnergy plus ThermalOutputDhwEnergy. The connection has no loss of its own."
+                "Heat taken from the district heating network in this timestep: the sum of "
+                "ThermalOutputShEnergy and ThermalOutputDhwEnergy, since the connection has no loss of its own. "
+                "No meter reads it; the meter reads the two energy outputs."
             ),
         )
         self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(

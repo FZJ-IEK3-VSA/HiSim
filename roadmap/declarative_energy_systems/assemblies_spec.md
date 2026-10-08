@@ -1049,7 +1049,7 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    two more rows of `COMPOSED_TWINS`. Their gates have one intended difference, G7: without a buffer there is no swap
    (the gate reads it from the rename map, where no member is the twin's `SimpleHotWaterStorage`). The district
    heating site states its `HeatDistributionSystem`'s `position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX`
-   as a site config line, until hydronic stage D derives the position from the circuit (D25). `DistrictHeating`
+   as a site config line, until hydronic stage D derives the position from the circuit (D25, G8). `DistrictHeating`
    declares its district-heat `EnergyPort` on the two outputs its meter reads, as `GenericBoiler` declares its fuel
    ports on `EnergyDemandSh` and `EnergyDemandDhw`, instead of on `DistrictHeatDrawn`, which no meter reads: a carrier
    need's outputs must carry the carrier (`EF-7M`). Ground source is not built: no `household_ground_source_*` setup
@@ -1059,9 +1059,9 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
 
 **Order in the base files** (§2.3). The composed files set a flat `order:` on site entries and imports to reproduce
 the twin's sequence up to neutral swaps: since D29 the heat-pump composed file
-(`energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml`) has one, the buffer before the
-cylinder; the mockup's second swap, the two heat-pump L1 controllers, came from its `serves_dhw` variant, which D29
-replaced by two assemblies. The numbering serves every generator twin, and `heatpump_solar_thermal` alone is
+(`energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml`) has one: the twin evaluates the DHW
+cylinder before the buffer, the composed file the buffer before the cylinder; the mockup's second swap, the two
+heat-pump L1 controllers, came from its `serves_dhw` variant, which D29 replaced by two assemblies. The numbering serves every generator twin, and `heatpump_solar_thermal` alone is
 reordered and re-recorded once (dry run §9.1).
 
 ## 13.1 Lean v1 (owner, 2026-10-06)
@@ -1176,7 +1176,9 @@ All by the owner on 2026-10-03.
 - **D23 — Evaluation order:** declared and nested, duplicates refused, pinned in the records; resolves G14 (§2.3, §13).
 - **G8 — A heating assembly without a buffer:** deferred to hydronic stage D, which makes the HDS's
   `position_hot_water_storage_in_system` derivable from the circuit binding instead of set by an import; until then
-  the heating assemblies are written with the buffer. An import never patches a site field.
+  the heating assemblies are written with the buffer. An import never patches a site field. Amended (owner,
+  2026-10-08): a heating assembly without a buffer is written where its twin has none (district heating, electric
+  heating), and the site states the HDS position (`NO_STORAGE_MASS_FLOW_FIX`) until hydronic stage D derives it (D25).
 - Also: units, descriptions, constraints and the variant partition check (§2.6); presets (§2.7); source maps (§9.2);
   `describe`, index, examples, isolation tests and the resolver's search path (§9.3).
 

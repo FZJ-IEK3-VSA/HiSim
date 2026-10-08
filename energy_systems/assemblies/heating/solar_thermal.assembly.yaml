@@ -1,0 +1,75 @@
+# Flat-plate solar thermal collectors with their differential-thermostat pump controller, charging a DHW cylinder
+# through its solar coil, the `solar_dhw` circuit. Control is hardcoded here (D21): the Controller starts the solar pump
+# on the collector temperature against the cylinder's mean temperature. The energy manager ranks the pump's electricity
+# from its own declaration (SOLAR_THERMAL_SYSTEM, weight 4, dispatch {}) and has no modifier for it (rank-only, dry run
+# G18), so the assembly offers no `ems_modifier`.
+#
+# The members expand as one block in the order their lines stand here, the twins' SolarThermalSystem,
+# SolarThermalSystemController. The collector area reads the number of apartments from the site by the engine's
+# bare-fact rule (§6, D29), as in the twins. The collector loop is the cylinder's primary coil, as the twins wire it
+# (household_gas_solar_thermal_building_sizer, household_heatpump_solar_thermal_building_sizer): the cylinder reads the
+# collector's supply through its default connections from SolarThermalSystem, the collector the cylinder's return
+# leg. The defaults reproduce both twins (D9): a parameter at its preset's value, AUTO or none writes no config line
+# (G9).
+
+schema_version: 4
+kind: assembly
+name: heating/solar_thermal
+description: Flat-plate solar thermal collectors with their pump controller, charging a DHW cylinder through its solar coil.
+
+parameters:
+  area_in_m2:
+    {type: float, unit: SQUARE_METER, default: AUTO, range: {min: 2, max: 20},
+     description: "Collector aperture area; AUTO is the class law, 4 m² per apartment."}
+     # range: one small collector (2 m²) up to a combi system of a large house (20 m²)
+
+components:
+  Collector:
+    class: hisim.components.solar_thermal_system.SolarThermalSystem
+    preset: flat_plate
+    config:
+      area_m2: {$param: area_in_m2}
+    inputs:
+      - {$port: weather}                                    # outside temperature, irradiance, sun position
+      - Controller                                          # ControlSignal
+      - {$port: solar_coil}                                 # TemperatureCollectorInletDegC, the cylinder's return leg
+  Controller:
+    class: hisim.components.solar_thermal_system.SolarThermalSystemController
+    preset: standard
+    inputs:
+      - Collector                                           # CollectorTemperature, MassFlow
+      - {$port: cylinder_temperature}                       # MeanWaterTemperatureInStorage
+
+interface:
+  needs:
+    weather:          {into: [Collector], partner: Weather}
+    cylinder_temperature: {into: [Controller], partner: SimpleDHWStorage}
+                      # the controller's measured variable, the cylinder's mean temperature: a need, not a circuit end
+    electricity:      {carrier: electricity, outputs: [Collector.ElectricityConsumptionOutput]}
+  provides:
+    solar_coil:       {circuit: solar_dhw, member: Collector}
+                      # the collector owns pump and supply leg, the cylinder's solar coil the return leg
+
+tests:
+  # One day at 900 s on the test weather (1 January, Aachen) beside a DHW cylinder at the other end of the solar_dhw
+  # circuit. Irradiance on the collector plane is at most about 1200 W/m², so over the box's 20 m² at most 24 kW, of
+  # which a flat plate delivers at most about 80 %; per-step energies are those powers x 0.25 h. The new solar pump
+  # draws 10 W while it runs (an old one 35 W). The Controller's one output, the pump's control signal, is binary:
+  # no energy or temperature.
+  bounds:
+    - {output: Collector.ThermalPowerOutput, unit: WATT, min: -5000, max: 20000}
+      # 20 m² x 1000 W/m² x 0.8; the loop loses a little heat while it runs on a cold cylinder (below 0)
+    - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: -1250, max: 5000}     # the power band x 0.25 h
+    - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
+    - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W
+    - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m²
+    - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power
+    - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}                 # at most the pump's electricity
+  monotone:
+    - {parameter: area_in_m2, kpi: CAPEX - Investment cost, member: Collector, direction: increasing}
+      # the investment is priced per m² of collector (3188 EUR for the default 4 m²); the heat delivered is no
+      # measure on the test day: 1 January in Aachen puts at most 53 W/m² on the collector plane, which never lifts
+      # the collector 10 K above the cylinder, so the pump never starts and every area of the range delivers 0 kWh
+  expect:
+    - {kpi: Total thermal energy delivered, member: Collector, min: 0, max: 0.5}
+      # 0.0 kWh measured at the defaults (4 m², one apartment) on the test day: the pump never starts

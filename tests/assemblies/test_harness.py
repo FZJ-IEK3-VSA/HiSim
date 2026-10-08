@@ -429,6 +429,23 @@ def test_a_partner_registered_for_a_fact_its_class_does_not_contribute_is_refuse
         isolation_document(load_reader(tmp_path), {}, registry)
 
 
+def test_a_need_binds_the_partner_of_its_class_a_circuit_end_brings() -> None:
+    """The collector's controller reads the cylinder the collector charges, never the heat pump's cylinder.
+
+    The registry serves the need's class, SimpleDHWStorage, by the dhw circuit's cylinder, which requires a generator;
+    the solar_dhw circuit end brings a cylinder of that class, so the need binds it and the system holds one.
+    """
+    library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+    resolver = AssemblyResolver([library])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    assembly = resolver.resolve("heating/solar_thermal", "test")
+    document = isolation_document(assembly, {}, registry)
+    classes = [entry["class"].rsplit(".", 1)[-1] for entry in document["components"].values()]
+    assert classes.count("SimpleDHWStorage") == 1 and "SolarCylinder" in document["components"]
+    assert document["imports"][SUBJECT]["bind"]["cylinder_temperature"] == "SolarCylinder"
+    assert registry.served[("partner", "SimpleDHWStorage")].name == "DHWStorage"
+
+
 @pytest.mark.assemblies
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> None:
     """An empty registry: the array's weather port names MockWeather."""

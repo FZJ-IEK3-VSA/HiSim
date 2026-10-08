@@ -3,7 +3,9 @@
 **The system.** The assembly is imported once, under the key :data:`SUBJECT`, with every parameter
 of the sample written out. Every port that is active with those parameters and whose binding
 changes what the assembly computes gets a test partner from the registry (:mod:`.partners`), with
-the partners those read: a need its first registered partner class, a circuit end the other end
+the partners those read: a need its first registered partner class (or the partner of that class a
+circuit end of the assembly brings, as the cylinder a collector charges is the one its controller
+reads, the engine's default rule binding the one candidate in scope), a circuit end the other end
 registered for its circuit and its members' classes, a carrier need its carrier's provider, a fuel
 the assembly provides a consumer, a fact need a provider of the fact, an observer member a component
 it observes, and a ``controllable: {target_input}`` output the controller ranking it. A sizing fact
@@ -51,7 +53,12 @@ from hisim.config.contributions import declared_facts_of
 from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.parameters import select
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
-from hisim.energy_system.assemblies.testing.partners import ServedKey, TestPartnerRegistry, TestPartnerRegistryError
+from hisim.energy_system.assemblies.testing.partners import (
+    ServedKey,
+    TestPartner,
+    TestPartnerRegistry,
+    TestPartnerRegistryError,
+)
 from hisim.energy_system.bindings import facts_read_by
 from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.executor import run_energy_system
@@ -214,12 +221,21 @@ def isolation_document(
     classes = {name: member.entry.class_path.rsplit(".", 1)[-1] for name, member in selection.members.items()}
     partners: List[str] = []
     verbs: Dict[str, Dict[str, str]] = {"bind": {}, "optional-bind": {}}
+    # A need binds the partner of its class that a circuit end of the assembly brings: the cylinder a collector
+    # charges is the cylinder its controller reads, as the engine's default rule binds the one candidate in scope.
+    ends: Dict[str, TestPartner] = {}
+    for name, port in model.ports.items():
+        if port.kind == PortKind.CIRCUIT and selection.state(port) != PortState.INACTIVE:
+            for alternatives in partners_needed(port, classes):
+                end = registry.find(alternatives, f"the port '{name}'", assembly.path)
+                ends[end.component["class"].rsplit(".", 1)[-1]] = end
     for name, port in model.ports.items():
         state = selection.state(port)
         if state == PortState.INACTIVE:
             continue
         for alternatives in partners_needed(port, classes):
-            partner = registry.find(alternatives, f"the port '{name}'", assembly.path)
+            brought = next((ends[key[1]] for key in alternatives if key[0] == "partner" and key[1] in ends), None)
+            partner = brought or registry.find(alternatives, f"the port '{name}'", assembly.path)
             partners.append(partner.name)
             if (
                 port.kind in (PortKind.NEED, PortKind.CIRCUIT, PortKind.FACT)

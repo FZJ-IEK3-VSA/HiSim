@@ -1054,6 +1054,18 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    ports on `EnergyDemandSh` and `EnergyDemandDhw`, instead of on `DistrictHeatDrawn`, which no meter reads: a carrier
    need's outputs must carry the carrier (`EF-7M`). Ground source is not built: no `household_ground_source_*` setup
    exists, so there is no twin to gate it against.
+   *Solar thermal: assembly done 2026-10-08* — `heating/solar_thermal` (Collector, Controller; the collector loop
+   is the `solar_dhw` circuit on the cylinder's primary coil, the controller reads the cylinder through a need;
+   parameter `area_in_m2`, AUTO by the class law) with its contract; in isolation the need binds the cylinder the
+   circuit end brings. The two solar twins' cylinders take the generator on their *secondary* coil, as explicit wires
+   from its DHW outputs, which a circuit end cannot lower to (its bare name's default connections are the primary
+   coil the collector feeds, `EF-26`). So the composed files
+   `household_{gas,heatpump}_solar_thermal_building_sizer.composed.energy_system.yaml`, their gates, and the reorder
+   and re-record of `household_heatpump_solar_thermal_building_sizer` (its two heat-pump controllers before the heat
+   pump, the heating block contiguous) wait for hydronic stage C (owner, 2026-10-08): D20's coil becomes hydronic
+   ports of the cylinder's two coils and the generators' DHW supply, from which the binder derives the wires; no
+   interim mechanism. The planned reorder, measured on the weekly golden: 58 of 127 KPIs move, most below 0.2 %, the
+   largest the degree-hours more than 1 K below the set point, −36 % from a small base (0.28 -> 0.18 °C·h).
 6. **New structure.** #83 request contract and N instances; LPG carrier and `supply/lpg_tank` (#77); DHW assemblies as
    their components land (hisim-epc.21, hisim-lenz); #85 contract; further controllers.
 

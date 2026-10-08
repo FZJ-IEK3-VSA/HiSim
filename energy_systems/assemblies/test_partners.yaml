@@ -5,7 +5,8 @@
 # energy-system file writes it, with the twins' presets and values (household_heatpump_building_sizer,
 # household_gas_building_sizer, household_oil_building_sizer, household_pellets_building_sizer,
 # household_wood_chips_building_sizer, household_hydrogen_boiler_building_sizer,
-# household_district_heating_building_sizer, household_electric_heating_building_sizer).
+# household_district_heating_building_sizer, household_electric_heating_building_sizer,
+# household_gas_solar_thermal_building_sizer, household_heatpump_solar_thermal_building_sizer).
 partners:
   # ------------------------------------------------------------------------------------------- the site
   Weather:
@@ -89,6 +90,20 @@ partners:
       inputs: [UTSPConnector, {$port: dhw}]
       ports:
         dhw: {circuit: dhw}
+
+  SolarCylinder:
+    # The other end of a solar collector's solar_dhw circuit: the cylinder of the solar twins, whose primary coil the
+    # collector charges, and the cylinder the collector's controller reads (a need binds the partner of its class that
+    # a circuit end of the same assembly already brings, isolation.py). Without a back-up generator: the test day's
+    # draws cool it, which the collector's contract does not depend on.
+    serves: {circuit: solar_dhw, other_end: [SolarThermalSystem]}
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, {$port: solar_coil}]
+      ports:
+        solar_coil: {circuit: solar_dhw}
 
   # ------------------------------------------------------------------- the heat pump of a cylinder
   HeatPump:

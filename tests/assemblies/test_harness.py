@@ -33,11 +33,15 @@ from hisim.energy_system.assemblies.testing.isolation import (
     SUBJECT,
     IsolationRun,
     IsolationRunError,
+    facts_needed,
+    facts_of_partners,
     isolation_document,
     refusal_in,
     run_isolation,
 )
+from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.testing.partners import (
+    TestPartner,
     TestPartnerMissingError,
     TestPartnerRegistry,
     TestPartnerRegistryError,
@@ -54,6 +58,7 @@ from hisim.energy_system.assemblies.testing.samples import (
     sweep,
     sweeps,
 )
+from hisim.energy_system.model import ComponentEntry
 from hisim.postprocessing.kpi_computation import tolerances
 from scripts import golden_kpis
 from tests.assemblies.helpers import MOCKS, Library, Mocks
@@ -318,6 +323,110 @@ def test_a_fact_a_partner_in_the_system_contributes_gets_no_second_provider() ->
     classes = [entry["class"].rsplit(".", 1)[-1] for entry in document["components"].values()]
     assert classes.count("GenericBoiler") == 1 and "OilBoiler" in document["components"]
     assert ("fact", "energy_carrier") not in registry.served
+
+
+def fact_partner(
+    name: str, mock_class: str, serves: Tuple[str, ...] = (), requires: Tuple[str, ...] = ()
+) -> TestPartner:
+    """A test partner of a mock class at its ``standard`` preset, serving the given facts."""
+    return TestPartner(
+        name=name,
+        serves=tuple(("fact", fact) for fact in serves),
+        requires=requires,
+        component={"class": f"{MOCKS}.{mock_class}", "preset": "standard"},
+        origin="inline",
+    )
+
+
+def fact_members(*members: Tuple[str, str]) -> Mapping[str, MemberTemplate]:
+    """Assembly members by name, each an entry of a mock class."""
+    return {
+        name: MemberTemplate(entry=ComponentEntry(name=name, class_path=f"{MOCKS}.{mock_class}"))
+        for name, mock_class in members
+    }
+
+
+@pytest.mark.parametrize(
+    ["members", "port_facts", "partner_facts", "needed"],
+    [
+        ((("Reader", "MockLoadReader"),), (), (), ["heating_load_in_watt", "number_of_apartments"]),
+        ((("Reader", "MockLoadReader"), ("House", "MockHouseFacts")), (), (), []),
+        ((("Reader", "MockLoadReader"),), ("heating_load_in_watt",), (), ["number_of_apartments"]),
+        ((("Reader", "MockLoadReader"),), (), ("number_of_apartments",), ["heating_load_in_watt"]),
+        ((("House", "MockHouseFacts"),), (), (), []),
+    ],
+    ids=["nothing_provides", "a_member_provides", "a_fact_port_names", "a_partner_contributes", "nothing_read"],
+)
+def test_facts_needed_leaves_out_what_a_member_a_fact_port_or_a_partner_provides(
+    members: Tuple[Tuple[str, str], ...], port_facts: Tuple[str, ...], partner_facts: Tuple[str, ...], needed: List[str]
+) -> None:
+    """Catches a fact read given a provider although a member, an active fact port or a partner already provides it."""
+    result = facts_needed(port_facts, fact_members(*members), partner_facts)
+    assert result == [(("fact", fact),) for fact in needed]
+
+
+def test_facts_of_partners_reads_the_classes_of_the_partners_and_their_requirements() -> None:
+    """Catches a fact a required partner contributes being missed, or a fact read from a partner not in the system."""
+    registry = TestPartnerRegistry(
+        [
+            fact_partner("House", "MockHouseFacts", serves=("heating_load_in_watt",)),
+            fact_partner("Count", "MockApartmentCount", serves=("number_of_apartments",)),
+            fact_partner("Device", "MockBareDevice", requires=("Count",)),
+        ],
+        [],
+    )
+    assert facts_of_partners(registry, []) == set()
+    assert facts_of_partners(registry, ["Device"]) == {"number_of_apartments"}
+    assert facts_of_partners(registry, ["House"]) == {"heating_load_in_watt", "number_of_apartments"}
+    assert registry.config_class_of("House").__name__ == "MockHouseFactsConfig"
+
+
+def load_reader(tmp_path: Path) -> ResolvedAssembly:
+    """An assembly of one member whose laws read the heating load and the number of apartments, with no fact port."""
+    library = Library(tmp_path)
+    library.add(
+        "sampled/load_reader",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/load_reader
+        description: A device reading two sizing facts from the site without a fact port.
+        components:
+          Reader: {{class: {MOCKS}.MockLoadReader, preset: sized}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    return library.resolver().resolve("sampled/load_reader", "test")
+
+
+def test_a_provider_found_for_one_fact_also_serves_the_other_facts_its_class_contributes(tmp_path: Path) -> None:
+    """Catches a second provider of a fact the first provider added already contributes, which sizing would refuse.
+
+    The member reads the heating load and the number of apartments. The house, registered for the heating load,
+    contributes both, so the partner registered for the number of apartments must not join beside it.
+    """
+    registry = TestPartnerRegistry(
+        [
+            fact_partner("House", "MockHouseFacts", serves=("heating_load_in_watt",)),
+            fact_partner("Count", "MockApartmentCount", serves=("number_of_apartments",)),
+        ],
+        [],
+    )
+    document = isolation_document(load_reader(tmp_path), {}, registry)
+    assert list(document["components"]) == ["House"]
+
+
+def test_a_partner_registered_for_a_fact_its_class_does_not_contribute_is_refused(tmp_path: Path) -> None:
+    """Catches the harness adding the same partner again and again for a fact it never contributes."""
+    registry = TestPartnerRegistry(
+        [
+            fact_partner("Device", "MockBareDevice", serves=("heating_load_in_watt",)),
+            fact_partner("Count", "MockApartmentCount", serves=("number_of_apartments",)),
+        ],
+        [],
+    )
+    with pytest.raises(TestPartnerRegistryError, match="'Device' is registered as the provider of the fact"):
+        isolation_document(load_reader(tmp_path), {}, registry)
 
 
 @pytest.mark.assemblies

@@ -44,10 +44,11 @@ from typing import Any, ClassVar, Dict, List, Mapping, Sequence, Tuple
 import yaml
 
 from hisim import loadtypes as lt
+from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.loader import EnergySystemReader
-from hisim.energy_system.model import EnergySystemFile
+from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 
 #: What a partner serves, as the registry finds it: the form's key, then its values.
 ServedKey = Tuple[Any, ...]
@@ -232,6 +233,25 @@ class TestPartnerRegistry:
             + f", and no {self.FILENAME} serves it (searched: {', '.join(self.files) or 'none on the library path'})."
             f" Register one in the {self.FILENAME} of the library directory."
         )
+
+    def config_class_of(self, name: str) -> type:
+        """The configuration class of a registered partner's component.
+
+        Example: ``config_class_of("OilBoiler")`` is ``GenericBoilerConfig`` when the partner's site
+        entry names ``hisim.components.generic_boiler.GenericBoiler``. The harness reads the sizing
+        facts a partner contributes from it.
+
+        Args:
+            name: The partner's site name.
+
+        Returns:
+            The configuration dataclass its component's constructor takes.
+
+        Raises:
+            EnergySystemBindingError: When the entry's class does not import to a component.
+        """
+        entry = ComponentEntry(name=name, class_path=self.partners[name].component["class"])
+        return ClassBinder.config_class_of(name, entry)
 
     def closure(self, names: Sequence[str]) -> List[str]:
         """The partners and every partner they require, transitively, each once, a requirement first.

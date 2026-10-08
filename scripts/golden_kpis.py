@@ -28,7 +28,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 # Every importer (the gate's scripts put the repo root on ``sys.path``; tests run from it) can
 # import ``hisim``; this module adds nothing to the path itself, so importing it has no effect.
@@ -177,6 +177,36 @@ def golden_leaves(all_kpis: Any) -> dict[str, dict[str, Any]]:
             raise GoldenFormatError(f"{where}: two entries share this address.")
         leaves[address.dotted] = golden_leaf(address, value, unit)
     return leaves
+
+
+def renamed_leaves(
+    leaves: Mapping[str, Mapping[str, Any]], rename: Callable[[KpiAddress], KpiAddress], origin: str
+) -> dict[str, dict[str, Any]]:
+    """A leaf map with every address renamed, each leaf rebuilt from its renamed address (:func:`golden_leaf`).
+
+    Renaming works on the leaves' fields, never on their keys: a composed run's leaves get the twin's names
+    (:func:`hisim.energy_system.assemblies.twins.rename_address`), a golden's port-named KPIs the declarative port
+    names (``golden_check.py``, ``composed`` mode).
+
+    Args:
+        leaves: The leaf map to rename.
+        rename: The address of a leaf to the address it is compared under.
+        origin: Where the leaves came from, for the error message.
+
+    Returns:
+        ``renamed dotted address -> leaf``, in the order of ``leaves``.
+
+    Raises:
+        GoldenFormatError: If a leaf is not the golden form (:func:`leaf_address`), or two leaves are renamed onto one
+            address, which would drop one of the two from the comparison.
+    """
+    renamed: dict[str, dict[str, Any]] = {}
+    for key, leaf in leaves.items():
+        address = rename(leaf_address(key, leaf, origin))
+        if address.dotted in renamed:
+            raise GoldenFormatError(f"{origin}: the rename maps two KPIs onto '{address.dotted}'.")
+        renamed[address.dotted] = golden_leaf(address, leaf["value"], leaf["unit"])
+    return renamed
 
 
 def _source_of_leaf(raw: Any, where: str) -> Optional[KpiSource]:

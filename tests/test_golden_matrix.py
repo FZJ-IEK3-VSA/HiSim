@@ -18,6 +18,7 @@ from scripts.golden_matrix import (
     PAIRS_AT_ONCE,
     build_matrix,
     build_shards,
+    composed_setups,
     main,
     pair_seconds,
 )
@@ -300,3 +301,23 @@ def test_with_yaml_counts_each_pair_twice_on_two_lanes() -> None:
     one_lane_year = build_shards(config, 1, horizon="year", with_yaml=True)["include"]
     # Two year pairs (470 s, and 120 s unmeasured) with their twins on the year's two lanes: 590 each.
     assert one_lane_year[0]["seconds"] == 470 + DEFAULT_PAIR_SECONDS
+
+
+def test_with_composed_counts_a_third_run_for_a_setup_with_a_composed_file() -> None:
+    """golden-check runs a pair's composed file beside its Python run and its twin: one more lane of its weight.
+
+    Catches the balance ignoring the composed runs. With one shard of four lanes, the 250 s pair takes three lanes
+    and the 240 s pair, two runs, cannot share a lane with it without ending at 490 s.
+    """
+    config = _weighted_config()
+    one_shard = build_shards(config, 1, horizon="week", with_yaml=True, composed=frozenset({"heavy"}))["include"]
+    assert one_shard[0]["seconds"] > build_shards(config, 1, horizon="week", with_yaml=True)["include"][0]["seconds"]
+    year = build_shards(config, 1, horizon="year", composed=frozenset({"heavy"}))["include"]
+    # The 470 s year pair and its composed file on the year's two lanes, the unmeasured pair after the shorter one.
+    assert year[0]["seconds"] == 470 + DEFAULT_PAIR_SECONDS
+
+
+def test_the_composed_setups_are_the_ones_with_a_composed_file_beside_the_config() -> None:
+    """The shipped config's composed setups are read from ``energy_systems/``: today the heat-pump sizer."""
+    config = json.loads(REAL_CONFIG.read_text())
+    assert composed_setups(config, REPO_ROOT) == frozenset({"household_heatpump_building_sizer"})

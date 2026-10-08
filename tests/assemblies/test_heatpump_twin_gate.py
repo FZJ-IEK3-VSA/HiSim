@@ -2,7 +2,8 @@
 
 ``energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml`` — the site plus six imports of
 ``energy_systems/assemblies/`` — is built (expansion of imports, then the wiring, which selects the observers' feeds
-and writes them as ordinary feeds) and its members renamed to the twin's names by :data:`RENAME`. The renamed file
+and writes them as ordinary feeds) and its members renamed to the twin's names by the rename map of its entry in
+:data:`~hisim.energy_system.assemblies.twins.COMPOSED_TWINS`. The renamed file
 must equal ``household_heatpump_building_sizer.energy_system.yaml``, the recorded twin of the Python setup, outside
 exactly these intended differences:
 
@@ -29,26 +30,16 @@ import pandas as pd
 import pytest
 import yaml
 
-from hisim.config.names import NameSyntax
+from hisim.energy_system.assemblies.twins import COMPOSED_TWINS, rename_column, rename_port_parts, rename_reference
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.loader import dump_energy_system
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-TWIN = REPOSITORY / "energy_systems" / "household_heatpump_building_sizer.energy_system.yaml"
-COMPOSED = REPOSITORY / "energy_systems" / "household_heatpump_building_sizer.composed.energy_system.yaml"
-
-#: Every expanded member address to the twin's name (dry run §4); the site entries keep the twin's names.
-RENAME: Mapping[str, str] = {
-    "heating-ControllerDHW": "HeatPumpControllerDHW",
-    "heating-ControllerSH": "MoreAdvancedHeatPumpHPLibControllerSH",
-    "heating-HeatPump": "MoreAdvancedHeatPumpHPLib",
-    "heating-Buffer": "SimpleHotWaterStorage",
-    "dhw-DHWStorage": "DHWStorage",
-    "pv-pv_system-PVSystem": "PVSystem",
-    "battery-battery-Battery": "Battery",
-    "control-EMS": "L2EMSElectricityController",
-    "grid-ElectricityMeter": "ElectricityMeter",
-}
+#: The heat pump's entry of the composed-twin table: its twin, its composed file and the rename map (dry run §4).
+HEATPUMP = COMPOSED_TWINS["household_heatpump_building_sizer"]
+TWIN = REPOSITORY / "energy_systems" / HEATPUMP.twin
+COMPOSED = REPOSITORY / "energy_systems" / HEATPUMP.composed
+RENAME: Mapping[str, str] = HEATPUMP.rename
 
 #: The neutral swaps of the sequence (dry run §9.1), each a pair of twin names adjacent in the twin's sequence.
 NEUTRAL_SWAPS: Tuple[Tuple[str, str], ...] = (("DHWStorage", "SimpleHotWaterStorage"),)
@@ -69,21 +60,7 @@ PARAMETERS: Mapping[str, Any] = {
 
 def renamed(text: str) -> str:
     """A component reference (``Name`` or ``Name.Output``) with its component renamed to the twin's name."""
-    component, dot, rest = text.partition(".")
-    return RENAME.get(component, component) + dot + rest
-
-
-def renamed_column(column: str) -> str:
-    """A result column, ``<component> - <output> [<unit>]``, with the component and its port-name parts renamed."""
-    component, _, output = column.partition(" - ")
-    return f"{renamed(component)} - {renamed_part(output)}"
-
-
-def renamed_part(text: str) -> str:
-    """A derived port, column or KPI name with every member's port-name part renamed (``heating_HeatPump``)."""
-    for address, twin in RENAME.items():
-        text = text.replace(NameSyntax.port_name_part(address), twin)
-    return text
+    return rename_reference(text, RENAME)
 
 
 def renamed_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
@@ -130,7 +107,7 @@ def kpi_values(path: Path, rename: bool) -> Dict[Tuple[str, str, str, str], Tupl
                 source = (entry.get("source") or {}).get("name") or ""
                 name = entry["name"]
                 if rename:
-                    source, name = renamed(source), renamed_part(name)
+                    source, name = renamed(source), rename_port_parts(name, RENAME)
                 values[(building, tag, name, source)] = (entry["value"], entry["unit"])
     return values
 
@@ -147,7 +124,7 @@ def fixture_runs(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Run]:
         rename = key == "composed"
         results = built.simulator.results_data_frame
         if rename:
-            results = results.rename(columns=renamed_column)
+            results = results.rename(columns=lambda column: rename_column(column, RENAME))
         runs[key] = Run(
             document=yaml.safe_load(dump_energy_system(built.model)),
             results=results,

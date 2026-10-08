@@ -26,7 +26,15 @@
 # Input_..." — and is excluded from both sides in YAML mode (PORT_NAMED_KPIS in
 # golden_check.py, printed per pair); the parity rig compares that family exactly.
 #
-# Gate: BLOCKING. Any KPI divergence or run error, in either mode, fails its shard and the
+# THE COMPOSED FILES (assemblies_spec.md §13 step 4). In the same pool (golden_check.py --mode
+# all), every pair whose setup has a composed file -- energy_systems/<stem>.composed.energy_system.yaml,
+# the site plus imports of energy_systems/assemblies/, listed in hisim/energy_system/assemblies/twins.py --
+# runs that file too, its KPIs renamed to the twin's names by the table's rename map, against the same
+# golden: the assemblies reproduce the Python setup. Its report is results/golden-ref-check-composed/;
+# a setup without a composed file is listed there as skipped. The "Priority for" family is compared,
+# not excluded: the golden's legacy port names are read through the parity rig's declared table.
+#
+# Gate: BLOCKING. Any KPI divergence or run error, in any mode, fails its shard and the
 # summary job. Because golden-year waits for this workflow to succeed, a YAML twin that
 # diverges from its golden also keeps the full-year tier from running: the twins gate
 # golden-year too, deliberately (decided 2026-09-27).
@@ -52,7 +60,7 @@ on:
   workflow_dispatch:
     inputs:
       horizon:
-        description: "Parameter horizon to check (both the Python setups and their recorded YAML twins)"
+        description: "Parameter horizon to check (the Python setups, their recorded YAML twins and the composed files)"
         type: choice
         default: week
         options: [ week, year ]
@@ -85,7 +93,7 @@ jobs:
           HORIZON: ${{ inputs.horizon || 'week' }}
         run: |
           echo "horizon=$HORIZON"
-          matrix="$(python3 scripts/golden_matrix.py --horizon "$HORIZON" --shards 4 --with-yaml)"
+          matrix="$(python3 scripts/golden_matrix.py --horizon "$HORIZON" --shards 4 --with-yaml --with-composed)"
           echo "$matrix" | python3 -m json.tool
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
@@ -132,15 +140,17 @@ jobs:
         with:
           mode: restore
           scope: ${{ github.workflow }}-${{ matrix.name }}
-      # Both modes from one pool of `jobs` child processes: each pair's Python setup and its
-      # YAML twin run side by side. One report per mode; a failure in either fails the step.
-      - name: Golden KPI check (Python setups and recorded YAML twins)
+      # All three modes from one pool of `jobs` child processes: each pair's Python setup, its
+      # YAML twin and, where it has one, its composed file run side by side. One report per
+      # mode; a failure in any fails the step.
+      - name: Golden KPI check (Python setups, recorded YAML twins and composed files)
         run: |
           # shellcheck disable=SC2086  # PAIRS is split into one argument per pair on purpose
-          python scripts/golden_check.py --mode both --jobs "$JOBS" --pairs $PAIRS
+          python scripts/golden_check.py --mode all --jobs "$JOBS" --pairs $PAIRS
       # Failure-only: a passing check needs no annotation, and the artifact carries the
-      # detail when it fails. It holds both modes' reports (golden-ref-check/ is the Python
-      # run, golden-ref-check-yaml/ the twins) and every child's log.
+      # detail when it fails. It holds every mode's report (golden-ref-check/ is the Python
+      # run, golden-ref-check-yaml/ the twins, golden-ref-check-composed/ the composed files)
+      # and every child's log.
       - name: Upload deviation report
         if: failure()
         uses: actions/upload-artifact@v7
@@ -172,5 +182,5 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Fail if any pair diverged or failed to run, in either mode
+      - name: Fail if any pair diverged or failed to run, in any mode
         run: '[ "${{ needs.golden.result }}" = "success" ] || exit 1'

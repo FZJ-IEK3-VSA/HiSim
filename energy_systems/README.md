@@ -460,7 +460,9 @@ the tests run on is `tests/assemblies/mock_assemblies/library/`.
 of the heat-pump twin plus six of them (all but the space-heating-only heat pump); `tests/assemblies/test_heatpump_twin_gate.py` expands it,
 renames its members to the twin's names and asserts the twin outside the listed intended differences
 (the battery's one-element `sizing_sources` list, G7, and one neutral swap of the sequence), and runs
-both for one day: every result column and KPI equal.
+both for one day: every result column and KPI equal. The golden gate's `composed` mode runs the composed file for
+the week and the full year and compares its KPIs, renamed through the table `hisim/energy_system/assemblies/twins.py`,
+with the Python setup's goldens (`golden_references/README.md`).
 
 ## Relation to `system_setups/`
 

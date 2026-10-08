@@ -29,6 +29,7 @@ from scripts.runner import (
     filter_config,
     load_config,
     parse_pair,
+    resolve_composed_path,
     resolve_twin_path,
     resolve_setup_path,
     run_all,
@@ -495,3 +496,46 @@ def test_a_relative_results_root_reaches_the_child_as_an_absolute_path(
 
     assert "FileNotFoundError" in (results[0].error or ""), results[0].error
     assert "without reporting a result" not in (results[0].error or "")
+
+
+def test_run_modes_runs_the_composed_file_only_for_a_setup_that_has_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches the composed mode running a setup without a composed file, which could only fail as a run error.
+
+    The heat-pump sizer has an entry in the composed-twin table and runs in all three modes; the other setup runs
+    in Python mode only, and ``golden_check.py`` lists it as skipped in the composed report.
+    """
+    calls: list[tuple[str, str]] = []
+
+    def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):
+        calls.append((setup.id, mode))
+        return RunResult(setup.id, param.id, result_directory, kpis={})
+
+    monkeypatch.setattr("scripts.runner.run_one", fake_run_one)
+    config = GoldenConfig(
+        check_subdir="check",
+        setups=[
+            SetupConfig("household_heatpump_building_sizer", "system_setups/household_heatpump_building_sizer.py"),
+            SetupConfig("s1", "a.py"),
+        ],
+        parameter_sets=[ParameterSetConfig("p1", "one_week_only", 2021, 60, ["COMPUTE_KPIS"])],
+    )
+    results = run_modes(config, tmp_path, REPO_ROOT, {"python": "check", "composed": "check-composed"})
+
+    assert calls == [
+        ("household_heatpump_building_sizer", "python"),
+        ("household_heatpump_building_sizer", "composed"),
+        ("s1", "python"),
+    ]
+    assert [r.setup_id for r in results["composed"]] == ["household_heatpump_building_sizer"]
+
+
+def test_resolve_composed_path_finds_the_heat_pump_file() -> None:
+    """The heat-pump sizer's composed file is found beside its twin, with its rename map."""
+    setup = SetupConfig("household_heatpump_building_sizer", "system_setups/household_heatpump_building_sizer.py")
+    path, twin = resolve_composed_path(setup, REPO_ROOT)
+    assert path == REPO_ROOT / "energy_systems" / "household_heatpump_building_sizer.composed.energy_system.yaml"
+    assert twin.rename["heating-HeatPump"] == "MoreAdvancedHeatPumpHPLib"
+    with pytest.raises(KeyError, match="no composed file"):
+        resolve_composed_path(SetupConfig("s1", "a.py"), REPO_ROOT)

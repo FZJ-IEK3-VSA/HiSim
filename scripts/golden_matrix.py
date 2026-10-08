@@ -25,6 +25,13 @@ YAML twin side by side in one pool (``golden_check.py --mode both``): every pair
 two runs of its weight, on two different lanes. The twin weighs what its Python pair weighs; the
 two measured within about 10 % of each other when they were still separate jobs.
 
+``--with-composed`` adds the ``composed`` mode's run (``golden_check.py --mode all``, or ``--mode
+python composed`` in the year tier) for every pair whose setup has a composed file,
+``energy_systems/<stem>.composed.energy_system.yaml`` beside the config's repository
+(:func:`composed_setups`; ``tests/assemblies/test_composed_twins.py`` holds those files equal to the
+table ``golden_check.py`` reads them through). That run weighs what its Python pair weighs too, on
+a lane of its own.
+
 **The weight is the pair's measured duration, kept in the config.** A setup entry may carry
 ``"seconds": {"<parameter set id>": <s>}``: the wall time of the pair's ``golden_check.py`` step
 on a GitHub runner, as last measured (``report.json`` records ``duration_s`` per pair, which is
@@ -151,14 +158,35 @@ def _choose_shard(lanes: list[list[float]], seconds: float, runs: int) -> int:
     return min(range(len(lanes)), key=lambda index: (ends[index], totals[index], index))
 
 
-def build_shards(config: dict, shards: int, horizon: Optional[str] = None, with_yaml: bool = False) -> dict:
+def composed_setups(config: dict, repo_root: Path) -> frozenset[str]:
+    """The ids of the config's setups that have a composed file in ``repo_root/energy_systems/``.
+
+    The file is ``<stem>.composed.energy_system.yaml``, the stem being the setup script's, as the
+    runner names the recorded twin ``<stem>.energy_system.yaml``.
+    """
+    return frozenset(
+        setup["id"]
+        for setup in config["setups"]
+        if (repo_root / "energy_systems" / f"{Path(setup['path']).stem}.composed.energy_system.yaml").exists()
+    )
+
+
+def build_shards(
+    config: dict,
+    shards: int,
+    horizon: Optional[str] = None,
+    with_yaml: bool = False,
+    composed: frozenset[str] = frozenset(),
+) -> dict:
     """Return a GitHub matrix whose cells are shards: balanced lists of pairs, per horizon.
 
     Every pair :func:`build_matrix` would emit lands in exactly one shard. Each horizon gets at
     most ``shards`` shards (fewer when it has fewer pairs; never an empty one), balanced by
     :func:`pair_seconds` over the shards' :data:`PAIRS_AT_ONCE` lanes with the longest-first
     greedy rule (see the module docstring). ``with_yaml`` counts each pair twice, its Python
-    run and its YAML twin side by side. Ties keep config order, so the output is deterministic.
+    run and its YAML twin side by side, and a pair whose setup is in ``composed`` (the ids of
+    :func:`composed_setups`) counts once more, for its composed file. Ties keep config order, so
+    the output is deterministic.
 
     Raises:
         ValueError: if ``shards`` is less than one, a ``seconds`` weight is malformed or names a
@@ -185,11 +213,11 @@ def build_shards(config: dict, shards: int, horizon: Optional[str] = None, with_
             key=lambda item: (-item[0], item[1]),
         )
         jobs = PAIRS_AT_ONCE[name]
-        runs = min(2 if with_yaml else 1, jobs)
         count = min(shards, len(members))
         lanes = [[0.0] * jobs for _ in range(count)]
         chosen: list[list[dict]] = [[] for _ in range(count)]
         for seconds, _, pair in weighted:
+            runs = min(1 + with_yaml + (pair["setup"] in composed), jobs)
             target = _choose_shard(lanes, seconds, runs)
             lane = lanes[target]
             for _ in range(runs):
@@ -225,6 +253,12 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Balance the shards for running each pair's YAML twin beside it (golden_check.py --mode both).",
     )
+    parser.add_argument(
+        "--with-composed",
+        action="store_true",
+        help="Balance the shards for running each pair's composed file beside it, where the setup has one "
+        "(golden_check.py --mode all, or --mode python composed).",
+    )
     return parser.parse_args(argv)
 
 
@@ -235,7 +269,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.shards is None:
         matrix = build_matrix(config, horizon=args.horizon)
     else:
-        matrix = build_shards(config, args.shards, horizon=args.horizon, with_yaml=args.with_yaml)
+        composed = composed_setups(config, args.config.resolve().parent.parent) if args.with_composed else frozenset()
+        matrix = build_shards(config, args.shards, horizon=args.horizon, with_yaml=args.with_yaml, composed=composed)
     # Compact single line: consumed by ``echo "matrix=$(...)" >> $GITHUB_OUTPUT``.
     print(json.dumps(matrix, separators=(",", ":")))
     return 0

@@ -77,7 +77,7 @@ tests:
       # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 38 K)
   monotone:
     - {parameter: power_in_watt, kpi: Total energy consumption, member: Heater, direction: increasing}
-      # a larger appliance covers at least as much of the demand: 66.9 kWh at 2 kW, 102.1 kWh at 20 kW on the test day
+      # a larger appliance covers at least as much of the demand: 66.4 kWh at 2 kW, 101.0 kWh at 20 kW on the test day
   expect:
     - {kpi: Total energy consumption, member: Heater, min: 85, max: 115}
-      # 100.0 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW
+      # 98.9 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW

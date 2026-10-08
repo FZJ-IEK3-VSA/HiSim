@@ -81,8 +81,8 @@ tests:
       # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 37 K)
   monotone:
     - {parameter: power_in_watt, kpi: Total energy consumption, member: Generator, direction: increasing}
-      # a larger connected load covers at least as much of the demand: 58.5 kWh at 3 kW, 104.8 kWh at 30 kW on the
+      # a larger connected load covers at least as much of the demand: 58.5 kWh at 3 kW, 103.7 kWh at 30 kW on the
       # test day
   expect:
     - {kpi: Total energy consumption, member: Generator, min: 85, max: 120}
-      # 102.1 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW
+      # 101.0 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW

@@ -26,13 +26,15 @@ parameters:
      description: Rated thermal output; AUTO is the building's heating load.}
      # range: residential air-to-water heat pumps, a small flat (2 kW) to a large old detached house (20 kW)
   scop_en14825_w35:
-    {type: float, unit: ANY, default: none, range: {min: 3.0, max: 6.0},
+    {type: float, unit: ANY, default: none, range: {min: 2.5, max: 6.0},
      description: Datasheet SCOP at W35 (EN 14825); none leaves hplib's generic fit.}
-     # range: EN 14825 average-climate W35 SCOPs of air-to-water units on the market, about 3 to 5.5, with margin
+     # range: EN 14825 average-climate W35 SCOPs of air-to-water units on the market span about 3 to 5.5; with margin
   scop_en14825_w55:
-    {type: float, unit: ANY, default: none, range: {min: 2.0, max: 3.0},
+    {type: float, unit: ANY, default: none, range: {min: 2.0, max: 4.5},
      description: Datasheet SCOP at W55 (EN 14825); none leaves hplib's generic fit.}
-     # range: W55 SCOPs, about 2.5 to 4, with margin
+     # range: W55 SCOPs on the market span about 2.5 to 4; with margin. The two ranges overlap: a W55 above the
+     # W35 is refused by the heat pump itself (ConfigurationRefusedError), not by these ranges, and the harness
+     # counts such a sample as refused, not failed (§9.4)
   buffer_volume_in_liter:
     {type: float, unit: LITER, default: AUTO, range: {min: 50, max: 1000},
      description: Buffer volume; AUTO is 50 l per kW of the heat pump.}

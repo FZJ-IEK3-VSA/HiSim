@@ -773,7 +773,11 @@ provides and no fact port names the registered provider of that fact (it crosses
 900 s per step (an assembly declares no resolution), the energy-balance check and `i_doublecheck` on. The test
 partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
 consumer or fact, each naming the partners it requires. The run fails on an exception,
-a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below.
+a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below. The declared parameter box
+may contain combinations a member's component refuses at construction (`ConfigurationRefusedError`, such as a heat
+pump's W55 SCOP above its W35 SCOP, both in range); the harness counts such a refusal as handled, not failed, and drops
+refused steps from a monotone sweep, skipping the sweep when fewer than two steps remain; hypercube samples are not
+redrawn (owner, 2026-10-08).
 
 **Declarations** (`tests:` in the assembly file; structured, no expressions):
 

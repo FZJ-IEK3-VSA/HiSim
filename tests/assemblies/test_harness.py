@@ -11,6 +11,7 @@ KPI the member does not report.
 
 from __future__ import annotations
 
+import functools
 import re
 import subprocess
 import sys
@@ -22,6 +23,7 @@ import pandas as pd
 import pytest
 
 from hisim import loadtypes as lt
+from hisim.config import ConfigurationRefusedError
 from hisim.energy_system.assemblies.model import MonotoneDirection
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
@@ -32,6 +34,7 @@ from hisim.energy_system.assemblies.testing.isolation import (
     IsolationRun,
     IsolationRunError,
     isolation_document,
+    refusal_in,
     run_isolation,
 )
 from hisim.energy_system.assemblies.testing.partners import (
@@ -485,3 +488,123 @@ def test_a_check_reading_a_run_without_results_that_raised_nothing_is_a_harness_
         ),
     ):
         checks.check_finite(IsolationRun("x", "a/b", tmp_path))
+
+
+def refusing_heater(monkeypatch: pytest.MonkeyPatch, above_watt: float, error: type) -> None:
+    """Makes ``MockHeater`` raise ``error`` at construction when its power lies above ``above_watt``."""
+    original = MockHeater.__init__
+
+    # wraps keeps the constructor's annotations, from which the build reads the config class.
+    @functools.wraps(original)
+    def construct(self: MockHeater, my_simulation_parameters: Any, config: Any) -> None:
+        """The heater's constructor, raising above the threshold."""
+        if config.power_in_watt > above_watt:
+            raise error(f"{config.component_id.name}: {config.power_in_watt} W is refused here")
+        original(self, my_simulation_parameters, config)
+
+    monkeypatch.setattr(MockHeater, "__init__", construct)
+
+
+@pytest.mark.assemblies
+def test_a_member_refusing_its_configuration_is_handled_and_any_other_error_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches a refused sample failing the contract, and a crash passing as a refusal.
+
+    The heater's constructor raises ``ConfigurationRefusedError``: the build wraps it (EF-33), the run
+    finds it as the cause, and every check raises ``SampleRefused``. The same constructor raising a
+    plain ``ValueError`` is a failure of every check, named.
+    """
+    assembly, space = mock("mock/electric_heater")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    resolver = AssemblyResolver([Mocks.LIBRARY])
+    tests = assembly.model.tests
+    assert tests is not None
+    refusing_heater(monkeypatch, 1000.0, ConfigurationRefusedError)
+    run = run_isolation(assembly, space.defaults(), registry, resolver, tmp_path / "refused", "h s0")
+    assert isinstance(run.refusal, ConfigurationRefusedError)
+    assert run.error is not None and run.refusal is run.error.__cause__
+    for check in (
+        checks.check_run,
+        checks.check_energy_balance,
+        checks.check_finite,
+        lambda run: checks.check_member_contract(run, tests),
+        lambda run: checks.check_bounds(run, tests.bounds[0]),
+    ):
+        with pytest.raises(checks.SampleRefused, match="^h s0 refused by a member: Heater: 2000.0 W is refused here$"):
+            check(run)
+    refusing_heater(monkeypatch, 1000.0, ValueError)
+    crashed = run_isolation(assembly, space.defaults(), registry, resolver, tmp_path / "crashed", "h s0")
+    assert crashed.refusal is None
+    with pytest.raises(AssemblyCheckFailure, match="^h s0 run the isolation run: EnergySystemWiringError: EF-33"):
+        checks.check_run(crashed)
+    with pytest.raises(AssemblyCheckFailure, match="^h s0 finite every result column: the run did not finish"):
+        checks.check_finite(crashed)
+
+
+@pytest.mark.assemblies
+def test_an_error_raised_while_handling_a_refusal_is_no_refusal() -> None:
+    """Catches a crash in an ``except`` block passing as a refusal: only the explicit cause counts."""
+    try:
+        try:
+            raise ConfigurationRefusedError("refused")
+        except ConfigurationRefusedError:
+            raise RuntimeError("crashed while handling it")  # pylint: disable=raise-missing-from
+    except RuntimeError as error:
+        assert refusal_in(error) is None
+    refusal = ConfigurationRefusedError("refused")
+    wrapped = ValueError("wrapped")
+    wrapped.__cause__ = refusal
+    assert refusal_in(wrapped) is refusal and refusal_in(None) is None
+
+
+@pytest.mark.assemblies
+def test_a_monotone_sweep_drops_the_points_a_member_refuses(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches a sweep failing on its refused points, or skipping when two points remain to compare.
+
+    The heater's power sweeps 500, 2333, 4167 and 6000 W. Refused above 4000 W the last two points
+    are dropped and the first two still rise; refused above 1000 W one point remains and the sweep is
+    skipped (``SampleRefused``), naming the dropped points.
+    """
+    assembly, space = mock("mock/electric_heater")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    resolver = AssemblyResolver([Mocks.LIBRARY])
+    (defaults, *_) = deterministic_samples(space)
+    tests = assembly.model.tests
+    assert tests is not None
+
+    def run_point(index: int, values: Mapping[str, Any], label: str) -> IsolationRun:
+        """One sweep point's run."""
+        return run_isolation(assembly, values, registry, resolver, tmp_path / f"{label[-1]}{index}", label)
+
+    refusing_heater(monkeypatch, 4000.0, ConfigurationRefusedError)
+    assert checks.evaluate_monotone(run_point, space, defaults, tests.monotone[0]) == pytest.approx(
+        [12500 / 3, 6000.0]
+    )
+    refusing_heater(monkeypatch, 1000.0, ConfigurationRefusedError)
+    with pytest.raises(
+        checks.SampleRefused,
+        match=re.escape("mock/electric_heater sweep of power_in_watt from s000: a member refuses 3 of 4 points"),
+    ):
+        checks.evaluate_monotone(run_point, space, defaults, tests.monotone[0])
+    assert not list(tmp_path.glob("*")), "every sweep point's run is released, refused or not"
+
+
+@pytest.mark.assemblies
+def test_the_real_heat_pump_refuses_a_w55_scop_above_its_w35_scop_as_a_configuration_refusal(tmp_path: Path) -> None:
+    """Catches the box's refused corner failing the contract: both SCOPs in range, W55 above W35, is handled.
+
+    The heat pump's ranges overlap (W35 2.5 to 6, W55 2 to 4.5); the component alone refuses a W55
+    above the W35, and the isolation run carries that refusal as the cause of its build error.
+    """
+    library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+    resolver = AssemblyResolver([library])
+    assembly = resolver.resolve("heating/air_source_heat_pump", "test")
+    values = {**ParameterSpace(assembly.model).defaults(), "scop_en14825_w35": 3.0, "scop_en14825_w55": 4.0}
+    registry = TestPartnerRegistry.from_directories([library])
+    run = run_isolation(assembly, values, registry, resolver, tmp_path / "r", "hp s0")
+    assert isinstance(run.refusal, ConfigurationRefusedError), run.error
+    assert "the W55 SCOP 4.0 is above the W35 SCOP 3.0" in str(run.refusal)
+    with pytest.raises(checks.SampleRefused, match="^hp s0 refused by a member: HeatPump"):
+        checks.check_run(run)
+    run.release()

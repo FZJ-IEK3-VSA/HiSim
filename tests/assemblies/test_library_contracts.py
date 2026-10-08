@@ -18,6 +18,11 @@ time: ``tests/assemblies/conftest.py`` puts the tests of one sample next to each
 run of a sample (its frames and its directory) is released when the next sample's run is made.
 Under ``xdist`` every sample is one ``xdist_group``, so ``--dist loadgroup`` keeps its tests on one
 worker.
+
+A sample a member's component refuses at construction (``ConfigurationRefusedError``, such as a heat
+pump's W55 SCOP above its W35 SCOP) is handled, not failed: its tests are skipped, naming the
+refusal. A monotone sweep drops the refused points and is skipped when fewer than two remain.
+Hypercube samples are not redrawn.
 """
 
 from __future__ import annotations
@@ -205,7 +210,7 @@ class RunCache:
         self.run: Optional[IsolationRun] = None
 
     def get(self, case: Case) -> IsolationRun:
-        """The run of one sample."""
+        """The run of one sample; skips the calling test when a member refused the sample at construction."""
         if self.run is None or self.case != case:
             self.release()
             self.case = case
@@ -218,6 +223,8 @@ class RunCache:
                 self.factory.mktemp(case.label.replace("/", "_").replace(" ", "_")) / "run",
                 case.label,
             )
+        if self.run.refusal is not None:
+            pytest.skip(str(checks.refused(self.run)))
         return self.run
 
     def release(self) -> None:
@@ -274,7 +281,7 @@ def test_expect(case: Case, declaration: ExpectDeclaration, runs: RunCache) -> N
 
 
 def test_monotone(sweep: Sweep, request: pytest.FixtureRequest, tmp_path: Path) -> None:
-    """One ``monotone`` entry holds over the sweep of its parameter from one base sample."""
+    """One ``monotone`` entry holds over the sweep of its parameter from one base sample, refused points dropped."""
     library = library_of(request.config, sweep.library)
     assembly = library.assembly(sweep.assembly)
 
@@ -282,4 +289,7 @@ def test_monotone(sweep: Sweep, request: pytest.FixtureRequest, tmp_path: Path) 
         """The isolation run of one sweep point, in its own directory."""
         return run_isolation(assembly, values, library.registry, library.resolver, tmp_path / f"point{index}", label)
 
-    checks.evaluate_monotone(run_point, ParameterSpace(assembly.model), sweep.base, sweep.declaration)
+    try:
+        checks.evaluate_monotone(run_point, ParameterSpace(assembly.model), sweep.base, sweep.declaration)
+    except checks.SampleRefused as refusal:
+        pytest.skip(str(refusal))

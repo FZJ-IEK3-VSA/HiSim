@@ -6,7 +6,8 @@ dependency direction is unambiguous — ``hisim/component.py`` imports this pack
 the other way round:
 
     - :mod:`hisim.config.base` — ``ComponentID`` (with its ``AddressStep``), ``ConfigBase`` and ``DisplayConfig``,
-      the three classes every component configuration is built from.
+      the three classes every component configuration is built from, and ``ConfigurationRefusedError``,
+      what a component raises when it refuses its configuration.
     - :mod:`hisim.config.names` — ``NameSyntax``: the one identifier grammar a component
       name, an energy-system file key and a reference all obey, kept here because its two
       enforcers (``hisim/component.py`` and ``hisim/energy_system/model.py``) sit on
@@ -63,7 +64,7 @@ canonical spelling; the submodules are equally importable for code that prefers 
 fully-qualified path.
 """
 
-from hisim.config.base import AddressStep, ComponentID, ConfigBase, DisplayConfig
+from hisim.config.base import AddressStep, ComponentID, ConfigBase, ConfigurationRefusedError, DisplayConfig
 from hisim.config.names import NameSyntax
 from hisim.config.presets import (
     BuilderKind,
@@ -136,6 +137,7 @@ __all__ = [
     "ConfigBuilder",
     "ConfigDescription",
     "ConfigSizingError",
+    "ConfigurationRefusedError",
     "ConnectionTag",
     "ConstructorInfo",
     "DispatchRule",

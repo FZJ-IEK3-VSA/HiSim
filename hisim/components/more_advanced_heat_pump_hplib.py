@@ -36,6 +36,7 @@ from hisim.component import (
 from hisim.config import (
     ComponentID,
     ConfigBase,
+    ConfigurationRefusedError,
     DisplayConfig,
     FactContribution,
     Sizable,
@@ -1436,10 +1437,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """Return the SCOP calibration a configuration asks for, refusing an impossible one.
 
         Raises:
+            ConfigurationRefusedError: When the W55 rating exceeds the W35 one: each value may be
+                valid, their combination is not.
             ValueError: When a stated SCOP is not above 1 or above :attr:`MAXIMUM_STANDARDIZED_SCOP`,
-                when the W55 rating exceeds the W35 one, when the machine is neither air/water
-                nor brine/water, the two groups EN 14825's rating here covers, or when hplib's fit
-                cannot be calibrated to the stated pair (:meth:`ScopCalibration.of`).
+                when the machine is neither air/water nor brine/water, the two groups EN 14825's
+                rating here covers, or when hplib's fit cannot be calibrated to the stated pair
+                (:meth:`ScopCalibration.of`).
         """
         w35, w55 = config.standardized_scop_en14825_w35, config.standardized_scop_en14825_w55
         given = {"standardized_scop_en14825_w35": w35, "standardized_scop_en14825_w55": w55}
@@ -1453,7 +1456,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     f"most {cls.MAXIMUM_STANDARDIZED_SCOP}."
                 )
         if w35 is not None and w55 is not None and w55 > w35:
-            raise ValueError(
+            raise ConfigurationRefusedError(
                 f"{config.component_id.name}: the W55 SCOP {w55} is above the W35 SCOP {w35}; a unit rated for "
                 "55 °C water cannot outperform its 35 °C rating."
             )

@@ -3316,7 +3316,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
                 dhw_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                # the tank's start-of-step temperature T0: the controller decides on a value the step's
+                # iteration does not move
+                component_class.WaterMeanTemperatureInStorage,
             )
         )
         return connections

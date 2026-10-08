@@ -1,0 +1,83 @@
+# Direct electric resistive heating with its controller, heating the Building without a water circuit and charging a DHW
+# cylinder through its `dhw` circuit (D29: this assembly serves DHW). One assembly per generator (owner, 2026-10-07).
+# There is no buffer, no heat distribution and no heat-distribution controller (#854: every emitter is reported as not
+# used): the Heater reads the Building's theoretical heating demand and the Building reads the Heater's space-heating
+# heat, both through their classes' default connections, so the space-heating side is a need of this assembly (the
+# Building as its partner) and a need of the site's Building (this Heater as its partner), not a circuit. Control is
+# hardcoded here (D21): the Controller switches space heating on the daily mean outside temperature and the cylinder
+# on its temperature; it reads no energy manager, so the assembly offers no `ems_modifier`.
+#
+# The members expand as one block in the order their lines stand here, the twin's ElectricHeatingController,
+# ElectricHeating. The sizing facts the members read from the site (heating load, conditioned floor area) bind their one
+# provider by the engine's bare-fact rule (§6). Electricity has no link (§4.3): the electricity need only checks that
+# the file has one grid connection, and the energy manager observes the Heater's two electricity outputs by its class's
+# declarations, ranked as the twin ranks them. The defaults reproduce household_electric_heating_building_sizer (D9): a
+# parameter at its preset's value, AUTO or none writes no config line (G9).
+
+schema_version: 4
+kind: assembly
+name: heating/electric_resistive
+description: Direct electric resistive heating of the building, also charging a DHW cylinder.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, range: {min: 2000, max: 20000},
+     description: Maximal electric power and so the maximal heat; AUTO is the building's heating load.}
+     # range: the panel heaters of a small flat (2 kW) up to the direct heating of a large old house (20 kW)
+
+components:
+  Controller:
+    class: hisim.components.generic_electric_heating.ElectricHeatingController
+    preset: standard
+    config:
+      with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
+      parallel_space_heating_and_dhw_option: true           # space heating and hot water in the same step, as the twin
+    inputs:
+      - {$port: weather}                                    # DailyAverageOutsideTemperature
+      - {$port: dhw_temperature}                            # WaterTemperatureInputFromWarmWaterStorage
+  Heater:
+    class: hisim.components.generic_electric_heating.ElectricHeating
+    preset: resistive
+    config:
+      with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
+      maximum_electric_power_w: {$param: power_in_watt}
+    inputs:
+      - Controller                                          # HeatingMode, DeltaTemperatureNeededForDHW
+      - {$port: building}                                   # TheoreticalHeatingDemand, TheoreticalHeatingEnergyDemand
+      - {$port: dhw}                                        # WaterInputTemperatureDhw, the cylinder's return leg
+
+interface:
+  needs:
+    weather:          {into: [Controller], partner: Weather}
+    dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
+                      # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
+    building:         {into: [Heater], partner: Building}
+                      # the heat it must deliver; the Building reads the heat back through a need of its own
+    electricity:      {carrier: electricity, outputs: [Heater.ElectricOutputShPower, Heater.ElectricOutputDhwPower]}
+  provides:
+    dhw:              {circuit: dhw, member: Heater}
+                      # the heater owns pump and supply leg, the cylinder the return leg
+
+tests:
+  # One day at 900 s beside the site partners (an unheated building, the cylinder, an energy manager, the grid). The
+  # heater turns every watt drawn into a watt of heat, at most the largest power of the box (20 kW): powers <= 25 kW,
+  # per-step energies <= 25 kW x 0.25 h, both with a 25 % margin. The water the heater sends to the cylinder stays
+  # liquid. The controller's one temperature output is the lift the cylinder asks for.
+  bounds:
+    - {output: Heater.ThermalOutputShPower, unit: WATT, min: 0, max: 25000}
+    - {output: Heater.ThermalOutputShEnergy, unit: WATT_HOUR, min: 0, max: 6250}
+    - {output: Heater.ElectricOutputShPower, unit: WATT, min: 0, max: 25000}
+    - {output: Heater.ElectricOutputShEnergy, unit: WATT_HOUR, min: 0, max: 6250}
+    - {output: Heater.WaterOutputDhwTemperature, unit: CELSIUS, min: 0, max: 100}             # measured at most 75 °C
+    - {output: Heater.ThermalOutputDhwPower, unit: WATT, min: 0, max: 25000}
+    - {output: Heater.ThermalOutputDhwEnergy, unit: WATT_HOUR, min: 0, max: 6250}
+    - {output: Heater.ElectricOutputDhwPower, unit: WATT, min: 0, max: 25000}
+    - {output: Heater.ElectricOutputDhwEnergy, unit: WATT_HOUR, min: 0, max: 6250}
+    - {output: Controller.DeltaTemperatureNeededForDHW, unit: CELSIUS, min: 0, max: 80}
+      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 38 K)
+  monotone:
+    - {parameter: power_in_watt, kpi: Total energy consumption, member: Heater, direction: increasing}
+      # a larger appliance covers at least as much of the demand: 66.9 kWh at 2 kW, 102.1 kWh at 20 kW on the test day
+  expect:
+    - {kpi: Total energy consumption, member: Heater, min: 85, max: 115}
+      # 100.0 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW

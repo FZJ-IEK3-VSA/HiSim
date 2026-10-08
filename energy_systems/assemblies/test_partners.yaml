@@ -4,7 +4,8 @@
 # hisim/energy_system/assemblies/testing/partners.py, which documents the format. Every partner is a site entry as an
 # energy-system file writes it, with the twins' presets and values (household_heatpump_building_sizer,
 # household_gas_building_sizer, household_oil_building_sizer, household_pellets_building_sizer,
-# household_wood_chips_building_sizer, household_hydrogen_boiler_building_sizer).
+# household_wood_chips_building_sizer, household_hydrogen_boiler_building_sizer,
+# household_district_heating_building_sizer, household_electric_heating_building_sizer).
 partners:
   # ------------------------------------------------------------------------------------------- the site
   Weather:
@@ -30,7 +31,7 @@ partners:
     # The house whose facts the members' sizing laws read. It is heated by nothing: a building reading the heat
     # distribution would need the heat distribution beside every assembly, and a test partner reads only what it
     # requires.
-    serves: [{fact: heating_load_in_watt}, {fact: number_of_apartments}, {fact: roof_area_in_m2},
+    serves: [{partner: Building}, {fact: heating_load_in_watt}, {fact: number_of_apartments}, {fact: roof_area_in_m2},
              {fact: set_heating_temperature_in_celsius}]
     requires: [Weather, UTSPConnector]
     component:
@@ -60,10 +61,26 @@ partners:
       ports:
         space_heating: {circuit: space_heating}
 
+  HeatDistributionSystemWithoutStorage:
+    # The other end of a space_heating circuit a generator feeds directly, without a buffer (district heating): the
+    # distribution of household_district_heating_building_sizer, whose position line the site states (D25). The
+    # generator's controller reads its water temperature.
+    serves: [{circuit: space_heating, other_end: [DistrictHeating]}, {partner: HeatDistribution}]
+    requires: [Building, HeatDistributionController]
+    component:
+      class: hisim.components.heat_distribution_system.HeatDistribution
+      preset: building_derived
+      config:
+        position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX
+      inputs: [Building, HeatDistributionController, {$port: space_heating}]
+      ports:
+        space_heating: {circuit: space_heating}
+
   # ----------------------------------------------------------------------------- the DHW cylinder
   DHWStorage:
     # The other end of a heat pump's or a boiler's dhw circuit, and the cylinder its DHW controller reads.
     serves: [{circuit: dhw, other_end: [MoreAdvancedHeatPumpHPLib]}, {circuit: dhw, other_end: [GenericBoiler]},
+             {circuit: dhw, other_end: [ElectricHeating]}, {circuit: dhw, other_end: [DistrictHeating]},
              {partner: SimpleDHWStorage}]
     requires: [UTSPConnector]
     component:
@@ -361,6 +378,49 @@ partners:
       class: hisim.components.simple_water_storage.SimpleDHWStorage
       preset: standard
       inputs: [UTSPConnector, HydrogenBoiler]
+
+  # ------------------------------------------------------------- district heat: meter and connection
+  DistrictHeatMeter:
+    # The district heating connection a carrier need binds; its fuel meter copies its carrier from the connection
+    # beside it, as in the twin.
+    serves: {carrier: district_heat}
+    component:
+      class: hisim.components.fuel_meter.FuelMeter
+      preset: standard
+      inputs: [{$port: connection}]
+      ports:
+        connection: {carrier: district_heat}
+  DistrictHeatingConsumer:
+    # A consumer of the district heat a supply provides: the connection of household_district_heating_building_sizer
+    # with its controller, its distribution and its cylinder; its class contributes the energy_carrier fact the meter
+    # copies.
+    serves: {consumes: district_heat}
+    requires: [Building, DistrictHeatingConsumerController, HeatDistributionSystemWithoutStorage, DistrictHeatingCylinder]
+    component:
+      class: hisim.components.generic_district_heating.DistrictHeating
+      preset: standard
+      config:
+        with_domestic_hot_water_preparation: true
+      inputs: [DistrictHeatingConsumerController, {$port: space_heating}, DistrictHeatingCylinder]
+      ports:
+        space_heating: {circuit: space_heating}
+        fuel: {carrier: district_heat, outputs: [ThermalOutputShEnergy, ThermalOutputDhwEnergy]}
+  DistrictHeatingConsumerController:
+    # Reads the distribution and the cylinder, which join with the connection: it reads them without requiring them.
+    requires: [Weather, HeatDistributionController]
+    component:
+      class: hisim.components.generic_district_heating.DistrictHeatingController
+      preset: standard
+      config:
+        with_domestic_hot_water_preparation: true
+        parallel_space_heating_and_dhw_option: true
+      inputs: [Weather, HeatDistributionController, HeatDistributionSystemWithoutStorage, DistrictHeatingCylinder]
+  DistrictHeatingCylinder:
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, DistrictHeatingConsumer]
 
   # ------------------------------------------------------------- electricity: arrays, control, grid
   PVArray:

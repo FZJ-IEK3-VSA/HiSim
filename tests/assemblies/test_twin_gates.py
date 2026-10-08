@@ -2,10 +2,12 @@
 
 Each gate is a row of :data:`~hisim.energy_system.assemblies.twins.COMPOSED_TWINS`: a composed file in
 ``energy_systems/`` — the site plus imports of ``energy_systems/assemblies/`` — built and renamed to the twin's
-names, which must equal the recorded twin of the Python setup outside exactly G7 and one neutral swap
-(:mod:`tests.assemblies.twin_gate`): the buffer before the DHW cylinder, which read nothing from each other. The heat
-pump writes its controllers in the twin's order, so the dry run's second swap does not arise; a fuel meter needs no
-swap, its import is numbered between the heat distribution and the grid, where the twin evaluates it.
+names, which must equal the recorded twin of the Python setup outside exactly G7 and the neutral swaps of its sequence
+(:mod:`tests.assemblies.twin_gate`). A generator with a space-heating buffer has one: the twin evaluates the DHW
+cylinder before the buffer, the composed file the buffer before the cylinder, and the two read nothing from each
+other. District heating and direct electric heating have no buffer, so their gates have no swap. The heat pump writes
+its controllers in the twin's order, so the dry run's second swap does not arise; a fuel meter needs no swap, its
+import is numbered between the heat distribution and the grid, where the twin evaluates it.
 Both files of a gate then run for one day, and every result column and KPI is equal.
 """
 
@@ -31,8 +33,10 @@ def gate(stem: str) -> TwinGate:
     """The gate of the composed twin ``stem`` of :data:`~hisim.energy_system.assemblies.twins.COMPOSED_TWINS`.
 
     Example: ``gate("household_oil_building_sizer")`` compares the oil boiler's composed file with its twin under the
-    table's rename map. Every gate has the same intended differences, G7 (the battery's one-element list) and the
-    buffer before the cylinder, because every composed file is the same household site around another generator.
+    table's rename map, with G7 (the battery's one-element list) and the cylinder and the buffer as its one neutral
+    swap; ``gate("household_district_heating_building_sizer")`` has G7 and no swap. Every composed file is the same
+    household site around another generator, so G7 is common to all of them. The swap exists only where the generator
+    has a buffer, which the rename map shows: a member the twin calls ``SimpleHotWaterStorage``.
 
     Args:
         stem: The Python setup's stem, a key of the table.
@@ -40,9 +44,11 @@ def gate(stem: str) -> TwinGate:
     Returns:
         The gate.
     """
+    entry = COMPOSED_TWINS[stem]
+    has_buffer = "SimpleHotWaterStorage" in entry.rename.values()
     return TwinGate(
-        COMPOSED_TWINS[stem],
-        neutral_swaps=(("DHWStorage", "SimpleHotWaterStorage"),),
+        entry,
+        neutral_swaps=(("DHWStorage", "SimpleHotWaterStorage"),) if has_buffer else (),
         g7_component="Battery",
         g7_line={"pv_peak_power_in_watt": ["PVSystem.pv_peak_power_in_watt"]},
     )

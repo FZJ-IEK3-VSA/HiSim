@@ -554,7 +554,7 @@ subject, §5.2) plus a meter whose `observes:` the importing file writes. `suppl
 connection and the `ElectricityMeter`, by default observing every electricity output its class declares (§4.3); an
 electricity need only checks that exactly one exists (§3.2). `supply/gas_connection` (`GasMeter`), `supply/lpg_tank`,
 `supply/oil_tank`, `supply/pellet_store`, `supply/wood_chip_store` (`FuelMeter`), `supply/hydrogen_connection`
-(`GasMeter`) and `supply/district_heating_substation` name their meter on the provision,
+(`GasMeter`) and `supply/district_heating_connection` (`FuelMeter`) name their meter on the provision,
 `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`, and **every consuming output a bound consumer's
 carrier need names lands at the meter's `{$port: connection}` placeholder as the feed the meter's class declares for
 that output, written explicitly** (`from`, tags, weight, as a twin writes it; never the consumer's bare name) (the
@@ -869,7 +869,7 @@ per DHW type and array count.
 | `storage_water_heater` | `dhw/storage_water_heater` | `energy_carrier`, volume | immersion heater (hisim-epc.21); LPG carrier |
 | `instantaneous_water_heater` | `dhw/instantaneous_water_heater` | `energy_carrier` | a flow heater component |
 | `heat_pump_water_heater` | `dhw/heat_pump_water_heater` (nested, §2.5) | volume | DHW heat pump (hisim-lenz) |
-| `district_heating` | `dhw/district_heating` | — | substation DHW side; `supply/district_heating_substation` |
+| `district_heating` | `dhw/district_heating` | — | substation DHW side; `supply/district_heating_connection` |
 | `none` | no `dhw` import | — | the heating's `dhw` port declined; reported: hot water not served |
 
 A `hot_water_system` measure swaps the `dhw` import's assembly and parameters, declines the heating assembly's `dhw`
@@ -1037,8 +1037,23 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    `household_{oil,pellets,wood_chips,hydrogen_boiler}_building_sizer.composed.energy_system.yaml`, each a row of
    `COMPOSED_TWINS` (`hisim/energy_system/assemblies/twins.py`), so the golden gate's `composed` mode runs them too.
    Every gate, the heat pump's and gas's included, is one module parametrized over that table,
-   `tests/assemblies/test_twin_gates.py`, with the same two intended differences. A test partner's class contributes the facts it provides to its isolation system, so a
-   fuel meter copies its carrier from the consumer partner beside it (§9.4).
+   `tests/assemblies/test_twin_gates.py`, with the same two intended differences wherever the generator has a buffer.
+   A test partner's class contributes the facts it provides to its isolation system, so a fuel meter copies its
+   carrier from the consumer partner beside it (§9.4).
+   *District heating, electric heating: done 2026-10-07* — `heating/district_heating` (Controller, Generator; the
+   connection is the space_heating circuit's supply end, without a buffer, and its fuel need names
+   `ThermalOutputShEnergy` and `ThermalOutputDhwEnergy` as `district_heat`) with `supply/district_heating_connection`
+   (`FuelMeter`), and `heating/electric_resistive` (Controller, Heater; no water circuit, #854: the Heater reads the
+   `Building` through a need and the site's `Building` reads the Heater through a need of its own, electricity has no
+   link); the composed files `household_{district_heating,electric_heating}_building_sizer.composed.energy_system.yaml`,
+   two more rows of `COMPOSED_TWINS`. Their gates have one intended difference, G7: without a buffer there is no swap
+   (the gate reads it from the rename map, where no member is the twin's `SimpleHotWaterStorage`). The district
+   heating site states its `HeatDistributionSystem`'s `position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX`
+   as a site config line, until hydronic stage D derives the position from the circuit (D25). `DistrictHeating`
+   declares its district-heat `EnergyPort` on the two outputs its meter reads, as `GenericBoiler` declares its fuel
+   ports on `EnergyDemandSh` and `EnergyDemandDhw`, instead of on `DistrictHeatDrawn`, which no meter reads: a carrier
+   need's outputs must carry the carrier (`EF-7M`). Ground source is not built: no `household_ground_source_*` setup
+   exists, so there is no twin to gate it against.
 6. **New structure.** #83 request contract and N instances; LPG carrier and `supply/lpg_tank` (#77); DHW assemblies as
    their components land (hisim-epc.21, hisim-lenz); #85 contract; further controllers.
 

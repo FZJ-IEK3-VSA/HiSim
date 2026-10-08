@@ -110,7 +110,7 @@ class DistrictHeatingConfig(ConfigBase):
     #: Largest thermal power the connection may draw from the network, the contracted connected
     #: load. Sizable: left ``AUTO`` it is the building's heating load exactly, the connection
     #: covering the design load with no reserve.
-    connected_load_in_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT)
+    connected_load_in_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT, unit=Units.WATT)
 
     @staticmethod
     def sizing_facts(config: "DistrictHeatingConfig", ctx: SizingContext) -> dict:
@@ -313,6 +313,9 @@ class DistrictHeating(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
             output_description="Thermal energy output for space heating",
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.DISTRICT_HEAT, peer_output=self.ThermalOutputShEnergy
+            ),
         )
 
         # Outputs DHW
@@ -351,9 +354,6 @@ class DistrictHeating(Component):
                 "Heat taken from the district heating network in this timestep, what the meter bills: "
                 "ThermalOutputShEnergy plus ThermalOutputDhwEnergy. The connection has no loss of its own."
             ),
-            energy_port=EnergyPort(
-                EnergyRole.IN, EnergyBalanceCarrier.DISTRICT_HEAT, peer_output=self.ThermalOutputShEnergy
-            ),
         )
         self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -361,6 +361,9 @@ class DistrictHeating(Component):
             load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT_HOUR,
             output_description="Thermal energy output for domestic hot water.",
+            energy_port=EnergyPort(
+                EnergyRole.IN, EnergyBalanceCarrier.DISTRICT_HEAT, peer_output=self.ThermalOutputDhwEnergy
+            ),
         )
         self.add_default_connections(self.get_default_connections_from_district_heating_controller())
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())

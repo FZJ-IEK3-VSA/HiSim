@@ -1,0 +1,88 @@
+# A house's connection to a district heating network with its controller, feeding the site's heat distribution directly
+# (no buffer: the connection is the supply end of the space_heating circuit) and charging a DHW cylinder through its
+# `dhw` circuit (D29: this assembly serves DHW). One assembly per generator (owner, 2026-10-07). Control is hardcoded
+# here (D21): the Controller opens the valve on the distribution's water temperature against the flow temperature the
+# site's HeatDistributionController asks for, and on the cylinder temperature; it reads no energy manager, so the
+# assembly offers no `ems_modifier`.
+#
+# The members expand as one block in the order their lines stand here, the twin's DistrictHeatingController,
+# DistrictHeating. The sizing facts the members read from the site (heating load, heating threshold) bind their one
+# provider by the engine's bare-fact rule (§6). The heat taken from the network goes to the one district-heat provider of
+# the file (§5.1), whose meter observes both heat outputs. The site's HeatDistributionSystem states its position without
+# a storage, NO_STORAGE_MASS_FLOW_FIX, as a site config line until hydronic stage D derives it from the circuit (D25).
+# The defaults reproduce household_district_heating_building_sizer (D9): a parameter at its preset's value, AUTO or none
+# writes no config line (G9).
+
+schema_version: 4
+kind: assembly
+name: heating/district_heating
+description: District heating connection with its controller, feeding the heat distribution directly, for space heating and DHW.
+
+parameters:
+  power_in_watt:
+    {type: float, unit: WATT, default: AUTO, range: {min: 3000, max: 30000},
+     description: Contracted connected load; AUTO is the building's heating load.}
+     # range: the substation of a small flat (3 kW) up to the connection of a large old house (30 kW)
+
+components:
+  Controller:
+    class: hisim.components.generic_district_heating.DistrictHeatingController
+    preset: standard
+    config:
+      with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
+      parallel_space_heating_and_dhw_option: true           # space heating and hot water in the same step, as the twin
+    inputs:
+      - {$port: weather}                                    # DailyAverageOutsideTemperature
+      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: distribution_temperature}                   # WaterTemperatureInputFromHeatDistributionSystem
+      - {$port: dhw_temperature}                            # WaterTemperatureInputFromWarmWaterStorage
+  Generator:
+    class: hisim.components.generic_district_heating.DistrictHeating
+    preset: standard
+    config:
+      with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
+      connected_load_in_w: {$param: power_in_watt}
+    inputs:
+      - Controller                                          # HeatingMode, DeltaTemperatureNeededForSH and ForDHW
+      - {$port: space_heating}                              # the distribution's return temperature and mass flow
+      - {$port: dhw}                                        # WaterInputTemperatureDhw, the cylinder's return leg
+
+interface:
+  needs:
+    weather:          {into: [Controller], partner: Weather}
+    flow_temperature: {into: [Controller], partner: HeatDistributionController}   # a set-point need (G1)
+    distribution_temperature: {into: [Controller], partner: HeatDistribution}
+                      # the controller's space-heating measured variable, the distribution's water temperature: a need,
+                      # not a circuit end (the distribution reads nothing from the controller)
+    dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
+                      # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
+    fuel:             {carrier: district_heat, outputs: [Generator.ThermalOutputShEnergy, Generator.ThermalOutputDhwEnergy]}
+  provides:
+    space_heating:    {circuit: space_heating, member: Generator}
+                      # the site's HeatDistribution owns pump and return leg, the connection the supply leg
+    dhw:              {circuit: dhw, member: Generator}
+                      # the connection owns pump and supply leg, the cylinder the return leg
+
+tests:
+  # One day at 900 s beside the site partners (an unheated building, its heat distribution without a storage, the
+  # cylinder, the district-heat meter). The connection delivers at most its connected load, the largest of the box
+  # 30 kW: powers <= 37.5 kW, per-step energies <= 37.5 kW x 0.25 h, both with a 25 % margin. Water stays liquid.
+  bounds:
+    - {output: Generator.WaterOutputShTemperature, unit: CELSIUS, min: 0, max: 100}            # measured 16 to 32 °C
+    - {output: Generator.ThermalOutputShPower, unit: WATT, min: 0, max: 37500}
+    - {output: Generator.ThermalOutputShEnergy, unit: WATT_HOUR, min: 0, max: 9375}
+    - {output: Generator.WaterOutputDhwTemperature, unit: CELSIUS, min: 0, max: 100}           # measured 45 to 75 °C
+    - {output: Generator.ThermalOutputDhwPower, unit: WATT, min: 0, max: 37500}
+    - {output: Generator.ThermalOutputDhwEnergy, unit: WATT_HOUR, min: 0, max: 9375}
+    - {output: Generator.DistrictHeatDrawn, unit: WATT_HOUR, min: 0, max: 9375}                # SH plus DHW of the step
+    - {output: Controller.DeltaTemperatureNeededForSH, unit: CELSIUS, min: 0, max: 80}
+      # the lift the distribution asks for, at most its flow temperature over a cold return (measured 0 to 18 K)
+    - {output: Controller.DeltaTemperatureNeededForDHW, unit: CELSIUS, min: 0, max: 80}
+      # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 37 K)
+  monotone:
+    - {parameter: power_in_watt, kpi: Total energy consumption, member: Generator, direction: increasing}
+      # a larger connected load covers at least as much of the demand: 58.5 kWh at 3 kW, 104.8 kWh at 30 kW on the
+      # test day
+  expect:
+    - {kpi: Total energy consumption, member: Generator, min: 85, max: 120}
+      # 102.1 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW

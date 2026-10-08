@@ -1,0 +1,38 @@
+# The district heating network's connection (the one provider of district heat) and its heat meter (spec §5.1): one
+# supply per carrier (owner, 2026-10-07), the shape of supply/oil_tank. The provision names its carrier and its meter,
+# `provides: {connection: {carrier: district_heat, meter: FuelMeter}}`: every consuming output a bound consumer's carrier
+# need names lands at the meter's `{$port: connection}` placeholder as the feed the meter's class declares for it (D30),
+# DistrictHeating's ThermalOutputShEnergy and ThermalOutputDhwEnergy, whose EnergyPort names district heat.
+#
+# The meter's fuel_loadtype and its two fuel constants stay with its preset's laws, copied from the facts of the one
+# connection in the file, as in household_district_heating_building_sizer, which writes no line for them (D28:
+# overrides only).
+
+schema_version: 4
+kind: assembly
+name: supply/district_heating_connection
+description: District heating network connection with its heat meter.
+
+components:
+  FuelMeter:
+    class: hisim.components.fuel_meter.FuelMeter
+    preset: standard
+    inputs:
+      - {$port: connection}                                 # one feed per consuming output of every bound consumer
+
+interface:
+  provides:
+    connection: {carrier: district_heat, meter: FuelMeter}
+
+tests:
+  # One day at 900 s beside the consumer partner of district heat, the twin's connection sized to the building (a
+  # household connection draws at most about 30 kW): per-step energies <= 30 kW x 0.25 h = 7.5 kWh, the day <= 30 kW x
+  # 24 h = 720 kWh, both with a 25 % margin.
+  bounds:
+    - {output: FuelMeter.HeatConsumption, unit: WATT_HOUR, min: 0, max: 9375}
+      # the heat taken from the network in the step (measured at most 1.9 kWh)
+    - {output: FuelMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 900000}
+  monotone: []                                              # no numeric parameter: nothing to sweep
+  expect:
+    - {kpi: Total energy consumption, member: FuelMeter, min: 85, max: 120}
+      # 102.1 kWh measured: the connection partner's day (1 January, Aachen), the heating assembly's own figure

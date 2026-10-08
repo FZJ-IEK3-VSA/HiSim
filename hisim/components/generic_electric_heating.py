@@ -91,7 +91,7 @@ class ElectricHeatingConfig(ConfigBase):
     #: Largest electric power the appliance draws, and therefore also the largest thermal power
     #: it delivers. Sizable: left ``AUTO`` it is the building's heating load exactly, the
     #: appliance covering the design load with no reserve.
-    maximum_electric_power_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT)
+    maximum_electric_power_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT, unit=Units.WATT)
 
     @staticmethod
     def sizing_facts(config: "ElectricHeatingConfig", ctx: SizingContext) -> dict:

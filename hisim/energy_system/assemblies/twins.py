@@ -148,6 +148,21 @@ COMPOSED_TWINS: Mapping[str, ComposedTwin] = MappingProxyType(
                     "hydrogen-GasMeter": "GasMeter",
                 },
             ),
+            ComposedTwin.household(
+                "household_district_heating_building_sizer",
+                {
+                    "heating-Controller": "DistrictHeatingController",
+                    "heating-Generator": "DistrictHeating",
+                    "district_heat-FuelMeter": "FuelMeter",
+                },
+            ),
+            ComposedTwin.household(
+                "household_electric_heating_building_sizer",
+                {
+                    "heating-Controller": "ElectricHeatingController",
+                    "heating-Heater": "ElectricHeating",
+                },
+            ),
         )
     }
 )

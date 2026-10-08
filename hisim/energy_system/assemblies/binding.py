@@ -11,9 +11,11 @@
   placeholder of the port (D25: a member that neither owns nor reads a circuit output is refused by
   the wiring as a bare name without default connections);
 - a **carrier need** ``{carrier: c, outputs: [Member.Output]}`` needs the one provider of ``c`` in
-  scope; for a fuel it lowers to a bare name of each consumer at the provider meter's placeholder
-  (the meter's dynamic default connections expand it), for electricity to nothing; the consuming
-  outputs go to the wiring, which checks their carrier and the meter's feeds;
+  scope; for a fuel each named output lands at the provider meter's placeholder as the feed the
+  meter's class declares for it, written explicitly by the wiring, which alone has the constructed
+  meter's declarations (D30; an output without a declared feed is refused, an unnamed one is not
+  metered), for electricity to nothing; the consuming outputs go to the wiring, which checks their
+  carrier and the meter's feeds;
 - a **fact need** ``{fact: f, into: [Member]}`` lowers to a ``sizing_sources`` line naming the one
   provider in scope — a site entry whose class contributes ``f``, or an import's provided fact
   ``{fact: f, member: M}`` — and with ``many: true`` to the list of every provider, in written order;
@@ -646,7 +648,7 @@ class PortBinder:
                     f"is not present with these parameters, so the consumers of '{owner.reference}.{port.name}' have "
                     "no meter to land in.",
                 )
-        consumers: Dict[str, Unit] = {}
+        landings: List[ConsumingOutput] = []
         for item in port.outputs:
             member, output = item.split(".", 1) if "." in item else (owner.reference, item)
             unit = owner.units.get(member)
@@ -657,8 +659,10 @@ class PortBinder:
                     f"the carrier port '{port.name}' names the consuming output '{item}', whose member is not present "
                     "with these parameters.",
                 )
-            consumers[unit.name] = unit
-            self.record.consuming.append(ConsumingOutput(unit.name, output, carrier, meter.name if meter else None))
+            consuming = ConsumingOutput(unit.name, output, carrier, meter.name if meter else None)
+            self.record.consuming.append(consuming)
+            if meter is not None:
+                landings.append(consuming)
         lowered: List[str] = []
         if meter is not None:
             positions = meter.placeholder_positions(provision.name)
@@ -669,14 +673,11 @@ class PortBinder:
                     f"the meter '{meter.name}' carries {len(positions)} '{{$port: {provision.name}}}' placeholders; "
                     "its consumers' feeds land at exactly one.",
                 )
-            landed = meter.lowered.get(positions[0], ([], ""))[0]
-            for name in consumers:
-                if DefaultInputs(source=name) not in landed:
-                    landed.append(DefaultInputs(source=name))
-                    lowered.append(f"{meter.name}.inputs: {name}")
-            meter.lowered[positions[0]] = (
-                landed,
-                f"carrier {carrier}: the consumers of {provider.reference}.{provision.name}",
+            # D30: each named output lands as the feed the meter's class declares for it, never as the consumer's
+            # bare name; the declaration exists on the constructed meter, so the wiring writes it (SelectionPlan).
+            self.record.selection.landings.extend(landings)
+            lowered.extend(
+                f"{meter.name}.inputs: {item.consumer}.{item.output} (its declared feed)" for item in landings
             )
         self.consumers.setdefault((provider.reference, provision.name), []).append(f"{owner.reference}.{port.name}")
         partner = f"{provider.reference}.{provision.name}" + (f" (meter {meter.name})" if meter else " (no link)")

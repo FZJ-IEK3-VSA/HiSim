@@ -1,12 +1,11 @@
-"""The gate of the first real assemblies (``assemblies_spec.md`` §13 step 4, D9): the composed file is its twin.
+"""The gate of the condensing gas boiler (``assemblies_spec.md`` §13 step 5, D9): the composed file is its twin.
 
-``energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml`` — the site plus six imports of
-``energy_systems/assemblies/`` — built and renamed through its entry in
-:data:`~hisim.energy_system.assemblies.twins.COMPOSED_TWINS` must equal
-``household_heatpump_building_sizer.energy_system.yaml``, the recorded twin of the Python setup, outside exactly G7
-and one neutral swap (:mod:`tests.assemblies.twin_gate`): the buffer before the DHW cylinder, which read nothing from
-each other (the heating block writes its controllers in the twin's order, so the second swap the dry run lists,
-ControllerDHW before ControllerSH, does not arise).
+``energy_systems/household_gas_building_sizer.composed.energy_system.yaml`` — the site plus seven imports of
+``energy_systems/assemblies/``, among them ``heating/gas_condensing_boiler`` and ``supply/gas_connection`` — built and
+renamed must equal ``household_gas_building_sizer.energy_system.yaml``, the recorded twin of the Python setup, outside
+exactly G7 and one neutral swap (:mod:`tests.assemblies.twin_gate`): the buffer before the DHW cylinder, which read
+nothing from each other. The gas meter needs no swap: its import is numbered between the heat distribution and the
+grid, where the twin evaluates it.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ from tests.assemblies.twin_gate import (
 )
 
 GATE = TwinGate(
-    COMPOSED_TWINS["household_heatpump_building_sizer"],
+    COMPOSED_TWINS["household_gas_building_sizer"],
     neutral_swaps=(("DHWStorage", "SimpleHotWaterStorage"),),
     g7_component="Battery",
     g7_line={"pv_peak_power_in_watt": ["PVSystem.pv_peak_power_in_watt"]},
@@ -37,7 +36,7 @@ GATE = TwinGate(
 @pytest.fixture(scope="module", name="runs")
 def fixture_runs(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Run]:
     """Both files run for one day, each in its own result directory."""
-    return run_both(GATE, tmp_path_factory.mktemp("heatpump_twin_gate"))
+    return run_both(GATE, tmp_path_factory.mktemp("gas_twin_gate"))
 
 
 @pytest.mark.assemblies

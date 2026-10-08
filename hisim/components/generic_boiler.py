@@ -12,7 +12,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 
 # Owned
 import importlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar, List, Optional, Tuple
 from enum import Enum, unique
 import pandas as pd
@@ -1145,7 +1145,9 @@ class GenericBoilerControllerConfig(ConfigBase):
     #: Whether the controller modulates the burner continuously or switches it on and off.
     is_modulating: bool = True
     #: Outside temperature above which the controller stops heating at all.
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float] = 16.0
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float] = field(
+        default=16.0, metadata={"unit": lt.Units.CELSIUS}
+    )
     #: Lower end of the boiler's power band; copied from the boiler this controller regulates.
     minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MINIMAL_THERMAL_POWER_IN_WATT)
     #: Upper end of the boiler's power band; copied from the boiler this controller regulates.

@@ -37,7 +37,8 @@ from hisim.energy_system.channels import FeedRequest
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId, EnergySystemRecordError
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
-from hisim.energy_system.model import AggregatorFeed, DispatchSpec
+from hisim.energy_system.model import AggregatorFeed, ConsumingOutput, DispatchSpec
+from hisim.energy_system.wiring_checks import check_consuming_outputs
 
 
 @dataclass
@@ -100,10 +101,22 @@ class Controllable:
 
 @dataclass
 class SelectionPlan:
-    """Every observer and controllable output of one expanded system; the wiring planner calls it."""
+    """Every observer, controllable output and metered consuming output of one expanded system; the wiring calls it.
+
+    A consuming output a carrier need names lands at its provider's meter as the feed the meter's
+    class declares for it, written explicitly (D30, §5.1); the declaration exists only on the
+    constructed meter, so the landing is planned here, beside the observers' selections, and the
+    realized record writes it into the meter's inputs as it writes theirs.
+    """
 
     observers: List[Observer] = field(default_factory=list)
     controllables: List[Controllable] = field(default_factory=list)
+    #: The consuming outputs with a meter, in the order the carrier needs named them.
+    landings: List[ConsumingOutput] = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        """Whether the wiring has anything to select or land."""
+        return bool(self.observers or self.controllables or self.landings)
 
     @staticmethod
     def error(error_id: EnergySystemErrorId, component: str, problem: str, **kwargs: Any) -> EnergySystemAssemblyError:
@@ -122,12 +135,15 @@ class SelectionPlan:
             components: Every constructed component by its name in the file, in file order.
 
         Returns:
-            Each observer's feeds, in candidate order.
+            Each observer's feeds, in candidate order, then each meter's landed feeds, in the order
+            the carrier needs named their outputs.
 
         Raises:
             EnergySystemAssemblyError: ``EF-7S`` for an observer that cannot observe or a selector
                 matching nothing, ``EF-7V`` for a derived weight that ties with another component
                 type's, ``EF-7U`` for a controllable output actuated by none or two.
+            EnergySystemWiringError: ``EF-21``, ``EF-7M`` or ``EF-7N`` for a consuming output that its
+                consumer does not have, that carries another carrier, or that its meter declares no feed for.
         """
         rankers: Dict[Tuple[str, str], List[str]] = {}
         selected: Dict[str, List[AggregatorFeed]] = {}
@@ -149,7 +165,40 @@ class SelectionPlan:
                     + (f", but its need is bound to {item.via_partner}" if item.via_partner else "")
                     + "; a controllable output is actuated by exactly the one controller it binds (D21).",
                 )
+        landed = check_consuming_outputs(components, self.landings)
+        for landing in self.landings:
+            assert landing.meter is not None
+            request = landed[(landing.meter, landing.consumer, landing.output)]
+            selected[request.consumer] = list(selected.get(request.consumer, [])) + [
+                self.written(request, request.weight)
+            ]
         return selected
+
+    @staticmethod
+    def written(request: FeedRequest, weight: int, dispatch: Optional[DispatchSpec] = None) -> AggregatorFeed:
+        """One feed request as the feed item a file writes: source, output, component type, tags, weight, dispatch.
+
+        Example: the gas meter's declared feed for ``boiler-Boiler.EnergyDemandSh`` becomes
+        ``{from: boiler-Boiler.EnergyDemandSh, tags: [GAS_CONSUMPTION_UNCONTROLLED], weight: 999}``.
+        The weight and the dispatch are arguments because a ranked observer feed carries a derived
+        weight and its dispatch, while a landed meter feed keeps the declared weight and has none.
+
+        Args:
+            request: The feed request, from a declaration of the observer's class.
+            weight: The weight the written feed carries.
+            dispatch: The dispatch of a ranked feed; ``None`` for a feed that is only measured.
+
+        Returns:
+            The feed item, as the realized file writes it.
+        """
+        return AggregatorFeed(
+            source=request.source,
+            output=request.output,
+            component_type=request.component_type.name if request.component_type is not None else None,
+            tags=tuple(tag.name for tag in request.flow_tags),
+            weight=weight,
+            dispatch=dispatch,
+        )
 
     def _select(self, observer: Observer, components: Mapping[str, Any]) -> List[AggregatorFeed]:
         """One observer's feeds: its candidates, filtered by its selection, ranked."""
@@ -239,16 +288,7 @@ class SelectionPlan:
                     None,
                 )
                 dispatch = DispatchSpec(target_input=target_input)
-            feeds.append(
-                AggregatorFeed(
-                    source=feed.source,
-                    output=feed.output,
-                    component_type=component_type,
-                    tags=tuple(tag.name for tag in feed.flow_tags),
-                    weight=weight,
-                    dispatch=dispatch,
-                )
-            )
+            feeds.append(self.written(feed, weight, dispatch))
         return feeds
 
     def _refuse_collision(

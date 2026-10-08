@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -678,6 +678,51 @@ class MockBoiler(MockComponent):
 
 @dataclass_json
 @dataclass
+class MockCombiBurnerConfig(ConfigBase):
+    """A gas burner with three fuel outputs."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockCombiBurner"
+
+    component_id: ComponentID
+    power_in_watt: float = field(default=1000.0, metadata={UNIT: lt.Units.WATT})
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "MockCombiBurnerConfig":
+        """A 1 kW burner per fuel output."""
+        return cls(component_id=ComponentID(name=name))
+
+
+class MockCombiBurner(MockComponent):
+    """Burns natural gas on three outputs, for space heating, hot water and a pilot flame.
+
+    The gas meter declares a feed for each of the three, so an assembly naming two of them shows
+    that only the named outputs are metered (D30). It heats nothing the tests read.
+    """
+
+    #: The three fuel outputs, each an energy port taking natural gas in.
+    FUEL_OUTPUTS: Tuple[str, ...] = ("FuelSh", "FuelDhw", "FuelPilot")
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockCombiBurnerConfig) -> None:
+        """Builds the burner's three fuel outputs."""
+        super().__init__(my_simulation_parameters, config)
+        for name in self.FUEL_OUTPUTS:
+            self.output_port(
+                name,
+                lt.LoadTypes.GAS,
+                lt.Units.WATT_HOUR,
+                energy_port=EnergyPort(lt.EnergyRole.IN, lt.EnergyBalanceCarrier.NATURAL_GAS, peer_output=name),
+            )
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Burns its power on every output."""
+        for name in self.FUEL_OUTPUTS:
+            energy = self.config.power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600.0
+            self.set(stsv, name, energy)
+
+
+@dataclass_json
+@dataclass
 class MockCylinderConfig(ConfigBase):
     """A hot-water cylinder charged over the dhw circuit."""
 
@@ -839,23 +884,24 @@ class MockAggregator(DynamicComponent):
     def observe(
         self,
         source: type,
-        output: str,
+        output: Union[str, Sequence[str]],
         tags: List[Any],
         weight: int,
         load_type: lt.LoadTypes = lt.LoadTypes.ELECTRICITY,
     ) -> None:
-        """Declares the feed of one output of one source class (``add_dynamic_default_connections``)."""
+        """Declares the feeds of one or several outputs of one source class (``add_dynamic_default_connections``)."""
         self.add_dynamic_default_connections(
             [
                 DynamicComponentConnection(
                     source_component_class=source,
                     source_class_name=source.__name__,
-                    source_component_field_name=output,
+                    source_component_field_name=name,
                     source_load_type=load_type,
                     source_unit=lt.Units.WATT_HOUR if load_type == lt.LoadTypes.GAS else lt.Units.WATT,
                     source_tags=tags,
                     source_weight=weight,
                 )
+                for name in ([output] if isinstance(output, str) else output)
             ]
         )
 
@@ -948,11 +994,45 @@ class MockGasMeter(MockAggregator):
         self.observe(
             MockBoiler, "FuelUse", [lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED], MEASURED, lt.LoadTypes.GAS
         )
+        self.observe(
+            MockCombiBurner,
+            MockCombiBurner.FUEL_OUTPUTS,
+            [lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+            MEASURED,
+            lt.LoadTypes.GAS,
+        )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """The calibrated sum of the consumption channel."""
         stsv.set_output_value(
             self.ports_out["GasConsumption"], self.channel_sum(stsv, "consumption") * self.config.calibration
+        )
+
+
+@dataclass_json
+@dataclass
+class MockDoubleGasMeterConfig(MockGasMeterConfig):
+    """A gas meter whose class declares the boiler's fuel output twice."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockDoubleGasMeter"
+
+
+class MockDoubleGasMeter(MockGasMeter):
+    """The mock gas meter with the feed from ``MockBoiler.FuelUse`` declared twice.
+
+    Stands in for a meter class whose author declared one consumer output in two feeds, which leaves
+    the feed a carrier need lands as undetermined (EF-7N).
+    """
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockDoubleGasMeterConfig) -> None:
+        """Builds the meter, then declares the boiler's fuel output twice in place of once."""
+        super().__init__(my_simulation_parameters, config)
+        self.observe(
+            MockBoiler,
+            ("FuelUse", "FuelUse"),
+            [lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+            MEASURED,
+            lt.LoadTypes.GAS,
         )
 
 

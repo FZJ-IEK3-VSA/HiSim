@@ -342,10 +342,11 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
   end of another circuit is refused;
 - a **carrier need**, `{carrier: natural_gas, outputs: [Boiler.FuelUse]}`, needs the one provider of
   its carrier (an `lt.EnergyBalanceCarrier` value), `provides: {connection: {carrier: natural_gas,
-  meter: Meter}}`. For a fuel the consumer's bare name lands at the meter's `{$port: connection}`
-  placeholder and the meter's dynamic default connections expand it; the wiring then checks that each
-  consuming output's energy port carries the carrier and that the meter feeds exactly the named
-  outputs. Electricity has no link and no meter on the provision: the need only requires the one grid
+  meter: Meter}}`. For a fuel each named consuming output lands at the meter's `{$port: connection}`
+  placeholder as the feed the meter's class declares for it, written explicitly (`from`, tags, weight)
+  by the wiring, which reads the constructed meter's declarations; a named output without a declared
+  feed is refused (`EF-7N`), an unnamed one is not metered (D30), and each consuming output's energy
+  port must carry the carrier (`EF-7M`). Electricity has no link and no meter on the provision: the need only requires the one grid
   connection. Two providers of one carrier, a need without one and a fuel provider nobody consumes from
   are refused;
 - a **fact need**, `{fact: pv_peak_power_in_watt, into: [Battery]}`, is written only where the author
@@ -385,7 +386,7 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 | `EF-7A` … `EF-7F` | no partner, several and no verb, `none:` on a required port, an absent `bind:` partner, an undecided optional port, a verb on an inactive port |
 | `EF-7G`, `EF-7H`, `EF-7J` | a verb on a port no verb binds, a bound output not read, a port that does not fit its members |
 | `EF-7K`, `EF-7L` | a circuit end of another circuit; a carrier without exactly one provider, or an idle fuel provider |
-| `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a meter not feeding exactly the outputs named |
+| `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a named consuming output its meter declares no feed for |
 | `EF-7S`, `EF-7T`, `EF-7U`, `EF-7V` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller; a derived weight reaching another kind's base weight |
 | `EF-4E`, `EF-4G` | (sizing) a sources line of the wrong cardinality; an empty or repeating many list, one fact read once and many-fold |
 
@@ -454,16 +455,20 @@ first real assemblies need, and a cut feature returns as its own change when a r
 it. The spec is `roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1); the mock library
 the tests run on is `tests/assemblies/mock_assemblies/library/`.
 
-**The real library** (§13 step 4) is `energy_systems/assemblies/`: `heating/air_source_heat_pump`,
+**The real library** (§13 steps 4 and 5) is `energy_systems/assemblies/`: `heating/air_source_heat_pump`,
 `heating/air_source_heat_pump_space_heating_only` (no DHW: a second assembly, D29),
-`dhw/indirect_cylinder`, `pv/array`, `storage/battery`, `control/ems_self_consumption` and
-`supply/electricity_grid`. `household_heatpump_building_sizer.composed.energy_system.yaml` is the site
-of the heat-pump twin plus six of them (all but the space-heating-only heat pump); `tests/assemblies/test_heatpump_twin_gate.py` expands it,
-renames its members to the twin's names and asserts the twin outside the listed intended differences
-(the battery's one-element `sizing_sources` list, G7, and one neutral swap of the sequence), and runs
-both for one day: every result column and KPI equal. The golden gate's `composed` mode runs the composed file for
-the week and the full year and compares its KPIs, renamed through the table `hisim/energy_system/assemblies/twins.py`,
-with the Python setup's goldens (`golden_references/README.md`).
+`heating/gas_condensing_boiler`, `dhw/indirect_cylinder`, `pv/array`, `storage/battery`,
+`control/ems_self_consumption`, `supply/electricity_grid` and `supply/gas_connection`.
+`household_heatpump_building_sizer.composed.energy_system.yaml` is the site of the heat-pump twin plus six of them
+(the heat pump with DHW, the cylinder, the array, the battery, the energy manager and the grid), and
+`household_gas_building_sizer.composed.energy_system.yaml` the site of the gas twin plus seven (the gas boiler and the
+gas connection in place of the heat pump). `tests/assemblies/test_heatpump_twin_gate.py` and
+`tests/assemblies/test_gas_twin_gate.py`, both on `tests/assemblies/twin_gate.py`, expand each, rename its members to
+the twin's names and assert the twin outside the listed intended differences (the battery's one-element
+`sizing_sources` list, G7, and one neutral swap of the sequence), and run both for one day: every result column and
+KPI equal. The golden gate's `composed` mode runs each composed file for the week and the full year and compares its
+KPIs, renamed through the table `hisim/energy_system/assemblies/twins.py`, with the Python setup's goldens
+(`golden_references/README.md`).
 
 ## Relation to `system_setups/`
 

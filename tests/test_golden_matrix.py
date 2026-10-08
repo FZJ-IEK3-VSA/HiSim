@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from hisim.energy_system.assemblies.twins import COMPOSED_TWINS
 from scripts.golden_matrix import (
     DEFAULT_PAIR_SECONDS,
     HORIZON_FACTORIES,
@@ -318,6 +319,12 @@ def test_with_composed_counts_a_third_run_for_a_setup_with_a_composed_file() -> 
 
 
 def test_the_composed_setups_are_the_ones_with_a_composed_file_beside_the_config() -> None:
-    """The shipped config's composed setups are read from ``energy_systems/``: today the heat-pump sizer."""
+    """The shipped config's composed setups, read from ``energy_systems/``, are the setups of the library table.
+
+    Catches the matrix (stdlib only, reading files) and the gate (reading the table) disagreeing on which pairs run a
+    composed file.
+    """
     config = json.loads(REAL_CONFIG.read_text())
-    assert composed_setups(config, REPO_ROOT) == frozenset({"household_heatpump_building_sizer"})
+    in_table = {setup["id"] for setup in config["setups"] if Path(setup["path"]).stem in COMPOSED_TWINS}
+    assert "household_heatpump_building_sizer" in in_table
+    assert composed_setups(config, REPO_ROOT) == frozenset(in_table)

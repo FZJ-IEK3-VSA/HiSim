@@ -215,14 +215,15 @@ def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path)
 
 @pytest.mark.base
 def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Path) -> None:
-    """The pump runs on 15 January: the collector delivers hot-water heat and its pump's electricity is a loss.
+    """The pump runs on 20 January: the collector delivers hot-water heat and its pump's electricity is a loss.
 
     Not a summer day: a window that does not start on 1 January still reads the weather from 1 January
-    (hisim-9g2), so a June day is a January day in disguise and its pump stands. The first half of January
-    at 900 s holds the year's first day on which the pump runs (15 January).
+    (hisim-9g2), so a June day is a January day in disguise and its pump stands. The first three weeks of January
+    at 900 s hold the year's first day on which the pump delivers more than 0.5 kWh (20 January; the pump stands
+    whenever the boiler has charged the tank above 60 °C).
     """
     results = run_household(
-        tmp_path, "household_gas_solar_thermal_building_sizer", start="2021-01-01", end="2021-01-16"
+        tmp_path, "household_gas_solar_thermal_building_sizer", start="2021-01-01", end="2021-01-21"
     )
     entry = balance_entry(results, "SolarThermalSystem")
     assert entry["verdict"] == "closes" and abs(entry["residual_kwh"]) <= 1e-9

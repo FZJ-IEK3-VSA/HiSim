@@ -8,6 +8,7 @@ from typing import ClassVar, List, Optional, Tuple
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
@@ -40,7 +41,6 @@ from hisim.components.heat_distribution_system import HeatDistributionController
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
-    PhysicsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import (
@@ -437,11 +437,15 @@ class ElectricHeating(Component):
             else:
                 thermal_power_sh_delivered_in_watt = 0.0
                 thermal_energy_sh_delivered_in_watthour = 0.0
-            # dhw outputs
+            # dhw outputs: the idle hot-water circuit moves no water, its supply is its return
             thermal_power_dhw_delivered_w = 0.0
             thermal_energy_dhw_delivered_in_watt_hour = 0.0
             water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
-            water_output_temperature_for_dhw_deg_c = 0.0
+            water_output_temperature_for_dhw_deg_c = (
+                stsv.get_input_value(self.water_input_temperature_dhw_channel)
+                if self.config.with_domestic_hot_water_preparation
+                else 0.0
+            )
 
         elif heating_mode == HeatingMode.DOMESTIC_HOT_WATER:
             # Get relevant inputs
@@ -553,26 +557,40 @@ class ElectricHeating(Component):
             )
 
     def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
+        """The hot-water circuit's heat, energy, supply temperature and mass flow for one step (spec §5.1).
 
-        # calculate thermal power delivered Q = m * cw * dT
+        The heater holds the lift ``dT`` its controller asks for and regulates its power as ``P = P_max dT / 100``
+        (at most ``P_max``); it pumps ``m = P / (c dT)`` and supplies the tank's step mean, its return
+        ``water_input_temperature_deg_c``, plus ``dT``. The heat it books is what that water carries,
+        ``m c (T_sup - T_ret)`` (:func:`hisim.hydronics.circuit_power_w`), which is ``P``. For example, a 6 kW heater
+        asked for a 25 K lift on a 50 °C return heats with 1.5 kW at 0.0144 kg/s and supplies 75 °C. Without a lift
+        the circuit moves no water and its supply is its return.
+
+        Args:
+            water_input_temperature_deg_c: The circuit's return temperature, the tank's step mean, °C.
+            delta_temperature_needed_in_celsius: The lift the controller asks for, K.
+
+        Returns:
+            The thermal power in W, the thermal energy of the step in Wh, the supply temperature in °C and the
+            mass flow in kg/s.
+        """
         if delta_temperature_needed_in_celsius > 0:
             # regulate thermal output power based on deltaT needed
-            thermal_power_delivered_w = min(
+            regulated_power_w = min(
                 concrete(self.config.maximum_electric_power_w) * delta_temperature_needed_in_celsius / 100.0,
                 concrete(self.config.maximum_electric_power_w),
             )
-            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
-                PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                * delta_temperature_needed_in_celsius
+            water_mass_flow_rate_in_kg_per_s = regulated_power_w / (
+                hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * delta_temperature_needed_in_celsius
             )
+            water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
         else:
-            thermal_power_delivered_w = 0
-            water_mass_flow_rate_in_kg_per_s = 0
+            water_mass_flow_rate_in_kg_per_s = 0.0
+            water_target_temperature_deg_c = water_input_temperature_deg_c
 
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
+        thermal_power_delivered_w = hydronics.circuit_power_w(
+            water_mass_flow_rate_in_kg_per_s, water_target_temperature_deg_c, water_input_temperature_deg_c
+        )
         thermal_energy_delivered_in_watt_hour = (
             thermal_power_delivered_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )

@@ -270,6 +270,39 @@ def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_p
 
 
 @pytest.mark.assemblies
+def test_a_fact_read_behind_an_inactive_fact_port_gets_its_registered_provider(tmp_path: Path) -> None:
+    """Catches an inactive conditional fact port hiding its fact from the bare-fact rule, leaving the read unserved.
+
+    With ``pinned: false`` the port is active and its fact need brings the array; with ``pinned: true`` the
+    port is inactive, the battery's law still reads the fact, and the harness gives the read its provider.
+    """
+    library = Library(tmp_path)
+    library.add(
+        "sampled/conditional_battery",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/conditional_battery
+        description: A battery whose fact port is active only while it is not pinned.
+        parameters:
+          pinned: {{type: bool, default: false, description: Whether the fact port is switched off.}}
+        components:
+          Battery: {{class: {MOCKS}.MockArrayBattery, preset: sized_to_all_arrays}}
+        interface:
+          needs:
+            pv_peak_power:
+              {{fact: pv_peak_power_in_watt, many: true, into: [Battery], active_when: {{pinned: [false]}}}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    assembly = library.resolver().resolve("sampled/conditional_battery", "test")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    for pinned in (False, True):
+        document = isolation_document(assembly, {"pinned": pinned}, registry)
+        assert list(document["components"]) == ["Weather", "PVArray"], pinned
+
+
+@pytest.mark.assemblies
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> None:
     """An empty registry: the array's weather port names MockWeather."""
     assembly, space = mock("mock/pv_array")

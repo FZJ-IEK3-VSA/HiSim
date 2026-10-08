@@ -226,14 +226,10 @@ def config_overrides(name: str, entry: ComponentEntry, resolved: Mapping[str, An
                 origin = _origin_of(name, entry)
             base, codec = origin
             decoded = codec.decode(key, value, f"{location}.config.{key}", name) if key in codec.fields else value
-            if decoded == base.get(key, _NO_ORIGIN):
+            if key in base and decoded == base[key]:
                 continue
         config[key] = value
     return config
-
-
-#: Marks a field whose origin gives no value to compare with (a required field without a default).
-_NO_ORIGIN = object()
 
 
 def _origin_of(name: str, entry: ComponentEntry) -> Tuple[Dict[str, Any], ConfigValueCodec]:

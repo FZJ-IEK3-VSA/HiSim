@@ -101,7 +101,7 @@ def facts_needed(port_facts: Sequence[str], members: Mapping[str, MemberTemplate
     """The facts the members' classes read that no member provides and no fact port names, each as its alternatives.
 
     Args:
-        port_facts: The facts the assembly's fact ports name.
+        port_facts: The facts the assembly's active fact ports name.
         members: The members present with the sample's parameters.
     """
     classes = [ClassBinder.config_class_of(name, member.entry) for name, member in members.items()]
@@ -137,7 +137,12 @@ def isolation_document(
                 and not port.many
             ):
                 verbs["bind" if state == PortState.REQUIRED else "optional-bind"][name] = partner.name
-    port_facts = [port.fact for port in model.ports.values() if port.kind == PortKind.FACT and port.fact]
+    # An inactive fact port names nothing: its fact crosses by the bare-fact rule like any unported read.
+    port_facts = [
+        port.fact
+        for port in model.ports.values()
+        if port.kind == PortKind.FACT and port.fact and selection.state(port) != PortState.INACTIVE
+    ]
     for alternatives in facts_needed(port_facts, selection.members):
         partners.append(registry.find(alternatives, f"the fact read '{alternatives[0][1]}'", assembly.path).name)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}

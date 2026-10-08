@@ -14,7 +14,7 @@ from hisim.energy_system.loader import dump_energy_system, parse_energy_system
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
 from hisim.energy_system.source_lines import LineIndex
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiSource
-from tests.assemblies.helpers import EMS, MOCKS, OCCUPANCY, WEATHER, Library, Mocks, expand_text, site
+from tests.assemblies.helpers import EMS, MOCKS, OCCUPANCY, WEATHER, Library, Mocks, build_text, expand_text, site
 from tests.assemblies.mock_components import MockPVSystemConfig
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -226,6 +226,40 @@ def test_a_member_without_a_preset_compares_with_the_field_default(tmp_path: Pat
 
 
 @pytest.mark.assemblies
+def test_a_member_configured_by_a_named_constructor_always_writes_its_fed_fields(tmp_path: Path) -> None:
+    """Pins G9's one exception: a constructor member's ``$param`` field is written even at the field's default.
+
+    A named constructor computes its configuration from its arguments, so the expansion has no origin to
+    compare with before the build; it writes every fed field that carries a value. Here
+    ``predictive_control: false`` equals both the field default and what ``for_location`` gives, and is
+    written all the same. Comparing with the field default instead would drop a value the constructor
+    may set otherwise.
+    """
+    library = Library(tmp_path)
+    library.add(
+        "mock/built_weather",
+        """
+        schema_version: 4
+        kind: assembly
+        name: mock/built_weather
+        description: A weather configured by its named constructor.
+        parameters:
+          predictive:
+            {type: bool, default: false, description: Whether the weather offers predictions.}
+        components:
+          Weather:
+            class: hisim.components.weather.Weather
+            constructor:
+              for_location: {location: AACHEN, data_source: DWD_TRY, heating_reference_temperature_in_celsius: -7.0}
+            config: {predictive_control: {$param: predictive}}
+        tests: {bounds: [], monotone: []}
+        """,
+    )
+    flat, _record = expand_text(site(imports="weather: {assembly: mock/built_weather}"), library.resolver())
+    assert flat.components["weather-Weather"].config == {"predictive_control": False}
+
+
+@pytest.mark.assemblies
 def test_the_import_record_states_what_each_instance_was_given_and_how_each_port_was_decided() -> None:
     """Catches an import record that cannot say which assembly ran, with what, bound to what."""
     _flat, record = expand_house()
@@ -327,17 +361,18 @@ def test_an_exactly_one_of_constraint_left_with_no_member_stated_is_refused() ->
 
 
 @pytest.mark.assemblies
-def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults() -> None:
+def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults(tmp_path: Path) -> None:
     """Catches the sibling's default (power 5000 W) still counting when the import writes only the share (D27)."""
-    flat, record = expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {share_of_roof: 0.5}}"))
+    text = site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {share_of_roof: 0.5}}")
+    flat, record = expand_text(text)
     assert record.instance("pv").parameters_resolved["power_in_watt"] is None
     assert record.instance("pv").parameters_resolved["share_of_roof"] == 0.5
     config = flat.components["pv-PVSystem"].config
     # G9: the unstated power writes no line, so the preset's open power stays and the share is read.
     assert "power_in_watt" not in config and config["share_of_roof"] == 0.5
-    array = MockPVSystemConfig.preset_rooftop("PVSystem")
-    array.share_of_roof = config["share_of_roof"]
-    assert array.peak_power_in_watt() == 0.5 * MockPVSystemConfig.ROOF_PEAK_POWER_IN_WATT
+    built = dict(build_text(text, tmp_path).wired.components)["pv-PVSystem"].config
+    assert built.power_in_watt is None
+    assert built.peak_power_in_watt() == 0.5 * MockPVSystemConfig.ROOF_PEAK_POWER_IN_WATT
 
 
 @pytest.mark.assemblies

@@ -113,6 +113,11 @@ class SelectionPlan:
     def __call__(self, components: Mapping[str, Any]) -> Dict[str, List[AggregatorFeed]]:
         """Selects, ranks and checks every observer's feeds among the constructed components.
 
+        An observer's candidates are the outputs in each constructed component's ``outputs`` that the
+        observer's class declares a dynamic default connection from. They are read when this runs, after
+        construction and before wiring: an output a component adds later, such as an aggregator's dispatch
+        output created while its feeds are resolved, is no candidate.
+
         Args:
             components: Every constructed component by its name in the file, in file order.
 
@@ -157,12 +162,13 @@ class SelectionPlan:
                 f"'{observer.component}' ({type(target).__name__}) observes, but its class declares no dynamic "
                 "default connections, so it has nothing to select from.",
             )
+        outputs = {name: {output.field_name for output in component.outputs} for name, component in components.items()}
         candidates = [
             DynamicConnectionResolver.feed_from_declaration(declaration, observer.component, name)
             for name, component in components.items()
             if name != observer.component
             for declaration in declared.get(component.get_classname(), ())
-            if declaration.source_component_field_name in {output.field_name for output in component.outputs}
+            if declaration.source_component_field_name in outputs[name]
         ]
         listed = ", ".join(f"{feed.source}.{feed.output}" for feed in candidates) or "none"
 

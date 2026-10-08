@@ -22,8 +22,10 @@ description: Direct electric resistive heating of the building, also charging a 
 parameters:
   power_in_watt:
     {type: float, unit: WATT, default: AUTO, range: {min: 2000, max: 20000},
-     description: Maximal electric power and so the maximal heat; AUTO is the building's heating load.}
+     description: 'Maximal electric power and so the maximal heat; AUTO is the building''s heating load. The heater
+       caps only the steps that also heat water; a space-heating-only step follows the building''s demand.'}
      # range: the panel heaters of a small flat (2 kW) up to the direct heating of a large old house (20 kW)
+     # the uncapped space-heating-only steps are a component bug, hisim-4g9.30
 
 components:
   Controller:

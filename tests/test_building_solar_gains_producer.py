@@ -246,8 +246,8 @@ def test_an_edit_to_the_producer_changes_its_code_fingerprint(
 
     source = probe.source(ProducerCopy.PRODUCER)
     edited = source.replace(
-        "if direct_normal_irradiance != 0 or direct_horizontal_irradiance != 0",
-        "if direct_normal_irradiance > 0 or direct_horizontal_irradiance != 0",
+        "if direct_normal_irradiance != 0 or diffuse_horizontal_irradiance != 0",
+        "if direct_normal_irradiance > 0 or diffuse_horizontal_irradiance != 0",
     )
     assert edited != source, "the line the edit targets has moved; point this test at another line"
     probe.write(ProducerCopy.PRODUCER, edited)

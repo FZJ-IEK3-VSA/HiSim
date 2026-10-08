@@ -210,7 +210,7 @@ class SolarGainsInputs:
 def produce_solar_gains(inputs: SolarGainsInputs) -> pd.DataFrame:
     """Produce the solar-gain series the building simulates from.
 
-    One value per timestep: the sum over the windows of the plane-of-array direct irradiance times
+    One value per timestep: the sum over the windows of the total plane-of-array irradiance times
     each window's reduction factor and area. The result is a pure function of ``inputs``; it is what
     the cache stores under the key built from them.
 
@@ -235,7 +235,7 @@ def produce_solar_gains(inputs: SolarGainsInputs) -> pd.DataFrame:
             windows=windows,
             azimuth=azimuth[timestep],
             direct_normal_irradiance=direct_normal_irradiance[timestep],
-            direct_horizontal_irradiance=diffuse_horizontal_irradiance[timestep],
+            diffuse_horizontal_irradiance=diffuse_horizontal_irradiance[timestep],
             global_horizontal_irradiance=global_horizontal_irradiance[timestep],
             direct_normal_irradiance_extra=direct_normal_irradiance_extra[timestep],
             apparent_zenith=apparent_zenith[timestep],
@@ -249,7 +249,7 @@ def solar_heat_gain_through_windows(
     windows,
     azimuth,
     direct_normal_irradiance,
-    direct_horizontal_irradiance,
+    diffuse_horizontal_irradiance,
     global_horizontal_irradiance,
     direct_normal_irradiance_extra,
     apparent_zenith,
@@ -264,12 +264,12 @@ def solar_heat_gain_through_windows(
     """
     solar_heat_gains = 0.0
 
-    if direct_normal_irradiance != 0 or direct_horizontal_irradiance != 0 or global_horizontal_irradiance != 0:
+    if direct_normal_irradiance != 0 or diffuse_horizontal_irradiance != 0 or global_horizontal_irradiance != 0:
         for window in windows:
             solar_heat_gain = window.calc_solar_heat_gains(
                 sun_azimuth=azimuth,
                 direct_normal_irradiance=direct_normal_irradiance,
-                direct_horizontal_irradiance=direct_horizontal_irradiance,
+                diffuse_horizontal_irradiance=diffuse_horizontal_irradiance,
                 global_horizontal_irradiance=global_horizontal_irradiance,
                 direct_normal_irradiance_extra=direct_normal_irradiance_extra,
                 apparent_zenith=apparent_zenith,

@@ -81,7 +81,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 2.263046339937521
+    "value": 2.1405857414661016
   },
   "BUI1.Building.Internal energy gains (Building)": {
     "building": "BUI1",
@@ -111,7 +111,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 21.734409373903134
+    "value": 21.73700436020655
   },
   "BUI1.Building.Minimum building indoor air temperature reached (Building)": {
     "building": "BUI1",
@@ -126,7 +126,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C",
-    "value": 16.404832814666854
+    "value": 16.41933476253583
   },
   "BUI1.Building.Rooftop area (Building)": {
     "building": "BUI1",
@@ -156,7 +156,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 4.69948940692353
+    "value": 12.53202740692353
   },
   "BUI1.Building.Specific heating load (Building)": {
     "building": "BUI1",
@@ -216,7 +216,7 @@
     },
     "tag": "Building",
     "unit": "\u00b0C*h",
-    "value": 9.054464560184295
+    "value": 8.706711270767912
   },
   "BUI1.Building.Theoretical cooling demand (Building)": {
     "building": "BUI1",
@@ -246,7 +246,7 @@
     },
     "tag": "Building",
     "unit": "kWh",
-    "value": 541.4692559754585
+    "value": 534.4613731768753
   },
   "BUI1.Costs.Costs of grid electricity for simulated period": {
     "building": "BUI1",
@@ -262,7 +262,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 202.57919854027273
+    "value": 200.79581734072468
   },
   "BUI1.Costs.Costs of other heating fuels for simulated period": {
     "building": "BUI1",
@@ -278,7 +278,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 212.53798354027273
+    "value": 210.7546023407247
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 250.23798354027272
+    "value": 248.45460234072468
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -382,7 +382,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 250.23798354027272
+    "value": 248.45460234072468
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -679,7 +679,7 @@
     },
     "tag": "Gas Meter",
     "unit": "Euro",
-    "value": 202.57919854027273
+    "value": 200.79581734072468
   },
   "BUI1.Gas Meter.Total gas consumption (GasMeter)": {
     "building": "BUI1",
@@ -694,7 +694,7 @@
     },
     "tag": "Gas Meter",
     "unit": "kWh",
-    "value": 810.3
+    "value": 803.2
   },
   "BUI1.Gas Meter.Total gas demand from grid (GasMeter)": {
     "building": "BUI1",
@@ -709,7 +709,7 @@
     },
     "tag": "Gas Meter",
     "unit": "kWh",
-    "value": 810.3
+    "value": 803.2
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -733,7 +733,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 846.3560633632378
+    "value": 839.2560633632379
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -837,7 +837,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 7.69
+    "value": 7.75
   },
   "BUI1.General.Windturbine production": {
     "building": "BUI1",
@@ -890,7 +890,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 4.440496701949179
+    "value": 4.427966203468404
   },
   "BUI1.Heat Distribution System.Mean flow temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -905,7 +905,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 27.6822381417293
+    "value": 27.715707849703627
   },
   "BUI1.Heat Distribution System.Mean return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -920,7 +920,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 24.86894407798806
+    "value": 24.937171832868604
   },
   "BUI1.Heat Distribution System.Mean temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -935,7 +935,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 2.8132940637412367
+    "value": 2.7785360168350275
   },
   "BUI1.Heat Distribution System.Min flow temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -950,7 +950,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 17.43780910488847
+    "value": 17.455350723720198
   },
   "BUI1.Heat Distribution System.Min return temperature of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -965,7 +965,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "\u00b0C",
-    "value": 16.404832814666854
+    "value": 16.41933476253583
   },
   "BUI1.Heat Distribution System.Min temperature difference of heat distribution system (HeatDistributionSystem)": {
     "building": "BUI1",
@@ -995,7 +995,7 @@
     },
     "tag": "Heat Distribution System",
     "unit": "kWh",
-    "value": 533.156300001056
+    "value": 526.5660074690137
   },
   "BUI1.Hydrogen Boiler.CAPEX - CO2 Footprint (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1055,7 +1055,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 697.6
+    "value": 690.5
   },
   "BUI1.Hydrogen Boiler.OPEX - CO2 Footprint (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1085,7 +1085,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "EUR",
-    "value": 202.57500000000002
+    "value": 200.8
   },
   "BUI1.Hydrogen Boiler.OPEX - Maintenance costs (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1130,7 +1130,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 539.8
+    "value": 533.2
   },
   "BUI1.Hydrogen Boiler.Total CO2 Footprint (CAPEX for simulated period + OPEX) (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1160,7 +1160,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "EUR",
-    "value": 210.85500000000002
+    "value": 209.08
   },
   "BUI1.Hydrogen Boiler.Total Green Hydrogen consumption (energy) (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1175,7 +1175,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 810.3000000000001
+    "value": 803.2
   },
   "BUI1.Hydrogen Boiler.Total Green Hydrogen consumption (mass) (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1190,7 +1190,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kg",
-    "value": 20.6
+    "value": 20.4
   },
   "BUI1.Hydrogen Boiler.Total Green Hydrogen consumption (volume) (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1205,7 +1205,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "l",
-    "value": 228880.3
+    "value": 226874.9
   },
   "BUI1.Hydrogen Boiler.Total thermal energy delivered (CondensingHydrogenBoiler)": {
     "building": "BUI1",
@@ -1220,7 +1220,7 @@
     },
     "tag": "Hydrogen Boiler",
     "unit": "kWh",
-    "value": 641.1999999999999
+    "value": 634.6
   },
   "BUI1.Residents.Residents' total electricity consumption (UTSPConnector)": {
     "building": "BUI1",
@@ -1295,6 +1295,6 @@
     },
     "tag": "Storage For Space Heating Hot Water",
     "unit": "kWh",
-    "value": 4.6
+    "value": 4.7
   }
 }

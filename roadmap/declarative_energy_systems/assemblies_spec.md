@@ -119,7 +119,8 @@ their internal ports bound before the assembly is offered to its importer); for 
    covering the selector's values exactly once; per-variant values live in the variant options instead) — and gives
    every member its structured address (§2.4), rewriting internal references. A value substituted into a member's
    config field writes no line when it equals the value the member's preset already gives that field (a member
-   without a preset: the field's default), and an `AUTO` or `none` writes no line, the field staying with the preset
+   without a preset: the field's default; a member built by a named constructor: always written, having no value to
+   compare with before the build), and an `AUTO` or `none` writes no line, the field staying with the preset
    or its law: the expansion writes only overrides, as the recorder does for a twin (decided, owner, 2026-10-07, D28,
    G9). A parameter feeding only such lines still does something for the library check (§2.6);
 4. binds every active port (§3.3) and lowers it to existing items — bare-name default inputs, explicit wires, dynamic
@@ -901,10 +902,10 @@ wiring (spec §3.5, "the two ends come from the wiring, never from a declared pe
 the wires its port produced. A circuit port binds exactly one partner; a split is a valve assembly with one circuit per
 branch. The dual-circuit generators (spec §3.3, circuits `SpaceHeating` and `Dhw`) make a heating assembly possible: `space_heating` binds
 the site's distribution side (D12), `dhw` binds `dhw/indirect_cylinder` or is declined. **Dependency:** the heating
-assemblies require hydronic stages C (DHW chain) and D (SH chain) of spec §9.5; before them generator, buffer and HDS
-are coupled through default connections (spec §9.2) and cannot be cut at a circuit. Stages A–B and §13 steps 1–3 proceed
-in parallel; each heating assembly is written once, against pure circuits, after C and D (or their joint PR) are on
-main.
+assemblies were to require hydronic stages C (DHW chain) and D (SH chain) of spec §9.5, since before them generator,
+buffer and HDS are coupled through default connections (spec §9.2). Lean v1 cuts them at a circuit all the same: a
+circuit port lowers to bare names over those default connections (§3.2, §13 step 4), so the heating assemblies with a
+buffer do not wait for C and D; the buffer-less one does (D25).
 
 ### 11.2 Energy balance (hisim-9uoo, #870/#871)
 
@@ -1001,7 +1002,11 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    run gives identical result columns; the golden gate's `composed` mode runs the composed file for the week (and the
    full year, where the setup has one) and its KPIs, renamed through `hisim/energy_system/assemblies/twins.py`, equal
    the Python setup's goldens within the gate's tolerance (owner, 2026-10-08); each carries its test
-   contract (§9.4) and the harness runs them in the PR gate. Waits for hydronic stages C and D (§11.1).
+   contract (§9.4) and the harness runs them in the PR gate. It does not wait for hydronic stages C and D (§11.1): v1
+   lowers a circuit port to bare names, each member at one end reading each member at the other end through the
+   default connections their classes already declare (§3.2), which couple heat pump, buffer, cylinder and
+   distribution as the twin does; the heating assemblies keep the buffer, so the distribution keeps its `PARALLEL`
+   default (D25).
 5. **One heating assembly per PR,** each with the equality gate against that generator's twin: condensing gas, oil,
    pellets, wood chips, hydrogen, ground source, district heating, electric heating, then solar thermal, with
    `supply/gas_connection`, `supply/oil_tank`, `dhw/indirect_cylinder`. The RenoVisor switches each generator to the
@@ -1150,8 +1155,10 @@ All by the owner on 2026-10-03.
   district heating). That is a property of the circuit, which the hydronic design already states: one pump owner per
   circuit, who publishes `MassFlowSpaceHeating`. From hydronic stage D on the HDS derives it from what the other end
   of its circuit publishes (it reads the flow through its default connections from that class, else it pumps), and the
-  enum goes away; no fact, no site setting, nothing written twice. Step 4 waits for stages C and D, so the first real
-  assemblies never meet the enum. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
+  enum goes away; no fact, no site setting, nothing written twice. Step 4 does not wait for stages C and D: v1 joins
+  circuit ends by bare names over the classes' default connections (§3.2, §13 step 4), and its heating assembly keeps
+  the buffer, so the HDS keeps the enum's default `PARALLEL` and no import sets it; the direct assembly waits for
+  stage D. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
   HDS inside the direct assembly (two shapes of the Building's input, D19), a site value checked against the import.
 
 - **D26 — Lean v1 (owner, 2026-10-06):** see §13.1; the cut list there supersedes D7 and D23 for v1. Revised 2026-10-07
@@ -1168,7 +1175,8 @@ All by the owner on 2026-10-03.
 
 - **D28 — Overrides only, and the gate of step 4 (owner, 2026-10-07):** (a) G9: a parameter value substituted into a
   member's config field writes no config line when it equals the value the member's preset already gives that field
-  (a member without a preset compares with the field default), and an `AUTO`/`none` substitution writes no line, the
+  (a member without a preset compares with the field default; a member built by a named constructor has no value to
+  compare with before the build, so its fed fields are written whenever they carry a value), and an `AUTO`/`none` substitution writes no line, the
   field staying with the preset or its law (§2.3 step 3); the import record keeps every parameter as given and as
   resolved. (b) The gate of §13 step 4 is a committed
   `energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml` (the site plus the six imports)

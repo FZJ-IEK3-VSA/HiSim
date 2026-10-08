@@ -10,10 +10,8 @@
 # buffer reads the heat pump's maximal thermal power inside the block. The defaults reproduce
 # household_heatpump_building_sizer (D9): a parameter at its preset's value, AUTO or none writes no config line (G9).
 #
-# A heat pump without DHW (the mockup's `serves_dhw: false`) is not offered: MoreAdvancedHeatPumpHPLib constructs its
-# DHW outputs only with with_domestic_hot_water_preparation, and a bounds entry cannot be switched off by a parameter,
-# so that contract cannot be stated in v1; it returns with a decided rule or as an assembly of its own (as D25 decides
-# for the buffer).
+# A heat pump without DHW is its own assembly, `heating/air_source_heat_pump_space_heating_only` (D29): the class
+# builds its DHW outputs only with with_domestic_hot_water_preparation, so each shape has its own contract.
 
 schema_version: 4
 kind: assembly

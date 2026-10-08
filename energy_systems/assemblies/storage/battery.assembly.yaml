@@ -6,7 +6,9 @@
 schema_version: 4
 kind: assembly
 name: storage/battery
-description: AC-coupled home battery, sized to the PV arrays it stands beside unless pinned.
+description: >-
+  AC-coupled home battery, sized to the PV arrays unless pinned; it always needs one or more arrays and one
+  energy manager.
 
 parameters:
   capacity_in_kwh:
@@ -29,6 +31,7 @@ components:
 interface:
   needs:
     pv_peak_power: {fact: pv_peak_power_in_watt, many: true, into: [Battery]}
+                   # required, pinned or not: a battery without an array is refused, as one without an energy manager
   provides:
     electricity:   {output: Battery.AcBatteryPowerUsed, controllable: {target_input: LoadingPowerInput}}
 

@@ -468,7 +468,7 @@ energy manager and the grid); the composed files of the gas, oil, pellets, wood-
 supply in place of the heat pump). The table `hisim/energy_system/assemblies/twins.py` names every composed file, its
 twin and the rename of its members to the twin's names. `tests/assemblies/test_twin_gates.py`, on
 `tests/assemblies/twin_gate.py`, runs one gate per row: it expands the composed file, renames its members and asserts
-the twin outside the listed intended differences (the battery's one-element `sizing_sources` list, G7, and one neutral
+the twin outside the listed intended differences (G7, the battery's one-element `sizing_sources` list, and one neutral
 swap of the sequence), and runs both for one day: every result column and KPI equal. The golden gate's `composed`
 mode runs each composed file for the week and the full year and compares its KPIs, renamed through the same table,
 with the Python setup's goldens (`golden_references/README.md`).

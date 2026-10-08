@@ -1,12 +1,13 @@
 # The natural-gas grid connection (the one provider of natural gas) and its meter (spec §5.1). The provision names its
-# carrier and its meter, `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`: every bound consumer's fuel
-# need lowers to the consumer's name at the meter's `{$port: connection}` placeholder, and the meter's class expands it
-# into the aggregator feeds it declares for the consuming outputs (GenericBoiler's EnergyDemandSh and EnergyDemandDhw,
-# whose EnergyPort names natural gas). That feed is the fuel link, and the meter the fuel port's balance peer.
+# carrier and its meter, `provides: {connection: {carrier: natural_gas, meter: GasMeter}}`: every consuming output a
+# bound consumer's fuel need names lands at the meter's `{$port: connection}` placeholder as the feed the meter's class
+# declares for it, written explicitly (D30): GenericBoiler's EnergyDemandSh and EnergyDemandDhw, whose EnergyPort names
+# natural gas. That feed is the fuel link, and the meter the fuel port's balance peer.
 #
-# The meter's gas_loadtype stays with its preset's law, copied from the energy_carrier fact of the one burner in the
-# file, as in the twin, which writes no line for it (D28: overrides only). A second burner of another fuel would make
-# that read ambiguous, which the engine refuses (§6, D26).
+# The meter's gas_loadtype stays with its preset's law, copied from the energy_carrier fact of the one provider of that
+# fact in the file, the burner, as in the twin, which writes no line for it (D28: overrides only). A second
+# energy_carrier provider of any value, a second burner of the same fuel included, leaves the law no one provider to
+# read, and sizing refuses the file (§5.1, D30).
 
 schema_version: 4
 kind: assembly

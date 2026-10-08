@@ -675,9 +675,6 @@ class PortBinder:
                 )
             # D30: each named output lands as the feed the meter's class declares for it, never as the consumer's
             # bare name; the declaration exists on the constructed meter, so the wiring writes it (SelectionPlan).
-            meter.lowered.setdefault(
-                positions[0], ([], f"carrier {carrier}: the consumers of {provider.reference}.{provision.name}")
-            )
             self.record.selection.landings.extend(landings)
             lowered.extend(
                 f"{meter.name}.inputs: {item.consumer}.{item.output} (its declared feed)" for item in landings

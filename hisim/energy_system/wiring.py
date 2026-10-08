@@ -437,7 +437,8 @@ def wire_energy_system(
         system: Its configurations, complete and sized.
         simulation_parameters: Parameters of the run, handed to every component.
         consuming: The consuming outputs of the carrier needs an expansion of imports lowered,
-            each checked for its carrier and its meter's feeds.
+            each checked for its carrier and its meter's feeds; the ones the selection lands at a
+            meter it has checked itself, so the caller leaves them out.
         selection: Selects observers' feeds among the constructed components (an expansion of
             imports' selection plan); ``None`` for a file without observers.
 

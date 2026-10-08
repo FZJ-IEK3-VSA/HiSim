@@ -1,7 +1,8 @@
 """The machinery of the twin gates (``assemblies_spec.md`` §13 steps 4 and 5, D9, D28): a composed file is its twin.
 
 A composed file — the site plus imports of ``energy_systems/assemblies/`` — is built (expansion of imports, then the
-wiring, which selects the observers' feeds and writes them as ordinary feeds) and its members renamed to the twin's
+wiring, which selects the observers' feeds and writes them as ordinary feeds, and lands each consuming output a carrier
+need names at its provider's meter as the feed the meter's class declares for it) and its members renamed to the twin's
 names by the rename map of its entry in the library table
 :data:`~hisim.energy_system.assemblies.twins.COMPOSED_TWINS`, which the golden gate's ``composed`` mode reads too.
 The renamed file must equal the recorded twin of the Python setup outside exactly the gate's intended differences:
@@ -29,22 +30,14 @@ from typing import Any, Dict, List, Mapping, Tuple
 import pandas as pd
 import yaml
 
-from hisim.energy_system.assemblies.twins import ComposedTwin, rename_column, rename_port_parts, rename_reference
+from hisim.energy_system.assemblies.testing.isolation import SIMULATION_PARAMETERS
+from hisim.energy_system.assemblies.twins import ComposedTwin, rename_address, rename_column, rename_reference
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.loader import dump_energy_system
+from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 
 #: The directory of the twins and the composed files.
 ENERGY_SYSTEMS = Path(__file__).resolve().parents[2] / "energy_systems"
-
-#: One day at 900 s with the KPIs written as JSON, for both runs.
-PARAMETERS: Mapping[str, Any] = {
-    "start_date": "2021-01-01T00:00:00",
-    "end_date": "2021-01-02T00:00:00",
-    "seconds_per_timestep": 900,
-    "country": "DE",
-    "logging_level": 1,
-    "post_processing_options": ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"],
-}
 
 
 @dataclass(frozen=True)
@@ -82,10 +75,6 @@ class TwinGate:
         """A result column, ``<component> - <output> [<unit>]``, with the component and its port-name parts renamed."""
         return rename_column(column, self.entry.rename)
 
-    def renamed_part(self, text: str) -> str:
-        """A derived port, column or KPI name with every member's port-name part renamed (``heating_HeatPump``)."""
-        return rename_port_parts(text, self.entry.rename)
-
     def renamed_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
         """One component of a document, every reference renamed, its feeds sorted by source.
 
@@ -118,27 +107,41 @@ class Run:
 
     document: Dict[str, Any]
     results: pd.DataFrame
-    kpis: Dict[Tuple[str, str, str, str], Tuple[Any, Any]]
+    kpis: Dict[str, Tuple[Any, Any]]
 
 
-def kpi_values(gate: TwinGate, path: Path, rename: bool) -> Dict[Tuple[str, str, str, str], Tuple[Any, Any]]:
-    """Every KPI of a run by building, tag, name and source component, renamed for the composed run."""
-    values: Dict[Tuple[str, str, str, str], Tuple[Any, Any]] = {}
-    for building, tags in json.loads(path.read_text(encoding="utf-8")).items():
-        for tag, entries in tags.items():
-            for entry in entries.values():
-                source = (entry.get("source") or {}).get("name") or ""
-                name = entry["name"]
-                if rename:
-                    source, name = gate.renamed(source), gate.renamed_part(name)
-                values[(building, tag, name, source)] = (entry["value"], entry["unit"])
+def kpi_values(gate: TwinGate, path: Path, rename: bool) -> Dict[str, Tuple[Any, Any]]:
+    """Every KPI of a run, ``(value, unit)`` by its dotted address, the composed run's renamed to the twin's.
+
+    Example: a KPI the composed gas run reports for ``heating-Boiler`` is keyed with the source
+    ``CondensingGasBoiler``, as the twin's run keys it. The entries are read by
+    :class:`~hisim.postprocessing.kpi_computation.kpi_address.KpiFinder` and renamed by
+    :func:`~hisim.energy_system.assemblies.twins.rename_address`, the two the golden gate's ``composed``
+    mode uses.
+
+    Args:
+        gate: The gate whose rename map applies.
+        path: The run's ``all_kpis.json``.
+        rename: Whether the run is the composed one.
+
+    Returns:
+        ``dotted address -> (value, unit)``.
+
+    Raises:
+        UnmappedMemberError: For a KPI of an assembly member the rename map gives no twin name.
+    """
+    values: Dict[str, Tuple[Any, Any]] = {}
+    for address, entry in KpiFinder(json.loads(path.read_text(encoding="utf-8"))).entries():
+        if rename:
+            address = rename_address(address, gate.entry.rename)
+        values[address.dotted] = (entry["value"], entry["unit"])
     return values
 
 
 def run_both(gate: TwinGate, directory: Path) -> Dict[str, Run]:
     """Both files of a gate run for one day, each in its own result directory below ``directory``."""
     parameters = directory / "one_day.simulation.yaml"
-    parameters.write_text(yaml.safe_dump(dict(PARAMETERS), sort_keys=False), encoding="utf-8")
+    parameters.write_text(yaml.safe_dump(dict(SIMULATION_PARAMETERS), sort_keys=False), encoding="utf-8")
     runs: Dict[str, Run] = {}
     for key, path in (("twin", gate.twin_path), ("composed", gate.composed_path)):
         built = run_energy_system(path, parameters, result_directory=str(directory / key))

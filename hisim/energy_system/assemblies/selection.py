@@ -38,7 +38,7 @@ from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemEr
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, ConsumingOutput, DispatchSpec
-from hisim.energy_system.wiring_checks import check_consuming_outputs, meter_feed_of
+from hisim.energy_system.wiring_checks import check_consuming_outputs
 
 
 @dataclass
@@ -165,19 +165,40 @@ class SelectionPlan:
                     + (f", but its need is bound to {item.via_partner}" if item.via_partner else "")
                     + "; a controllable output is actuated by exactly the one controller it binds (D21).",
                 )
-        check_consuming_outputs(components, self.landings)
+        landed = check_consuming_outputs(components, self.landings)
         for landing in self.landings:
-            request = meter_feed_of(components, landing)
+            assert landing.meter is not None
+            request = landed[(landing.meter, landing.consumer, landing.output)]
             selected[request.consumer] = list(selected.get(request.consumer, [])) + [
-                AggregatorFeed(
-                    source=request.source,
-                    output=request.output,
-                    component_type=request.component_type.name if request.component_type is not None else None,
-                    tags=tuple(tag.name for tag in request.flow_tags),
-                    weight=request.weight,
-                )
+                self.written(request, request.weight)
             ]
         return selected
+
+    @staticmethod
+    def written(request: FeedRequest, weight: int, dispatch: Optional[DispatchSpec] = None) -> AggregatorFeed:
+        """One feed request as the feed item a file writes: source, output, component type, tags, weight, dispatch.
+
+        Example: the gas meter's declared feed for ``boiler-Boiler.EnergyDemandSh`` becomes
+        ``{from: boiler-Boiler.EnergyDemandSh, tags: [GAS_CONSUMPTION_UNCONTROLLED], weight: 999}``.
+        The weight and the dispatch are arguments because a ranked observer feed carries a derived
+        weight and its dispatch, while a landed meter feed keeps the declared weight and has none.
+
+        Args:
+            request: The feed request, from a declaration of the observer's class.
+            weight: The weight the written feed carries.
+            dispatch: The dispatch of a ranked feed; ``None`` for a feed that is only measured.
+
+        Returns:
+            The feed item, as the realized file writes it.
+        """
+        return AggregatorFeed(
+            source=request.source,
+            output=request.output,
+            component_type=request.component_type.name if request.component_type is not None else None,
+            tags=tuple(tag.name for tag in request.flow_tags),
+            weight=weight,
+            dispatch=dispatch,
+        )
 
     def _select(self, observer: Observer, components: Mapping[str, Any]) -> List[AggregatorFeed]:
         """One observer's feeds: its candidates, filtered by its selection, ranked."""
@@ -267,16 +288,7 @@ class SelectionPlan:
                     None,
                 )
                 dispatch = DispatchSpec(target_input=target_input)
-            feeds.append(
-                AggregatorFeed(
-                    source=feed.source,
-                    output=feed.output,
-                    component_type=component_type,
-                    tags=tuple(tag.name for tag in feed.flow_tags),
-                    weight=weight,
-                    dispatch=dispatch,
-                )
-            )
+            feeds.append(self.written(feed, weight, dispatch))
         return feeds
 
     def _refuse_collision(

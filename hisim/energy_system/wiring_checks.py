@@ -358,13 +358,29 @@ def unconsumed_sources(
     )
 
 
-def check_consuming_outputs(components_by_name: Mapping[str, Component], consuming: Sequence[ConsumingOutput]) -> None:
+def check_consuming_outputs(
+    components_by_name: Mapping[str, Component], consuming: Sequence[ConsumingOutput]
+) -> Dict[Tuple[str, str, str], FeedRequest]:
     """Checks every consuming output against its component and its meter, the two facts no wire shows.
+
+    Each consuming output must be an output of its consumer whose energy port carries the need's
+    carrier; one with a meter must also be an output the meter's class declares a feed for, and that
+    feed is what the output lands as. Example: ``boiler-Boiler.FuelUse`` consumed as natural gas with
+    the meter ``gas-Meter`` returns ``{("gas-Meter", "boiler-Boiler", "FuelUse"): <its declared feed>}``.
+    The feeds are returned so that the caller landing them reads each declaration once.
+
+    Args:
+        components_by_name: Every constructed component, keyed by its name in the file.
+        consuming: The consuming outputs to check, in the order the carrier needs named them.
+
+    Returns:
+        The feed each consuming output with a meter lands as, keyed by ``(meter, consumer, output)``,
+        in the order of ``consuming``; an output without a meter (electricity) has none.
 
     Raises:
         EnergySystemWiringError: ``EF-21`` for an output the consumer does not have, ``EF-7M`` for one
             whose energy port carries another carrier, ``EF-7N`` for a named output its meter's class
-            declares no feed for (:func:`meter_feed_of`).
+            declares no feed or more than one feed for (:func:`meter_feed_of`).
     """
     for item in consuming:
         consumer = components_by_name[item.consumer]
@@ -386,9 +402,11 @@ def check_consuming_outputs(components_by_name: Mapping[str, Component], consumi
                 f"the output '{item.consumer}.{item.output}' is consumed as {item.carrier}, but "
                 + (f"its energy port carries {carrier}." if carrier else "it declares no energy port."),
             )
+    landed: Dict[Tuple[str, str, str], FeedRequest] = {}
     for item in consuming:
         if item.meter is not None:
-            meter_feed_of(components_by_name, item)
+            landed[(item.meter, item.consumer, item.output)] = meter_feed_of(components_by_name, item)
+    return landed
 
 
 def meter_feed_of(components_by_name: Mapping[str, Component], item: ConsumingOutput) -> FeedRequest:
@@ -396,24 +414,34 @@ def meter_feed_of(components_by_name: Mapping[str, Component], item: ConsumingOu
 
     The declaration is the meter's dynamic default connection for the consumer's class and the
     output, which only the constructed meter states; it is read through the lookup feed resolution
-    uses for a bare item, so the landed feed is the one an author would write by hand.
+    uses for a bare item, so the landed feed is the one an author would write by hand. Example: the
+    gas meter declares one feed for ``GenericBoiler.EnergyDemandSh``, so the boiler's output lands as
+    that feed. A class that declares the output twice is refused rather than one declaration dropped.
 
     Raises:
-        EnergySystemWiringError: ``EF-7N`` for an output the meter's class declares no feed for.
+        EnergySystemWiringError: ``EF-7N`` for an output the meter's class declares no feed for, or
+            more than one.
     """
     assert item.meter is not None
     meter, consumer = components_by_name[item.meter], components_by_name[item.consumer]
     declared = DynamicConnectionResolver.default_feeds_of(meter, consumer.get_classname())
     match = [declaration for declaration in declared if declaration.source_component_field_name == item.output]
-    if not match:
+    if len(match) != 1:
         fed = ", ".join(str(declaration.source_component_field_name) for declaration in declared) or "nothing"
+        problem = (
+            f"declares {len(match)} feeds for it, so the one it lands as is not determined"
+            if match
+            else f"declares no feed for it; of {consumer.get_classname()} it declares feeds for {fed}"
+        )
         raise EnergySystemWiringError(
             EnergySystemErrorId.METER_FEEDS,
             f"components.{item.meter}.inputs",
             f"the carrier need names the consuming output '{item.consumer}.{item.output}', but the meter "
-            f"'{item.meter}' ({meter.get_classname()}) declares no feed for it; of {consumer.get_classname()} it "
-            f"declares feeds for {fed}.",
-            remedy="Name only outputs the provider's meter declares a feed for, or declare it in the meter's class.",
+            f"'{item.meter}' ({meter.get_classname()}) {problem}.",
+            remedy=(
+                "Name only outputs the provider's meter declares exactly one feed for, or declare it once in the "
+                "meter's class."
+            ),
         )
     return DynamicConnectionResolver.feed_from_declaration(match[0], item.meter, item.consumer)
 

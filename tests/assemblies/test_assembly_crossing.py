@@ -352,28 +352,44 @@ def test_the_reader_refuses_a_provision_of_the_wrong_shape(tmp_path: Path, port:
 
 @pytest.mark.assemblies
 @pytest.mark.parametrize(
-    ("outputs", "carrier", "code", "fragment"),
+    ("outputs", "carrier", "meter", "code", "fragment"),
     [
-        ("[Boiler.Nope]", "natural_gas", "EF-21", "'boiler-Boiler.Nope', which MockBoiler does not have"),
+        (
+            "[Boiler.Nope]",
+            "natural_gas",
+            "MockGasMeter",
+            "EF-21",
+            "'boiler-Boiler.Nope', which MockBoiler does not have",
+        ),
         (
             "[Boiler.FuelUse]",
             "heating_oil",
+            "MockGasMeter",
             "EF-7M",
             "consumed as heating_oil, but its energy port carries natural_gas",
         ),
         (
             "[Boiler.FuelUse, Boiler.FlueLoss]",
             "natural_gas",
+            "MockGasMeter",
             "EF-7N",
             "names the consuming output 'boiler-Boiler.FlueLoss', but the meter 'supply-Meter' (MockGasMeter) declares "
             "no feed for it; of MockBoiler it declares feeds for FuelUse",
         ),
+        (
+            "[Boiler.FuelUse]",
+            "natural_gas",
+            "MockDoubleGasMeter",
+            "EF-7N",
+            "names the consuming output 'boiler-Boiler.FuelUse', but the meter 'supply-Meter' (MockDoubleGasMeter) "
+            "declares 2 feeds for it, so the one it lands as is not determined",
+        ),
     ],
 )
 def test_the_wiring_checks_what_a_carrier_need_states_and_no_wire_shows(
-    tmp_path: Path, outputs: str, carrier: str, code: str, fragment: str
+    tmp_path: Path, outputs: str, carrier: str, meter: str, code: str, fragment: str
 ) -> None:
-    """A consuming output exists, carries the need's carrier, and is an output its meter declares a feed for."""
+    """A consuming output exists, carries the need's carrier, and is one its meter declares exactly one feed for."""
     library = Library(tmp_path)
     library.add(
         "test/burner",
@@ -396,7 +412,7 @@ def test_the_wiring_checks_what_a_carrier_need_states_and_no_wire_shows(
         kind: assembly
         name: test/supply
         components:
-          Meter: {{class: {MOCKS}.MockGasMeter, preset: standard, inputs: [{{$port: connection}}]}}
+          Meter: {{class: {MOCKS}.{meter}, preset: standard, inputs: [{{$port: connection}}]}}
         interface:
           provides:
             connection: {{carrier: {carrier}, meter: Meter}}

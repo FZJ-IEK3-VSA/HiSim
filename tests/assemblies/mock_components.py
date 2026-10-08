@@ -1011,6 +1011,33 @@ class MockGasMeter(MockAggregator):
 
 @dataclass_json
 @dataclass
+class MockDoubleGasMeterConfig(MockGasMeterConfig):
+    """A gas meter whose class declares the boiler's fuel output twice."""
+
+    MAIN_CLASS = "tests.assemblies.mock_components.MockDoubleGasMeter"
+
+
+class MockDoubleGasMeter(MockGasMeter):
+    """The mock gas meter with the feed from ``MockBoiler.FuelUse`` declared twice.
+
+    Stands in for a meter class whose author declared one consumer output in two feeds, which leaves
+    the feed a carrier need lands as undetermined (EF-7N).
+    """
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockDoubleGasMeterConfig) -> None:
+        """Builds the meter, then declares the boiler's fuel output twice in place of once."""
+        super().__init__(my_simulation_parameters, config)
+        self.observe(
+            MockBoiler,
+            ("FuelUse", "FuelUse"),
+            [lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+            MEASURED,
+            lt.LoadTypes.GAS,
+        )
+
+
+@dataclass_json
+@dataclass
 class MockEnergyManagerConfig(ConfigBase):
     """A surplus controller raising set points by a fixed offset."""
 

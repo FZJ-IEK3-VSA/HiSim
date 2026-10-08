@@ -390,3 +390,78 @@ def test_a_minimum_time_shorter_than_one_timestep_warns_once_and_a_whole_one_doe
     assert len(warnings) == len(warned_fields)
     assert controller.minimum_runtime_in_timesteps == int(runtime_in_seconds // 900)
     assert controller.minimum_resting_time_in_timesteps == int(resting_time_in_seconds // 900)
+
+
+def boiler_with_fake_inputs() -> Any:
+    """A condensing gas boiler of 20 kW whose five inputs read fake outputs, the step values and the fakes.
+
+    The fakes are, in order: control signal, operating mode, lift, space-heating return, hot-water return.
+    """
+    from hisim import component as cp  # pylint: disable=import-outside-toplevel
+    from tests import functions_for_testing as fft  # pylint: disable=import-outside-toplevel
+
+    parameters = SimulationParameters.one_day_only(2021, 900)
+    config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("Boiler")
+    config.maximal_thermal_power_in_watt = 20000.0
+    config.minimal_thermal_power_in_watt = 2000.0
+    boiler = generic_boiler.GenericBoiler(parameters, config)
+    channels = [
+        (boiler.control_signal_channel, lt.LoadTypes.ANY, lt.Units.PERCENT),
+        (boiler.operating_mode_channel, lt.LoadTypes.ANY, lt.Units.ANY),
+        (boiler.temperature_delta_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        (boiler.water_input_temperature_sh_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+        (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+    ]
+    fakes = []
+    for number, (channel, load_type, unit) in enumerate(channels):
+        fake = cp.ComponentOutput(
+            f"Fake{number}", f"Fake{number}", load_type, unit, component_id=ComponentID(f"Fake{number}")
+        )
+        channel.source_output = fake
+        fakes.append(fake)
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, boiler]))
+    fft.add_global_index_of_components([*fakes, boiler])
+    return boiler, stsv, fakes
+
+
+@pytest.mark.base
+def test_the_hot_water_circuit_books_the_heat_its_water_carries_from_the_tanks_step_mean() -> None:
+    """In hot-water mode the boiler supplies the tank's step mean plus the lift and books m c (T_sup - T_ret).
+
+    20 kW at full signal, a 20 K lift and a 47.3 °C return: the boiler pumps P / (c 20 K) and supplies 67.3 °C, and
+    the heat it books is the heat that water carries, which is its thermal power.
+    """
+    from hisim import hydronics  # pylint: disable=import-outside-toplevel
+
+    boiler, stsv, fakes = boiler_with_fake_inputs()
+    for fake, value in zip(fakes, [1.0, HeatingMode.DOMESTIC_HOT_WATER.value, 20.0, 35.0, 47.3]):
+        stsv.set_output_value(fake, value)
+    boiler.i_simulate(0, stsv, False)
+
+    def output(channel: Any) -> float:
+        return float(stsv.values[channel.global_index])
+
+    mass_flow = output(boiler.water_output_mass_flow_dhw_channel)
+    supply = output(boiler.water_output_temperature_dhw_channel)
+    booked = output(boiler.thermal_output_power_dhw_channel)
+    assert supply == pytest.approx(67.3)
+    assert booked == hydronics.circuit_power_w(mass_flow, supply, 47.3)
+    assert booked == pytest.approx(20000.0 * boiler.max_combustion_efficiency, rel=1e-12)
+    assert output(boiler.energy_demand_dhw_channel) == pytest.approx(20000.0 * 900 / 3600)
+
+
+@pytest.mark.base
+def test_a_hot_water_charge_without_a_lift_does_not_fire() -> None:
+    """With no lift the circuit moves no water: no heat, no fuel, no combustion loss on that step."""
+    boiler, stsv, fakes = boiler_with_fake_inputs()
+    for fake, value in zip(fakes, [1.0, HeatingMode.DOMESTIC_HOT_WATER.value, 0.0, 35.0, 71.0]):
+        stsv.set_output_value(fake, value)
+    boiler.i_simulate(0, stsv, False)
+    for channel in (
+        boiler.water_output_mass_flow_dhw_channel,
+        boiler.thermal_output_power_dhw_channel,
+        boiler.energy_demand_dhw_channel,
+        boiler.combustion_heat_loss_channel,
+    ):
+        assert stsv.values[channel.global_index] == 0.0
+    assert stsv.values[boiler.water_output_temperature_dhw_channel.global_index] == 71.0

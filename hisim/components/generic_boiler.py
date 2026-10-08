@@ -18,6 +18,7 @@ from enum import Enum, unique
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from hisim import hydronics
 from hisim import log
 from hisim import loadtypes as lt
 from hisim.components.configuration import (
@@ -683,6 +684,10 @@ class GenericBoiler(Component):
 
         if not 0 <= control_signal <= 1:
             raise ValueError(f"Expected a control signal between 0 and 1, not {control_signal}")
+        if operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value and temperature_delta <= 0:
+            # A hot-water charge without a lift moves no water, so its circuit carries no heat and the burner
+            # stays off on this step.
+            operating_mode = HeatingMode.OFF.value
 
         # Calculate combustion efficiency
         delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
@@ -767,21 +772,25 @@ class GenericBoiler(Component):
                 stsv.get_input_value(self.water_input_temperature_dhw_channel),
             )
         elif operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
+            # The hot-water circuit: the boiler pumps m = P_th / (c lift) and supplies the tank's step mean (its
+            # return) plus the lift; the heat it books is what that water carries, m c (T_sup - T_ret), which is
+            # P_th (spec §5.1, D1).
+            return_temperature_dhw_in_celsius = stsv.get_input_value(self.water_input_temperature_dhw_channel)
+            water_output_temperature_in_celsius = return_temperature_dhw_in_celsius + temperature_delta
+            thermal_power_dhw_in_watt = hydronics.circuit_power_w(
+                mass_flow_out_in_kg_per_second, water_output_temperature_in_celsius, return_temperature_dhw_in_celsius
+            )
             stsv.set_output_value(
                 self.thermal_output_power_dhw_channel,
-                thermal_power_delivered_in_watt,
+                thermal_power_dhw_in_watt,
             )
             stsv.set_output_value(
                 self.thermal_output_energy_dhw_channel,
-                thermal_energy_delivered_in_watt_hour,
+                thermal_power_dhw_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
             )
             stsv.set_output_value(
                 self.energy_demand_dhw_channel,
                 fuel_energy_consumption_in_watt_hour,
-            )
-
-            water_output_temperature_in_celsius = temperature_delta + stsv.get_input_value(
-                self.water_input_temperature_dhw_channel
             )
             stsv.set_output_value(
                 self.water_output_temperature_dhw_channel,

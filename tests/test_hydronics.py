@@ -351,6 +351,30 @@ def test_circuit_heat_is_m_c_delta_t_dt() -> None:
     assert hydronics.kilowatt_hours(0.1, 60.0, 50.0, 3600.0) == pytest.approx(4.18, rel=1e-15)
 
 
+@pytest.mark.parametrize(
+    ("mass_flow", "t_supply", "t_return", "dt"),
+    [(0.4, 35.0, 30.04, 900.0), (0.333, 7.0, 12.3, 60.0), (0.0, 55.0, 45.0, 3600.0), (1.7, 40.1, 40.1, 1.0)],
+)
+def test_circuit_heat_is_the_circuit_power_times_the_step_to_the_last_bit(
+    mass_flow: float, t_supply: float, t_return: float, dt: float
+) -> None:
+    """What a component books as power and what the balance derives as heat from the same values agree exactly."""
+    power = hydronics.circuit_power_w(mass_flow, t_supply, t_return)
+    assert power == mass_flow * C_WATER * (t_supply - t_return)
+    assert hydronics.circuit_heat_j(mass_flow, t_supply, t_return, dt) == power * dt
+
+
+def test_circuit_power_is_m_c_delta_t_and_refuses_what_circuit_heat_refuses() -> None:
+    """0.4 kg/s over 4.96 K carries 8293.12 W; a negative flow and a non-finite temperature are refused."""
+    assert hydronics.circuit_power_w(0.4, 35.0, 30.04) == pytest.approx(8293.12, rel=1e-12)
+    with pytest.raises(hydronics.NegativeMassFlowError):
+        hydronics.circuit_power_w(-0.1, 35.0, 30.0)
+    with pytest.raises(hydronics.NonFiniteValueError):
+        hydronics.circuit_power_w(0.1, math.nan, 30.0)
+    with pytest.raises(hydronics.NonFiniteValueError, match="circuit power"):
+        hydronics.circuit_power_w(1e306, 1e3, -1e3)
+
+
 def test_kilowatt_hours_sign_rule() -> None:
     """Heating (``T_sup > T_ret``) is positive, cooling (``T_sup < T_ret``) negative, no flow or no lift zero."""
     assert hydronics.kilowatt_hours(0.2, 55.0, 45.0, 900.0) > 0.0

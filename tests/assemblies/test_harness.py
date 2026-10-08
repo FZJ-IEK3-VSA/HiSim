@@ -304,10 +304,11 @@ def test_a_fact_read_behind_an_inactive_fact_port_gets_its_registered_provider(t
 
 @pytest.mark.assemblies
 def test_a_fact_a_partner_in_the_system_contributes_gets_no_second_provider() -> None:
-    """The oil tank's meter copies its carrier from the oil boiler beside it, never from the gas boiler.
+    """Catches the harness adding a second energy_carrier provider beside the oil tank's consumer partner.
 
-    Every fuel's consumer partner contributes energy_carrier by its class; no partner serves the fact, and a
-    second burner of another fuel would make the meter's read ambiguous.
+    The oil boiler partner contributes energy_carrier by its class, and the meter copies its carrier from it, so no
+    partner serves the fact. A second provider of the fact, of any value (a second burner of the same fuel included),
+    leaves the meter's law no one provider to read, and sizing refuses the system.
     """
     library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
     resolver = AssemblyResolver([library])

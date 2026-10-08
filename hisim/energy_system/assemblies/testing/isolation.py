@@ -11,7 +11,8 @@ a member's class reads that no member provides and no fact port names crosses th
 engine's bare-fact rule, as it does in the system that imports the assembly (§6), so it gets the
 registered provider of that fact as well (:func:`facts_needed`), unless a partner already in the
 system contributes it by its class, as the consumer of a fuel contributes the carrier its meter
-copies: the engine binds the fact there, and a second provider would make the read ambiguous. Optional
+copies: the engine binds the fact there, and sizing refuses a second provider of the fact, of any
+value, since the meter's law then has no one provider to read. Optional
 ports are bound like required ones, so the run exercises the whole interface the parameters offer;
 the verb is written out (``bind:`` for a required port, ``optional-bind:`` for an optional one)
 wherever the format has one. A port no partner serves refuses the build by name.

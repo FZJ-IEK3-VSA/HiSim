@@ -780,10 +780,9 @@ active port whose binding changes what the assembly computes, optional ports inc
 for a fuel the assembly provides a consumer partner, and for every sizing fact a member's class reads that no member
 provides, no fact port names and no partner already in the system contributes by its class the registered provider
 of that fact (it crosses by the bare-fact rule, §6, D29; `facts_needed` in `testing/isolation.py`: a fuel meter copies
-its carrier from the consumer partner beside it, and a second provider would make the read ambiguous); one
-simulated day at 900 s per step (an assembly declares no resolution), the energy-balance check and `i_doublecheck`
-on. The test
-partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
+its carrier from the consumer partner beside it, and a second `energy_carrier` provider of any value is refused at
+sizing, §5.1, D30); one simulated day at 900 s per step (an assembly declares no resolution), the energy-balance
+check and `i_doublecheck` on. The test partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
 consumer or fact, each naming the partners it requires. The run fails on an exception,
 a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below. The declared parameter box
 may contain combinations a member's component refuses at construction (`ConfigurationRefusedError`, such as a heat

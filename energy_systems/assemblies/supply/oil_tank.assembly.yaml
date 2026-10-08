@@ -1,11 +1,15 @@
 # The heating-oil tank (the one provider of heating oil) and its meter (spec §5.1): one supply per fuel (owner,
 # 2026-10-07), the shape of supply/gas_connection. The provision names its carrier and its meter, `provides:
 # {connection: {carrier: heating_oil, meter: FuelMeter}}`: every consuming output a bound consumer's fuel need names
-# lands at the meter's `{$port: connection}` placeholder as the feed the meter's class declares for it (D30),
-# GenericBoiler's EnergyDemandSh and EnergyDemandDhw, whose EnergyPort names heating oil.
+# lands at the meter's `{$port: connection}` placeholder as the feed the meter's class declares for it, written
+# explicitly (D30): GenericBoiler's EnergyDemandSh and EnergyDemandDhw, whose EnergyPort names heating oil. That feed is
+# the fuel link, and the meter the fuel port's balance peer.
 #
-# The meter's fuel_loadtype and its two fuel constants stay with its preset's laws, copied from the facts of the one
-# burner in the file, as in household_oil_building_sizer, which writes no line for them (D28: overrides only).
+# The meter's fuel_loadtype and its two fuel constants stay with its preset's laws, copied from the energy_carrier,
+# heating-value and density facts of the one provider of those facts in the file, the burner, as in
+# household_oil_building_sizer, which writes no line for them (D28: overrides only). A second energy_carrier provider of
+# any value, a second burner of the same fuel included, leaves the laws no one provider to read, and sizing refuses the
+# file (§5.1, D30).
 
 schema_version: 4
 kind: assembly

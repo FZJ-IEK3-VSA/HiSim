@@ -48,7 +48,7 @@ rules:
         - /hisim/energy_system/executor.py
         - /hisim/energy_system/audit.py
         - /hisim/energy_system/comments.py
-        - /hisim/economics/__main__.py
+        - /hisim/economics/staged_cli.py
         - /hisim/economics/audit.py
         - /hisim/economics/bridge.py
         - /hisim/economics/exports.py

@@ -1,3 +1,6 @@
+# HISTORICAL since 2026-10-07 (spec §9.3): this directory is the design record, no longer updated and read by no test.
+# The real library is energy_systems/assemblies/, the real composed files energy_systems/*.composed.energy_system.yaml.
+#
 # Mockup (design, lean v1 syntax, spec §13.1): the composed energy-system file the RenoVisor translator would write for ONE
 # calculation request, covering every leaf of the request schema (calculation-request.schema.json at the pinned
 # commit) and every measure of measures.yaml — including features HiSim does not model yet, marked (†). Every

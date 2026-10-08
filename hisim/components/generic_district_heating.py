@@ -15,6 +15,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, ComponentType
 from hisim.component import (
@@ -196,6 +197,7 @@ class DistrictHeating(Component):
 
     # Inputs for DHW
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
+    SupplyTemperatureSetForDHW = "SupplyTemperatureSetForDHW"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
@@ -210,6 +212,10 @@ class DistrictHeating(Component):
     WaterOutputDhwMassFlowRate = "WaterOutputDhwMassFlowRate"
     #: The heat taken from the network in this step, what the meter bills: space heating plus hot water (Wh).
     DistrictHeatDrawn = "DistrictHeatDrawn"
+
+    #: The lift over which the hot-water circuit's pump flow carries the connected load: the pump runs at
+    #: ``m = P_connected / (c * 100 K)``, so a connected load of 15 kW pumps 0.0359 kg/s.
+    DHW_PUMP_DESIGN_LIFT_IN_KELVIN: ClassVar[float] = 100.0
 
     def __init__(
         self,
@@ -267,6 +273,13 @@ class DistrictHeating(Component):
             True,
         )
         if self.config.with_domestic_hot_water_preparation:
+            self.supply_temperature_set_for_dhw_channel: ComponentInput = self.add_input(
+                self.component_name,
+                DistrictHeating.SupplyTemperatureSetForDHW,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
             self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
                 self.component_name,
                 DistrictHeating.WaterInputTemperatureDhw,
@@ -398,6 +411,13 @@ class DistrictHeating(Component):
                 DistrictHeating.DeltaTemperatureNeededForSH,
                 controller_classname,
                 component_class.DeltaTemperatureNeededForSH,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                DistrictHeating.SupplyTemperatureSetForDHW,
+                controller_classname,
+                component_class.SupplyTemperatureSetForDHW,
             )
         )
         return connections
@@ -543,6 +563,7 @@ class DistrictHeating(Component):
                 water_mass_flow_rate_in_kg_per_s,
             ) = self._calculate_dhw_outputs(
                 water_input_temperature_for_dhw_deg_c,
+                stsv.get_input_value(self.supply_temperature_set_for_dhw_channel),
                 delta_temperature_needed_for_dhw_in_celsius,
             )
 
@@ -595,6 +616,7 @@ class DistrictHeating(Component):
                 water_mass_flow_rate_for_dhw_in_kg_per_s,
             ) = self._calculate_dhw_outputs(
                 water_input_temperature_for_dhw_deg_c,
+                stsv.get_input_value(self.supply_temperature_set_for_dhw_channel),
                 delta_temperature_needed_for_dhw_in_celsius,
             )
 
@@ -719,27 +741,49 @@ class DistrictHeating(Component):
         )
         return thermal_power_delivered_in_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
 
-    def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
+    def _calculate_dhw_outputs(
+        self,
+        water_input_temperature_deg_c: float,
+        supply_temperature_set_deg_c: float,
+        delta_temperature_needed_in_celsius: float,
+    ) -> Tuple[float, float, float, float]:
+        """The hot-water circuit's heat, energy, supply temperature and mass flow for one step (spec §5.4).
 
-        # calculate thermal power delivered Q = m * cw * dT
+        The substation is a power-limited heat exchanger. While the controller asks for hot water (a positive
+        ``delta_temperature_needed_in_celsius``), its pump runs at ``m = P_connected / (c * 100 K)``
+        (:data:`DHW_PUMP_DESIGN_LIFT_IN_KELVIN`) and it supplies
+        ``T_sup = T_ret + min(T_set - T_ret, P_connected / (m c))``, never below the return: the set temperature
+        unless the connected load runs out first. ``T_ret`` is the tank's step mean. The heat it books, and the
+        network bills, is what that water carries, ``m c (T_sup - T_ret)`` (:func:`hisim.hydronics.circuit_power_w`).
+        For example, a 15 kW connection with a 50 °C return and a 70 °C set temperature pumps 0.0359 kg/s, supplies
+        70 °C and delivers 3 kW. Without a request the circuit moves no water and its supply is its return.
+
+        Args:
+            water_input_temperature_deg_c: The circuit's return temperature, the tank's step mean, °C.
+            supply_temperature_set_deg_c: The supply temperature the controller sets for hot water, °C.
+            delta_temperature_needed_in_celsius: The controller's request; zero or less asks for no hot water.
+
+        Returns:
+            The thermal power in W, the thermal energy of the step in Wh, the supply temperature in °C and the
+            mass flow in kg/s.
+        """
         if delta_temperature_needed_in_celsius > 0:
-            # regulate thermal output power based on deltaT needed
             connected_load_in_w = concrete(self.config.connected_load_in_w)
-            thermal_power_delivered_in_w = min(
-                connected_load_in_w * delta_temperature_needed_in_celsius / 100.0, connected_load_in_w
+            water_mass_flow_rate_in_kg_per_s = connected_load_in_w / (
+                hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * self.DHW_PUMP_DESIGN_LIFT_IN_KELVIN
             )
-            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_in_w / (
-                PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                * delta_temperature_needed_in_celsius
+            lift_in_kelvin = min(
+                supply_temperature_set_deg_c - water_input_temperature_deg_c,
+                connected_load_in_w / (water_mass_flow_rate_in_kg_per_s * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K),
             )
+            water_target_temperature_deg_c = water_input_temperature_deg_c + max(lift_in_kelvin, 0.0)
         else:
-            thermal_power_delivered_in_w = 0
-            water_mass_flow_rate_in_kg_per_s = 0
+            water_mass_flow_rate_in_kg_per_s = 0.0
+            water_target_temperature_deg_c = water_input_temperature_deg_c
 
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
+        thermal_power_delivered_in_w = hydronics.circuit_power_w(
+            water_mass_flow_rate_in_kg_per_s, water_target_temperature_deg_c, water_input_temperature_deg_c
+        )
         thermal_energy_delivered_in_watt_hour = (
             thermal_power_delivered_in_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
@@ -1027,6 +1071,9 @@ class DistrictHeatingController(Component):
     # Outputs
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"
+    #: The supply temperature the substation's hot-water circuit aims at: the tank's start temperature plus
+    #: the lift the controller asks for, zero while no hot water is asked for.
+    SupplyTemperatureSetForDHW = "SupplyTemperatureSetForDHW"
     OperatingMode = "HeatingMode"
 
     def __init__(
@@ -1096,6 +1143,16 @@ class DistrictHeatingController(Component):
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description=f"here a description for {self.DeltaTemperatureNeededForSH} will follow.",
+        )
+        self.supply_temperature_set_for_dhw_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.SupplyTemperatureSetForDHW,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            output_description=(
+                "The supply temperature the hot-water circuit aims at: the tank's start temperature plus the lift "
+                "asked for (DeltaTemperatureNeededForDHW), zero while no hot water is asked for."
+            ),
         )
 
         self.controller_mode: HeatingMode
@@ -1263,6 +1320,15 @@ class DistrictHeatingController(Component):
         stsv.set_output_value(
             self.delta_temperature_for_sh_to_district_heating_channel,
             delta_temperature_for_space_heating_in_celsius,
+        )
+        stsv.set_output_value(
+            self.supply_temperature_set_for_dhw_channel,
+            (
+                water_temperature_input_from_warm_water_storage_in_celsius + delta_temperature_for_dhw_in_celsius
+                if water_temperature_input_from_warm_water_storage_in_celsius is not None
+                and delta_temperature_for_dhw_in_celsius > 0
+                else 0.0
+            ),
         )
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
 

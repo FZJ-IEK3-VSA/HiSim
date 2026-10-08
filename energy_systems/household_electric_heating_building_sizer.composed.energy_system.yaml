@@ -1,0 +1,77 @@
+# The composed file of the electric heating twin (assemblies_spec.md §8, §13 step 5): the site with the twin's site
+# values plus the six imports from energy_systems/assemblies/ that reproduce
+# household_electric_heating_building_sizer.energy_system.yaml, the recorded twin of
+# system_setups/household_electric_heating_building_sizer.py. tests/assemblies/test_twin_gates.py expands it, renames the
+# members to the twin's names and asserts the twin outside the intended differences, and runs both for one day: every
+# result column equal.
+#
+# Site component names are the twin's; a site entry carries a `ports:` block only where an import binds to it, and
+# `{$port: <port>}` in its inputs marks where the bound port's items land. Direct electric heating has no water circuit
+# (#854): the site has no heat distribution and no heat-distribution controller, and the Building reads the heater's
+# space-heating heat through its `heating` need, which binds the one ElectricHeating of the file. `order:` is the
+# evaluation order within a time step (spec §2.3): Building 1, UTSPConnector 2, Weather 3, pv 4, heating 5 (Controller,
+# Heater), dhw 6, grid 7, battery 8, control 9, the twin's sequence with no swap: there is no buffer. Electricity has no
+# link (§4.3): the heater's electricity need checks the one grid connection, and the energy manager observes its two
+# electricity outputs by its class's declarations.
+
+schema_version: 4
+name: household_electric_heating_building_sizer
+description: Household electric heating system setup with building sizing.
+
+components:
+  Building:
+    order: 1
+    class: hisim.components.building.building.Building
+    preset: german_single_family_home
+    config:
+      number_of_apartments: 1.0
+      enable_opening_windows: true
+      weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+    inputs:
+      - Weather
+      - {$port: temperature_modifier}
+      - UTSPConnector
+      - {$port: heating}
+    ports:
+      temperature_modifier: {partner: L2GenericEnergyManagementSystem, optional: true}   # BuildingTemperatureModifier
+      heating: {partner: ElectricHeating}                   # the heater's space-heating heat; no water circuit
+    optional-bind: {temperature_modifier: control}
+  UTSPConnector:
+    order: 2
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: couple_both_at_work
+    config:
+      data_acquisition_mode: USE_LOCAL_LPG
+  Weather:
+    order: 3
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      data_source: DWD_TRY
+      heating_reference_temperature_in_celsius: -7.0
+      predictive_control: false
+
+imports:
+  heating:
+    order: 5
+    assembly: heating/electric_resistive
+  dhw:
+    order: 6
+    assembly: dhw/indirect_cylinder
+    bind: {circuit: heating.dhw}
+  pv:
+    order: 4
+    assembly: pv/array
+    instances: {pv_system: {}}                              # the legacy single array's id (spec §10.4)
+  battery:
+    order: 8
+    assembly: storage/battery
+    instances: {battery: {}}
+  control:
+    order: 9
+    assembly: control/ems_self_consumption
+  grid:
+    order: 7
+    assembly: supply/electricity_grid
+    observes: [{output: TotalElectricityToOrFromGrid}]      # the manager's grid balance only, never its flows twice

@@ -51,14 +51,20 @@ interface:
                       # the collector owns pump and supply leg, the cylinder's solar coil the return leg
 
 tests:
-  # One day at 900 s on the test weather (1 January, Aachen) beside a DHW cylinder at the other end of the solar_dhw
-  # circuit. Irradiance on the collector plane is at most about 1200 W/m², so over the box's 20 m² at most 24 kW, of
-  # which a flat plate delivers at most about 80 %; per-step energies are those powers x 0.25 h. The new solar pump
-  # draws 10 W while it runs (an old one 35 W). The Controller's one output, the pump's control signal, is binary:
-  # no energy or temperature.
+  # What this contract tests: the assembly's build, its bounds and its pricing, not collection. Its isolation run is
+  # the fixed test day, 1 January in Aachen, on which the solar pump never starts (see the monotone entry), so the
+  # collector delivers no heat and no entry can fail on the collector's physics. That physics is covered by the
+  # goldens of the two solar twins until the assembly's composed file and its gate arrive with hydronic stage C, whose
+  # golden-year run covers summer; bead hisim-lt0b.23 adds the test of collection then.
+  #
+  # One day at 900 s on the test weather beside a DHW cylinder at the other end of the solar_dhw circuit. The bounds
+  # are sized for the physical ceiling, not for the test day: irradiance on the collector plane is at most about
+  # 1200 W/m², so over the box's 20 m² at most 24 kW, of which a flat plate delivers at most about 80 %; per-step
+  # energies are those powers x 0.25 h. The new solar pump draws 10 W while it runs (an old one 35 W). The
+  # Controller's one output, the pump's control signal, is binary: no energy or temperature.
   bounds:
     - {output: Collector.ThermalPowerOutput, unit: WATT, min: -5000, max: 20000}
-      # 20 m² x 1000 W/m² x 0.8; the loop loses a little heat while it runs on a cold cylinder (below 0)
+      # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; the loop loses a little heat while it runs on a cold cylinder (below 0)
     - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: -1250, max: 5000}     # the power band x 0.25 h
     - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
     - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W
@@ -67,9 +73,10 @@ tests:
     - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}                 # at most the pump's electricity
   monotone:
     - {parameter: area_in_m2, kpi: CAPEX - Investment cost, member: Collector, direction: increasing}
-      # the investment is priced per m² of collector (3188 EUR for the default 4 m²); the heat delivered is no
-      # measure on the test day: 1 January in Aachen puts at most 53 W/m² on the collector plane, which never lifts
-      # the collector 10 K above the cylinder, so the pump never starts and every area of the range delivers 0 kWh
+      # the investment is priced per m² of collector (3188 EUR for the default 4 m², 1594 to 15940 EUR over the
+      # range); the heat delivered is no measure on the test day: unlike the 1200 W/m² ceiling the bounds are sized
+      # for, the test day measures at most 53 W/m² on the collector plane, which never lifts the collector 10 K above
+      # the cylinder, so the pump never starts and every area of the range delivers 0 kWh
   expect:
     - {kpi: Total thermal energy delivered, member: Collector, min: 0, max: 0.5}
       # 0.0 kWh measured at the defaults (4 m², one apartment) on the test day: the pump never starts

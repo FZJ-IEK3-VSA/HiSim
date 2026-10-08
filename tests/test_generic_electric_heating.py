@@ -239,3 +239,29 @@ def test_electric_heating_controller_display_config_default_instances_are_isolat
 
     first.my_display_config.display_in_webtool = True
     assert second.my_display_config.display_in_webtool is False
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "return_temperature_in_celsius, lift_in_kelvin", [(50.0, 25.0), (44.2, 115.0), (60.0, 0.0)]
+)
+def test_the_hot_water_circuit_books_the_heat_its_water_carries(
+    return_temperature_in_celsius: float, lift_in_kelvin: float
+) -> None:
+    """The heater supplies the return plus the lift at P_max lift / 100 (at most P_max) and books m c dT.
+
+    A 25 K lift takes a quarter of the maximal power, a lift above 100 K all of it; without a lift the circuit
+    moves no water, books nothing and its supply is its return.
+    """
+    from hisim import hydronics  # pylint: disable=import-outside-toplevel
+    from hisim.config import concrete  # pylint: disable=import-outside-toplevel
+
+    heater = _make_electric_heating()
+    maximum = concrete(heater.config.maximum_electric_power_w)
+    power, energy, supply, mass_flow = heater._calculate_dhw_outputs(  # pylint: disable=protected-access
+        return_temperature_in_celsius, lift_in_kelvin
+    )
+    assert supply == return_temperature_in_celsius + lift_in_kelvin
+    assert power == hydronics.circuit_power_w(mass_flow, supply, return_temperature_in_celsius)
+    assert power == pytest.approx(min(maximum * lift_in_kelvin / 100.0, maximum), rel=1e-12)
+    assert energy == pytest.approx(power * heater.my_simulation_parameters.seconds_per_timestep / 3600.0)

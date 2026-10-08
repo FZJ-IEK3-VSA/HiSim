@@ -10,7 +10,8 @@ into the observer's inputs, and a re-run selects nothing.
 
 **Candidates and order.** Every output of every other present component, in file order (site
 entries, then the imports, each instance as written), that the observer declares a feed from, in
-the order it declares them; an observer never matches its own outputs. A selector that matches
+the order it declares them; an observer never matches its own outputs, and a declared output the
+constructed source does not have (a heat pump built without its DHW side) is no candidate. A selector that matches
 nothing is refused (``EF-7S``), as is an observer whose class declares no feeds at all.
 
 **Control** (§4.4, D11, D21, D27). An observer whose class declares a feed at a weight other than
@@ -112,6 +113,11 @@ class SelectionPlan:
     def __call__(self, components: Mapping[str, Any]) -> Dict[str, List[AggregatorFeed]]:
         """Selects, ranks and checks every observer's feeds among the constructed components.
 
+        An observer's candidates are the outputs in each constructed component's ``outputs`` that the
+        observer's class declares a dynamic default connection from. They are read when this runs, after
+        construction and before wiring: an output a component adds later, such as an aggregator's dispatch
+        output created while its feeds are resolved, is no candidate.
+
         Args:
             components: Every constructed component by its name in the file, in file order.
 
@@ -156,11 +162,13 @@ class SelectionPlan:
                 f"'{observer.component}' ({type(target).__name__}) observes, but its class declares no dynamic "
                 "default connections, so it has nothing to select from.",
             )
+        outputs = {name: {output.field_name for output in component.outputs} for name, component in components.items()}
         candidates = [
             DynamicConnectionResolver.feed_from_declaration(declaration, observer.component, name)
             for name, component in components.items()
             if name != observer.component
             for declaration in declared.get(component.get_classname(), ())
+            if declaration.source_component_field_name in outputs[name]
         ]
         listed = ", ".join(f"{feed.source}.{feed.output}" for feed in candidates) or "none"
 

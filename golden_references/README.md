@@ -77,20 +77,46 @@ python scripts/golden_check.py                              # all pairs
 python scripts/golden_check.py --setup <id> --param <id>    # one pair
 python scripts/golden_check.py --pairs <id>:<id> ... --jobs 4 # a CI shard, four pairs at once
 python scripts/golden_check.py --mode yaml ...               # the recorded YAML twins
-python scripts/golden_check.py --mode both ...               # both, side by side, one report each
+python scripts/golden_check.py --mode composed ...           # the composed files
+python scripts/golden_check.py --mode both ...               # python and yaml, side by side, one report each
+python scripts/golden_check.py --mode all ...                # the three, side by side, one report each
+python scripts/golden_check.py --mode python composed ...    # any modes, side by side
 ```
 
 Re-runs the pairs, compares KPIs to the goldens here, writes
-`results/golden-ref-check/report.{txt,json}` (`golden-ref-check-yaml/` in YAML mode), and exits non-zero on any deviation,
+`results/golden-ref-check/report.{txt,json}` (`golden-ref-check-yaml/` in YAML mode,
+`golden-ref-check-composed/` in composed mode), and exits non-zero on any deviation,
 unit change, missing or unusable golden, or run failure. Missing and unusable goldens fail
 **before** running, so they never waste compute.
+
+### The three modes
+
+Every mode compares with the same goldens, which are blessed from the Python runs; none ever
+compares with an earlier run of its own.
+
+- **`python`** runs the `.py` setup: *the reference*. A divergence here is a change of the
+  simulation itself.
+- **`yaml`** runs the setup's recorded twin, `energy_systems/<stem>.energy_system.yaml`, through
+  the declarative executor: *the recorded twin reproduces the reference*. The energy manager's
+  `Priority for <port>` KPIs quote an aggregator port, which the two paths name differently
+  (C-P3.2), so this mode excludes that family from both sides (`PORT_NAMED_KPIS`, printed per pair).
+- **`composed`** runs the setup's composed file, `energy_systems/<stem>.composed.energy_system.yaml`
+  (the site plus imports of `energy_systems/assemblies/`): *the assemblies reproduce the reference*.
+  Its KPIs carry the members' addresses (`heating-HeatPump`, with an import, a path and an assembly),
+  so each is renamed to the twin's site component through the rename map of the setup's entry in
+  `hisim/energy_system/assemblies/twins.py` (`rename_address`; a member the map does not name fails
+  the run). Nothing is excluded: the golden's `Priority for <legacy port>` KPIs are read under the
+  declarative port names through the parity rig's declared table (`scripts/p3_parity_renamings.py`,
+  printed per pair), and a port the table does not declare fails as a missing and a new KPI. A setup
+  without an entry in that table is listed as `SKIPPED` in the composed report and does not fail it.
 
 In CI this runs as two tiers (see `.github/workflows/`):
 
 - **`golden-check.yml`** — one-week pairs, on every PR and push to `main`, each pair's Python
-  setup and its recorded YAML twin side by side (`golden_check.py --mode both`, one report per
-  mode), in four shards (`scripts/golden_matrix.py --shards 4 --with-yaml`) that run four
-  simulations at once each. A diverging YAML twin fails it, and so also holds back `golden-year`. The shards are
+  setup, its recorded YAML twin and, where it has one, its composed file side by side
+  (`golden_check.py --mode all`, one report per mode), in four shards
+  (`scripts/golden_matrix.py --shards 4 --with-yaml --with-composed`) that run four simulations at
+  once each. A diverging YAML twin or composed file fails it, and so also holds back `golden-year`. The shards are
   balanced by each pair's measured duration, `"seconds"` in `scripts/golden_config.json`;
   `report.json` records a fresh `duration_s` per pair when they need refreshing.
 - **`golden-year.yml`** — full-year pairs, for PRs to `main` **only after** `quality`,
@@ -98,8 +124,10 @@ In CI this runs as two tiers (see `.github/workflows/`):
   full-year compute when a cheaper check already failed). It is triggered by those
   workflows completing (`workflow_run`), not by the pull request itself, so that
   waiting for them costs no runner; its result reaches the pull request as a
-  `golden-year` commit status rather than as an entry in the checks list. Four shards of
-  two pairs each, since a full-year pair needs about 6 GiB.
+  `golden-year` commit status rather than as an entry in the checks list. Four shards running
+  two simulations at once, since a full-year pair needs about 6 GiB: the Python setups and, where
+  the setup has one, its composed file (`golden_check.py --mode python composed`,
+  `golden_matrix.py --with-composed`).
 
 ## Blessing (updating the goldens)
 

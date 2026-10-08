@@ -117,7 +117,12 @@ their internal ports bound before the assembly is offered to its importer); for 
 3. substitutes the parameters — `{$param: <name>}`, the one placeholder of v1 (not in v1 (D26): `{$switch:
    <selector>, <case>: <value>, …}`, the value of the case a parameter or an internal variant selects, its cases
    covering the selector's values exactly once; per-variant values live in the variant options instead) — and gives
-   every member its structured address (§2.4), rewriting internal references;
+   every member its structured address (§2.4), rewriting internal references. A value substituted into a member's
+   config field writes no line when it equals the value the member's preset already gives that field (a member
+   without a preset: the field's default; a member built by a named constructor: always written, having no value to
+   compare with before the build), and an `AUTO` or `none` writes no line, the field staying with the preset
+   or its law: the expansion writes only overrides, as the recorder does for a twin (decided, owner, 2026-10-07, D28,
+   G9). A parameter feeding only such lines still does something for the library check (§2.6);
 4. binds every active port (§3.3) and lowers it to existing items — bare-name default inputs, explicit wires, dynamic
    input feeds, `sizing_sources` lines, config values (§3.2) — and resolves the selectors (§4);
 5. attaches a source map entry to everything it produced (§9.2) and writes an **import record** (data, like
@@ -647,7 +652,11 @@ never binds nothing silently. `describe` prints the members per option.
 
 **v1 carries `Sum(Many)` and the fact ports only; exports and the scoped-provider rule are not in v1 (D26).** 
 The resolver sees the expanded system: every member is an ordinary config under its expanded name, so the engine's
-providers and binding rule apply unchanged (`engine.py:193-225`, `:311-348`). Three cases need the expansion's help:
+providers and binding rule apply unchanged (`engine.py:193-225`, `:311-348`). **A fact port is written only where the
+author must choose among providers or sum them (`many`)** (decided, owner, 2026-10-07, D29): a scalar read with one
+provider in the file crosses the assembly boundary by the engine's bare-fact rule and needs no port, as in the twins,
+where no such read writes a line; a scalar fact port lowers to its `sizing_sources` line. Three cases need the
+expansion's help:
 
 - **A fact read over all instances.** The battery is sized to all arrays. Its laws become a sum over a many-cardinality
   read, which needs the `Many` aggregation implemented with an explicit `Sum` (`laws.py:228-241` raise today). The
@@ -731,7 +740,8 @@ feed checks, the energy-balance report, economics (a subject without a catalogue
   real assembly moves to the real library when it exists (§13 step 4); the mock library then shrinks to that residue.
   Each mock class says in one line which real class or role it stands in for. The spec's design mockup
   (`roadmap/declarative_energy_systems/assemblies_mockup/`) is a design document, not a test input: the schema test reads
-  it only until the first real assemblies land, then the mockup is marked historical.
+  it only until the first real assemblies land, then the mockup is marked historical. **It is historical since
+  2026-10-07** (§13 step 4): the real library is `energy_systems/assemblies/`, and the mockup stays the design record.
 
 ### 9.4 Testing an assembly
 
@@ -758,11 +768,17 @@ dimensions are all discrete, where two points drawing the same values are one sa
 
 **Isolation run.** For each sample the harness builds a minimal system: the assembly, plus a test partner for each
 active port whose binding changes what the assembly computes, optional ports included (a providing port gets none),
-and for a fuel the assembly provides a consumer partner; one simulated day at
+for a fuel the assembly provides a consumer partner, and for every sizing fact a member's class reads that no member
+provides and no fact port names the registered provider of that fact (it crosses by the bare-fact rule, §6, D29;
+`facts_needed` in `testing/isolation.py`); one simulated day at
 900 s per step (an assembly declares no resolution), the energy-balance check and `i_doublecheck` on. The test
 partners are data, one `test_partners.yaml` per library: a site entry per partner class, circuit end, carrier,
 consumer or fact, each naming the partners it requires. The run fails on an exception,
-a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below.
+a NaN or infinity, an open balance (`EnergyBalanceError`) or a violated declaration below. The declared parameter box
+may contain combinations a member's component refuses at construction (`ConfigurationRefusedError`, such as a heat
+pump's W55 SCOP above its W35 SCOP, both in range); the harness counts such a refusal as handled, not failed, and drops
+refused steps from a monotone sweep, skipping the sweep when fewer than two steps remain; hypercube samples are not
+redrawn (owner, 2026-10-08).
 
 **Declarations** (`tests:` in the assembly file; structured, no expressions):
 
@@ -801,7 +817,9 @@ tests:
   error at load time.
 
 **Tiers (D24).** The PR gate runs the contract test and the deterministic samples (defaults, boundaries, values,
-variants) with every declaration, a few one-day runs per assembly, sharded like the week goldens. The Latin hypercube
+variants) with every declaration, a few one-day runs per assembly, in the `assemblies` tier: the pytest marker of every
+test under `tests/assemblies/` but the nightly ones, run by its own CI job `pytest (assemblies)`, not in `base`, since
+the tier runs long and needs the local LoadProfileGenerator (D28 b, amended). The Latin hypercube
 sample of the box runs as the job `assemblies-nightly` of `golden-year.yml`, beside the full-year goldens and for now
 behind the same gate, once per PR commit; a schedule comes with the real library. A failure opens a bead, as a golden
 drift does. The example system of every assembly is a golden pair, so its default result is also pinned exactly.
@@ -884,10 +902,10 @@ wiring (spec §3.5, "the two ends come from the wiring, never from a declared pe
 the wires its port produced. A circuit port binds exactly one partner; a split is a valve assembly with one circuit per
 branch. The dual-circuit generators (spec §3.3, circuits `SpaceHeating` and `Dhw`) make a heating assembly possible: `space_heating` binds
 the site's distribution side (D12), `dhw` binds `dhw/indirect_cylinder` or is declined. **Dependency:** the heating
-assemblies require hydronic stages C (DHW chain) and D (SH chain) of spec §9.5; before them generator, buffer and HDS
-are coupled through default connections (spec §9.2) and cannot be cut at a circuit. Stages A–B and §13 steps 1–3 proceed
-in parallel; each heating assembly is written once, against pure circuits, after C and D (or their joint PR) are on
-main.
+assemblies were to require hydronic stages C (DHW chain) and D (SH chain) of spec §9.5, since before them generator,
+buffer and HDS are coupled through default connections (spec §9.2). Lean v1 cuts them at a circuit all the same: a
+circuit port lowers to bare names over those default connections (§3.2, §13 step 4), so the heating assemblies with a
+buffer do not wait for C and D; the buffer-less one does (D25).
 
 ### 11.2 Energy balance (hisim-9uoo, #870/#871)
 
@@ -981,8 +999,14 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    twin byte for byte under the rename map and a short, listed set of intended differences (decided, owner, 2026-10-04,
    G7: a many fact port with one provider writes its one-element `sizing_sources` list where the twin writes no line —
    one lowering rule whatever the count, and adding a second array never changes the first one's lines), and a one-day
-   run gives identical result columns; each carries its test
-   contract (§9.4) and the harness runs them in the PR gate. Waits for hydronic stages C and D (§11.1).
+   run gives identical result columns; the golden gate's `composed` mode runs the composed file for the week (and the
+   full year, where the setup has one) and its KPIs, renamed through `hisim/energy_system/assemblies/twins.py`, equal
+   the Python setup's goldens within the gate's tolerance (owner, 2026-10-08); each carries its test
+   contract (§9.4) and the harness runs them in the PR gate. It does not wait for hydronic stages C and D (§11.1): v1
+   lowers a circuit port to bare names, each member at one end reading each member at the other end through the
+   default connections their classes already declare (§3.2), which couple heat pump, buffer, cylinder and
+   distribution as the twin does; the heating assemblies keep the buffer, so the distribution keeps its `PARALLEL`
+   default (D25).
 5. **One heating assembly per PR,** each with the equality gate against that generator's twin: condensing gas, oil,
    pellets, wood chips, hydrogen, ground source, district heating, electric heating, then solar thermal, with
    `supply/gas_connection`, `supply/oil_tank`, `dhw/indirect_cylinder`. The RenoVisor switches each generator to the
@@ -991,9 +1015,11 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    their components land (hisim-epc.21, hisim-lenz); #85 contract; further controllers.
 
 **Order in the base files** (§2.3). The composed files set a flat `order:` on site entries and imports to reproduce
-the twin's sequence up to neutral swaps, the two heat-pump L1 controllers and buffer before cylinder
-(`composed_heatpump_default.energy_system.yaml`); the numbering serves every generator
-twin, and `heatpump_solar_thermal` alone is reordered and re-recorded once (dry run §9.1).
+the twin's sequence up to neutral swaps: since D29 the heat-pump composed file
+(`energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml`) has one, the buffer before the
+cylinder; the mockup's second swap, the two heat-pump L1 controllers, came from its `serves_dhw` variant, which D29
+replaced by two assemblies. The numbering serves every generator twin, and `heatpump_solar_thermal` alone is
+reordered and re-recorded once (dry run §9.1).
 
 ## 13.1 Lean v1 (owner, 2026-10-06)
 
@@ -1129,8 +1155,10 @@ All by the owner on 2026-10-03.
   district heating). That is a property of the circuit, which the hydronic design already states: one pump owner per
   circuit, who publishes `MassFlowSpaceHeating`. From hydronic stage D on the HDS derives it from what the other end
   of its circuit publishes (it reads the flow through its default connections from that class, else it pumps), and the
-  enum goes away; no fact, no site setting, nothing written twice. Step 4 waits for stages C and D, so the first real
-  assemblies never meet the enum. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
+  enum goes away; no fact, no site setting, nothing written twice. Step 4 does not wait for stages C and D: v1 joins
+  circuit ends by bare names over the classes' default connections (§3.2, §13 step 4), and its heating assembly keeps
+  the buffer, so the HDS keeps the enum's default `PARALLEL` and no import sets it; the direct assembly waits for
+  stage D. Rejected: a sizing fact for the position (a second statement of a wiring fact), the
   HDS inside the direct assembly (two shapes of the Building's input, D19), a site value checked against the import.
 
 - **D26 — Lean v1 (owner, 2026-10-06):** see §13.1; the cut list there supersedes D7 and D23 for v1. Revised 2026-10-07
@@ -1144,6 +1172,30 @@ All by the owner on 2026-10-03.
   deleted; over one array the numbers are unchanged, the audit's law string changes (§6); (c) a derived weight
   `default + k` that reaches another kind's base weight in the controller's weights, or 999, is refused (`EF-7V`),
   naming both participants and the weight; the remedy is a pinned weight on the feed (§4.4).
+
+- **D28 — Overrides only, and the gate of step 4 (owner, 2026-10-07):** (a) G9: a parameter value substituted into a
+  member's config field writes no config line when it equals the value the member's preset already gives that field
+  (a member without a preset compares with the field default; a member built by a named constructor has no value to
+  compare with before the build, so its fed fields are written whenever they carry a value), and an `AUTO`/`none` substitution writes no line, the
+  field staying with the preset or its law (§2.3 step 3); the import record keeps every parameter as given and as
+  resolved. (b) The gate of §13 step 4 is a committed
+  `energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml` (the site plus the six imports)
+  beside the twin; a test expands it, applies the rename map and asserts equality with the twin outside the
+  listed intended differences, and a one-day run of both gives identical result columns. The real library lives in
+  `energy_systems/assemblies/` with its own `test_partners.yaml`, and the contract harness runs it. Amended (owner,
+  2026-10-08): the gate and the contract harness run in the `assemblies` tier, its own CI job (`pytest
+  (assemblies)` in `tests.yml`), not in base: the base tier ran too long, and the assembly tests need the local
+  LoadProfileGenerator. `tests/assemblies/conftest.py` marks every test there `assemblies` (the nightly tier
+  excepted) and refuses one marked `base`, `extendedbase` or `extendedbase2`.
+
+- **D29 — DHW or no DHW is two assemblies, and fact ports only for a choice (owner, 2026-10-07):** (a) a heat pump
+  with and without DHW are two assemblies, `heating/air_source_heat_pump` and
+  `heating/air_source_heat_pump_space_heating_only`, as D25 decided for the buffer; no `serves_dhw` parameter: the
+  class builds its DHW outputs only with DHW preparation, so each shape has its own contract. An observer's candidates
+  are the declared outputs its sources were built with (a manager beside the space-heating-only heat pump observes no
+  DHW draw). (b) A fact port is written only where the author must choose among providers or sum them (`many`); a
+  single-provider scalar read crosses the boundary by the engine's bare-fact rule and needs no port (§6), and the
+  harness gives such a read its registered provider (§9.4).
 
 ### 14.2 Open
 

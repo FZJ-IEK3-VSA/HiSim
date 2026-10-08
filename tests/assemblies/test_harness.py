@@ -11,6 +11,7 @@ KPI the member does not report.
 
 from __future__ import annotations
 
+import functools
 import re
 import subprocess
 import sys
@@ -22,6 +23,7 @@ import pandas as pd
 import pytest
 
 from hisim import loadtypes as lt
+from hisim.config import ConfigurationRefusedError
 from hisim.energy_system.assemblies.model import MonotoneDirection
 from hisim.energy_system.assemblies.parameters import ParameterChecks
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
@@ -32,6 +34,7 @@ from hisim.energy_system.assemblies.testing.isolation import (
     IsolationRun,
     IsolationRunError,
     isolation_document,
+    refusal_in,
     run_isolation,
 )
 from hisim.energy_system.assemblies.testing.partners import (
@@ -91,7 +94,7 @@ def mock(path: str, root: Path = Mocks.LIBRARY) -> Tuple[ResolvedAssembly, Param
     return assembly, ParameterSpace(assembly.model)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_every_numeric_dimension_has_one_sample_per_stratum_and_discrete_values_are_even(tmp_path: Path) -> None:
     """With N samples each numeric dimension falls once into every 1/N stratum; an enum and a bool within one."""
     space = box(tmp_path)
@@ -106,7 +109,7 @@ def test_every_numeric_dimension_has_one_sample_per_stratum_and_discrete_values_
             assert max(counts) - min(counts) <= 1, (name, counts)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_same_seed_reproduces_the_sample_and_another_seed_does_not(tmp_path: Path) -> None:
     """The hypercube is a function of the seed."""
     space = box(tmp_path)
@@ -114,7 +117,7 @@ def test_the_same_seed_reproduces_the_sample_and_another_seed_does_not(tmp_path:
     assert first == again != other
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_exactly_one_of_splits_the_box_into_its_branches(tmp_path: Path) -> None:
     """One hypercube per stated parameter; the other is fixed unstated, and every sample satisfies the constraint."""
     space = box(tmp_path, "constraints:\n  - {exactly_one_of: [power_in_watt, share]}")
@@ -127,7 +130,7 @@ def test_an_exactly_one_of_splits_the_box_into_its_branches(tmp_path: Path) -> N
     assert sum(1 for sample in samples if sample.values["power_in_watt"] is None) == 6
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_deterministic_samples_cover_boundaries_values_and_variants_within_the_constraints() -> None:
     """The heater's boundaries, values and options; the array's share at its minimum states it, so the power is none."""
     _, heater = mock("mock/electric_heater")
@@ -151,7 +154,7 @@ def test_the_deterministic_samples_cover_boundaries_values_and_variants_within_t
     assert [point["power_in_watt"] for point in swept[0][1]] == pytest.approx([0.0, 20000 / 3, 40000 / 3, 20000.0])
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "values, direction, offending",
     [
@@ -174,7 +177,7 @@ def test_the_monotone_evaluation_names_the_first_pair_moving_the_wrong_way(
     assert checks.REL_TOL is tolerances.REL_TOL and golden_kpis.REL_TOL is tolerances.REL_TOL
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
     """A bounds band the output leaves and a monotone of the wrong sign fail, named; the rest of it holds."""
     wrong = Mocks.ROOT / "wrong"
@@ -216,7 +219,7 @@ def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
     assert not list(tmp_path.glob("p*")), "every sweep point's run is released, its directory deleted"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly_computes() -> None:
     """A gas provider and a cylinder for the boiler, a consumer for the connection, a controller for the battery."""
     registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
@@ -238,7 +241,68 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         assert {verb: entry[verb] for verb in ("bind", "optional-bind") if verb in entry} == verbs, path
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
+def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_path: Path) -> None:
+    """A battery whose law reads the arrays' peak power by the bare-fact rule, with no fact port, gets the array."""
+    library = Library(tmp_path)
+    library.add(
+        "sampled/bare_battery",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/bare_battery
+        description: A battery reading its sizing fact from the site without a fact port.
+        components:
+          Battery: {{class: {MOCKS}.MockArrayBattery, preset: sized_to_all_arrays}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    assembly = library.resolver().resolve("sampled/bare_battery", "test")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    document = isolation_document(assembly, {}, registry)
+    assert list(document["components"]) == ["Weather", "PVArray"]
+    with pytest.raises(
+        TestPartnerMissingError,
+        match="the fact read 'pv_peak_power_in_watt' of 'sampled/bare_battery' needs a test partner, the provider of "
+        "the fact pv_peak_power_in_watt",
+    ):
+        isolation_document(assembly, {}, TestPartnerRegistry([], []))
+
+
+@pytest.mark.assemblies
+def test_a_fact_read_behind_an_inactive_fact_port_gets_its_registered_provider(tmp_path: Path) -> None:
+    """Catches an inactive conditional fact port hiding its fact from the bare-fact rule, leaving the read unserved.
+
+    With ``pinned: false`` the port is active and its fact need brings the array; with ``pinned: true`` the
+    port is inactive, the battery's law still reads the fact, and the harness gives the read its provider.
+    """
+    library = Library(tmp_path)
+    library.add(
+        "sampled/conditional_battery",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/conditional_battery
+        description: A battery whose fact port is active only while it is not pinned.
+        parameters:
+          pinned: {{type: bool, default: false, description: Whether the fact port is switched off.}}
+        components:
+          Battery: {{class: {MOCKS}.MockArrayBattery, preset: sized_to_all_arrays}}
+        interface:
+          needs:
+            pv_peak_power:
+              {{fact: pv_peak_power_in_watt, many: true, into: [Battery], active_when: {{pinned: [false]}}}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    assembly = library.resolver().resolve("sampled/conditional_battery", "test")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    for pinned in (False, True):
+        document = isolation_document(assembly, {"pinned": pinned}, registry)
+        assert list(document["components"]) == ["Weather", "PVArray"], pinned
+
+
+@pytest.mark.assemblies
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> None:
     """An empty registry: the array's weather port names MockWeather."""
     assembly, space = mock("mock/pv_array")
@@ -250,7 +314,7 @@ def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> 
         isolation_document(assembly, space.defaults(), TestPartnerRegistry([], []))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "text, message",
     [
@@ -276,7 +340,7 @@ def test_a_registry_that_does_not_read_is_refused_whole(tmp_path: Path, text: st
         TestPartnerRegistry.from_directories([tmp_path])
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_member_contract_names_unbounded_outputs_wrong_units_and_unreported_kpis(tmp_path: Path) -> None:
     """Outputs decide by unit and load type; an assembly with every fault fails its contract, each one named."""
     rule = MemberContract.carries_energy_or_temperature
@@ -317,7 +381,7 @@ def test_the_member_contract_names_unbounded_outputs_wrong_units_and_unreported_
     ]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_finiteness_reads_numeric_columns_and_a_check_on_an_unfinished_run_names_why(tmp_path: Path) -> None:
     """A NaN in a number column is named, a column of text skipped; a run that raised fails every check reading it."""
     frame = pd.DataFrame({"Power": [1.0, float("nan"), 2.0], "State": ["on", "off", "on"]})
@@ -333,7 +397,7 @@ def test_finiteness_reads_numeric_columns_and_a_check_on_an_unfinished_run_names
         checks.check_run(broken)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_int_parameter_takes_the_nearest_integer_in_its_range_everywhere(tmp_path: Path) -> None:
     """Catches a truncated bound, a hypercube point or a sweep point leaving an int parameter's range."""
     assert [range_value(value, 1, 5, True) for value in (0.4, 1.5, 2.49, 3.67, 5.4)] == [1, 2, 2, 4, 5]
@@ -353,7 +417,7 @@ def test_an_int_parameter_takes_the_nearest_integer_in_its_range_everywhere(tmp_
     assert all(sample.tier == Tier.NIGHTLY and sample.nightly for sample in hypercube_samples(space, 4, 1))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "arguments, message",
     [
@@ -368,7 +432,7 @@ def test_a_dimension_is_a_rising_range_or_a_set_of_choices(arguments: Any, messa
         Dimension("x", **arguments)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_contracts_collect_without_xdist() -> None:
     """Catches the xdist_group marker known only while pytest-xdist is loaded (--strict-markers)."""
     completed = subprocess.run(
@@ -393,7 +457,7 @@ def test_the_contracts_collect_without_xdist() -> None:
     assert re.search(r"^\d+ tests collected", completed.stdout, re.MULTILINE), completed.stdout[-2000:]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_column_a_bounds_entry_cannot_compare_fails_by_name(tmp_path: Path) -> None:
     """Catches a bounds entry passing on a column of text, or one holding a value that is not finite."""
     assembly, _ = mock("mock/electric_heater")
@@ -427,7 +491,7 @@ def test_a_column_a_bounds_entry_cannot_compare_fails_by_name(tmp_path: Path) ->
             checks.check_bounds(run, declaration)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_run_whose_component_raises_names_where_it_raised(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Catches a failed run that does not say whether the assembly's member or the harness raised."""
 
@@ -447,7 +511,7 @@ def test_a_run_whose_component_raises_names_where_it_raised(tmp_path: Path, monk
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_check_reading_a_run_without_results_that_raised_nothing_is_a_harness_error(tmp_path: Path) -> None:
     """Catches a check passing vacuously on a run the harness left without results."""
     with pytest.raises(
@@ -457,3 +521,123 @@ def test_a_check_reading_a_run_without_results_that_raised_nothing_is_a_harness_
         ),
     ):
         checks.check_finite(IsolationRun("x", "a/b", tmp_path))
+
+
+def refusing_heater(monkeypatch: pytest.MonkeyPatch, above_watt: float, error: type) -> None:
+    """Makes ``MockHeater`` raise ``error`` at construction when its power lies above ``above_watt``."""
+    original = MockHeater.__init__
+
+    # wraps keeps the constructor's annotations, from which the build reads the config class.
+    @functools.wraps(original)
+    def construct(self: MockHeater, my_simulation_parameters: Any, config: Any) -> None:
+        """The heater's constructor, raising above the threshold."""
+        if config.power_in_watt > above_watt:
+            raise error(f"{config.component_id.name}: {config.power_in_watt} W is refused here")
+        original(self, my_simulation_parameters, config)
+
+    monkeypatch.setattr(MockHeater, "__init__", construct)
+
+
+@pytest.mark.assemblies
+def test_a_member_refusing_its_configuration_is_handled_and_any_other_error_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches a refused sample failing the contract, and a crash passing as a refusal.
+
+    The heater's constructor raises ``ConfigurationRefusedError``: the build wraps it (EF-33), the run
+    finds it as the cause, and every check raises ``SampleRefused``. The same constructor raising a
+    plain ``ValueError`` is a failure of every check, named.
+    """
+    assembly, space = mock("mock/electric_heater")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    resolver = AssemblyResolver([Mocks.LIBRARY])
+    tests = assembly.model.tests
+    assert tests is not None
+    refusing_heater(monkeypatch, 1000.0, ConfigurationRefusedError)
+    run = run_isolation(assembly, space.defaults(), registry, resolver, tmp_path / "refused", "h s0")
+    assert isinstance(run.refusal, ConfigurationRefusedError)
+    assert run.error is not None and run.refusal is run.error.__cause__
+    for check in (
+        checks.check_run,
+        checks.check_energy_balance,
+        checks.check_finite,
+        lambda run: checks.check_member_contract(run, tests),
+        lambda run: checks.check_bounds(run, tests.bounds[0]),
+    ):
+        with pytest.raises(checks.SampleRefused, match="^h s0 refused by a member: Heater: 2000.0 W is refused here$"):
+            check(run)
+    refusing_heater(monkeypatch, 1000.0, ValueError)
+    crashed = run_isolation(assembly, space.defaults(), registry, resolver, tmp_path / "crashed", "h s0")
+    assert crashed.refusal is None
+    with pytest.raises(AssemblyCheckFailure, match="^h s0 run the isolation run: EnergySystemWiringError: EF-33"):
+        checks.check_run(crashed)
+    with pytest.raises(AssemblyCheckFailure, match="^h s0 finite every result column: the run did not finish"):
+        checks.check_finite(crashed)
+
+
+@pytest.mark.assemblies
+def test_an_error_raised_while_handling_a_refusal_is_no_refusal() -> None:
+    """Catches a crash in an ``except`` block passing as a refusal: only the explicit cause counts."""
+    try:
+        try:
+            raise ConfigurationRefusedError("refused")
+        except ConfigurationRefusedError:
+            raise RuntimeError("crashed while handling it")  # pylint: disable=raise-missing-from
+    except RuntimeError as error:
+        assert refusal_in(error) is None
+    refusal = ConfigurationRefusedError("refused")
+    wrapped = ValueError("wrapped")
+    wrapped.__cause__ = refusal
+    assert refusal_in(wrapped) is refusal and refusal_in(None) is None
+
+
+@pytest.mark.assemblies
+def test_a_monotone_sweep_drops_the_points_a_member_refuses(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches a sweep failing on its refused points, or skipping when two points remain to compare.
+
+    The heater's power sweeps 500, 2333, 4167 and 6000 W. Refused above 4000 W the last two points
+    are dropped and the first two still rise; refused above 1000 W one point remains and the sweep is
+    skipped (``SampleRefused``), naming the dropped points.
+    """
+    assembly, space = mock("mock/electric_heater")
+    registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
+    resolver = AssemblyResolver([Mocks.LIBRARY])
+    (defaults, *_) = deterministic_samples(space)
+    tests = assembly.model.tests
+    assert tests is not None
+
+    def run_point(index: int, values: Mapping[str, Any], label: str) -> IsolationRun:
+        """One sweep point's run."""
+        return run_isolation(assembly, values, registry, resolver, tmp_path / f"{label[-1]}{index}", label)
+
+    refusing_heater(monkeypatch, 4000.0, ConfigurationRefusedError)
+    assert checks.evaluate_monotone(run_point, space, defaults, tests.monotone[0]) == pytest.approx(
+        [12500 / 3, 6000.0]
+    )
+    refusing_heater(monkeypatch, 1000.0, ConfigurationRefusedError)
+    with pytest.raises(
+        checks.SampleRefused,
+        match=re.escape("mock/electric_heater sweep of power_in_watt from s000: a member refuses 3 of 4 points"),
+    ):
+        checks.evaluate_monotone(run_point, space, defaults, tests.monotone[0])
+    assert not list(tmp_path.glob("*")), "every sweep point's run is released, refused or not"
+
+
+@pytest.mark.assemblies
+def test_the_real_heat_pump_refuses_a_w55_scop_above_its_w35_scop_as_a_configuration_refusal(tmp_path: Path) -> None:
+    """Catches the box's refused corner failing the contract: both SCOPs in range, W55 above W35, is handled.
+
+    The heat pump's ranges overlap (W35 2.5 to 6, W55 2 to 4.5); the component alone refuses a W55
+    above the W35, and the isolation run carries that refusal as the cause of its build error.
+    """
+    library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+    resolver = AssemblyResolver([library])
+    assembly = resolver.resolve("heating/air_source_heat_pump", "test")
+    values = {**ParameterSpace(assembly.model).defaults(), "scop_en14825_w35": 3.0, "scop_en14825_w55": 4.0}
+    registry = TestPartnerRegistry.from_directories([library])
+    run = run_isolation(assembly, values, registry, resolver, tmp_path / "r", "hp s0")
+    assert isinstance(run.refusal, ConfigurationRefusedError), run.error
+    assert "the W55 SCOP 4.0 is above the W35 SCOP 3.0" in str(run.refusal)
+    with pytest.raises(checks.SampleRefused, match="^hp s0 refused by a member: HeatPump"):
+        checks.check_run(run)
+    run.release()

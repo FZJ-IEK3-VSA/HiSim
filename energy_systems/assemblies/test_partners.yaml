@@ -1,0 +1,147 @@
+# The test partners of the real assembly library (assemblies_spec.md §9.4): the site components the assembly test
+# contracts (tests/assemblies/test_library_contracts.py) place beside an assembly they run in isolation, one for every
+# port whose binding changes what the assembly computes and every sizing fact its members read from the site. Read by
+# hisim/energy_system/assemblies/testing/partners.py, which documents the format. Every partner is a site entry as an
+# energy-system file writes it, with the twin's presets and values (household_heatpump_building_sizer).
+partners:
+  # ------------------------------------------------------------------------------------------- the site
+  Weather:
+    serves: [{partner: Weather}, {fact: weather_identity}, {fact: heating_reference_temperature_in_celsius}]
+    component:
+      class: hisim.components.weather.Weather
+      config:
+        location: Aachen
+        source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+        data_source: DWD_TRY
+        heating_reference_temperature_in_celsius: -7.0
+        predictive_control: false
+  UTSPConnector:
+    # The residents: they draw hot water, the energy manager ranks their consumption and the meter measures it.
+    serves: [{partner: UtspLpgConnector}, {observed_by: L2GenericEnergyManagementSystem},
+             {observed_by: ElectricityMeter}]
+    component:
+      class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+      preset: couple_both_at_work
+      config:
+        data_acquisition_mode: USE_LOCAL_LPG
+  Building:
+    # The house whose facts the members' sizing laws read. It is heated by nothing: a building reading the heat
+    # distribution would need the heat distribution beside every assembly, and a test partner reads only what it
+    # requires.
+    serves: [{fact: heating_load_in_watt}, {fact: number_of_apartments}, {fact: roof_area_in_m2},
+             {fact: set_heating_temperature_in_celsius}]
+    requires: [Weather, UTSPConnector]
+    component:
+      class: hisim.components.building.building.Building
+      preset: german_single_family_home
+      config:
+        number_of_apartments: 1.0
+        enable_opening_windows: true
+        weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      inputs: [Weather, UTSPConnector]
+  HeatDistributionController:
+    serves: [{partner: HeatDistributionController}, {fact: heat_distribution_system_type},
+             {fact: set_heating_threshold_outside_temperature_in_celsius}]
+    requires: [Weather, Building]
+    component:
+      class: hisim.components.heat_distribution_system.HeatDistributionController
+      preset: building_derived
+      inputs: [Weather, Building]
+  HeatDistributionSystem:
+    # The other end of a heating assembly's space_heating circuit: it pumps and owns the return leg.
+    serves: {circuit: space_heating, other_end: [SimpleHotWaterStorage]}
+    requires: [Building, HeatDistributionController]
+    component:
+      class: hisim.components.heat_distribution_system.HeatDistribution
+      preset: building_derived
+      inputs: [Building, HeatDistributionController, {$port: space_heating}]
+      ports:
+        space_heating: {circuit: space_heating}
+
+  # ----------------------------------------------------------------------------- the DHW cylinder
+  DHWStorage:
+    # The other end of a heat pump's dhw circuit, and the cylinder its DHW controller reads.
+    serves: [{circuit: dhw, other_end: [MoreAdvancedHeatPumpHPLib]}, {partner: SimpleDHWStorage}]
+    requires: [UTSPConnector]
+    component:
+      class: hisim.components.simple_water_storage.SimpleDHWStorage
+      preset: standard
+      inputs: [UTSPConnector, {$port: dhw}]
+      ports:
+        dhw: {circuit: dhw}
+
+  # ------------------------------------------------------------------- the heat pump of a cylinder
+  HeatPump:
+    # The other end of a cylinder's dhw circuit: the twin's heat pump with its controllers and its buffer.
+    serves: {circuit: dhw, other_end: [SimpleDHWStorage]}
+    requires: [HeatPumpControllerDHW, HeatPumpControllerSH, Buffer, Weather]
+    component:
+      class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+      preset: air_water
+      config:
+        with_domestic_hot_water_preparation: true
+      inputs:
+        - HeatPumpControllerDHW
+        - HeatPumpControllerSH
+        - {$port: dhw}
+        - Buffer
+        - {input: TemperatureAmbient, from: Weather.DailyAverageOutsideTemperatures}
+        - {input: TemperatureInputPrimary, from: Weather.DailyAverageOutsideTemperatures}
+      ports:
+        dhw: {circuit: dhw}
+  HeatPumpControllerDHW:
+    # Reads the cylinder under test, the one SimpleDHWStorage of its system.
+    component:
+      class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+      preset: standard
+      inputs: [{$port: cylinder}]
+      ports:
+        cylinder: {partner: SimpleDHWStorage}
+  HeatPumpControllerSH:
+    # Reads the heat pump's buffer, which joins with the heat pump: it reads it without requiring it.
+    requires: [Weather, HeatDistributionController]
+    component:
+      class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+      preset: standard
+      inputs: [Weather, HeatDistributionController, Buffer]
+  Buffer:
+    # Reads the heat pump it joins with, without requiring it back.
+    requires: [HeatDistributionSystem]
+    component:
+      class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+      preset: buffer
+      config:
+        sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
+      inputs: [{$port: space_heating}, HeatPump]
+      ports:
+        space_heating: {circuit: space_heating}
+
+  # ------------------------------------------------------------- electricity: arrays, control, grid
+  PVArray:
+    # A roof array contributing pv_peak_power_in_watt, the fact a battery is sized from.
+    serves: {fact: pv_peak_power_in_watt}
+    requires: [Weather, Building]
+    component:
+      class: hisim.components.generic_pv_system.PVSystem
+      preset: rooftop
+      inputs: [Weather]
+  EnergyManager:
+    # The controller an energy-manager need binds and a battery's controllable output is ranked by; it observes
+    # what its class declares and the system's components have (beside the space-heating-only heat pump: no DHW).
+    serves: [{partner: L2GenericEnergyManagementSystem}, {controls: Battery}]
+    component:
+      class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+      preset: optimize_own_consumption
+      observes: declared
+  Grid:
+    # The one electricity provider an electricity need checks for. Its meter observes the energy manager's grid
+    # balance, which it requires: a need for electricity stands beside a manager in this library (the heating
+    # assemblies bind their modifiers to one), and a meter observing the balance and the flows is refused.
+    serves: {carrier: electricity}
+    requires: [EnergyManager]
+    component:
+      class: hisim.components.electricity_meter.ElectricityMeter
+      preset: standard
+      observes: [{output: TotalElectricityToOrFromGrid}]
+      ports:
+        connection: {carrier: electricity}

@@ -59,6 +59,11 @@ class ParameterChecks:
         return None
 
     @classmethod
+    def carries_value(cls, value: Any) -> bool:
+        """Whether a resolved value is one a field takes, neither ``none`` nor ``AUTO`` (G9: those write no line)."""
+        return value is not None and value != cls.AUTO_SPELLING
+
+    @classmethod
     def is_stated(cls, value: Any) -> bool:
         """Whether a resolved value counts for a constraint; by identity, so ``0`` is stated and ``false`` is not."""
         return value is not None and value is not False and value != cls.AUTO_SPELLING

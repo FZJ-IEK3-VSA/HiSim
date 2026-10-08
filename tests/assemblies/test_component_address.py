@@ -10,7 +10,7 @@ from hisim.config import AddressStep, ComponentID, NameSyntax
 from tests.assemblies.mock_components import MockTankConfig
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_address_joins_the_import_the_instance_and_the_member_with_hyphens() -> None:
     """Catches a key that loses the instance, or a building no longer prefixing it."""
     east = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="pv/array")
@@ -20,7 +20,7 @@ def test_the_address_joins_the_import_the_instance_and_the_member_with_hyphens()
     assert ComponentID("Weather").address == "Weather"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_display_name_is_presentation_and_never_identity() -> None:
     """Catches two identities differing only by their label comparing or hashing differently."""
     one = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), display_name="PV array, east")
@@ -28,7 +28,7 @@ def test_the_display_name_is_presentation_and_never_identity() -> None:
     assert one == other and hash(one) == hash(other)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_owning_assembly_is_informative_and_never_identity() -> None:
     """Catches two identities of one runtime name comparing or hashing differently by their assembly."""
     one = ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="pv/array")
@@ -37,7 +37,7 @@ def test_the_owning_assembly_is_informative_and_never_identity() -> None:
     assert other.to_dict()["assembly"] == "other/array"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_identity_outside_every_assembly_serializes_as_before_and_a_path_round_trips() -> None:
     """Catches the new fields changing the dump (and so every cache key) of a component without an address."""
     assert ComponentID("Weather", building="BUI1").to_dict() == {"name": "Weather", "building": "BUI1", "unit": None}
@@ -45,7 +45,7 @@ def test_an_identity_outside_every_assembly_serializes_as_before_and_a_path_roun
     assert ComponentID.from_dict(east.to_dict()) == east
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_cache_key_ignores_where_a_member_sits() -> None:
     """Catches two arrays of identical configuration computing their series twice."""
     plain = MockTankConfig.preset_standard("Tank")
@@ -55,7 +55,7 @@ def test_the_cache_key_ignores_where_a_member_sits() -> None:
     assert plain.cache_key_view().component_id == member.cache_key_view().component_id
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize("step", [("pv-east", None), ("pv", "east west"), ("", None)])
 def test_an_address_step_is_made_of_identifiers(step: tuple) -> None:
     """Catches a key containing the separator, which would make two addresses serialize alike."""
@@ -63,7 +63,7 @@ def test_an_address_step_is_made_of_identifiers(step: tuple) -> None:
         AddressStep(*step)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_runtime_name_may_carry_the_separator_and_nothing_else() -> None:
     """Catches the component-name rule admitting a wildcard or an empty part."""
     NameSyntax.require_component_key("pv-east-PVSystem")

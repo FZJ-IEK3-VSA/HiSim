@@ -60,7 +60,10 @@
 # '.energy_system.yaml' twin beside its Python setup, and fails when either diverges, so
 # a YAML twin that no longer reproduces its golden keeps the full-year tier from starting.
 # That is deliberate (decided 2026-09-27): the declarative path is a first-class input.
-# The full-year pairs themselves run the Python setups only.
+# The full-year pairs themselves run the Python setups, and beside each, where its setup has
+# one, the composed file (golden_check.py --mode python composed, assemblies_spec.md §13 step 4):
+# the assemblies reproduce the Python setup's full-year golden too. The matrix counts those runs
+# (golden_matrix.py --with-composed), which is why the config's checkout includes energy_systems/.
 #
 # SHARDS. The full-year pairs run as four shards of two (golden_matrix.py --shards 4):
 # a full-year pair peaks at about 6 GiB, so a 16 GB runner holds two at once
@@ -71,8 +74,8 @@
 # `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
 # seeded Latin hypercube sample of every assembly's parameter box, under the same gate as the
 # full-year pairs, and its result joins the `golden-year` status. The deterministic samples
-# run in the PR gate's `base` shard. Until the first real assemblies land the library is the
-# mock library under tests/assemblies/mock_assemblies/library. A failed check fails the job,
+# run in the PR gate's `assemblies` shard of tests.yml. The libraries are the mock one under
+# tests/assemblies/mock_assemblies/library and the real one, energy_systems/assemblies/. A failed check fails the job,
 # named in pytest's summary; opening a bead for it, as for a golden drift, is the owner's
 # manual step today.
 #
@@ -203,12 +206,15 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           path: under-test
-          sparse-checkout: scripts      # cone mode: the directory the config lives in
+          # Cone mode: the directory the config lives in, and the composed files the matrix counts.
+          sparse-checkout: |
+            scripts
+            energy_systems
       - name: Build full-year matrix
         id: gen
         if: steps.decide.outputs.proceed == 'true'
         run: |
-          echo "matrix=$(python3 scripts/golden_matrix.py --horizon year --shards 4 \
+          echo "matrix=$(python3 scripts/golden_matrix.py --horizon year --shards 4 --with-composed \
             --config under-test/scripts/golden_config.json)" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.
@@ -263,11 +269,11 @@ jobs:
       # This job runs the head commit's golden_check.py under the default branch's copy of this
       # workflow (see EDITING THIS FILE). A branch cut before the checker learned --pairs gets
       # its pairs one at a time instead; drop the fallback once no open branch is that old.
-      - name: Golden KPI check (full year)
+      - name: Golden KPI check (full year, Python setups and composed files)
         run: |
           if python scripts/golden_check.py --help | grep -q -- '--pairs'; then
             # shellcheck disable=SC2086  # PAIRS is split into one argument per pair on purpose
-            python scripts/golden_check.py --jobs "$JOBS" --pairs $PAIRS
+            python scripts/golden_check.py --mode python composed --jobs "$JOBS" --pairs $PAIRS
           else
             echo "::notice title=golden-year::This branch's golden_check.py predates --pairs; running the shard's pairs one by one."
             status=0
@@ -282,8 +288,8 @@ jobs:
         with:
           name: golden-year-report-${{ matrix.name }}
           path: |
-            results/golden-ref-check/report.*
-            results/golden-ref-check/_children/*.log
+            results/golden-ref-check*/report.*
+            results/golden-ref-check*/_children/*.log
           if-no-files-found: warn
       # Kept even when the job failed; see the action for why that is safe.
       - name: Save the HiSim inputs cache

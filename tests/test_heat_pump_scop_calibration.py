@@ -20,6 +20,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
     ScopCalibration,
     StandardizedSeasonalCop,
 )
+from hisim.config import ConfigurationRefusedError
 from hisim.simulationparameters import SimulationParameters
 
 pytestmark = pytest.mark.base
@@ -214,3 +215,17 @@ class TestTheComponent:
         """A SCOP of 1 or less, above 10, a W55 rating above W35, or a pair the fit cannot reach fails the build."""
         with pytest.raises(ValueError, match=message):
             self.build(self.config(**fields))
+
+    def test_a_w55_rating_above_w35_is_a_configuration_refusal_and_a_scop_out_of_range_is_not(self) -> None:
+        """Catches the W55-above-W35 refusal losing its type, which the assembly test harness counts as handled.
+
+        Each SCOP lies in its own range, their combination does not exist: ``ConfigurationRefusedError``.
+        A SCOP outside the component's own bounds stays a plain ``ValueError``: an assembly's ``range``
+        can and must exclude it, so the harness must keep failing on it.
+        """
+        with pytest.raises(ConfigurationRefusedError, match="the W55 SCOP 4.6 is above the W35 SCOP 3.4"):
+            self.build(self.config(standardized_scop_en14825_w35=3.4, standardized_scop_en14825_w55=4.6))
+        with pytest.raises(ValueError, match="at most") as caught:
+            self.build(self.config(standardized_scop_en14825_w35=11.0))
+        assert not isinstance(caught.value, ConfigurationRefusedError)
+        self.build(self.config(standardized_scop_en14825_w35=4.5, standardized_scop_en14825_w55=4.5))

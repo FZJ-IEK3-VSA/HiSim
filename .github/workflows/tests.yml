@@ -48,6 +48,14 @@ jobs:
             # 2.5 GB peak (~1.1 GB above idle) for one process: four fit easily; ~7,300 tests in
             # ~200 modules, so loadfile spreads well.
             workers: 4
+          - name: assemblies
+            marker: "assemblies"
+            # Every test under tests/assemblies/ but the nightly tier: the format, expansion and harness tests,
+            # the PR tier of the assembly test contracts and the heat-pump gate, which need the local
+            # LoadProfileGenerator. They ran in the base shard until 2026-10-08, inside its 2.5 GB peak; ~1,600
+            # tests in 13 modules, of which test_library_contracts.py (one isolation run per sample) is the
+            # longest and stays on one worker under loadfile.
+            workers: 4
           - name: buildingtest
             marker: "buildingtest"
             # 2.2 GB peak; seven modules, bounded by test_building_scalability_with_factor (62 s).
@@ -77,7 +85,7 @@ jobs:
             # One test (test_occupancy_scaling_with_local_lpg, 328 s) at 11.5 GB peak: nothing to spread.
             workers: 0
           - name: others
-            marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions and not nightly"
+            marker: "not base and not buildingtest and not system_setups and not extendedbase and not extendedbase2 and not utsp and not postprocessingoptions and not nightly and not assemblies"
             allow_empty: "true"
             # 1.9 GB peak, 35 s: two workers are the most the short shard gains from, and they leave the
             # HPC-harness worker-pool tests, which time child processes, cores to spare.

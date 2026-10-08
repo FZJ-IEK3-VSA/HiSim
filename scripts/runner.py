@@ -20,6 +20,7 @@ of its own pair. The child is this file, run as a script with :data:`ChildRuns.C
 from __future__ import annotations
 
 import datetime
+import functools
 import hashlib
 import json
 import os
@@ -30,16 +31,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence, cast
+from typing import Any, Callable, Mapping, Optional, Sequence, cast
 
+from hisim.energy_system.assemblies.twins import COMPOSED_TWINS, ComposedTwin, rename_address
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 
 try:  # importable both as ``scripts.runner`` (tests) and ``runner`` (CLI from scripts/)
-    from golden_kpis import golden_leaves  # type: ignore[import-not-found]
+    from golden_kpis import golden_leaves, renamed_leaves  # type: ignore[import-not-found]
     from golden_horizons import HorizonVocabulary  # type: ignore[import-not-found]
 except ModuleNotFoundError:
-    from scripts.golden_kpis import golden_leaves
+    from scripts.golden_kpis import golden_leaves, renamed_leaves
     from scripts.golden_horizons import HorizonVocabulary
 
 
@@ -359,6 +361,27 @@ def resolve_twin_path(setup: SetupConfig, repo_root: Path) -> Path:
     return resolved
 
 
+def composed_twin_of(setup: SetupConfig) -> Optional[ComposedTwin]:
+    """The setup's entry in the composed-twin table (:data:`COMPOSED_TWINS`), or ``None`` if it has no composed file."""
+    return COMPOSED_TWINS.get(Path(setup.path).stem)
+
+
+def resolve_composed_path(setup: SetupConfig, repo_root: Path) -> tuple[Path, ComposedTwin]:
+    """Resolve the composed file of the setup and return it with its table entry (``composed`` mode).
+
+    Raises:
+        KeyError: if the setup has no entry in :data:`COMPOSED_TWINS`; :func:`run_modes` never asks for one.
+        FileNotFoundError: if the entry's composed file does not exist.
+    """
+    twin = composed_twin_of(setup)
+    if twin is None:
+        raise KeyError(f"Setup {setup.id!r} has no composed file in hisim/energy_system/assemblies/twins.py.")
+    resolved = (repo_root / "energy_systems" / twin.composed).resolve()
+    if not resolved.exists():
+        raise FileNotFoundError(f"Composed file not found for setup {setup.id!r}: {resolved}.")
+    return resolved, twin
+
+
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
@@ -375,7 +398,9 @@ def run_one(
     turns ``<result_directory>/all_kpis.json`` into golden leaves. With ``mode="python"``
     (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`; with
     ``mode="yaml"`` it runs the recorded ``.energy_system.yaml`` twin through the
-    declarative executor. Both receive the *same* built
+    declarative executor, and with ``mode="composed"`` the setup's composed file
+    (:func:`resolve_composed_path`), whose KPI leaves are then renamed to the twin's
+    names (:func:`~hisim.energy_system.assemblies.twins.rename_address`). All receive the *same* built
     :class:`SimulationParameters`, so the runs are directly comparable. The oracle is
     the KPI set, deliberately: the legacy and declarative paths name aggregator result
     columns differently (C-P3.2), but KPIs do not depend on column names.
@@ -392,11 +417,16 @@ def run_one(
         # HiSim execution stack.
         from hisim import hisim_main
 
-        if mode == "yaml":
+        rename: Optional[Mapping[str, str]] = None
+        if mode in ("yaml", "composed"):
             from hisim.energy_system.executor import build_energy_system
 
-            twin_path = resolve_twin_path(setup, repo_root)
-            built = build_energy_system(str(twin_path), params)
+            if mode == "composed":
+                path, composed = resolve_composed_path(setup, repo_root)
+                rename = composed.rename
+            else:
+                path = resolve_twin_path(setup, repo_root)
+            built = build_energy_system(str(path), params)
             built.simulator.run_all_timesteps()
         else:
             setup_path = resolve_setup_path(setup, repo_root)
@@ -409,6 +439,8 @@ def run_one(
                 "COMPUTE_KPIS and WRITE_KPIS_TO_JSON."
             )
         kpis = golden_leaves(json.loads(kpi_path.read_text()))
+        if rename is not None:
+            kpis = renamed_leaves(kpis, functools.partial(rename_address, mapping=rename), str(kpi_path))
         return RunResult(
             setup_id=setup.id,
             parameter_set_id=parameter_set.id,
@@ -446,11 +478,14 @@ def run_modes(
     YAML twin), so with ``jobs`` above one a pair's two runs go into the one pool of child
     processes together and the heaviest pair — first in a CI shard — starts both at once. With
     ``jobs`` of one everything runs in this process, one after another. Returns each mode's
-    results in pair order.
+    results in pair order; ``composed`` mode has a result only for the pairs whose setup has a
+    composed file (:func:`composed_twin_of`).
     """
     tasks: list[PairTask] = []
     for setup, param_set in select_pairs(config):
         for mode, subdir in subdirs.items():
+            if mode == "composed" and composed_twin_of(setup) is None:
+                continue  # no composed file: golden_check.py lists the pair as skipped
             result_directory = base_root / subdir / setup.id / param_set.id
             result_directory.mkdir(parents=True, exist_ok=True)
             tasks.append(

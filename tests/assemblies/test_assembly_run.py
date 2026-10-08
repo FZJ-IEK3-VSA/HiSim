@@ -20,7 +20,7 @@ from hisim.simulationparameters import SimulationParameters
 from tests.assemblies.helpers import EMPTY_CONTRACT, WEATHER, Library, Mocks, read_system, site
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_mock_house_runs_records_its_imports_and_its_record_reruns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
@@ -78,7 +78,7 @@ def test_a_mock_house_runs_records_its_imports_and_its_record_reruns(
     assert again["components"] == record["components"]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_ordered_house_records_its_sequence_and_a_reordered_record_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
@@ -107,7 +107,7 @@ def test_an_ordered_house_records_its_sequence_and_a_reordered_record_is_refused
     capsys.readouterr()
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_wiring_refusal_of_a_lowered_item_names_where_it_came_from(tmp_path: Path) -> None:
     """Catches a refusal of an item an import produced that names only the expanded component."""
     library = Library(tmp_path)

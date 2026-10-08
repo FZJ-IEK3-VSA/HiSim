@@ -8,6 +8,9 @@ moved verbatim out of ``hisim/component.py``:
     2. class ConfigBase - the base class of every component configuration dataclass.
     3. class DisplayConfig - how a component is presented in postprocessing.
 
+and the one error a component raises when it refuses its configuration,
+``ConfigurationRefusedError``.
+
 The module imports nothing from outside the ``hisim.config`` package, which is what lets
 the sizing machinery be reachable from ``ConfigBase`` (``resolve``/``auto_fields``
 delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
@@ -375,6 +378,21 @@ def _rendered_for_report(value: Any) -> Any:
     if isinstance(value, (set, frozenset)):
         return type(value)(_rendered_for_report(item) for item in value)
     return value
+
+
+class ConfigurationRefusedError(ValueError):
+    """A component refuses its configuration at construction: the values are each allowed, their combination is not.
+
+    Example: a heat pump stated with a W55 SCOP above its W35 SCOP. Each SCOP lies in its own
+    range, but no unit rated for 55 °C water outperforms its 35 °C rating, so the heat pump's
+    constructor raises this error.
+
+    It is a distinct type so that a caller can tell a configuration the component declines,
+    on purpose and with a message, from a component that crashed. The assembly test harness
+    relies on that: a sample of an assembly's parameter box that a member refuses this way is
+    handled, not failed. It derives from ``ValueError``, so an existing ``except ValueError``
+    still catches it.
+    """
 
 
 @dataclass

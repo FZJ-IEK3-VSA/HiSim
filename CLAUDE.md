@@ -33,7 +33,8 @@ pytest -m base                                  # only base tests
 pytest -m "not buildingtest and not system_setups"  # exclude slow tests
 ```
 
-Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`
+Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`, `assemblies` (every test under
+`tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job)
 
 ### Run an energy system (declarative YAML — the declarative input)
 ```bash

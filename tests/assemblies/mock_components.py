@@ -218,6 +218,9 @@ class MockOccupancyConfig(ConfigBase):
 
     component_id: ComponentID
     residents: int = 2
+    #: Whether the residents' electricity is an output at all; without it the occupancy stands in for a
+    #: component built without an output its observers declare a feed from (a heat pump without its DHW side).
+    with_electricity: bool = True
 
     @preset
     @classmethod
@@ -236,13 +239,15 @@ class MockOccupancy(MockComponent):
         """Builds the occupancy."""
         super().__init__(my_simulation_parameters, config)
         self.output_port("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP)
-        self.output_port("ElectricityConsumption", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        if config.with_electricity:
+            self.output_port("ElectricityConsumption", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Draws in the morning and the evening."""
         draw = 10.0 if timestep % 96 in (28, 29, 76, 77) else 0.0
         self.set(stsv, "WaterDemand", draw)
-        self.set(stsv, "ElectricityConsumption", 150.0 * self.config.residents)
+        if self.config.with_electricity:
+            self.set(stsv, "ElectricityConsumption", 150.0 * self.config.residents)
 
 
 # ------------------------------------------------------------------------------------------------ pv
@@ -251,7 +256,12 @@ class MockOccupancy(MockComponent):
 @dataclass_json
 @dataclass
 class MockPVSystemConfig(ConfigBase):
-    """A PV array: its peak power — or the share of the roof it covers instead — and its orientation."""
+    """A PV array: its peak power — or the share of the roof it covers instead — and its orientation.
+
+    As the real ``PVSystemConfig``: the preset leaves the power open and gives a share, and a stated
+    power wins over the share, so an import stating either one overrides only that field (G9: a
+    ``none`` writes no line, and the preset's value of the other field stays).
+    """
 
     MAIN_CLASS = "tests.assemblies.mock_components.MockPVSystem"
 
@@ -259,9 +269,10 @@ class MockPVSystemConfig(ConfigBase):
     ROOF_PEAK_POWER_IN_WATT: ClassVar[float] = 20000.0
 
     component_id: ComponentID
-    power_in_watt: Optional[float] = field(default=5000.0, metadata={UNIT: lt.Units.WATT})
-    #: The share of the roof the array covers, the alternative to its peak power; dimensionless.
-    share_of_roof: Optional[float] = field(default=None, metadata={UNIT: lt.Units.ANY})
+    #: The peak power; ``None`` takes the share of the roof's.
+    power_in_watt: Optional[float] = field(default=None, metadata={UNIT: lt.Units.WATT})
+    #: The share of the roof the array covers, read when no power is given; dimensionless (5 kWp of the roof).
+    share_of_roof: Optional[float] = field(default=0.25, metadata={UNIT: lt.Units.ANY})
     azimuth: float = field(default=180.0, metadata={UNIT: lt.Units.DEGREES})
     tilt: float = field(default=30.0, metadata={UNIT: lt.Units.DEGREES})
     #: A field without a declared unit, for the refusal of a fed field without one.
@@ -276,15 +287,12 @@ class MockPVSystemConfig(ConfigBase):
     )
 
     def peak_power_in_watt(self) -> float:
-        """The peak power: the one given, or the share of the roof's; exactly one of the two is set."""
-        if (self.power_in_watt is None) == (self.share_of_roof is None):
-            raise ValueError(
-                f"{self.component_id.name} sets power_in_watt={self.power_in_watt!r} and "
-                f"share_of_roof={self.share_of_roof!r}; exactly one of the two is given."
-            )
+        """The peak power: the one given, else the share of the roof's."""
         if self.power_in_watt is not None:
             return self.power_in_watt
-        return float(self.share_of_roof or 0.0) * self.ROOF_PEAK_POWER_IN_WATT
+        if self.share_of_roof is None:
+            raise ValueError(f"{self.component_id.name} gives neither power_in_watt nor share_of_roof.")
+        return self.share_of_roof * self.ROOF_PEAK_POWER_IN_WATT
 
     @preset
     @classmethod

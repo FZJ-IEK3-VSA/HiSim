@@ -85,7 +85,7 @@ def ports(record: ImportRecord, key: str) -> dict:
 # ------------------------------------------------------------------------------------------ circuits
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_circuit_lowers_to_a_bare_name_of_the_other_end_at_each_end_and_records_both_ends() -> None:
     """Catches a circuit wired one way only, or recorded at one end only."""
     model, record = boiler_house()
@@ -109,7 +109,7 @@ def test_a_circuit_lowers_to_a_bare_name_of_the_other_end_at_each_end_and_record
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_required_circuit_end_without_the_other_end_is_refused() -> None:
     """Catches a cylinder left without its boiler."""
     message = refusal(SITE + imports("cylinder: {assembly: mock/dhw_cylinder}"))
@@ -117,7 +117,7 @@ def test_a_required_circuit_end_without_the_other_end_is_refused() -> None:
     assert "an end of the circuit dhw" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
     """Catches a circuit end silently picking one of two boilers."""
     gas = "gas: {assembly: mock/gas_connection}"
@@ -139,7 +139,7 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
     assert model.components["one-Boiler"].inputs == (DefaultInputs(source="tank-Cylinder"),)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_joined_circuit_end_bound_to_an_undeclared_name_is_refused_by_name() -> None:
     """Catches a joined end whose verb names a partner the file does not declare escaping as a KeyError."""
     message = refusal(
@@ -155,7 +155,7 @@ def test_a_joined_circuit_end_bound_to_an_undeclared_name_is_refused_by_name() -
     assert "declares no import or component 'wrong'" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_binding_an_end_of_another_circuit_is_refused(tmp_path: Path) -> None:
     """Catches a dhw cylinder bound to a space_heating end: the circuit name is the medium."""
     library = Library(tmp_path)
@@ -183,7 +183,7 @@ def test_binding_an_end_of_another_circuit_is_refused(tmp_path: Path) -> None:
     assert "the circuit space_heating ('space_heating')" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_member_at_an_end_that_reads_nothing_of_the_other_is_refused_by_the_wiring(tmp_path: Path) -> None:
     """D25: a member that neither owns nor reads a circuit output is a bare name without default connections."""
     library = Library(tmp_path)
@@ -208,7 +208,7 @@ def test_a_member_at_an_end_that_reads_nothing_of_the_other_is_refused_by_the_wi
     assert "[source: boiler-Boiler (import boiler" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_site_entry_is_a_circuit_end_of_its_own() -> None:
     """Catches a circuit that only imports can end."""
     tank = (
@@ -227,7 +227,7 @@ def test_a_site_entry_is_a_circuit_end_of_its_own() -> None:
 # ------------------------------------------------------------------------------------------ carriers
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_fuel_need_lowers_to_a_bare_name_in_the_providers_meter_and_hands_the_wiring_its_outputs() -> None:
     """Catches a burner whose gas no meter observes."""
     model, record = boiler_house()
@@ -239,7 +239,7 @@ def test_a_fuel_need_lowers_to_a_bare_name_in_the_providers_meter_and_hands_the_
     assert ports(record, "gas")["connection"].partner == "boiler.fuel"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_fuel_need_without_a_provider_two_providers_and_an_idle_provider_are_refused() -> None:
     """Catches a carrier without exactly one provider, and a provider nothing consumes from."""
     boiler, cylinder, gas = (
@@ -255,7 +255,7 @@ def test_a_fuel_need_without_a_provider_two_providers_and_an_idle_provider_are_r
     assert message.startswith("EF-7L at import 'gas'") and "has no bound consumer" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_no_verb_binds_a_carrier_need() -> None:
     """Catches a verb on a carrier need being accepted: there is one provider per carrier."""
     message = refusal(
@@ -269,7 +269,7 @@ def test_no_verb_binds_a_carrier_need() -> None:
     assert message.startswith("EF-7G at import 'boiler'") and "'fuel', which is a carrier port" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_site_entries_provide_and_consume_carriers_alike() -> None:
     """Catches a carrier that only assemblies can provide or consume."""
     meter = (
@@ -284,7 +284,7 @@ def test_site_entries_provide_and_consume_carriers_alike() -> None:
     assert record.site_ports["Meter"][0].partner == "boiler.fuel"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("port", "code", "fragment"),
     [
@@ -314,7 +314,7 @@ def test_the_reader_refuses_a_provision_of_the_wrong_shape(tmp_path: Path, port:
     assert str(raised.value).startswith(code) and fragment in str(raised.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("outputs", "carrier", "code", "fragment"),
     [
@@ -368,7 +368,7 @@ def test_the_wiring_checks_what_a_carrier_need_states_and_no_wire_shows(
     assert "[source: " in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_electricity_need_checks_the_one_provider_and_writes_no_wire(tmp_path: Path) -> None:
     """Catches an electricity need lowering a wire, or passing without a grid connection."""
     library = Library(tmp_path)
@@ -398,7 +398,7 @@ def test_an_electricity_need_checks_the_one_provider_and_writes_no_wire(tmp_path
 # --------------------------------------------------------------------------------------------- facts
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_fact_need_lowers_to_a_sizing_line_naming_its_provider_bound_by_a_verb() -> None:
     """Catches a battery that cannot be pointed at one of two arrays."""
     model, record = boiler_house()
@@ -412,7 +412,7 @@ def test_a_fact_need_lowers_to_a_sizing_line_naming_its_provider_bound_by_a_verb
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_scalar_fact_need_with_two_providers_needs_a_verb_and_a_site_provider_counts() -> None:
     """Catches a fact need silently picking one of two arrays; a site array is a provider by its class."""
     pv = "pv: {assembly: mock/pv_array, instances: {east: {}, west: {}}}"
@@ -426,7 +426,7 @@ def test_a_scalar_fact_need_with_two_providers_needs_a_verb_and_a_site_provider_
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_many_fact_need_lowers_the_list_of_every_provider_in_written_order_and_takes_no_verb() -> None:
     """Site entries first, then the imports and instances as written; a verb cannot choose among them."""
     roof = f"Roof: {{class: {MOCKS}.MockPVSystem, preset: rooftop, inputs: [Weather]}}"
@@ -449,7 +449,7 @@ def test_a_many_fact_need_lowers_the_list_of_every_provider_in_written_order_and
     assert message.startswith("EF-7A at import 'battery'") and "pv_peak_power_in_watt" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_list_into_a_one_provider_law_and_one_provider_into_a_sum_are_refused_by_name(tmp_path: Path) -> None:
     """The sizing engine refuses a line whose shape is not the cardinality of the law reading it (EF-4E)."""
     library = Library(tmp_path)
@@ -478,7 +478,7 @@ def test_a_list_into_a_one_provider_law_and_one_provider_into_a_sum_are_refused_
         assert message.startswith("EF-4E") and fragment in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_two_fact_ports_lowering_one_fact_into_one_member_are_refused(tmp_path: Path) -> None:
     """Catches the second fact port silently overwriting the first's sizing_sources line."""
     library = Library(tmp_path)
@@ -504,7 +504,7 @@ def test_two_fact_ports_lowering_one_fact_into_one_member_are_refused(tmp_path: 
         assert name in message, f"{name!r} is not in: {message}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_fuel_provision_whose_meter_is_absent_is_refused_by_name() -> None:
     """Catches the binder raising a KeyError for a fuel provision's meter the selection left out."""
     provision = Port(name="connection", section="provides", kind=PortKind.CARRIER, carrier="natural_gas", meter="Meter")
@@ -534,7 +534,7 @@ def test_a_fuel_provision_whose_meter_is_absent_is_refused_by_name() -> None:
         assert name in message, f"{name!r} is not in: {message}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_active_observer_port_whose_members_are_all_absent_is_refused_by_name() -> None:
     """Catches an observer port registering no observer, silently, when the selection left out its members."""
     port = Port(name="reading", section="observes", kind=PortKind.OBSERVER, into=("Meter",), selection=Selection())
@@ -554,7 +554,7 @@ def test_an_active_observer_port_whose_members_are_all_absent_is_refused_by_name
         assert name in message, f"{name!r} is not in: {message}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_provided_fact_outside_the_member_classes_contributions_fails_the_library_check(tmp_path: Path) -> None:
     """Catches a fact port promising a fact its member's class never computes."""
     library = Library(tmp_path)
@@ -587,7 +587,7 @@ def run(system: str, directory: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return directory
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_boiler_house_runs_a_day_its_meter_reads_the_boilers_fuel_and_its_balance_closes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -599,7 +599,7 @@ def test_the_boiler_house_runs_a_day_its_meter_reads_the_boilers_fuel_and_its_ba
     assert json.loads((result / "balance_report.json").read_text(encoding="utf-8"))["verdict"] == "closes"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_record_carries_the_consuming_outputs_and_a_rerun_checks_them_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -620,7 +620,7 @@ def test_the_record_carries_the_consuming_outputs_and_a_rerun_checks_them_again(
         run_energy_system(edited, parameters, str(tmp_path / "edited"), rerun=True)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_two_array_house_sizes_its_battery_to_both_arrays_and_its_record_reruns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:

@@ -1,0 +1,42 @@
+# The public grid connection (the one provider of electricity) and its bidirectional meter, an observer whose
+# selection the importing file writes (spec §4.3, §5.1). Electricity has no link: an electricity need only checks that
+# exactly one connection exists. At its default the meter observes every electricity output its class declares (the
+# twin shape metered_directly); beside an energy manager the import selects the manager's grid balance by name,
+# `observes: [{output: TotalElectricityToOrFromGrid}]` (ems_with_battery).
+
+schema_version: 4
+kind: assembly
+name: supply/electricity_grid
+description: Public grid connection with its bidirectional meter.
+
+components:
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+
+interface:
+  provides:
+    connection: {carrier: electricity}
+  observes:
+    reading:    {into: [ElectricityMeter], default: declared}
+
+tests:
+  # One day at 900 s beside the residents, the flow its default selection finds in isolation (at most about 50 kW):
+  # per-step energies <= 50 kW x 0.25 h, the day <= 50 kW x 24 h. The exchange is signed: from the grid is negative.
+  bounds:
+    - {output: ElectricityMeter.ElectricityToGridInWatt, unit: WATT, min: 0, max: 50000}
+    - {output: ElectricityMeter.ElectricityFromGridInWatt, unit: WATT, min: 0, max: 50000}
+    - {output: ElectricityMeter.ElectricityProductionInWatt, unit: WATT, min: 0, max: 50000}
+    - {output: ElectricityMeter.ElectricityConsumptionInWatt, unit: WATT, min: 0, max: 50000}
+    - {output: ElectricityMeter.ElectricityAvailable, unit: WATT, min: -50000, max: 50000}     # production minus consumption
+    - {output: ElectricityMeter.ElectricityToAndFromGrid, unit: WATT_HOUR, min: -12500, max: 12500}
+    - {output: ElectricityMeter.ElectricityToGrid, unit: WATT_HOUR, min: 0, max: 12500}
+    - {output: ElectricityMeter.ElectricityFromGrid, unit: WATT_HOUR, min: 0, max: 12500}
+    - {output: ElectricityMeter.ElectricityConsumption, unit: WATT_HOUR, min: 0, max: 12500}
+    - {output: ElectricityMeter.ElectricityProduction, unit: WATT_HOUR, min: 0, max: 12500}
+    - {output: ElectricityMeter.CumulativeConsumption, unit: WATT_HOUR, min: 0, max: 1200000}
+    - {output: ElectricityMeter.CumulativeProduction, unit: WATT_HOUR, min: 0, max: 1200000}
+  monotone: []                                              # no numeric parameter: nothing to sweep
+  expect:
+    - {kpi: Total energy from grid, member: ElectricityMeter, min: 10, max: 14}
+      # 12.1 kWh measured: the residents' day (couple_both_at_work, 1 January)

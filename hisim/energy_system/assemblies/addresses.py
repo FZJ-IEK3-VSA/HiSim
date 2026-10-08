@@ -1,7 +1,8 @@
 """Every member's structured address and its entry, substituted, rewritten and lowered (§2.4, §9.2).
 
 One import instance's members become **units**: entries with the parameters substituted (``{$param:
-…}`` in config values and constructor arguments, the preset a ``{$param}`` names), the structured
+…}`` in config values and constructor arguments, the preset a ``{$param}`` names; a config field
+fed by a parameter is written only as an override, :func:`config_overrides`), the structured
 address ``ComponentID(name, path=(AddressStep(import, instance),), assembly, display_name)`` whose
 serialization ``pv-east-PVSystem`` is the component's name in the flat file, and their place in the
 file's sequence (:func:`sequence`): members in their assembly's written order, an import one block
@@ -13,13 +14,17 @@ replaced by what their ports lowered to — and its source-map entries.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim.config import AddressStep, ComponentID
-from hisim.energy_system.assemblies.parameters import Selection
+from hisim.config.presets import presets_of
+from hisim.energy_system.assemblies.parameters import ParameterChecks, Selection
 from hisim.energy_system.assemblies.record import SourceMap, SourceMapEntry
 from hisim.energy_system.assemblies.resolver import ResolvedAssembly
+from hisim.energy_system.classes import ClassBinder
+from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.errors import EnergySystemAssemblyError, EnergySystemErrorId
 from hisim.energy_system.imports_model import BindingVerbs, ParameterReference, PortPlaceholder
 from hisim.energy_system.model import AnyInputItem, ComponentEntry, SourceReference
@@ -165,7 +170,9 @@ def member_units(
         identity = ComponentID(name=name, path=(step,), assembly=assembly.path, display_name=display)
         substituted = entry.model_copy(
             update={
-                "config": ParameterReference.substitute(dict(entry.config), selection.resolved),
+                "config": config_overrides(
+                    name, entry.model_copy(update={"preset": preset}), selection.resolved, location
+                ),
                 "constructor": constructor,
                 "preset": preset,
             }
@@ -183,6 +190,65 @@ def member_units(
             )
         )
     return sorted(units, key=lambda unit: unit.lines.location(*unit.block_path).line)
+
+
+def config_overrides(name: str, entry: ComponentEntry, resolved: Mapping[str, Any], location: str) -> Dict[str, Any]:
+    """A member's config block with its parameters substituted, every fed field written only as an override.
+
+    G9 (owner, 2026-10-07, D28): a top-level field written ``{$param: …}`` gets no line when the
+    parameter resolves to ``AUTO`` or ``none`` — the field stays with the preset or its law — or to
+    the value the member's preset already gives the field (a member without a preset or constructor:
+    the field's default). The expansion writes only overrides, as the recorder does for a twin. A
+    member configured by a named constructor has no origin before its arguments are decoded, so its
+    fed fields are written whenever they carry a value. Every other value is substituted as written.
+
+    Args:
+        name: The member's local name.
+        entry: The member's entry, its preset resolved.
+        resolved: The instance's resolved parameters.
+        location: The member in its assembly file, for messages.
+
+    Returns:
+        The config block the flat file writes.
+    """
+    origin: Optional[Tuple[Any, ConfigValueCodec]] = None
+    config: Dict[str, Any] = {}
+    for key, written in entry.config.items():
+        parameter = ParameterReference.name_of(written)
+        if parameter is None:
+            config[key] = ParameterReference.substitute(written, resolved)
+            continue
+        value = resolved[parameter]
+        if not ParameterChecks.carries_value(value):
+            continue
+        if entry.constructor is None:
+            if origin is None:
+                origin = _origin_of(name, entry)
+            base, codec = origin
+            decoded = codec.decode(key, value, f"{location}.config.{key}", name) if key in codec.fields else value
+            if key in base and decoded == base[key]:
+                continue
+        config[key] = value
+    return config
+
+
+def _origin_of(name: str, entry: ComponentEntry) -> Tuple[Dict[str, Any], ConfigValueCodec]:
+    """The field values a member's preset gives (or its class's field defaults), and the codec decoding its values."""
+    config_class = ClassBinder.config_class_of(name, entry)
+    codec = ConfigValueCodec(config_class)
+    presets = presets_of(config_class)
+    if entry.preset is not None:
+        if entry.preset not in presets:
+            return {}, codec  # the class binding refuses the unknown preset by name, with the class's presets
+        built = presets[entry.preset].build(name)
+        return {key: getattr(built, key) for key in codec.fields}, codec
+    defaults: Dict[str, Any] = {}
+    for key, declared in codec.fields.items():
+        if declared.default is not dataclasses.MISSING:
+            defaults[key] = declared.default
+        elif declared.default_factory is not dataclasses.MISSING:
+            defaults[key] = declared.default_factory()
+    return defaults, codec
 
 
 def final_entry(unit: Unit, source_map: SourceMap) -> ComponentEntry:

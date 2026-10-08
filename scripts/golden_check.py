@@ -14,13 +14,21 @@ machine-readable ``report.json``. Read-only: never writes golden references
 A CI job checks one *shard*: ``--pairs setup:param ...`` (from ``golden_matrix.py --shards``)
 with ``--jobs N``, which runs N pairs at once, each in a child process of its own; the results
 still land in the one report, and a pair that diverges or fails to run fails the whole check.
-``--mode both`` runs every pair's Python setup and its recorded YAML twin side by side in that
-one pool and writes one report per mode: YAML mode writes to ``<check_subdir>-yaml``, so the two
-never share a result directory or read each other's ``all_kpis.json``.
+Three modes run a pair, each compared with the same committed golden, the Python setup's blessed
+result: ``python`` runs the ``.py`` setup (the reference), ``yaml`` its recorded
+``.energy_system.yaml`` twin (the recorded twin reproduces it), and ``composed`` the setup's composed
+file, the site plus imports of ``energy_systems/assemblies/`` (the assemblies reproduce it), its KPIs
+renamed to the twin's names through the setup's entry in
+``hisim/energy_system/assemblies/twins.py``. A setup without a composed file is listed as skipped in
+the ``composed`` report. ``--mode`` takes one mode or several, ``both`` being python and yaml and
+``all`` the three; the modes run side by side in one pool and each writes its own report, to
+``<check_subdir><MODE_SUFFIX>``, so no two share a result directory or read each other's
+``all_kpis.json``.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import re
 import sys
@@ -40,12 +48,16 @@ try:  # run as a script from scripts/ ...
         REL_TOL,
         UNIT,
         GoldenFormatError,
+        KpiAddress,
         compare,
         load_golden,
+        renamed_leaves,
     )
+    from p3_parity_renamings import DeclaredPortRenamings  # type: ignore[import-not-found]
     from runner import (  # type: ignore[import-not-found]
         GoldenConfig,
         RunResult,
+        composed_twin_of,
         filter_config,
         load_config,
         parse_pair,
@@ -54,10 +66,21 @@ try:  # run as a script from scripts/ ...
         select_pairs,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
-    from scripts.golden_kpis import ABS_TOL, REL_TOL, UNIT, GoldenFormatError, compare, load_golden
+    from scripts.golden_kpis import (
+        ABS_TOL,
+        REL_TOL,
+        UNIT,
+        GoldenFormatError,
+        KpiAddress,
+        compare,
+        load_golden,
+        renamed_leaves,
+    )
+    from scripts.p3_parity_renamings import DeclaredPortRenamings
     from scripts.runner import (
         GoldenConfig,
         RunResult,
+        composed_twin_of,
         filter_config,
         load_config,
         parse_pair,
@@ -66,6 +89,9 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
         select_pairs,
     )
 
+#: The name of the energy-management system's KPI that quotes one of its aggregator input ports.
+PRIORITY_PREFIX = "Priority for "
+
 #: KPI names that carry a legacy aggregator port name (``Priority for Input_<source>_<field>_<n>``).
 #: The legacy and declarative paths name aggregator ports differently (C-P3.2 of the P3
 #: requirements), and the energy-management system names its priority KPI after the port, so these
@@ -73,7 +99,30 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
 #: family from both sides of the comparison -- declared here, printed per pair, and covered
 #: exactly by the parity rig through its renaming table. The exclusion dissolves when the legacy
 #: aggregator ports adopt the declarative names (a P4/P5 item per C-P3.2).
-PORT_NAMED_KPIS = re.compile(r"\.Priority for ")
+PORT_NAMED_KPIS = re.compile(r"\." + re.escape(PRIORITY_PREFIX))
+
+#: The declared translation of the legacy aggregator port names into the declarative ones (C-P3.2), the parity rig's
+#: table; ``composed`` mode reads the golden's port-named KPIs through it instead of excluding them.
+_PORT_RENAMING = DeclaredPortRenamings.port_renaming()
+
+
+def declarative_port_names(address: KpiAddress) -> KpiAddress:
+    """A golden KPI's address with the legacy aggregator port its name quotes renamed to the declarative port.
+
+    The energy-management system names one KPI per participant after its aggregator input,
+    ``Priority for Input_Battery_AcBatteryPowerUsed_6`` in a Python run and ``Priority for
+    AcBatteryPowerUsedFromBattery`` in a declarative one (C-P3.2). ``composed`` mode reads the golden through
+    the parity rig's declared table (``scripts/p3_parity_renamings.py``), keyed by the KPI's source component
+    and the legacy port, so the family is compared rather than excluded. A port the table does not declare
+    keeps its name, and the comparison then reports the KPI as missing and the composed one as new.
+    """
+    if address.source is None or not address.name.startswith(PRIORITY_PREFIX):
+        return address
+    port = address.name[len(PRIORITY_PREFIX):]
+    return dataclasses.replace(
+        address, name=PRIORITY_PREFIX + _PORT_RENAMING.rename(address.source.name, port)
+    )
+
 
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = Path(__file__).parent / "golden_config.json"
@@ -94,7 +143,7 @@ class PairReport:
 
     setup_id: str
     parameter_set_id: str
-    status: str  # "pass" | "fail" | "advisory" | "missing_golden" | "unusable_golden" | "run_error"
+    status: str  # "pass" | "fail" | "advisory" | "missing_golden" | "unusable_golden" | "run_error" | "skipped"
     nondeterministic: bool = False
     deviations: list[str] = field(default_factory=list)
     #: KPIs whose unit changed: a failure of its own kind, kept apart from ``deviations``.
@@ -111,11 +160,13 @@ class ComparisonReport:
     pairs: list[PairReport] = field(default_factory=list)
 
     def summary_line(self) -> str:
-        total = len(self.pairs)
+        skipped = sum(1 for p in self.pairs if p.status == "skipped")
+        total = len(self.pairs) - skipped
+        counted = f"{total} pair(s)" + (f", {skipped} skipped without a composed file" if skipped else "")
         if self.passed:
             advisory = sum(1 for p in self.pairs if p.status == "advisory")
             extra = f" ({advisory} advisory)" if advisory else ""
-            return f"GOLDEN CHECK OK ({total} pair(s)){extra}"
+            return f"GOLDEN CHECK OK ({counted}){extra}"
         diverged = sum(1 for p in self.pairs if p.status == "fail" and p.deviations)
         unit_changed = sum(1 for p in self.pairs if p.status == "fail" and p.unit_changes)
         errored = sum(1 for p in self.pairs if p.status == "run_error")
@@ -132,7 +183,7 @@ class ComparisonReport:
             reasons.append(f"{missing} missing a golden reference")
         if unusable:
             reasons.append(f"{unusable} with an unusable golden reference")
-        return f"GOLDEN CHECK FAILED ({total} pair(s)): {', '.join(reasons)}"
+        return f"GOLDEN CHECK FAILED ({counted}): {', '.join(reasons)}"
 
 
 def _print_failure_details(report: ComparisonReport, out_dir: Path, advisory: bool) -> None:
@@ -197,10 +248,28 @@ def _write_reports(report: ComparisonReport, out_dir: Path) -> None:
     (out_dir / "report.txt").write_text("\n".join(lines) + "\n")
 
 
-#: Each mode's result subdirectory suffix (appended to the config's ``check_subdir``) and the KPI
-#: names it excludes from the comparison.
-MODE_SUFFIX = {"python": "", "yaml": "-yaml"}
-MODE_IGNORED_KPIS: dict[str, Optional[re.Pattern]] = {"python": None, "yaml": PORT_NAMED_KPIS}
+#: The modes, in the order they are run and reported.
+MODES = ("python", "yaml", "composed")
+#: The names ``--mode`` takes for several modes at once.
+MODE_GROUPS = {"both": ("python", "yaml"), "all": MODES}
+#: Each mode's result subdirectory suffix (appended to the config's ``check_subdir``), the KPI
+#: names it excludes from the comparison, and how it reads the golden's addresses.
+MODE_SUFFIX = {"python": "", "yaml": "-yaml", "composed": "-composed"}
+MODE_IGNORED_KPIS: dict[str, Optional[re.Pattern]] = {"python": None, "yaml": PORT_NAMED_KPIS, "composed": None}
+MODE_REFERENCE_RENAME: dict[str, Optional[Callable[[KpiAddress], KpiAddress]]] = {
+    "python": None,
+    "yaml": None,
+    "composed": declarative_port_names,
+}
+#: Why a pair is skipped in ``composed`` mode.
+NO_COMPOSED_FILE = "no composed file: the setup has no entry in hisim/energy_system/assemblies/twins.py"
+
+
+def expand_modes(names: Sequence[str]) -> list[str]:
+    """The modes ``--mode`` names (a mode, ``both`` or ``all``, one or several), each once, in :data:`MODES` order."""
+    wanted = {mode for name in names for mode in MODE_GROUPS.get(name, (name,))}
+    return [mode for mode in MODES if mode in wanted]
+
 
 ModesRunFn = Callable[[GoldenConfig, Path, Path, dict[str, str], int], dict[str, list[RunResult]]]
 
@@ -251,8 +320,16 @@ def _evaluate(
     rel_tol: float,
     abs_tol: float,
     ignore_kpis: Optional[re.Pattern],
+    reference_rename: Optional[Callable[[KpiAddress], KpiAddress]] = None,
+    skipped: Sequence[tuple[str, str]] = (),
 ) -> ComparisonReport:
-    """Compare each run's KPIs with its golden and return the verdicts of all of them."""
+    """Compare each run's KPIs with its golden and return the verdicts of all of them.
+
+    ``reference_rename`` reads the golden's addresses as the mode's run names them (``composed``
+    mode: :func:`declarative_port_names`); every renamed KPI is counted and printed with its pair.
+    ``skipped`` lists the ``(setup, parameter set)`` pairs the mode does not run, each reported as
+    skipped (``composed`` mode: the setups without a composed file).
+    """
     param_by_id = {p.id: p for p in config.parameter_sets}
     pair_reports: list[PairReport] = []
     passed = True
@@ -277,6 +354,12 @@ def _evaluate(
 
         golden_path = golden_dir / golden_filename(result.setup_id, result.parameter_set_id)
         ref: dict[str, Any] = load_golden(golden_path)
+        if reference_rename is not None:
+            stored = ref
+            ref = renamed_leaves(stored, reference_rename, str(golden_path))
+            moved = len(set(stored) - set(ref))
+            if moved:
+                print(f"  ({name}: {moved} port-named golden KPI(s) read under the declarative port names, C-P3.2)")
         got = result.kpis
         if ignore_kpis is not None:
             got = {k: v for k, v in got.items() if not ignore_kpis.search(k)}
@@ -307,6 +390,9 @@ def _evaluate(
                 result.duration_s,
             )
         )
+    for setup_id, param_id in skipped:
+        nondet = param_by_id[param_id].nondeterministic
+        pair_reports.append(PairReport(setup_id, param_id, "skipped", nondet, [NO_COMPOSED_FILE]))
     return ComparisonReport(passed=passed, pairs=pair_reports)
 
 
@@ -384,11 +470,13 @@ def check_modes(
 ) -> int:
     """Check the pairs in every mode of ``modes`` from one pool of runs, one report per mode.
 
-    Each mode is judged exactly as :func:`main` judges it — its own result directory
+    Each mode is judged as :func:`main` judges it — its own result directory
     (:data:`MODE_SUFFIX`), its own excluded KPIs (:data:`MODE_IGNORED_KPIS`), its own
     ``report.*`` — but the runs of all modes share one pool of ``jobs`` child processes, so a
-    CI shard runs a pair's Python setup and its YAML twin side by side. Returns ``1`` if any
-    mode's check fails (subject to ``advisory``), else ``0``; every mode is always reported.
+    CI shard runs a pair's Python setup, its YAML twin and its composed file side by side.
+    ``composed`` mode reads the golden through :data:`MODE_REFERENCE_RENAME` and lists the pairs
+    whose setup has no composed file as skipped. Returns ``1`` if any mode's check fails
+    (subject to ``advisory``), else ``0``; every mode is always reported.
     """
     config = load_config(config_path)
     config = filter_config(config, setup_id=setup_id, param_id=param_id, pairs=pairs)
@@ -401,7 +489,21 @@ def check_modes(
     exit_code = 0
     for mode, subdir in subdirs.items():
         print(f"\n== {mode} ==")
-        report = _evaluate(config, results[mode], golden_dir, rel_tol, abs_tol, MODE_IGNORED_KPIS[mode])
+        skipped = [
+            (setup.id, param.id)
+            for setup, param in select_pairs(config)
+            if mode == "composed" and composed_twin_of(setup) is None
+        ]
+        report = _evaluate(
+            config,
+            results[mode],
+            golden_dir,
+            rel_tol,
+            abs_tol,
+            MODE_IGNORED_KPIS[mode],
+            MODE_REFERENCE_RENAME[mode],
+            skipped,
+        )
         exit_code = max(exit_code, _conclude(report, results_root / subdir, advisory))
     return exit_code
 
@@ -433,11 +535,14 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--abs-tol", type=float, default=ABS_TOL)
     parser.add_argument(
         "--mode",
-        choices=("python", "yaml", "both"),
-        default="python",
-        help="Run the '.py' setups (python) or their recorded '.energy_system.yaml' twins "
-        "through the declarative executor (yaml), or both side by side from one pool of runs "
-        "(both; one report per mode). All compare against the same committed golden references.",
+        nargs="+",
+        choices=(*MODES, *MODE_GROUPS),
+        default=["python"],
+        help="Run the '.py' setups (python), their recorded '.energy_system.yaml' twins through the "
+        "declarative executor (yaml), or their composed files with the KPIs renamed to the twins' names "
+        "(composed; a setup without one is listed as skipped). Several modes run side by side from one "
+        "pool of runs, one report each; 'both' is python and yaml, 'all' the three. All compare against "
+        "the same committed golden references.",
     )
     parser.add_argument(
         "--advisory",
@@ -454,7 +559,7 @@ if __name__ == "__main__":
     args = _parse_args()
     sys.exit(
         check_modes(
-            ["python", "yaml"] if args.mode == "both" else [args.mode],
+            expand_modes(args.mode),
             config_path=args.config,
             golden_dir=args.golden_dir,
             results_root=args.results_root,

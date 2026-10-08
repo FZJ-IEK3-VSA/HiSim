@@ -11,9 +11,18 @@ from pathlib import Path
 
 import pytest
 
-from scripts.golden_check import PORT_NAMED_KPIS, _parse_args, check_modes, golden_filename, main
+from scripts.golden_check import (
+    PORT_NAMED_KPIS,
+    _parse_args,
+    check_modes,
+    declarative_port_names,
+    expand_modes,
+    golden_filename,
+    main,
+)
+from scripts.golden_kpis import leaf_address
 from scripts.runner import GoldenConfig, RunResult, run_all, select_pairs
-from tests.golden_leaf_factory import derived, general, leaf_map
+from tests.golden_leaf_factory import component, derived, general, leaf_map
 
 pytestmark = pytest.mark.base
 
@@ -220,10 +229,10 @@ def test_advisory_missing_golden_returns_zero(tmp_path: Path) -> None:
 def test_cli_mode_and_advisory_flags() -> None:
     """``--mode yaml`` and ``--advisory`` parse; defaults stay python/blocking."""
     default = _parse_args([])
-    assert default.mode == "python"
+    assert default.mode == ["python"]
     assert default.advisory is False
     parsed = _parse_args(["--mode", "yaml", "--advisory"])
-    assert parsed.mode == "yaml"
+    assert parsed.mode == ["yaml"]
     assert parsed.advisory is True
     # 'json' was the third mode until the v1 scenario files retired; it is refused now.
     with pytest.raises(SystemExit):
@@ -418,8 +427,115 @@ def test_a_missing_golden_fails_both_modes_before_running(tmp_path: Path) -> Non
 
 
 def test_cli_mode_both() -> None:
-    """``--mode both`` is the golden-check shard's mode."""
-    assert _parse_args(["--mode", "both"]).mode == "both"
+    """``--mode both`` is python and yaml."""
+    assert expand_modes(_parse_args(["--mode", "both"]).mode) == ["python", "yaml"]
+
+
+def test_cli_mode_all_and_several_modes() -> None:
+    """``--mode all`` is the golden-check shard's three modes; the year tier names python and composed.
+
+    Catches a mode named twice running twice, or the modes running in another order than they are reported.
+    """
+    assert expand_modes(_parse_args(["--mode", "all"]).mode) == ["python", "yaml", "composed"]
+    assert expand_modes(_parse_args(["--mode", "composed", "python"]).mode) == ["python", "composed"]
+    assert expand_modes(_parse_args(["--mode", "both", "yaml", "composed"]).mode) == ["python", "yaml", "composed"]
+
+
+# --------------------------------------------------------------------------- #
+# The composed mode: the composed files against the Python setups' goldens
+# --------------------------------------------------------------------------- #
+def _composed_config(tmp_path: Path) -> Path:
+    """Two setups: the heat-pump sizer, which has a composed file, and one without."""
+    config = _config_dict()
+    config["setups"] = [
+        {"id": "household_heatpump_building_sizer", "path": "system_setups/household_heatpump_building_sizer.py"},
+        {"id": "setup_a", "path": "system_setups/simple_system_setup_one.py"},
+    ]
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(config))
+    return path
+
+
+def test_the_composed_mode_lists_a_setup_without_a_composed_file_as_skipped(tmp_path: Path) -> None:
+    """Catches a setup without a composed file vanishing from the composed report, or failing it.
+
+    The pool is asked for the composed runs (the fake returns them for every pair); only the pair with a
+    composed file is compared, the other is listed as skipped, and the Python report has no skipped pair.
+    """
+    config_path = _composed_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    golden_dir.mkdir()
+    for setup_id in ("household_heatpump_building_sizer", "setup_a"):
+        (golden_dir / golden_filename(setup_id, "one_week_60s")).write_text(json.dumps(general({"a": 1.0})))
+
+    def run_modes_fn(config: GoldenConfig, _root: Path, _repo: Path, _subdirs: dict, _jobs: int) -> dict:
+        pairs = select_pairs(config)
+        return {
+            "python": [RunResult(s.id, p.id, "rd", kpis=general({"a": 1.0})) for s, p in pairs],
+            "composed": [
+                RunResult(s.id, p.id, "rd", kpis=general({"a": 1.0}))
+                for s, p in pairs
+                if s.id == "household_heatpump_building_sizer"
+            ],
+        }
+
+    rc = check_modes(
+        ["python", "composed"], config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_modes_fn=run_modes_fn,
+    )
+
+    assert rc == 0
+    composed = json.loads((tmp_path / "golden-ref-check-composed" / "report.json").read_text())
+    assert [(p["setup_id"], p["status"]) for p in composed["pairs"]] == [
+        ("household_heatpump_building_sizer", "pass"),
+        ("setup_a", "skipped"),
+    ]
+    text = (tmp_path / "golden-ref-check-composed" / "report.txt").read_text()
+    assert text.startswith("GOLDEN CHECK OK (1 pair(s), 1 skipped without a composed file)")
+    assert "[SKIPPED] setup_a / one_week_60s" in text
+    python = json.loads((tmp_path / "golden-ref-check" / "report.json").read_text())
+    assert [p["status"] for p in python["pairs"]] == ["pass", "pass"]
+
+
+def _composed_runs(runs: list, _config: GoldenConfig, _root: Path, _repo: Path, _subdirs: dict, _jobs: int) -> dict:
+    """A ``run_modes`` stand-in for ``composed`` mode alone, returning the given runs."""
+    return {"composed": runs}
+
+
+def test_the_composed_mode_compares_the_priority_kpis_under_the_declarative_port_names(tmp_path: Path) -> None:
+    """Catches the port-named family being excluded in composed mode, or compared without the declared translation.
+
+    The golden names the energy manager's priority after the legacy port; the composed run, renamed to the twin's
+    names, after the declarative one. Read through the parity rig's table they are one KPI, so a changed value
+    fails the pair, and an equal one passes it.
+    """
+    config_path = _composed_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    golden_dir.mkdir()
+    ems, controller = "Energy Management System", "L2EMSElectricityController"
+    legacy = component("Priority for Input_Battery_AcBatteryPowerUsed_6", controller, 6.0, tag=ems)
+    for setup_id in ("household_heatpump_building_sizer", "setup_a"):
+        (golden_dir / golden_filename(setup_id, "one_week_60s")).write_text(json.dumps(leaf_map(legacy)))
+    verdicts = {}
+    for value in (6.0, 7.0):
+        declarative = leaf_map(component("Priority for AcBatteryPowerUsedFromBattery", controller, value, tag=ems))
+        run = RunResult("household_heatpump_building_sizer", "one_week_60s", "rd", kpis=declarative)
+        verdicts[value] = check_modes(
+            ["composed"], config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+            repo_root=tmp_path, run_modes_fn=functools.partial(_composed_runs, [run]),
+        )
+
+    assert verdicts == {6.0: 0, 7.0: 1}
+
+
+def test_a_legacy_port_the_table_does_not_declare_keeps_its_name() -> None:
+    """Catches the translation guessing: an undeclared port, or a KPI without a source, is read as it is stored."""
+    ems = "Energy Management System"
+    undeclared = component("Priority for Input_Nothing_Declared_9", "L2EMSElectricityController", 1.0, tag=ems)
+    no_source = derived("Priority for Input_Battery_AcBatteryPowerUsed_6", 1.0, tag=ems)
+    for key, leaf in (undeclared, no_source):
+        address = leaf_address(key, leaf, "test")
+        assert declarative_port_names(address) == address
 
 
 # --------------------------------------------------------------------------- #

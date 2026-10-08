@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
@@ -141,7 +142,7 @@ def controlled(*extra: str) -> str:
 # ---------------------------------------------------------------------------------- the twin shapes
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_metered_directly_shape_writes_exactly_the_twins_feeds(tmp_path: Path) -> None:
     """No manager: the meter's default selection is, item by item, the twin's hand-written feeds (§4.2 gate)."""
     model = build(system_text("metered_house.energy_system.yaml"), tmp_path)
@@ -149,7 +150,7 @@ def test_the_metered_directly_shape_writes_exactly_the_twins_feeds(tmp_path: Pat
     assert model.components["heater-Controller"].inputs == ()
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_ems_with_battery_shape_writes_exactly_the_twins_feeds(tmp_path: Path) -> None:
     """With a manager: its feeds — tags, weights, dispatches — and the meter's one feed are the twin's, item by item."""
     model = build(system_text("ems_house.energy_system.yaml"), tmp_path)
@@ -159,7 +160,7 @@ def test_the_ems_with_battery_shape_writes_exactly_the_twins_feeds(tmp_path: Pat
     assert model.components["battery-Battery"].inputs == ()
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_one_device_each_gives_the_class_defaults_and_a_second_battery_follows_the_first(tmp_path: Path) -> None:
     """The weights are the controller class's own (DEFAULT_WEIGHTS); the k-th further battery gets default + k."""
     model = build(controlled("battery: {assembly: mock/home_battery, instances: {garage: {}, cellar: {}}}"), tmp_path)
@@ -178,11 +179,17 @@ def test_one_device_each_gives_the_class_defaults_and_a_second_battery_follows_t
 
 
 class FakeComponent:
-    """A constructed component as the selection sees it: a class name and, for an observer, its declared feeds."""
+    """A constructed component as the selection sees it: a class name, its outputs and, for an observer, its feeds."""
 
-    def __init__(self, classname: str, declared: Optional[Dict[str, List[DynamicComponentConnection]]] = None) -> None:
-        """Names the class; an observer also carries its dynamic default connections."""
+    def __init__(
+        self,
+        classname: str,
+        declared: Optional[Dict[str, List[DynamicComponentConnection]]] = None,
+        outputs: Tuple[str, ...] = (),
+    ) -> None:
+        """Names the class and the outputs it was built with; an observer also carries its default feeds."""
         self.classname = classname
+        self.outputs = [SimpleNamespace(field_name=output) for output in outputs]
         setattr(self, DynamicConnectionResolver.DEFAULT_FEEDS_ATTRIBUTE, declared or {})
 
     def get_classname(self) -> str:
@@ -210,13 +217,18 @@ def ranked_by_fake_controller(
     declared: Dict[str, List[DynamicComponentConnection]] = {}
     for declaration in declarations:
         declared.setdefault(declaration.source_class_name, []).append(declaration)
-    components = {name: FakeComponent(classname) for name, classname in participants.items()}
+    components = {
+        name: FakeComponent(
+            classname, outputs=tuple(item.source_component_field_name for item in declared.get(classname, ()))
+        )
+        for name, classname in participants.items()
+    }
     components["Controller"] = FakeComponent("FakeController", declared)
     plan = SelectionPlan(observers=[Observer("Controller", Selection(), "Controller")])
     return [(feed.source, feed.output or "", feed.weight) for feed in plan(components)["Controller"]]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_participant_with_two_ranked_feeds_of_one_type_is_one_participant() -> None:
     """Catches the counter advancing per feed: both feeds of the first device rank at 6, the second device's at 7."""
     controlled_tags: List[Any] = [lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
@@ -232,7 +244,7 @@ def test_a_participant_with_two_ranked_feeds_of_one_type_is_one_participant() ->
     ]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_participants_without_a_component_type_each_rank_at_the_declared_weight() -> None:
     """A feed without a component type counts under its source alone: two such participants keep the declared 5."""
     declarations = [declared_feed("Gadget", "Draw", [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED], 5)]
@@ -242,7 +254,7 @@ def test_participants_without_a_component_type_each_rank_at_the_declared_weight(
     ]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_derived_weight_reaching_another_types_base_weight_is_refused(tmp_path: Path) -> None:
     """EF-7V (D27): a second space heater at 2 + 1 = 3 would tie with the hot-water heater's base weight 3."""
     heaters = [
@@ -266,7 +278,7 @@ def test_a_derived_weight_reaching_another_types_base_weight_is_refused(tmp_path
 # ------------------------------------------------------------------------------------ the selection
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_selection_is_the_union_of_its_selectors_matches_in_candidate_order(tmp_path: Path) -> None:
     """``{component_type: PV}`` and ``{flow: …}`` together; the order is the file's, not the selectors'."""
     grid = (
@@ -277,7 +289,16 @@ def test_a_selection_is_the_union_of_its_selectors_matches_in_candidate_order(tm
     assert [feed.source for feed in feeds(model, "grid-Meter")] == ["Occupancy", "pv-PVSystem"]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
+def test_a_declared_output_the_built_source_does_not_have_is_no_candidate(tmp_path: Path) -> None:
+    """Catches the manager selecting an output its source was built without (EF-21) instead of binding the rest."""
+    occupancy = f"Occupancy: {{class: {MOCKS}.MockOccupancy, preset: standard, config: {{with_electricity: false}}}}"
+    control = "control: {assembly: mock/ems_self_consumption}"
+    model = build(site(WEATHER, occupancy) + imports("pv: {assembly: mock/pv_array}", control), tmp_path)
+    assert [feed.source for feed in feeds(model, "control-EMS")] == ["pv-PVSystem"]
+
+
+@pytest.mark.assemblies
 def test_a_site_entry_observes_with_its_own_selection(tmp_path: Path) -> None:
     """``observes:`` on a site entry: its selected feeds follow its own inputs."""
     meter = f"Meter: {{class: {MOCKS}.MockElectricityMeter, preset: standard, observes: [{{component_type: PV}}]}}"
@@ -285,7 +306,7 @@ def test_a_site_entry_observes_with_its_own_selection(tmp_path: Path) -> None:
     assert [feed.source for feed in feeds(model, "Meter")] == ["pv-PVSystem"]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("observes", "code", "fragment"),
     [
@@ -305,7 +326,7 @@ def test_a_selection_matching_nothing_and_every_cut_selector_key_are_refused(
     assert message.startswith(code) and fragment in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_observer_whose_class_declares_no_feeds_and_an_import_without_an_observer_port_are_refused(
     tmp_path: Path,
 ) -> None:
@@ -317,7 +338,7 @@ def test_an_observer_whose_class_declares_no_feeds_and_an_import_without_an_obse
     assert message.startswith("EF-7J at import 'pv'") and "'mock/pv_array' has 0" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_output_selected_and_fed_explicitly_is_refused_as_a_duplicate_feed(tmp_path: Path) -> None:
     """Coexistence (§4.2): written feeds stay legal, the same output selected again is EF-25."""
     written = "{from: Occupancy.ElectricityConsumption, tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED], weight: 999}"
@@ -329,7 +350,7 @@ def test_an_output_selected_and_fed_explicitly_is_refused_as_a_duplicate_feed(tm
 # ---------------------------------------------------------------------------------- the double count
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_grid_left_at_its_default_beside_a_controller_counts_the_flows_twice(tmp_path: Path) -> None:
     """EF-7T: the meter reads the manager's balance and the flows the manager observes."""
     message = refusal(
@@ -346,7 +367,7 @@ def test_the_grid_left_at_its_default_beside_a_controller_counts_the_flows_twice
     assert "[source: grid-Meter (import grid" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize("occupancy", ["Occupancy.ElectricityConsumption", "Occupancy"], ids=["output", "no output"])
 def test_the_double_count_check_covers_hand_written_files(tmp_path: Path, occupancy: str) -> None:
     """A flat file whose meter reads the manager's balance and a flow the manager reads: EF-7T.
@@ -383,7 +404,7 @@ components:
 # --------------------------------------------------------------------------------------- actuation
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("text", "fragment"),
     [
@@ -420,7 +441,7 @@ def test_a_controllable_output_is_actuated_by_exactly_the_one_controller_it_bind
 # ------------------------------------------------------------------------------- derived port names
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_derived_port_names_replace_the_address_separator_and_a_collision_is_refused(tmp_path: Path) -> None:
     """``-`` becomes ``_`` in a derived port; a site entry named like the result collides (EF-32)."""
     assert NameSyntax.port_name_part("pv-east-PVSystem") == "pv_east_PVSystem"
@@ -433,7 +454,7 @@ def test_derived_port_names_replace_the_address_separator_and_a_collision_is_ref
     assert message.startswith("EF-32") and "ElectricityOutputFrompv_PVSystem" in message
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_real_meter_declares_its_feed_from_the_real_ems() -> None:
     """The ElectricityMeter's dynamic default connection from the EMS's grid balance (§4.3, dry run G6)."""
     meter = ElectricityMeter.__new__(ElectricityMeter)
@@ -449,7 +470,7 @@ def test_the_real_meter_declares_its_feed_from_the_real_ems() -> None:
 # ------------------------------------------------------------------------------------------ one day
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_import_record_written_before_the_wiring_selected_its_observers_feeds_is_refused() -> None:
     """Catches the record silently writing an observer with no feeds when serialized before the wiring."""
     _, record = expand_text(system_text("ems_house.energy_system.yaml"))
@@ -460,7 +481,7 @@ def test_an_import_record_written_before_the_wiring_selected_its_observers_feeds
         assert name in message, f"{name!r} is not in: {message}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_ems_house_runs_a_day_with_the_balance_closed_and_its_record_reruns_selecting_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:

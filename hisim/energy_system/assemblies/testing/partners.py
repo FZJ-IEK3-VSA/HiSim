@@ -212,8 +212,13 @@ class TestPartnerRegistry:
             "controls": "the controller of the class",
         }[key[0]] + f" {key[1]}"
 
-    def find(self, alternatives: Sequence[ServedKey], port: str, assembly: str) -> TestPartner:
+    def find(self, alternatives: Sequence[ServedKey], need: str, assembly: str) -> TestPartner:
         """The partner registered for the first of the alternatives that has one.
+
+        Args:
+            alternatives: What would serve, in order.
+            need: What needs it, as a message names it: ``the port 'weather'``, ``the fact read 'roof_area_in_m2'``.
+            assembly: The assembly under test.
 
         Raises:
             TestPartnerMissingError: When none has, naming every alternative and the files searched.
@@ -222,7 +227,7 @@ class TestPartnerRegistry:
             if key in self.served:
                 return self.served[key]
         raise TestPartnerMissingError(
-            f"the port '{port}' of '{assembly}' needs a test partner, "
+            f"{need} of '{assembly}' needs a test partner, "
             + " or ".join(self.describe(key) for key in alternatives)
             + f", and no {self.FILENAME} serves it (searched: {', '.join(self.files) or 'none on the library path'})."
             f" Register one in the {self.FILENAME} of the library directory."

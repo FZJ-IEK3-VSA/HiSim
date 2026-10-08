@@ -19,6 +19,13 @@ and a check that needs a finished run fails, naming why, when the run did not fi
   member it is the one derived KPI of that name (``source: null``), unambiguous in the isolation
   system's single building.
 
+**A refused sample.** A run whose error was raised from a member's
+:class:`~hisim.config.ConfigurationRefusedError` (:attr:`IsolationRun.refusal`) is a parameter
+combination the component declines by design, such as a W55 SCOP above the W35 one. Every check of
+it raises :class:`SampleRefused` instead of a failure; pytest reports the test as skipped with the
+refusal. A monotone sweep drops the points a member refuses and checks the rest; when fewer than two
+remain, the sweep raises :class:`SampleRefused` as well. Any other error of a run stays a failure.
+
 **Tolerance of monotone.** Two neighbouring values of a sweep are equal when they differ by at most
 the golden gate's relative tolerance times the largest magnitude of the series, plus
 :data:`MONOTONE_ABS_FLOOR`; scaling by the series keeps a KPI that is nominally zero at one point
@@ -59,6 +66,20 @@ class AssemblyCheckFailure(AssertionError):
     """A check of an assembly's test contract that does not hold, named by assembly, sample, check and subject."""
 
 
+class SampleRefused(Exception):
+    """A sample, or a whole sweep, a member's component refuses at construction: handled, not failed.
+
+    Example: ``air_source_heat_pump sample h007 refused by a member: HeatPump: the W55 SCOP 4.1 is
+    above the W35 SCOP 3.2; …``. It is no ``AssertionError``, so a caller cannot mistake it for a
+    failed check; the contract tests turn it into a skip that names the refusal.
+    """
+
+
+def refused(run: IsolationRun) -> SampleRefused:
+    """The :class:`SampleRefused` of a run whose member refused its configuration."""
+    return SampleRefused(f"{run.label} refused by a member: {run.refusal}")
+
+
 def failure(label: str, check: str, subject: str, problem: str) -> AssemblyCheckFailure:
     """The failure of one check: ``<assembly> sample <id> <check> <subject>: <problem>``."""
     return AssemblyCheckFailure(f"{label} {check} {subject}: {problem}")
@@ -83,9 +104,12 @@ def finished(run: IsolationRun, check: str, subject: str) -> IsolationRun:
     """The run, when it finished; the failure of a check that needs it, when it did not.
 
     Raises:
-        AssemblyCheckFailure: When the run raised.
+        SampleRefused: When a member refused the sample's configuration at construction.
+        AssemblyCheckFailure: When the run raised anything else.
         IsolationRunError: When the run was released, or has no results although it raised nothing (a harness bug).
     """
+    if run.refusal is not None:
+        raise refused(run)
     if run.error is not None:
         raise failure(run.label, check, subject, f"the run did not finish ({raised(run.error)})")
     if run.released or run.results is None:
@@ -95,13 +119,22 @@ def finished(run: IsolationRun, check: str, subject: str) -> IsolationRun:
 
 
 def check_run(run: IsolationRun) -> None:
-    """The run raised nothing; an open energy balance is :func:`check_energy_balance`'s finding."""
+    """The run raised nothing; an open energy balance is :func:`check_energy_balance`'s finding.
+
+    Raises:
+        SampleRefused: When a member refused the sample's configuration at construction.
+        AssemblyCheckFailure: When the run raised anything but that or an ``EnergyBalanceError``.
+    """
+    if run.refusal is not None:
+        raise refused(run)
     if run.error is not None and not isinstance(run.error, EnergyBalanceError):
         raise failure(run.label, "run", "the isolation run", raised(run.error))
 
 
 def check_energy_balance(run: IsolationRun) -> None:
     """The energy balance closed (``EnergyBalanceError``, raised by every run's post-processing)."""
+    if run.refusal is not None:
+        raise refused(run)
     if isinstance(run.error, EnergyBalanceError):
         raise failure(run.label, "energy balance", "the isolation run", str(run.error))
     finished(run, "energy balance", "the isolation run")
@@ -254,11 +287,19 @@ RunFactory = Callable[[int, Mapping[str, Any], str], IsolationRun]
 
 def evaluate_monotone(
     run_factory: RunFactory, space: ParameterSpace, base: Sample, declaration: MonotoneDeclaration
-) -> None:
+) -> List[Any]:
     """One ``monotone`` entry from one base: runs each sweep point, reads its KPI, releases the run, compares.
+
+    A point a member refuses at construction (:attr:`IsolationRun.refusal`) is dropped, and the
+    remaining points are compared. Example: the sweep of a heat pump's W35 SCOP from a base with
+    W55 at 4.5 drops the points with W35 below 4.5.
+
+    Returns:
+        The swept parameter's values at the dropped points, rising; empty when none was refused.
 
     Raises:
         SamplerError: When the base admits no sweep of the parameter (the caller chose the base).
+        SampleRefused: When refusals leave fewer than two points: the sweep is skipped.
         AssemblyCheckFailure: When a point's KPI cannot be read, or the series moves the wrong way.
     """
     parameter = declaration.parameter
@@ -268,13 +309,23 @@ def evaluate_monotone(
     label = f"{space.model.name} sweep of {parameter} from {base.sample_id}"
     subject = f"{declaration.kpi} of {declaration.member or 'the system'}"
     series: List[Tuple[Any, float]] = []
+    dropped: List[Any] = []
     for index, values in enumerate(points):
         run = run_factory(index, values, f"{label}, point {index}")
         try:
+            if run.refusal is not None:
+                dropped.append(values[parameter])
+                continue
             series.append((values[parameter], kpi_value(run, "monotone", subject, declaration.kpi, declaration.member)))
         finally:
             run.release()
+    if dropped and len(series) < 2:
+        raise SampleRefused(
+            f"{label}: a member refuses {len(dropped)} of {len(points)} points ({parameter} at "
+            f"{', '.join(repr(value) for value in dropped)}), which leaves fewer than two to compare"
+        )
     check_monotone(label, declaration, series)
+    return dropped
 
 
 class MemberContract:

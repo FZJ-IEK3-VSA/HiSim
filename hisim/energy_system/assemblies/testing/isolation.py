@@ -6,7 +6,10 @@ changes what the assembly computes gets a test partner from the registry (:mod:`
 the partners those read: a need its first registered partner class, a circuit end the other end
 registered for its circuit and its members' classes, a carrier need its carrier's provider, a fuel
 the assembly provides a consumer, a fact need a provider of the fact, an observer member a component
-it observes, and a ``controllable: {target_input}`` output the controller ranking it. Optional
+it observes, and a ``controllable: {target_input}`` output the controller ranking it. A sizing fact
+a member's class reads that no member provides and no fact port names crosses the boundary by the
+engine's bare-fact rule, as it does in the system that imports the assembly (§6), so it gets the
+registered provider of that fact as well (:func:`facts_needed`). Optional
 ports are bound like required ones, so the run exercises the whole interface the parameters offer;
 the verb is written out (``bind:`` for a required port, ``optional-bind:`` for an optional one)
 wherever the format has one. A port no partner serves refuses the build by name.
@@ -19,6 +22,13 @@ energy-balance check and every component's ``i_doublecheck`` run in every simula
 raises is captured with its error, one finding about the sample the checks report (:mod:`.checks`),
 naming the innermost raising ``file.py:line`` so the reader sees whether the assembly or the harness
 raised; an error of the harness before the run — a missing partner — is raised.
+
+**A refused sample.** An assembly's parameter box may contain combinations a member's component
+refuses at construction, such as a heat pump's W55 SCOP above its W35 SCOP: each value lies in its
+range, their combination does not exist. The component raises
+:class:`~hisim.config.ConfigurationRefusedError`, the build wraps it as its cause, and
+:attr:`IsolationRun.refusal` finds it there. The checks count such a run as handled, not failed
+(:class:`~.checks.SampleRefused`); any other error stays a failure.
 """
 
 from __future__ import annotations
@@ -27,15 +37,19 @@ import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import pandas as pd
 import yaml
 
-from hisim.config import AddressStep, ComponentID
+from hisim.config import AddressStep, ComponentID, ConfigurationRefusedError
+from hisim.config.contributions import declared_facts_of
+from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.parameters import select
 from hisim.energy_system.assemblies.resolver import AssemblyResolver, ResolvedAssembly
 from hisim.energy_system.assemblies.testing.partners import ServedKey, TestPartnerRegistry
+from hisim.energy_system.bindings import facts_read_by
+from hisim.energy_system.classes import ClassBinder
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.imports_model import Port, PortKind, PortState
 from hisim.energy_system.model import EnergySystemFile
@@ -83,6 +97,19 @@ def partners_needed(  # pylint: disable=too-many-return-statements  # one return
     return []
 
 
+def facts_needed(port_facts: Sequence[str], members: Mapping[str, MemberTemplate]) -> List[Tuple[ServedKey, ...]]:
+    """The facts the members' classes read that no member provides and no fact port names, each as its alternatives.
+
+    Args:
+        port_facts: The facts the assembly's active fact ports name.
+        members: The members present with the sample's parameters.
+    """
+    classes = [ClassBinder.config_class_of(name, member.entry) for name, member in members.items()]
+    provided = {fact for config_class in classes for fact in declared_facts_of(config_class)}
+    read = dict.fromkeys(fact for config_class in classes for fact in facts_read_by(config_class))
+    return [(("fact", fact),) for fact in read if fact not in provided and fact not in port_facts]
+
+
 def isolation_document(
     assembly: ResolvedAssembly, values: Mapping[str, Any], registry: TestPartnerRegistry
 ) -> Dict[str, Any]:
@@ -102,7 +129,7 @@ def isolation_document(
         if state == PortState.INACTIVE:
             continue
         for alternatives in partners_needed(port, classes):
-            partner = registry.find(alternatives, name, assembly.path)
+            partner = registry.find(alternatives, f"the port '{name}'", assembly.path)
             partners.append(partner.name)
             if (
                 port.kind in (PortKind.NEED, PortKind.CIRCUIT, PortKind.FACT)
@@ -110,6 +137,14 @@ def isolation_document(
                 and not port.many
             ):
                 verbs["bind" if state == PortState.REQUIRED else "optional-bind"][name] = partner.name
+    # An inactive fact port names nothing: its fact crosses by the bare-fact rule like any unported read.
+    port_facts = [
+        port.fact
+        for port in model.ports.values()
+        if port.kind == PortKind.FACT and port.fact and selection.state(port) != PortState.INACTIVE
+    ]
+    for alternatives in facts_needed(port_facts, selection.members):
+        partners.append(registry.find(alternatives, f"the fact read '{alternatives[0][1]}'", assembly.path).name)
     entry: Dict[str, Any] = {"assembly": assembly.path, "parameters": dict(values)}
     entry.update({verb: bound for verb, bound in verbs.items() if bound})
     return {
@@ -119,6 +154,26 @@ def isolation_document(
         "components": registry.document(partners, f"the test partners of '{assembly.path}'"),
         "imports": {SUBJECT: entry},
     }
+
+
+def refusal_in(error: Optional[BaseException]) -> Optional[ConfigurationRefusedError]:
+    """The configuration refusal an error was raised from, following its explicit causes; ``None`` when there is none.
+
+    Example: a component's constructor raises ``ConfigurationRefusedError``; the build re-raises it
+    as an ``EnergySystemWiringError`` (``EF-33``) ``from`` the refusal, so the refusal is that
+    error's ``__cause__``. Only ``__cause__`` is followed: an error raised while another was being
+    handled (``__context__``) is a failure of its own, not a refusal.
+
+    Args:
+        error: What a run raised, or ``None``.
+    """
+    seen: Set[int] = set()
+    while error is not None and id(error) not in seen:
+        if isinstance(error, ConfigurationRefusedError):
+            return error
+        seen.add(id(error))
+        error = error.__cause__
+    return None
 
 
 class IsolationRunError(Exception):
@@ -151,6 +206,11 @@ class IsolationRun:
     runtime: Dict[str, str] = field(default_factory=dict)
     released: bool = False
     _finder: Optional[KpiFinder] = field(default=None, repr=False)
+
+    @property
+    def refusal(self) -> Optional[ConfigurationRefusedError]:
+        """The refusal of a member's component the run's error was raised from, or ``None`` (:func:`refusal_in`)."""
+        return refusal_in(self.error)
 
     def finder(self) -> KpiFinder:
         """The run's KPI collection, read from its ``all_kpis.json`` once.

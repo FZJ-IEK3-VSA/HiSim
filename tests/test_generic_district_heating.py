@@ -74,6 +74,8 @@ def test_controller_determine_operating_mode(
         (20000, 50, 20, 4000, 4000 / 60, 70, 0.04784688995215311),
         (15000, 70, 0, 0, 0, 70, 0),
         (20000, 70, 0, 0, 0, 70, 0),
+        # the set temperature 120 °C lies beyond the connected load: the supply stops at return + 100 K
+        (15000, 20, 100, 15000, 15000 / 60, 120, 0.03588516746411483),
     ],
 )
 def test_component_get_dhw_outputs(
@@ -97,11 +99,14 @@ def test_component_get_dhw_outputs(
         water_mass_flow_rate_in_kg_per_s
     ) = testee._calculate_dhw_outputs(  # pylint: disable=protected-access
         water_input_temperature_deg_c,
+        water_input_temperature_deg_c + delta_temperature_needed_in_celsius,
         delta_temperature_needed_in_celsius,
     )
 
-    assert thermal_power_delivered_in_w == expected_thermal_power_delivered_in_w
-    assert thermal_energy_delivered_in_watt_hour == expected_thermal_energy_delivered_in_watt_hour
+    assert thermal_power_delivered_in_w == pytest.approx(expected_thermal_power_delivered_in_w, rel=1e-12)
+    assert thermal_energy_delivered_in_watt_hour == pytest.approx(
+        expected_thermal_energy_delivered_in_watt_hour, rel=1e-12
+    )
     assert water_output_temperature_deg_c == expected_water_output_temperature_deg_c
     assert water_mass_flow_rate_in_kg_per_s == expected_water_mass_flow_rate_in_kg_per_s
 

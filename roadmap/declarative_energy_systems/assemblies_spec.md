@@ -1064,8 +1064,10 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    and re-record of `household_heatpump_solar_thermal_building_sizer` (its two heat-pump controllers before the heat
    pump, the heating block contiguous) wait for hydronic stage C (owner, 2026-10-08): D20's coil becomes hydronic
    ports of the cylinder's two coils and the generators' DHW supply, from which the binder derives the wires; no
-   interim mechanism. The planned reorder, measured on the weekly golden: 58 of 127 KPIs move, most below 0.2 %, the
-   largest the degree-hours more than 1 K below the set point, −36 % from a small base (0.28 -> 0.18 °C·h).
+   interim mechanism. The planned reorder, measured on the weekly golden after the window solar gains of #876: 55 of
+   127 KPIs move, 42 of them below 0.5 %; the largest are the degree-hours more than 1 K below the set point, −41 %
+   from a small base (0.21 -> 0.12 °C·h), the temperature deviation below 20 °C, −19 %, and the grid injection, −13 %
+   from 0.45 kWh (before #876: 58 KPIs, most below 0.2 %, the degree-hours −36 % from 0.28 °C·h).
 6. **New structure.** #83 request contract and N instances; LPG carrier and `supply/lpg_tank` (#77); DHW assemblies as
    their components land (hisim-epc.21, hisim-lenz); #85 contract; further controllers.
 

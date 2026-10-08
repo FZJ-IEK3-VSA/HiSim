@@ -153,6 +153,16 @@ jobs:
         path: tests/.coverage.*
         include-hidden-files: true
         if-no-files-found: warn
+    # The iterations per step of every energy-system file with a hot-water tank, one JSON per file, written by
+    # tests/test_dhw_chain_twins.py (hydronic coupling spec §6), so a drift of the convergence is seen.
+    - name: Upload the iteration histograms
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: iteration-histogram-${{ matrix.name }}
+        path: results/iteration_histogram/
+        if-no-files-found: ignore
     # Kept even when the job failed; see the action for why that is safe.
     - name: Save the HiSim inputs cache
       if: always()

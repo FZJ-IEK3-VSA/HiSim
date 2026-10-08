@@ -74,8 +74,8 @@
 # `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
 # seeded Latin hypercube sample of every assembly's parameter box, under the same gate as the
 # full-year pairs, and its result joins the `golden-year` status. The deterministic samples
-# run in the PR gate's `base` shard. Until the first real assemblies land the library is the
-# mock library under tests/assemblies/mock_assemblies/library. A failed check fails the job,
+# run in the PR gate's `assemblies` shard of tests.yml. The libraries are the mock one under
+# tests/assemblies/mock_assemblies/library and the real one, energy_systems/assemblies/. A failed check fails the job,
 # named in pytest's summary; opening a bead for it, as for a golden drift, is the owner's
 # manual step today.
 #

@@ -35,7 +35,7 @@ def read_assembly(text: str) -> None:
     AssemblyReader.read_text(textwrap.dedent(text), "test/minimal.assembly.yaml")
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_version_4_file_round_trips_with_its_imports_verbs_ports_and_placeholders() -> None:
     """Catches the emitter dropping or moving a block the reader reads (imports, verbs, ports, a placeholder)."""
     model = parse_energy_system(Mocks.HOUSE)
@@ -48,7 +48,7 @@ def test_a_version_4_file_round_trips_with_its_imports_verbs_ports_and_placehold
     assert model.imports["tank"].verbs.bind == {"heat": "heater.heat"}
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_version_3_file_that_imports_is_refused() -> None:
     """Catches a flat file silently gaining imports without declaring the version that reads them."""
     with pytest.raises(EnergySystemFormatError, match="EF-01") as refusal:
@@ -56,21 +56,21 @@ def test_a_version_3_file_that_imports_is_refused() -> None:
     assert "imports" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_version_3_entry_with_ports_or_verbs_is_refused() -> None:
     """Catches the keys of version 4 leaking into a version-3 file or into a group's entry."""
     with pytest.raises(EnergySystemFormatError, match="EF-18"):
         read_system(f"schema_version: 3\nname: x\ncomponents:\n  {WEATHER.replace('}', ', bind: {a: b}}')}\n")
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_authored_hyphenated_name_is_refused() -> None:
     """Catches the address separator being admitted in a name nobody's expansion produced."""
     with pytest.raises(EnergySystemFormatError, match="EF-08"):
         read_system(site(WEATHER.replace("Weather:", "pv-east-PVSystem:", 1)))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("construct", "text"),
     [
@@ -97,7 +97,7 @@ def test_every_cut_construct_of_an_assembly_is_refused_by_name(construct: str, t
     assert f"'{construct}'" in str(refusal.value) and "D26" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("construct", "text"),
     [
@@ -116,7 +116,7 @@ def test_every_cut_construct_of_an_energy_system_file_is_refused_by_name(constru
     assert f"'{construct}'" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize("value", ["first", "true", "1.5", "[1]"])
 def test_an_order_that_is_no_integer_is_refused(value: str) -> None:
     """Catches ``order: true`` or ``order: 1.5`` being read as a position."""
@@ -125,7 +125,7 @@ def test_an_order_that_is_no_integer_is_refused(value: str) -> None:
     assert "imports.pv.order" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_port_both_optional_and_required_when_is_refused() -> None:
     """Catches ``optional: true`` being silently ignored on a port that also states ``required_when``."""
     port = "    weather: {into: [Device], partner: MockWeather, optional: true, required_when: {fitted: [true]}}\n"
@@ -135,14 +135,14 @@ def test_a_port_both_optional_and_required_when_is_refused() -> None:
         assert name in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_verbs_model_refuses_a_port_under_two_verbs() -> None:
     """Catches a verbs model built in code holding a port the reader would refuse, which then dumps a bad file."""
     with pytest.raises(pydantic.ValidationError, match="the ports p carry two verbs"):
         BindingVerbs(bind={"p": "Heater"}, none=("p",))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("fields", "names"),
     [
@@ -160,7 +160,7 @@ def test_the_port_model_refuses_a_shape_its_kind_does_not_have(fields: dict, nam
         assert name in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_every_port_kind_is_read_with_the_fields_it_lowers_by(tmp_path: Path) -> None:
     """Catches a circuit, carrier, fact or observer port, ``controllable`` or ``observes:`` read without its fields."""
     library = Library(tmp_path)
@@ -212,7 +212,7 @@ def test_every_port_kind_is_read_with_the_fields_it_lowers_by(tmp_path: Path) ->
     assert observes is not None and observes.to_document() == [{"component_type": ["PV"]}]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_observes_placeholder_is_refused_since_selected_feeds_follow_the_observers_inputs() -> None:
     """Catches ``{$observes: …}`` read as an input item: a selection lands after the observer's own items."""
     text = site(WEATHER.replace("}", ", inputs: [{$observes: flows}]}"))
@@ -221,20 +221,20 @@ def test_an_observes_placeholder_is_refused_since_selected_feeds_follow_the_obse
     assert "an observer's selected feeds follow its own inputs" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_both_committed_schemas_are_current() -> None:
     """Catches a reader change that the committed assembly schema does not follow (``hisim energy-system schema``)."""
     assert assembly_schema_is_current(), "run `hisim energy-system schema` and commit both schema files"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize("path", sorted(Mocks.LIBRARY.rglob("*.assembly.yaml")), ids=lambda path: path.stem)
 def test_every_mock_assembly_validates_against_the_assembly_schema(path: Path) -> None:
     """Catches the assembly schema refusing a file the reader accepts."""
     jsonschema.validate(yaml.safe_load(path.read_text(encoding="utf-8")), AssemblySchemaBuilder().build())
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "extra",
     [

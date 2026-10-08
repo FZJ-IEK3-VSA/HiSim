@@ -15,7 +15,7 @@ ENERGY_SYSTEMS = Path(__file__).resolve().parents[2] / "energy_systems"
 HEATPUMP = COMPOSED_TWINS["household_heatpump_building_sizer"]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_table_lists_exactly_the_committed_composed_files() -> None:
     """Catches a composed file the golden gate never runs, or an entry whose files are missing.
 
@@ -28,7 +28,7 @@ def test_the_table_lists_exactly_the_committed_composed_files() -> None:
         assert (ENERGY_SYSTEMS / twin.twin).exists(), f"{twin.stem}: no twin {twin.twin}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_rename_map_names_every_import_of_the_composed_file() -> None:
     """Catches an import whose members the map forgets: their KPIs would fail the golden gate by name only."""
     for twin in COMPOSED_TWINS.values():
@@ -36,7 +36,7 @@ def test_the_rename_map_names_every_import_of_the_composed_file() -> None:
         assert {address.split("-")[0] for address in twin.rename} == imports, twin.stem
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_table_cannot_be_changed_through_an_entry() -> None:
     """Catches a caller editing a rename map in place, which would change every later reader's comparison."""
     with pytest.raises(TypeError):
@@ -54,7 +54,7 @@ def member_source(name: str, member: str, import_key: str) -> KpiSource:
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_member_kpi_is_addressed_as_the_twins_site_component() -> None:
     """Catches a renamed KPI keeping the member's import, path or assembly, which the golden's leaf does not carry."""
     address = KpiAddress("BUI1", "Heat Pump For Space Heating", "Heating hours of SH heat pump",
@@ -69,7 +69,7 @@ def test_a_member_kpi_is_addressed_as_the_twins_site_component() -> None:
     assert renamed.key == "Heating hours of SH heat pump (MoreAdvancedHeatPumpHPLib)"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_port_name_part_in_a_kpi_name_is_renamed_and_a_site_source_kept() -> None:
     """The energy manager's priority quotes the member's port-name part; a site component keeps its source."""
     site = KpiSource(name="UTSPConnector", member="UTSPConnector")
@@ -80,7 +80,7 @@ def test_a_port_name_part_in_a_kpi_name_is_renamed_and_a_site_source_kept() -> N
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_member_the_map_does_not_name_is_refused() -> None:
     """Catches an incomplete rename map passing as a KPI that is merely missing and new."""
     address = KpiAddress("BUI1", "General", "x", member_source("heating-Pump", "Pump", "heating"))

@@ -812,7 +812,9 @@ tests:
   error at load time.
 
 **Tiers (D24).** The PR gate runs the contract test and the deterministic samples (defaults, boundaries, values,
-variants) with every declaration, a few one-day runs per assembly, sharded like the week goldens. The Latin hypercube
+variants) with every declaration, a few one-day runs per assembly, in the `assemblies` tier: the pytest marker of every
+test under `tests/assemblies/` but the nightly ones, run by its own CI job `pytest (assemblies)`, not in `base`, since
+the tier runs long and needs the local LoadProfileGenerator (D28 b, amended). The Latin hypercube
 sample of the box runs as the job `assemblies-nightly` of `golden-year.yml`, beside the full-year goldens and for now
 behind the same gate, once per PR commit; a schedule comes with the real library. A failure opens a bead, as a golden
 drift does. The example system of every assembly is a golden pair, so its default result is also pinned exactly.
@@ -1166,9 +1168,13 @@ All by the owner on 2026-10-03.
   field staying with the preset or its law (§2.3 step 3); the import record keeps every parameter as given and as
   resolved. (b) The gate of §13 step 4 is a committed
   `energy_systems/household_heatpump_building_sizer.composed.energy_system.yaml` (the site plus the six imports)
-  beside the twin; a base test expands it, applies the rename map and asserts equality with the twin outside the
+  beside the twin; a test expands it, applies the rename map and asserts equality with the twin outside the
   listed intended differences, and a one-day run of both gives identical result columns. The real library lives in
-  `energy_systems/assemblies/` with its own `test_partners.yaml`, and the contract harness runs it in the base tier.
+  `energy_systems/assemblies/` with its own `test_partners.yaml`, and the contract harness runs it. Amended (owner,
+  2026-10-08): the gate and the contract harness run in the `assemblies` tier, its own CI job (`pytest
+  (assemblies)` in `tests.yml`), not in base: the base tier ran too long, and the assembly tests need the local
+  LoadProfileGenerator. `tests/assemblies/conftest.py` marks every test there `assemblies` (the nightly tier
+  excepted) and refuses one marked `base`, `extendedbase` or `extendedbase2`.
 
 - **D29 — DHW or no DHW is two assemblies, and fact ports only for a choice (owner, 2026-10-07):** (a) a heat pump
   with and without DHW are two assemblies, `heating/air_source_heat_pump` and

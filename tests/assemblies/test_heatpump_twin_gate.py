@@ -133,7 +133,7 @@ def fixture_runs(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Run]:
     return runs
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_composed_file_is_the_twin_outside_the_intended_differences(runs: Dict[str, Run]) -> None:
     """Catches any class, preset, config line, input item, feed tag, weight or dispatch the assemblies get wrong."""
     twin = yaml.safe_load(TWIN.read_text(encoding="utf-8"))
@@ -155,7 +155,7 @@ def test_the_composed_file_is_the_twin_outside_the_intended_differences(runs: Di
         assert components[name] == entry, f"{name}: the composed file writes {components[name]}, the twin {entry}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_sequence_is_the_twins_up_to_the_neutral_swap(runs: Dict[str, Run]) -> None:
     """Catches an evaluation order other than the twin's, or a swap of two components that read each other."""
     twin = yaml.safe_load(TWIN.read_text(encoding="utf-8"))["components"]
@@ -171,7 +171,7 @@ def test_the_sequence_is_the_twins_up_to_the_neutral_swap(runs: Dict[str, Run]) 
     assert [renamed(name) for name in runs["composed"].document["components"]] == sequence
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_every_result_column_of_one_day_is_the_twins(runs: Dict[str, Run]) -> None:
     """Catches a composed system that computes anything else than the twin, to the last bit."""
     twin, composed = runs["twin"].results, runs["composed"].results
@@ -180,7 +180,7 @@ def test_every_result_column_of_one_day_is_the_twins(runs: Dict[str, Run]) -> No
     assert not unequal, f"columns differing from the twin: {unequal}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_every_kpi_of_one_day_is_the_twins(runs: Dict[str, Run]) -> None:
     """Catches a KPI that differs from the twin's under the address rename."""
     twin, composed = runs["twin"].kpis, runs["composed"].kpis

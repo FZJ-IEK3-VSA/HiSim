@@ -37,7 +37,7 @@ FLAT_FILES = [
 ]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize("path", FLAT_FILES, ids=lambda path: path.name)
 def test_every_committed_file_expands_to_itself(path: Path) -> None:
     """Catches the expansion touching a file that imports nothing: it must be the very same object."""
@@ -47,7 +47,7 @@ def test_every_committed_file_expands_to_itself(path: Path) -> None:
     assert dump_energy_system(expanded) == dump_energy_system(parse_energy_system(path))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_expansion_is_idempotent() -> None:
     """Catches a second expansion changing the flat file the first one produced."""
     flat, _record = expand_house()
@@ -55,7 +55,7 @@ def test_the_expansion_is_idempotent() -> None:
     assert again is flat and record.is_empty and flat.schema_version == 3
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_site_entries_come_first_then_each_import_in_file_order() -> None:
     """Catches an evaluation order other than file order for a file without ``order:``, or a record not stating it."""
     flat, record = expand_house()
@@ -85,7 +85,7 @@ def ordered(weather: str = "", occupancy: str = "", tank: str = "", heater: str 
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
@@ -108,7 +108,7 @@ def test_order_sorts_the_entries_carrying_it_then_the_others_follow_in_file_orde
     assert all(entry.order is None for entry in flat.components.values())
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_import_with_instances_is_one_block_in_written_order() -> None:
     """Catches ``order:`` on an import separating its instances or reversing them."""
     text = site(
@@ -118,7 +118,7 @@ def test_an_import_with_instances_is_one_block_in_written_order() -> None:
     assert list(expand_text(text)[0].components) == ["pv-west-PVSystem", "pv-east-PVSystem", "Weather"]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_repeated_order_number_is_refused() -> None:
     """Catches two entries claiming one position, which would leave their sequence to chance."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-7P") as refusal:
@@ -126,7 +126,7 @@ def test_a_repeated_order_number_is_refused() -> None:
     assert "component 'Occupancy'" in str(refusal.value) and "import 'heater'" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_two_instances_get_one_step_addresses_and_their_kpi_sources_carry_them() -> None:
     """Catches two arrays sharing a name, or a KPI source losing the instance it came from."""
     flat, record = expand_house()
@@ -146,7 +146,7 @@ def test_two_instances_get_one_step_addresses_and_their_kpi_sources_carry_them()
     assert flat.addresses == record.addresses
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_parameters_are_substituted_and_the_lowered_items_land_at_their_placeholders() -> None:
     """Catches a parameter not reaching its field, or a lowered item landing elsewhere than its placeholder."""
     flat, _record = expand_house()
@@ -165,7 +165,7 @@ def test_parameters_are_substituted_and_the_lowered_items_land_at_their_placehol
     assert flat.components["heater-Controller"].preset == "standard"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_parameter_at_its_presets_value_auto_or_none_writes_no_config_line() -> None:
     """Catches the expansion writing a line the twin has not (G9, D28): a value the preset gives, AUTO or none."""
     imports = "pv: {assembly: mock/pv_array}\nbattery: {assembly: mock/battery}"
@@ -176,7 +176,7 @@ def test_a_parameter_at_its_presets_value_auto_or_none_writes_no_config_line() -
     assert "capacity_in_kwh" not in flat.components["battery-Battery"].config
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_override_writes_its_line_and_the_record_keeps_every_parameter() -> None:
     """Catches G9 dropping an override, or the import record losing the values the expansion did not write."""
     flat, record = expand_house()
@@ -193,7 +193,7 @@ def test_an_override_writes_its_line_and_the_record_keeps_every_parameter() -> N
     }
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_member_without_a_preset_compares_with_the_field_default(tmp_path: Path) -> None:
     """Catches G9 comparing a member configured by its own block with anything but its class's field default."""
     library = Library(tmp_path)
@@ -225,7 +225,7 @@ def test_a_member_without_a_preset_compares_with_the_field_default(tmp_path: Pat
     assert flat.components["tank-Tank"].config == {"volume_in_liter": 200}
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_import_record_states_what_each_instance_was_given_and_how_each_port_was_decided() -> None:
     """Catches an import record that cannot say which assembly ran, with what, bound to what."""
     _flat, record = expand_house()
@@ -256,7 +256,7 @@ def test_the_import_record_states_what_each_instance_was_given_and_how_each_port
     }
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_source_map_names_the_import_the_instance_and_both_files_lines() -> None:
     """Catches a produced item without a source-map entry, or an entry pointing at the wrong line."""
     _flat, record = expand_house()
@@ -274,7 +274,7 @@ def test_the_source_map_names_the_import_the_instance_and_both_files_lines() -> 
     assert ("pv-west-PVSystem", "config.azimuth") in entries
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_variant_without_the_member_drops_it_its_inputs_and_its_ports() -> None:
     """Catches a member of an unselected option surviving, or its ports demanding a partner."""
     flat, record = expand_text(
@@ -289,7 +289,7 @@ def test_a_variant_without_the_member_drops_it_its_inputs_and_its_ports() -> Non
     assert record.instance("heater").variants == {"thermostat": "none"}
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("parameters", "code", "names"),
     [
@@ -308,7 +308,7 @@ def test_a_parameter_that_does_not_fit_is_refused(parameters: str, code: str, na
         assert name in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_enum_value_outside_its_values_is_refused() -> None:
     """Catches an enum parameter taking a value its declaration does not allow."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-76") as refusal:
@@ -316,7 +316,7 @@ def test_an_enum_value_outside_its_values_is_refused() -> None:
     assert "facing" in str(refusal.value) and "'north'" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_exactly_one_of_constraint_left_with_no_member_stated_is_refused() -> None:
     """Catches the one written member set to none leaving the component with neither alternative."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
@@ -326,7 +326,7 @@ def test_an_exactly_one_of_constraint_left_with_no_member_stated_is_refused() ->
         assert name in message, f"{name!r} is not in: {message}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults() -> None:
     """Catches the sibling's default (power 5000 W) still counting when the import writes only the share (D27)."""
     flat, record = expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {share_of_roof: 0.5}}"))
@@ -340,7 +340,7 @@ def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults() 
     assert array.peak_power_in_watt() == 0.5 * MockPVSystemConfig.ROOF_PEAK_POWER_IN_WATT
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_zero_is_a_stated_value_for_an_exactly_one_of_constraint() -> None:
     """Catches ``0 == False`` making a power of 0 count as unstated: alone it is the one stated value."""
     flat, record = expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {power_in_watt: 0}}"))
@@ -348,7 +348,7 @@ def test_zero_is_a_stated_value_for_an_exactly_one_of_constraint() -> None:
     assert flat.components["pv-PVSystem"].config["power_in_watt"] == 0
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "parameters", ["{power_in_watt: 0, share_of_roof: 0.5}", "{power_in_watt: 5000, share_of_roof: 0.5}"]
 )
@@ -361,7 +361,7 @@ def test_an_import_writing_two_members_of_an_exactly_one_of_is_refused(parameter
         assert name in message, f"{name!r} is not in: {message}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
     """Catches an import writing ``none`` for a variant's selector crashing on an assertion."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-76") as refusal:
@@ -371,7 +371,7 @@ def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
         assert name in message, f"{name!r} is not in: {message}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_import_named_like_a_component_is_refused() -> None:
     """Catches a verb's partner reference that could mean a component or an import."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-52"):

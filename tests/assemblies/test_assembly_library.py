@@ -59,13 +59,13 @@ def with_parameter(line: str) -> str:
     return BASE.replace(PARAMETER, PARAMETER + f"  {line}\n")
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_base_case_passes(tmp_path: Path) -> None:
     """Catches a base case that would make every refusal below vacuous."""
     assert problems_of(tmp_path, BASE) == ""
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("text", "names"),
     [
@@ -108,7 +108,7 @@ def test_the_parameter_rules(tmp_path: Path, text: str, names: Tuple[str, ...]) 
         assert name in problems, f"{name!r} is not in: {problems}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_parameter_feeding_a_field_without_a_unit_is_refused(tmp_path: Path) -> None:
     """Catches D16 b: a numeric parameter feeding a field that declares no unit, or a nested value."""
     pv = textwrap.dedent(
@@ -136,7 +136,7 @@ def test_a_parameter_feeding_a_field_without_a_unit_is_refused(tmp_path: Path) -
     assert "EF-79: the numeric parameter 'tilt' feeds 'config.nested.tilt'" in problems
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_value_of_an_enum_that_selects_nothing_of_its_own_is_refused(tmp_path: Path) -> None:
     """Catches a knob value that behaves exactly like another one (§2.6: every value selects something)."""
     text = with_parameter("mode: {type: enum, values: [eco, normal, boost], default: eco, description: m.}").replace(
@@ -148,7 +148,7 @@ def test_a_value_of_an_enum_that_selects_nothing_of_its_own_is_refused(tmp_path:
     assert "'boost'" not in problems
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("text", "names"),
     [
@@ -234,7 +234,7 @@ variants:
 )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("text", "names"),
     [
@@ -268,7 +268,7 @@ def test_the_variant_rules(tmp_path: Path, text: str, names: Tuple[str, ...]) ->
         assert name in problems, f"{name!r} is not in: {problems}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_port_into_a_member_an_active_option_lacks_is_refused(tmp_path: Path) -> None:
     """Catches a need into a member that one option leaves out while the port is still active there."""
     text = VARIANT.replace(
@@ -284,7 +284,7 @@ def test_a_port_into_a_member_an_active_option_lacks_is_refused(tmp_path: Path) 
     assert problems_of(tmp_path / "off", switched_off) == ""
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_provided_output_of_a_member_an_active_option_lacks_is_refused(tmp_path: Path) -> None:
     """Catches a provided output naming a member one option leaves out while the port is still provided there."""
     text = VARIANT.replace(
@@ -297,7 +297,7 @@ def test_a_provided_output_of_a_member_an_active_option_lacks_is_refused(tmp_pat
     assert problems_of(tmp_path / "off", switched_off) == ""
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("member", "port"),
     [
@@ -325,7 +325,7 @@ def test_a_provision_whose_member_an_option_drops_is_refused(tmp_path: Path, mem
     assert problems_of(tmp_path / "off", switched_off) == ""
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_observer_port_into_a_member_an_active_option_lacks_is_refused(tmp_path: Path) -> None:
     """Catches an observer port whose member one option leaves out while the port is still active there."""
     text = VARIANT.replace(
@@ -343,7 +343,7 @@ def test_an_observer_port_into_a_member_an_active_option_lacks_is_refused(tmp_pa
     assert problems_of(tmp_path / "off", switched_off) == ""
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_one_member_name_in_the_options_of_two_variants_is_refused(tmp_path: Path) -> None:
     """Catches two selected options of two variants writing one member, which would make one component of two."""
     text = VARIANT.replace(
@@ -357,7 +357,7 @@ def test_one_member_name_in_the_options_of_two_variants_is_refused(tmp_path: Pat
     assert "'Heater' is written in the options of the variants 'heating' and 'mode'" in problems
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_member_module_raising_at_import_is_one_problem_and_the_listing_goes_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -374,7 +374,7 @@ def test_a_member_module_raising_at_import_is_one_problem_and_the_listing_goes_o
     assert "the parameter 'volume_in_liter' has no description" in problems
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     ("text", "names"),
     [
@@ -404,7 +404,7 @@ def test_the_test_contract_rules(tmp_path: Path, text: str, names: Tuple[str, ..
         assert name in problems, f"{name!r} is not in: {problems}"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_check_lists_every_problem_at_once_and_the_expansion_runs_it(tmp_path: Path) -> None:
     """Catches a check that stops at the first problem, or an expansion that skips the check."""
     library = Library(tmp_path)
@@ -415,7 +415,7 @@ def test_the_check_lists_every_problem_at_once_and_the_expansion_runs_it(tmp_pat
     assert "test/base.assembly.yaml:5" in str(refusal.value)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_sized_field_and_a_plain_field_declare_their_units_alike() -> None:
     """Catches ``sized_field(unit=)`` and ``field(metadata={"unit"})`` being read differently."""
     import dataclasses  # pylint: disable=import-outside-toplevel
@@ -442,7 +442,7 @@ def test_a_sized_field_and_a_plain_field_declare_their_units_alike() -> None:
     assert declared_field_unit(UnitConfig, "bare") is None
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_resolver_refuses_a_missing_a_doubled_and_a_malformed_assembly(tmp_path: Path) -> None:
     """Catches a library path shadowed by a second directory, or a missing one failing late."""
     first, second = Library(tmp_path / "a"), Library(tmp_path / "b")
@@ -459,14 +459,14 @@ def test_the_resolver_refuses_a_missing_a_doubled_and_a_malformed_assembly(tmp_p
         AssemblyResolver([tmp_path / "nowhere"])
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_resolver_searches_the_environment_variable(monkeypatch: pytest.MonkeyPatch) -> None:
     """Catches ``HISIM_ASSEMBLY_PATH`` not being searched."""
     monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
     assert AssemblyResolver.default().resolve("mock/pv_array", "here").path == "mock/pv_array"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_describe_prints_the_interface_the_parameters_and_the_contract(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
@@ -498,7 +498,7 @@ def test_describe_prints_the_interface_the_parameters_and_the_contract(
     assert cli.main(["energy-system", "describe", "mock/nothing"]) != 0
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_facts_lists_an_imports_parameters_and_selected_variants_as_knobs(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:

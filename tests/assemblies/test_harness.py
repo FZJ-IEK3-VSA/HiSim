@@ -91,7 +91,7 @@ def mock(path: str, root: Path = Mocks.LIBRARY) -> Tuple[ResolvedAssembly, Param
     return assembly, ParameterSpace(assembly.model)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_every_numeric_dimension_has_one_sample_per_stratum_and_discrete_values_are_even(tmp_path: Path) -> None:
     """With N samples each numeric dimension falls once into every 1/N stratum; an enum and a bool within one."""
     space = box(tmp_path)
@@ -106,7 +106,7 @@ def test_every_numeric_dimension_has_one_sample_per_stratum_and_discrete_values_
             assert max(counts) - min(counts) <= 1, (name, counts)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_same_seed_reproduces_the_sample_and_another_seed_does_not(tmp_path: Path) -> None:
     """The hypercube is a function of the seed."""
     space = box(tmp_path)
@@ -114,7 +114,7 @@ def test_the_same_seed_reproduces_the_sample_and_another_seed_does_not(tmp_path:
     assert first == again != other
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_exactly_one_of_splits_the_box_into_its_branches(tmp_path: Path) -> None:
     """One hypercube per stated parameter; the other is fixed unstated, and every sample satisfies the constraint."""
     space = box(tmp_path, "constraints:\n  - {exactly_one_of: [power_in_watt, share]}")
@@ -127,7 +127,7 @@ def test_an_exactly_one_of_splits_the_box_into_its_branches(tmp_path: Path) -> N
     assert sum(1 for sample in samples if sample.values["power_in_watt"] is None) == 6
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_deterministic_samples_cover_boundaries_values_and_variants_within_the_constraints() -> None:
     """The heater's boundaries, values and options; the array's share at its minimum states it, so the power is none."""
     _, heater = mock("mock/electric_heater")
@@ -151,7 +151,7 @@ def test_the_deterministic_samples_cover_boundaries_values_and_variants_within_t
     assert [point["power_in_watt"] for point in swept[0][1]] == pytest.approx([0.0, 20000 / 3, 40000 / 3, 20000.0])
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "values, direction, offending",
     [
@@ -174,7 +174,7 @@ def test_the_monotone_evaluation_names_the_first_pair_moving_the_wrong_way(
     assert checks.REL_TOL is tolerances.REL_TOL and golden_kpis.REL_TOL is tolerances.REL_TOL
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
     """A bounds band the output leaves and a monotone of the wrong sign fail, named; the rest of it holds."""
     wrong = Mocks.ROOT / "wrong"
@@ -216,7 +216,7 @@ def test_the_wrong_mock_fails_by_name(tmp_path: Path) -> None:
     assert not list(tmp_path.glob("p*")), "every sweep point's run is released, its directory deleted"
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly_computes() -> None:
     """A gas provider and a cylinder for the boiler, a consumer for the connection, a controller for the battery."""
     registry = TestPartnerRegistry.from_directories([Mocks.LIBRARY])
@@ -238,7 +238,7 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
         assert {verb: entry[verb] for verb in ("bind", "optional-bind") if verb in entry} == verbs, path
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_path: Path) -> None:
     """A battery whose law reads the arrays' peak power by the bare-fact rule, with no fact port, gets the array."""
     library = Library(tmp_path)
@@ -266,7 +266,7 @@ def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_p
         isolation_document(assembly, {}, TestPartnerRegistry([], []))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> None:
     """An empty registry: the array's weather port names MockWeather."""
     assembly, space = mock("mock/pv_array")
@@ -278,7 +278,7 @@ def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> 
         isolation_document(assembly, space.defaults(), TestPartnerRegistry([], []))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "text, message",
     [
@@ -304,7 +304,7 @@ def test_a_registry_that_does_not_read_is_refused_whole(tmp_path: Path, text: st
         TestPartnerRegistry.from_directories([tmp_path])
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_member_contract_names_unbounded_outputs_wrong_units_and_unreported_kpis(tmp_path: Path) -> None:
     """Outputs decide by unit and load type; an assembly with every fault fails its contract, each one named."""
     rule = MemberContract.carries_energy_or_temperature
@@ -345,7 +345,7 @@ def test_the_member_contract_names_unbounded_outputs_wrong_units_and_unreported_
     ]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_finiteness_reads_numeric_columns_and_a_check_on_an_unfinished_run_names_why(tmp_path: Path) -> None:
     """A NaN in a number column is named, a column of text skipped; a run that raised fails every check reading it."""
     frame = pd.DataFrame({"Power": [1.0, float("nan"), 2.0], "State": ["on", "off", "on"]})
@@ -361,7 +361,7 @@ def test_finiteness_reads_numeric_columns_and_a_check_on_an_unfinished_run_names
         checks.check_run(broken)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_an_int_parameter_takes_the_nearest_integer_in_its_range_everywhere(tmp_path: Path) -> None:
     """Catches a truncated bound, a hypercube point or a sweep point leaving an int parameter's range."""
     assert [range_value(value, 1, 5, True) for value in (0.4, 1.5, 2.49, 3.67, 5.4)] == [1, 2, 2, 4, 5]
@@ -381,7 +381,7 @@ def test_an_int_parameter_takes_the_nearest_integer_in_its_range_everywhere(tmp_
     assert all(sample.tier == Tier.NIGHTLY and sample.nightly for sample in hypercube_samples(space, 4, 1))
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 @pytest.mark.parametrize(
     "arguments, message",
     [
@@ -396,7 +396,7 @@ def test_a_dimension_is_a_rising_range_or_a_set_of_choices(arguments: Any, messa
         Dimension("x", **arguments)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_the_contracts_collect_without_xdist() -> None:
     """Catches the xdist_group marker known only while pytest-xdist is loaded (--strict-markers)."""
     completed = subprocess.run(
@@ -421,7 +421,7 @@ def test_the_contracts_collect_without_xdist() -> None:
     assert re.search(r"^\d+ tests collected", completed.stdout, re.MULTILINE), completed.stdout[-2000:]
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_column_a_bounds_entry_cannot_compare_fails_by_name(tmp_path: Path) -> None:
     """Catches a bounds entry passing on a column of text, or one holding a value that is not finite."""
     assembly, _ = mock("mock/electric_heater")
@@ -455,7 +455,7 @@ def test_a_column_a_bounds_entry_cannot_compare_fails_by_name(tmp_path: Path) ->
             checks.check_bounds(run, declaration)
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_run_whose_component_raises_names_where_it_raised(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Catches a failed run that does not say whether the assembly's member or the harness raised."""
 
@@ -475,7 +475,7 @@ def test_a_run_whose_component_raises_names_where_it_raised(tmp_path: Path, monk
     )
 
 
-@pytest.mark.base
+@pytest.mark.assemblies
 def test_a_check_reading_a_run_without_results_that_raised_nothing_is_a_harness_error(tmp_path: Path) -> None:
     """Catches a check passing vacuously on a run the harness left without results."""
     with pytest.raises(

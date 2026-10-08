@@ -8,9 +8,10 @@ check kind reads: the run, the energy balance, finiteness, the member contract, 
 applicable ``bounds`` entry, and ``expect`` at the defaults. Every ``monotone`` entry sweeps its
 parameter from the samples admitting a sweep, once per distinct point set
 (:func:`~hisim.energy_system.assemblies.testing.checks.evaluate_monotone`). The deterministic
-samples run under the ``base`` marker (the PR gate), the Latin hypercube under ``nightly`` (the
-golden-year workflow), sized and seeded by ``--samples`` and ``--seed``. A failure reads
-``mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [0, 20000]: …``.
+samples run under the ``assemblies`` marker (the PR gate's job ``pytest (assemblies)``), the Latin
+hypercube under ``nightly`` (the golden-year workflow), sized and seeded by ``--samples`` and
+``--seed``. A failure reads ``mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in
+[0, 20000]: …``.
 
 A sample's run is made once by the module's run cache, which keeps the run of one sample at a
 time: ``tests/assemblies/conftest.py`` puts the tests of one sample next to each other, and the
@@ -65,7 +66,7 @@ class Case:
 
     def param(self, *values: Any, name: str = "") -> Any:
         """The case as a pytest parameter, marked by its tier and grouped by its sample under xdist."""
-        tier = pytest.mark.nightly if self.sample.nightly else pytest.mark.base
+        tier = pytest.mark.nightly if self.sample.nightly else pytest.mark.assemblies
         group = pytest.mark.xdist_group(f"{self.assembly}:{self.sample.sample_id}")
         identifier = f"{self.assembly}:{self.sample.sample_id}" + (f":{name}" if name else "")
         return pytest.param(self, *values, id=identifier, marks=[tier, group])
@@ -125,7 +126,7 @@ class ContractLibrary:
                         pytest.param(
                             Sweep(self.directory, path, declaration, base),
                             id=f"{path}:{base.sample_id}:monotone[{index}]",
-                            marks=pytest.mark.nightly if base.nightly else pytest.mark.base,
+                            marks=pytest.mark.nightly if base.nightly else pytest.mark.assemblies,
                         )
                     )
 
@@ -177,7 +178,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         metafunc.parametrize(
             "library, assembly_path",
             [
-                pytest.param(library.directory, path, id=path, marks=pytest.mark.base)
+                pytest.param(library.directory, path, id=path, marks=pytest.mark.assemblies)
                 for library in libraries
                 for path in library.paths
             ],

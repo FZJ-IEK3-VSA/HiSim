@@ -120,11 +120,20 @@ def test_water_specific_heat_is_the_one_physics_config_states() -> None:
 
 
 def test_water_density_is_the_storages_value_at_40_degrees() -> None:
-    """The library's density is the one the storages turn their volume into a mass with, 0.992 kg/l at 40 °C."""
+    """The library's density, 0.992 kg/l at 40 °C, is every storage's and ``PhysicsConfig``'s.
+
+    The space-heating buffer states it as a literal, the hot-water tank reads the library, and ``PhysicsConfig``
+    (which the heat distribution system turns its pipe volume into a mass with) reads the library too.
+    """
     source = inspect.getsource(simple_water_storage)
     stated = set(re.findall(r"density_water_at_40_degree_celsius_in_kg_per_liter = ([0-9.]+)", source))
     assert stated == {"0.992"}
     assert hydronics.WATER_DENSITY_KG_PER_M3 == float(stated.pop()) * 1000.0
+    assert simple_water_storage.SimpleDHWStorage.WATER_DENSITY_IN_KG_PER_LITER * 1000.0 == (
+        hydronics.WATER_DENSITY_KG_PER_M3
+    )
+    water = PhysicsConfig.get_properties_for_energy_carrier(lt.LoadTypes.WATER)
+    assert water.density_in_kg_per_m3 == hydronics.WATER_DENSITY_KG_PER_M3
 
 
 # --- the small-a threshold -----------------------------------------------------------------------------------

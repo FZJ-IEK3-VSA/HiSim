@@ -1,9 +1,11 @@
 """Hydronics: the water arithmetic every hydronic circuit and every fully mixed node shares (hisim-fxix.2).
 
 This module is stage A of the hydronic coupling spec (``roadmap/hydronic_coupling_spec.md``, PR #878, §9.5 A):
-a pure numerical library. Its one user so far is the hplib heat pump
-(``hisim/components/more_advanced_heat_pump_hplib.py``), which books the thermal power of its circuits with
-:func:`circuit_power_w`. Later stages (C and D) replace the storages' own mixing, booking and loss code in
+a pure numerical library. The hplib heat pump (``hisim/components/more_advanced_heat_pump_hplib.py``) and the
+hot-water circuits of the boiler, the district-heating substation and the electric heater book the thermal power of
+their circuits with :func:`circuit_power_w`; the hot-water tank, ``SimpleDHWStorage``, is a :class:`MixedNode` with
+the tap valve of :func:`mixing_valve_draw` and the acceleration of :func:`accelerated_node_mean`. For the
+space-heating buffer, ``SimpleHotWaterStorage``, the next stage replaces its own mixing, booking and loss code in
 ``hisim/components/simple_water_storage.py`` with the functions here: the mass mixing of
 ``calculate_mean_water_temperature_in_water_storage`` becomes :meth:`MixedNode.step`, the inflow heat booked
 against the start temperature becomes ``NodeStep.heat_in_j_per_inflow`` (booked against the step mean), the
@@ -89,9 +91,9 @@ WATER_SPECIFIC_HEAT_J_PER_KG_K: float = 4180.0
 #: Density of water, kg/m³: 0.992 kg/l at 40 °C, the value ``SimpleHotWaterStorage`` and ``SimpleDHWStorage``
 #: turn their volume into a mass with (``density_water_at_40_degree_celsius_in_kg_per_liter`` in
 #: ``hisim/components/simple_water_storage.py``, source
-#: https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php). Nothing reads this constant
-#: yet. ``PhysicsConfig``'s water entry states 1000 kg/m³, which no storage uses; hydronic stage C aligns it with
-#: this value when the storages move onto this library.
+#: https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php). The hot-water tank reads it
+#: (``SimpleDHWStorage.WATER_DENSITY_IN_KG_PER_LITER``), and so does ``PhysicsConfig``'s water entry, which the heat
+#: distribution system turns its pipe volume into a mass with.
 WATER_DENSITY_KG_PER_M3: float = 992.0
 
 #: Joules in one kilowatt hour.

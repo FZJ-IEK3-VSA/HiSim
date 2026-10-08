@@ -79,6 +79,8 @@ tests:
       # the lift the distribution asks for, at most its flow temperature over a cold return (measured 0 to 18 K)
     - {output: Controller.DeltaTemperatureNeededForDHW, unit: CELSIUS, min: 0, max: 80}
       # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 37 K)
+    - {output: Controller.SupplyTemperatureSetForDHW, unit: CELSIUS, min: 0, max: 110}
+      # the cylinder's start temperature plus that lift: 75 °C below the aim, 15 K above a cylinder over it, 0 idle
   monotone:
     - {parameter: power_in_watt, kpi: Total energy consumption, member: Generator, direction: increasing}
       # a larger connected load covers at least as much of the demand: 58.5 kWh at 3 kW, 103.7 kWh at 30 kW on the

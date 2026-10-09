@@ -13,7 +13,8 @@ each resolution, and:
 
 The 3600 s excess is the standby loss of a hotter tank: a controller decides on the tank's start temperature (D4), so
 an hour-long charge keeps the tank near its supply cap, the controller's set temperature, longer than a quarter-hour
-one. Reaching 1 % at 3600 s is open (spec §7). The windows start on 1 January, since a window starting later reads its weather from 1 January (hisim-9g2).
+one. Reaching 1 % at 3600 s is open (spec §7). The windows start on 1 January, since a window starting later reads
+its weather from 1 January (hisim-9g2).
 """
 
 from pathlib import Path

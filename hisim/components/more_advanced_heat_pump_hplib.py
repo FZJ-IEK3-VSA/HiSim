@@ -3371,9 +3371,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         if not force_convergence:
             storage_temperature_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
             if storage_temperature_in_celsius == 0:
-                # The simulator starts every step from zeroed outputs, so a controller simulated before the tank
-                # reads 0 °C on the first pass and would start a charge; it keeps the temperature it read last
-                # instead. This guard goes once the controller restores its decision on every pass.
+                # Step-0 guard: only the first step starts from zeroed outputs, so on its first pass a controller
+                # simulated before the tank reads 0 °C and would start a charge; it keeps the temperature it read
+                # last instead. Every later step starts from the values the previous step converged to (the
+                # simulator's warm start), so the guard fires only at step 0. It goes once the controller restores
+                # its decision on every pass, since until then a decision taken on the 0 would latch.
                 storage_temperature_in_celsius = self.water_temperature_input_from_dhw_storage_in_celsius_previous
             self.water_temperature_input_from_dhw_storage_in_celsius = storage_temperature_in_celsius
             raise_in_kelvin = stsv.get_input_value(self.storage_temperature_modifier_channel)

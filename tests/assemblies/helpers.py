@@ -184,9 +184,4 @@ def build_text(text: str, result_directory: Path, resolver: Optional[AssemblyRes
     ).build()
 
 
-def system_text(name: str) -> str:
-    """The text of one committed mock system."""
-    return (Mocks.ROOT / "systems" / name).read_text(encoding="utf-8")
-
-
 MOCKS = Mocks.CLASSES

@@ -45,4 +45,5 @@ partners:
     component:
       class: tests.assemblies.mock_components.MockPVSystem
       preset: rooftop
+      config: {power_in_watt: 5000}
       inputs: [Weather]

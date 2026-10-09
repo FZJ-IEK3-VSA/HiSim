@@ -1525,6 +1525,10 @@ class MoreAdvancedHeatPumpHPLib(Component):
             The thermal and the electrical power in W.
 
         Raises:
+            NonFiniteValueError: If an argument is NaN or infinite, or the power overflows the float range, as
+                :func:`hisim.hydronics.circuit_power_w` raises it.
+            NegativeMassFlowError: If ``mass_flow_kg_per_s`` is negative, as :func:`hisim.hydronics.circuit_power_w`
+                raises it.
             ZeroDivisionError: If ``cop`` is 0.
         """
         thermal_power_in_watt = hydronics.circuit_power_w(mass_flow_kg_per_s, t_out_c, t_in_c)
@@ -3181,10 +3185,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     #: upper set temperature of DHW Storage, given in °C
     t_max_dhw_storage_in_celsius: float = 60.0
     #: set thermal power delivered for dhw on constant value --> max. Value of heatpump.
-    #: false: modulation, true: constant power for dhw
+    #: false: modulation, true: constant power for dhw. The heat pump refuses true with a parallel
+    #: storage, at its first hot-water step, because it books the heat its flow carries, which a
+    #: constant power would contradict; in the fixed-flow mode (a series storage or none) true is ignored.
     thermalpower_dhw_is_constant: bool = False
     #: max. Power of Heatpump for not modulation dhw production; only read when
-    #: ``thermalpower_dhw_is_constant`` is true
+    #: ``thermalpower_dhw_is_constant`` is true, which a parallel storage refuses and the fixed-flow
+    #: mode ignores, so no heat pump uses it
     p_th_max_dhw_in_watt: float = 5000.0
 
     @preset

@@ -527,3 +527,25 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     assert output(my_sts.thermal_power_w_output_channel) == 0.0
     assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow
     assert output(my_sts.collector_temperature_at_step_mean_channel) == 60.0
+
+
+@pytest.mark.base
+def test_the_pump_switches_on_at_the_step_mean_and_stops_on_a_full_tank_at_the_steps_start() -> None:
+    """The pump runs when the collector has heat at the step mean, and stops when the tank started above 60 °C.
+
+    A 45 °C step mean under a collector 20 K warmer and with flow switches the pump on; the same answer with the
+    tank at 61 °C at the step's start, or with a flow below the minimum, stops it.
+    """
+    mysim = sim.SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
+    controller = solar_thermal_system.SolarThermalSystemController(
+        my_simulation_parameters=mysim,
+        config=solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarController"),
+    )
+    controller.get_controller_state(0, 45.0, 65.0, 0.01, 44.0)
+    assert controller.state.on_off == 1
+    controller.get_controller_state(1, 45.0, 65.0, 0.01, 61.0)
+    assert controller.state.on_off == 0
+    controller.get_controller_state(2, 45.0, 65.0, 0.01, 44.0)
+    assert controller.state.on_off == 1
+    controller.get_controller_state(3, 45.0, 65.0, 0.004, 44.0)
+    assert controller.state.on_off == 0

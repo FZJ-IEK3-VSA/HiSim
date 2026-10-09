@@ -994,7 +994,10 @@ class SolarThermalSystemController(Component):
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
+    #: The storage's step mean, on which the pump switches on (spec §5.3).
     MeanWaterTemperatureInStorage: ClassVar[str] = "MeanWaterTemperatureInStorage"
+    #: The storage's start-of-step temperature, on which the pump stops once the storage is full (spec §5.3).
+    StorageTemperatureAtStartOfStep: ClassVar[str] = "StorageTemperatureAtStartOfStep"
     CollectorTemperature: ClassVar[str] = "CollectorTemperature"
     MassFlow: ClassVar[str] = "MassFlow"
 
@@ -1031,6 +1034,14 @@ class SolarThermalSystemController(Component):
         self.mean_water_temperature_storage_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.MeanWaterTemperatureInStorage,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
+            True,
+        )
+
+        self.storage_temperature_at_start_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.StorageTemperatureAtStartOfStep,
             loadtypes.LoadTypes.TEMPERATURE,
             loadtypes.Units.CELSIUS,
             True,
@@ -1081,6 +1092,14 @@ class SolarThermalSystemController(Component):
                 storage_classname,
                 # the storage's step mean: the solar pump decides within the step (D4 amended, owner 2026-10-09)
                 SimpleDHWStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.StorageTemperatureAtStartOfStep,
+                storage_classname,
+                # the storage's start-of-step temperature: the full-tank stop stays on T0 (D4)
+                SimpleDHWStorage.WaterMeanTemperatureInStorage,
             )
         )
         return connections
@@ -1144,12 +1163,16 @@ class SolarThermalSystemController(Component):
             )
             collector_temperature_deg_c = stsv.get_input_value(self.collector_temperature_input_channel)
             required_mass_flow_kg_s = stsv.get_input_value(self.required_mass_flow_input_channel)
+            storage_temperature_at_start_deg_c = stsv.get_input_value(
+                self.storage_temperature_at_start_input_channel
+            )
 
             self.get_controller_state(
                 timestep,
                 mean_water_temperature_storage_deg_c,
                 collector_temperature_deg_c,
                 required_mass_flow_kg_s,
+                storage_temperature_at_start_deg_c,
             )
             self.processed_state = self.state.clone()
 
@@ -1164,22 +1187,38 @@ class SolarThermalSystemController(Component):
         mean_water_temperature_storage_deg_c: float,
         collector_temperature_deg_c: float,
         mass_flow_kg_s: float,
+        storage_temperature_at_start_deg_c: float,
     ) -> None:
-        """Calculate the solar pump state and activate / deactives."""
+        """Switch the solar pump on or off for this step.
+
+        The pump switches on when the collector, evaluated at the storage's step mean, is more than
+        ``set_temperature_difference_for_on`` warmer than that mean, which it is whenever the collector has heat
+        there. It stops when the storage started the step above the 60 °C aim, or when the flow the collector heat
+        needs is below :attr:`MINIMUM_MASS_FLOW_IN_KG_PER_S`. For example, a tank at a 45 °C step mean under a
+        collector with heat at 45 °C runs the pump; the same tank at 61 °C at the step's start stops it.
+
+        Why the two temperatures: the switch-on decides within the step on the step mean (spec §5.3, owner
+        2026-10-09), so the collector's answer and the tank agree; the full-tank stop stays on the start-of-step
+        temperature (D4), because a stop on the step mean has no fixed point when the pump's own heat lifts the mean
+        across 60 °C, and the step would end at the simulator's ``force_convergence``.
+
+        Args:
+            timestep: The step, recorded by the state on a switch.
+            mean_water_temperature_storage_deg_c: The storage's step mean, °C.
+            collector_temperature_deg_c: The collector's outlet temperature at that mean, °C.
+            mass_flow_kg_s: The flow the collector heat at that mean needs, kg/s.
+            storage_temperature_at_start_deg_c: The storage's start-of-step temperature, °C.
+        """
         if (
             collector_temperature_deg_c - mean_water_temperature_storage_deg_c
         ) > self.config.set_temperature_difference_for_on:
-            # activate heating when difference between collector temperature and storage temperature
-            # is at least 6 K
             self.state.activate(timestep)
 
-        if mean_water_temperature_storage_deg_c > self.warm_water_temperature_aim_in_celsius:
-            # deactivate heating when storage temperature is too high
-            # this overrides the activation based on temperature difference
+        if storage_temperature_at_start_deg_c > self.warm_water_temperature_aim_in_celsius:
+            # the storage is full; this overrides the switch-on
             self.state.deactivate(timestep)
 
         if mass_flow_kg_s < self.MINIMUM_MASS_FLOW_IN_KG_PER_S:
-            # deactivate when mass flow is too low
             self.state.deactivate(timestep)
 
     def get_cost_opex(

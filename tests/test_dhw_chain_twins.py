@@ -15,8 +15,10 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   times that), and every circuit charges on some step;
 * the iterations per step (hydronic coupling spec §6): no step of a file without a heat pump reaches the simulator's
   ``force_convergence`` (more than eleven passes). The heat-pump files are recorded, not asserted: their forced
-  steps come from the energy manager's on/off loop (hisim-4g9.28) and hplib's 0.1 K staircase, which stage D
-  resolves. Every file's histogram is written to ``results/iteration_histogram/``.
+  steps come from the energy manager, which switches its set-temperature raise on the sign of a surplus that
+  includes the heat pump's own draw, so a float's flip turns it on and off within a step, and from controllers
+  that decide once for a whole step, which a converged iteration cannot always reconcile with the plant's
+  state; stage D resolves both. Every file's histogram is written to ``results/iteration_histogram/``.
 
 The recorded twins run in the ``base`` set; their grouped twins, which RenoVisor translates from, and the composed
 files run in ``system_setups``. Every file except the car twin replaces its load-profile generator by the shipped

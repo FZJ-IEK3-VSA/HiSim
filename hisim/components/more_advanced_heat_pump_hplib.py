@@ -1527,16 +1527,18 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """Return the thermal and electrical power a running heating circuit books, from the water it carries.
 
         The thermal power is the heat the circuit's water carries, ``P_th = m c (T_out - T_in)``
-        (:func:`hisim.hydronics.circuit_power_w`), with ``T_in`` the return temperature the heat pump reads,
-        unrounded. The electrical power follows at the step's coefficient of performance, ``P_el = P_th / COP``.
-        For example, hplib answers a return of 30.04 °C (rounded to 30.0 °C) with 8400 W, 0.4 kg/s and 35.0 °C;
-        at a COP of 3.5 the heat pump books ``0.4 * 4180 * 4.96 = 8293.12`` W of heat and 2369.46 W of
-        electricity.
+        (:func:`hisim.hydronics.circuit_power_w`), with ``T_in`` the return temperature the heat pump reads.
+        The electrical power follows at the step's coefficient of performance, ``P_el = P_th / COP``.
+        For example, at a return of 47.04 °C hplib's results at 47.0 and 47.1 °C are interpolated to 0.4 kg/s and
+        an outlet of 52.04 °C, the 5 K lift hplib holds; at a COP of 3.5 the heat pump books
+        ``0.4 * 4180 * 5.0 = 8360`` W of heat and 2388.57 W of electricity, where hplib's own thermal power is
+        ``0.4 * 4200 * 5.0 = 8400`` W.
 
         The flow is authoritative because the storage at the other end integrates exactly this flow, so the heat
-        pump books what the storage receives. hplib's own thermal power differs from it, by up to about 1.5 % on
-        one step, through its 0.1 K rounding of the return temperature and its specific heat of water,
-        4200 J/(kg K) instead of HiSim's 4180 J/(kg K).
+        pump books what the storage receives. While the outlet is hplib's own (not throttled,
+        :meth:`throttled_dhw_supply`), hplib's own thermal power differs from it only through its specific heat of
+        water, 4200 J/(kg K) instead of HiSim's 4180 J/(kg K): the booked heat is hplib's times 4180/4200, about
+        0.48 % less.
 
         Args:
             mass_flow_kg_per_s: The circuit's mass flow, kg/s.

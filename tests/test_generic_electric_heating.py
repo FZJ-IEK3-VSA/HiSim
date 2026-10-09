@@ -250,8 +250,9 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries(
 ) -> None:
     """The heater supplies the return plus the lift at P_max lift / 100 (at most P_max) and books m c dT.
 
-    A 25 K lift takes a quarter of the maximal power, a lift above 100 K all of it; without a lift the circuit
-    moves no water, books nothing and its supply is its return.
+    A 25 K lift takes a quarter of the maximal power; a lift above 100 K would take all of it, but its supply stops
+    at the 80 °C maximum and the heat is what the flow carries up to it; without a lift the circuit moves no water,
+    books nothing and its supply is its return.
     """
     from hisim import hydronics  # pylint: disable=import-outside-toplevel
     from hisim.config import concrete  # pylint: disable=import-outside-toplevel
@@ -261,7 +262,12 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries(
     power, energy, supply, mass_flow = heater._calculate_dhw_outputs(  # pylint: disable=protected-access
         return_temperature_in_celsius, lift_in_kelvin
     )
-    assert supply == return_temperature_in_celsius + lift_in_kelvin
+    limit = heater.config.maximal_dhw_supply_temperature_in_celsius
+    assert supply == min(return_temperature_in_celsius + lift_in_kelvin, limit)
     assert power == hydronics.circuit_power_w(mass_flow, supply, return_temperature_in_celsius)
-    assert power == pytest.approx(min(maximum * lift_in_kelvin / 100.0, maximum), rel=1e-12)
+    regulated = min(maximum * lift_in_kelvin / 100.0, maximum)
+    if supply < return_temperature_in_celsius + lift_in_kelvin:
+        assert power < regulated  # throttled: the flow carries less than the regulated power
+    else:
+        assert power == pytest.approx(regulated, rel=1e-12)
     assert energy == pytest.approx(power * heater.my_simulation_parameters.seconds_per_timestep / 3600.0)

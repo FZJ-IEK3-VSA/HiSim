@@ -126,24 +126,7 @@ def fixture_translated_house(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.mark.system_setups
-@pytest.mark.parametrize(
-    "seconds_per_timestep",
-    [
-        900,
-        1800,
-        pytest.param(
-            3600,
-            marks=pytest.mark.xfail(
-                strict=True,
-                raises=ValueError,
-                reason=(
-                    "hisim-fxix.9: the hot-water tank conserves the boiler's heat, and an hour-long full-power charge "
-                    "decided on the start temperature heats it past 90 °C"
-                ),
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("seconds_per_timestep", [900, 1800, 3600])
 def test_the_gas_house_keeps_its_storages_in_range_for_a_winter_week(
     translated_house: Path, tmp_path: Path, seconds_per_timestep: int
 ) -> None:

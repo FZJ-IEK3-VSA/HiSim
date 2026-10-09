@@ -1,7 +1,7 @@
 """Electric Heating Module."""
 
 # Owned
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from typing import ClassVar, List, Optional, Tuple
 
@@ -92,6 +92,11 @@ class ElectricHeatingConfig(ConfigBase):
     #: it delivers. Sizable: left ``AUTO`` it is the building's heating load exactly, the
     #: appliance covering the design load with no reserve.
     maximum_electric_power_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT, unit=Units.WATT)
+    #: The highest supply temperature the hot-water side delivers, °C. A charge whose return plus lift would exceed
+    #: it is throttled to it (hydronic coupling spec §5.1). 80 °C is the usual upper setting of the thermostat of a
+    #: domestic electric water heater, whose safety cut-out acts above it (EN 60335-2-21); it lies above the
+    #: controller's 75 °C hot-water supply aim (the 60 °C aim plus its 15 K hysteresis).
+    maximal_dhw_supply_temperature_in_celsius: float = field(default=80.0, metadata={"unit": Units.CELSIUS})
 
     @staticmethod
     def sizing_facts(config: "ElectricHeatingConfig", ctx: SizingContext) -> dict:
@@ -564,7 +569,9 @@ class ElectricHeating(Component):
         ``water_input_temperature_deg_c``, plus ``dT``. The heat it books is what that water carries,
         ``m c (T_sup - T_ret)`` (:func:`hisim.hydronics.circuit_power_w`), which is ``P``. For example, a 6 kW heater
         asked for a 25 K lift on a 50 °C return heats with 1.5 kW at 0.0144 kg/s and supplies 75 °C. Without a lift
-        the circuit moves no water and its supply is its return.
+        the circuit moves no water and its supply is its return. A supply above
+        ``maximal_dhw_supply_temperature_in_celsius`` is throttled to it (and to the return, if that is hotter): the
+        flow stays, the heat and the electricity are what the water then carries (spec §5.1, owner 2026-10-09).
 
         Args:
             water_input_temperature_deg_c: The circuit's return temperature, the tank's step mean, °C.
@@ -583,7 +590,10 @@ class ElectricHeating(Component):
             water_mass_flow_rate_in_kg_per_s = regulated_power_w / (
                 hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * delta_temperature_needed_in_celsius
             )
-            water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
+            water_target_temperature_deg_c = min(
+                water_input_temperature_deg_c + delta_temperature_needed_in_celsius,
+                max(self.config.maximal_dhw_supply_temperature_in_celsius, water_input_temperature_deg_c),
+            )
         else:
             water_mass_flow_rate_in_kg_per_s = 0.0
             water_target_temperature_deg_c = water_input_temperature_deg_c

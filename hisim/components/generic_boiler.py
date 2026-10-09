@@ -208,6 +208,11 @@ class GenericBoilerConfig(ConfigBase):
     eff_th_min: float = 0.60
     eff_th_max: float = 0.90
     temperature_delta_in_celsius: float = 20.0
+    #: The highest supply temperature the boiler delivers, °C. A charge whose return plus lift would exceed it is
+    #: throttled to it (hydronic coupling spec §5.1). 80 °C is the usual upper flow-temperature setting of domestic
+    #: gas, oil and solid-fuel boilers, whose safety high-limit cut-outs act above it (around 90-110 °C, EN 15502-1,
+    #: EN 303-5); it lies above the controller's 70 °C hot-water flow aim, so every charge reaches its set point.
+    maximal_flow_temperature_in_celsius: float = field(default=80.0, metadata={"unit": lt.Units.CELSIUS})
     device_co2_footprint_in_kg: Optional[float] = None
     investment_costs_in_euro: Optional[float] = None
     lifetime_in_years: Optional[float] = None
@@ -625,6 +630,7 @@ class GenericBoiler(Component):
         self.maximal_thermal_power_in_watt = self.config.maximal_thermal_power_in_watt
         self.min_combustion_efficiency = self.config.eff_th_min
         self.max_combustion_efficiency = self.config.eff_th_max
+        self.maximal_flow_temperature_in_celsius = self.config.maximal_flow_temperature_in_celsius
         # self.temperature_delta_in_celsius = (
         #     self.config.temperature_delta_in_celsius
         # )
@@ -689,156 +695,160 @@ class GenericBoiler(Component):
             # stays off on this step.
             operating_mode = HeatingMode.OFF.value
 
-        # Calculate combustion efficiency
-        delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
-
+        # the burner's power and efficiency at the control signal, the forward law (D1)
         if control_signal * self.maximal_thermal_power_in_watt < self.minimal_thermal_power_in_watt:
-            maximum_power_used_in_watt = self.minimal_thermal_power_in_watt
-            real_combustion_efficiency = self.min_combustion_efficiency
+            fuel_power_in_watt = self.minimal_thermal_power_in_watt
         else:
-            maximum_power_used_in_watt = control_signal * self.maximal_thermal_power_in_watt
-            # values for the efficiency
-            delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
-            delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
-            slope = delta_efficiency / delta_power
-            # real efficiency formula
-            real_combustion_efficiency = (self.min_combustion_efficiency
-                + (maximum_power_used_in_watt - self.minimal_thermal_power_in_watt) * slope)
-
-        # energy consumption
-        fuel_energy_consumption_in_watt_hour = (
-            maximum_power_used_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
-        )
-
-        # thermal power delivered from combustion
-        thermal_power_delivered_in_watt = maximum_power_used_in_watt * real_combustion_efficiency
-        thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
-        )
+            fuel_power_in_watt = control_signal * self.maximal_thermal_power_in_watt
+        combustion_efficiency = self.combustion_efficiency_at_burner_power(fuel_power_in_watt)
+        thermal_power_in_watt = fuel_power_in_watt * combustion_efficiency
         mass_flow_out_in_kg_per_second = (
-            thermal_power_delivered_in_watt
+            thermal_power_in_watt
             / (self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius * temperature_delta)
             if temperature_delta > 0
             else 0
         )
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
-        stsv.set_output_value(
-            self.total_fuel_input_power_channel,
-            maximum_power_used_in_watt,
-        )
-        # The loss of the fuel billed in this step (EnergyDemandSh/Dhw), which is nothing when the boiler is off.
-        stsv.set_output_value(
-            self.combustion_heat_loss_channel,
-            (
-                0.0
-                if operating_mode == HeatingMode.OFF.value
-                else maximum_power_used_in_watt * (1 - real_combustion_efficiency)
-            ),
-        )
-
+        idle_sh = [
+            self.thermal_output_power_sh_channel,
+            self.thermal_output_energy_sh_channel,
+            self.energy_demand_sh_channel,
+            self.water_output_mass_flow_sh_channel,
+        ]
+        idle_dhw = [
+            self.thermal_output_power_dhw_channel,
+            self.thermal_output_energy_dhw_channel,
+            self.energy_demand_dhw_channel,
+            self.water_output_mass_flow_dhw_channel,
+        ]
         if operating_mode == HeatingMode.SPACE_HEATING.value:
-            stsv.set_output_value(
-                self.thermal_output_power_sh_channel,
-                thermal_power_delivered_in_watt,
-            )
-            stsv.set_output_value(
-                self.thermal_output_energy_sh_channel,
-                thermal_energy_delivered_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.energy_demand_sh_channel,
-                fuel_energy_consumption_in_watt_hour,
-            )
-            water_output_temperature_in_celsius = temperature_delta + stsv.get_input_value(
-                self.water_input_temperature_sh_channel
-            )
-            stsv.set_output_value(
+            circuit = (
+                self.water_input_temperature_sh_channel,
                 self.water_output_temperature_sh_channel,
-                water_output_temperature_in_celsius,
-            )
-            stsv.set_output_value(
                 self.water_output_mass_flow_sh_channel,
-                mass_flow_out_in_kg_per_second,
+                self.thermal_output_power_sh_channel,
+                self.thermal_output_energy_sh_channel,
+                self.energy_demand_sh_channel,
             )
-            for channel in [
+            idle_channels, idle_supply = idle_dhw, (
+                self.water_output_temperature_dhw_channel,
+                self.water_input_temperature_dhw_channel,
+            )
+        elif operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
+            circuit = (
+                self.water_input_temperature_dhw_channel,
+                self.water_output_temperature_dhw_channel,
+                self.water_output_mass_flow_dhw_channel,
                 self.thermal_output_power_dhw_channel,
                 self.thermal_output_energy_dhw_channel,
                 self.energy_demand_dhw_channel,
-                self.water_output_mass_flow_dhw_channel,
-            ]:
-                stsv.set_output_value(channel, 0)
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                stsv.get_input_value(self.water_input_temperature_dhw_channel),
             )
-        elif operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
+            idle_channels, idle_supply = idle_sh, (
+                self.water_output_temperature_sh_channel,
+                self.water_input_temperature_sh_channel,
+            )
+        elif operating_mode == HeatingMode.OFF.value:
+            # both circuits idle: no flow, supply equal to return, no fuel
+            for channel in idle_sh + idle_dhw:
+                stsv.set_output_value(channel, 0)
+            for supply_channel, return_channel in (
+                (self.water_output_temperature_sh_channel, self.water_input_temperature_sh_channel),
+                (self.water_output_temperature_dhw_channel, self.water_input_temperature_dhw_channel),
+            ):
+                stsv.set_output_value(supply_channel, stsv.get_input_value(return_channel))
+            stsv.set_output_value(self.total_fuel_input_power_channel, fuel_power_in_watt)
+            stsv.set_output_value(self.combustion_heat_loss_channel, 0.0)
+            return
+        else:
+            raise ValueError(f"Unknown operating mode {operating_mode}")
+
+        return_channel, supply_channel, flow_channel, power_channel, energy_channel, fuel_channel = circuit
+        return_temperature_in_celsius = stsv.get_input_value(return_channel)
+        supply_temperature_in_celsius = return_temperature_in_celsius + temperature_delta
+        if operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
             # The hot-water circuit: the boiler pumps m = P_th / (c lift) and supplies the tank's step mean (its
             # return) plus the lift; the heat it books is what that water carries, m c (T_sup - T_ret), which is
             # P_th (spec §5.1, D1).
-            return_temperature_dhw_in_celsius = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-            water_output_temperature_in_celsius = return_temperature_dhw_in_celsius + temperature_delta
-            thermal_power_dhw_in_watt = hydronics.circuit_power_w(
-                mass_flow_out_in_kg_per_second, water_output_temperature_in_celsius, return_temperature_dhw_in_celsius
+            thermal_power_in_watt = hydronics.circuit_power_w(
+                mass_flow_out_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
             )
-            stsv.set_output_value(
-                self.thermal_output_power_dhw_channel,
-                thermal_power_dhw_in_watt,
+        if supply_temperature_in_celsius > self.maximal_flow_temperature_in_celsius:
+            # Throttled within the boiler's limit (spec §5.1, D1 as amended 2026-10-09): the supply stops at the
+            # maximal flow temperature (or at the return, if that is hotter), the circuit carries
+            # m c (T_sup - T_ret), and the burner burns what that heat needs at its own efficiency.
+            supply_temperature_in_celsius = max(self.maximal_flow_temperature_in_celsius, return_temperature_in_celsius)
+            thermal_power_in_watt = hydronics.circuit_power_w(
+                mass_flow_out_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
             )
-            stsv.set_output_value(
-                self.thermal_output_energy_dhw_channel,
-                thermal_power_dhw_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
-            )
-            stsv.set_output_value(
-                self.energy_demand_dhw_channel,
-                fuel_energy_consumption_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                water_output_temperature_in_celsius,
-            )
+            fuel_power_in_watt, combustion_efficiency = self.fuel_power_for_thermal_power(thermal_power_in_watt)
 
-            stsv.set_output_value(
-                self.water_output_mass_flow_dhw_channel,
-                mass_flow_out_in_kg_per_second,
-            )
-            for channel in [
-                self.thermal_output_power_sh_channel,
-                self.thermal_output_energy_sh_channel,
-                self.energy_demand_sh_channel,
-                self.water_output_temperature_sh_channel,
-                self.water_output_mass_flow_sh_channel,
-            ]:
-                stsv.set_output_value(channel, 0)
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                stsv.get_input_value(self.water_input_temperature_sh_channel),
-            )
-        elif operating_mode == HeatingMode.OFF.value:
-            for channel in [
-                self.thermal_output_power_sh_channel,
-                self.thermal_output_energy_sh_channel,
-                self.energy_demand_sh_channel,
-                self.water_output_temperature_sh_channel,
-                self.water_output_mass_flow_sh_channel,
-            ]:
-                stsv.set_output_value(channel, 0)
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                stsv.get_input_value(self.water_input_temperature_sh_channel),
-            )
-            for channel in [
-                self.thermal_output_power_dhw_channel,
-                self.thermal_output_energy_dhw_channel,
-                self.energy_demand_dhw_channel,
-                self.water_output_mass_flow_dhw_channel,
-            ]:
-                stsv.set_output_value(channel, 0)
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                stsv.get_input_value(self.water_input_temperature_dhw_channel),
-            )
+        stsv.set_output_value(self.total_fuel_input_power_channel, fuel_power_in_watt)
+        # the loss of the fuel billed in this step: what of it did not become heat
+        stsv.set_output_value(self.combustion_heat_loss_channel, fuel_power_in_watt - thermal_power_in_watt)
+        stsv.set_output_value(power_channel, thermal_power_in_watt)
+        stsv.set_output_value(energy_channel, thermal_power_in_watt * seconds_per_timestep / 3.6e3)
+        stsv.set_output_value(fuel_channel, fuel_power_in_watt * seconds_per_timestep / 3.6e3)
+        stsv.set_output_value(supply_channel, supply_temperature_in_celsius)
+        stsv.set_output_value(flow_channel, mass_flow_out_in_kg_per_second)
+        for channel in idle_channels:
+            stsv.set_output_value(channel, 0)
+        stsv.set_output_value(idle_supply[0], stsv.get_input_value(idle_supply[1]))
+
+    def combustion_efficiency_at_burner_power(self, fuel_power_in_watt: float) -> float:
+        """The combustion efficiency at a burner power: the boiler's modulation law.
+
+        The efficiency runs linearly from ``eff_th_min`` at the minimal to ``eff_th_max`` at the maximal burner
+        power, ``eta(F) = eta_min + (F - F_min) slope`` with ``slope = (eta_max - eta_min) / (F_max - F_min)``.
+        A burner below its minimal power runs at ``eff_th_min``, and so does a boiler whose band is one power.
+        For example, a 2-20 kW band from 0.6 to 0.9 burns at 0.75 at 11 kW.
+
+        Args:
+            fuel_power_in_watt: The burner power, W.
+
+        Returns:
+            The combustion efficiency, the share of the fuel power that becomes heat.
+        """
+        delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
+        if delta_power <= 0 or fuel_power_in_watt <= self.minimal_thermal_power_in_watt:
+            return float(self.min_combustion_efficiency)
+        slope = (self.max_combustion_efficiency - self.min_combustion_efficiency) / delta_power
+        return float(
+            self.min_combustion_efficiency + (fuel_power_in_watt - self.minimal_thermal_power_in_watt) * slope
+        )
+
+    def fuel_power_for_thermal_power(self, thermal_power_in_watt: float) -> Tuple[float, float]:
+        """The burner power that yields a thermal power, and its efficiency: the inverse of the modulation law.
+
+        Used on a throttled step only (spec §5.1, D1 as amended 2026-10-09), where the circuit's water carries
+        less heat than the control signal asked for and the fuel follows from that heat. With
+        ``eta(F) = linear + slope F``, ``P_th = F (linear + slope F)`` is solved for ``F``: the positive root for a
+        rising efficiency, ``P_th / linear`` for a constant one, and for a falling one the smaller root, written
+        ``2 P_th / (linear + sqrt(linear^2 + 4 slope P_th))`` so it keeps its digits. A heat below what the
+        minimal power yields is burnt at the minimal power's efficiency, ``F = P_th / eff_th_min``: the burner
+        cycles at its minimum. For example, a 2-20 kW band from 0.6 to 0.9 yields 8250 W of heat at 11 kW.
+
+        Args:
+            thermal_power_in_watt: The heat the circuit carries, W, at least 0.
+
+        Returns:
+            The burner power in W and the combustion efficiency.
+        """
+        minimal, maximal = self.minimal_thermal_power_in_watt, self.maximal_thermal_power_in_watt
+        if thermal_power_in_watt <= minimal * self.min_combustion_efficiency or maximal <= minimal:
+            return thermal_power_in_watt / self.min_combustion_efficiency, float(self.min_combustion_efficiency)
+        slope = (self.max_combustion_efficiency - self.min_combustion_efficiency) / (maximal - minimal)
+        linear = self.min_combustion_efficiency - minimal * slope
+        if slope > 0:
+            fuel_power_in_watt = (-linear + (linear**2 + 4 * slope * thermal_power_in_watt) ** 0.5) / (2 * slope)
+        elif slope == 0:
+            fuel_power_in_watt = thermal_power_in_watt / linear
         else:
-            raise ValueError(f"Unknown operating mode {operating_mode}")
+            fuel_power_in_watt = 2 * thermal_power_in_watt / (
+                linear + (linear**2 + 4 * slope * thermal_power_in_watt) ** 0.5
+            )
+        fuel_power_in_watt = min(fuel_power_in_watt, maximal)
+        return fuel_power_in_watt, self.combustion_efficiency_at_burner_power(fuel_power_in_watt)
 
     @staticmethod
     def get_cost_capex(

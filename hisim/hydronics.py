@@ -445,8 +445,9 @@ def accelerated_node_mean(published_c: Sequence[float], computed_c: Sequence[flo
 
     * Up to ``ACCELERATION_AFTER_ITERATIONS`` iterates: the plain iteration, ``computed_c[-1]``.
     * When the last two residuals have opposite signs (an oscillation, which a contraction with ``theta`` in
-      (0, 1) does not produce but the heat pump's rounding staircase of §5.2 can): the under-relaxed
-      ``x + w r`` with ``w = UNDER_RELAXATION_WEIGHT``.
+      (0, 1) does not produce but a circuit whose heat falls steeply with the step mean can, such as the heat
+      pump's hot-water supply capped at its controller's set temperature): the under-relaxed ``x + w r`` with
+      ``w = UNDER_RELAXATION_WEIGHT``.
     * Otherwise the secant step on the residual, ``x - r (x - x_prev) / (r - r_prev)``, which is Aitken's
       delta-squared extrapolation when the node has published its plain iterates: with ``x = F(x_prev)`` the two
       are algebraically identical, ``x - r r_prev / (r - r_prev) = x_prev - (x - x_prev)^2 / (F(x) - 2x + x_prev)``.

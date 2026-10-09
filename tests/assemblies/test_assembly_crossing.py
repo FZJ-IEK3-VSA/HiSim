@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 from typing import ClassVar, Dict, Iterator, Tuple
 
+import pandas as pd
 import pytest
 import yaml
 
@@ -746,11 +747,30 @@ def fixture_gas_house_run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[
 
 @pytest.mark.assemblies
 def test_the_gas_house_runs_a_day_its_meter_reads_the_boilers_fuel_and_its_balance_closes(gas_house_run: Path) -> None:
-    """Catches a gas meter that reads something else than the gas burned, or a balance that does not close."""
+    """Catches a gas meter that reads something else than the gas burned, or a balance that does not close.
+
+    The meter is compared step by step on the unrounded results, not on the KPIs: both KPIs are rounded to
+    0.1 kWh, the boiler's total as the sum of its space-heating and hot-water parts, each rounded on its own.
+    On the test day the boiler burns 76.531 + 10.635 = 87.166 kWh and the meter reads the same on every step,
+    yet the KPIs read 76.5 + 10.6 = 87.1 and 87.2. Each KPI is checked within its own rounding of that total.
+    """
+    results = pd.read_csv(gas_house_run / "all_results.csv", index_col=0)
+
+    def series(component: str, output: str) -> pd.Series:
+        """The one column of an output, whose header is ``<component> - <output> [<load type> - <unit>]``."""
+        (column,) = [name for name in results.columns if name.startswith(f"{component} - {output} [")]
+        return results[column]
+
+    fuel = series("heating-Boiler", "EnergyDemandSh") + series("heating-Boiler", "EnergyDemandDhw")
+    metered = series("gas-GasMeter", "GasConsumption")
+    assert fuel.sum() > 0
+    assert list(metered) == pytest.approx(list(fuel), rel=1e-12)
+    fuel_in_kwh = fuel.sum() * 1e-3
     kpis = KpiFinder(json.loads((gas_house_run / "all_kpis.json").read_text(encoding="utf-8")))
-    fuel = kpis.value(name="Total Gas consumption (energy)", source="heating-Boiler")
-    metered = kpis.value(name="Total gas consumption", source="gas-GasMeter")
-    assert fuel > 0 and metered == pytest.approx(fuel, rel=1e-12)
+    assert kpis.value(name="Total gas consumption", source="gas-GasMeter") == pytest.approx(fuel_in_kwh, abs=0.05)
+    assert kpis.value(name="Total Gas consumption (energy)", source="heating-Boiler") == pytest.approx(
+        fuel_in_kwh, abs=0.1
+    )
     assert json.loads((gas_house_run / "balance_report.json").read_text(encoding="utf-8"))["verdict"] == "closes"
 
 

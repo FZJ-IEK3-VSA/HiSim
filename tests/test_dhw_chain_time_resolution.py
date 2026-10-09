@@ -3,8 +3,9 @@
 The hot-water tank is a fully mixed node whose step is exact for constant inflows, and every generator books the heat
 its water carries into it, so the heat drawn at the tap and the heat the generators deliver no longer depend on the
 step length the way they did while the tank mixed masses (the boiler's hot-water heat was 28 % higher at 900 s than at
-60 s, and twice as high at 3600 s). Four recorded twins, a boiler, a district-heating substation, an electric heater
-and a heat pump, run the first four weeks of 2021 at each resolution, and:
+60 s, and twice as high at 3600 s). Six recorded twins, a boiler, a district-heating substation, an electric heater,
+a heat pump and the two with a solar collector beside a boiler or a heat pump, run the first four weeks of 2021 at
+each resolution, and:
 
 * the heat drawn at the tap agrees within 1 % at 900 s and at 3600 s;
 * the generators' hot-water heat, net of the heat the tank holds more or less at the end of the window, agrees
@@ -37,6 +38,8 @@ class ResolutionRuns:
         "household_district_heating_building_sizer",
         "household_electric_heating_building_sizer",
         "household_heatpump_building_sizer",
+        "household_gas_solar_thermal_building_sizer",
+        "household_heatpump_solar_thermal_building_sizer",
     )
 
     #: The window: the first four weeks of 2021.

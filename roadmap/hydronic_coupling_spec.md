@@ -391,8 +391,9 @@ shows the watt outputs dominate.
 **Node-side acceleration.** A node that has iterated more than six times on a step accelerates its published
 `T̄` from its own last iterates (secant / Aitken on its own fixed-point residual; only temperatures it already
 receives, so the ports stay pure), and under-relaxes only when it detects a sign change between iterates (an
-oscillation, which a contraction with `θ > 0` should not produce, but the heat pump's rounding staircase of §5.2
-can). The acceleration changes only how fast the fixed point is reached, never which one. Its first target is
+oscillation, which a contraction with `θ > 0` should not produce, but a circuit whose heat falls steeply with `T̄`
+can, such as the heat pump's hot-water supply capped at its controller's set temperature; the rounding staircase
+of §5.2 that first showed it is interpolated away since stage C). The acceleration changes only how fast the fixed point is reached, never which one. Its first target is
 the firing boiler step, which must come back under the limit of 10. A node whose new step mean lies within 1e-9 K
 of the one it published last publishes that float unchanged: a converged iteration can alternate between two
 neighbouring floats, which a component deciding on the sign of a balance turns into a cycle of its own (owner,
@@ -401,7 +402,7 @@ neighbouring floats, which a component deciding on the sign of a balance turns i
 **Iteration histogram test.** The recorded twins run at 60, 900 and 3600 s and the iterations per step
 (`simulator.py:426` returns the count) are asserted: at 900 s no step reaches `force_convergence` (more than 10
 tries). The boiler twins (gas, oil, pellets, wood chips, hydrogen, gas + solar thermal), the heat-pump twins (for
-the rounding staircase) and the district-heating twin (no buffer) are listed explicitly. The histogram and each
+the energy manager's on/off loop; the rounding staircase is interpolated since stage C) and the district-heating twin (no buffer) are listed explicitly. The histogram and each
 twin's mean are a CI artifact, so drifts are seen.
 
 **Escalation to hisim-4g9.22** if, after stage D (§9.5), a twin still has 900 s steps at `force_convergence`, or
@@ -452,7 +453,7 @@ Each is a unit test asserting every node's per-step balance (relative 1e-6) and 
 | `SimpleHotWaterStorage`, `SimpleDHWStorage` | fully mixed path: node step, publish `T̄`, `T_end`, `T0`; drop mass mixing (`:372-397`), start-temperature booking, explicit loss. Stratification path unchanged (D5) |
 | `HeatDistribution` | same-step return; pipe-water node without a buffer; drop the lag (`:471-491`) |
 | `GenericBoiler` + controller | keep `control_signal`, `modulate_power` and fixed lift; supply from `T̄`; controller reads `T0` |
-| `MoreAdvancedHeatPumpHPLib` | `m_dot`/`T_out` authoritative, `P_th` derived, `P_el = P_th/COP`; 0.1 K rounding kept; cooling metered |
+| `MoreAdvancedHeatPumpHPLib` | `m_dot`/`T_out` authoritative, `P_th` derived, `P_el = P_th/COP`; 0.1 K grid kept, interpolated in the return (stage C); cooling metered |
 | `ElectricHeating` | keep power regulation and fixed lift; supply from `T̄` |
 | `DistrictHeating`, `SolarThermalSystem` | supply from return within their limits; book derived heat |
 

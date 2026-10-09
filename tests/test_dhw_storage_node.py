@@ -236,3 +236,42 @@ def test_the_tank_publishes_its_step_mean_to_the_circuits_and_its_start_temperat
     # the circuit's heat as both ends derive it from the three published values
     heat_wh = Tank.output(stsv, storage.thermal_energy_from_heat_generator_channel)
     assert heat_wh * 3600.0 == pytest.approx(hydronics.circuit_heat_j(0.2, 70.0, step.node.t_mean_c, 900), rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "published, computed, cycles",
+    [
+        ([70.549, 70.551, 70.550], [70.552, 70.549, 70.549], True),  # +0.003, -0.002, -0.001 K: a cycle at a cell edge
+        ([60.0, 60.2, 60.3], [60.2, 60.3, 60.35], False),  # one sign: a contraction
+        ([60.0, 60.3, 60.1], [60.3, 60.1, 60.2], False),  # sign changes, but far from its point
+        ([70.0, 70.1], [70.1, 70.0], False),  # too few iterations to tell
+    ],
+)
+def test_the_tank_recognises_a_cycle(published: List[float], computed: List[float], cycles: bool) -> None:
+    """A cycle changes the residual's sign at the size of a grid cell's jump; a contraction keeps one sign."""
+    storage = Tank.build(900)
+    storage.published_step_means_in_celsius = list(published)
+    storage.computed_step_means_in_celsius = list(computed)
+    assert storage.iteration_cycles() is cycles
+
+
+@pytest.mark.base
+def test_under_force_convergence_a_cycling_tank_holds_its_step_mean_for_the_rest_of_the_step() -> None:
+    """With a cycling history and forced convergence the tank publishes what it published last, then keeps it."""
+    storage, stsv, fakes = Tank.with_fake_inputs(900)
+    stsv.set_output_value(fakes[1], 75.0)
+    stsv.set_output_value(fakes[2], 0.25)
+    storage.state.mean_water_temperature_in_celsius = 68.0
+    storage.i_save_state()
+    # the step mean of this charge is about 70.385 °C; the history hovers around it
+    storage.published_step_means_in_celsius = [70.384, 70.386, 70.385]
+    storage.computed_step_means_in_celsius = [70.387, 70.384, 70.384]
+    storage.last_published_step_mean_in_celsius = 70.3851
+    for _ in range(2):
+        storage.i_restore_state()
+        storage.i_simulate(0, stsv, True)
+        assert Tank.output(stsv, storage.water_temperature_to_heat_generator_channel) == 70.3851
+    assert storage.holding_step_mean
+    storage.i_save_state()
+    assert not storage.holding_step_mean

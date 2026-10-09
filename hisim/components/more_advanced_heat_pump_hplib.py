@@ -546,6 +546,12 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     group_id: int = 1
     #: Flow temperature the curve fit is evaluated at, on the secondary (sink) side.
     flow_temperature_in_celsius: float = 52.0
+    #: The highest supply temperature the hot-water circuit delivers, °C; hplib itself has no outlet limit. A
+    #: charge whose outlet would exceed it is throttled to it (hydronic coupling spec §5.2). 75 °C is the highest
+    #: flow temperature air/water heat pumps on the market reach (propane (R290) units' datasheets state 70-75 °C),
+    #: and it lies above the hot-water controller's switch-off point, its 60 °C upper set temperature plus the
+    #: energy manager's 10 K surplus raise, so every charge can end.
+    maximal_dhw_supply_temperature_in_celsius: float = field(default=75.0, metadata={"unit": Units.CELSIUS})
     #: The unit's standardised SCOP as its datasheet states it (EN 14825, average climate) for the
     #: low- (W35) and medium-temperature (W55) application. Either, both or neither: a stated one
     #: calibrates hplib's fit to it (:class:`ScopCalibration`); unset keeps the fit as hplib ships it.
@@ -1576,6 +1582,26 @@ class MoreAdvancedHeatPumpHPLib(Component):
             )
         return -thermal_power_in_watt / eer
 
+    def throttled_dhw_supply(self, t_out_c: float, t_in_c: float) -> float:
+        """The hot-water circuit's supply within the heat pump's limit (spec §5.2, owner 2026-10-09).
+
+        An outlet above ``maximal_dhw_supply_temperature_in_celsius`` is throttled to it, or to the return if that
+        is hotter; the flow stays, so the circuit then carries ``m c (T_max - T_in)`` and the electricity follows
+        at the step's COP (:meth:`booked_heating_powers`). For example, with the 75 °C limit a 72.0 °C return and
+        hplib's 77.0 °C outlet give 75.0 °C; a 70.0 °C return and a 75.0 °C outlet stay as they are.
+
+        Args:
+            t_out_c: The outlet the heat pump's own law gives, °C.
+            t_in_c: The circuit's return temperature, the tank's step mean, °C.
+
+        Returns:
+            The supply temperature the circuit carries, °C.
+        """
+        limit = float(self.config.maximal_dhw_supply_temperature_in_celsius)
+        if t_out_c <= limit:
+            return t_out_c
+        return max(limit, t_in_c)
+
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
 
@@ -1765,6 +1791,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                         "heat its water carries at hplib's mass flow and outlet temperature, which a constant "
                         "power would contradict. Set thermalpower_dhw_is_constant to false."
                     )
+                t_out_dhw = self.throttled_dhw_supply(t_out_dhw, t_in_secondary_dhw)
                 dhw_powers = self.booked_heating_powers_in_watt(
                     mass_flow_in_kg_per_second=m_dot_dhw,
                     outlet_temperature_in_celsius=t_out_dhw,
@@ -1807,6 +1834,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_out_dhw = t_in_secondary_dhw + p_th_dhw_target_in_watt / (
                     m_dot_dhw * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 )
+                t_out_dhw = self.throttled_dhw_supply(t_out_dhw, t_in_secondary_dhw)
                 dhw_powers = self.booked_heating_powers_in_watt(
                     mass_flow_in_kg_per_second=m_dot_dhw,
                     outlet_temperature_in_celsius=t_out_dhw,

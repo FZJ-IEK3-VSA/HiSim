@@ -442,3 +442,46 @@ def test_a_constant_hot_water_power_with_a_parallel_storage_is_refused() -> None
                 MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 45.0,
             },
         )
+
+
+@pytest.mark.base
+def test_a_hot_water_outlet_above_the_maximal_supply_temperature_is_throttled() -> None:
+    """A 72.04 °C return: hplib's outlet, 77.0 °C, stops at the 75 °C limit and the flow books the heat up to it.
+
+    The flow stays hplib's, so the circuit carries ``m c (75 - 72.04)`` and the electricity is that heat over the COP.
+    """
+    outputs = SingleStep.step(
+        SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
+        {
+            MoreAdvancedHeatPumpHPLib.OnOffSwitchDHW: 2,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 30.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 72.04,
+        },
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW] == 75.0
+    booked = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
+    assert booked == flow_heat(
+        outputs,
+        MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW,
+        MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW,
+        MoreAdvancedHeatPumpHPLib.TemperatureInputDHW,
+    )
+    assert booked == pytest.approx(
+        outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW] * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * 2.96,
+        rel=1e-9,
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW] == booked / outputs[MoreAdvancedHeatPumpHPLib.COP]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("t_out_c", "t_in_c", "expected_c"), [(77.0, 72.0, 75.0), (75.0, 70.0, 75.0), (79.0, 76.0, 76.0)]
+)
+def test_the_hot_water_supply_stays_within_the_limit_and_never_below_the_return(
+    t_out_c: float, t_in_c: float, expected_c: float
+) -> None:
+    """Above the 75 °C limit the supply is the limit, or the return when that is hotter; below it is unchanged."""
+    heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
+    assert heat_pump.throttled_dhw_supply(t_out_c, t_in_c) == expected_c

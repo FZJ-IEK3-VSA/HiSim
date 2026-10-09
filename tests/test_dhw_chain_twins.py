@@ -12,8 +12,7 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
 * on every step, the hot-water heat the boiler, heat pump, district-heating substation, electric heater or solar
   collector books equals the heat the tank received from that circuit, up to what the simulator's convergence
   tolerance leaves open (the tank's step mean is converged to about 1e-4 K, so the two ends may differ by ``m c``
-  times that; on a step at ``force_convergence`` the tank holds its published mean, and the tolerance is 0.05 K),
-  and every circuit charges on some step;
+  times that), and every circuit charges on some step;
 * the iterations per step (hydronic coupling spec §6): no step of a file without a heat pump reaches the simulator's
   ``force_convergence`` (more than eleven passes). The heat-pump files are recorded, not asserted: their forced
   steps come from the energy manager's on/off loop (hisim-4g9.28) and hplib's 0.1 K staircase, which stage D
@@ -107,10 +106,6 @@ class DhwTwins:
     #: The tank converges its step mean to about the simulator's tolerance, 1e-4 K; the two ends of a circuit may
     #: differ by the circuit's ``m c`` times this.
     CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN: float = 1e-3
-
-    #: On a step at ``force_convergence`` the tank holds the step mean it published last, so the two ends of a
-    #: circuit may differ by ``m c`` times the change it would have made next (measured up to 0.003 K).
-    FORCED_CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN: float = 0.05
 
     @classmethod
     def derived_files(cls) -> List[str]:
@@ -260,7 +255,7 @@ def check_tank_closure(results: pd.DataFrame) -> None:
     assert np.any(tap < 0.0)
 
 
-def check_circuits(results: pd.DataFrame, circuits: Dict[str, str], forced: Tuple[bool, ...]) -> int:
+def check_circuits(results: pd.DataFrame, circuits: Dict[str, str]) -> int:
     """Every charging circuit: the generator books the heat the tank received; returns how many were checked."""
     tank = DhwTwins.tank_name(results)
     received_field = {
@@ -273,12 +268,7 @@ def check_circuits(results: pd.DataFrame, circuits: Dict[str, str], forced: Tupl
         booked = DhwTwins.column(results, component, DhwTwins.BOOKED_DHW_POWER[classname])
         received = DhwTwins.column(results, tank, received_field[circuit])
         flow = DhwTwins.column(results, component, DhwTwins.DHW_MASS_FLOW[classname])
-        kelvin = np.where(
-            np.array(forced),
-            DhwTwins.FORCED_CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN,
-            DhwTwins.CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN,
-        )
-        tolerance = flow * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * kelvin
+        tolerance = flow * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * DhwTwins.CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN
         difference = np.abs(booked - received)
         assert np.all(difference <= tolerance + 1e-6), (circuit, float(np.max(difference)))
         assert np.any(booked > 0.0), f"the {circuit} circuit never charged in the window"
@@ -310,7 +300,7 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Run one file and apply the three checks."""
     results, passes, forced, circuits = DhwTwins.run(name, str(tmp_path_factory.mktemp(name.replace(".", "_"))))
     check_tank_closure(results)
-    assert check_circuits(results, circuits, forced) >= 1, circuits
+    assert check_circuits(results, circuits) >= 1, circuits
     classnames = {owner.split("|")[1] for owner in circuits.values()}
     summary = record_histogram(name, passes, forced)
     if MoreAdvancedHeatPumpHPLib.get_classname() not in classnames:

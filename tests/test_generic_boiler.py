@@ -465,3 +465,42 @@ def test_a_hot_water_charge_without_a_lift_does_not_fire() -> None:
     ):
         assert stsv.values[channel.global_index] == 0.0
     assert stsv.values[boiler.water_output_temperature_dhw_channel.global_index] == 71.0
+
+
+@pytest.mark.base
+def test_a_charge_above_the_maximal_flow_temperature_is_throttled_and_burns_what_its_heat_needs() -> None:
+    """A 30 K lift on a 70 °C return stops at the 80 °C maximum; the heat follows from the flow, the fuel from it.
+
+    The pump keeps the flow of the unthrottled charge, P_th / (c 30 K), so the water carries a third of P_th; the
+    burner burns what that heat needs at its own efficiency (the inverse of the modulation law), and the loss is
+    the fuel the heat does not take.
+    """
+    from hisim import hydronics  # pylint: disable=import-outside-toplevel
+
+    boiler, stsv, fakes = boiler_with_fake_inputs()
+    for fake, value in zip(fakes, [1.0, HeatingMode.DOMESTIC_HOT_WATER.value, 30.0, 35.0, 70.0]):
+        stsv.set_output_value(fake, value)
+    boiler.i_simulate(0, stsv, False)
+
+    def output(channel: Any) -> float:
+        return float(stsv.values[channel.global_index])
+
+    mass_flow = output(boiler.water_output_mass_flow_dhw_channel)
+    booked = output(boiler.thermal_output_power_dhw_channel)
+    fuel = output(boiler.total_fuel_input_power_channel)
+    assert output(boiler.water_output_temperature_dhw_channel) == 80.0
+    assert booked == hydronics.circuit_power_w(mass_flow, 80.0, 70.0)
+    assert booked == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 3.0, rel=1e-12)
+    assert fuel * boiler.combustion_efficiency_at_burner_power(fuel) == pytest.approx(booked, rel=1e-12)
+    assert output(boiler.energy_demand_dhw_channel) == pytest.approx(fuel * 900 / 3600)
+    assert output(boiler.combustion_heat_loss_channel) == pytest.approx(fuel - booked)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("thermal_power_in_watt", [500.0, 1200.0, 5000.0, 12000.0, 18000.0])
+def test_the_fuel_law_inverts_the_modulation_law(thermal_power_in_watt: float) -> None:
+    """Burning the returned fuel at its efficiency yields the asked heat, below the minimum at the minimum's."""
+    boiler, _, _ = boiler_with_fake_inputs()
+    fuel, efficiency = boiler.fuel_power_for_thermal_power(thermal_power_in_watt)
+    assert efficiency == boiler.combustion_efficiency_at_burner_power(fuel)
+    assert fuel * efficiency == pytest.approx(thermal_power_in_watt, rel=1e-12)

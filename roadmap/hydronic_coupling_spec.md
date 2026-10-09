@@ -321,7 +321,11 @@ return. The pump decides on the step mean, an exception to D4 for the solar cont
 the collector publishes the flow `Q_coll(T̄)/(c · 2 ΔT_n)` and the outlet temperature `T̄ + 2 ΔT_n` (`T̄` while
 `Q_coll(T̄) ≤ 0`) whether or not the pump runs, and the controller reads them with the node's `T̄`; the pump runs
 when the collector heat at `T̄` is positive and the switch-on lift is reached. Deciding on `T0` made the collector's
-yield and the tank's hot-water fuel depend on the step length. The controller's minimum pump flow is halved to
+yield and the tank's hot-water fuel depend on the step length. The controller's full-tank stop (the tank above its
+60 °C aim) stays on `T0`: on `T̄` it has no fixed point when the pump's own heat lifts the step mean across 60 °C, and
+such a step ended at `force_convergence` (1110 steps of the gas-and-solar twin's year at 900 s, 21507 at 60 s;
+13, 11 and 7 at 60, 900 and 3600 s with the stop on `T0`). This reading of the owner's rule is the implementer's
+and awaits the owner's confirmation. The controller's minimum pump flow is halved to
 0.005 kg/s, the same collector heat as before (owner, 2026-10-09).
 
 ### 5.4 District heating substation
@@ -542,7 +546,8 @@ first candidate for hisim-4g9.22 if the histogram fails.
 `DhwChargeYield`; controllers stay as on main, deciding on start-of-step values. Consequence: hisim-6ehm stays
 open as a validation item; heat-pump comfort at 900 s is compared in the validation runs (§9.4) and, if the
 underheating returns, it is solved then. *Amendment (owner, 2026-10-09):* the solar controller decides on the node's
-step mean `T̄` and the collector's answer there (§5.3), the one exception. The in-step supply cap at the
+step mean `T̄` and the collector's answer there to switch the pump on (§5.3), the one exception; its full-tank
+stop stays on `T0`. The in-step supply cap at the
 controller's set temperature (§5) relates to D4 as a limit, not a forecast: the generator stops its supply at the
 controller's target inside the step, while the controller still decides on `T0`.
 

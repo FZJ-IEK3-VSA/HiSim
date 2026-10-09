@@ -26,6 +26,8 @@ from hisim import loadtypes as lt
 from hisim.components.more_advanced_heat_pump_hplib import (
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
     MoreAdvancedHeatPumpHPLibState,
     PositionHotWaterStorageInSystemSetup,
 )
@@ -245,11 +247,18 @@ class SingleStep:
     def step(heat_pump: MoreAdvancedHeatPumpHPLib, values: Dict[str, float]) -> Dict[str, float]:
         """Step ``heat_pump`` once with its inputs set from ``values`` by field name (0 for the rest).
 
+        The hot-water set temperature, an optional input, stays unconnected unless ``values`` names it, so only the
+        maximal supply temperature limits the hot-water supply.
+
         Returns:
             Every output of the heat pump by field name.
         """
         fakes: List[cp.ComponentOutput] = []
         for component_input in heat_pump.inputs:
+            if component_input.field_name == MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHW and (
+                component_input.field_name not in values
+            ):
+                continue
             fake = cp.ComponentOutput(
                 "Fake",
                 component_input.field_name,
@@ -502,3 +511,80 @@ def test_the_hot_water_supply_stays_within_the_limit_and_never_below_the_return(
     """Above the 75 °C limit the supply is the limit, or the return when that is hotter; below it is unchanged."""
     heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
     assert heat_pump.throttled_dhw_supply(t_out_c, t_in_c) == expected_c
+
+
+@pytest.mark.base
+def test_a_hot_water_outlet_above_the_controllers_set_temperature_stops_at_it() -> None:
+    """With the controller's 60 °C set temperature, a 58 °C return's interpolated outlet stops at 60 °C.
+
+    The flow stays hplib's, so the circuit carries ``m c (60 - 58)`` and the electricity is that heat over the COP.
+    """
+    outputs = SingleStep.step(
+        SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
+        {
+            MoreAdvancedHeatPumpHPLib.OnOffSwitchDHW: 2,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 30.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 58.0,
+            MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHW: 60.0,
+        },
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW] == 60.0
+    booked = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
+    assert booked == pytest.approx(
+        outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW] * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * 2.0,
+        rel=1e-9,
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW] == booked / outputs[MoreAdvancedHeatPumpHPLib.COP]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("t_out_c", "t_in_c", "set_c", "expected_c"),
+    [(63.0, 58.0, 60.0, 60.0), (59.0, 54.0, 60.0, 59.0), (77.0, 72.0, 80.0, 75.0), (66.0, 62.0, 70.0, 66.0)],
+)
+def test_the_hot_water_supply_stays_below_the_set_temperature_and_the_maximum(
+    t_out_c: float, t_in_c: float, set_c: float, expected_c: float
+) -> None:
+    """The limit is the lower of the controller's set temperature and the 75 °C maximum."""
+    heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
+    assert heat_pump.throttled_dhw_supply(t_out_c, t_in_c, set_c) == expected_c
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("start_temperature_c", "modifier_k", "expected_state", "expected_set_c"),
+    [(59.4, 0.0, 2, 60.0), (59.5, 0.0, 0, 60.0), (69.4, 10.0, 2, 70.0), (69.5, 10.0, 0, 70.0)],
+)
+def test_the_hot_water_charge_ends_within_half_a_kelvin_of_the_set_temperature(
+    start_temperature_c: float, modifier_k: float, expected_state: int, expected_set_c: float
+) -> None:
+    """A running charge ends once the tank's start temperature is within 0.5 K of t_max plus the raise.
+
+    The heat pump's supply is capped at that set temperature, which the controller also states, so the tank
+    approaches it without passing it; a 60 °C target ends the charge at 59.5 °C, a raised 70 °C one at 69.5 °C.
+    """
+    controller = MoreAdvancedHeatPumpHPLibControllerDHW(
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, 60),
+        config=MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW"),
+    )
+    fakes = []
+    for component_input in controller.inputs:
+        fake = cp.ComponentOutput(
+            "Fake", component_input.field_name, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake")
+        )
+        component_input.source_output = fake
+        fakes.append(fake)
+    fft.add_global_index_of_components([*fakes, controller])
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, controller]))
+    values = {
+        MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage: start_temperature_c,
+        MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier: modifier_k,
+    }
+    for fake in fakes:
+        stsv.values[fake.global_index] = values[fake.field_name]
+    controller.state_dhw = 2
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+    assert controller.state_dhw == expected_state
+    assert stsv.values[controller.supply_temperature_set_dhw_channel.global_index] == expected_set_c

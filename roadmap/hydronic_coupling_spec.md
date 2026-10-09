@@ -355,7 +355,7 @@ validation item (§9.4); if it returns, it is solved then. The heat pump's hot-w
 2026-10-09): its supply is capped at `t_max + raise` (§5.2), so the tank approaches that target without passing it,
 and with the former strict `T0 > t_max + raise` a charge never ended (hot-water mode on 56.9 % of the time at
 60 s). The energy manager's switch-on with a surplus (`raise > 0` and the tank below `t_max`) stops at the same
-`t_max − 0.5 K` (implementer's choice, for the owner's confirmation): at `t_max`, a tank between `t_max − 0.5 K` and
+`t_max − 0.5 K` (owner decision, 2026-10-09): at `t_max`, a tank between `t_max − 0.5 K` and
 `t_max` would be switched on with the raise and off without it, and the raise follows the heat pump's draw, so it
 can come and go within a step (hisim-4g9.28); with the stop at the same point the charge's state cannot toggle with
 it (forced steps of the heat-pump twin's year at 60 s: 112312 with the switch-on at `t_max`, 97983 with it at
@@ -518,7 +518,12 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
   accepted. For the houses with solar thermal the residual comes from the solar pump's whole-step decisions
   (collector yield -7 % / -24 % with a gas boiler and -15 % / -15 % with a heat pump at 900 / 3600 s, the backup's
   gas +1.3 % / +4.3 % and electricity +9.2 % / +43 %, measured before the heat pump's hot-water cap); it moves to
-  hisim-fxix.11, due before RenoVisor's solar results are relied on (RenoVisor runs at 900 s).
+  hisim-fxix.11, due before RenoVisor's solar results are relied on (RenoVisor runs at 900 s). The heat pump's
+  hot-water electricity residual (+1.73 % at 900 s, +18.1 % at 3600 s against 60 s, while its hot-water heat agrees
+  within 0.4 %) comes from whole-step charge decisions (D4) into hplib's near-COP-1 range above about 63 °C and from
+  the energy manager's raise switching inside a step; it moves to hisim-fxix.12 (owner, 2026-10-09). The
+  heat-pump-and-solar twin's year at 3600 s aborts on a 2-cycle the pinned 0.5 under-relaxation cannot damp
+  (hisim-fxix.13; the owner kept 0.5, 2026-10-09).
 - **D. SH chain.** Scope: `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a
   buffer, the SH circuits, the iteration histogram test. Done when: buffer and HDS close per step, district
   heating's bill equals pipe-water `ΔU` plus delivered heat (hisim-9uoo.12 closed), no step at

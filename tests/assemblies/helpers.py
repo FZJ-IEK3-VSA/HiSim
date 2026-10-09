@@ -45,9 +45,13 @@ class Real:
     Example: ``site(Real.WEATHER, Real.OCCUPANCY) + imports(Real.PV)`` is a house with one real PV
     array; :func:`expand_text` and :func:`build_text` resolve it against both libraries.
 
-    The site entries are written as the composed files and ``energy_systems/assemblies/test_partners.yaml``
-    write them, so a build constructs what a composed file constructs. A build of a PV array states its
-    power: at its default the array is sized from the building's roof, which needs a ``Building``.
+    ``WEATHER``, ``OCCUPANCY`` and ``BUILDING`` are written as the composed files and
+    ``energy_systems/assemblies/test_partners.yaml`` write them, so a build constructs what a composed
+    file constructs; a test holds them equal to the partners. ``HEAT_DISTRIBUTION_CONTROLLER`` and
+    ``HEAT_DISTRIBUTION`` are reduced for expansion only: they read no other site entry,
+    so :meth:`heating_site` needs no building, and a site of them expands but does not build. A build of
+    a PV array states its power: at its default the array is sized from the building's roof, which needs
+    a ``Building``.
     """
 
     REPOSITORY: ClassVar[Path] = Path(__file__).resolve().parents[2]

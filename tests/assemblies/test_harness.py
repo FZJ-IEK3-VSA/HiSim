@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
 from hisim import loadtypes as lt
 from hisim.config import ConfigurationRefusedError
@@ -310,6 +311,24 @@ def test_the_isolation_system_binds_a_single_provider_fact_need_to_its_partner(t
     assert {verb: entry[verb] for verb in ("bind", "optional-bind") if verb in entry} == {
         "bind": {"pv_power": "PVArray"}
     }
+
+
+@pytest.mark.assemblies
+def test_the_real_site_entries_of_the_test_helpers_equal_the_real_test_partners() -> None:
+    """Catches ``Real.WEATHER``, ``Real.OCCUPANCY`` or ``Real.BUILDING`` drifting from the partner it copies.
+
+    Example: ``Real.BUILDING`` parsed as YAML is ``{"Building": {"class": ..., "preset": ..., "config": ...,
+    "inputs": [...]}}``, and the real library's ``test_partners.yaml`` registers the partner ``Building`` with
+    the same component entry. The fields both define are compared, and the name, class and preset or config
+    must be among them; a test built from a helper then constructs what an isolation run constructs.
+    """
+    registry = TestPartnerRegistry.from_directories([Real.LIBRARY])
+    for text in (Real.WEATHER, Real.OCCUPANCY, Real.BUILDING):
+        ((name, entry),) = yaml.safe_load(text).items()
+        partner = dict(registry.partners[name].component)
+        shared = set(entry) & set(partner)
+        assert "class" in shared and shared & {"preset", "config"}, (name, shared)
+        assert {key: entry[key] for key in shared} == {key: partner[key] for key in shared}, name
 
 
 @pytest.mark.assemblies

@@ -18,7 +18,7 @@ its weather from 1 January (hisim-9g2).
 """
 
 from pathlib import Path
-from typing import ClassVar, Dict, Tuple
+from typing import Any, ClassVar, Dict, List, Tuple
 
 import pytest
 import yaml
@@ -43,6 +43,19 @@ class ResolutionRuns:
         "household_heatpump_solar_thermal_building_sizer",
     )
 
+    #: The shard each twin runs in, by wall time (pytest.ini): with its 60 s reference a twin's runs take 11 to 33 s
+    #: on a local machine and about five times that in CI. The two heat-pump twins (about 60 s locally) join the
+    #: heat-pump booking runs in ``extendedbase2``, which runs serially; the other four (about 65 s locally) run in
+    #: ``extendedbase``, whose two workers take this module beside the participant canaries.
+    SHARDS: ClassVar[Dict[str, pytest.MarkDecorator]] = {
+        "household_gas_building_sizer": pytest.mark.extendedbase,
+        "household_district_heating_building_sizer": pytest.mark.extendedbase,
+        "household_electric_heating_building_sizer": pytest.mark.extendedbase,
+        "household_heatpump_building_sizer": pytest.mark.extendedbase2,
+        "household_gas_solar_thermal_building_sizer": pytest.mark.extendedbase,
+        "household_heatpump_solar_thermal_building_sizer": pytest.mark.extendedbase2,
+    }
+
     #: The window: the first four weeks of 2021.
     WINDOW: Tuple[str, str] = ("2021-01-01T00:00:00", "2021-01-29T00:00:00")
 
@@ -57,6 +70,11 @@ class ResolutionRuns:
 
     #: The sums already computed in this test process, by twin and resolution.
     computed: ClassVar[Dict[Tuple[str, int], Dict[str, float]]] = {}
+
+    @classmethod
+    def twin_parameters(cls) -> List[Any]:
+        """One parameter per twin of :attr:`TWINS`, marked with its shard from :attr:`SHARDS`."""
+        return [pytest.param(twin, marks=cls.SHARDS[twin], id=twin) for twin in cls.TWINS]
 
     @classmethod
     def sums(
@@ -110,9 +128,8 @@ class ResolutionRuns:
         }
 
 
-@pytest.mark.system_setups
 @pytest.mark.parametrize("seconds_per_timestep", [900, 3600])
-@pytest.mark.parametrize("twin", ResolutionRuns.TWINS)
+@pytest.mark.parametrize("twin", ResolutionRuns.twin_parameters())
 def test_the_hot_water_heat_agrees_across_resolutions(
     twin: str, seconds_per_timestep: int, tmp_path_factory: pytest.TempPathFactory
 ) -> None:

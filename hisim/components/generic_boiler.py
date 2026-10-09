@@ -361,6 +361,8 @@ class GenericBoiler(Component):
     ControlSignal = "ControlSignal"  # at which Procentage is the GenericBoiler modulating [0..1]
     OperatingMode = "OperatingMode"
     TemperatureDelta = "TemperatureDelta"
+    #: The hot-water supply temperature the controller aims at: the boiler's hot-water supply never exceeds it.
+    SupplyTemperatureSetDhw = "SupplyTemperatureSetDhw"
     WaterInputTemperatureSh = "WaterInputTemperatureSh"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
 
@@ -415,6 +417,13 @@ class GenericBoiler(Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.KELVIN,
             True,
+        )
+        self.supply_temperature_set_dhw_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.SupplyTemperatureSetDhw,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            False,
         )
 
         self.total_fuel_input_power_channel: ComponentOutput = self.add_output(
@@ -575,6 +584,13 @@ class GenericBoiler(Component):
                 GenericBoiler.TemperatureDelta,
                 l1_controller_classname,
                 component_class.TemperatureDelta,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                GenericBoiler.SupplyTemperatureSetDhw,
+                l1_controller_classname,
+                component_class.SupplyTemperatureSetDhw,
             )
         )
         return connections
@@ -773,15 +789,24 @@ class GenericBoiler(Component):
             thermal_power_in_watt = hydronics.circuit_power_w(
                 mass_flow_out_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
             )
-        if supply_temperature_in_celsius > self.maximal_flow_temperature_in_celsius:
-            # Throttled within the boiler's limit (spec §5.1, D1 as amended 2026-10-09): the supply stops at the
-            # maximal flow temperature (or at the return, if that is hotter), the circuit carries
-            # m c (T_sup - T_ret), and the burner burns what that heat needs at its own efficiency.
-            supply_temperature_in_celsius = max(self.maximal_flow_temperature_in_celsius, return_temperature_in_celsius)
+        supply_limit_in_celsius = self.maximal_flow_temperature_in_celsius
+        if (
+            operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value
+            and self.supply_temperature_set_dhw_channel.source_output is not None
+        ):
+            # the hot-water charge ends at the controller's target inside the step (spec §5.1, owner 2026-10-09)
+            supply_limit_in_celsius = min(
+                supply_limit_in_celsius, stsv.get_input_value(self.supply_temperature_set_dhw_channel)
+            )
+        if supply_temperature_in_celsius > supply_limit_in_celsius:
+            # Throttled (spec §5.1, D1 as amended 2026-10-09): the supply stops at the limit, or at the return if that
+            # is hotter, and the circuit carries m c (T_sup - T_ret). The burner cycles at the power it was commanded
+            # to, so the fuel is that heat over the efficiency at the commanded power.
+            supply_temperature_in_celsius = max(supply_limit_in_celsius, return_temperature_in_celsius)
             thermal_power_in_watt = hydronics.circuit_power_w(
                 mass_flow_out_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
             )
-            fuel_power_in_watt, combustion_efficiency = self.fuel_power_for_thermal_power(thermal_power_in_watt)
+            fuel_power_in_watt = thermal_power_in_watt / combustion_efficiency
 
         stsv.set_output_value(self.total_fuel_input_power_channel, fuel_power_in_watt)
         # the loss of the fuel billed in this step: what of it did not become heat
@@ -816,39 +841,6 @@ class GenericBoiler(Component):
         return float(
             self.min_combustion_efficiency + (fuel_power_in_watt - self.minimal_thermal_power_in_watt) * slope
         )
-
-    def fuel_power_for_thermal_power(self, thermal_power_in_watt: float) -> Tuple[float, float]:
-        """The burner power that yields a thermal power, and its efficiency: the inverse of the modulation law.
-
-        Used on a throttled step only (spec §5.1, D1 as amended 2026-10-09), where the circuit's water carries
-        less heat than the control signal asked for and the fuel follows from that heat. With
-        ``eta(F) = linear + slope F``, ``P_th = F (linear + slope F)`` is solved for ``F``: the positive root for a
-        rising efficiency, ``P_th / linear`` for a constant one, and for a falling one the smaller root, written
-        ``2 P_th / (linear + sqrt(linear^2 + 4 slope P_th))`` so it keeps its digits. A heat below what the
-        minimal power yields is burnt at the minimal power's efficiency, ``F = P_th / eff_th_min``: the burner
-        cycles at its minimum. For example, a 2-20 kW band from 0.6 to 0.9 yields 8250 W of heat at 11 kW.
-
-        Args:
-            thermal_power_in_watt: The heat the circuit carries, W, at least 0.
-
-        Returns:
-            The burner power in W and the combustion efficiency.
-        """
-        minimal, maximal = self.minimal_thermal_power_in_watt, self.maximal_thermal_power_in_watt
-        if thermal_power_in_watt <= minimal * self.min_combustion_efficiency or maximal <= minimal:
-            return thermal_power_in_watt / self.min_combustion_efficiency, float(self.min_combustion_efficiency)
-        slope = (self.max_combustion_efficiency - self.min_combustion_efficiency) / (maximal - minimal)
-        linear = self.min_combustion_efficiency - minimal * slope
-        if slope > 0:
-            fuel_power_in_watt = (-linear + (linear**2 + 4 * slope * thermal_power_in_watt) ** 0.5) / (2 * slope)
-        elif slope == 0:
-            fuel_power_in_watt = thermal_power_in_watt / linear
-        else:
-            fuel_power_in_watt = 2 * thermal_power_in_watt / (
-                linear + (linear**2 + 4 * slope * thermal_power_in_watt) ** 0.5
-            )
-        fuel_power_in_watt = min(fuel_power_in_watt, maximal)
-        return fuel_power_in_watt, self.combustion_efficiency_at_burner_power(fuel_power_in_watt)
 
     @staticmethod
     def get_cost_capex(
@@ -1286,6 +1278,8 @@ class GenericBoilerController(Component):
     ControlSignalToGenericBoiler = "ControlSignalToGenericBoiler"
     OperatingMode = "OperatingMode"
     TemperatureDelta = "TemperatureDelta"
+    #: The hot-water supply temperature the controller aims at: its 60 °C aim plus its hysteresis, 70 °C by default.
+    SupplyTemperatureSetDhw = "SupplyTemperatureSetDhw"
 
     def __init__(
         self,
@@ -1372,6 +1366,17 @@ class GenericBoilerController(Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.KELVIN,
             output_description="Temperature difference between actual and set water temperature.",
+        )
+        self.supply_temperature_set_dhw_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.SupplyTemperatureSetDhw,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=(
+                "The hot-water supply temperature the controller aims at, the warm-water aim plus the hysteresis "
+                "(70 °C by default). The boiler's hot-water supply stops at it, so a charge ends at its target inside "
+                "the step."
+            ),
         )
 
         self.controller_mode: HeatingMode
@@ -1545,6 +1550,10 @@ class GenericBoilerController(Component):
             stsv.set_output_value(self.control_signal_to_generic_boiler_channel, control_signal)
             stsv.set_output_value(self.operating_mode_channel, self.controller_mode.value)
             stsv.set_output_value(self.temperature_delta_channel, temperature_delta)
+            stsv.set_output_value(
+                self.supply_temperature_set_dhw_channel,
+                self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset,
+            )
 
     def determine_operating_mode(
         self,

@@ -392,10 +392,18 @@ def test_a_minimum_time_shorter_than_one_timestep_warns_once_and_a_whole_one_doe
     assert controller.minimum_resting_time_in_timesteps == int(resting_time_in_seconds // 900)
 
 
-def boiler_with_fake_inputs() -> Any:
-    """A condensing gas boiler of 20 kW whose five inputs read fake outputs, the step values and the fakes.
+def boiler_with_fake_inputs(with_supply_temperature_set: bool = False) -> Any:
+    """A condensing gas boiler of 20 kW whose inputs read fake outputs, the step values and the fakes.
 
-    The fakes are, in order: control signal, operating mode, lift, space-heating return, hot-water return.
+    The fakes are, in order: control signal, operating mode, lift, space-heating return, hot-water return, and, with
+    ``with_supply_temperature_set``, the controller's hot-water supply set temperature. Without it that input stays
+    unconnected and only the maximal flow temperature limits the supply.
+
+    Args:
+        with_supply_temperature_set: Whether the hot-water supply set temperature reads a sixth fake.
+
+    Returns:
+        The boiler, the step values and the list of fakes.
     """
     from hisim import component as cp  # pylint: disable=import-outside-toplevel
     from tests import functions_for_testing as fft  # pylint: disable=import-outside-toplevel
@@ -412,6 +420,8 @@ def boiler_with_fake_inputs() -> Any:
         (boiler.water_input_temperature_sh_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
         (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
     ]
+    if with_supply_temperature_set:
+        channels.append((boiler.supply_temperature_set_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS))
     fakes = []
     for number, (channel, load_type, unit) in enumerate(channels):
         fake = cp.ComponentOutput(
@@ -471,9 +481,9 @@ def test_a_hot_water_charge_without_a_lift_does_not_fire() -> None:
 def test_a_charge_above_the_maximal_flow_temperature_is_throttled_and_burns_what_its_heat_needs() -> None:
     """A 30 K lift on a 70 °C return stops at the 80 °C maximum; the heat follows from the flow, the fuel from it.
 
-    The pump keeps the flow of the unthrottled charge, P_th / (c 30 K), so the water carries a third of P_th; the
-    burner burns what that heat needs at its own efficiency (the inverse of the modulation law), and the loss is
-    the fuel the heat does not take.
+    The pump keeps the flow of the unthrottled charge, P_th / (c 30 K), so the water carries a third of P_th. The
+    burner cycles at the power it was commanded to, full power here, so the fuel is that heat over the efficiency
+    at full power, and the loss is the fuel the heat does not take.
     """
     from hisim import hydronics  # pylint: disable=import-outside-toplevel
 
@@ -491,16 +501,36 @@ def test_a_charge_above_the_maximal_flow_temperature_is_throttled_and_burns_what
     assert output(boiler.water_output_temperature_dhw_channel) == 80.0
     assert booked == hydronics.circuit_power_w(mass_flow, 80.0, 70.0)
     assert booked == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 3.0, rel=1e-12)
-    assert fuel * boiler.combustion_efficiency_at_burner_power(fuel) == pytest.approx(booked, rel=1e-12)
+    assert fuel == pytest.approx(booked / boiler.combustion_efficiency_at_burner_power(20000.0), rel=1e-12)
+    assert fuel == pytest.approx(20000.0 / 3.0, rel=1e-12)
     assert output(boiler.energy_demand_dhw_channel) == pytest.approx(fuel * 900 / 3600)
     assert output(boiler.combustion_heat_loss_channel) == pytest.approx(fuel - booked)
 
 
 @pytest.mark.base
-@pytest.mark.parametrize("thermal_power_in_watt", [500.0, 1200.0, 5000.0, 12000.0, 18000.0])
-def test_the_fuel_law_inverts_the_modulation_law(thermal_power_in_watt: float) -> None:
-    """Burning the returned fuel at its efficiency yields the asked heat, below the minimum at the minimum's."""
-    boiler, _, _ = boiler_with_fake_inputs()
-    fuel, efficiency = boiler.fuel_power_for_thermal_power(thermal_power_in_watt)
-    assert efficiency == boiler.combustion_efficiency_at_burner_power(fuel)
-    assert fuel * efficiency == pytest.approx(thermal_power_in_watt, rel=1e-12)
+def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
+    """With the controller's 70 °C set temperature connected, a 20 K lift on a 60 °C return supplies 70 °C.
+
+    The flow stays that of the full 20 K charge, so the water carries half the commanded heat, and the fuel is
+    that heat over the efficiency at the commanded power. Below the set temperature nothing is throttled.
+    """
+    from hisim import hydronics  # pylint: disable=import-outside-toplevel
+
+    boiler, stsv, fakes = boiler_with_fake_inputs(with_supply_temperature_set=True)
+    for fake, value in zip(fakes, [1.0, HeatingMode.DOMESTIC_HOT_WATER.value, 20.0, 35.0, 60.0, 70.0]):
+        stsv.set_output_value(fake, value)
+    boiler.i_simulate(0, stsv, False)
+
+    def output(channel: Any) -> float:
+        return float(stsv.values[channel.global_index])
+
+    booked = output(boiler.thermal_output_power_dhw_channel)
+    assert output(boiler.water_output_temperature_dhw_channel) == 70.0
+    assert booked == hydronics.circuit_power_w(output(boiler.water_output_mass_flow_dhw_channel), 70.0, 60.0)
+    assert booked == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 2.0, rel=1e-12)
+    assert output(boiler.total_fuel_input_power_channel) == pytest.approx(10000.0, rel=1e-12)
+
+    stsv.set_output_value(fakes[4], 45.0)
+    boiler.i_simulate(0, stsv, False)
+    assert output(boiler.water_output_temperature_dhw_channel) == pytest.approx(65.0)
+    assert output(boiler.total_fuel_input_power_channel) == pytest.approx(20000.0, rel=1e-12)

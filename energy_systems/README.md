@@ -424,7 +424,7 @@ across its range in four equidistant steps from the samples that admit a sweep, 
 point set, within the golden gate's tolerance; an int parameter takes the nearest integer of each step,
 so its sweep yields up to four distinct values across the range. A failure is named by assembly,
 sample, check and subject:
-`mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [0, 20000]: …`. A run's directory (under pytest's `tmp_path`) holds its `isolation.energy_system.yaml` and
+`pv/array sample s003 bounds PVSystem.ElectricityOutput [WATT] in [-100, 33000]: …`. A run's directory (under pytest's `tmp_path`) holds its `isolation.energy_system.yaml` and
 parameters while its sample's checks run, and is deleted with the run once they are done.
 
 ```bash
@@ -443,8 +443,8 @@ the `assemblies-nightly` job of `golden-year.yml` (`--samples`, default 16 per b
 default 20261003). `--assembly-library DIR` tests another library: its assemblies and the
 `test_partners.yaml` beside them, which names the site entry standing in for each partner class,
 circuit end, carrier provider or consumer, fact provider, observed component and controller
-(`hisim/energy_system/assemblies/testing/partners.py` documents the format; the mock library's file
-is the example). A port no partner serves fails its sample's tests, naming the class it needs.
+(`hisim/energy_system/assemblies/testing/partners.py` documents the format;
+`energy_systems/assemblies/test_partners.yaml` is the complete example). A port no partner serves fails its sample's tests, naming the class it needs.
 
 **Not in v1** (owner, 2026-10-06, D26): nesting (inner `imports`, `from:` re-exports, `internal:`
 ports), `order:` paths and `order:` on an instance or an assembly member, presets inside
@@ -452,8 +452,9 @@ assemblies, `$switch`/`$fact`/`$derived` (`$param` is the one value placeholder)
 `at_most_one_of`/`requires`, fact exports and the scoped-provider rule, `priorities`, `actuates` and
 `feed:`/`required:` on selectors. Each is refused by name (`EF-73`): assemblies are flat, which the
 first real assemblies need, and a cut feature returns as its own change when a real assembly needs
-it. The spec is `roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1); the mock library
-the tests run on is `tests/assemblies/mock_assemblies/library/`.
+it. The spec is `roadmap/declarative_energy_systems/assemblies_spec.md` (§13.1). The tests run on the
+real library; the mock library, `tests/assemblies/mock_assemblies/library/`, keeps only the shapes the
+real one cannot show (§9.3).
 
 **The real library** (§13 steps 4 and 5) is `energy_systems/assemblies/`: `heating/air_source_heat_pump`,
 `heating/air_source_heat_pump_space_heating_only` (no DHW: a second assembly, D29),

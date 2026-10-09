@@ -183,6 +183,11 @@ iteration (all inside one `i_simulate`, no simulator iteration): then the heat d
 unmixed and the shortfall is `ThermalEnergyUnmetDHW`; below `T_cold` nothing is drawn. #864's
 `check_water_mass` (a vessel without water is refused at construction) is kept.
 
+The DHW tank publishes its start temperature `T0` as the circuits' return on the first pass of every step, and its
+computed step mean from the second pass on (owner, 2026-10-09). The simulator starts every step from zeroed outputs,
+so a generator simulated before the tank has answered a 0 °C return in the first pass, and the step mean computed
+from that answer is a worse start than `T0`; the fixed point does not change.
+
 ### 4.4 The space-heating buffer
 
 On the fully mixed path `SimpleHotWaterStorage` becomes a node with up to two charging circuits and one
@@ -231,6 +236,14 @@ Every generator reads its node's return temperature and answers, within its limi
 and (as pump owner) a mass flow. Its heat is `Q = m c (T_sup − T_ret) dt` (§3.5); its fuel or electricity follows
 from its own model, which at the converged iterate carries exactly that heat.
 
+**Maximum supply temperature (owner, 2026-10-09).** Every generator that holds a lift (the boiler, the electric
+heater's hot-water side, the heat pump's hot-water side) has a maximum supply temperature and throttles like the
+district-heating substation (§5.4): when `T_ret + ΔT` would exceed `T_max`, the supply is `max(T_max, T_ret)`, the
+flow stays the one the unthrottled law pumps, and the heat is `m c (T_max − T_ret)`. The fuel or electricity of a
+throttled step follows from that heat through the generator's own efficiency or COP law; unthrottled steps stay as
+D1 and D2 say. Without the limit, a full-power charge decided on `T0` (D4) heated the conserving DHW tank past
+90 °C at 3600 s, and at 900 s for a small tank or a large generator (hisim-fxix.9).
+
 ### 5.1 Boiler (D1: power control kept)
 
 The boiler keeps its power control and fixed lift. The controller sets, from start-of-step values, the
@@ -248,6 +261,16 @@ simulator's `force_convergence` limit of 10. The node acceleration of §6 and th
 the boiler setups explicitly. The **electric DHW heater** stays the same way: it keeps its `P_max ΔT/100`
 regulation (`generic_electric_heating.py:542-560`) and fixed lift, publishing `T_sup = T_ret + ΔT`.
 
+The boiler's maximum supply temperature is `GenericBoilerConfig.maximal_flow_temperature_in_celsius`, 80 °C: the usual
+upper flow-temperature setting of domestic gas, oil and solid-fuel boilers, whose safety high-limit cut-outs act
+above it, and above the controller's 70 °C hot-water flow aim. On a throttled step the burner burns
+`GenericBoiler.fuel_power_for_thermal_power`, the inverse of the efficiency law
+(`combustion_efficiency_at_burner_power`), and a heat below what the minimal power yields burns at the minimal
+power's efficiency. The electric heater's is `ElectricHeatingConfig.maximal_dhw_supply_temperature_in_celsius`,
+80 °C, the usual upper thermostat setting of a domestic electric water heater; its electricity is the throttled heat.
+A hot-water step whose controller asks for no lift moves no water, so the boiler does not fire on it (owner,
+2026-10-09).
+
 ### 5.2 Heat pump (D2: hplib's flow is authoritative)
 
 hplib returns `P_th`, `P_el`, `COP`, `T_out` and `m_dot` for a return temperature (parallel mode,
@@ -264,18 +287,32 @@ between two bins at the 1e-4 tolerance. The iteration histogram test (§6) watch
 grid points is the remedy if it shows. Cooling uses the same circuit with `T_sup < T_ret`; its electricity and
 the brine pump must reach the meter (hisim-9uoo.15) before #864's cooling refusal is removed (hisim-9uoo.17).
 
+The heat pump's hot-water outlet is limited to
+`MoreAdvancedHeatPumpHPLibConfig.maximal_dhw_supply_temperature_in_celsius`, 75 °C (owner, 2026-10-09): hplib has
+no outlet limit; 75 °C is the highest flow temperature air/water heat pumps on the market reach (propane units state
+70-75 °C), and it lies above the hot-water controller's switch-off point, 60 °C plus the energy manager's 10 K
+surplus raise. A throttled step keeps hplib's flow and COP; its electricity is the throttled heat over that COP.
+
 ### 5.3 Solar thermal
 
-The collector heat depends on the inlet temperature (`solar_thermal_system.py:767-777`); today the outlet is
-`T_in + 2 ΔT_n` at a flow sized for `ΔT_n` (`:784-796`). The collector becomes pump owner at that flow, reads the
-node's `T̄` and publishes `T_sup = T_ret + Q_coll(T_ret)/(m c)`; its controller keeps start values (`:1067-1086`).
+The collector heat depends on the inlet temperature (`solar_thermal_system.py:767-777`); on main the outlet is
+`T_in + 2 ΔT_n` at a flow sized for `ΔT_n` (`:784-796`), so the water carried twice the heat the collector booked.
+Corrected (owner, 2026-10-09): the outlet stays `T_in + 2 ΔT_n`, because `ΔT_n` is the inlet-to-mean difference the
+efficiency curve is evaluated at, and the flow is sized for `2 ΔT_n`: the collector is pump owner at
+`m = Q_coll(T̄)/(c · 2 ΔT_n)`, reads the node's `T̄` and publishes `T_sup = T̄ + 2 ΔT_n`, so its water carries exactly
+`Q_coll(T̄)`. While the pump stands or the collector has no heat, the circuit moves no water and its supply is its
+return. The controller keeps start values (`:1067-1086`): the collector also publishes the flow and the outlet
+temperature evaluated at the node's `T0`, which the controller reads; its minimum flow is halved to 0.005 kg/s, the
+same collector heat as before.
 
 ### 5.4 District heating substation
 
 The substation is a power-limited heat exchanger: `T_sup = T_ret + min(T_set − T_ret, P_connected/(m c))` on
 whichever circuit runs, replacing `P = m c ΔT_needed` (`generic_district_heating.py:653-685`) and the
 `P_connected ΔT/100` regulation of its DHW side (`:687-707`). It books the derived heat, so its bill is what the
-node received (hisim-9uoo.12). Its early return under `force_convergence` (`:452-453`) keeps the balance
+node received (hisim-9uoo.12). On the DHW circuit the pump runs at `m = P_connected / (c · 100 K)`, the flow the
+former regulation implied, and `T_set` is the controller's `T0` plus the lift it asks for (owner, 2026-10-09). Its
+early return under `force_convergence` (`:452-453`) keeps the balance
 consistent, since the node integrates what the frozen supply carries; only its reaction is stale.
 
 ### 5.5 Controllers (D4: as on main)
@@ -456,6 +493,11 @@ SH circuit is not. If main must never hold that mixed state, C and D go in one P
 firing boiler step is the power-limited pure-port case of §7 (≈11 iterations at 900 s, just past the 10-try
 `force_convergence` limit), so the node acceleration and the iteration histogram test cover the boiler setups
 explicitly (§6, §9.5 D). #864's setpoint feed-forward and inverse fuel law are dropped.
+
+*Amendment (owner, 2026-10-09).* Every fixed-lift generator (boiler, electric heater's DHW side, heat pump's DHW
+side) has a maximum supply temperature and throttles to it when `T_ret + ΔT` would exceed it (§5); on a throttled
+step the heat is `m c (T_max − T_ret)` and the fuel or electricity follows from it through the generator's own
+efficiency or COP law, which reopens the inverse fuel law for throttled steps only. Unthrottled steps stay as above.
 
 **D2 — Heat-pump authority: hplib's `m_dot` and `T_out`.** `P_th = m c (T_out − T_in)`, `P_el = P_th/COP`;
 resolves hisim-4g9.21, with the delivered heat differing from the calibrated SCOP value by up to ~0.5 %. The

@@ -40,10 +40,13 @@ def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
 
 
 # Multiplicative factor for the order-of-magnitude check on computed
-# (non-invariant) components.  Empirically derived from the largest observed
-# max/min ratio (~11.1 for MoreAdvancedHeatPumpHPLib|Time|TimeOff) across
-# 15/30/60-min resolutions; provides ~35% margin while catching gross
-# regressions such as a 20x error.  See values_are_same_order_of_magnitude.
+# (non-invariant) components.  The largest observed max/min ratio across the
+# 15/30/60-min resolutions is ~11 for MoreAdvancedHeatPumpHPLib|Time|TimeOff
+# (11.0 on 2026-10-09, with and without the simulator's warm start).  That
+# quantity is the step sum of a counter, which has a factor of 4 between 15 and
+# 60 min built in -- see values_are_same_order_of_magnitude -- so 15 leaves
+# a factor of about 3.75 for the switching pattern itself, while still catching
+# gross regressions such as a 20x error.
 _ORDER_OF_MAGNITUDE_FACTOR: float = 15.0
 
 
@@ -60,11 +63,25 @@ def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGN
     absolute values must stay below *factor*; when fewer than two values are
     non-zero the ratio check is skipped because dividing by zero is undefined.
 
-    The default factor of 15 was chosen by running the test once and inspecting
-    the printed divergences: the largest observed max/min ratio for non-zero
-    absolute values is ~11.1 (``MoreAdvancedHeatPumpHPLib|Time|TimeOff``), so 15
-    provides a ~35% margin while still catching gross regressions such as a 20x
-    error.
+    The default factor of 15 comes from the quantity with the largest ratio,
+    ``MoreAdvancedHeatPumpHPLib|Time|TimeOff`` (~11; 11.0 on 2026-10-09, with
+    and without the simulator's warm start). That output is a counter: the
+    seconds since the heat pump last switched off, which grows by one time step
+    per off step and is 0 while it runs. Its unit is seconds, so the yearly value
+    is the sum over all steps, not the mean. One off period of length ``T``
+    contributes ``dt * (1 + 2 + ... + T/dt) = T * (T + dt) / (2 * dt)``, roughly
+    ``T**2 / (2 * dt)``. Two consequences follow:
+
+    - the same switching pattern gives a value 4 times larger at 15 min than at
+      60 min, from the step size alone;
+    - the value grows with the square of each off period, so a modest change in
+      when the controller switches (which the step size does change) moves it
+      by much more than it moves the energies.
+
+    A factor of 15 therefore leaves about 3.75 for the switching pattern itself
+    on top of the built-in 4, and still catches gross regressions such as a 20x
+    error. The summed stock values (``ThermalEnergyInStorage``,
+    ``Cumulative*``) carry the same built-in factor of 4, and stay near it.
 
     Known limitations (by design):
 

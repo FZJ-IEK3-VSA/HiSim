@@ -11,7 +11,7 @@ from hisim.energy_system.assemblies.record import ImportRecord
 from hisim.energy_system.errors import EnergySystemAssemblyError
 from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, PortState
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
-from tests.assemblies.helpers import EMS, OCCUPANCY, WEATHER, Mocks, Real, expand_text, site
+from tests.assemblies.helpers import Mocks, Real, expand_text, site
 
 TANK = "tank: {assembly: mock/wired_tank"
 HEATER = "heater: {assembly: mock/variant_heater"
@@ -29,8 +29,8 @@ PV_PAIR = "pv: {assembly: pv/array, instances: {east: {azimuth_in_degree: 90}, w
 def switched(verb: str = "optional-bind", enabled: bool = True) -> str:
     """A heater whose ``ems_modifier`` a verb names ``Ems``, which sits in the group ``control``."""
     imports = f"{TANK}}}\n{HEATER}, {verb}: {{ems_modifier: Ems}}}}"
-    group = f"groups:\n  control:\n    enabled: {str(enabled).lower()}\n    components: {{{EMS}}}\n"
-    return site(OCCUPANCY, imports=imports) + group
+    group = f"groups:\n  control:\n    enabled: {str(enabled).lower()}\n    components: {{{Mocks.EMS}}}\n"
+    return site(Mocks.OCCUPANCY, imports=imports) + group
 
 
 def refused(text: str, code: str, *names: str) -> str:
@@ -52,29 +52,35 @@ def ports_of(text: str, import_key: str) -> dict:
 def test_a_required_port_without_a_partner_is_refused() -> None:
     """Catches a tank expanded with nobody drawing hot water from it."""
     refused(
-        site(WEATHER, imports=f"{TANK}}}\n{HEATER}}}"), "EF-7A", "hot_water_demand", "MockOccupancy", "import 'tank'"
+        site(Mocks.WEATHER, imports=f"{TANK}}}\n{HEATER}}}"),
+        "EF-7A",
+        "hot_water_demand",
+        "MockOccupancy",
+        "import 'tank'",
     )
 
 
 @pytest.mark.assemblies
 def test_a_required_port_with_several_candidates_and_no_verb_is_refused() -> None:
     """Catches the default rule picking one of two partners."""
-    second = OCCUPANCY.replace("Occupancy:", "Guests:", 1)
-    message = refused(site(OCCUPANCY, second, imports=f"{TANK}}}\n{HEATER}}}"), "EF-7B", "Occupancy", "Guests")
+    second = Mocks.OCCUPANCY.replace("Occupancy:", "Guests:", 1)
+    message = refused(site(Mocks.OCCUPANCY, second, imports=f"{TANK}}}\n{HEATER}}}"), "EF-7B", "Occupancy", "Guests")
     assert "`bind: {hot_water_demand: Occupancy}`" in message
 
 
 @pytest.mark.assemblies
 def test_declining_a_required_port_is_refused() -> None:
     """Catches ``none:`` switching off a port the assembly cannot work without."""
-    refused(site(OCCUPANCY, imports=f"{TANK}, none: [hot_water_demand]}}\n{HEATER}}}"), "EF-7C", "hot_water_demand")
+    refused(
+        site(Mocks.OCCUPANCY, imports=f"{TANK}, none: [hot_water_demand]}}\n{HEATER}}}"), "EF-7C", "hot_water_demand"
+    )
 
 
 @pytest.mark.assemblies
 def test_a_bind_to_an_absent_partner_is_refused() -> None:
     """Catches ``bind:`` naming a component the file does not have."""
     refused(
-        site(OCCUPANCY, imports=f"{TANK}, bind: {{hot_water_demand: Nobody}}}}\n{HEATER}}}"),
+        site(Mocks.OCCUPANCY, imports=f"{TANK}, bind: {{hot_water_demand: Nobody}}}}\n{HEATER}}}"),
         "EF-7D",
         "Nobody",
         "Occupancy",
@@ -100,7 +106,7 @@ def test_a_bind_to_an_instance_an_import_does_not_have_is_refused_whatever_the_v
 def test_an_optional_bind_on_a_required_port_is_refused_with_the_bind_line() -> None:
     """Catches ``optional-bind:`` leaving a required port silently unbound when its partner is absent."""
     message = refused(
-        site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, optional-bind: {{tank_temperature: tank}}}}"),
+        site(Mocks.OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, optional-bind: {{tank_temperature: tank}}}}"),
         "EF-7C",
         "tank_temperature",
         "import 'heater'",
@@ -113,7 +119,7 @@ def test_an_optional_bind_on_a_required_port_is_refused_with_the_bind_line() -> 
 def test_a_three_part_verb_target_on_an_import_without_instances_is_refused() -> None:
     """Catches ``import.port.extra`` binding to the port and silently dropping the rest."""
     refused(
-        site(OCCUPANCY, imports=f"{TANK}, bind: {{heat: heater.heat.extra}}}}\n{HEATER}}}"),
+        site(Mocks.OCCUPANCY, imports=f"{TANK}, bind: {{heat: heater.heat.extra}}}}\n{HEATER}}}"),
         "EF-7D",
         "heater.heat.extra",
         "names more than an instance and a port",
@@ -138,7 +144,7 @@ def test_a_provided_output_whose_member_is_absent_is_refused_by_name() -> None:
 @pytest.mark.assemblies
 def test_an_optional_port_with_a_candidate_and_no_verb_is_refused() -> None:
     """Catches adding an energy manager silently rewiring a heater that did not ask for it."""
-    message = refused(site(OCCUPANCY, EMS, imports=f"{TANK}}}\n{HEATER}}}"), "EF-7E", "ems_modifier", "Ems")
+    message = refused(site(Mocks.OCCUPANCY, Mocks.EMS, imports=f"{TANK}}}\n{HEATER}}}"), "EF-7E", "ems_modifier", "Ems")
     assert "`optional-bind: {ems_modifier: Ems}`" in message and "`none: [ems_modifier]`" in message
 
 
@@ -146,8 +152,8 @@ def test_an_optional_port_with_a_candidate_and_no_verb_is_refused() -> None:
 def test_a_verb_on_an_inactive_port_is_refused() -> None:
     """Catches a verb for a port the parameters switch off."""
     text = site(
-        OCCUPANCY,
-        EMS,
+        Mocks.OCCUPANCY,
+        Mocks.EMS,
         imports=f"{HEATER}, parameters: {{with_thermostat: false}}, optional-bind: {{ems_modifier: Ems}}}}",
     )
     refused(text, "EF-7F", "ems_modifier", "inactive")
@@ -158,21 +164,24 @@ def test_a_verb_on_an_inactive_port_is_refused() -> None:
 def test_a_verb_naming_no_need_is_refused(port: str) -> None:
     """Catches a verb naming a port the import does not have, or binding a provided port from its own side."""
     refused(
-        site(OCCUPANCY, imports=f"{TANK}, bind: {{{port}: Occupancy}}}}\n{HEATER}}}"), "EF-7G", port, "hot_water_demand"
+        site(Mocks.OCCUPANCY, imports=f"{TANK}, bind: {{{port}: Occupancy}}}}\n{HEATER}}}"),
+        "EF-7G",
+        port,
+        "hot_water_demand",
     )
 
 
 @pytest.mark.assemblies
 def test_a_need_bound_to_a_provided_output_its_wires_do_not_read_is_refused() -> None:
     """Catches a binding to an output that the lowered wires never read: a silent lie."""
-    text = site(OCCUPANCY, imports=f"{TANK}, bind: {{heat: heater.electricity}}}}\n{HEATER}}}")
+    text = site(Mocks.OCCUPANCY, imports=f"{TANK}, bind: {{heat: heater.electricity}}}}\n{HEATER}}}")
     refused(text, "EF-7H", "heater.electricity", "Heater.ElectricityInput", "ThermalPower")
 
 
 @pytest.mark.assemblies
 def test_a_need_without_wires_bound_to_a_provided_output_is_refused() -> None:
     """Catches a provided output named where only default connections are lowered, which name no output."""
-    text = site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, bind: {{tank_temperature: tank.temperature}}}}")
+    text = site(Mocks.OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, bind: {{tank_temperature: tank.temperature}}}}")
     refused(text, "EF-7H", "tank.temperature", "default connections")
 
 
@@ -180,7 +189,7 @@ def test_a_need_without_wires_bound_to_a_provided_output_is_refused() -> None:
 def test_a_bind_to_a_partner_of_another_class_is_refused() -> None:
     """Catches a need bound to a component whose class its default connections do not come from."""
     refused(
-        site(WEATHER, OCCUPANCY, imports=f"{TANK}, bind: {{hot_water_demand: Weather}}}}\n{HEATER}}}"),
+        site(Mocks.WEATHER, Mocks.OCCUPANCY, imports=f"{TANK}, bind: {{hot_water_demand: Weather}}}}\n{HEATER}}}"),
         "EF-7J",
         "MockWeather",
         "MockOccupancy",
@@ -236,18 +245,20 @@ def test_the_optional_states_are_recorded_and_lower_nothing() -> None:
     """Catches an optional port lowered without a partner, or its decision not stated."""
     absent = ports_of(switched(enabled=False), "heater")
     assert absent["ems_modifier"].decision == "not bound: Ems disabled by group control"
-    declined = ports_of(site(OCCUPANCY, EMS, imports=f"{TANK}}}\n{HEATER}, none: [ems_modifier]}}"), "heater")
+    declined = ports_of(
+        site(Mocks.OCCUPANCY, Mocks.EMS, imports=f"{TANK}}}\n{HEATER}, none: [ems_modifier]}}"), "heater"
+    )
     assert declined["ems_modifier"].decision == "declined" and not declined["ems_modifier"].lowered_to
-    alone = ports_of(site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}}}"), "heater")
+    alone = ports_of(site(Mocks.OCCUPANCY, imports=f"{TANK}}}\n{HEATER}}}"), "heater")
     assert alone["ems_modifier"].decision == "not bound: no candidate"
-    flat, _record = expand_text(site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}}}"))
+    flat, _record = expand_text(site(Mocks.OCCUPANCY, imports=f"{TANK}}}\n{HEATER}}}"))
     assert flat.components["heater-Controller"].inputs == (DefaultInputs(source="tank-Tank"),)
 
 
 @pytest.mark.assemblies
 def test_a_port_never_binds_into_its_own_instance() -> None:
     """Catches the default rule binding an assembly to its own member."""
-    text = site(WEATHER, OCCUPANCY, imports=f"{TANK}}}\n{HEATER}}}")
+    text = site(Mocks.WEATHER, Mocks.OCCUPANCY, imports=f"{TANK}}}\n{HEATER}}}")
     flat, _record = expand_text(text)
     assert flat.components["tank-Tank"].inputs[1] == ExplicitWire(
         source="heater-Heater", input="ThermalPower", output="ThermalPower"
@@ -266,9 +277,9 @@ def test_an_optional_bind_to_a_live_declared_partner_binds_it() -> None:
 @pytest.mark.assemblies
 def test_an_optional_bind_to_a_partner_an_unselected_option_holds_stays_unbound_with_the_reason() -> None:
     """Catches a switched-off partner failing the file, or its port's record not saying why it is unbound."""
-    text = site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, optional-bind: {{ems_modifier: Ems}}}}") + (
+    text = site(Mocks.OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, optional-bind: {{ems_modifier: Ems}}}}") + (
         "variants:\n  metering:\n    selected: bare\n    options:\n"
-        f"      managed: {{components: {{{EMS}}}}}\n      bare: {{components: {{{WEATHER}}}}}\n"
+        f"      managed: {{components: {{{Mocks.EMS}}}}}\n      bare: {{components: {{{Mocks.WEATHER}}}}}\n"
     )
     flat, record = expand_text(text)
     port = {port.port: port for port in record.instance("heater").ports}["ems_modifier"]
@@ -286,6 +297,6 @@ def test_a_bind_to_a_switched_off_partner_is_refused_with_the_reason() -> None:
 @pytest.mark.parametrize("verb", ["optional-bind", "bind"])
 def test_a_partner_the_file_does_not_declare_is_refused_whatever_the_verb(verb: str) -> None:
     """Catches a typo in a partner being taken for a house without that import."""
-    text = site(OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, {verb}: {{ems_modifier: control}}}}")
+    text = site(Mocks.OCCUPANCY, imports=f"{TANK}}}\n{HEATER}, {verb}: {{ems_modifier: control}}}}")
     message = refused(text, "EF-7D", "'control'", "declares no import or component")
     assert "Occupancy, heater, tank" in message

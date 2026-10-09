@@ -14,20 +14,7 @@ from hisim.energy_system.loader import dump_energy_system, parse_energy_system
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
 from hisim.energy_system.source_lines import LineIndex
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiSource
-from tests.assemblies.helpers import (
-    EMS,
-    MOCKS,
-    OCCUPANCY,
-    WEATHER,
-    Library,
-    Mocks,
-    Real,
-    both_libraries,
-    build_text,
-    expand_text,
-    imports,
-    site,
-)
+from tests.assemblies.helpers import Library, Mocks, Real, both_libraries, build_text, expand_text, imports, site
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 HEATER = "heater: {assembly: mock/variant_heater"
@@ -91,8 +78,8 @@ TANK_AND_HEATER = "tank: {assembly: mock/wired_tank{tank}}\nheater: {assembly: m
 def ordered(weather: str = "", occupancy: str = "", tank: str = "", heater: str = "") -> str:
     """A file of Weather, Occupancy, a tank and a heater, each with the given ``order:`` suffix."""
     return site(
-        WEATHER.replace("}", weather + "}"),
-        OCCUPANCY.replace("}", occupancy + "}"),
+        Mocks.WEATHER.replace("}", weather + "}"),
+        Mocks.OCCUPANCY.replace("}", occupancy + "}"),
         imports=TANK_AND_HEATER.replace("{tank}", tank).replace("{heater}", heater),
     )
 
@@ -223,17 +210,17 @@ def test_a_member_without_a_preset_compares_with_the_field_default(tmp_path: Pat
             {{type: float, unit: LITER, default: 150, range: {{min: 50, max: 500}}, description: Volume.}}
         components:
           Tank:
-            class: {MOCKS}.MockTank
+            class: {Mocks.CLASSES}.MockTank
             config: {{volume_in_liter: {{$param: volume_in_liter}}}}
         tests:
           bounds: [{{output: Tank.WaterTemperature, unit: CELSIUS, min: 0, max: 100}}]
           monotone: [{{parameter: volume_in_liter, kpi: Standby heat losses, member: Tank, direction: increasing}}]
         """,
     )
-    flat, _record = expand_text(site(WEATHER, imports="tank: {assembly: test/plain_tank}"), library.resolver())
+    flat, _record = expand_text(site(Mocks.WEATHER, imports="tank: {assembly: test/plain_tank}"), library.resolver())
     assert flat.components["tank-Tank"].config == {}
     flat, _record = expand_text(
-        site(WEATHER, imports="tank: {assembly: test/plain_tank, parameters: {volume_in_liter: 200}}"),
+        site(Mocks.WEATHER, imports="tank: {assembly: test/plain_tank, parameters: {volume_in_liter: 200}}"),
         library.resolver(),
     )
     assert flat.components["tank-Tank"].config == {"volume_in_liter": 200}
@@ -327,7 +314,9 @@ def test_a_variant_without_the_member_drops_it_its_inputs_and_its_ports() -> Non
     """Catches a member of an unselected option surviving, or its ports demanding a partner."""
     flat, record = expand_text(
         site(
-            WEATHER, OCCUPANCY, imports="heater: {assembly: mock/variant_heater, parameters: {with_thermostat: false}}"
+            Mocks.WEATHER,
+            Mocks.OCCUPANCY,
+            imports="heater: {assembly: mock/variant_heater, parameters: {with_thermostat: false}}",
         )
     )
     assert list(flat.components) == ["Weather", "Occupancy", "heater-Heater"]
@@ -361,7 +350,7 @@ def test_a_parameter_that_does_not_fit_is_refused(parameters: str, code: str, na
 def test_an_enum_value_outside_its_values_is_refused() -> None:
     """Catches an enum parameter taking a value its declaration does not allow."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-76") as refusal:
-        expand_text(site(WEATHER, imports="pv: {assembly: mock/labelled_array, parameters: {facing: north}}"))
+        expand_text(site(Mocks.WEATHER, imports="pv: {assembly: mock/labelled_array, parameters: {facing: north}}"))
     assert "facing" in str(refusal.value) and "'north'" in str(refusal.value)
 
 
@@ -436,7 +425,7 @@ def test_an_import_writing_two_members_of_an_exactly_one_of_is_refused(parameter
 def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
     """Catches an import writing ``none`` for a variant's selector crashing on an assertion."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-76") as refusal:
-        expand_text(site(WEATHER, OCCUPANCY, imports=f"{HEATER}, parameters: {{with_thermostat: none}}}}"))
+        expand_text(site(Mocks.WEATHER, Mocks.OCCUPANCY, imports=f"{HEATER}, parameters: {{with_thermostat: none}}}}"))
     message = str(refusal.value)
     for name in ("with_thermostat", "thermostat", "None", "import 'heater'"):
         assert name in message, f"{name!r} is not in: {message}"
@@ -446,4 +435,4 @@ def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
 def test_an_import_named_like_a_component_is_refused() -> None:
     """Catches a verb's partner reference that could mean a component or an import."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-52"):
-        expand_text(site(WEATHER, EMS, imports="Ems: {assembly: pv/array}"))
+        expand_text(site(Mocks.WEATHER, Mocks.EMS, imports="Ems: {assembly: pv/array}"))

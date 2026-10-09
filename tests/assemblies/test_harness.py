@@ -63,7 +63,7 @@ from hisim.energy_system.assemblies.testing.samples import (
 from hisim.energy_system.model import ComponentEntry
 from hisim.postprocessing.kpi_computation import tolerances
 from scripts import golden_kpis
-from tests.assemblies.helpers import MOCKS, Library, Mocks, Real
+from tests.assemblies.helpers import Library, Mocks, Real
 from tests.assemblies.mock_components import MockHeater
 
 #: A parameter box for the sampler: two numbers (one an integer), an enum, a boolean.
@@ -81,7 +81,7 @@ parameters:
 CONSTRAINTS
 components:
   Heater:
-    class: {MOCKS}.MockHeater
+    class: {Mocks.CLASSES}.MockHeater
     preset: standard
     config:
       power_in_watt: {{$param: power_in_watt}}
@@ -296,7 +296,7 @@ def test_the_isolation_system_binds_a_single_provider_fact_need_to_its_partner(t
         name: sampled/scalar_battery
         description: A battery whose fact need reads the peak power of one array.
         components:
-          Battery: {{class: {MOCKS}.MockBattery, preset: sized_to_pv}}
+          Battery: {{class: {Mocks.CLASSES}.MockBattery, preset: sized_to_pv}}
         interface:
           needs:
             pv_power: {{fact: pv_peak_power_in_watt, into: [Battery]}}
@@ -324,7 +324,7 @@ def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_p
         name: sampled/bare_battery
         description: A battery reading its sizing fact from the site without a fact port.
         components:
-          Battery: {{class: {MOCKS}.MockArrayBattery, preset: sized_to_all_arrays}}
+          Battery: {{class: {Mocks.CLASSES}.MockArrayBattery, preset: sized_to_all_arrays}}
         tests: {{bounds: [], monotone: []}}
         """,
     )
@@ -358,7 +358,7 @@ def test_a_fact_read_behind_an_inactive_fact_port_gets_its_registered_provider(t
         parameters:
           pinned: {{type: bool, default: false, description: Whether the fact port is switched off.}}
         components:
-          Battery: {{class: {MOCKS}.MockArrayBattery, preset: sized_to_all_arrays}}
+          Battery: {{class: {Mocks.CLASSES}.MockArrayBattery, preset: sized_to_all_arrays}}
         interface:
           needs:
             pv_peak_power:
@@ -399,7 +399,7 @@ def fact_partner(
         name=name,
         serves=tuple(("fact", fact) for fact in serves),
         requires=requires,
-        component={"class": f"{MOCKS}.{mock_class}", "preset": "standard"},
+        component={"class": f"{Mocks.CLASSES}.{mock_class}", "preset": "standard"},
         origin="inline",
     )
 
@@ -407,7 +407,7 @@ def fact_partner(
 def fact_members(*members: Tuple[str, str]) -> Mapping[str, MemberTemplate]:
     """Assembly members by name, each an entry of a mock class."""
     return {
-        name: MemberTemplate(entry=ComponentEntry(name=name, class_path=f"{MOCKS}.{mock_class}"))
+        name: MemberTemplate(entry=ComponentEntry(name=name, class_path=f"{Mocks.CLASSES}.{mock_class}"))
         for name, mock_class in members
     }
 
@@ -458,7 +458,7 @@ def load_reader(tmp_path: Path) -> ResolvedAssembly:
         name: sampled/load_reader
         description: A device reading two sizing facts from the site without a fact port.
         components:
-          Reader: {{class: {MOCKS}.MockLoadReader, preset: sized}}
+          Reader: {{class: {Mocks.CLASSES}.MockLoadReader, preset: sized}}
         tests: {{bounds: [], monotone: []}}
         """,
     )
@@ -519,7 +519,7 @@ def circuit_end(name: str, circuit: str) -> TestPartner:
         name=name,
         serves=(("circuit", circuit, frozenset({"MockBoiler"})),),
         requires=(),
-        component={"class": f"{MOCKS}.MockCylinder", "preset": "standard"},
+        component={"class": f"{Mocks.CLASSES}.MockCylinder", "preset": "standard"},
         origin="inline",
     )
 
@@ -563,8 +563,8 @@ def test_a_need_two_circuit_ends_bring_partners_of_its_class_for_is_refused_nami
         name: sampled/two_ends
         description: Two boilers, each charging a cylinder of its own, and a need for a cylinder.
         components:
-          First: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: first}}]}}
-          Second: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: second}}]}}
+          First: {{class: {Mocks.CLASSES}.MockBoiler, preset: condensing, inputs: [{{$port: first}}]}}
+          Second: {{class: {Mocks.CLASSES}.MockBoiler, preset: condensing, inputs: [{{$port: second}}]}}
         interface:
           needs:
             cylinder: {{into: [First], partner: MockCylinder}}
@@ -614,7 +614,7 @@ def test_a_port_without_a_registered_test_partner_refuses_naming_the_class() -> 
 )
 def test_a_registry_that_does_not_read_is_refused_whole(tmp_path: Path, text: str, message: str) -> None:
     """A duplicate, an unknown requirement, a malformed serves, an unknown carrier, a site entry that does not read."""
-    weather = f"{{class: {MOCKS}.MockWeather, preset: standard}}"
+    weather = f"{{class: {Mocks.CLASSES}.MockWeather, preset: standard}}"
     (tmp_path / TestPartnerRegistry.FILENAME).write_text(f"partners:\n  {text.replace(': W}', f': {weather}}}')}\n")
     with pytest.raises(TestPartnerRegistryError, match=re.escape(message)):
         TestPartnerRegistry.from_directories([tmp_path])
@@ -638,7 +638,7 @@ def test_the_member_contract_names_unbounded_outputs_wrong_units_and_unreported_
           power_in_watt: {{type: float, unit: WATT, default: 2000, range: {{min: 500, max: 6000}}, description: P.}}
         components:
           Heater:
-            class: {MOCKS}.MockHeater
+            class: {Mocks.CLASSES}.MockHeater
             preset: standard
             config:
               power_in_watt: {{$param: power_in_watt}}

@@ -39,7 +39,7 @@ from hisim.energy_system.errors import EnergySystemError, EnergySystemRecordErro
 from hisim.energy_system.feed_resolution import DynamicConnectionResolver
 from hisim.energy_system.imports_model import Selection
 from hisim.energy_system.model import AggregatorFeed, DispatchSpec, EnergySystemFile
-from tests.assemblies.helpers import MOCKS, OCCUPANCY, WEATHER, Real, build_text, expand_text, imports, site
+from tests.assemblies.helpers import Mocks, Real, build_text, expand_text, imports, site
 
 #: The weight of a feed an observer only measures.
 MEASURED = FeedRequest.MONITORED_ONLY_WEIGHT
@@ -249,11 +249,13 @@ def test_a_derived_weight_reaching_another_types_base_weight_is_refused(tmp_path
     shows only with two heating sites.
     """
     heaters = [
-        f"{name}: {{class: {MOCKS}.{cls}, preset: standard}}"
+        f"{name}: {{class: {Mocks.CLASSES}.{cls}, preset: standard}}"
         for name, cls in (("Floor", "MockHeater"), ("Attic", "MockHeater"), ("Water", "MockWaterHeater"))
     ]
-    control = f"Control: {{class: {MOCKS}.MockEnergyManager, preset: optimize_own_consumption, observes: declared}}"
-    message = refusal(site(WEATHER, OCCUPANCY, *heaters, control), tmp_path)
+    control = (
+        f"Control: {{class: {Mocks.CLASSES}.MockEnergyManager, preset: optimize_own_consumption, observes: declared}}"
+    )
+    message = refusal(site(Mocks.WEATHER, Mocks.OCCUPANCY, *heaters, control), tmp_path)
     assert message.startswith("EF-7V at components.Control")
     for name in (
         "Attic.ElectricityInput",

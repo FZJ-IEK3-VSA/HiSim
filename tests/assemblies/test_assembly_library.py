@@ -15,7 +15,7 @@ from hisim.config.sizing import declared_field_unit
 from hisim.energy_system.assemblies.library import check_assembly
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError
-from tests.assemblies.helpers import OCCUPANCY, WEATHER, Library, Mocks, expand_text, site
+from tests.assemblies.helpers import Library, Mocks, expand_text, site
 
 #: A valid assembly every case of the library check changes in one place.
 BASE = f"""\
@@ -410,7 +410,7 @@ def test_the_check_lists_every_problem_at_once_and_the_expansion_runs_it(tmp_pat
     library = Library(tmp_path)
     library.add("test/base", BASE.replace(" description: Volume.}", "}").replace("unit: LITER", "unit: WATT"))
     with pytest.raises(EnergySystemAssemblyError, match="EF-75") as refusal:
-        expand_text(site(WEATHER, OCCUPANCY, imports="tank: {assembly: test/base}"), library.resolver())
+        expand_text(site(Mocks.WEATHER, Mocks.OCCUPANCY, imports="tank: {assembly: test/base}"), library.resolver())
     assert "2 problems" in str(refusal.value)
     assert "test/base.assembly.yaml:5" in str(refusal.value)
 

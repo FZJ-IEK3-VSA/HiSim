@@ -18,7 +18,12 @@ from hisim.simulationparameters import SimulationParameters
 
 
 class Mocks:
-    """Where the mock files live: the shapes the real library cannot show (``assemblies_spec.md`` §9.3)."""
+    """The mock library, its house, and the site entries of mock classes its assemblies bind to.
+
+    Example: ``site(Mocks.WEATHER) + imports("pv: {assembly: mock/labelled_array}")`` is a site with
+    one mock PV array. The mock files hold only the shapes the real library cannot show
+    (``assemblies_spec.md`` §9.3); :class:`Real` holds the real counterparts.
+    """
 
     ROOT: ClassVar[Path] = Path(__file__).resolve().parent / "mock_assemblies"
     LIBRARY: ClassVar[Path] = ROOT / "library"
@@ -27,6 +32,11 @@ class Mocks:
 
     #: Dotted prefix of the mock component classes.
     CLASSES: ClassVar[str] = "tests.assemblies.mock_components"
+
+    #: Site entries of the mock weather, the mock residents and the mock energy manager.
+    WEATHER: ClassVar[str] = f"Weather: {{class: {CLASSES}.MockWeather, preset: standard}}"
+    OCCUPANCY: ClassVar[str] = f"Occupancy: {{class: {CLASSES}.MockOccupancy, preset: standard}}"
+    EMS: ClassVar[str] = f"Ems: {{class: {CLASSES}.MockEms, preset: standard}}"
 
 
 class Real:
@@ -164,14 +174,9 @@ def site(*entries: str, imports: str = "") -> str:  # pylint: disable=redefined-
 def imports(*lines: str) -> str:
     """An ``imports:`` block of one-line imports, to append to the text of :func:`site`.
 
-    Example: ``site(WEATHER) + imports("pv: {assembly: pv/array}")``.
+    Example: ``site(Real.WEATHER) + imports("pv: {assembly: pv/array}")``.
     """
     return "imports:\n" + "".join(f"  {line}\n" for line in lines)
-
-
-WEATHER = f"Weather: {{class: {Mocks.CLASSES}.MockWeather, preset: standard}}"
-OCCUPANCY = f"Occupancy: {{class: {Mocks.CLASSES}.MockOccupancy, preset: standard}}"
-EMS = f"Ems: {{class: {Mocks.CLASSES}.MockEms, preset: standard}}"
 
 
 def build_text(text: str, result_directory: Path, resolver: Optional[AssemblyResolver] = None) -> BuiltEnergySystem:
@@ -182,6 +187,3 @@ def build_text(text: str, result_directory: Path, resolver: Optional[AssemblyRes
     return EnergySystemExecutor(
         model, parameters, assembly_resolver=resolver or both_libraries(), source_lines=lines
     ).build()
-
-
-MOCKS = Mocks.CLASSES

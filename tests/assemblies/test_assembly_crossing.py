@@ -39,18 +39,7 @@ from hisim.energy_system.imports_model import BindingVerbs, Port, PortKind, Port
 from hisim.energy_system.model import AggregatorFeed, DefaultInputs, EnergySystemFile, SourceReference
 from hisim.energy_system.wiring_checks import ConsumingOutput
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
-from tests.assemblies.helpers import (
-    EMPTY_CONTRACT,
-    MOCKS,
-    OCCUPANCY,
-    WEATHER,
-    Library,
-    Real,
-    build_text,
-    expand_text,
-    imports,
-    site,
-)
+from tests.assemblies.helpers import EMPTY_CONTRACT, Library, Mocks, Real, build_text, expand_text, imports, site
 from tests.assemblies.mock_components import MEASURED
 
 
@@ -72,7 +61,8 @@ class Gas:
             kind: assembly
             name: test/cylinder
             components:
-              Cylinder: {{class: {MOCKS}.MockCylinder, preset: standard, inputs: [{{$port: demand}}, {{$port: dhw}}]}}
+              Cylinder:
+                {{class: {Mocks.CLASSES}.MockCylinder, preset: standard, inputs: [{{$port: demand}}, {{$port: dhw}}]}}
             interface:
               needs:
                 demand: {{into: [Cylinder], partner: MockOccupancy}}
@@ -83,7 +73,7 @@ class Gas:
             kind: assembly
             name: test/gas
             components:
-              Meter: {{class: {MOCKS}.MockGasMeter, preset: standard, inputs: [{{$port: connection}}]}}
+              Meter: {{class: {Mocks.CLASSES}.MockGasMeter, preset: standard, inputs: [{{$port: connection}}]}}
             interface:
               provides:
                 connection: {{carrier: natural_gas, meter: Meter}}
@@ -215,7 +205,7 @@ def test_binding_an_end_of_another_circuit_is_refused(tmp_path: Path) -> None:
         kind: assembly
         name: test/floor
         components:
-          Floor: {{class: {MOCKS}.MockCylinder, preset: standard, inputs: [{{$port: space_heating}}]}}
+          Floor: {{class: {Mocks.CLASSES}.MockCylinder, preset: standard, inputs: [{{$port: space_heating}}]}}
         interface:
           needs:
             space_heating: {{circuit: space_heating, member: Floor}}
@@ -246,7 +236,7 @@ def test_a_member_at_an_end_that_reads_nothing_of_the_other_is_refused_by_the_wi
         kind: assembly
         name: test/boiler
         components:
-          Boiler: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: dhw}}]}}
+          Boiler: {{class: {Mocks.CLASSES}.MockBoiler, preset: condensing, inputs: [{{$port: dhw}}]}}
         interface:
           provides:
             dhw: {{circuit: dhw, member: Boiler}}
@@ -259,13 +249,15 @@ def test_a_member_at_an_end_that_reads_nothing_of_the_other_is_refused_by_the_wi
         kind: assembly
         name: test/bare_end
         components:
-          Device: {{class: {MOCKS}.MockBareDevice, preset: standard, inputs: [{{$port: dhw}}]}}
+          Device: {{class: {Mocks.CLASSES}.MockBareDevice, preset: standard, inputs: [{{$port: dhw}}]}}
         interface:
           needs:
             dhw: {{circuit: dhw, member: Device}}
         {EMPTY_CONTRACT}""",
     )
-    text = site(WEATHER, OCCUPANCY) + imports("boiler: {assembly: test/boiler}", "end: {assembly: test/bare_end}")
+    text = site(Mocks.WEATHER, Mocks.OCCUPANCY) + imports(
+        "boiler: {assembly: test/boiler}", "end: {assembly: test/bare_end}"
+    )
     message = build_refusal(text, tmp_path / "results", library)
     assert message.startswith("EF-23 at components.boiler-Boiler.inputs: the bare item 'end-Device'")
     assert "[source: boiler-Boiler (import boiler" in message
@@ -332,13 +324,13 @@ def test_two_named_outputs_land_as_two_feeds_and_an_unnamed_one_is_not_metered(t
         kind: assembly
         name: test/combi
         components:
-          Burner: {{class: {MOCKS}.MockCombiBurner, preset: standard}}
+          Burner: {{class: {Mocks.CLASSES}.MockCombiBurner, preset: standard}}
         interface:
           needs:
             fuel: {{carrier: natural_gas, outputs: [Burner.FuelSh, Burner.FuelDhw]}}
         {EMPTY_CONTRACT}""",
     )
-    text = site(WEATHER, OCCUPANCY) + imports("gas: {assembly: test/gas}", "combi: {assembly: test/combi}")
+    text = site(Mocks.WEATHER, Mocks.OCCUPANCY) + imports("gas: {assembly: test/gas}", "combi: {assembly: test/combi}")
     built = build_text(text, tmp_path / "results", library.resolver())
     assert built.model.components["gas-Meter"].inputs == (
         gas_feed("combi-Burner", "FuelSh"),
@@ -405,14 +397,16 @@ def test_the_reader_refuses_a_provision_of_the_wrong_shape(tmp_path: Path, port:
         kind: assembly
         name: test/supply
         components:
-          Meter: {{class: {MOCKS}.MockGasMeter, preset: standard, inputs: [{{$port: connection}}]}}
+          Meter: {{class: {Mocks.CLASSES}.MockGasMeter, preset: standard, inputs: [{{$port: connection}}]}}
         interface:
           provides:
             connection: {port}
         {EMPTY_CONTRACT}""",
     )
     with pytest.raises(EnergySystemError) as raised:
-        expand_text(site(WEATHER, OCCUPANCY) + imports("supply: {assembly: test/supply}"), library.resolver())
+        expand_text(
+            site(Mocks.WEATHER, Mocks.OCCUPANCY) + imports("supply: {assembly: test/supply}"), library.resolver()
+        )
     assert str(raised.value).startswith(code) and fragment in str(raised.value)
 
 
@@ -468,7 +462,7 @@ def test_the_wiring_checks_what_a_carrier_need_states_and_no_wire_shows(
         kind: assembly
         name: test/burner
         components:
-          Boiler: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: dhw}}]}}
+          Boiler: {{class: {Mocks.CLASSES}.MockBoiler, preset: condensing, inputs: [{{$port: dhw}}]}}
         interface:
           needs:
             fuel: {{carrier: {carrier}, outputs: {outputs}}}
@@ -482,13 +476,13 @@ def test_the_wiring_checks_what_a_carrier_need_states_and_no_wire_shows(
         kind: assembly
         name: test/supply
         components:
-          Meter: {{class: {MOCKS}.{meter}, preset: standard, inputs: [{{$port: connection}}]}}
+          Meter: {{class: {Mocks.CLASSES}.{meter}, preset: standard, inputs: [{{$port: connection}}]}}
         interface:
           provides:
             connection: {{carrier: {carrier}, meter: Meter}}
         {EMPTY_CONTRACT}""",
     )
-    text = site(WEATHER, OCCUPANCY) + imports(
+    text = site(Mocks.WEATHER, Mocks.OCCUPANCY) + imports(
         "supply: {assembly: test/supply}", "boiler: {assembly: test/burner}", "cylinder: {assembly: test/cylinder}"
     )
     message = build_refusal(text, tmp_path / "results", library)
@@ -507,13 +501,13 @@ def test_an_electricity_need_checks_the_one_provider_and_writes_no_wire(tmp_path
         kind: assembly
         name: test/plug
         components:
-          Heater: {{class: {MOCKS}.MockHeater, preset: standard}}
+          Heater: {{class: {Mocks.CLASSES}.MockHeater, preset: standard}}
         interface:
           needs:
             power: {{carrier: electricity, outputs: [Heater.ElectricityInput]}}
         {EMPTY_CONTRACT}""",
     )
-    house = site(WEATHER, OCCUPANCY)
+    house = site(Mocks.WEATHER, Mocks.OCCUPANCY)
     message = refusal(house + imports("plug: {assembly: test/plug}"), library)
     assert message.startswith("EF-7L at import 'plug'") and "no provider of electricity" in message
     model, record = expand_text(
@@ -539,7 +533,7 @@ class ScalarBattery:
         kind: assembly
         name: test/scalar_battery
         components:
-          Battery: {{class: {MOCKS}.MockBattery, preset: sized_to_pv}}
+          Battery: {{class: {Mocks.CLASSES}.MockBattery, preset: sized_to_pv}}
         interface:
           needs:
             pv_power: {{fact: pv_peak_power_in_watt, into: [Battery]}}
@@ -628,7 +622,7 @@ def test_a_list_into_a_one_provider_law_and_one_provider_into_a_sum_are_refused_
             kind: assembly
             name: {name}
             components:
-              Battery: {{class: {MOCKS}.{member_class}, preset: {preset}}}
+              Battery: {{class: {Mocks.CLASSES}.{member_class}, preset: {preset}}}
             interface:
               needs:
                 pv_power: {{fact: pv_peak_power_in_watt, many: {many}, into: [Battery]}}
@@ -652,7 +646,7 @@ def test_two_fact_ports_lowering_one_fact_into_one_member_are_refused(tmp_path: 
         kind: assembly
         name: test/twice
         components:
-          Battery: {{class: {MOCKS}.MockBattery, preset: sized_to_pv}}
+          Battery: {{class: {Mocks.CLASSES}.MockBattery, preset: sized_to_pv}}
         interface:
           needs:
             size_one: {{fact: pv_peak_power_in_watt, into: [Battery]}}
@@ -728,13 +722,13 @@ def test_a_provided_fact_outside_the_member_classes_contributions_fails_the_libr
         kind: assembly
         name: test/liar
         components:
-          Tank: {{class: {MOCKS}.MockTank, preset: standard}}
+          Tank: {{class: {Mocks.CLASSES}.MockTank, preset: standard}}
         interface:
           provides:
             peak: {{fact: pv_peak_power_in_watt, member: Tank}}
         {EMPTY_CONTRACT}""",
     )
-    message = refusal(site(WEATHER, OCCUPANCY) + imports("liar: {assembly: test/liar}"), library)
+    message = refusal(site(Mocks.WEATHER, Mocks.OCCUPANCY) + imports("liar: {assembly: test/liar}"), library)
     assert message.startswith("EF-75") and "MockTankConfig (member 'Tank') does not declare" in message
 
 

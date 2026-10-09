@@ -270,7 +270,11 @@ def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> N
 
 @pytest.mark.base
 def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -> None:
-    """A return of 47.04 °C: hplib computes at 47.0 °C, the heat pump books its flow from 47.04 °C."""
+    """A return of 47.04 °C: hplib's results at 47.0 and 47.1 °C are interpolated, and the flow is booked from 47.04.
+
+    The interpolated outlet is 52.04 °C, the 5 K lift hplib holds; the booked heat is the interpolated flow's at
+    HiSim's 4180 J/(kg K), about 0.5 % below hplib's own heat at its 4200 J/(kg K).
+    """
     outputs = SingleStep.step(
         SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
         {
@@ -281,7 +285,7 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 50.0,
         },
     )
-    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == 52.0
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == pytest.approx(52.04, abs=1e-9)
     booked = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
     assert booked == flow_heat(
         outputs,
@@ -289,10 +293,25 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
         MoreAdvancedHeatPumpHPLib.TemperatureOutputSH,
         MoreAdvancedHeatPumpHPLib.TemperatureInputSH,
     )
-    # hplib's own heat, m * 4200 J/(kg K) * 5 K, is about 1.3 % more than the flow carries at 4.96 K and 4180.
     hplib_heat = outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] * 4200.0 * 5.0
-    assert booked == pytest.approx(hplib_heat * 4180.0 / 4200.0 * 4.96 / 5.0, rel=1e-9)
+    assert booked == pytest.approx(hplib_heat * 4180.0 / 4200.0, rel=1e-9)
     assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH] == booked / outputs[MoreAdvancedHeatPumpHPLib.COP]
+
+
+@pytest.mark.base
+def test_hplib_s_results_are_interpolated_linearly_between_its_grid_points() -> None:
+    """Between two 0.1 K grid points every result is the linear blend of the two: continuous in the return."""
+    heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
+
+    def results(t_in_secondary: float):
+        return heat_pump.get_cached_results_or_run_hplib_simulation(-7.0, t_in_secondary, -7.0, 1, "heating_sh", 1500.0)
+
+    lower, upper, between = results(47.0), results(47.1), results(47.04)
+    for key in ("T_out", "m_dot", "P_th", "P_el", "COP"):
+        assert between[key] == pytest.approx(0.6 * lower[key] + 0.4 * upper[key], rel=1e-12)
+    # on either side of a grid point the results meet: no step at 47.1 °C
+    assert results(47.1 - 1e-9)["m_dot"] == pytest.approx(upper["m_dot"], rel=1e-6)
+    assert results(47.1 + 1e-9)["m_dot"] == pytest.approx(upper["m_dot"], rel=1e-6)
 
 
 @pytest.mark.base
@@ -397,7 +416,7 @@ def test_a_constant_hot_water_power_with_a_parallel_storage_is_refused() -> None
 
 @pytest.mark.base
 def test_a_hot_water_outlet_above_the_maximal_supply_temperature_is_throttled() -> None:
-    """A 72.04 °C return: hplib's outlet, 77.0 °C, stops at the 75 °C limit and the flow books the heat up to it.
+    """A 72.04 °C return: hplib's interpolated outlet, 77.04 °C, stops at the 75 °C limit; the flow books up to it.
 
     The flow stays hplib's, so the circuit carries ``m c (75 - 72.04)`` and the electricity is that heat over the COP.
     """

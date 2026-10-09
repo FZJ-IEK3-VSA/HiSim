@@ -2119,12 +2119,59 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         return opex_cost_data_class
 
+    #: The grid hplib's results are cached on, K: 0.1 K in every temperature it is called with.
+    HPLIB_GRID_IN_KELVIN: ClassVar[float] = 0.1
+
     def get_cached_results_or_run_hplib_simulation(
         self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int, operation_mode: str, p_th_min: float
     ) -> Any:
-        """Use caching of results of HPLib simulation."""
+        """The results of hplib at a return temperature, interpolated linearly between the cached 0.1 K grid points.
 
-        # rounding of variable values
+        hplib is called, and its results are cached, at grid points 0.1 K apart. The source and ambient temperatures
+        come from the weather and stay constant while a step iterates, so they are rounded to the grid. The return
+        temperature ``t_in_secondary`` is the storage's step mean, which moves from iteration to iteration: it is
+        not rounded, the results of the two neighbouring grid points are interpolated linearly in it, so the heat
+        pump's answer is continuous in the return and the storage's step mean has a fixed point (spec §5.2, D2's
+        remedy, owner 2026-10-09). Every number of the result is interpolated, ``T_out``, ``m_dot``, ``P_th``,
+        ``P_el`` and ``COP`` alike. For example, a return of 47.04 °C takes 60 % of hplib's results at 47.0 °C and
+        40 % of those at 47.1 °C; its outlet is 52.04 °C.
+
+        Args:
+            t_in_primary: The source temperature, °C, rounded to the grid.
+            t_in_secondary: The return temperature, °C, interpolated.
+            t_amb: The ambient temperature, °C, rounded to the grid.
+            mode: hplib's mode, 1 heating, 2 cooling.
+            operation_mode: The circuit hplib is evaluated for, part of the cache key.
+            p_th_min: The minimal thermal power hplib modulates down to, W.
+
+        Returns:
+            hplib's result dictionary at the return temperature.
+        """
+        cells_per_kelvin = 1.0 / self.HPLIB_GRID_IN_KELVIN
+        lower_index = math.floor(round(t_in_secondary * cells_per_kelvin, 9))
+        share_of_upper = t_in_secondary * cells_per_kelvin - lower_index
+        lower = self.cached_hplib_result_at_grid_point(
+            t_in_primary, lower_index / cells_per_kelvin, t_amb, mode, operation_mode, p_th_min
+        )
+        if share_of_upper <= 1e-12:
+            return lower
+        upper = self.cached_hplib_result_at_grid_point(
+            t_in_primary, (lower_index + 1) / cells_per_kelvin, t_amb, mode, operation_mode, p_th_min
+        )
+        interpolated = dict(lower)
+        for key, value in lower.items():
+            if isinstance(value, (int, float, np.floating)) and not isinstance(value, bool):
+                interpolated[key] = float(value) + share_of_upper * (float(upper[key]) - float(value))
+        return interpolated
+
+    def cached_hplib_result_at_grid_point(
+        self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int, operation_mode: str, p_th_min: float
+    ) -> Any:
+        """The results of hplib at one point of its 0.1 K grid, from the cache or computed and cached.
+
+        The source and ambient temperatures are rounded to 0.1 K, the return is a grid point already; the stated
+        SCOP's calibration is applied once, before the result is cached.
+        """
         t_in_primary = round(t_in_primary, 1)
         t_in_secondary = round(t_in_secondary, 1)
         t_amb = round(t_amb, 1)

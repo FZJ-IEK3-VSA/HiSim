@@ -271,3 +271,24 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries(
     else:
         assert power == pytest.approx(regulated, rel=1e-12)
     assert energy == pytest.approx(power * heater.my_simulation_parameters.seconds_per_timestep / 3600.0)
+
+
+@pytest.mark.base
+def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
+    """With the controller's 75 °C set temperature, a 25 K lift on a 60 °C return supplies 75 °C.
+
+    The flow stays that of the full 25 K charge, so the water carries three fifths of the regulated power, and that
+    heat is the electricity. A supply below the set temperature is not throttled.
+    """
+    from hisim import hydronics  # pylint: disable=import-outside-toplevel
+    from hisim.config import concrete  # pylint: disable=import-outside-toplevel
+
+    heater = _make_electric_heating()
+    regulated = concrete(heater.config.maximum_electric_power_w) * 25.0 / 100.0
+    power, _, supply, mass_flow = heater._calculate_dhw_outputs(60.0, 25.0, 75.0)  # pylint: disable=protected-access
+    assert supply == 75.0
+    assert power == hydronics.circuit_power_w(mass_flow, 75.0, 60.0)
+    assert power == pytest.approx(regulated * 15.0 / 25.0, rel=1e-12)
+    power, _, supply, _ = heater._calculate_dhw_outputs(45.0, 25.0, 75.0)  # pylint: disable=protected-access
+    assert supply == 70.0
+    assert power == pytest.approx(regulated, rel=1e-12)

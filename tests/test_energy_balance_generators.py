@@ -1,10 +1,10 @@
 """The heat generators state their energy flows and close their balance (hisim-9uoo.4).
 
 Every run checks the declared balances and fails when one does not close, so a run that finishes is one whose
-generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. A winter day at 3600 s of the gas
-and the heat-pump household is the fast ``base`` check of the ports; the first three weeks of January of the
-solar-thermal one, in which its pump runs, run in the ``extendedbase2`` shard; the second January week at 900 s of
-each recorded generator household is the ``system_setups`` run. Each generator declares what it takes (fuel,
+generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. Every check runs a whole household,
+so all of them run in the ``extendedbase2`` shard: a winter day at 3600 s of the gas and the heat-pump household
+for the ports, the first three weeks of January of the solar-thermal one, in which its pump runs, and the second
+January week at 900 s of each recorded generator household. Each generator declares what it takes (fuel,
 electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water) and what it
 loses; the Sankey links it to its meter, its storages and the environment. The storages and the heat distribution
 system are undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).
@@ -161,7 +161,7 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
 }
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase2
 @pytest.mark.parametrize("setup", sorted(FAST_PORTS))
 def test_a_winter_day_runs_and_the_generator_declares_its_ports(setup: str, tmp_path: Path) -> None:
     """One winter day at 3600 s: the run finishing proves the generator closes; its ports are as declared."""
@@ -195,7 +195,7 @@ def test_every_fuel_has_its_balance_carrier_and_the_table_is_read_only() -> None
         EnergyPort.FUEL_CARRIERS[lt.LoadTypes.HEATING] = lt.EnergyBalanceCarrier.SOLAR  # type: ignore[index]
 
 
-@pytest.mark.system_setups
+@pytest.mark.extendedbase2
 @pytest.mark.parametrize("setup", sorted(GENERATORS))
 def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path) -> None:
     """The run passes; the generator closes to 1e-9 kWh, takes and gives its carriers, and is linked."""
@@ -238,7 +238,7 @@ def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Pa
     }
 
 
-@pytest.mark.system_setups
+@pytest.mark.extendedbase2
 def test_a_boiler_loses_what_its_efficiency_does_not_convert(tmp_path: Path) -> None:
     """The combustion loss is the billed fuel times one minus the efficiency: 10 to 40 % of the gas in a week."""
     results = run_household(tmp_path)

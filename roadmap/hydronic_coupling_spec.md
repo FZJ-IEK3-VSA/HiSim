@@ -360,7 +360,8 @@ oscillation, which a contraction with `θ > 0` should not produce, but the heat 
 can). The acceleration changes only how fast the fixed point is reached, never which one. Its first target is
 the firing boiler step, which must come back under the limit of 10. A node whose new step mean lies within 1e-9 K
 of the one it published last publishes that float unchanged: a converged iteration can alternate between two
-neighbouring floats, which a component deciding on the sign of a balance turns into a cycle of its own.
+neighbouring floats, which a component deciding on the sign of a balance turns into a cycle of its own (owner,
+2026-10-09: a stopgap, kept until the energy manager's knife-edge switch is fixed properly, hisim-4g9.31).
 
 **Iteration histogram test.** The recorded twins run at 60, 900 and 3600 s and the iterations per step
 (`simulator.py:426` returns the count) are asserted: at 900 s no step reaches `force_convergence` (more than 10

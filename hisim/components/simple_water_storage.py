@@ -2018,7 +2018,8 @@ class SimpleDHWStorage(SimpleWaterStorage):
         elif abs(published_mean_c - self.last_published_step_mean_in_celsius) <= self.PUBLISHED_MEAN_DEADBAND_IN_KELVIN:
             # Converged to the last few bits of a float: the iteration can alternate between two neighbouring floats,
             # which a component that decides on the sign of a balance (the energy manager's surplus) turns into a
-            # cycle of its own. The tank keeps publishing the same float instead.
+            # cycle of its own. The tank keeps publishing the same float instead. A stopgap (owner 2026-10-09),
+            # removed once the energy manager's knife-edge switch is fixed at the source (hisim-4g9.31).
             published_mean_c = self.last_published_step_mean_in_celsius
         self.last_published_step_mean_in_celsius = published_mean_c
 

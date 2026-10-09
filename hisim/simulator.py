@@ -374,6 +374,10 @@ class Simulator:
         Following up, all components have their states restored and simulated respectively.
         Convergence is dependent on the i_restore and i_simulate of the components and how they
         are connected to each other.
+
+        ``previous_stsv`` is the vector the previous step converged to (all zeros at step 0), so
+        the first pass reads the previous step's value from every output computed later in the
+        order. It is cloned before the first write and is never changed here.
         """
 
         # Save states of all components
@@ -644,7 +648,8 @@ class Simulator:
         starttime = datetime.datetime.now()
         total_iteration_tries_since_last_msg = 0
 
-        # Creates empty list with values to get started
+        # All outputs start at zero for the first step only; every later step starts from the
+        # values the step before it converged to (the warm start below).
         number_of_outputs = len(self.all_outputs)
         stsv = cp.SingleTimeStepValues(number_of_outputs)
 
@@ -655,8 +660,11 @@ class Simulator:
                 iteration_tries,
                 force_convergence,
             ) = self.process_one_timestep(step, stsv)
-            # Comment this out to always begin the convergence process with the previously converged state
-            # stsv = cp.SingleTimeStepValues(number_of_outputs)
+            # Warm start: the next step's first pass reads the values this step converged to, so a
+            # component that reads an output computed later in the order sees the previous step's
+            # value on that pass instead of 0. No copy is needed: process_one_timestep clones its
+            # argument before it writes, so the values appended below are never changed afterwards.
+            stsv = resulting_stsv
 
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries

@@ -20,8 +20,9 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   that decide once for a whole step, which a converged iteration cannot always reconcile with the plant's
   state; stage D resolves both. Every file's histogram is written to ``results/iteration_histogram/``.
 
-The recorded twins run in the ``base`` set; their grouped twins, which RenoVisor translates from, and the composed
-files run in ``system_setups``. Every file except the car twin replaces its load-profile generator by the shipped
+Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
+grouped twins, which RenoVisor translates from, and the composed files. Only the check that every file with a tank is
+listed stays in ``base``. Every file except the car twin replaces its load-profile generator by the shipped
 predefined profile, so no run needs the LoadProfileGenerator; the car twin needs the generator's driving profile and
 reads the cached one.
 """
@@ -55,7 +56,7 @@ class DhwTwins:
     #: The repository's root.
     ROOT = Path(__file__).resolve().parents[1]
 
-    #: The recorded twins, one per setup with a hot-water tank (run in ``base``).
+    #: The recorded twins, one per setup with a hot-water tank (run in ``extendedbase2``).
     TWINS: Tuple[str, ...] = (
         "automatic_default_connections",
         "household_district_heating_building_sizer",
@@ -72,7 +73,7 @@ class DhwTwins:
         "household_wood_chips_building_sizer",
     )
 
-    #: The kinds of derived file run in ``system_setups``: the grouped twins and the composed files.
+    #: The kinds of derived file run beside the recorded twins: the grouped twins and the composed files.
     DERIVED_KINDS: Tuple[str, ...] = ("grouped", "composed")
 
     #: The car twin reads the generator's driving profile, which a predefined profile does not carry.
@@ -309,7 +310,7 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
         assert summary["steps_at_force_convergence"] == 0, summary
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase2
 @pytest.mark.parametrize("name", DhwTwins.TWINS)
 def test_the_recorded_twins_close_their_tank_and_agree_on_every_circuit(
     name: str, tmp_path_factory: pytest.TempPathFactory
@@ -318,7 +319,7 @@ def test_the_recorded_twins_close_their_tank_and_agree_on_every_circuit(
     check_file(name, tmp_path_factory)
 
 
-@pytest.mark.system_setups
+@pytest.mark.extendedbase2
 @pytest.mark.parametrize("name", DhwTwins.derived_files())
 def test_the_grouped_twins_and_composed_files_close_their_tank_and_agree_on_every_circuit(
     name: str, tmp_path_factory: pytest.TempPathFactory

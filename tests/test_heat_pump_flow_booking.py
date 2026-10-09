@@ -1,11 +1,11 @@
 """The hplib heat pump books the heat its water carries: ``P_th = m c (T_out - T_in)`` and ``P_el = P_th / COP``.
 
-hplib answers a return temperature rounded to 0.1 K with a thermal power, a mass flow and an outlet temperature,
-the flow computed with hplib's own specific heat of water, 4200 J/(kg K). The storage at the other end of the
-circuit integrates that flow at the unrounded return, so the heat pump books the heat the flow carries at HiSim's
-water ``c`` (:data:`hisim.hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K`), from the return temperature it read, and its
-electricity at the step's COP. The fixed-flow mode (a series storage or none) runs the pump at its nominal flow and
-books by the same rule.
+hplib answers a return temperature with a thermal power, a mass flow and an outlet temperature, interpolated
+between its 0.1 K grid points, the flow computed with hplib's own specific heat of water, 4200 J/(kg K). The storage
+at the other end of the circuit integrates that flow at the same return, so the heat pump books the heat the flow
+carries at HiSim's water ``c`` (:data:`hisim.hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K`), from the return temperature
+it read, and its electricity at the step's COP; in the parallel mode that heat is hplib's own times 4180/4200.
+The fixed-flow mode (a series storage or none) runs the pump at its nominal flow and books by the same rule.
 
 The unit tests step the component once in each mode; the run tests simulate every recorded heat-pump twin, the
 grouped twins RenoVisor translates from and the composed heat-pump file for a winter day, and check every step.
@@ -283,7 +283,7 @@ def flow_thermal_power_in_watt(outputs: Dict[str, float], mass_flow: str, t_out:
 
 @pytest.mark.base
 def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> None:
-    """For hplib's 8400 W at 0.4 kg/s and 35.0 °C from a return of 30.04 °C (30.0 °C rounded), 8293.12 W is booked."""
+    """A flow of 0.4 kg/s from a return of 30.04 °C to 35.0 °C books 0.4 * 4180 * 4.96 = 8293.12 W, over the COP."""
     powers = MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
         mass_flow_in_kg_per_second=0.4,
         outlet_temperature_in_celsius=35.0,

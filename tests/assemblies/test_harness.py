@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -33,6 +33,7 @@ from hisim.energy_system.assemblies.testing.isolation import (
     SUBJECT,
     IsolationRun,
     IsolationRunError,
+    brought_by_circuit_end,
     facts_needed,
     facts_of_partners,
     isolation_document,
@@ -41,6 +42,7 @@ from hisim.energy_system.assemblies.testing.isolation import (
 )
 from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.testing.partners import (
+    ServedKey,
     TestPartner,
     TestPartnerMissingError,
     TestPartnerRegistry,
@@ -427,6 +429,93 @@ def test_a_partner_registered_for_a_fact_its_class_does_not_contribute_is_refuse
     )
     with pytest.raises(TestPartnerRegistryError, match="'Device' is registered as the provider of the fact"):
         isolation_document(load_reader(tmp_path), {}, registry)
+
+
+def test_a_need_binds_the_partner_of_its_class_a_circuit_end_brings() -> None:
+    """The collector's controller reads the cylinder the collector charges, never the heat pump's cylinder.
+
+    The registry serves the need's class, SimpleDHWStorage, by DHWStorage, the cylinder at the other end of a
+    generator's dhw circuit, which requires only UTSPConnector; the solar_dhw circuit end brings SolarCylinder, a
+    cylinder of the same class, so the need binds it and the system holds one cylinder.
+    """
+    library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+    resolver = AssemblyResolver([library])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    assembly = resolver.resolve("heating/solar_thermal", "test")
+    document = isolation_document(assembly, {}, registry)
+    classes = [entry["class"].rsplit(".", 1)[-1] for entry in document["components"].values()]
+    assert classes.count("SimpleDHWStorage") == 1 and "SolarCylinder" in document["components"]
+    assert document["imports"][SUBJECT]["bind"]["cylinder_temperature"] == "SolarCylinder"
+    assert registry.served[("partner", "SimpleDHWStorage")].name == "DHWStorage"
+
+
+def circuit_end(name: str, circuit: str) -> TestPartner:
+    """A mock cylinder registered as the end of one circuit whose other end is a mock boiler."""
+    return TestPartner(
+        name=name,
+        serves=(("circuit", circuit, frozenset({"MockBoiler"})),),
+        requires=(),
+        component={"class": f"{MOCKS}.MockCylinder", "preset": "standard"},
+        origin="inline",
+    )
+
+
+def test_a_need_no_circuit_end_brings_a_partner_for_falls_back_to_the_registry() -> None:
+    """Catches the circuit-end rule taking over a need whose class no circuit end brings.
+
+    A circuit end brings a MockCylinder. A need for a Weather, and a need served only by a fact, find no brought
+    partner, so the rule returns None and the registry serves them as before.
+    """
+    cylinder = circuit_end("CylinderA", "dhw")
+    ends: Dict[Tuple[str, Tuple[ServedKey, ...]], TestPartner] = {
+        ("first", (("circuit", "dhw", frozenset({"MockBoiler"})),)): cylinder
+    }
+    assert brought_by_circuit_end("weather", (("partner", "MockWeather"),), ends, "sampled/one_end") is None
+    assert brought_by_circuit_end("load", (("fact", "heating_load_in_watt"),), ends, "sampled/one_end") is None
+    assert brought_by_circuit_end("cylinder", (("partner", "MockCylinder"),), ends, "sampled/one_end") is cylinder
+
+
+def test_the_solar_collectors_weather_need_still_binds_the_registry_partner() -> None:
+    """The circuit-end rule changes only the cylinder need: the weather need binds the registry's Weather partner."""
+    library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+    resolver = AssemblyResolver([library])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    document = isolation_document(resolver.resolve("heating/solar_thermal", "test"), {}, registry)
+    assert document["imports"][SUBJECT]["bind"]["weather"] == registry.served[("partner", "Weather")].name
+
+
+def test_a_need_two_circuit_ends_bring_partners_of_its_class_for_is_refused_naming_both(tmp_path: Path) -> None:
+    """Catches a need silently binding one of two cylinders its assembly's circuit ends bring.
+
+    Two boilers are the ends of two circuits, and each circuit's other end is a MockCylinder of its own. A need
+    for a MockCylinder has two candidates; the harness refuses, as the engine's default rule does, naming both ports.
+    """
+    library = Library(tmp_path)
+    library.add(
+        "sampled/two_ends",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/two_ends
+        description: Two boilers, each charging a cylinder of its own, and a need for a cylinder.
+        components:
+          First: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: first}}]}}
+          Second: {{class: {MOCKS}.MockBoiler, preset: condensing, inputs: [{{$port: second}}]}}
+        interface:
+          needs:
+            cylinder: {{into: [First], partner: MockCylinder}}
+          provides:
+            first: {{circuit: dhw, member: First}}
+            second: {{circuit: solar_dhw, member: Second}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    assembly = library.resolver().resolve("sampled/two_ends", "test")
+    registry = TestPartnerRegistry([circuit_end("CylinderA", "dhw"), circuit_end("CylinderB", "solar_dhw")], [])
+    with pytest.raises(TestPartnerRegistryError, match="the class MockCylinder") as refusal:
+        isolation_document(assembly, {}, registry)
+    assert "'CylinderA' through the port 'first'" in str(refusal.value)
+    assert "'CylinderB' through the port 'second'" in str(refusal.value)
 
 
 @pytest.mark.assemblies

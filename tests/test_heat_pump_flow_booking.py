@@ -12,9 +12,10 @@ grouped twins RenoVisor translates from and the composed heat-pump file for a wi
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Mapping, Tuple
 
 import numpy as np
+from numpy.typing import ArrayLike
 import pandas as pd
 import pytest
 import yaml
@@ -122,41 +123,64 @@ class HeatPumpTwins:
         }
 
 
-def run_and_check_every_step(file_name: str, directory: Path, seconds_per_timestep: int) -> None:
-    """Simulate a twin and assert, on every step and both circuits, that the booked heat is the flow's heat.
+def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
+    """Assert, on every step of both circuits, that the booked heat is the flow's heat and the electricity follows it.
 
     The flow's heat is ``m c (T_out - T_in)`` from the heat pump's own mass-flow, outlet and return outputs, in the
-    order :func:`hisim.hydronics.circuit_power_w` evaluates it; the electricity is that heat over the COP on every
-    step the circuit runs, and both are zero on the others.
+    order :func:`hisim.hydronics.circuit_power_w` evaluates it. On every heating step (a flow and a COP above 0) the
+    electricity is that heat over the COP. On every cooling step (a negative booked heat) the electricity for
+    cooling is the heat drawn over hplib's EER, ``ElectricalInputPowerForCooling = -P_th / EER``. On a step without
+    flow the booked heat and the electricity are zero.
+
+    Args:
+        outputs: The heat pump's outputs by field name, one value per step.
+
+    Returns:
+        Per circuit, the number of steps with a flow.
     """
-    outputs = HeatPumpTwins.columns(HeatPumpTwins.run(file_name, directory, seconds_per_timestep))
-    cop = outputs[MoreAdvancedHeatPumpHPLib.COP].to_numpy()
-    running_somewhere = 0
+    cop = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.COP], dtype=float)
+    eer = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.EER], dtype=float)
+    electrical_for_cooling = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling], dtype=float)
+    running_steps: Dict[str, int] = {}
     for circuit, (mass_flow, t_out, t_in, thermal, electrical) in HeatPumpTwins.CIRCUITS.items():
-        flow = outputs[mass_flow].to_numpy()
+        flow = np.asarray(outputs[mass_flow], dtype=float)
         carried = flow * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * (
-            outputs[t_out].to_numpy() - outputs[t_in].to_numpy()
+            np.asarray(outputs[t_out], dtype=float) - np.asarray(outputs[t_in], dtype=float)
         )
-        booked = outputs[thermal].to_numpy()
+        booked = np.asarray(outputs[thermal], dtype=float)
+        consumed = np.asarray(outputs[electrical], dtype=float)
         np.testing.assert_allclose(booked, carried, rtol=1e-12, atol=1e-9, err_msg=circuit)
         running = flow > 0.0
-        assert running.any(), f"the {circuit} circuit never runs on the winter day"
-        running_somewhere += int(running.sum())
+        heating = running & (cop > 0.0)
+        cooling = booked < 0.0
+        np.testing.assert_allclose(consumed[heating], booked[heating] / cop[heating], rtol=1e-12, err_msg=circuit)
         np.testing.assert_allclose(
-            outputs[electrical].to_numpy()[running], booked[running] / cop[running], rtol=1e-12, err_msg=circuit
+            electrical_for_cooling[cooling], -booked[cooling] / eer[cooling], rtol=1e-12, err_msg=circuit
         )
-        assert not booked[~running].any() and not outputs[electrical].to_numpy()[~running].any(), circuit
-    assert running_somewhere > 0
+        assert not booked[~running].any() and not consumed[~running].any(), circuit
+        running_steps[circuit] = int(running.sum())
+    return running_steps
 
 
-@pytest.mark.base
+def run_and_check_every_step(file_name: str, directory: Path, seconds_per_timestep: int) -> None:
+    """Simulate a twin over the winter day and apply :func:`check_every_step` to every step of its heat pump.
+
+    Every circuit must run on some step of the day, or the check would hold on nothing.
+    """
+    results = HeatPumpTwins.run(file_name, directory, seconds_per_timestep)
+    running_steps = check_every_step(HeatPumpTwins.columns(results))
+    for circuit, steps in running_steps.items():
+        assert steps > 0, f"the {circuit} circuit never runs on the winter day"
+
+
+@pytest.mark.extendedbase2
 @pytest.mark.parametrize("file_name", HeatPumpTwins.FILES)
 def test_every_heat_pump_twin_books_the_heat_its_flow_carries_at_900_s(file_name: str, tmp_path: Path) -> None:
     """A winter day at 900 s of every heat-pump file: flow heat equals booked heat on every step, both circuits."""
     run_and_check_every_step(file_name, tmp_path, 900)
 
 
-@pytest.mark.system_setups
+@pytest.mark.extendedbase2
 @pytest.mark.parametrize("file_name", HeatPumpTwins.FILES)
 def test_every_heat_pump_twin_books_the_heat_its_flow_carries_at_60_s(file_name: str, tmp_path: Path) -> None:
     """The same winter day at 60 s, where the heat pump starts and stops within the hour."""
@@ -323,6 +347,34 @@ def test_active_cooling_books_the_heat_its_flow_draws_and_that_heat_over_the_eer
     assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling] == -booked / outputs[
         MoreAdvancedHeatPumpHPLib.EER
     ]
+
+
+@pytest.mark.base
+def test_the_run_check_holds_on_an_active_cooling_step() -> None:
+    """The run tests' per-step check on one cooling step, the branch no recorded twin reaches (none cools).
+
+    The step books a negative heat, has a COP of 0 and so is no heating step, and its electricity for cooling is
+    the heat drawn over hplib's EER. The check also fails when that electricity is off, so it checks something.
+    """
+    outputs = SingleStep.step(
+        SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
+        {
+            MoreAdvancedHeatPumpHPLib.OnOffSwitchSH: -1,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 30.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 30.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 22.04,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 50.0,
+        },
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] < 0.0
+    assert outputs[MoreAdvancedHeatPumpHPLib.COP] == 0.0
+    steps = {field_name: [value] for field_name, value in outputs.items()}
+    assert check_every_step(steps) == {"space heating": 1, "hot water": 0}
+    steps[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling] = [
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling] * 1.01
+    ]
+    with pytest.raises(AssertionError, match="space heating"):
+        check_every_step(steps)
 
 
 @pytest.mark.base

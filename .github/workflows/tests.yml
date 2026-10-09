@@ -68,8 +68,9 @@ jobs:
             workers: 2
           - name: extendedbase2
             marker: "extendedbase2"
-            # One module (test_hisim_main_python.py), so loadfile has nothing to spread, and it peaks at
-            # 11.3 GB: a second process beside it would risk the 16 GB limit.
+            # test_hisim_main_python.py peaks at 11.3 GB: a second process beside it would risk the 16 GB
+            # limit, so the shard runs serially (it also holds the heat-pump booking runs of
+            # test_heat_pump_flow_booking.py).
             workers: 0
           - name: postprocessingoptions
             marker: "postprocessingoptions"

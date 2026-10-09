@@ -3528,7 +3528,14 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 self.water_temperature_input_channel
             )
             if self.water_temperature_input_from_dhw_storage_in_celsius == 0:
-                # for avoiding errors: sometimes timestep output of dhw storage sends zero as input, so hp will switch to dhw, even this is not necessary
+                # Step-0 guard: the first step starts from zeros. On the first pass of step 0, a DHW storage
+                # that comes later in the component order has not published its temperature yet, and the 0
+                # read here would switch the heat pump to DHW for nothing. Every later step starts from the
+                # previous step's converged values (the simulator's warm start), so the guard fires only at
+                # step 0. It cannot go yet: this controller writes previous_state_dhw in i_simulate, so its
+                # restore returns the previous pass instead of the step start (convergence_order_findings.md,
+                # defect 2) and a decision taken on the 0 would latch. It goes with that restore fix,
+                # hisim-4g9.28.
                 self.water_temperature_input_from_dhw_storage_in_celsius = (
                     self.water_temperature_input_from_dhw_storage_in_celsius_previous
                 )

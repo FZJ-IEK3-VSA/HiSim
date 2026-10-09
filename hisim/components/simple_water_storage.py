@@ -2011,9 +2011,12 @@ class SimpleDHWStorage(SimpleWaterStorage):
         ]
         published_mean_c = min(max(published_mean_c, min(mixed_temperatures)), max(mixed_temperatures))
         if len(self.computed_step_means_in_celsius) == 1:
-            # The first iteration of a step starts the circuits from the start temperature: the simulator begins
-            # every step from zeroed outputs, so a generator simulated before the tank has answered a 0 °C return,
-            # and the step mean computed from that answer is a worse start than T0.
+            # The first iteration of a step starts the circuits from the start temperature. The rule matters at
+            # step 0: the simulator begins it from zeroed outputs, so a generator simulated before the tank has
+            # answered a 0 °C return, and the step mean computed from that answer is a worse start than T0. Every
+            # later step begins from the values the previous step converged to (the simulator's warm start), so
+            # the generator has answered last step's return; there the rule only picks the iteration's start,
+            # not its fixed point.
             published_mean_c = t0_c
         elif abs(published_mean_c - self.last_published_step_mean_in_celsius) <= self.PUBLISHED_MEAN_DEADBAND_IN_KELVIN:
             # Converged to the last few bits of a float: the iteration can alternate between two neighbouring floats,

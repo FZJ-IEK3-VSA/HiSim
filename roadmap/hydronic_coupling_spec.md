@@ -184,9 +184,11 @@ unmixed and the shortfall is `ThermalEnergyUnmetDHW`; below `T_cold` nothing is 
 `check_water_mass` (a vessel without water is refused at construction) is kept.
 
 The DHW tank publishes its start temperature `T0` as the circuits' return on the first pass of every step, and its
-computed step mean from the second pass on (owner, 2026-10-09). The simulator starts every step from zeroed outputs,
-so a generator simulated before the tank has answered a 0 °C return in the first pass, and the step mean computed
-from that answer is a worse start than `T0`; the fixed point does not change.
+computed step mean from the second pass on (owner, 2026-10-09). The rule matters at step 0: the simulator starts it
+from zeroed outputs, so a generator simulated before the tank has answered a 0 °C return in the first pass, and the
+step mean computed from that answer is a worse start than `T0`; the fixed point does not change. Every later step
+starts from the values the previous step converged to (the simulator's warm start, D7 amendment), so there the
+generator has answered last step's return and the rule only picks where the iteration starts.
 
 ### 4.4 The space-heating buffer
 
@@ -367,7 +369,9 @@ it (forced steps of the heat-pump twin's year at 60 s: 112312 with the switch-on
 
 The simulator iterates every component in order until no output changes by more than 1e-4
 (`hisim/component.py:189-195`, `hisim/simulator.py:393-422`); after 10 tries it sets `force_convergence`, which
-freezes controllers, and after 100 it aborts (`simulator.py:415-419`). D7: the simulator is not changed.
+freezes controllers, and after 100 it aborts (`simulator.py:415-419`). D7: the iteration is not changed; since the
+D7 amendment (owner, 2026-10-09) every step starts from the values the previous step converged to, and only step 0
+from zeros.
 
 **Why it converges.** For a node fed by one circuit whose supply follows the return 1:1 (a generator holding its
 lift), the derivative of the node's `T̄` with respect to the inflow temperature is
@@ -588,6 +592,15 @@ charge takes whole steps; within a step every flow is constant, as §4.1 assumes
 
 **D7 — Simulator: no change.** Node-side acceleration and the iteration histogram test only; the convergence
 burden sits in the nodes. A per-output tolerance only if the histogram shows the watt outputs dominate (§6).
+*Amendment (owner, 2026-10-09):* one simulator change, the warm start (hisim-4g9.23). Every step's iteration now
+starts from the values the previous step converged to, where it used to start from all zeros; only step 0 still
+starts from zeros. The iteration itself, its tolerance and its `force_convergence` limit are unchanged. Measured on
+the stack after stage C, full year at 900 s: the heat-pump twin needs 5.71 passes per step instead of 7.26, and
+half the forced steps (3937 instead of 7909); its energies move by up to 2 % (grid energy +1.8 %, SH heat +0.8 %)
+and its underheating below the set temperature by -4 %. The gas twin needs 4.10 passes instead of 5.01, with no forced steps either way and KPIs equal to
+float noise (3e-12); the electric-heating twin needs 6.16 instead of 6.95, its KPIs equal to 1e-7. On main, before
+stage B, the verification also measured the order sensitivity of the heat-pump twin's annual KPIs: it fell 3-7x.
+The heat pump's DHW zero guard stays as a step-0 guard until the controller restore fix (hisim-4g9.28).
 
 **D8 — Staging: staged PRs straight into main,** each re-blessing the goldens it changes (§9.5). Consequence:
 goldens and RenoVisor results move in several steps, and each stage that changes results is announced on

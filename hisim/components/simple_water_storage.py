@@ -1352,9 +1352,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
     When the simulator iterates a step more than six times, the tank publishes an extrapolation of its own fixed
     point instead of its raw step mean (:func:`hisim.hydronics.accelerated_node_mean`), clamped to the range of the
-    temperatures it mixes; this shortens the iteration and does not change where it ends. The first iteration of a
-    step publishes ``T0``. Once the simulator forces convergence and the iteration cycles (:meth:`iteration_cycles`),
-    the tank holds its published step mean for the rest of the step.
+    temperatures it mixes; this shortens the iteration and does not change where it ends.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -1438,8 +1436,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.computed_step_means_in_celsius: List[float] = []
         # The step mean the tank published last, which the generators' current supply temperatures answer.
         self.last_published_step_mean_in_celsius: float = self.mean_water_temperature_in_water_storage_in_celsius
-        # Whether the tank holds its published step mean for the rest of the current step (see i_simulate).
-        self.holding_step_mean: bool = False
 
         # =================================================================================================================================
         # Input channels
@@ -1873,7 +1869,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.previous_state = self.state.self_copy()
         self.published_step_means_in_celsius = []
         self.computed_step_means_in_celsius = []
-        self.holding_step_mean = False
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
@@ -1969,37 +1964,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
             f"{self.TAP_SOLVE_MAXIMUM_ITERATIONS} evaluations (bracket {low} to {high} °C)."
         )
 
-    #: How many of the latest residuals the tank inspects for a cycle.
-    CYCLE_RESIDUALS: ClassVar[int] = 3
-
-    #: The largest residual of a cycle the tank holds: a smaller jump than this between two grid cells, K.
-    CYCLE_RESIDUAL_LIMIT_IN_KELVIN: ClassVar[float] = 0.05
-
-    def iteration_cycles(self) -> bool:
-        """Whether the step's iteration cycles near a point instead of contracting to it.
-
-        The residual of an iteration is the step mean the tank computed minus the one it had published. A contraction
-        keeps one sign; a generator whose answer jumps at the edge of a grid cell makes the residuals change sign
-        again and again at the size of the jump. The iteration cycles when the last :data:`CYCLE_RESIDUALS`
-        residuals change sign at least once and are all smaller than :data:`CYCLE_RESIDUAL_LIMIT_IN_KELVIN`. For
-        example, +0.003, -0.002 and -0.001 K cycle; +0.2, +0.1 and +0.05 K do not, and neither do +0.3, -0.2 and
-        +0.1 K, an iteration still far from its point.
-
-        Returns:
-            True when the iteration cycles.
-        """
-        count = self.CYCLE_RESIDUALS
-        if len(self.computed_step_means_in_celsius) < count:
-            return False
-        residuals = [
-            computed - published
-            for computed, published in zip(
-                self.computed_step_means_in_celsius[-count:], self.published_step_means_in_celsius[-count:]
-            )
-        ]
-        changes_sign = any(earlier * later < 0.0 for earlier, later in zip(residuals, residuals[1:]))
-        return changes_sign and max(abs(residual) for residual in residuals) < self.CYCLE_RESIDUAL_LIMIT_IN_KELVIN
-
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Integrate the tank over the step and publish its step mean to its charging circuits.
 
@@ -2047,13 +2011,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
             # every step from zeroed outputs, so a generator simulated before the tank has answered a 0 °C return,
             # and the step mean computed from that answer is a worse start than T0.
             published_mean_c = t0_c
-        elif self.holding_step_mean or (force_convergence and self.iteration_cycles()):
-            # Once the simulator forces convergence and the iteration cycles, the tank holds the step
-            # mean it published last for the rest of the step, as the controllers hold their decisions: a generator
-            # whose answer jumps between two cells of hplib's 0.1 K grid would otherwise keep the iteration cycling
-            # until the simulator aborts the run (spec §5.2, §6).
-            self.holding_step_mean = True
-            published_mean_c = self.last_published_step_mean_in_celsius
         self.last_published_step_mean_in_celsius = published_mean_c
 
         demand_heat_j = (

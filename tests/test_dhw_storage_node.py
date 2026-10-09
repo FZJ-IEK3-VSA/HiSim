@@ -236,3 +236,22 @@ def test_the_tank_publishes_its_step_mean_to_the_circuits_and_its_start_temperat
     # the circuit's heat as both ends derive it from the three published values
     heat_wh = Tank.output(stsv, storage.thermal_energy_from_heat_generator_channel)
     assert heat_wh * 3600.0 == pytest.approx(hydronics.circuit_heat_j(0.2, 70.0, step.node.t_mean_c, 900), rel=1e-12)
+
+
+@pytest.mark.base
+def test_a_step_mean_within_the_deadband_of_the_last_published_one_is_published_unchanged() -> None:
+    """A computed mean within 1e-9 K of the one published last leaves the published float as it was."""
+    storage, stsv, fakes = Tank.with_fake_inputs(900)
+    stsv.set_output_value(fakes[1], 70.0)
+    stsv.set_output_value(fakes[2], 0.2)
+    storage.state.mean_water_temperature_in_celsius = 50.0
+    storage.i_save_state()
+    storage.i_restore_state()
+    storage.i_simulate(0, stsv, False)
+    storage.i_restore_state()
+    storage.i_simulate(0, stsv, False)
+    converged = Tank.output(stsv, storage.water_temperature_to_heat_generator_channel)
+    storage.last_published_step_mean_in_celsius = converged + 5e-10
+    storage.i_restore_state()
+    storage.i_simulate(0, stsv, False)
+    assert Tank.output(stsv, storage.water_temperature_to_heat_generator_channel) == converged + 5e-10

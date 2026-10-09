@@ -1369,6 +1369,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
     #: The most evaluations the tap valve's local solve may take before it fails the run.
     TAP_SOLVE_MAXIMUM_ITERATIONS: ClassVar[int] = 200
 
+    #: A step mean that moved by at most this from the one published last is published unchanged, K: far below the
+    #: simulator's 1e-4 tolerance, above the float noise of a converged iteration (about 1e-13 K at 70 °C).
+    PUBLISHED_MEAN_DEADBAND_IN_KELVIN: ClassVar[float] = 1e-9
+
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
     WaterTemperatureFromHeatGenerator = "WaterTemperatureFromHeatGenerator"
@@ -2011,6 +2015,11 @@ class SimpleDHWStorage(SimpleWaterStorage):
             # every step from zeroed outputs, so a generator simulated before the tank has answered a 0 °C return,
             # and the step mean computed from that answer is a worse start than T0.
             published_mean_c = t0_c
+        elif abs(published_mean_c - self.last_published_step_mean_in_celsius) <= self.PUBLISHED_MEAN_DEADBAND_IN_KELVIN:
+            # Converged to the last few bits of a float: the iteration can alternate between two neighbouring floats,
+            # which a component that decides on the sign of a balance (the energy manager's surplus) turns into a
+            # cycle of its own. The tank keeps publishing the same float instead.
+            published_mean_c = self.last_published_step_mean_in_celsius
         self.last_published_step_mean_in_celsius = published_mean_c
 
         demand_heat_j = (

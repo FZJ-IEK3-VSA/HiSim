@@ -284,7 +284,10 @@ flow carries, and it may differ from hplib's calibrated `P_th` (and so from the 
 The cache keeps today's 0.1 K rounding of its inputs (`:1997-1999`); the rounding is the likely cause of the
 0.5 %. Risk: as a function of the return temperature the rounded result is a staircase, so an iteration can hop
 between two bins at the 1e-4 tolerance. The iteration histogram test (§6) watches for it; interpolation between
-grid points is the remedy if it shows. Cooling uses the same circuit with `T_sup < T_ret`; its electricity and
+grid points is the remedy if it shows. It showed, and the remedy is applied in stage C (owner, 2026-10-09): the
+cache stays keyed on the 0.1 K grid, and the results of the two neighbouring grid points are interpolated
+linearly in the return temperature, which is not rounded any more (`T_out`, `m_dot`, `P_th`, `P_el` and `COP`
+alike); the source and ambient temperatures stay rounded, since they are constant while a step iterates. Cooling uses the same circuit with `T_sup < T_ret`; its electricity and
 the brine pump must reach the meter (hisim-9uoo.15) before #864's cooling refusal is removed (hisim-9uoo.17).
 
 The heat pump's hot-water outlet is limited to
@@ -302,8 +305,8 @@ efficiency curve is evaluated at, and the flow is sized for `2 ΔT_n`: the colle
 `m = Q_coll(T̄)/(c · 2 ΔT_n)`, reads the node's `T̄` and publishes `T_sup = T̄ + 2 ΔT_n`, so its water carries exactly
 `Q_coll(T̄)`. While the pump stands or the collector has no heat, the circuit moves no water and its supply is its
 return. The controller keeps start values (`:1067-1086`): the collector also publishes the flow and the outlet
-temperature evaluated at the node's `T0`, which the controller reads; its minimum flow is halved to 0.005 kg/s, the
-same collector heat as before.
+temperature evaluated at the node's `T0`, which the controller reads. The controller's minimum pump flow is halved
+to 0.005 kg/s, the same collector heat as before (owner, 2026-10-09).
 
 ### 5.4 District heating substation
 
@@ -355,7 +358,9 @@ shows the watt outputs dominate.
 receives, so the ports stay pure), and under-relaxes only when it detects a sign change between iterates (an
 oscillation, which a contraction with `θ > 0` should not produce, but the heat pump's rounding staircase of §5.2
 can). The acceleration changes only how fast the fixed point is reached, never which one. Its first target is
-the firing boiler step, which must come back under the limit of 10.
+the firing boiler step, which must come back under the limit of 10. A node whose new step mean lies within 1e-9 K
+of the one it published last publishes that float unchanged: a converged iteration can alternate between two
+neighbouring floats, which a component deciding on the sign of a balance turns into a cycle of its own.
 
 **Iteration histogram test.** The recorded twins run at 60, 900 and 3600 s and the iterations per step
 (`simulator.py:426` returns the count) are asserted: at 900 s no step reaches `force_convergence` (more than 10
@@ -503,7 +508,9 @@ efficiency or COP law, which reopens the inverse fuel law for throttled steps on
 resolves hisim-4g9.21, with the delivered heat differing from the calibrated SCOP value by up to ~0.5 %. The
 cache keeps today's 0.1 K rounding (`more_advanced_heat_pump_hplib.py:1997-1999`). Consequence: a staircase in
 the return temperature that can make an iteration hop between bins; the histogram test watches for it, and
-interpolation is the remedy if it shows.
+interpolation is the remedy if it shows. *Amendment (owner, 2026-10-09):* the staircase showed (a heat pump's
+hot-water outlet throttled at 75 °C left the storage's step mean without a fixed point), and the interpolation is
+applied in stage C (§5.2).
 
 **D3 — Generator → HDS without a buffer: the HDS pipe water is the node** (§4.6). Fixes hisim-9uoo.12 and keeps
 the RenoVisor district-heating path as it is. Consequence: ≈24 iterations at 900 s before acceleration; the

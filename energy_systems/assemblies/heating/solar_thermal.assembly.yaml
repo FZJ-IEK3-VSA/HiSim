@@ -63,12 +63,12 @@ tests:
   # energies are those powers x 0.25 h. The new solar pump draws 10 W while it runs (an old one 35 W). The
   # Controller's one output, the pump's control signal, is binary: no energy or temperature.
   bounds:
-    - {output: Collector.ThermalPowerOutput, unit: WATT, min: -5000, max: 20000}
-      # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; the loop loses a little heat while it runs on a cold cylinder (below 0)
-    - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: -1250, max: 5000}     # the power band x 0.25 h
+    - {output: Collector.ThermalPowerOutput, unit: WATT, min: 0, max: 20000}
+      # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; never negative: the collector clips its efficiency at zero
+    - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: 0, max: 5000}         # the power band x 0.25 h
     - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
     - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W
-    - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m²
+    - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m² = 24 kW, with margin
     - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power
     - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}                 # at most the pump's electricity
   monotone:

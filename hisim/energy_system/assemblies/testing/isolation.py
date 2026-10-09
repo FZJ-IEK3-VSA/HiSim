@@ -291,7 +291,9 @@ def isolation_document(
                 or brought_by_circuit_end(name, alternatives, circuit_ends, assembly.path)
                 or registry.find(alternatives, f"the port '{name}'", assembly.path)
             )
-            partners.append(partner.name)
+            # A need bound to a partner a circuit end brings names a partner already in the system.
+            if partner.name not in partners:
+                partners.append(partner.name)
             if (
                 port.kind in (PortKind.NEED, PortKind.CIRCUIT, PortKind.FACT)
                 and not port.is_provision

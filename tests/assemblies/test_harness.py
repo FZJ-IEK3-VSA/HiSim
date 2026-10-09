@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -33,6 +33,7 @@ from hisim.energy_system.assemblies.testing.isolation import (
     SUBJECT,
     IsolationRun,
     IsolationRunError,
+    brought_by_circuit_end,
     facts_needed,
     facts_of_partners,
     isolation_document,
@@ -41,6 +42,7 @@ from hisim.energy_system.assemblies.testing.isolation import (
 )
 from hisim.energy_system.assemblies.model import MemberTemplate
 from hisim.energy_system.assemblies.testing.partners import (
+    ServedKey,
     TestPartner,
     TestPartnerMissingError,
     TestPartnerRegistry,
@@ -456,6 +458,30 @@ def circuit_end(name: str, circuit: str) -> TestPartner:
         component={"class": f"{MOCKS}.MockCylinder", "preset": "standard"},
         origin="inline",
     )
+
+
+def test_a_need_no_circuit_end_brings_a_partner_for_falls_back_to_the_registry() -> None:
+    """Catches the circuit-end rule taking over a need whose class no circuit end brings.
+
+    A circuit end brings a MockCylinder. A need for a Weather, and a need served only by a fact, find no brought
+    partner, so the rule returns None and the registry serves them as before.
+    """
+    cylinder = circuit_end("CylinderA", "dhw")
+    ends: Dict[Tuple[str, Tuple[ServedKey, ...]], TestPartner] = {
+        ("first", (("circuit", "dhw", frozenset({"MockBoiler"})),)): cylinder
+    }
+    assert brought_by_circuit_end("weather", (("partner", "MockWeather"),), ends, "sampled/one_end") is None
+    assert brought_by_circuit_end("load", (("fact", "heating_load_in_watt"),), ends, "sampled/one_end") is None
+    assert brought_by_circuit_end("cylinder", (("partner", "MockCylinder"),), ends, "sampled/one_end") is cylinder
+
+
+def test_the_solar_collectors_weather_need_still_binds_the_registry_partner() -> None:
+    """The circuit-end rule changes only the cylinder need: the weather need binds the registry's Weather partner."""
+    library = Path(__file__).resolve().parents[2] / "energy_systems" / "assemblies"
+    resolver = AssemblyResolver([library])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    document = isolation_document(resolver.resolve("heating/solar_thermal", "test"), {}, registry)
+    assert document["imports"][SUBJECT]["bind"]["weather"] == registry.served[("partner", "Weather")].name
 
 
 def test_a_need_two_circuit_ends_bring_partners_of_its_class_for_is_refused_naming_both(tmp_path: Path) -> None:

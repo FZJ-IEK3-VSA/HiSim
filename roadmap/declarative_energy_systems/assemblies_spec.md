@@ -1059,7 +1059,8 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    parameter `area_in_m2`, AUTO by the class law) with its contract; in isolation the need binds the cylinder the
    circuit end brings. The two solar twins' cylinders take the generator on their *secondary* coil, as explicit wires
    from its DHW outputs, which a circuit end cannot lower to (its bare name's default connections are the primary
-   coil the collector feeds, `EF-26`). So the composed files
+   coil the collector feeds, so the generator's bare name and the collector would both wire the primary coil's
+   inputs, two wires into one input, which the wiring refuses as `EF-26`). So the composed files
    `household_{gas,heatpump}_solar_thermal_building_sizer.composed.energy_system.yaml`, their gates, and the reorder
    and re-record of `household_heatpump_solar_thermal_building_sizer` (its two heat-pump controllers before the heat
    pump, the heating block contiguous) wait for hydronic stage C (owner, 2026-10-08): D20's coil becomes hydronic

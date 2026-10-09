@@ -3450,6 +3450,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         self.previous_state_dhw: int
         self.water_temperature_input_from_dhw_storage_in_celsius_previous: float
         self.water_temperature_input_from_dhw_storage_in_celsius: float
+        self.supply_temperature_set_dhw_in_celsius: float
         self.thermalpower_dhw_is_constant: bool
         self.p_th_max_dhw: float
 
@@ -3560,7 +3561,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
         self.state_dhw = 0
         self.water_temperature_input_from_dhw_storage_in_celsius = 40.0
-        self.supply_temperature_set_dhw_in_celsius: float = self.config.t_max_dhw_storage_in_celsius
+        self.supply_temperature_set_dhw_in_celsius = self.config.t_max_dhw_storage_in_celsius
         self.thermalpower_dhw_is_constant = self.config.thermalpower_dhw_is_constant
         self.p_th_max_dhw = self.config.p_th_max_dhw_in_watt
 

@@ -280,6 +280,39 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
 
 
 @pytest.mark.assemblies
+def test_the_isolation_system_binds_a_single_provider_fact_need_to_its_partner(tmp_path: Path) -> None:
+    """Catches a scalar fact need left without its verb, so a second array in a system would leave it ambiguous.
+
+    Example: a battery whose ``pv_power`` need reads one array's peak power gets the ``PVArray`` partner and
+    ``bind: {pv_power: PVArray}``. The real battery's fact need is ``many: true`` and takes no verb, so the
+    scalar shape is an inline assembly of mock classes.
+    """
+    library = Library(tmp_path)
+    library.add(
+        "sampled/scalar_battery",
+        f"""
+        schema_version: 4
+        kind: assembly
+        name: sampled/scalar_battery
+        description: A battery whose fact need reads the peak power of one array.
+        components:
+          Battery: {{class: {MOCKS}.MockBattery, preset: sized_to_pv}}
+        interface:
+          needs:
+            pv_power: {{fact: pv_peak_power_in_watt, into: [Battery]}}
+        tests: {{bounds: [], monotone: []}}
+        """,
+    )
+    assembly = library.resolver().resolve("sampled/scalar_battery", "test")
+    document = isolation_document(assembly, {}, TestPartnerRegistry.from_directories([Mocks.LIBRARY]))
+    assert list(document["components"]) == ["Weather", "PVArray"]
+    entry = document["imports"][SUBJECT]
+    assert {verb: entry[verb] for verb in ("bind", "optional-bind") if verb in entry} == {
+        "bind": {"pv_power": "PVArray"}
+    }
+
+
+@pytest.mark.assemblies
 def test_a_fact_a_member_reads_without_a_port_gets_its_registered_provider(tmp_path: Path) -> None:
     """A battery whose law reads the arrays' peak power by the bare-fact rule, with no fact port, gets the array."""
     library = Library(tmp_path)

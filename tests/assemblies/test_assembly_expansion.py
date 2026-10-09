@@ -14,18 +14,17 @@ from hisim.energy_system.loader import dump_energy_system, parse_energy_system
 from hisim.energy_system.model import DefaultInputs, ExplicitWire
 from hisim.energy_system.source_lines import LineIndex
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiAddressStep, KpiSource
-from tests.assemblies.helpers import EMS, MOCKS, OCCUPANCY, WEATHER, Library, Mocks, build_text, expand_text, site
-from tests.assemblies.mock_components import MockPVSystemConfig
+from tests.assemblies.helpers import Library, Mocks, Real, both_libraries, build_text, expand_text, imports, site
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-HEATER = "heater: {assembly: mock/electric_heater"
+HEATER = "heater: {assembly: mock/variant_heater"
 
 
 def expand_house():
     """The mock house, expanded against the mock library."""
     model = parse_energy_system(Mocks.HOUSE)
     lines = LineIndex.from_text(Mocks.HOUSE.read_text(encoding="utf-8"), Mocks.HOUSE.name)
-    return expand_imports(model, AssemblyResolver([Mocks.LIBRARY]), lines=lines)
+    return expand_imports(model, both_libraries(), lines=lines)
 
 
 #: Every committed energy-system file that imports nothing; a composed file is checked by its gate
@@ -51,7 +50,7 @@ def test_every_committed_file_expands_to_itself(path: Path) -> None:
 def test_the_expansion_is_idempotent() -> None:
     """Catches a second expansion changing the flat file the first one produced."""
     flat, _record = expand_house()
-    again, record = expand_imports(flat, AssemblyResolver([Mocks.LIBRARY]))
+    again, record = expand_imports(flat, both_libraries())
     assert again is flat and record.is_empty and flat.schema_version == 3
 
 
@@ -73,14 +72,14 @@ def test_site_entries_come_first_then_each_import_in_file_order() -> None:
     assert record.sequence == tuple(flat.components) == tuple(record.to_document()["sequence"])
 
 
-TANK_AND_HEATER = "tank: {assembly: mock/hot_water_tank{tank}}\nheater: {assembly: mock/electric_heater{heater}}"
+TANK_AND_HEATER = "tank: {assembly: mock/wired_tank{tank}}\nheater: {assembly: mock/variant_heater{heater}}"
 
 
 def ordered(weather: str = "", occupancy: str = "", tank: str = "", heater: str = "") -> str:
     """A file of Weather, Occupancy, a tank and a heater, each with the given ``order:`` suffix."""
     return site(
-        WEATHER.replace("}", weather + "}"),
-        OCCUPANCY.replace("}", occupancy + "}"),
+        Mocks.WEATHER.replace("}", weather + "}"),
+        Mocks.OCCUPANCY.replace("}", occupancy + "}"),
         imports=TANK_AND_HEATER.replace("{tank}", tank).replace("{heater}", heater),
     )
 
@@ -112,8 +111,8 @@ def test_order_sorts_the_entries_carrying_it_then_the_others_follow_in_file_orde
 def test_an_import_with_instances_is_one_block_in_written_order() -> None:
     """Catches ``order:`` on an import separating its instances or reversing them."""
     text = site(
-        WEATHER.replace("}", ", order: 2}"),
-        imports="pv: {assembly: mock/pv_array, order: 1, instances: {west: {azimuth_in_degree: 270}, east: {}}}",
+        Real.WEATHER[:-1] + ", order: 2}",
+        imports="pv: {assembly: pv/array, order: 1, instances: {west: {azimuth_in_degree: 270}, east: {}}}",
     )
     assert list(expand_text(text)[0].components) == ["pv-west-PVSystem", "pv-east-PVSystem", "Weather"]
 
@@ -131,7 +130,7 @@ def test_two_instances_get_one_step_addresses_and_their_kpi_sources_carry_them()
     """Catches two arrays sharing a name, or a KPI source losing the instance it came from."""
     flat, record = expand_house()
     east, west = record.addresses["pv-east-PVSystem"], record.addresses["pv-west-PVSystem"]
-    assert east == ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="mock/pv_array")
+    assert east == ComponentID("PVSystem", path=(AddressStep("pv", "east"),), assembly="mock/labelled_array")
     assert (east.key, west.key) == ("pv-east-PVSystem", "pv-west-PVSystem")
     assert east.display_name == "PV array, east, azimuth 90"
     source = KpiSource.for_component(east, DisplayConfig())
@@ -140,7 +139,7 @@ def test_two_instances_get_one_step_addresses_and_their_kpi_sources_carry_them()
         "pv",
         "east",
         "PVSystem",
-        "mock/pv_array",
+        "mock/labelled_array",
     )
     assert source.display_name == "PV array, east, azimuth 90"
     assert flat.addresses == record.addresses
@@ -168,12 +167,15 @@ def test_parameters_are_substituted_and_the_lowered_items_land_at_their_placehol
 @pytest.mark.assemblies
 def test_a_parameter_at_its_presets_value_auto_or_none_writes_no_config_line() -> None:
     """Catches the expansion writing a line the twin has not (G9, D28): a value the preset gives, AUTO or none."""
-    imports = "pv: {assembly: mock/pv_array}\nbattery: {assembly: mock/battery}"
-    flat, _record = expand_text(site(WEATHER, imports=imports))
-    # azimuth 180 and tilt 30 are the rooftop preset's; the share resolves to none; power 5000 is an override.
-    assert flat.components["pv-PVSystem"].config == {"power_in_watt": 5000}
-    # The capacity resolves to AUTO, which leaves the field with its law.
-    assert "capacity_in_kwh" not in flat.components["battery-Battery"].config
+    house = site(Real.WEATHER) + imports("pv: {assembly: pv/array}", "battery: {assembly: storage/battery}")
+    flat, _record = expand_text(house)
+    # azimuth 180 and tilt 30 are the rooftop preset's, the share 1.0 too, and the power resolves to AUTO; the
+    # location is a literal of the assembly, not a parameter.
+    assert flat.components["pv-PVSystem"].config == {"location": "AACHEN"}
+    # The capacity and the inverter power resolve to AUTO, which leaves both fields with their laws.
+    assert flat.components["battery-Battery"].config == {}
+    flat, _record = expand_text(array("{tilt_in_degree: 40}"))
+    assert flat.components["pv-PVSystem"].config == {"location": "AACHEN", "tilt": 40}
 
 
 @pytest.mark.assemblies
@@ -188,7 +190,6 @@ def test_an_override_writes_its_line_and_the_record_keeps_every_parameter() -> N
         "azimuth_in_degree": 90,
         "tilt_in_degree": 30,
         "power_in_watt": 5000,
-        "share_of_roof": None,
         "facing": "east",
     }
 
@@ -198,28 +199,28 @@ def test_a_member_without_a_preset_compares_with_the_field_default(tmp_path: Pat
     """Catches G9 comparing a member configured by its own block with anything but its class's field default."""
     library = Library(tmp_path)
     library.add(
-        "mock/plain_tank",
+        "test/plain_tank",
         f"""
         schema_version: 4
         kind: assembly
-        name: mock/plain_tank
+        name: test/plain_tank
         description: A tank configured by its own block.
         parameters:
           volume_in_liter:
             {{type: float, unit: LITER, default: 150, range: {{min: 50, max: 500}}, description: Volume.}}
         components:
           Tank:
-            class: {MOCKS}.MockTank
+            class: {Mocks.CLASSES}.MockTank
             config: {{volume_in_liter: {{$param: volume_in_liter}}}}
         tests:
           bounds: [{{output: Tank.WaterTemperature, unit: CELSIUS, min: 0, max: 100}}]
           monotone: [{{parameter: volume_in_liter, kpi: Standby heat losses, member: Tank, direction: increasing}}]
         """,
     )
-    flat, _record = expand_text(site(WEATHER, imports="tank: {assembly: mock/plain_tank}"), library.resolver())
+    flat, _record = expand_text(site(Mocks.WEATHER, imports="tank: {assembly: test/plain_tank}"), library.resolver())
     assert flat.components["tank-Tank"].config == {}
     flat, _record = expand_text(
-        site(WEATHER, imports="tank: {assembly: mock/plain_tank, parameters: {volume_in_liter: 200}}"),
+        site(Mocks.WEATHER, imports="tank: {assembly: test/plain_tank, parameters: {volume_in_liter: 200}}"),
         library.resolver(),
     )
     assert flat.components["tank-Tank"].config == {"volume_in_liter": 200}
@@ -237,11 +238,11 @@ def test_a_member_configured_by_a_named_constructor_always_writes_its_fed_fields
     """
     library = Library(tmp_path)
     library.add(
-        "mock/built_weather",
+        "test/built_weather",
         """
         schema_version: 4
         kind: assembly
-        name: mock/built_weather
+        name: test/built_weather
         description: A weather configured by its named constructor.
         parameters:
           predictive:
@@ -255,7 +256,7 @@ def test_a_member_configured_by_a_named_constructor_always_writes_its_fed_fields
         tests: {bounds: [], monotone: []}
         """,
     )
-    flat, _record = expand_text(site(imports="weather: {assembly: mock/built_weather}"), library.resolver())
+    flat, _record = expand_text(site(imports="weather: {assembly: test/built_weather}"), library.resolver())
     assert flat.components["weather-Weather"].config == {"predictive_control": False}
 
 
@@ -264,9 +265,9 @@ def test_the_import_record_states_what_each_instance_was_given_and_how_each_port
     """Catches an import record that cannot say which assembly ran, with what, bound to what."""
     _flat, record = expand_house()
     west = record.instance("pv", "west")
-    assert west.assembly == "mock/pv_array" and len(west.sha256) == 64
+    assert west.assembly == "mock/labelled_array" and len(west.sha256) == 64
     assert west.parameters_given == {"azimuth_in_degree": 270, "facing": "west", "power_in_watt": 3000}
-    assert west.parameters_resolved["tilt_in_degree"] == 30 and west.parameters_resolved["share_of_roof"] is None
+    assert west.parameters_resolved["tilt_in_degree"] == 30 and west.parameters_resolved["facing"] == "west"
     assert west.reserved == {"installation_year": 2026}
     heater = record.instance("heater")
     assert heater.variants == {"thermostat": "fitted"}
@@ -285,7 +286,7 @@ def test_the_import_record_states_what_each_instance_was_given_and_how_each_port
     assert document["addresses"]["pv-east-PVSystem"] == {
         "path": [{"import": "pv", "instance": "east"}],
         "member": "PVSystem",
-        "assembly": "mock/pv_array",
+        "assembly": "mock/labelled_array",
         "display_name": "PV array, east, azimuth 90",
     }
 
@@ -298,13 +299,13 @@ def test_the_source_map_names_the_import_the_instance_and_both_files_lines() -> 
     component = entries[("pv-west-PVSystem", "component")]
     assert (component.import_key, component.instance, component.member) == ("pv", "west", "PVSystem")
     assert [location.text for location in component.chain] == [
-        "house.energy_system.yaml:32",
-        "mock/pv_array.assembly.yaml:24",
+        "house.energy_system.yaml:34",
+        "mock/labelled_array.assembly.yaml:22",
     ]
     lowered = entries[("pv-west-PVSystem", "inputs[0]")]
     assert lowered.note == "port weather bound to Weather (default)"
-    assert lowered.chain[-1].text == "mock/pv_array.assembly.yaml:34"
-    assert entries[("Monitor", "inputs[0]")].chain[-1].text == "house.energy_system.yaml:22"
+    assert lowered.chain[-1].text == "mock/labelled_array.assembly.yaml:31"
+    assert entries[("Monitor", "inputs[0]")].chain[-1].text == "house.energy_system.yaml:24"
     assert ("pv-west-PVSystem", "config.azimuth") in entries
 
 
@@ -313,7 +314,9 @@ def test_a_variant_without_the_member_drops_it_its_inputs_and_its_ports() -> Non
     """Catches a member of an unselected option surviving, or its ports demanding a partner."""
     flat, record = expand_text(
         site(
-            WEATHER, OCCUPANCY, imports="heater: {assembly: mock/electric_heater, parameters: {with_thermostat: false}}"
+            Mocks.WEATHER,
+            Mocks.OCCUPANCY,
+            imports="heater: {assembly: mock/variant_heater, parameters: {with_thermostat: false}}",
         )
     )
     assert list(flat.components) == ["Weather", "Occupancy", "heater-Heater"]
@@ -329,14 +332,15 @@ def test_a_variant_without_the_member_drops_it_its_inputs_and_its_ports() -> Non
     [
         ("{volume: 3}", "EF-76", ("volume", "volume_in_liter")),
         ("{volume_in_liter: big}", "EF-76", ("volume_in_liter", "'big' is not a number")),
-        ("{volume_in_liter: 900}", "EF-76", ("volume_in_liter", "outside the range")),
+        ("{volume_in_liter: 2000}", "EF-76", ("volume_in_liter", "outside the range")),
     ],
 )
 def test_a_parameter_that_does_not_fit_is_refused(parameters: str, code: str, names: tuple) -> None:
     """Catches an unknown parameter, a wrong type or a value outside the range passing into a member."""
     with pytest.raises(EnergySystemAssemblyError, match=code) as refusal:
         expand_text(
-            site(WEATHER, OCCUPANCY, imports=f"tank: {{assembly: mock/hot_water_tank, parameters: {parameters}}}")
+            site(Real.WEATHER, Real.OCCUPANCY)
+            + imports(f"tank: {{assembly: dhw/indirect_cylinder, parameters: {parameters}}}")
         )
     for name in names + ("import 'tank'",):
         assert name in str(refusal.value)
@@ -346,53 +350,74 @@ def test_a_parameter_that_does_not_fit_is_refused(parameters: str, code: str, na
 def test_an_enum_value_outside_its_values_is_refused() -> None:
     """Catches an enum parameter taking a value its declaration does not allow."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-76") as refusal:
-        expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {facing: north}}"))
+        expand_text(site(Mocks.WEATHER, imports="pv: {assembly: mock/labelled_array, parameters: {facing: north}}"))
     assert "facing" in str(refusal.value) and "'north'" in str(refusal.value)
+
+
+def array(parameters: str, *site_entries: str) -> str:
+    """A house of a weather station, the given site entries and one real PV array with the given parameters."""
+    return site(Real.WEATHER, *site_entries) + imports(f"pv: {{assembly: pv/array, parameters: {parameters}}}")
 
 
 @pytest.mark.assemblies
 def test_an_exactly_one_of_constraint_left_with_no_member_stated_is_refused() -> None:
     """Catches the one written member set to none leaving the component with neither alternative."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
-        expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {power_in_watt: none}}"))
+        expand_text(array("{power_in_watt: none}"))
     message = str(refusal.value)
-    for name in ("power_in_watt, share_of_roof", "0 are (none)", "import 'pv'"):
+    for name in ("power_in_watt, share_of_maximum_pv_potential", "0 are (none)", "import 'pv'"):
         assert name in message, f"{name!r} is not in: {message}"
 
 
 @pytest.mark.assemblies
 def test_stating_one_member_of_an_exactly_one_of_unstates_the_others_defaults(tmp_path: Path) -> None:
-    """Catches the sibling's default (power 5000 W) still counting when the import writes only the share (D27)."""
-    text = site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {share_of_roof: 0.5}}")
+    """Catches the sibling's default (the share 1.0) still counting when the import writes only the power (D27).
+
+    The other way round, a stated share leaves the power with its law: AUTO counts as unstated, writes no
+    line, and the built array's power is half of what the whole roof gives.
+    """
+    flat, record = expand_text(array("{power_in_watt: 5000}"))
+    assert record.instance("pv").parameters_resolved["share_of_maximum_pv_potential"] is None
+    assert flat.components["pv-PVSystem"].config == {"location": "AACHEN", "power_in_watt": 5000}
+    text = array("{share_of_maximum_pv_potential: 0.5}")
     flat, record = expand_text(text)
     assert record.instance("pv").parameters_resolved["power_in_watt"] is None
-    assert record.instance("pv").parameters_resolved["share_of_roof"] == 0.5
+    assert record.instance("pv").parameters_resolved["share_of_maximum_pv_potential"] == 0.5
     config = flat.components["pv-PVSystem"].config
-    # G9: the unstated power writes no line, so the preset's open power stays and the share is read.
-    assert "power_in_watt" not in config and config["share_of_roof"] == 0.5
-    built = dict(build_text(text, tmp_path).wired.components)["pv-PVSystem"].config
-    assert built.power_in_watt is None
-    assert built.peak_power_in_watt() == 0.5 * MockPVSystemConfig.ROOF_PEAK_POWER_IN_WATT
+    # G9: the unstated power writes no line, so the preset's open power stays and its law reads the share.
+    assert "power_in_watt" not in config and config["share_of_maximum_pv_potential"] == 0.5
+    half, whole = (
+        dict(build_text(array(parameters, Real.OCCUPANCY, Real.BUILDING), tmp_path / name).wired.components)[
+            "pv-PVSystem"
+        ].config
+        for name, parameters in (("half", "{share_of_maximum_pv_potential: 0.5}"), ("whole", "{}"))
+    )
+    assert half.share_of_maximum_pv_potential == 0.5 and whole.share_of_maximum_pv_potential == 1.0
+    assert half.power_in_watt == pytest.approx(0.5 * whole.power_in_watt) and half.power_in_watt > 0
 
 
 @pytest.mark.assemblies
 def test_zero_is_a_stated_value_for_an_exactly_one_of_constraint() -> None:
-    """Catches ``0 == False`` making a power of 0 count as unstated: alone it is the one stated value."""
-    flat, record = expand_text(site(WEATHER, imports="pv: {assembly: mock/pv_array, parameters: {power_in_watt: 0}}"))
-    assert record.instance("pv").parameters_resolved["power_in_watt"] == 0
-    assert flat.components["pv-PVSystem"].config["power_in_watt"] == 0
+    """Catches ``0 == False`` making a share of 0 count as unstated: alone it is the one stated value."""
+    flat, record = expand_text(array("{share_of_maximum_pv_potential: 0}"))
+    assert record.instance("pv").parameters_resolved["share_of_maximum_pv_potential"] == 0
+    assert flat.components["pv-PVSystem"].config["share_of_maximum_pv_potential"] == 0
 
 
 @pytest.mark.assemblies
 @pytest.mark.parametrize(
-    "parameters", ["{power_in_watt: 0, share_of_roof: 0.5}", "{power_in_watt: 5000, share_of_roof: 0.5}"]
+    "parameters",
+    [
+        "{power_in_watt: 5000, share_of_maximum_pv_potential: 0}",
+        "{power_in_watt: 5000, share_of_maximum_pv_potential: 0.5}",
+    ],
 )
 def test_an_import_writing_two_members_of_an_exactly_one_of_is_refused(parameters: str) -> None:
     """Catches two stated alternatives passing, where stating one unstates the other (0 is stated)."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-77") as refusal:
-        expand_text(site(WEATHER, imports=f"pv: {{assembly: mock/pv_array, parameters: {parameters}}}"))
+        expand_text(array(parameters))
     message = str(refusal.value)
-    for name in ("states 2 of them (power_in_watt, share_of_roof)", "state one", "import 'pv'"):
+    for name in ("states 2 of them (power_in_watt, share_of_maximum_pv_potential)", "state one", "import 'pv'"):
         assert name in message, f"{name!r} is not in: {message}"
 
 
@@ -400,7 +425,7 @@ def test_an_import_writing_two_members_of_an_exactly_one_of_is_refused(parameter
 def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
     """Catches an import writing ``none`` for a variant's selector crashing on an assertion."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-76") as refusal:
-        expand_text(site(WEATHER, OCCUPANCY, imports=f"{HEATER}, parameters: {{with_thermostat: none}}}}"))
+        expand_text(site(Mocks.WEATHER, Mocks.OCCUPANCY, imports=f"{HEATER}, parameters: {{with_thermostat: none}}}}"))
     message = str(refusal.value)
     for name in ("with_thermostat", "thermostat", "None", "import 'heater'"):
         assert name in message, f"{name!r} is not in: {message}"
@@ -410,4 +435,4 @@ def test_a_variant_selector_left_at_no_value_is_refused_by_name() -> None:
 def test_an_import_named_like_a_component_is_refused() -> None:
     """Catches a verb's partner reference that could mean a component or an import."""
     with pytest.raises(EnergySystemAssemblyError, match="EF-52"):
-        expand_text(site(WEATHER, EMS, imports="Ems: {assembly: mock/pv_array}"))
+        expand_text(site(Mocks.WEATHER, Mocks.EMS, imports="Ems: {assembly: pv/array}"))

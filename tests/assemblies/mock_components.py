@@ -1,9 +1,10 @@
-"""Mock components for the mock assemblies: small, deterministic, and fully declared.
+"""Mock components for the mock assemblies and the inline refusal assemblies: small, deterministic and declared.
 
 A mock assembly or a mock class exists only for a shape the real library cannot show
-(``assemblies_spec.md`` §9.3); everything that can run on a real assembly moves to the real library
-when it exists (§13 step 4). The names say so: the family ``mock/``, the classes ``Mock*``, each with
-one line naming the real class or role it stands in for.
+(``assemblies_spec.md`` §9.3): a refusal, a deliberately wrong contract, a variant, a conditional
+port, a scalar fact need, a need contradicting its member's or its meter's class. Every test that
+can run on a real assembly runs on ``energy_systems/assemblies/``. The names say so: the family
+``mock/``, the classes ``Mock*``, each with one line naming the real class or role it stands in for.
 
 Like every HiSim component, each mock creates its inputs, its outputs and its default connections in
 its constructor and nowhere else; the wiring stage of a build reads them off the constructed instance.
@@ -20,9 +21,9 @@ For the circuit, carrier and fact ports a gas boiler charges a cylinder over the
 the boiler owns ``MassFlowDhw`` and ``SupplyTemperatureDhw``, the cylinder ``ReturnTemperatureDhw``,
 each reading the other's by its default connections — and burns natural gas a gas meter observes
 through the default feed its constructor declares; a battery is sized from the arrays' peak power.
-For the selectors an energy manager and an electricity meter declare their feeds as the real ones
-do, the manager at the real controller's weights (``L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS``);
-a hot-water heater beside the space heaters is ranked at the hot-water weight.
+For the weight refusal an energy manager declares its feeds as the real one does, at the real
+controller's weights (``L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS``); a hot-water heater beside
+the space heaters is ranked at the hot-water weight.
 """
 
 from __future__ import annotations
@@ -218,9 +219,6 @@ class MockOccupancyConfig(ConfigBase):
 
     component_id: ComponentID
     residents: int = 2
-    #: Whether the residents' electricity is an output at all; without it the occupancy stands in for a
-    #: component built without an output its observers declare a feed from (a heat pump without its DHW side).
-    with_electricity: bool = True
 
     @preset
     @classmethod
@@ -239,15 +237,13 @@ class MockOccupancy(MockComponent):
         """Builds the occupancy."""
         super().__init__(my_simulation_parameters, config)
         self.output_port("WaterDemand", lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP)
-        if config.with_electricity:
-            self.output_port("ElectricityConsumption", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.output_port("ElectricityConsumption", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Draws in the morning and the evening."""
         draw = 10.0 if timestep % 96 in (28, 29, 76, 77) else 0.0
         self.set(stsv, "WaterDemand", draw)
-        if self.config.with_electricity:
-            self.set(stsv, "ElectricityConsumption", 150.0 * self.config.residents)
+        self.set(stsv, "ElectricityConsumption", 150.0 * self.config.residents)
 
 
 # ------------------------------------------------------------------------------------------------ pv
@@ -256,23 +252,18 @@ class MockOccupancy(MockComponent):
 @dataclass_json
 @dataclass
 class MockPVSystemConfig(ConfigBase):
-    """A PV array: its peak power — or the share of the roof it covers instead — and its orientation.
+    """A PV array: its peak power and its orientation.
 
-    As the real ``PVSystemConfig``: the preset leaves the power open and gives a share, and a stated
-    power wins over the share, so an import stating either one overrides only that field (G9: a
-    ``none`` writes no line, and the preset's value of the other field stays).
+    Example: ``{preset: rooftop, config: {power_in_watt: 5000}}`` is a south-facing 5 kWp array at
+    30° tilt. As in the real ``PVSystemConfig``, the preset leaves the power open, so an import that
+    states a power writes its line (G9); a component built without one is refused.
     """
 
     MAIN_CLASS = "tests.assemblies.mock_components.MockPVSystem"
 
-    #: The peak power of the whole roof, which a share of it is taken of.
-    ROOF_PEAK_POWER_IN_WATT: ClassVar[float] = 20000.0
-
     component_id: ComponentID
-    #: The peak power; ``None`` takes the share of the roof's.
+    #: The peak power, which a battery beside the array is sized from; the preset leaves it open.
     power_in_watt: Optional[float] = field(default=None, metadata={UNIT: lt.Units.WATT})
-    #: The share of the roof the array covers, read when no power is given; dimensionless (5 kWp of the roof).
-    share_of_roof: Optional[float] = field(default=0.25, metadata={UNIT: lt.Units.ANY})
     azimuth: float = field(default=180.0, metadata={UNIT: lt.Units.DEGREES})
     tilt: float = field(default=30.0, metadata={UNIT: lt.Units.DEGREES})
     #: A field without a declared unit, for the refusal of a fed field without one.
@@ -287,12 +278,14 @@ class MockPVSystemConfig(ConfigBase):
     )
 
     def peak_power_in_watt(self) -> float:
-        """The peak power: the one given, else the share of the roof's."""
-        if self.power_in_watt is not None:
-            return self.power_in_watt
-        if self.share_of_roof is None:
-            raise ValueError(f"{self.component_id.name} gives neither power_in_watt nor share_of_roof.")
-        return self.share_of_roof * self.ROOF_PEAK_POWER_IN_WATT
+        """The stated peak power.
+
+        Raises:
+            ValueError: The array states no ``power_in_watt``.
+        """
+        if self.power_in_watt is None:
+            raise ValueError(f"{self.component_id.name} states no power_in_watt.")
+        return self.power_in_watt
 
     @preset
     @classmethod
@@ -513,7 +506,6 @@ class MockController(MockComponent):
         self.output_port("Signal", lt.LoadTypes.ON_OFF, lt.Units.ANY)
         self.defaults_from("MockTank", {"TankTemperature": "WaterTemperature"})
         self.defaults_from("MockEms", {"Modifier": "Modifier"})
-        self.defaults_from("MockEnergyManager", {"Modifier": "Modifier"})
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """On in one step of four, longer the higher the (raised) set point; off above a safety limit.
@@ -1173,7 +1165,8 @@ class MockEnergyManager(MockAggregator):
     It observes electricity flows, ranks the controllable ones by weight and writes each one's
     dispatch output — the surplus — and sums what it observes into ``TotalElectricityToOrFromGrid``;
     its ``Modifier`` raises an L1's set point while there is surplus. Stands in for the real
-    ``L2GenericEnergyManagementSystem`` in the mock assemblies.
+    ``L2GenericEnergyManagementSystem`` in the weight refusal of the selector tests and in the library
+    check's refusal of an observer port into a member an active option lacks.
     """
 
     GRID_BALANCE_KPI = "Grid balance"
@@ -1213,67 +1206,3 @@ class MockEnergyManager(MockAggregator):
                 stsv.set_output_value(output, max(surplus, 0.0))
         stsv.set_output_value(self.ports_out["TotalElectricityToOrFromGrid"], production - uncontrolled - controlled)
         stsv.set_output_value(self.ports_out["Modifier"], self.config.offset_in_kelvin if surplus > 0 else 0.0)
-
-
-@dataclass_json
-@dataclass
-class MockElectricityMeterConfig(ConfigBase):
-    """An electricity meter."""
-
-    MAIN_CLASS = "tests.assemblies.mock_components.MockElectricityMeter"
-
-    component_id: ComponentID
-    #: A calibration factor of the reading; dimensionless (a record writes a configuration's fields).
-    calibration: float = field(default=1.0, metadata={UNIT: lt.Units.ANY})
-
-    @preset
-    @classmethod
-    def preset_standard(cls, name: str) -> "MockElectricityMeterConfig":
-        """A meter."""
-        return cls(component_id=ComponentID(name=name))
-
-
-class MockElectricityMeter(MockAggregator):
-    """Books production minus consumption as grid exchange, on the real meter's two channels.
-
-    It declares the flows it may observe — the residents, a PV array and a heater — and an energy
-    manager's grid balance on the production channel at 999, the feed the real meter declares from
-    the real EMS (``assemblies_spec.md`` §4.3). Stands in for the real ``ElectricityMeter``.
-    """
-
-    EXCHANGE_KPI = "Grid exchange"
-
-    CHANNELS = (
-        DynamicConnectionChannel(
-            key="production",
-            tags=frozenset({lt.InandOutputType.ELECTRICITY_PRODUCTION}),
-            load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
-            dispatch=DispatchRule.FORBIDDEN,
-        ),
-        DynamicConnectionChannel(
-            key="consumption_uncontrolled",
-            tags=frozenset({lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED}),
-            load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
-            dispatch=DispatchRule.FORBIDDEN,
-        ),
-    )
-
-    SUM_KPIS = {EXCHANGE_KPI: ("ElectricityToAndFromGrid", KpiAggregation.POWER_IN_KWH)}
-
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: MockElectricityMeterConfig) -> None:
-        """Builds the meter: its exchange output and every flow it may observe, all measured."""
-        super().__init__(my_simulation_parameters, config)
-        self.output_port("ElectricityToAndFromGrid", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
-        uncontrolled = lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-        production = lt.InandOutputType.ELECTRICITY_PRODUCTION
-        self.observe(MockOccupancy, "ElectricityConsumption", [uncontrolled], MEASURED)
-        self.observe(MockPVSystem, "ElectricityOutput", [lt.ComponentType.PV, production], MEASURED)
-        self.observe(MockHeater, "ElectricityInput", [lt.ComponentType.ELECTRIC_HEATING_SH, uncontrolled], MEASURED)
-        self.observe(MockEnergyManager, "TotalElectricityToOrFromGrid", [production], MEASURED)
-
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Production minus consumption."""
-        exchange = self.channel_sum(stsv, "production") - self.channel_sum(stsv, "consumption_uncontrolled")
-        stsv.set_output_value(self.ports_out["ElectricityToAndFromGrid"], exchange * self.config.calibration)

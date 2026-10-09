@@ -15,7 +15,7 @@ from hisim.config.sizing import declared_field_unit
 from hisim.energy_system.assemblies.library import check_assembly
 from hisim.energy_system.assemblies.resolver import AssemblyResolver
 from hisim.energy_system.errors import EnergySystemAssemblyError
-from tests.assemblies.helpers import OCCUPANCY, WEATHER, Library, Mocks, expand_text, site
+from tests.assemblies.helpers import Library, Mocks, expand_text, site
 
 #: A valid assembly every case of the library check changes in one place.
 BASE = f"""\
@@ -335,7 +335,7 @@ def test_an_observer_port_into_a_member_an_active_option_lacks_is_refused(tmp_pa
     ).replace(
         "Heater: {class: tests.assemblies.mock_components.MockHeater, preset: standard}",
         "Heater: {class: tests.assemblies.mock_components.MockHeater, preset: standard}\n          "
-        f"Meter: {{class: {Mocks.CLASSES}.MockElectricityMeter, preset: standard}}",
+        f"Meter: {{class: {Mocks.CLASSES}.MockEnergyManager, preset: optimize_own_consumption}}",
     )
     problems = problems_of(tmp_path, text)
     assert "the port 'reading' names 'Meter', which the option 'off' of the variant 'heating' does not have" in problems
@@ -410,7 +410,7 @@ def test_the_check_lists_every_problem_at_once_and_the_expansion_runs_it(tmp_pat
     library = Library(tmp_path)
     library.add("test/base", BASE.replace(" description: Volume.}", "}").replace("unit: LITER", "unit: WATT"))
     with pytest.raises(EnergySystemAssemblyError, match="EF-75") as refusal:
-        expand_text(site(WEATHER, OCCUPANCY, imports="tank: {assembly: test/base}"), library.resolver())
+        expand_text(site(Mocks.WEATHER, Mocks.OCCUPANCY, imports="tank: {assembly: test/base}"), library.resolver())
     assert "2 problems" in str(refusal.value)
     assert "test/base.assembly.yaml:5" in str(refusal.value)
 
@@ -463,7 +463,7 @@ def test_the_resolver_refuses_a_missing_a_doubled_and_a_malformed_assembly(tmp_p
 def test_the_resolver_searches_the_environment_variable(monkeypatch: pytest.MonkeyPatch) -> None:
     """Catches ``HISIM_ASSEMBLY_PATH`` not being searched."""
     monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
-    assert AssemblyResolver.default().resolve("mock/pv_array", "here").path == "mock/pv_array"
+    assert AssemblyResolver.default().resolve("mock/labelled_array", "here").path == "mock/labelled_array"
 
 
 @pytest.mark.assemblies
@@ -472,10 +472,10 @@ def test_describe_prints_the_interface_the_parameters_and_the_contract(
 ) -> None:
     """Catches ``describe <family>/<name>`` leaving out a port, a parameter's unit or the test contract."""
     monkeypatch.setenv(AssemblyResolver.ENVIRONMENT_VARIABLE, str(Mocks.LIBRARY))
-    assert cli.main(["energy-system", "describe", "mock/electric_heater"]) == 0
+    assert cli.main(["energy-system", "describe", "mock/variant_heater"]) == 0
     out = capsys.readouterr().out
     for line in (
-        "mock/electric_heater — A mock electric heater and its thermostat.",
+        "mock/variant_heater — A mock electric heater and its thermostat.",
         "needs: tank_temperature need from MockTank into Controller; required when with_thermostat in [True]",
         "needs: ems_modifier     need from MockEms into Controller; optional (bind:, optional-bind: or none:), "
         "active when with_thermostat in [True]",
@@ -488,11 +488,21 @@ def test_describe_prints_the_interface_the_parameters_and_the_contract(
         "bounds    Heater.ThermalPower [WATT]: [0, 6000]",
     ):
         assert line in out, f"{line!r} is not in:\n{out}"
-    assert cli.main(["energy-system", "describe", "mock/pv_array"]) == 0
+    assert cli.main(["energy-system", "describe", "mock/labelled_array"]) == 0
     out = capsys.readouterr().out
     for line in (
         "bounds    PV production of PVSystem: [0, …]",
         "expect    at the defaults: PV production of PVSystem [0, 100]",
+    ):
+        assert line in out, f"{line!r} is not in:\n{out}"
+    assert cli.main(["energy-system", "describe", "pv/array"]) == 0
+    out = capsys.readouterr().out
+    for line in (
+        "pv/array — One PV array on the roof, with its inverter (pvlib, CEC databases).",
+        "needs: weather          need from Weather into PVSystem; required",
+        "exactly_one_of: [power_in_watt, share_of_maximum_pv_potential]",
+        "monotone  power_in_watt rises: PV production of the building (derived) increasing",
+        "expect    at the defaults: PV production of the building (derived) [3, 7]",
     ):
         assert line in out, f"{line!r} is not in:\n{out}"
     assert cli.main(["energy-system", "describe", "mock/nothing"]) != 0
@@ -510,9 +520,9 @@ def test_facts_lists_an_imports_parameters_and_selected_variants_as_knobs(
     for text in (
         "imports.pv.east",
         "imports.pv.west",
-        "mock/pv_array",
+        "mock/labelled_array",
         "given: azimuth_in_degree=270, facing='west', power_in_watt=3000",
-        "resolved: azimuth_in_degree=90, tilt_in_degree=30, power_in_watt=5000, share_of_roof=None, facing='east'",
+        "resolved: azimuth_in_degree=90, tilt_in_degree=30, power_in_watt=5000, facing='east'",
         "imports.tank",
         "given: volume_in_liter=200",
         "imports.heater",

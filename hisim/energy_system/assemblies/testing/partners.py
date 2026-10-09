@@ -4,16 +4,17 @@ An assembly runs in isolation beside the smallest set of site components its por
 partner for each. Which component stands in for what is data, not code: every library directory
 holds a ``test_partners.yaml`` beside its assemblies, and the registry is the union of those files
 along the library's search path. A partner is a named site entry, written exactly as an energy-system
-file writes one, with what it serves and the other partners it reads::
+file writes one, with what it serves and the other partners it reads. The real library's DHW
+cylinder, abridged to a boiler's circuit (``energy_systems/assemblies/test_partners.yaml``)::
 
     partners:
-      Cylinder:
-        serves: {circuit: dhw, other_end: [MockBoiler]}
-        requires: [Occupancy]
+      DHWStorage:
+        serves: [{circuit: dhw, other_end: [GenericBoiler]}, {partner: SimpleDHWStorage}]
+        requires: [UTSPConnector]
         component:
-          class: tests.assemblies.mock_components.MockCylinder
+          class: hisim.components.simple_water_storage.SimpleDHWStorage
           preset: standard
-          inputs: [Occupancy, {$port: dhw}]
+          inputs: [UTSPConnector, {$port: dhw}]
           ports: {dhw: {circuit: dhw}}
 
 ``serves`` is one of the forms below, or a list of them; a partner without ``serves`` joins a

@@ -751,6 +751,11 @@ feed checks, the energy-balance report, economics (a subject without a catalogue
   (`roadmap/declarative_energy_systems/assemblies_mockup/`) is a design document, not a test input: the schema test reads
   it only until the first real assemblies land, then the mockup is marked historical. **It is historical since
   2026-10-07** (§13 step 4): the real library is `energy_systems/assemblies/`, and the mockup stays the design record.
+  **Pruned 2026-10-08:** the format, expansion, selector, circuit, carrier and fact tests run on the real library and the
+  composed files; the mock library keeps `mock/variant_heater` (a variant, conditional ports, an enum selecting a preset),
+  `mock/wired_tank` (a need with wires bound to a provided output), `mock/labelled_array` (a display template and an
+  enum parameter, imported as two instances by the mock house) and the deliberately wrong `mock/backwards_heater`; the
+  refusals that need a class the real library does not have define inline assemblies of `Mock*` classes.
 
 ### 9.4 Testing an assembly
 
@@ -931,7 +936,8 @@ schema leaf and catalogue measure, † where HiSim lacks the feature), one `*.as
 `dry_run_heatpump_twin.md` expands the heat-pump composed file with the twin's defaults
 by hand as §2.3 describes and compares it with the twin's `ems_with_battery` option; its gap list is what this spec
 owes before §13 step 4. All design, written in v1 syntax: the lean reader and library check read every file and refuse
-only what is marked † (a class or carrier HiSim lacks) and the open points the dry run lists.
+only what is marked † (a class or carrier HiSim lacks) and the open points the dry run lists. The mockup is historical
+since 2026-10-07 (§9.3): no test reads it, and the schema test validates the real library and the mock residue.
 
 Each example is the `imports` block the translator adds to the site file (§10.1).
 

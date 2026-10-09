@@ -17,7 +17,7 @@ from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.executor import EnergySystemExecutor
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.simulationparameters import SimulationParameters
-from tests.assemblies.helpers import EMPTY_CONTRACT, WEATHER, Library, Mocks, read_system, site
+from tests.assemblies.helpers import EMPTY_CONTRACT, Library, Mocks, read_system, site
 
 
 @pytest.mark.assemblies
@@ -46,8 +46,8 @@ def test_a_mock_house_runs_records_its_imports_and_its_record_reruns(
     assert imports["instances"][3]["quote"]["source"] == "mock"
     source_map = record["metadata"]["source_map"]
     assert source_map["tank-Tank"]["inputs[1]"]["chain"] == [
-        "house.energy_system.yaml:33",
-        "mock/hot_water_tank.assembly.yaml:20",
+        "house.energy_system.yaml:35",
+        "mock/wired_tank.assembly.yaml:22",
     ]
 
     kpis = KpiFinder(json.loads((first / "all_kpis.json").read_text(encoding="utf-8")))
@@ -127,7 +127,7 @@ def test_a_wiring_refusal_of_a_lowered_item_names_where_it_came_from(tmp_path: P
             weather: {{into: [Device], partner: MockWeather}}
         {EMPTY_CONTRACT}""",
     )
-    model, lines = read_system(site(WEATHER, imports="bare: {assembly: test/bare}"))
+    model, lines = read_system(site(Mocks.WEATHER, imports="bare: {assembly: test/bare}"))
     parameters = SimulationParameters.one_day_only(2021, 900)
     parameters.result_directory = str(tmp_path / "results")
     with pytest.raises(EnergySystemWiringError, match="EF-23") as refusal:

@@ -1,0 +1,11 @@
+# One day at 15 min with the KPIs as JSON and the energy-balance report written: what the end-to-end tests of
+# the circuits, carriers, facts and selectors run on the real library. The balance check runs in every simulation.
+start_date: "2021-01-01T00:00:00"
+end_date: "2021-01-02T00:00:00"
+seconds_per_timestep: 900
+country: "DE"
+logging_level: 3
+post_processing_options:
+  - COMPUTE_KPIS
+  - WRITE_KPIS_TO_JSON
+  - EXPORT_ENERGY_BALANCE

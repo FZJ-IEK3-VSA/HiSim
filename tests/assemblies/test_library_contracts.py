@@ -10,8 +10,8 @@ parameter from the samples admitting a sweep, once per distinct point set
 (:func:`~hisim.energy_system.assemblies.testing.checks.evaluate_monotone`). The deterministic
 samples run under the ``assemblies`` marker (the PR gate's job ``pytest (assemblies)``), the Latin
 hypercube under ``nightly`` (the golden-year workflow), sized and seeded by ``--samples`` and
-``--seed``. A failure reads ``mock/pv_array sample s003 bounds PVSystem.ElectricityOutput [WATT] in
-[0, 20000]: …``.
+``--seed``. A failure reads ``pv/array sample s003 bounds PVSystem.ElectricityOutput [WATT] in
+[-100, 33000]: …``.
 
 A sample's run is made once by the module's run cache, which keeps the run of one sample at a
 time: ``tests/assemblies/conftest.py`` puts the tests of one sample next to each other, and the
@@ -66,7 +66,7 @@ class Case:
 
     @property
     def label(self) -> str:
-        """How a failure names the sample: ``mock/pv_array sample s003``."""
+        """How a failure names the sample: ``pv/array sample s003``."""
         return f"{self.assembly} sample {self.sample.sample_id}"
 
     def param(self, *values: Any, name: str = "") -> Any:

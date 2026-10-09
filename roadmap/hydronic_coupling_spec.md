@@ -356,8 +356,10 @@ validation item (§9.4); if it returns, it is solved then. The heat pump's hot-w
 and with the former strict `T0 > t_max + raise` a charge never ended (hot-water mode on 56.9 % of the time at
 60 s). The energy manager's switch-on with a surplus (`raise > 0` and the tank below `t_max`) stops at the same
 `t_max − 0.5 K` (implementer's choice, for the owner's confirmation): at `t_max`, a tank between `t_max − 0.5 K` and
-`t_max` was switched on with the raise and off without it, and since the raise follows the heat pump's draw, the
-heat-pump twin's year at 900 s toggled within steps. One exception: the solar pump decides on the node's `T̄`
+`t_max` would be switched on with the raise and off without it, and the raise follows the heat pump's draw, so it
+can come and go within a step (hisim-4g9.28); with the stop at the same point the charge's state cannot toggle with
+it (forced steps of the heat-pump twin's year at 60 s: 112312 with the switch-on at `t_max`, 97983 with it at
+`t_max − 0.5 K`). One exception: the solar pump decides on the node's `T̄`
 (§5.3, owner 2026-10-09). The hot-water supply cap at the controller's set temperature (§5) is not a decision on
 `T̄`: the controller's set temperature is a constant, and the controller still switches on `T0`.
 

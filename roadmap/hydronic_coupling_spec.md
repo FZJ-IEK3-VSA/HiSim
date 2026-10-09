@@ -250,12 +250,13 @@ supply is also capped at its controller's set temperature, the value the control
 electricity follows from that heat (§5.1). The boiler's `T_set` is its controller's 60 °C warm-water aim plus its
 10 K hysteresis, 70 °C (`GenericBoilerController.SupplyTemperatureSetDhw`); the electric heater's is its
 controller's 60 °C aim plus its 15 K hysteresis, 75 °C (`ElectricHeatingController.SupplyTemperatureSetForDHW`);
-`T_max` (80 °C, 80 °C) stays the upper bound. So a charge ends at its target inside the step rather than a whole
+the heat pump's is its hot-water controller's `t_max`, 60 °C, plus the energy manager's raise while it is active
+(`MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetDHW`); `T_max` (80 °C, 80 °C, 75 °C) stays the upper
+bound. So a charge ends at its target inside the step rather than a whole
 step past it, which made the fuel and electricity depend on the step length (gas fuel +4.4 % at 3600 s against
 60 s over a year before the cap). This is an in-step supply cap at the controller's target, not a forecast: the
-controller still decides on `T0` (D4, §10). The heat pump's hot-water side is not capped at its controller's set
-temperature: capped at 60 °C plus the energy manager's raise, the tank's `T0` never passes the controller's
-switch-off point above it and a charge does not end; this is open.
+controller still decides on `T0` (D4, §10). A supply capped at the set temperature brings the tank towards it but
+never past it, so the heat pump's hot-water controller ends a charge within 0.5 K of it (§5.5).
 
 ### 5.1 Boiler (D1: power control kept)
 
@@ -308,6 +309,9 @@ The heat pump's hot-water outlet is limited to
 no outlet limit; 75 °C is the highest flow temperature air/water heat pumps on the market reach (propane units state
 70-75 °C), and it lies above the hot-water controller's switch-off point, 60 °C plus the energy manager's 10 K
 surplus raise. A throttled step keeps hplib's flow and COP; its electricity is the throttled heat over that COP.
+Below that maximum the hot-water outlet is capped at the hot-water controller's set temperature, `t_max` (60 °C)
+plus the energy manager's raise while it is active (owner, 2026-10-09; §5): `T_out = min(T_set, T_max, hplib's
+T_out)`, the flow stays hplib's, the heat is `m c (T_out − T̄)` and the electricity that heat over the COP.
 
 ### 5.3 Solar thermal
 
@@ -323,9 +327,9 @@ the collector publishes the flow `Q_coll(T̄)/(c · 2 ΔT_n)` and the outlet tem
 when the collector heat at `T̄` is positive and the switch-on lift is reached. Deciding on `T0` made the collector's
 yield and the tank's hot-water fuel depend on the step length. The controller's full-tank stop (the tank above its
 60 °C aim) stays on `T0`: on `T̄` it has no fixed point when the pump's own heat lifts the step mean across 60 °C, and
-such a step ended at `force_convergence` (1110 steps of the gas-and-solar twin's year at 900 s, 21507 at 60 s;
-13, 11 and 7 at 60, 900 and 3600 s with the stop on `T0`). This reading of the owner's rule is the implementer's
-and awaits the owner's confirmation. The controller's minimum pump flow is halved to
+such a step ended at `force_convergence` (owner decision, 2026-10-09: the stop stays on `T0` because on `T̄` it has
+no fixed point; the gas-and-solar twin's year has 21507 forced steps at 60 s with the stop on `T̄`, 13 with it on
+`T0`, and 1110 against 11 at 900 s). The controller's minimum pump flow is halved to
 0.005 kg/s, the same collector heat as before (owner, 2026-10-09).
 
 ### 5.4 District heating substation
@@ -346,7 +350,14 @@ iteration and freezing them under `force_convergence` changes nothing. There is 
 on/off controllers and no `DhwChargeYield`; #864's `StorageForecast` and `DhwChargeYield` are dropped. DHW
 priority stays in `DiverterValve` (`dual_circuit_system.py:108-112`), one circuit per step (D6). Whether
 heat-pump buffers run dry and underheat at coarse steps once the vessels conserve energy (hisim-6ehm) is a
-validation item (§9.4); if it returns, it is solved then. One exception: the solar pump decides on the node's `T̄`
+validation item (§9.4); if it returns, it is solved then. The heat pump's hot-water controller ends a charge when
+`T0 ≥ t_max + raise − 0.5 K` (`MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN`; owner,
+2026-10-09): its supply is capped at `t_max + raise` (§5.2), so the tank approaches that target without passing it,
+and with the former strict `T0 > t_max + raise` a charge never ended (hot-water mode on 56.9 % of the time at
+60 s). The energy manager's switch-on with a surplus (`raise > 0` and the tank below `t_max`) stops at the same
+`t_max − 0.5 K` (implementer's choice, for the owner's confirmation): at `t_max`, a tank between `t_max − 0.5 K` and
+`t_max` was switched on with the raise and off without it, and since the raise follows the heat pump's draw, the
+heat-pump twin's year at 900 s toggled within steps. One exception: the solar pump decides on the node's `T̄`
 (§5.3, owner 2026-10-09). The hot-water supply cap at the controller's set temperature (§5) is not a decision on
 `T̄`: the controller's set temperature is a constant, and the controller still switches on `T0`.
 
@@ -500,6 +511,12 @@ renovisorissues before it merges, naming the KPIs that move and by how much. Eac
 - **C. DHW chain.** Scope: `SimpleDHWStorage` as node, tap valve and unmet DHW, the DHW circuits of boiler, heat
   pump, district heating, electric heater and solar thermal, controllers on `T0`. Done when: the DHW tank closes
   per step in every twin, 60 / 900 / 3600 s agree within 1 %, twins and goldens re-recorded.
+  *Amended (owner, 2026-10-09):* the 1 % applies to the generators' hot-water heat and to their fuel or
+  electricity, at 900 s and at 3600 s against 60 s. The electric heater's 1.08 % at 3600 s (full year 2021) is
+  accepted. For the houses with solar thermal the residual comes from the solar pump's whole-step decisions
+  (collector yield -7 % / -24 % with a gas boiler and -15 % / -15 % with a heat pump at 900 / 3600 s, the backup's
+  gas +1.3 % / +4.3 % and electricity +9.2 % / +43 %, measured before the heat pump's hot-water cap); it moves to
+  hisim-fxix.11, due before RenoVisor's solar results are relied on (RenoVisor runs at 900 s).
 - **D. SH chain.** Scope: `SimpleHotWaterStorage` as node, HDS same-step return and pipe-water node without a
   buffer, the SH circuits, the iteration histogram test. Done when: buffer and HDS close per step, district
   heating's bill equals pipe-water `ΔU` plus delivered heat (hisim-9uoo.12 closed), no step at
@@ -528,7 +545,8 @@ step the heat is `m c (T_max − T_ret)` and the fuel or electricity follows fro
 efficiency or COP law. Unthrottled steps stay as above. *Second amendment (owner, 2026-10-09):* the boiler's and the
 electric heater's hot-water supply is also capped at their controller's set temperature (70 °C, 75 °C), with
 `T_max` as the upper bound (§5), and a throttled boiler burns at the efficiency of its commanded power, so the
-inverse fuel law is not used (§5.1).
+inverse fuel law is not used (§5.1). The heat pump's hot-water outlet is capped the same way at its controller's
+`t_max` plus the energy manager's raise, below its 75 °C maximum (§5.2).
 
 **D2 — Heat-pump authority: hplib's `m_dot` and `T_out`.** `P_th = m c (T_out − T_in)`, `P_el = P_th/COP`;
 resolves hisim-4g9.21, with the delivered heat differing from the calibrated SCOP value by up to ~0.5 %. The
@@ -549,7 +567,8 @@ underheating returns, it is solved then. *Amendment (owner, 2026-10-09):* the so
 step mean `T̄` and the collector's answer there to switch the pump on (§5.3), the one exception; its full-tank
 stop stays on `T0`. The in-step supply cap at the
 controller's set temperature (§5) relates to D4 as a limit, not a forecast: the generator stops its supply at the
-controller's target inside the step, while the controller still decides on `T0`.
+controller's target inside the step, while the controller still decides on `T0`; the heat pump's hot-water
+controller ends a charge within 0.5 K of its set temperature, since a capped supply never passes it (§5.5).
 
 **D5 — Stratification path: keep for now.** `heat_exchanger_is_present=False` and the `dt/3600` mixing stay as they
 are; bead hisim-fxix.1 tackles it later. Consequence: the node rule covers only the fully mixed path;

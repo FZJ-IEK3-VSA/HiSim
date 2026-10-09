@@ -563,7 +563,9 @@ class UtspLpgConnector(cp.Component):
             )
 
             if ww_energy_demand > 0 and (ww_mass_input == 0 and ww_temperature_input == 0):
-                # first iteration --> random numbers
+                # nothing published yet --> placeholder values: the first pass of step 0 starts from zeros, so a
+                # warm-water storage later in the order still reads 0; every later step starts from the values the
+                # previous step converged to (the simulator's warm start)
                 ww_temperature_input = DEFAULT_WW_TEMPERATURE_INPUT
                 ww_mass_input = DEFAULT_WW_MASS_INPUT
 

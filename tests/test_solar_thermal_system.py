@@ -469,13 +469,12 @@ def test_the_timestep_output_equals_the_series_path() -> None:
 
 
 @pytest.mark.base
-def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_and_its_controller_reads_t0() -> None:
-    """The circuit carries the collector heat at the tank's step mean; the controller's inputs are at T0.
+def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_and_its_controller_reads_it() -> None:
+    """The circuit carries the collector heat at the tank's step mean; the controller's inputs are at that mean too.
 
-    At noon on 2 July in Aachen, with the tank's step mean at 40 °C and its start temperature at 38 °C: the pump runs
-    ``Q(40) / (c * 20 K)`` and the supply is 60 °C, so the water carries ``Q(40)``; the flow and the collector
-    temperature the controller reads are those at 38 °C. With the pump off the circuit moves no water and its supply
-    is its return.
+    At noon on 2 July in Aachen, with the tank's step mean at 40 °C: the pump runs ``Q(40) / (c * 20 K)`` and the
+    supply is 60 °C, so the water carries ``Q(40)``; the flow and the collector temperature the controller reads are
+    the same, whether or not the pump runs. With the pump off the circuit moves no water and its supply is its return.
     """
     from hisim import hydronics  # pylint: disable=import-outside-toplevel
 
@@ -491,12 +490,11 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     my_sts.i_prepare_simulation()
     fakes = [
         component.ComponentOutput("Fake", name, LoadTypes.ANY, Units.ANY, component_id=ComponentID("Fake" + name))
-        for name in ("ControlSignal", "InletTemperature", "StartTemperature")
+        for name in ("ControlSignal", "InletTemperature")
     ]
-    control, inlet, start = fakes
+    control, inlet = fakes
     my_sts.control_signal_channel.source_output = control
     my_sts.water_temperature_input_channel.source_output = inlet
-    my_sts.storage_temperature_at_start_of_step_channel.source_output = start
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
     my_sts.ghi_channel.source_output = my_weather.ghi_output
@@ -506,7 +504,6 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     my_weather.i_simulate(timestep, stsv, False)
     air = stsv.values[my_weather.air_temperature_output.global_index]
     stsv.values[inlet.global_index] = 40.0
-    stsv.values[start.global_index] = 38.0
 
     def output(channel: Any) -> float:
         return float(stsv.values[channel.global_index])
@@ -520,15 +517,13 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     assert output(my_sts.water_temperature_deg_c_output_channel) == 60.0
     assert output(my_sts.thermal_power_w_output_channel) == hydronics.circuit_power_w(flow, 60.0, 40.0)
     assert output(my_sts.thermal_power_w_output_channel) == pytest.approx(heat, rel=1e-12)
-    heat_at_start = my_sts.collector_heat_w(38.0, air)
-    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == pytest.approx(
-        heat_at_start / (hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * 20.0), rel=1e-12
-    )
-    assert output(my_sts.collector_temperature_at_start_of_step_channel) == 58.0
+    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow
+    assert output(my_sts.collector_temperature_at_step_mean_channel) == 60.0
 
     stsv.values[control.global_index] = 0
     my_sts.i_simulate(timestep, stsv, False)
     assert output(my_sts.water_mass_flow_kg_s_output_channel) == 0.0
     assert output(my_sts.water_temperature_deg_c_output_channel) == 40.0
     assert output(my_sts.thermal_power_w_output_channel) == 0.0
-    assert output(my_sts.collector_temperature_at_start_of_step_channel) == 58.0
+    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow
+    assert output(my_sts.collector_temperature_at_step_mean_channel) == 60.0

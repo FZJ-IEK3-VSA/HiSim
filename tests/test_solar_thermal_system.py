@@ -404,7 +404,7 @@ def test_the_fast_collector_equals_the_series_path(
 
 @pytest.mark.base
 def test_the_timestep_output_equals_the_series_path() -> None:
-    """``i_simulate``'s thermal power equals the old Series path at hand-picked steps of a real year.
+    """The collector heat equals the old Series path at hand-picked steps of a year, and ``i_simulate`` books it.
 
     Every hour of a summer and a winter day in Aachen, each at three inlet temperatures simulated
     one after the other within the same timestep -- the way convergence iterations call it -- so
@@ -455,9 +455,80 @@ def test_the_timestep_output_equals_the_series_path() -> None:
                     stsv.values[my_weather.air_temperature_output.global_index],
                     inlet_deg_c,
                 )
-                fast = stsv.values[my_sts.thermal_power_w_output_channel.global_index]
+                fast = my_sts.collector_heat_w(
+                    inlet_deg_c, stsv.values[my_weather.air_temperature_output.global_index]
+                )
                 assert _bits(fast) == _bits(reference), (
                     f"timestep {timestep}, inlet {inlet_deg_c} °C: {fast!r} against the Series path's {reference!r}"
                 )
+                # the booked heat is what the circuit's water carries: the collector heat to the last digits
+                booked = stsv.values[my_sts.thermal_power_w_output_channel.global_index]
+                assert booked == pytest.approx(max(reference, 0.0), rel=1e-12, abs=1e-9)
                 compared += 1
     assert compared == 2 * 24 * 3
+
+
+@pytest.mark.base
+def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_and_its_controller_reads_t0() -> None:
+    """The circuit carries the collector heat at the tank's step mean; the controller's inputs are at T0.
+
+    At noon on 2 July in Aachen, with the tank's step mean at 40 °C and its start temperature at 38 °C: the pump runs
+    ``Q(40) / (c * 20 K)`` and the supply is 60 °C, so the water carries ``Q(40)``; the flow and the collector
+    temperature the controller reads are those at 38 °C. With the pump off the circuit moves no water and its supply
+    is its return.
+    """
+    from hisim import hydronics  # pylint: disable=import-outside-toplevel
+
+    repo = sim_repository.SimRepository()
+    mysim = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=3600)
+    my_weather = weather.Weather(config=weather.WeatherConfig.preset_aachen("Weather"), my_simulation_parameters=mysim)
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    config.area_m2 = 4
+    my_sts = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=mysim)
+    my_sts.set_sim_repo(repo)
+    my_sts.i_prepare_simulation()
+    fakes = [
+        component.ComponentOutput("Fake", name, LoadTypes.ANY, Units.ANY, component_id=ComponentID("Fake" + name))
+        for name in ("ControlSignal", "InletTemperature", "StartTemperature")
+    ]
+    control, inlet, start = fakes
+    my_sts.control_signal_channel.source_output = control
+    my_sts.water_temperature_input_channel.source_output = inlet
+    my_sts.storage_temperature_at_start_of_step_channel.source_output = start
+    my_sts.t_out_channel.source_output = my_weather.air_temperature_output
+    my_sts.dhi_channel.source_output = my_weather.dhi_output
+    my_sts.ghi_channel.source_output = my_weather.ghi_output
+    fft.add_global_index_of_components([my_weather, my_sts, *fakes])
+    stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_weather, my_sts, *fakes]))
+    timestep = 183 * 24 + 12
+    my_weather.i_simulate(timestep, stsv, False)
+    air = stsv.values[my_weather.air_temperature_output.global_index]
+    stsv.values[inlet.global_index] = 40.0
+    stsv.values[start.global_index] = 38.0
+
+    def output(channel: Any) -> float:
+        return float(stsv.values[channel.global_index])
+
+    stsv.values[control.global_index] = 1
+    my_sts.i_simulate(timestep, stsv, False)
+    heat = my_sts.collector_heat_w(40.0, air)
+    assert heat > 0.0
+    flow = output(my_sts.water_mass_flow_kg_s_output_channel)
+    assert flow == pytest.approx(heat / (hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * 20.0), rel=1e-12)
+    assert output(my_sts.water_temperature_deg_c_output_channel) == 60.0
+    assert output(my_sts.thermal_power_w_output_channel) == hydronics.circuit_power_w(flow, 60.0, 40.0)
+    assert output(my_sts.thermal_power_w_output_channel) == pytest.approx(heat, rel=1e-12)
+    heat_at_start = my_sts.collector_heat_w(38.0, air)
+    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == pytest.approx(
+        heat_at_start / (hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * 20.0), rel=1e-12
+    )
+    assert output(my_sts.collector_temperature_at_start_of_step_channel) == 58.0
+
+    stsv.values[control.global_index] = 0
+    my_sts.i_simulate(timestep, stsv, False)
+    assert output(my_sts.water_mass_flow_kg_s_output_channel) == 0.0
+    assert output(my_sts.water_temperature_deg_c_output_channel) == 40.0
+    assert output(my_sts.thermal_power_w_output_channel) == 0.0
+    assert output(my_sts.collector_temperature_at_start_of_step_channel) == 58.0

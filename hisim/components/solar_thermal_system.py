@@ -28,10 +28,10 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim import loadtypes, log, utils
+from hisim import hydronics, loadtypes, log, utils
 from hisim.caching import atomic_cache_write
 from hisim.energy_port import EnergyPort
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
@@ -233,6 +233,8 @@ class SolarThermalSystem(Component):
     Azimuth: ClassVar[str] = "Azimuth"
     ApparentZenith: ClassVar[str] = "ApparentZenith"
     TemperatureCollectorInletDegC: ClassVar[str] = "TemperatureCollectorInletDegC"
+    #: The storage's temperature at the start of the step, T0, from which the controller-facing outputs are computed.
+    TemperatureStorageAtStartOfStepDegC: ClassVar[str] = "TemperatureStorageAtStartOfStepDegC"
     ControlSignal: ClassVar[str] = "ControlSignal"
 
     # Outputs
@@ -241,6 +243,8 @@ class SolarThermalSystem(Component):
     RequiredWaterMassFlowOutput: ClassVar[str] = "RequiredWaterMassFlowOutput"
     WaterMassFlowOutput: ClassVar[str] = "WaterMassFlowOutput"
     WaterTemperatureOutput: ClassVar[str] = "WaterTemperatureOutput"
+    #: The collector's outlet temperature at the storage's start temperature T0, what its controller compares.
+    CollectorTemperatureAtStartOfStep: ClassVar[str] = "CollectorTemperatureAtStartOfStep"
     ElectricityConsumptionOutput: ClassVar[str] = "ElectricityConsumptionOutput"
     #: The irradiance on the collector plane times the collector area: the solar power the collectors receive (W).
     SolarPowerOnCollector: ClassVar[str] = "SolarPowerOnCollector"
@@ -339,6 +343,14 @@ class SolarThermalSystem(Component):
             True,
         )
 
+        self.storage_temperature_at_start_of_step_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureStorageAtStartOfStepDegC,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
+            True,
+        )
+
         self.control_signal_channel: ComponentInput = self.add_input(
             self.component_name,
             SolarThermalSystem.ControlSignal,
@@ -383,7 +395,20 @@ class SolarThermalSystem(Component):
             field_name=self.RequiredWaterMassFlowOutput,
             load_type=loadtypes.LoadTypes.WARM_WATER,
             unit=loadtypes.Units.KG_PER_SEC,
-            output_description="The required mass flow of heat transfer liquid [kg/s] for achieving target temperature rise",
+            output_description=(
+                "The mass flow [kg/s] the pump would run at the storage's start temperature T0: the collector heat "
+                "at T0 over c times twice the inlet-to-mean difference. The controller reads it."
+            ),
+        )
+        self.collector_temperature_at_start_of_step_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CollectorTemperatureAtStartOfStep,
+            load_type=loadtypes.LoadTypes.TEMPERATURE,
+            unit=loadtypes.Units.CELSIUS,
+            output_description=(
+                "The collector's outlet temperature [°C] at the storage's start temperature T0: T0 plus twice the "
+                "inlet-to-mean difference while the collector has heat at T0, T0 otherwise. The controller reads it."
+            ),
         )
 
         self.water_temperature_deg_c_output_channel: ComponentOutput = self.add_output(
@@ -391,7 +416,10 @@ class SolarThermalSystem(Component):
             field_name=self.WaterTemperatureOutput,
             load_type=loadtypes.LoadTypes.TEMPERATURE,
             unit=loadtypes.Units.CELSIUS,
-            output_description="Output temperature of heat transfer liquid [°C]",
+            output_description=(
+                "Supply temperature [°C] of the collector's circuit: the storage's step mean plus twice the "
+                "inlet-to-mean difference while the pump runs with heat, the return otherwise."
+            ),
         )
         self.electricity_consumption_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -640,6 +668,13 @@ class SolarThermalSystem(Component):
                 SimpleDHWStorage.WaterTemperatureToHeatGenerator,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.TemperatureStorageAtStartOfStepDegC,
+                storage_classname,
+                SimpleDHWStorage.WaterMeanTemperatureInStorage,
+            )
+        )
         return connections
 
     def get_default_connections_from_weather(self) -> List[ComponentConnection]:
@@ -778,6 +813,34 @@ class SolarThermalSystem(Component):
         self.solar_azimuth = self.solar_position["azimuth"].to_numpy(dtype=np.float64)
         self.plane_of_array_key = None
 
+    def collector_heat_w(self, temperature_collector_inlet_deg_c: float, ambient_air_temperature_deg_c: float) -> float:
+        """The collectors' heat at an inlet temperature in this step's irradiance on their plane, W.
+
+        The flat-plate efficiency curve evaluated at the collector's mean temperature, the inlet plus
+        ``delta_temperature_n_k``, times the irradiance and the collector area; zero when the efficiency is not
+        positive. For example, 4 m² at 500 W/m², a 40 °C inlet and 5 °C outside give about 860 W.
+
+        Args:
+            temperature_collector_inlet_deg_c: The collector's inlet temperature, °C.
+            ambient_air_temperature_deg_c: The outside air temperature, °C.
+
+        Returns:
+            The heat the collectors deliver, W.
+        """
+        return float(
+            flat_plate_collector_heat_w_m2(
+                eta_0=self.config.eta_0,  # optical efficiency of the collector
+                a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
+                a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
+                temperature_collector_inlet_deg_c=temperature_collector_inlet_deg_c,
+                # difference between collector inlet and mean temperature
+                delta_temperature_n_k=self.config.delta_temperature_n_k,
+                ambient_air_temperature_deg_c=ambient_air_temperature_deg_c,
+                collector_irradiance_w_m2=self.plane_of_array_irradiance_w_m2,
+            )
+            * self.area_m2
+        )
+
     def i_simulate(
         self,
         timestep: int,
@@ -810,51 +873,43 @@ class SolarThermalSystem(Component):
                 diffuse_horizontal_irradiance_w_m2=diffuse_horizontal_irradiance_w_m2,
             )
             self.plane_of_array_key = plane_of_array_key
-        # The efficiency depends on the storage's inlet temperature, so it is calculated every call.
-        collectors_heat_w_m2 = flat_plate_collector_heat_w_m2(
-            eta_0=self.config.eta_0,  # optical efficiency of the collector
-            a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
-            a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
-            temperature_collector_inlet_deg_c=temperature_collector_inlet_deg_c,
-            # difference between collector inlet and mean temperature
-            delta_temperature_n_k=self.config.delta_temperature_n_k,
-            ambient_air_temperature_deg_c=ambient_air_temperature_deg_c,
-            collector_irradiance_w_m2=self.plane_of_array_irradiance_w_m2,
+        # The efficiency depends on the collector's inlet temperature, so it is calculated every call: at the
+        # storage's step mean for the circuit, at its start temperature for the controller.
+        storage_temperature_at_start_deg_c = stsv.get_input_value(self.storage_temperature_at_start_of_step_channel)
+        collector_heat_at_return_w = self.collector_heat_w(
+            temperature_collector_inlet_deg_c, ambient_air_temperature_deg_c
+        )
+        collector_heat_at_start_w = self.collector_heat_w(
+            storage_temperature_at_start_deg_c, ambient_air_temperature_deg_c
+        )
+        # The outlet is the inlet plus twice the inlet-to-mean difference the efficiency curve is evaluated at, and
+        # the pump runs the flow that carries the collector heat over that lift (spec §5.3, owner 2026-10-09).
+        lift_in_kelvin = 2 * self.config.delta_temperature_n_k
+        required_mass_flow_output_kg_s: float = max(collector_heat_at_start_w, 0.0) / (
+            hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin
+        )
+        collector_temperature_at_start_deg_c = storage_temperature_at_start_deg_c + (
+            lift_in_kelvin if collector_heat_at_start_w > 0 else 0.0
         )
 
-        thermal_power_output_w: float = collectors_heat_w_m2 * self.area_m2
-
+        if control_signal != 0 and collector_heat_at_return_w > 0:
+            mass_flow_output_kg_s: float = collector_heat_at_return_w / (
+                hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin
+            )
+            water_temperature_output_deg_c = temperature_collector_inlet_deg_c + lift_in_kelvin
+        else:
+            # an idle circuit moves no water and its supply is its return
+            mass_flow_output_kg_s = 0.0
+            water_temperature_output_deg_c = temperature_collector_inlet_deg_c
+        # the heat the circuit's water carries, which is the collector heat at the step mean while it pumps
+        thermal_power_output_w: float = hydronics.circuit_power_w(
+            mass_flow_output_kg_s, water_temperature_output_deg_c, temperature_collector_inlet_deg_c
+        )
         thermal_energy_output_wh: float = (
             thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
-        required_mass_flow_output_kg_s: float = thermal_power_output_w / (
-            PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=loadtypes.LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-            * self.config.delta_temperature_n_k
-        )
-
-        if thermal_power_output_w > 0:
-            # Given the right mass flow, assume that target temperature rise is achieved
-            # Factor of 2 because delta_temperature_n_k is difference between inlet and mean temperature
-            water_temperature_output_deg_c = 2 * self.config.delta_temperature_n_k + stsv.get_input_value(
-                self.water_temperature_input_channel
-            )
-        else:
-            # Simplified assumption, neglecting heat losses: collector temperature equals input temperature
-            water_temperature_output_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
-
-        if control_signal == 0:
-            # If the controller signals 'off', the solar pump does not pump the solar fluid from
-            # the collector to the storage
-            mass_flow_output_kg_s: float = 0
-            thermal_power_output_w = 0
-            thermal_energy_output_wh = 0
-            electric_power_demand_solar_pump_w = 0
-        else:
-            mass_flow_output_kg_s = required_mass_flow_output_kg_s
-            # Calculate electricity consumption of solar pump
-            electric_power_demand_solar_pump_w = 35 if self.config.old_solar_pump else 10
+        # the solar pump draws its electricity while the controller runs it
+        electric_power_demand_solar_pump_w = (35 if self.config.old_solar_pump else 10) if control_signal != 0 else 0
 
         stsv.set_output_value(self.thermal_power_w_output_channel, thermal_power_output_w)
         stsv.set_output_value(self.thermal_energy_wh_output_channel, thermal_energy_output_wh)
@@ -867,6 +922,7 @@ class SolarThermalSystem(Component):
             self.required_water_mass_flow_kg_s_output_channel,
             required_mass_flow_output_kg_s,
         )
+        stsv.set_output_value(self.collector_temperature_at_start_of_step_channel, collector_temperature_at_start_deg_c)
         stsv.set_output_value(
             self.electricity_consumption_output_channel,
             electric_power_demand_solar_pump_w,
@@ -960,6 +1016,11 @@ class SolarThermalSystemController(Component):
 
     # Outputs
     ControlSignalToSolarThermalSystem: ClassVar[str] = "ControlSignalToSolarThermalSystem"
+
+    #: Below this pump flow at the storage's start temperature the controller stops the pump. The flow is sized for
+    #: twice the collector's inlet-to-mean difference (20 K), so 0.005 kg/s is the collector heat of about 420 W
+    #: below which the pump has always stood (0.01 kg/s when the flow was sized for 10 K).
+    MINIMUM_MASS_FLOW_IN_KG_PER_S: ClassVar[float] = 0.005
 
     def __init__(
         self,
@@ -1056,7 +1117,7 @@ class SolarThermalSystemController(Component):
             ComponentConnection(
                 SolarThermalSystemController.CollectorTemperature,
                 storage_classname,
-                SolarThermalSystem.WaterTemperatureOutput,
+                SolarThermalSystem.CollectorTemperatureAtStartOfStep,
             )
         )
         connections.append(
@@ -1132,7 +1193,7 @@ class SolarThermalSystemController(Component):
             # this overrides the activation based on temperature difference
             self.state.deactivate(timestep)
 
-        if mass_flow_kg_s < 0.01:
+        if mass_flow_kg_s < self.MINIMUM_MASS_FLOW_IN_KG_PER_S:
             # deactivate when mass flow is too low
             self.state.deactivate(timestep)
 

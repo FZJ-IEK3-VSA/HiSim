@@ -5,20 +5,18 @@ charging circuits bring, minus the heat its tap draws and its standby loss, is t
 ``C (T_end - T0)``. It publishes its step mean ``T̄`` as the return temperature of each charging circuit, so the heat a
 generator books for its hot-water circuit, ``m c (T_sup - T̄)``, is the heat the tank receives.
 
-Each energy-system file with a hot-water tank is simulated for a winter day at 900 s, and three things are checked:
+Each energy-system file with a hot-water tank is simulated at 900 s, a winter day, or the first twenty days of January
+for a file with a solar collector (whose pump first runs on 20 January), and three things are checked:
 
 * the tank's balance closes on every step, to a millionth of the step's largest term;
-* on every step, the hot-water heat the boiler, heat pump, district-heating substation or electric heater books equals
-  the heat the tank received from that circuit, up to what the simulator's convergence tolerance leaves open (the
-  tank's step mean is converged to about 1e-4 K, so the two ends may differ by ``m c`` times that);
-* the iterations per step (hydronic coupling spec §6): no step of a boiler, district-heating or electric-heating file
-  reaches the simulator's ``force_convergence`` (more than eleven passes). The heat-pump and solar files are recorded,
-  not asserted: their forced steps come from the energy manager's on/off loop and hplib's 0.1 K staircase, which
-  stage C does not change. Every file's histogram is written to ``results/iteration_histogram/``.
-
-The solar collector's circuit is not compared: the collector still books its collector heat while its water carries
-twice that heat into the tank (its outlet is ``T_in + 2 dT_n`` at a flow sized for ``dT_n``), which the tank's own
-balance absorbs and which a later change of the collector resolves.
+* on every step, the hot-water heat the boiler, heat pump, district-heating substation, electric heater or solar
+  collector books equals the heat the tank received from that circuit, up to what the simulator's convergence
+  tolerance leaves open (the tank's step mean is converged to about 1e-4 K, so the two ends may differ by ``m c``
+  times that), and every circuit charges on some step;
+* the iterations per step (hydronic coupling spec §6): no step of a file without a heat pump reaches the simulator's
+  ``force_convergence`` (more than eleven passes). The heat-pump files are recorded, not asserted: their forced
+  steps come from the energy manager's on/off loop (hisim-4g9.28) and hplib's 0.1 K staircase, which stage D
+  resolves. Every file's histogram is written to ``results/iteration_histogram/``.
 
 The recorded twins run in the ``base`` set; their grouped twins, which RenoVisor translates from, and the composed
 files run in ``system_setups``. Every file except the car twin replaces its load-profile generator by the shipped
@@ -90,14 +88,20 @@ class DhwTwins:
         MoreAdvancedHeatPumpHPLib.get_classname(): MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW,
         DistrictHeating.get_classname(): DistrictHeating.ThermalOutputDhwPower,
         ElectricHeating.get_classname(): ElectricHeating.ThermalOutputDhwPower,
+        SolarThermalSystem.get_classname(): SolarThermalSystem.ThermalPowerOutput,
     }
 
-    #: Generators whose files must keep every step below ``force_convergence``.
-    WITHOUT_FORCED_STEPS: Tuple[str, ...] = (
-        GenericBoiler.get_classname(),
-        DistrictHeating.get_classname(),
-        ElectricHeating.get_classname(),
-    )
+    #: Per generator class, the output of its hot-water circuit's mass flow (kg/s).
+    DHW_MASS_FLOW: Dict[str, str] = {
+        GenericBoiler.get_classname(): GenericBoiler.WaterOutputMassFlowDhw,
+        MoreAdvancedHeatPumpHPLib.get_classname(): MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW,
+        DistrictHeating.get_classname(): DistrictHeating.WaterOutputDhwMassFlowRate,
+        ElectricHeating.get_classname(): ElectricHeating.WaterOutputDhwMassFlowRate,
+        SolarThermalSystem.get_classname(): SolarThermalSystem.WaterMassFlowOutput,
+    }
+
+    #: The first twenty days of January, for a file with a solar collector: its pump first runs on 20 January.
+    SOLAR_WINDOW: Tuple[str, str] = ("2021-01-01T00:00:00", "2021-01-21T00:00:00")
 
     #: The tank converges its step mean to about the simulator's tolerance, 1e-4 K; the two ends of a circuit may
     #: differ by the circuit's ``m c`` times this.
@@ -116,7 +120,7 @@ class DhwTwins:
     @classmethod
     @lru_cache(maxsize=None)
     def run(cls, name: str, directory: str) -> Tuple[pd.DataFrame, Tuple[int, ...], Tuple[bool, ...], Dict[str, str]]:
-        """Simulate ``energy_systems/<name>.energy_system.yaml`` over :attr:`WINTER_DAY` at 900 s.
+        """Simulate ``energy_systems/<name>.energy_system.yaml`` at 900 s over its window (:meth:`window`).
 
         Returns:
             The result frame, the passes and the ``force_convergence`` flag of every step, and per charging circuit
@@ -133,7 +137,7 @@ class DhwTwins:
         energy_system = work / f"{name.replace('.', '_')}.energy_system.yaml"
         energy_system.write_text(yaml.safe_dump(model, sort_keys=False), encoding="utf-8")
         parameters_path = work / "winter_day.simulation.yaml"
-        start, end = cls.WINTER_DAY
+        start, end = cls.window(name)
         parameters_path.write_text(
             yaml.safe_dump(
                 {
@@ -170,6 +174,13 @@ class DhwTwins:
             simulator.run_all_timesteps()
             results = simulator.results_data_frame
         return results, tuple(passes), tuple(forced), circuits
+
+    @classmethod
+    def window(cls, name: str) -> Tuple[str, str]:
+        """The simulated window: :attr:`SOLAR_WINDOW` for a file with a solar collector, :attr:`WINTER_DAY` else."""
+        text = (cls.ROOT / "energy_systems" / f"{name}.energy_system.yaml").read_text(encoding="utf-8")
+        has_collector = SolarThermalSystem.get_full_classname() in text or "solar_thermal" in name
+        return cls.SOLAR_WINDOW if has_collector else cls.WINTER_DAY
 
     @classmethod
     def circuit_generators(cls, simulator) -> Dict[str, str]:
@@ -245,7 +256,7 @@ def check_tank_closure(results: pd.DataFrame) -> None:
 
 
 def check_circuits(results: pd.DataFrame, circuits: Dict[str, str]) -> int:
-    """Every non-solar charging circuit: the generator books the heat the tank received; returns how many checked."""
+    """Every charging circuit: the generator books the heat the tank received; returns how many were checked."""
     tank = DhwTwins.tank_name(results)
     received_field = {
         "primary": SimpleDHWStorage.ThermalPowerFromHeatGenerator,
@@ -254,21 +265,13 @@ def check_circuits(results: pd.DataFrame, circuits: Dict[str, str]) -> int:
     checked = 0
     for circuit, owner in circuits.items():
         component, classname = owner.split("|")
-        if classname == SolarThermalSystem.get_classname():
-            continue
         booked = DhwTwins.column(results, component, DhwTwins.BOOKED_DHW_POWER[classname])
         received = DhwTwins.column(results, tank, received_field[circuit])
-        mass_flow_field = {
-            GenericBoiler.get_classname(): GenericBoiler.WaterOutputMassFlowDhw,
-            MoreAdvancedHeatPumpHPLib.get_classname(): MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW,
-            DistrictHeating.get_classname(): DistrictHeating.WaterOutputDhwMassFlowRate,
-            ElectricHeating.get_classname(): ElectricHeating.WaterOutputDhwMassFlowRate,
-        }[classname]
-        flow = DhwTwins.column(results, component, mass_flow_field)
+        flow = DhwTwins.column(results, component, DhwTwins.DHW_MASS_FLOW[classname])
         tolerance = flow * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * DhwTwins.CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN
         difference = np.abs(booked - received)
         assert np.all(difference <= tolerance + 1e-6), (circuit, float(np.max(difference)))
-        assert np.any(booked > 0.0), f"the {circuit} circuit never charged on the day"
+        assert np.any(booked > 0.0), f"the {circuit} circuit never charged in the window"
         checked += 1
     return checked
 
@@ -278,7 +281,7 @@ def record_histogram(name: str, passes: Tuple[int, ...], forced: Tuple[bool, ...
     summary: Dict[str, object] = {
         "file": f"energy_systems/{name}.energy_system.yaml",
         "seconds_per_timestep": DhwTwins.SECONDS_PER_TIMESTEP,
-        "period": list(DhwTwins.WINTER_DAY),
+        "period": list(DhwTwins.window(name)),
         "steps": len(passes),
         "mean_passes": float(np.mean(passes)),
         "max_passes": int(max(passes)),
@@ -297,14 +300,10 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Run one file and apply the three checks."""
     results, passes, forced, circuits = DhwTwins.run(name, str(tmp_path_factory.mktemp(name.replace(".", "_"))))
     check_tank_closure(results)
-    checked = check_circuits(results, circuits)
+    assert check_circuits(results, circuits) >= 1, circuits
     classnames = {owner.split("|")[1] for owner in circuits.values()}
-    assert checked >= 1 or classnames == {SolarThermalSystem.get_classname()}, circuits
     summary = record_histogram(name, passes, forced)
-    if classnames & set(DhwTwins.WITHOUT_FORCED_STEPS) and not classnames & {
-        MoreAdvancedHeatPumpHPLib.get_classname(),
-        SolarThermalSystem.get_classname(),
-    }:
+    if MoreAdvancedHeatPumpHPLib.get_classname() not in classnames:
         assert summary["steps_at_force_convergence"] == 0, summary
 
 
@@ -313,7 +312,7 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
 def test_the_recorded_twins_close_their_tank_and_agree_on_every_circuit(
     name: str, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """A winter day of every recorded twin at 900 s: closure, circuit agreement and the iteration histogram."""
+    """Every recorded twin at 900 s: closure, circuit agreement and the iteration histogram."""
     check_file(name, tmp_path_factory)
 
 

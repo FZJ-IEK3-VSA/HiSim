@@ -375,7 +375,7 @@ def test_hplib_s_results_are_interpolated_linearly_between_its_grid_points() -> 
             return_temperature_in_celsius=return_temperature_in_celsius,
             ambient_temperature_in_celsius=-7.0,
             mode=1,
-            operation_mode="heating_sh",
+            operation_mode="heating_building",
             minimal_thermal_power_in_watt=1500.0,
         )
 

@@ -1311,11 +1311,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
             time_on_cooling_in_seconds=self.state.time_on_cooling,
             time_off_in_seconds=self.state.time_off,
         )
-        on_off_sh: float = stsv.get_input_value(self.on_off_switch_sh)
+        on_off_space_heating: float = stsv.get_input_value(self.on_off_switch_space_heating)
         on_off_dhw: float = (
             stsv.get_input_value(self.on_off_switch_dhw) if self.with_domestic_hot_water_preparation else 0
         )
-        on_off = on_off_dhw if on_off_dhw != 0 else on_off_sh
+        on_off = on_off_dhw if on_off_dhw != 0 else on_off_space_heating
 
         # cycling means periodic turning on and off of the heat pump
         if self.cycling_mode is True:
@@ -1358,12 +1358,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
         return HeatPumpStepConditions(
             source_temperature_in_celsius=stsv.get_input_value(self.t_in_primary),
             ambient_temperature_in_celsius=stsv.get_input_value(self.t_amb),
-            space_heating_return_temperature_in_celsius=stsv.get_input_value(self.t_in_secondary_sh),
+            space_heating_return_temperature_in_celsius=stsv.get_input_value(self.t_in_secondary_space_heating),
             hot_water_return_temperature_in_celsius=(
                 stsv.get_input_value(self.t_in_secondary_dhw) if self.with_domestic_hot_water_preparation else 0
             ),
             space_heating_set_temperature_in_celsius=(
-                stsv.get_input_value(self.set_temperature_hp_sh) if reads_space_heating_set_temperature else None
+                stsv.get_input_value(self.set_temperature_hp_space_heating) if reads_space_heating_set_temperature else None
             ),
             hot_water_supply_set_temperature_in_celsius=(
                 stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel)
@@ -1704,7 +1704,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 state.cumulative_thermal_energy_tot_in_watt_hour + abs(thermal_total_in_watt_hour)
             ),
             cumulative_thermal_space_heating_in_watt_hour=(
-                state.cumulative_thermal_energy_sh_in_watt_hour + abs(thermal_space_heating_in_watt_hour)
+                state.cumulative_thermal_energy_space_heating_in_watt_hour + abs(thermal_space_heating_in_watt_hour)
             ),
             cumulative_thermal_hot_water_in_watt_hour=(
                 state.cumulative_thermal_energy_dhw_in_watt_hour + abs(thermal_hot_water_in_watt_hour)
@@ -1713,7 +1713,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 state.cumulative_electrical_energy_tot_in_watt_hour + abs(electrical_total_in_watt_hour)
             ),
             cumulative_electrical_space_heating_in_watt_hour=(
-                state.cumulative_electrical_energy_sh_in_watt_hour + abs(electrical_space_heating_in_watt_hour)
+                state.cumulative_electrical_energy_space_heating_in_watt_hour + abs(electrical_space_heating_in_watt_hour)
             ),
             cumulative_electrical_hot_water_in_watt_hour=(
                 state.cumulative_electrical_energy_dhw_in_watt_hour + abs(electrical_hot_water_in_watt_hour)
@@ -1729,7 +1729,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         one more space-heating switch and one more switch on.
         """
         return HeatPumpSwitchCounters(
-            space_heating=state.counter_switch_sh + (1 if state.on_off_previous != on_off and on_off == 1 else 0),
+            space_heating=state.counter_switch_space_heating + (1 if state.on_off_previous != on_off and on_off == 1 else 0),
             hot_water=state.counter_switch_dhw + (1 if state.on_off_previous != on_off and on_off == 2 else 0),
             on_off=state.counter_onoff + (1 if state.on_off_previous == 0 and on_off != 0 else 0),
         )
@@ -1784,18 +1784,18 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
             self.publish_primary_side(stsv, on_off, conditions, operation)
 
-        stsv.set_output_value(self.p_th_sh, operation.thermal_power_space_heating_in_watt)
+        stsv.set_output_value(self.p_th_space_heating, operation.thermal_power_space_heating_in_watt)
         stsv.set_output_value(self.p_th_tot, operation.total_thermal_power_in_watt)
-        stsv.set_output_value(self.p_el_sh, operation.electrical_power_space_heating_in_watt)
+        stsv.set_output_value(self.p_el_space_heating, operation.electrical_power_space_heating_in_watt)
         stsv.set_output_value(self.p_el_cooling, operation.electrical_power_cooling_in_watt)
         stsv.set_output_value(self.p_el_brine_pump, operation.electrical_power_brine_pump_in_watt)
         stsv.set_output_value(self.p_el_tot, operation.total_electrical_power_in_watt)
         stsv.set_output_value(self.cop, operation.cop)
         stsv.set_output_value(self.eer, operation.eer)
         stsv.set_output_value(self.heatpump_state, on_off)
-        stsv.set_output_value(self.t_in_sh, conditions.space_heating_return_temperature_in_celsius)
-        stsv.set_output_value(self.t_out_sh, operation.outlet_temperature_space_heating_in_celsius)
-        stsv.set_output_value(self.m_dot_sh, operation.mass_flow_space_heating_in_kg_per_second)
+        stsv.set_output_value(self.t_in_space_heating, conditions.space_heating_return_temperature_in_celsius)
+        stsv.set_output_value(self.t_out_space_heating, operation.outlet_temperature_space_heating_in_celsius)
+        stsv.set_output_value(self.m_dot_space_heating, operation.mass_flow_space_heating_in_kg_per_second)
         stsv.set_output_value(self.time_on_heating, timers.time_on_heating_in_seconds)
         stsv.set_output_value(self.time_on_cooling, timers.time_on_cooling_in_seconds)
         stsv.set_output_value(self.time_off, timers.time_off_in_seconds)
@@ -1807,18 +1807,18 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.thermal_power_drawn_for_cooling, max(-operation.thermal_power_space_heating_in_watt, 0.0)
         )
         stsv.set_output_value(self.thermal_energy_hp_tot_channel, totals.thermal_total_in_watt_hour)
-        stsv.set_output_value(self.thermal_energy_hp_sh_channel, totals.thermal_space_heating_in_watt_hour)
+        stsv.set_output_value(self.thermal_energy_hp_space_heating_channel, totals.thermal_space_heating_in_watt_hour)
         stsv.set_output_value(self.electrical_energy_hp_tot_channel, totals.electrical_total_in_watt_hour)
-        stsv.set_output_value(self.electrical_energy_hp_sh_channel, totals.electrical_space_heating_in_watt_hour)
+        stsv.set_output_value(self.electrical_energy_hp_space_heating_channel, totals.electrical_space_heating_in_watt_hour)
         stsv.set_output_value(self.cumulative_hp_thermal_energy_tot_channel, totals.cumulative_thermal_total_in_watt_hour)
         stsv.set_output_value(
-            self.cumulative_hp_thermal_energy_sh_channel, totals.cumulative_thermal_space_heating_in_watt_hour
+            self.cumulative_hp_thermal_energy_space_heating_channel, totals.cumulative_thermal_space_heating_in_watt_hour
         )
         stsv.set_output_value(
             self.cumulative_hp_electrical_energy_tot_channel, totals.cumulative_electrical_total_in_watt_hour
         )
         stsv.set_output_value(
-            self.cumulative_hp_electrical_energy_sh_channel, totals.cumulative_electrical_space_heating_in_watt_hour
+            self.cumulative_hp_electrical_energy_space_heating_channel, totals.cumulative_electrical_space_heating_in_watt_hour
         )
         stsv.set_output_value(self.counter_on_off_channel, counters.on_off)
         stsv.set_output_value(self.delta_t_hp_secondary_side_channel, self.heatpump.delta_t)
@@ -1838,19 +1838,19 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 self.cumulative_hp_electrical_energy_dhw_channel, totals.cumulative_electrical_hot_water_in_watt_hour
             )
             stsv.set_output_value(self.counter_switch_dhw_channel, counters.hot_water)
-            stsv.set_output_value(self.counter_switch_sh_channel, counters.space_heating)
+            stsv.set_output_value(self.counter_switch_space_heating_channel, counters.space_heating)
 
         self.state.time_on_heating = timers.time_on_heating_in_seconds
         self.state.time_on_cooling = timers.time_on_cooling_in_seconds
         self.state.time_off = timers.time_off_in_seconds
         self.state.on_off_previous = on_off
         self.state.cumulative_thermal_energy_tot_in_watt_hour = totals.cumulative_thermal_total_in_watt_hour
-        self.state.cumulative_thermal_energy_sh_in_watt_hour = totals.cumulative_thermal_space_heating_in_watt_hour
+        self.state.cumulative_thermal_energy_space_heating_in_watt_hour = totals.cumulative_thermal_space_heating_in_watt_hour
         self.state.cumulative_thermal_energy_dhw_in_watt_hour = totals.cumulative_thermal_hot_water_in_watt_hour
         self.state.cumulative_electrical_energy_tot_in_watt_hour = totals.cumulative_electrical_total_in_watt_hour
-        self.state.cumulative_electrical_energy_sh_in_watt_hour = totals.cumulative_electrical_space_heating_in_watt_hour
+        self.state.cumulative_electrical_energy_space_heating_in_watt_hour = totals.cumulative_electrical_space_heating_in_watt_hour
         self.state.cumulative_electrical_energy_dhw_in_watt_hour = totals.cumulative_electrical_hot_water_in_watt_hour
-        self.state.counter_switch_sh = counters.space_heating
+        self.state.counter_switch_space_heating = counters.space_heating
         self.state.counter_switch_dhw = counters.hot_water
         self.state.counter_onoff = counters.on_off
         self.state.delta_t_secondary_side = self.heatpump.delta_t

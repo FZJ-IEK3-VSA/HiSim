@@ -3,7 +3,7 @@
 # (owner, 2026-10-07): the shape of heating/gas_condensing_boiler, the boiler at the class's `pellets` preset (a
 # conventional boiler down to a twelfth of its power), the controller at `on_off` with the twin's minimum runtime and
 # resting time. Control is hardcoded here (D21): the Controller switches the burner on the buffer temperature against
-# the flow temperature the site's HeatDistributionController asks for, and on the cylinder temperature; it reads no
+# the flow temperature the site's HeatingCurveController sets, and on the cylinder temperature; it reads no
 # energy manager, so the assembly offers no `ems_modifier`.
 #
 # The members expand as one block in the order their lines stand here, the twin's ConventionalPelletBoiler,
@@ -24,10 +24,6 @@ parameters:
      description: 'Maximal fuel input power (the heat delivered is this times the combustion efficiency); AUTO
        is the class law, sized from the heating load and the apartments.'}
      # range: pellet boilers of a small house (8 kW) up to a large old house (40 kW)
-  heating_threshold_in_celsius:
-    {type: float, unit: CELSIUS, default: 18.0, range: {min: 10.0, max: 22.0},
-     description: Daily mean outside temperature above which the controller stops space heating.}
-     # range: heating limits of German practice, 10 °C for a passive house up to 22 °C for an unrenovated one
   minimum_runtime_in_seconds:
     {type: float, unit: SECONDS, default: 1800.0, range: {min: 900.0, max: 3600.0},
      description: 'Shortest burn once the controller switched the burner on, in whole timesteps rounded down:
@@ -53,13 +49,11 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: on_off
     config:
-      set_heating_threshold_outside_temperature_in_celsius: {$param: heating_threshold_in_celsius}
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
       minimum_runtime_in_seconds: {$param: minimum_runtime_in_seconds}
       minimum_resting_time_in_seconds: {$param: minimum_resting_time_in_seconds}
     inputs:
-      - {$port: weather}                                    # DailyAverageOutsideTemperature
-      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - Boiler                                              # PartLoadRatioRunDhw, the ratio the hot-water charge ran
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
       - Buffer                                              # WaterTemperatureInputFromWaterStorage
@@ -74,8 +68,7 @@ components:
 
 interface:
   needs:
-    weather:          {into: [Controller], partner: Weather}
-    flow_temperature: {into: [Controller], partner: HeatDistributionController}   # a set-point need (G1)
+    heating_curve:    {into: [Controller], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
                       # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
     fuel:             {carrier: pellets, outputs: [Boiler.EnergyDemandSh, Boiler.EnergyDemandDhw]}
@@ -134,10 +127,6 @@ tests:
        direction: increasing}
       # the buffer's volume follows the boiler's power (SIZE_ACCORDING_TO_PELLET_HEATING): a larger vessel has
       # more surface
-    - {parameter: heating_threshold_in_celsius, kpi: Total Pellets consumption (energy), member: Boiler,
-       direction: increasing}
-      # a higher heating limit heats on more days, never on fewer; on the test day (1 January) every limit of the
-      # range lies above the daily mean, so the sweep is flat
   expect:
     - {kpi: Total Pellets consumption (energy), member: Boiler, min: 175, max: 235}
       # 203.3 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW

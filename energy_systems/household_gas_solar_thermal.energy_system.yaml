@@ -30,8 +30,13 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - Weather
+      - HeatingCurveController
       - Building
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
+      - Weather
   DHWStorage:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
@@ -76,8 +81,7 @@ components:
     config:
       with_domestic_hot_water_preparation: true
     inputs:
-      - Weather
-      - HeatDistributionController
+      - HeatingCurveController
       - CondensingGasBoiler
       - DHWStorage
       - SimpleHotWaterStorage

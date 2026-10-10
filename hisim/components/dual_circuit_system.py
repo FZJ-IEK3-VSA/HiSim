@@ -27,7 +27,6 @@ class SetTemperatureConfig:
     set_temperature_space_heating_in_celsius: float
     set_temperature_dhw_in_celsius: Optional[float]
     hysteresis_water_temperature_offset_in_celsius: Optional[float]
-    outside_temperature_threshold_in_celsius: Optional[float]
 
 
 class DiverterValve:
@@ -41,7 +40,7 @@ class DiverterValve:
     def determine_operating_mode(
         with_domestic_hot_water_preparation: bool,
         current_controller_mode: HeatingMode,
-        daily_average_outside_temperature_in_celsius: float,
+        is_heating_season: bool,
         water_temperature_input_sh_in_celsius: float,
         water_temperature_input_dhw_in_celsius: Optional[float],
         set_temperatures: SetTemperatureConfig,
@@ -53,16 +52,17 @@ class DiverterValve:
         space-heating circuit or the hot-water tank, or both at once if ``parallel_space_heating_and_dhw_option`` is
         set. Without the parallel option a hot-water charge has priority over space heating. Whether the tank needs a
         charge is :meth:`hot_water_charge_needed`; space heating is needed in the heating season while the water is
-        below its set temperature plus the hysteresis. For example, with the parallel option, a tank at 44 °C (60 °C
+        below its set temperature plus the hysteresis. The heating season comes from the heating curve, or, for a
+        generator without one, from :meth:`is_heating_season`. For example, with the parallel option, a tank at 44 °C (60 °C
         set, 15 K hysteresis) on a winter day gives the parallel mode, and the parallel charge goes on up to 60 °C.
 
         Args:
             with_domestic_hot_water_preparation: Whether the generator has a hot-water tank at all.
             current_controller_mode: The controller's mode at the start of the step.
-            daily_average_outside_temperature_in_celsius: The day's mean outside temperature, in °C.
+            is_heating_season: Whether the day is in the heating season, in which space heating runs at all.
             water_temperature_input_sh_in_celsius: The space-heating water temperature, in °C.
             water_temperature_input_dhw_in_celsius: The hot-water tank's temperature, in °C, or None without a tank.
-            set_temperatures: The set temperatures, the hysteresis and the heating threshold.
+            set_temperatures: The set temperatures and the hysteresis.
             parallel_space_heating_and_dhw_option: Whether both circuits may be heated at once.
 
         Returns:
@@ -74,13 +74,7 @@ class DiverterValve:
             target_water_temperature_in_celsius: float,
         ) -> bool:
             assert set_temperatures.hysteresis_water_temperature_offset_in_celsius is not None
-            if (
-                DiverterValve.determine_summer_heating_mode(
-                    daily_average_outside_temperature_in_celsius,
-                    set_temperatures.outside_temperature_threshold_in_celsius,
-                )
-                == "off"
-            ):
+            if not is_heating_season:
                 return False
             if (
                 current_water_temperature_in_celsius
@@ -161,30 +155,21 @@ class DiverterValve:
         return controller_mode in DiverterValve.CHARGING_MODES and storage_temperature_in_celsius < set_temperature_in_celsius
 
     @staticmethod
-    def determine_summer_heating_mode(
-        daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
-    ) -> str:
-        """Determine summer heating mode.
+    def is_heating_season(*, daily_average_outside_temperature_in_celsius: float, heating_threshold_in_celsius: float) -> bool:
+        """Return whether space heating runs on a day, for a generator without a heating curve, from the day's mean and the threshold.
 
-        Determines whether heating should be switched off entirely,
-        based on the average daily outside temperature.
+        The electric heater heats the rooms directly and has no heating curve, so its controller decides the heating
+        season itself: a day whose mean outside temperature is at or below the threshold is in the heating season.
+        For example, with a 16 °C threshold a day at 16 °C is in it and a day at 16.5 °C is not.
+
+        Args:
+            daily_average_outside_temperature_in_celsius: The day's mean outside temperature, in °C.
+            heating_threshold_in_celsius: The heating threshold, in °C.
+
+        Returns:
+            Whether the day is in the heating season.
         """
-
-        # if no heating threshold is set, space heating is always on
-        if set_heating_threshold_temperature_in_celsius is None:
-            heating_mode = "on"
-
-        # it is too hot for heating
-        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
-            heating_mode = "off"
-
-        # it is cold enough for heating (at or below threshold)
-        elif daily_average_outside_temperature_in_celsius <= set_heating_threshold_temperature_in_celsius:
-            heating_mode = "on"
-        # (equality case is handled as "on" above)
-
-        return heating_mode
+        return daily_average_outside_temperature_in_celsius <= heating_threshold_in_celsius
 
 
 class DualCircuitHotWater:

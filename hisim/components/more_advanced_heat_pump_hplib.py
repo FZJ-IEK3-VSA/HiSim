@@ -47,7 +47,7 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim.components import weather, simple_water_storage, heat_distribution_system
+from hisim.components import weather, simple_water_storage, heating_curve
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
@@ -2532,12 +2532,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     """Configuration of the hplib heat pump's space-heating controller.
 
     The on/off logic in front of the machine's space-heating side: it compares the buffer
-    vessel's water temperature with the flow temperature the heat distribution system asks
-    for, and it stops heating once the daily average outside temperature has risen above
-    the heating threshold. The named default is :meth:`preset_standard`; the three fields
-    that belong to the building and its emitter circuit rather than to the machine --
-    :attr:`heat_distribution_system_type`,
-    :attr:`set_heating_threshold_outside_temperature_in_celsius` and
+    vessel's water temperature with the supply temperature the heating curve asks for, and it
+    heats only in the heating season the heating curve publishes. The named default is
+    :meth:`preset_standard`; the two fields that belong to the building and its emitter
+    circuit rather than to the machine -- :attr:`heat_distribution_system_type` and
     :attr:`set_heating_temperature_for_building_in_celsius` -- are sizable, so the preset
     leaves them ``AUTO`` and ``.resolve(ctx)`` copies them from the facts the building and
     the heat distribution controller contribute::
@@ -2548,14 +2546,12 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
             SizingContext(
                 set_heating_temperature_in_celsius=20.0,
                 heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
-                set_heating_threshold_outside_temperature_in_celsius=18.0,
             )
         )
 
     Copying rather than restating is the point: the building decides the room temperature it
-    is heated to, the emitter circuit decides which emitter it feeds and above which outside
-    temperature nothing heats, and a generator controller that disagreed with either would
-    heat water too cold for the room or into a circuit that has switched off.
+    is heated to and the emitter circuit decides which emitter it feeds, and a generator
+    controller that disagreed with either would heat water too cold for the room.
     """
 
     MAIN_CLASS = "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating"
@@ -2564,13 +2560,6 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     #: Which control law runs: 1 is the plain on/off switch, 2 adds a cooling state and is
     #: only admissible for floor heating, which is what the component checks before using it.
     mode: int = 1
-    #: Daily average outside temperature above which nothing heats, copied from the emitter
-    #: circuit. Sizable: left ``AUTO`` it is the threshold the heat distribution controller
-    #: resolved to, so both switch off on the same day. ``None`` is a legal value and means
-    #: the machine never stops for the season, whatever the weather does.
-    set_heating_threshold_outside_temperature_in_celsius: Sizable[Optional[float]] = sized_field(
-        rule=Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS, optional=True
-    )
     #: Daily average outside temperature below which the machine does not cool in ``mode``
     #: 2. ``None`` means cooling is available at any outside temperature.
     set_cooling_threshold_outside_temperature_in_celsius: Optional[float] = 20.0
@@ -2638,7 +2627,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
     # Inputs
     WaterTemperatureInput = "WaterTemperatureInput"
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
+    SpaceHeatingSupplyTemperatureSetInCelsius = "SpaceHeatingSupplyTemperatureSetInCelsius"
+    HeatingSeason = "HeatingSeason"
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
@@ -2683,11 +2673,18 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             True,
         )
 
-        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
+        self.supply_temperature_set_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.HeatingFlowTemperatureFromHeatDistributionSystem,
+            self.SpaceHeatingSupplyTemperatureSetInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
+            True,
+        )
+        self.heating_season_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingSeason,
+            LoadTypes.ANY,
+            Units.ANY,
             True,
         )
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
@@ -2717,25 +2714,31 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+        self.add_default_connections(self.get_default_connections_from_heating_curve())
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
-        """Get default connections."""
-        connections = []
-        hdsc_classname = heat_distribution_system.HeatDistributionController.get_classname()
-        connections.append(
+    @staticmethod
+    def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
+        """Return the connections of the supply temperature set point and the heating season from the heating curve.
+
+        Returns:
+            The two connections.
+        """
+        curve_classname = heating_curve.HeatingCurveController.get_classname()
+        return [
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.HeatingFlowTemperatureFromHeatDistributionSystem,
-                hdsc_classname,
-                heat_distribution_system.HeatDistributionController.HeatingFlowTemperature,
-            )
-        )
-        return connections
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.SpaceHeatingSupplyTemperatureSetInCelsius,
+                curve_classname,
+                heating_curve.HeatingCurveController.SpaceHeatingSupplyTemperatureSetInCelsius,
+            ),
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.HeatingSeason,
+                curve_classname,
+                heating_curve.HeatingCurveController.HeatingSeason,
+            ),
+        ]
 
     def get_default_connections_from_weather(
         self,
@@ -2839,9 +2842,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
 
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
-                self.heating_flow_temperature_from_heat_distribution_system_channel
-            )
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(self.supply_temperature_set_channel)
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
@@ -2851,13 +2852,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
                 self.simple_hot_water_storage_temperature_modifier_channel
             )
 
-            # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
-            summer_heating_mode = self.summer_heating_condition(
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                set_heating_threshold_temperature_in_celsius=concrete(
-                    self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius
-                ),
-            )
+            # the heat pump heats only in the heating season the heating curve publishes
+            summer_heating_mode = "on" if stsv.get_input_value(self.heating_season_channel) > 0.5 else "off"
 
             # mode 1 is on/off controller
             if self.mode == 1:
@@ -3048,32 +3044,6 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
         else:
             raise ValueError("unknown mode")
-
-    def summer_heating_condition(
-        self,
-        daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
-    ) -> str:
-        """Set conditions for the heat pump."""
-
-        # if no heating threshold is set, the heat pump is always on
-        if set_heating_threshold_temperature_in_celsius is None:
-            heating_mode = "on"
-
-        # it is too hot for heating
-        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
-            heating_mode = "off"
-
-        # it is cold enough for heating
-        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
-            heating_mode = "on"
-
-        else:
-            raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
-                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
-            )
-        return heating_mode
 
     def summer_cooling_condition(
         self,

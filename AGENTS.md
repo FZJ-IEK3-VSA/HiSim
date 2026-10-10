@@ -9,6 +9,13 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 - No test should leave any calculation artefact in any other directory
 - Exception — cache directories (hisim-epc.22): the directories listed in `SimulationParameters.cache_directories` (or the `HISIM_CACHE_DIRECTORIES` environment variable) are shared state, not output, and are exempt from both rules above. A cache entry is content-keyed and deterministic; keeping it across calculations is wanted. Its location must be a declared directory, never the repository working tree.
 - When components expose string constants for field names, connection names, output names, or class-derived identifiers, reference those constants instead of duplicating the literal strings. This keeps connections safe when the constants are renamed or adjusted.
+- Every name that holds a physical quantity carries its unit: Python variables, attributes, function parameters,
+  config fields, constants, component input and output names, KPI names and test helpers alike. Spell it as the
+  suffix the code already uses most, `_in_<unit>`: `thermal_power_in_watt`, `temperature_in_celsius`,
+  `energy_in_kilowatt_hour`, `mass_flow_in_kg_per_second`, `heat_flow_in_watt_per_kelvin`. A name such as
+  `heat_flow_per_kelvin` is not enough: it names the quantity, not its unit. A module with its own established
+  short suffixes (`hisim/hydronics.py`: `_w`, `_c`, `_j`, `_kg_per_s`, `_w_per_k`) keeps them. A dimensionless
+  quantity says so in its name (`part_load_ratio`, `share_of_roof`).
 - Avoid monkeypatching whenever practical, especially in shared fixtures. Prefer explicit configuration, constructor arguments, or small test helpers; use monkeypatching only when the alternative would be substantially more fragile or invasive.
 
 ## Pull requests and merging

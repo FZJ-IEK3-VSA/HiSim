@@ -239,8 +239,8 @@ def circuit_power_w(mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: fl
     t_supply = _finite("t_supply_c", t_supply_c)
     t_return = _finite("t_return_c", t_return_c)
     lift = _finite_result("The circuit's lift t_supply_c - t_return_c", t_supply - t_return)
-    power = mass_flow * WATER_SPECIFIC_HEAT_J_PER_KG_K * lift
-    return _finite_result("The circuit power m c (T_sup - T_ret)", power)
+    power_w = mass_flow * WATER_SPECIFIC_HEAT_J_PER_KG_K * lift
+    return _finite_result("The circuit power m c (T_sup - T_ret)", power_w)
 
 
 def circuit_heat_j(mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float) -> float:

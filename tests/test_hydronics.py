@@ -352,16 +352,16 @@ def test_circuit_heat_is_m_c_delta_t_dt() -> None:
 
 
 @pytest.mark.parametrize(
-    ("mass_flow", "t_supply", "t_return", "dt"),
+    ("mass_flow_kg_per_s", "t_supply_c", "t_return_c", "dt_s"),
     [(0.4, 35.0, 30.04, 900.0), (0.333, 7.0, 12.3, 60.0), (0.0, 55.0, 45.0, 3600.0), (1.7, 40.1, 40.1, 1.0)],
 )
 def test_circuit_heat_is_the_circuit_power_times_the_step_to_the_last_bit(
-    mass_flow: float, t_supply: float, t_return: float, dt: float
+    mass_flow_kg_per_s: float, t_supply_c: float, t_return_c: float, dt_s: float
 ) -> None:
     """What a component books as power and what the balance derives as heat from the same values agree exactly."""
-    power = hydronics.circuit_power_w(mass_flow, t_supply, t_return)
-    assert power == mass_flow * C_WATER * (t_supply - t_return)
-    assert hydronics.circuit_heat_j(mass_flow, t_supply, t_return, dt) == power * dt
+    power_w = hydronics.circuit_power_w(mass_flow_kg_per_s, t_supply_c, t_return_c)
+    assert power_w == mass_flow_kg_per_s * C_WATER * (t_supply_c - t_return_c)
+    assert hydronics.circuit_heat_j(mass_flow_kg_per_s, t_supply_c, t_return_c, dt_s) == power_w * dt_s
 
 
 def test_circuit_power_is_m_c_delta_t_and_refuses_what_circuit_heat_refuses() -> None:

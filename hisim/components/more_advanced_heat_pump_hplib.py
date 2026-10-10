@@ -1498,8 +1498,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
         pass
 
     @staticmethod
-    def booked_heating_powers(
-        mass_flow_kg_per_s: float, t_out_c: float, t_in_c: float, cop: float
+    def booked_heating_powers_in_watt(
+        mass_flow_in_kg_per_second: float,
+        outlet_temperature_in_celsius: float,
+        return_temperature_in_celsius: float,
+        cop: float,
     ) -> Tuple[float, float]:
         """Return the thermal and electrical power a running heating circuit books, from the water it carries.
 
@@ -1516,9 +1519,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         4200 J/(kg K) instead of HiSim's 4180 J/(kg K).
 
         Args:
-            mass_flow_kg_per_s: The circuit's mass flow, kg/s.
-            t_out_c: The temperature the water leaves the heat pump at, °C.
-            t_in_c: The return temperature the heat pump reads, °C.
+            mass_flow_in_kg_per_second: The circuit's mass flow, kg/s.
+            outlet_temperature_in_celsius: The temperature the water leaves the heat pump at, °C.
+            return_temperature_in_celsius: The return temperature the heat pump reads, °C.
             cop: The coefficient of performance of the step, above 0.
 
         Returns:
@@ -1527,11 +1530,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
         Raises:
             NonFiniteValueError: If an argument is NaN or infinite, or the power overflows the float range, as
                 :func:`hisim.hydronics.circuit_power_w` raises it.
-            NegativeMassFlowError: If ``mass_flow_kg_per_s`` is negative, as :func:`hisim.hydronics.circuit_power_w`
-                raises it.
+            NegativeMassFlowError: If ``mass_flow_in_kg_per_second`` is negative, as
+                :func:`hisim.hydronics.circuit_power_w` raises it.
             ZeroDivisionError: If ``cop`` is 0.
         """
-        thermal_power_in_watt = hydronics.circuit_power_w(mass_flow_kg_per_s, t_out_c, t_in_c)
+        thermal_power_in_watt = hydronics.circuit_power_w(
+            mass_flow_in_kg_per_second, outlet_temperature_in_celsius, return_temperature_in_celsius
+        )
         return thermal_power_in_watt, thermal_power_in_watt / cop
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
@@ -1626,7 +1631,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
                 m_dot_sh = results["m_dot"]
                 m_dot_dhw = 0.0
-                p_th_sh, p_el_sh = self.booked_heating_powers(m_dot_sh, t_out_sh, t_in_secondary_sh, cop)
+                p_th_sh, p_el_sh = self.booked_heating_powers_in_watt(m_dot_sh, t_out_sh, t_in_secondary_sh, cop)
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
@@ -1657,17 +1662,17 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     * self.heatpump.delta_t
                 )
                 if p_th_sh_theoretical <= self.minimum_thermal_output_power:
-                    p_th_sh_target = self.minimum_thermal_output_power
+                    p_th_sh_target_in_watt = self.minimum_thermal_output_power
                 else:
-                    p_th_sh_target = p_th_sh_theoretical
+                    p_th_sh_target_in_watt = p_th_sh_theoretical
                 # time shifting while the heat pump starts
-                p_th_sh_target = p_th_sh_target * (1 - np.exp(-time_on_heating / 360))
+                p_th_sh_target_in_watt = p_th_sh_target_in_watt * (1 - np.exp(-time_on_heating / 360))
 
                 # The pump runs at the nominal flow; the power sets the outlet, and the flow books the heat.
-                t_out_sh = t_in_secondary_sh + p_th_sh_target / (
+                t_out_sh = t_in_secondary_sh + p_th_sh_target_in_watt / (
                     m_dot_sh * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 )
-                p_th_sh, p_el_sh = self.booked_heating_powers(m_dot_sh, t_out_sh, t_in_secondary_sh, cop)
+                p_th_sh, p_el_sh = self.booked_heating_powers_in_watt(m_dot_sh, t_out_sh, t_in_secondary_sh, cop)
 
                 self.heatpump.delta_t = t_out_sh - t_in_secondary_sh
 
@@ -1711,7 +1716,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                         "heat its water carries at hplib's mass flow and outlet temperature, which a constant "
                         "power would contradict. Set thermalpower_dhw_is_constant to false."
                     )
-                p_th_dhw, p_el_dhw = self.booked_heating_powers(m_dot_dhw, t_out_dhw, t_in_secondary_dhw, cop)
+                p_th_dhw, p_el_dhw = self.booked_heating_powers_in_watt(m_dot_dhw, t_out_dhw, t_in_secondary_dhw, cop)
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
@@ -1737,17 +1742,17 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     * self.heatpump.delta_t
                 )
                 if p_th_dhw_theoretical <= self.minimum_thermal_output_power:
-                    p_th_dhw_target = self.minimum_thermal_output_power
+                    p_th_dhw_target_in_watt = self.minimum_thermal_output_power
                 else:
-                    p_th_dhw_target = p_th_dhw_theoretical
+                    p_th_dhw_target_in_watt = p_th_dhw_theoretical
                 # time shifting while the heat pump starts
-                p_th_dhw_target = p_th_dhw_target * (1 - np.exp(-time_on_heating / 360))
+                p_th_dhw_target_in_watt = p_th_dhw_target_in_watt * (1 - np.exp(-time_on_heating / 360))
 
                 # The pump runs at the nominal flow; the power sets the outlet, and the flow books the heat.
-                t_out_dhw = t_in_secondary_dhw + p_th_dhw_target / (
+                t_out_dhw = t_in_secondary_dhw + p_th_dhw_target_in_watt / (
                     m_dot_dhw * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 )
-                p_th_dhw, p_el_dhw = self.booked_heating_powers(m_dot_dhw, t_out_dhw, t_in_secondary_dhw, cop)
+                p_th_dhw, p_el_dhw = self.booked_heating_powers_in_watt(m_dot_dhw, t_out_dhw, t_in_secondary_dhw, cop)
 
                 t_out_sh = t_in_secondary_sh
                 p_th_sh = 0.0

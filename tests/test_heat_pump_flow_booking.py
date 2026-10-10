@@ -140,24 +140,37 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
     """
     cop = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.COP], dtype=float)
     eer = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.EER], dtype=float)
-    electrical_for_cooling = np.asarray(outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling], dtype=float)
+    electrical_power_for_cooling_in_watt = np.asarray(
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling], dtype=float
+    )
     running_steps: Dict[str, int] = {}
     for circuit, (mass_flow, t_out, t_in, thermal, electrical) in HeatPumpTwins.CIRCUITS.items():
-        flow = np.asarray(outputs[mass_flow], dtype=float)
-        carried = flow * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * (
+        mass_flow_in_kg_per_second = np.asarray(outputs[mass_flow], dtype=float)
+        carried_thermal_power_in_watt = mass_flow_in_kg_per_second * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * (
             np.asarray(outputs[t_out], dtype=float) - np.asarray(outputs[t_in], dtype=float)
         )
-        booked = np.asarray(outputs[thermal], dtype=float)
-        consumed = np.asarray(outputs[electrical], dtype=float)
-        np.testing.assert_allclose(booked, carried, rtol=1e-12, atol=1e-9, err_msg=circuit)
-        running = flow > 0.0
-        heating = running & (cop > 0.0)
-        cooling = booked < 0.0
-        np.testing.assert_allclose(consumed[heating], booked[heating] / cop[heating], rtol=1e-12, err_msg=circuit)
+        booked_power_in_watt = np.asarray(outputs[thermal], dtype=float)
+        consumed_electrical_power_in_watt = np.asarray(outputs[electrical], dtype=float)
         np.testing.assert_allclose(
-            electrical_for_cooling[cooling], -booked[cooling] / eer[cooling], rtol=1e-12, err_msg=circuit
+            booked_power_in_watt, carried_thermal_power_in_watt, rtol=1e-12, atol=1e-9, err_msg=circuit
         )
-        assert not booked[~running].any() and not consumed[~running].any(), circuit
+        running = mass_flow_in_kg_per_second > 0.0
+        heating = running & (cop > 0.0)
+        cooling = booked_power_in_watt < 0.0
+        np.testing.assert_allclose(
+            consumed_electrical_power_in_watt[heating],
+            booked_power_in_watt[heating] / cop[heating],
+            rtol=1e-12,
+            err_msg=circuit,
+        )
+        np.testing.assert_allclose(
+            electrical_power_for_cooling_in_watt[cooling],
+            -booked_power_in_watt[cooling] / eer[cooling],
+            rtol=1e-12,
+            err_msg=circuit,
+        )
+        assert not booked_power_in_watt[~running].any(), circuit
+        assert not consumed_electrical_power_in_watt[~running].any(), circuit
         running_steps[circuit] = int(running.sum())
     return running_steps
 
@@ -254,7 +267,7 @@ class SingleStep:
         return {output.field_name: stsv.values[output.global_index] for output in heat_pump.outputs}
 
 
-def flow_heat(outputs: Dict[str, float], mass_flow: str, t_out: str, t_in: str) -> float:
+def flow_thermal_power_in_watt(outputs: Dict[str, float], mass_flow: str, t_out: str, t_in: str) -> float:
     """The heat a circuit's water carries, ``m c (T_out - T_in)`` in W, from the heat pump's own outputs."""
     return hydronics.circuit_power_w(outputs[mass_flow], outputs[t_out], outputs[t_in])
 
@@ -262,10 +275,12 @@ def flow_heat(outputs: Dict[str, float], mass_flow: str, t_out: str, t_in: str) 
 @pytest.mark.base
 def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> None:
     """For hplib's 8400 W at 0.4 kg/s and 35.0 °C from a return of 30.04 °C (30.0 °C rounded), 8293.12 W is booked."""
-    thermal, electrical = MoreAdvancedHeatPumpHPLib.booked_heating_powers(0.4, 35.0, 30.04, 3.5)
-    assert thermal == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
-    assert thermal == pytest.approx(8293.12, rel=1e-12)
-    assert electrical == thermal / 3.5
+    thermal_power_in_watt, electrical_power_in_watt = MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
+        0.4, 35.0, 30.04, 3.5
+    )
+    assert thermal_power_in_watt == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
+    assert thermal_power_in_watt == pytest.approx(8293.12, rel=1e-12)
+    assert electrical_power_in_watt == thermal_power_in_watt / 3.5
 
 
 @pytest.mark.base
@@ -282,17 +297,19 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
         },
     )
     assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == 52.0
-    booked = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
-    assert booked == flow_heat(
+    booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
+    assert booked_power_in_watt == flow_thermal_power_in_watt(
         outputs,
         MoreAdvancedHeatPumpHPLib.MassFlowOutputSH,
         MoreAdvancedHeatPumpHPLib.TemperatureOutputSH,
         MoreAdvancedHeatPumpHPLib.TemperatureInputSH,
     )
     # hplib's own heat, m * 4200 J/(kg K) * 5 K, is about 1.3 % more than the flow carries at 4.96 K and 4180.
-    hplib_heat = outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] * 4200.0 * 5.0
-    assert booked == pytest.approx(hplib_heat * 4180.0 / 4200.0 * 4.96 / 5.0, rel=1e-9)
-    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH] == booked / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    hplib_thermal_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] * 4200.0 * 5.0
+    assert booked_power_in_watt == pytest.approx(hplib_thermal_power_in_watt * 4180.0 / 4200.0 * 4.96 / 5.0, rel=1e-9)
+    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH] == (
+        booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    )
 
 
 @pytest.mark.base
@@ -316,11 +333,11 @@ def test_the_fixed_flow_mode_books_the_heat_of_the_nominal_flow(switches: Dict[s
     outputs = SingleStep.step(SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.SERIES), values)
     mass_flow, t_out, t_in, thermal, electrical = HeatPumpTwins.CIRCUITS[circuit]
     assert outputs[mass_flow] == 0.333
-    booked = outputs[thermal]
-    assert booked == flow_heat(outputs, mass_flow, t_out, t_in)
+    booked_power_in_watt = outputs[thermal]
+    assert booked_power_in_watt == flow_thermal_power_in_watt(outputs, mass_flow, t_out, t_in)
     # 5 K at the nominal flow, ramped up after ten minutes of running: (1 - e^(-600/360)) of 6959.7 W.
-    assert booked == pytest.approx(0.333 * 4180.0 * 5.0 * (1.0 - np.exp(-600.0 / 360.0)), rel=1e-12)
-    assert outputs[electrical] == booked / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    assert booked_power_in_watt == pytest.approx(0.333 * 4180.0 * 5.0 * (1.0 - np.exp(-600.0 / 360.0)), rel=1e-12)
+    assert outputs[electrical] == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
 
 
 @pytest.mark.base
@@ -336,15 +353,15 @@ def test_active_cooling_books_the_heat_its_flow_draws_and_that_heat_over_the_eer
             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 50.0,
         },
     )
-    booked = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
-    assert booked < 0.0
-    assert booked == flow_heat(
+    booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
+    assert booked_power_in_watt < 0.0
+    assert booked_power_in_watt == flow_thermal_power_in_watt(
         outputs,
         MoreAdvancedHeatPumpHPLib.MassFlowOutputSH,
         MoreAdvancedHeatPumpHPLib.TemperatureOutputSH,
         MoreAdvancedHeatPumpHPLib.TemperatureInputSH,
     )
-    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling] == -booked / outputs[
+    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling] == -booked_power_in_watt / outputs[
         MoreAdvancedHeatPumpHPLib.EER
     ]
 

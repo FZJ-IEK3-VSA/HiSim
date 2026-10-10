@@ -37,7 +37,7 @@ components:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
     preset: standard
     inputs:
-      - Collector                                           # MassFlow, the flow its heat at the step mean needs
+      - Collector                                           # MassFlow, the flow its heat at the step mean needs, and PartLoadRatioRun
       - {$port: cylinder_temperature}                       # the start-of-step temperature, for the full-tank stop
 
 interface:
@@ -62,7 +62,7 @@ tests:
   # are sized for the physical ceiling, not for the test day: irradiance on the collector plane is at most about
   # 1200 W/m², so over the box's 20 m² at most 24 kW, of which a flat plate delivers at most about 80 %; per-step
   # energies are those powers x 0.25 h. The new solar pump draws 10 W while it runs (an old one 35 W). The
-  # Controller's one output, the pump's control signal, is binary: no energy or temperature.
+  # Controller's pump signal is binary; its target and part-load ratio are bounded below.
   bounds:
     - {output: Collector.ThermalPowerOutput, unit: WATT, min: 0, max: 20000}
       # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; never negative: the collector clips its efficiency at zero
@@ -72,6 +72,12 @@ tests:
     - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m² = 24 kW, with margin
     - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power
     - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}                 # at most the pump's electricity
+    - {output: Controller.TargetTemperatureInCelsius, unit: CELSIUS, min: 40, max: 80}
+      # the cylinder temperature above which the Controller stops the pump, its 60 °C warm-water aim
+    - {output: Controller.PartLoadRatio, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the pump runs: 1 at and below the part-load threshold
+    - {output: Collector.PartLoadRatioRun, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the pump ran, reported back to the Controller
   monotone:
     - {parameter: area_in_m2, kpi: CAPEX - Investment cost, member: Collector, direction: increasing}
       # the investment is priced per m² of collector (3188 EUR for the default 4 m², 1594 to 15940 EUR over the

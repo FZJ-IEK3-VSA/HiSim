@@ -410,6 +410,35 @@ class CircuitStep:
         """
         return CircuitStep(mass_flow_kg_per_s=0.0, t_supply_c=t_return_c, power_w=0.0)
 
+    def at_part_load(self, *, part_load_ratio: float, t_return_c: float) -> "CircuitStep":
+        """Return this full-load step of a circuit when its generator runs only a fraction of the step.
+
+        A generator that runs a fraction of a step at full load publishes the averaged flow, its full-load flow times
+        the ratio, at its full-load supply temperature, and the heat that flow carries from the return,
+        ``m c (T_sup - T_ret)`` (:func:`circuit_power_w`). A ratio of 1 returns this step unchanged. For example, a
+        step of 0.0144 kg/s at 75 °C over a 50 °C return at a ratio of 0.5 gives 0.0072 kg/s and 752.4 W.
+
+        Args:
+            part_load_ratio: The fraction of the step the generator runs, from 0 to 1.
+            t_return_c: The circuit's return temperature, in °C.
+
+        Returns:
+            The step at that ratio.
+
+        Raises:
+            ValueError: If the ratio lies outside [0, 1].
+        """
+        if not 0.0 <= part_load_ratio <= 1.0:
+            raise ValueError(f"A part-load ratio is a fraction from 0 to 1, not {part_load_ratio}.")
+        if part_load_ratio == 1.0:
+            return self
+        mass_flow_kg_per_s = part_load_ratio * self.mass_flow_kg_per_s
+        return CircuitStep(
+            mass_flow_kg_per_s=mass_flow_kg_per_s,
+            t_supply_c=self.t_supply_c,
+            power_w=circuit_power_w(mass_flow_kg_per_s=mass_flow_kg_per_s, t_supply_c=self.t_supply_c, t_return_c=t_return_c),
+        )
+
 
 def throttled_supply_temperature_c(*, unthrottled_supply_c: float, return_c: float, supply_limit_c: float) -> float:
     """Return the supply temperature of a generator that holds its lift, throttled at a supply limit, in °C.

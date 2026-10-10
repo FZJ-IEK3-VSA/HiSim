@@ -45,6 +45,7 @@ components:
       parallel_space_heating_and_dhw_option: true
     inputs:
       - Weather
+      - ElectricHeating
       - DHWStorage
   ElectricHeating:
     class: hisim.components.generic_electric_heating.ElectricHeating

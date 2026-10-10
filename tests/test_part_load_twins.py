@@ -21,6 +21,8 @@ import yaml
 
 from hisim.calculation_scope import CalculationScope
 from hisim.components.generic_boiler import GenericBoilerController
+from hisim.components.generic_electric_heating import ElectricHeatingController
+from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerDHW
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.energy_system.executor import SimulationParametersReader, build_energy_system
 from hisim.part_load import PartLoadRule
@@ -43,6 +45,14 @@ class PartLoadTwins:
         "household_gas_building_sizer": (
             f"ModulatingBoilerController - {GenericBoilerController.PartLoadRatioDhw} [",
             f"ModulatingBoilerController - {GenericBoilerController.TargetTemperatureDhwInCelsius} [",
+        ),
+        "household_electric_heating_building_sizer": (
+            f"ElectricHeatingController - {ElectricHeatingController.PartLoadRatioDhw} [",
+            f"ElectricHeatingController - {ElectricHeatingController.TargetTemperatureDhwInCelsius} [",
+        ),
+        "household_heatpump_building_sizer": (
+            f"HeatPumpControllerDHW - {MoreAdvancedHeatPumpHPLibControllerDHW.PartLoadRatioDHW} [",
+            f"HeatPumpControllerDHW - {MoreAdvancedHeatPumpHPLibControllerDHW.TargetTemperatureDHWInCelsius} [",
         ),
     }
 

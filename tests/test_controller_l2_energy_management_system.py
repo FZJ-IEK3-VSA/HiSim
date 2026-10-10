@@ -885,6 +885,8 @@ class TestSurplusHysteresis:
         (0.0, True, True),
         (5e-12, False, False),
         (-5e-12, True, True),
+        (BAND_IN_WATT * 0.5, False, False),
+        (-BAND_IN_WATT * 0.5, True, True),
         (BAND_IN_WATT, False, False),
         (-BAND_IN_WATT, True, True),
         (BAND_IN_WATT * 1.5, False, True),

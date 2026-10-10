@@ -426,7 +426,7 @@ under-relaxed value (weight 0.5) when the residual changes sign (an oscillation,
 should not produce, but a circuit whose heat falls steeply with `T̄` can, such as the heat pump's hot-water supply
 capped at its controller's set temperature). A converged iteration can alternate between two neighbouring floats;
 the energy manager, which switches its set-temperature raise on the sign of the surplus after the battery, keeps
-its previous step's decision within 0.01 W of zero surplus (hisim-4g9.31), so that alternation no longer becomes a
+its previous step's decision within 1 W of zero surplus (hisim-4g9.31), so that alternation no longer becomes a
 cycle of its own. Once the simulator forces convergence it stops accelerating: the controllers are then frozen,
 and a secant from a history that spans their switching aims at a fixed point that no longer exists (with the
 extrapolation kept under forced convergence the heat-pump twin's year at 3600 s aborted on a 100-pass cycle). The

@@ -761,9 +761,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.passive_cooling_with_brine = config.passive_cooling_with_brine
 
-        self.electrical_input_power_brine_pump_in_watt = config.electrical_input_power_brine_pump_in_watt
-        if self.electrical_input_power_brine_pump_in_watt is None:
-            self.electrical_input_power_brine_pump_in_watt = 0.0
+        # An unset brine pump power means the machine has no brine pump of its own, so it draws nothing.
+        self.electrical_input_power_brine_pump_in_watt: float = (
+            0.0
+            if config.electrical_input_power_brine_pump_in_watt is None
+            else config.electrical_input_power_brine_pump_in_watt
+        )
 
         self.position_hot_water_storage_in_system = config.position_hot_water_storage_in_system
 
@@ -1499,19 +1502,20 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
     @staticmethod
     def booked_heating_powers_in_watt(
+        *,
         mass_flow_in_kg_per_second: float,
         outlet_temperature_in_celsius: float,
         return_temperature_in_celsius: float,
         cop: float,
-    ) -> Tuple[float, float]:
+    ) -> "HeatingCircuitPowers":
         """Return the thermal and electrical power a running heating circuit books, from the water it carries.
 
         The thermal power is the heat the circuit's water carries, ``P_th = m c (T_out - T_in)``
         (:func:`hisim.hydronics.circuit_power_w`), with ``T_in`` the return temperature the heat pump reads,
-        unrounded. The electrical power follows at the step's coefficient of performance, ``P_el = P_th / COP``.
-        For example, hplib answers a return of 30.04 °C (rounded to 30.0 °C) with 8400 W, 0.4 kg/s and 35.0 °C;
-        at a COP of 3.5 the heat pump books ``0.4 * 4180 * 4.96 = 8293.12`` W of heat and 2369.46 W of
-        electricity.
+        unrounded. The electrical power follows at the step's coefficient of performance (COP, the heat delivered
+        per unit of electricity), ``P_el = P_th / COP``. For example, hplib answers a return of 30.04 °C (rounded
+        to 30.0 °C) with 8400 W, 0.4 kg/s and 35.0 °C; at a COP of 3.5 the heat pump books
+        ``0.4 * 4180 * 4.96 = 8293.12`` W of heat and 2369.46 W of electricity.
 
         The flow is authoritative because the storage at the other end integrates exactly this flow, so the heat
         pump books what the storage receives. hplib's own thermal power differs from it, by up to about 1.5 % on
@@ -1519,25 +1523,58 @@ class MoreAdvancedHeatPumpHPLib(Component):
         4200 J/(kg K) instead of HiSim's 4180 J/(kg K).
 
         Args:
-            mass_flow_in_kg_per_second: The circuit's mass flow, kg/s.
-            outlet_temperature_in_celsius: The temperature the water leaves the heat pump at, °C.
-            return_temperature_in_celsius: The return temperature the heat pump reads, °C.
-            cop: The coefficient of performance of the step, above 0.
+            mass_flow_in_kg_per_second: The circuit's mass flow, in kg/s.
+            outlet_temperature_in_celsius: The temperature the water leaves the heat pump at, in °C.
+            return_temperature_in_celsius: The return temperature the heat pump reads, in °C.
+            cop: The coefficient of performance of the step, dimensionless, above 0.
 
         Returns:
-            The thermal and the electrical power in W.
+            The thermal and the electrical power, in W.
 
         Raises:
+            ValueError: If ``cop`` is 0 or less, which would book infinite or negative electricity.
             NonFiniteValueError: If an argument is NaN or infinite, or the power overflows the float range, as
                 :func:`hisim.hydronics.circuit_power_w` raises it.
             NegativeMassFlowError: If ``mass_flow_in_kg_per_second`` is negative, as
                 :func:`hisim.hydronics.circuit_power_w` raises it.
-            ZeroDivisionError: If ``cop`` is 0.
         """
+        if not cop > 0.0:
+            raise ValueError(
+                f"A running heating circuit needs a coefficient of performance above 0 to book its electricity, "
+                f"got {cop}."
+            )
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_in_kg_per_second, outlet_temperature_in_celsius, return_temperature_in_celsius
         )
-        return thermal_power_in_watt, thermal_power_in_watt / cop
+        return HeatingCircuitPowers(
+            thermal_power_in_watt=thermal_power_in_watt, electrical_power_in_watt=thermal_power_in_watt / cop
+        )
+
+    @staticmethod
+    def active_cooling_electrical_power_in_watt(*, thermal_power_in_watt: float, eer: float) -> float:
+        """Return the electricity an actively cooling heat pump draws for the heat its circuit removes, in W.
+
+        The energy efficiency ratio (EER) is the heat removed per unit of electricity, so the electricity is the
+        heat removed over the EER. A cooling circuit's thermal power is negative (its supply is colder than its
+        return), so the heat removed is ``-thermal_power_in_watt``. For example, a circuit that removes 3000 W
+        (thermal power -3000 W) at an EER of 4 draws 750 W.
+
+        Args:
+            thermal_power_in_watt: The cooling circuit's thermal power, in W, 0 or negative.
+            eer: The energy efficiency ratio of the step, dimensionless, above 0.
+
+        Returns:
+            The electrical power, in W, 0 or more.
+
+        Raises:
+            ValueError: If ``eer`` is 0 or less, which would book no or negative electricity for the cooling.
+        """
+        if not eer > 0.0:
+            raise ValueError(
+                f"An actively cooling heat pump needs an energy efficiency ratio above 0 to book its electricity, "
+                f"got {eer} for a thermal power of {thermal_power_in_watt} W."
+            )
+        return -thermal_power_in_watt / eer
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
@@ -1631,7 +1668,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
                 m_dot_sh = results["m_dot"]
                 m_dot_dhw = 0.0
-                p_th_sh, p_el_sh = self.booked_heating_powers_in_watt(m_dot_sh, t_out_sh, t_in_secondary_sh, cop)
+                sh_powers = self.booked_heating_powers_in_watt(
+                    mass_flow_in_kg_per_second=m_dot_sh,
+                    outlet_temperature_in_celsius=t_out_sh,
+                    return_temperature_in_celsius=t_in_secondary_sh,
+                    cop=cop,
+                )
+                p_th_sh, p_el_sh = sh_powers.thermal_power_in_watt, sh_powers.electrical_power_in_watt
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
@@ -1672,7 +1715,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_out_sh = t_in_secondary_sh + p_th_sh_target_in_watt / (
                     m_dot_sh * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 )
-                p_th_sh, p_el_sh = self.booked_heating_powers_in_watt(m_dot_sh, t_out_sh, t_in_secondary_sh, cop)
+                sh_powers = self.booked_heating_powers_in_watt(
+                    mass_flow_in_kg_per_second=m_dot_sh,
+                    outlet_temperature_in_celsius=t_out_sh,
+                    return_temperature_in_celsius=t_in_secondary_sh,
+                    cop=cop,
+                )
+                p_th_sh, p_el_sh = sh_powers.thermal_power_in_watt, sh_powers.electrical_power_in_watt
 
                 self.heatpump.delta_t = t_out_sh - t_in_secondary_sh
 
@@ -1716,7 +1765,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                         "heat its water carries at hplib's mass flow and outlet temperature, which a constant "
                         "power would contradict. Set thermalpower_dhw_is_constant to false."
                     )
-                p_th_dhw, p_el_dhw = self.booked_heating_powers_in_watt(m_dot_dhw, t_out_dhw, t_in_secondary_dhw, cop)
+                dhw_powers = self.booked_heating_powers_in_watt(
+                    mass_flow_in_kg_per_second=m_dot_dhw,
+                    outlet_temperature_in_celsius=t_out_dhw,
+                    return_temperature_in_celsius=t_in_secondary_dhw,
+                    cop=cop,
+                )
+                p_th_dhw, p_el_dhw = dhw_powers.thermal_power_in_watt, dhw_powers.electrical_power_in_watt
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
@@ -1752,7 +1807,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_out_dhw = t_in_secondary_dhw + p_th_dhw_target_in_watt / (
                     m_dot_dhw * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 )
-                p_th_dhw, p_el_dhw = self.booked_heating_powers_in_watt(m_dot_dhw, t_out_dhw, t_in_secondary_dhw, cop)
+                dhw_powers = self.booked_heating_powers_in_watt(
+                    mass_flow_in_kg_per_second=m_dot_dhw,
+                    outlet_temperature_in_celsius=t_out_dhw,
+                    return_temperature_in_celsius=t_in_secondary_dhw,
+                    cop=cop,
+                )
+                p_th_dhw, p_el_dhw = dhw_powers.thermal_power_in_watt, dhw_powers.electrical_power_in_watt
 
                 t_out_sh = t_in_secondary_sh
                 p_th_sh = 0.0
@@ -1824,7 +1885,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 m_dot_dhw = 0.0
                 # The circuit's water carries the heat drawn (negative); hplib's EER relates it to the electricity.
                 p_th_sh = hydronics.circuit_power_w(m_dot_sh, t_out_sh, t_in_secondary_sh)
-                p_el_cooling = -p_th_sh / eer if eer > 0 else 0.0
+                p_el_cooling = self.active_cooling_electrical_power_in_watt(thermal_power_in_watt=p_th_sh, eer=eer)
                 time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
                 time_on_heating = 0
                 time_off = 0
@@ -1854,8 +1915,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
         p_th_tot_in_watt = p_th_dhw + p_th_sh
-        # the configured pump power is never None here: the constructor replaces an unset one by 0
-        p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling + (p_el_brine_pump or 0.0)
+        p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling + p_el_brine_pump
 
         thermal_power_from_environment = p_th_tot_in_watt - p_el_tot_in_watt
 
@@ -1938,7 +1998,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         stsv.set_output_value(self.p_el_sh, p_el_sh)
         stsv.set_output_value(self.p_el_cooling, p_el_cooling)
         # the configured pump power is never None here: the constructor replaces an unset one by 0
-        stsv.set_output_value(self.p_el_brine_pump, p_el_brine_pump or 0.0)
+        stsv.set_output_value(self.p_el_brine_pump, p_el_brine_pump)
         stsv.set_output_value(self.p_el_tot, p_el_tot_in_watt)
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
@@ -2497,6 +2557,21 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         list_of_kpi_entries.append(min_temperature_difference_sh_entry)
         return list_of_kpi_entries
+
+
+@dataclass(frozen=True)
+class HeatingCircuitPowers:
+    """The thermal and electrical power a running heating circuit of the hplib heat pump books for one step.
+
+    Both are derived from the same water flow: the thermal power is the heat the circuit's water carries, the
+    electrical power that heat over the step's coefficient of performance. A value object, so the two powers
+    cannot be swapped by position.
+    """
+
+    #: The heat the circuit's water carries, in W.
+    thermal_power_in_watt: float
+    #: The electricity the compressor draws for that heat, in W.
+    electrical_power_in_watt: float
 
 
 @dataclass

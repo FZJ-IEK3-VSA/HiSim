@@ -275,12 +275,44 @@ def flow_thermal_power_in_watt(outputs: Dict[str, float], mass_flow: str, t_out:
 @pytest.mark.base
 def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> None:
     """For hplib's 8400 W at 0.4 kg/s and 35.0 °C from a return of 30.04 °C (30.0 °C rounded), 8293.12 W is booked."""
-    thermal_power_in_watt, electrical_power_in_watt = MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
-        0.4, 35.0, 30.04, 3.5
+    powers = MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
+        mass_flow_in_kg_per_second=0.4,
+        outlet_temperature_in_celsius=35.0,
+        return_temperature_in_celsius=30.04,
+        cop=3.5,
     )
-    assert thermal_power_in_watt == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
-    assert thermal_power_in_watt == pytest.approx(8293.12, rel=1e-12)
-    assert electrical_power_in_watt == thermal_power_in_watt / 3.5
+    assert powers.thermal_power_in_watt == pytest.approx(0.4 * 4180.0 * 4.96, rel=1e-12)
+    assert powers.thermal_power_in_watt == pytest.approx(8293.12, rel=1e-12)
+    assert powers.electrical_power_in_watt == powers.thermal_power_in_watt / 3.5
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("cop", [0.0, -1.0])
+def test_a_heating_circuit_without_a_positive_cop_is_refused(cop: float) -> None:
+    """A COP of 0 or less would book infinite or negative electricity; the booking must refuse it by name."""
+    with pytest.raises(ValueError, match="coefficient of performance above 0"):
+        MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=0.4,
+            outlet_temperature_in_celsius=35.0,
+            return_temperature_in_celsius=30.0,
+            cop=cop,
+        )
+
+
+@pytest.mark.base
+def test_active_cooling_draws_the_heat_removed_over_the_eer() -> None:
+    """3000 W removed at an EER of 4 draws 750 W; a sign or division error in the cooling electricity fails this."""
+    assert MoreAdvancedHeatPumpHPLib.active_cooling_electrical_power_in_watt(
+        thermal_power_in_watt=-3000.0, eer=4.0
+    ) == pytest.approx(750.0, rel=1e-15)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("eer", [0.0, -2.0])
+def test_active_cooling_without_a_positive_eer_is_refused(eer: float) -> None:
+    """An EER of 0 or less used to book free cooling silently; the cooling electricity must refuse it instead."""
+    with pytest.raises(ValueError, match="energy efficiency ratio above 0"):
+        MoreAdvancedHeatPumpHPLib.active_cooling_electrical_power_in_watt(thermal_power_in_watt=-3000.0, eer=eer)
 
 
 @pytest.mark.base

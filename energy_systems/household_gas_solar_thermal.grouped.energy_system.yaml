@@ -79,6 +79,7 @@ components:
     inputs:
       - Weather
       - HeatDistributionController
+      - CondensingGasBoiler
       - DHWStorage
       - SimpleHotWaterStorage
   GasMeter:

@@ -484,8 +484,9 @@ class GenericBoiler(Component):
     A hot-water charge runs the part-load ratio its controller commands (``PartLoadRatioDhw``): 1, the whole step, at
     and below the part-load threshold; above it the fraction of the step that brings the tank to the controller's
     target. Below 1 the boiler publishes the averaged flow, the full-load flow times the ratio, at the full-load supply
-    temperature, and books the heat that flow carries and the ratio times the full-load fuel. Cycling losses of the
-    burner are not modelled.
+    temperature, and books the heat that flow carries and the ratio times the full-load fuel. It reports the ratio it
+    ran with (``PartLoadRatioRunDhw``): the commanded ratio while it charges the tank, 0 otherwise. Cycling losses of
+    the burner are not modelled.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -502,6 +503,8 @@ class GenericBoiler(Component):
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
 
     # Output
+    #: The fraction of the step the hot-water charge ran, reported back to the controller.
+    PartLoadRatioRunDhw = "PartLoadRatioRunDhw"
     WaterOutputMassFlowSh = "WaterOutputMassFlowSh"
     WaterOutputTemperatureSh = "WaterOutputTemperatureSh"
     EnergyDemandSh = "EnergyDemandSh"
@@ -560,7 +563,12 @@ class GenericBoiler(Component):
             lt.Units.CELSIUS,
             True,
         )
-        self.dhw_part_load_command = PartLoadCommand(self, input_name=GenericBoiler.PartLoadRatioDhw)
+        self.dhw_part_load_command = PartLoadCommand(
+            self,
+            input_name=GenericBoiler.PartLoadRatioDhw,
+            ratio_run_output_name=GenericBoiler.PartLoadRatioRunDhw,
+            device_description="the boiler's hot-water charge",
+        )
 
         self.total_fuel_input_power_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -874,12 +882,14 @@ class GenericBoiler(Component):
             fired, idle = self.hot_water_circuit, self.space_heating_circuit
         elif operating_mode == HeatingMode.OFF.value:
             self.publish_idle_boiler(stsv)
+            self.dhw_part_load_command.publish_ratio_run(stsv, 0.0)
             return
         else:
             raise ValueError(f"Unknown operating mode {operating_mode}")
         if lift_in_kelvin <= 0:
             # a circuit without a lift moves no water, so it carries no heat and the burner stays off
             self.publish_idle_boiler(stsv)
+            self.dhw_part_load_command.publish_ratio_run(stsv, 0.0)
             return
 
         return_temperature_in_celsius = stsv.get_input_value(fired.return_temperature)
@@ -904,12 +914,13 @@ class GenericBoiler(Component):
             return_temperature_in_celsius=return_temperature_in_celsius,
             supply_temperature_in_celsius=supply_temperature_in_celsius,
         )
+        hot_water_ratio_run = 0.0
         if fired is self.hot_water_circuit:
+            hot_water_ratio_run = self.dhw_part_load_command.ratio(stsv)
             firing = self.part_loaded_firing(
-                firing,
-                part_load_ratio=self.dhw_part_load_command.ratio(stsv),
-                return_temperature_in_celsius=return_temperature_in_celsius,
+                firing, part_load_ratio=hot_water_ratio_run, return_temperature_in_celsius=return_temperature_in_celsius
             )
+        self.dhw_part_load_command.publish_ratio_run(stsv, hot_water_ratio_run)
         self.publish_firing(stsv, fired, firing)
         self.publish_idle_circuit(stsv, idle)
 
@@ -1473,9 +1484,10 @@ class GenericBoilerController(Component):
     The controller also owns how much of a step a hot-water charge runs (:class:`hisim.part_load.PartLoadControl`):
     it decides the mode on the tank's start-of-step temperature as before, and commands the part-load ratio
     ``PartLoadRatioDhw`` with it. At and below the part-load threshold the ratio is 1 whenever the charge runs. Above it
-    the controller iterates the ratio over the simulator's passes so that the tank ends the step at its warm-water aim,
-    the temperature at which it ends the charge (``TargetTemperatureDhwInCelsius``, 60 °C), or at most a few hundredths
-    of a kelvin above it.
+    the ratio follows :class:`hisim.part_load.PartLoadRule` from the ratio the boiler reports it ran with
+    (``PartLoadRatioRunDhw``) and the tank's start and end temperatures, so that the tank ends the step at the warm-water
+    aim, the temperature at which the controller ends the charge (``TargetTemperatureDhwInCelsius``, 60 °C), or at most
+    a few hundredths of a kelvin above it.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -1483,8 +1495,10 @@ class GenericBoilerController(Component):
     # Inputs
     WaterTemperatureInputFromWaterStorage = "WaterTemperatureInputFromWaterStorage"
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
-    #: The hot-water tank's temperature at the end of the step, which the part-load ratio regulates.
+    #: The hot-water tank's temperature at the end of the step, which the part-load ratio is set against.
     WaterTemperatureAtEndOfStepFromDHWStorageInCelsius = "WaterTemperatureAtEndOfStepFromDHWStorageInCelsius"
+    #: The fraction of the step the boiler's hot-water charge ran, as the boiler reports it.
+    PartLoadRatioRunDhw = "PartLoadRatioRunDhw"
 
     # set heating  flow temperature
     HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
@@ -1559,6 +1573,7 @@ class GenericBoilerController(Component):
         self.dhw_part_load = PartLoadControl(
             self,
             end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius,
+            ratio_run_input_name=self.PartLoadRatioRunDhw,
             ratio_output_name=self.PartLoadRatioDhw,
             target_output_name=self.TargetTemperatureDhwInCelsius,
             device_description="the boiler's hot-water charge",
@@ -1620,6 +1635,7 @@ class GenericBoilerController(Component):
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+        self.add_default_connections(self.get_default_connections_from_generic_boiler())
 
     def whole_timesteps(self, field_name: str, seconds: float) -> int:
         """A minimum time of the configuration in whole timesteps, rounded down; warns when it has no effect.
@@ -1685,6 +1701,23 @@ class GenericBoilerController(Component):
         )
         return connections
 
+    def get_default_connections_from_generic_boiler(self) -> List[ComponentConnection]:
+        """Return the default connection from the boiler: the part-load ratio its hot-water charge ran with.
+
+        The controller sets the next ratio from the ratio the boiler reports, so the boiler's report is wired back to
+        it. A boiler without hot water reports 0 on every step.
+
+        Returns:
+            The one connection of ``PartLoadRatioRunDhw``.
+        """
+        return [
+            ComponentConnection(
+                GenericBoilerController.PartLoadRatioRunDhw,
+                GenericBoiler.get_classname(),
+                GenericBoiler.PartLoadRatioRunDhw,
+            )
+        ]
+
     def get_default_connections_from_weather(
         self,
     ):
@@ -1733,9 +1766,8 @@ class GenericBoilerController(Component):
         pass
 
     def i_save_state(self) -> None:
-        """Save the current state and start the hot-water part-load search afresh for the next step."""
+        """Save the current state."""
         self.previous_controller_mode = self.controller_mode
-        self.dhw_part_load.start_step()
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
@@ -1759,11 +1791,12 @@ class GenericBoilerController(Component):
     ) -> None:
         """Decide the boiler's mode and power on the stores' start temperatures, and its hot-water part-load ratio.
 
-        Under ``force_convergence`` every output keeps the value of the last pass, the part-load ratio included.
+        Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratio: it
+        becomes the ratio the boiler reports it ran with, so the charge stops changing.
         """
 
         if force_convergence:
-            pass
+            self.dhw_part_load.publish_held(stsv)
         else:
             # Retrieves inputs
             water_temperature_input_from_space_heating_water_storage_in_celsius = stsv.get_input_value(
@@ -1803,7 +1836,6 @@ class GenericBoilerController(Component):
                 device_runs=self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER,
                 start_temperature_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius or 0.0,
                 target_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
-                force_convergence=force_convergence,
             )
 
     def determine_operating_mode(

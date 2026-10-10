@@ -1,10 +1,12 @@
 """Part load of the boiler's hot-water charge: the controller commands the ratio, the boiler runs it.
 
 * ``GenericBoilerController`` publishes the part-load ratio and its target: 0 while the charge does not run, exactly 1
-  at and below the threshold, and above it the ratio its search iterates against the tank's end temperature. Each step
-  starts a fresh search, and under ``force_convergence`` the controller keeps every output.
+  at and below the threshold, and above it the ratio :class:`hisim.part_load.PartLoadRule` gives for the ratio the
+  boiler ran and the tank's start and end temperatures. It keeps no part-load memory, and under ``force_convergence``
+  it publishes the ratio the boiler ran.
 * ``GenericBoiler`` books the commanded fraction of its full-load charge: the averaged flow at the full-load supply,
-  the heat that flow carries and the fraction of the fuel. Space heating ignores the ratio.
+  the heat that flow carries and the fraction of the fuel, and reports the ratio it ran. Space heating ignores the
+  ratio.
 """
 
 from typing import Dict
@@ -14,7 +16,7 @@ import pytest
 from hisim.components import generic_boiler
 from hisim.components.dual_circuit_system import HeatingMode
 from hisim import hydronics
-from hisim.part_load import PartLoadRatioRegulator
+from hisim.part_load import PartLoadRule
 from tests.part_load_rigs import BoilerControllerRig, BoilerRig, Parameters, Rig
 
 
@@ -62,50 +64,53 @@ def test_a_charge_that_does_not_run_gets_zero_and_the_target_is_the_warm_water_a
 
 
 @pytest.mark.base
-def test_above_the_threshold_the_controller_iterates_the_ratio_against_the_tank() -> None:
-    """At 900 s the controller keeps 1 for three passes, then follows its search on the tank's end temperature."""
+def test_above_the_threshold_the_controller_applies_the_rule_to_the_ratio_run_and_the_tank() -> None:
+    """At 900 s the ratio is the rule's: the line from the tank's start through the ratio the boiler ran and the end."""
     controller, stsv, fakes = BoilerControllerRig.build(900)
-    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=64.0)
-    controller.i_save_state()
-    ratios = []
-    for _ in range(PartLoadRatioRegulator.PASSES_BEFORE_FIRST_READING + 1):
-        controller.i_restore_state()
-        ratios.append(ControllerPass.run(controller, stsv)["ratio"])
-    expected = (60.0 + PartLoadRatioRegulator.TARGET_BAND_IN_KELVIN / 2.0 - 45.0) / (64.0 - 45.0)
-    assert ratios[:-1] == [1.0] * PartLoadRatioRegulator.PASSES_BEFORE_FIRST_READING
-    assert ratios[-1] == pytest.approx(expected, rel=1e-12)
+    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=64.0, ratio_run=0.8)
+    expected = 0.8 * (60.0 + PartLoadRule.TARGET_BAND_IN_KELVIN / 2.0 - 45.0) / (64.0 - 45.0)
+    assert ControllerPass.run(controller, stsv)["ratio"] == pytest.approx(expected, rel=1e-12)
 
 
 @pytest.mark.base
-def test_every_step_starts_a_fresh_search() -> None:
-    """``i_save_state`` discards the last step's search, so a new step starts from 1, not from the last ratio."""
-    controller, stsv, fakes = BoilerControllerRig.build(900)
-    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=64.0)
-    controller.i_save_state()
-    for _ in range(PartLoadRatioRegulator.PASSES_BEFORE_FIRST_READING + 1):
-        controller.i_restore_state()
-        ControllerPass.run(controller, stsv)
-    assert Rig.output(stsv, controller.dhw_part_load.ratio_channel) < 1.0
-    controller.i_save_state()
-    controller.i_restore_state()
-    assert ControllerPass.run(controller, stsv)["ratio"] == 1.0
+def test_the_controller_keeps_no_part_load_memory_between_passes_or_steps() -> None:
+    """The same inputs give the same ratio in every pass and after every save and restore.
 
-
-@pytest.mark.base
-def test_under_force_convergence_the_controller_keeps_its_ratio() -> None:
-    """A forced pass keeps the last ratio whatever the tank reads; the search does not advance in it."""
+    A controller that kept part-load memory, a search or a pass count, would answer the same inputs differently in a
+    later pass or a later step.
+    """
     controller, stsv, fakes = BoilerControllerRig.build(900)
-    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=64.0)
+    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=64.0, ratio_run=1.0)
     controller.i_save_state()
-    for _ in range(PartLoadRatioRegulator.PASSES_BEFORE_FIRST_READING + 1):
-        controller.i_restore_state()
-        held = ControllerPass.run(controller, stsv)["ratio"]
-    search_before = controller.dhw_part_load.regulator.search
-    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=50.0)
+    first = ControllerPass.run(controller, stsv)["ratio"]
+    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=50.0, ratio_run=0.3)
     for _ in range(3):
         controller.i_restore_state()
-        assert ControllerPass.run(controller, stsv, force_convergence=True)["ratio"] == held
-    assert controller.dhw_part_load.regulator.search == search_before
+        ControllerPass.run(controller, stsv)
+    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=64.0, ratio_run=1.0)
+    controller.i_restore_state()
+    assert ControllerPass.run(controller, stsv)["ratio"] == first
+    controller.i_save_state()
+    controller.i_restore_state()
+    assert ControllerPass.run(controller, stsv)["ratio"] == first
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("seconds_per_timestep, held_ratio", [(900, 0.42), (60, 1.0)])
+def test_under_force_convergence_the_controller_publishes_the_ratio_run(seconds_per_timestep: int, held_ratio: float) -> None:
+    """A forced pass publishes the ratio the boiler ran, whatever the tank reads, so the charge stops changing.
+
+    At and below the threshold the ratio keeps its last unforced value, exactly 1 for a running charge, as without
+    part load.
+    """
+    controller, stsv, fakes = BoilerControllerRig.build(seconds_per_timestep)
+    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=64.0, ratio_run=1.0)
+    controller.i_save_state()
+    ControllerPass.run(controller, stsv)
+    BoilerControllerRig.set_inputs(stsv, fakes, tank_start_c=45.0, tank_end_c=50.0, ratio_run=0.42)
+    for _ in range(3):
+        controller.i_restore_state()
+        assert ControllerPass.run(controller, stsv, force_convergence=True)["ratio"] == held_ratio
 
 
 @pytest.mark.base
@@ -121,6 +126,7 @@ def test_the_boiler_books_the_commanded_fraction_of_its_full_load_charge() -> No
     assert part["heat_w"] == pytest.approx(0.3 * full["heat_w"], rel=1e-12)
     assert part["fuel_w"] == pytest.approx(0.3 * full["fuel_w"], rel=1e-12)
     assert part["fuel_wh"] == pytest.approx(part["fuel_w"] * 900.0 / 3600.0, rel=1e-12)
+    assert (part["ratio_run"], full["ratio_run"]) == (0.3, 1.0)
 
 
 @pytest.mark.base
@@ -145,6 +151,8 @@ def test_a_whole_step_and_space_heating_are_booked_as_without_part_load() -> Non
     assert BoilerRig.charge(900, ratio=0.0, mode=HeatingMode.SPACE_HEATING) == BoilerRig.charge(
         900, ratio=1.0, mode=HeatingMode.SPACE_HEATING
     )
+    assert BoilerRig.charge(900, ratio=1.0, mode=HeatingMode.SPACE_HEATING)["ratio_run"] == 0.0
+    assert BoilerRig.charge(900, ratio=1.0, mode=HeatingMode.OFF)["ratio_run"] == 0.0
 
 
 @pytest.mark.base

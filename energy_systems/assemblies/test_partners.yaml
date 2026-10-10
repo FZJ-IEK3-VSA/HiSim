@@ -184,7 +184,7 @@ partners:
       config:
         set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
-      inputs: [Weather, HeatDistributionController, GasCylinder, GasBuffer]
+      inputs: [Weather, HeatDistributionController, GasBoiler, GasCylinder, GasBuffer]
   GasBuffer:
     # Reads the boiler it joins with, without requiring it back.
     requires: [HeatDistributionSystem]
@@ -233,7 +233,7 @@ partners:
       config:
         set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
-      inputs: [Weather, HeatDistributionController, OilCylinder, OilBuffer]
+      inputs: [Weather, HeatDistributionController, OilBoiler, OilCylinder, OilBuffer]
   OilBuffer:
     requires: [HeatDistributionSystem]
     component:
@@ -280,7 +280,7 @@ partners:
         with_domestic_hot_water_preparation: true
         minimum_runtime_in_seconds: 1800.0
         minimum_resting_time_in_seconds: 900.0
-      inputs: [Weather, HeatDistributionController, PelletCylinder, PelletBuffer]
+      inputs: [Weather, HeatDistributionController, PelletBoiler, PelletCylinder, PelletBuffer]
   PelletBuffer:
     requires: [HeatDistributionSystem]
     component:
@@ -329,7 +329,7 @@ partners:
         with_domestic_hot_water_preparation: true
         minimum_runtime_in_seconds: 3600.0
         minimum_resting_time_in_seconds: 1800.0
-      inputs: [Weather, HeatDistributionController, WoodChipCylinder, WoodChipBuffer]
+      inputs: [Weather, HeatDistributionController, WoodChipBoiler, WoodChipCylinder, WoodChipBuffer]
   WoodChipBuffer:
     requires: [HeatDistributionSystem]
     component:
@@ -376,7 +376,7 @@ partners:
       config:
         set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
-      inputs: [Weather, HeatDistributionController, HydrogenCylinder, HydrogenBuffer]
+      inputs: [Weather, HeatDistributionController, HydrogenBoiler, HydrogenCylinder, HydrogenBuffer]
   HydrogenBuffer:
     requires: [HeatDistributionSystem]
     component:

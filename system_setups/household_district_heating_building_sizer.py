@@ -13,6 +13,7 @@ from typing import Optional, Any, Union, List
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext, concrete
+from hisim.components import heating_curve
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -364,17 +365,25 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Build district heating controller
-    my_district_heating_controller_sh_config = (
-        generic_district_heating.DistrictHeatingControllerConfig.preset_standard(
-            "DistrictHeatingController"
-        ).resolve(
-            SizingContext(
-                set_heating_threshold_outside_temperature_in_celsius=(
-                    my_hds_controller_information.set_heating_threshold_temperature_in_celsius
-                )
-            )
+    # Build the heating curve, the L2 controller that sends the supply temperature and the heating season to the
+    # generator's controller and the heat distribution controller
+    my_heating_curve_config = heating_curve.HeatingCurveControllerConfig.preset_building_derived("HeatingCurveController").resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
         )
+    )
+    my_heating_curve = heating_curve.HeatingCurveController(
+        my_simulation_parameters=my_simulation_parameters, config=my_heating_curve_config
+    )
+    my_sim.add_component(my_heating_curve, connect_automatically=True)
+
+    # Build district heating controller
+    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.preset_standard(
+        "DistrictHeatingController"
     )
     # This house takes its hot water off the network as well, and serves both circuits at once.
     my_district_heating_controller_sh_config.with_domestic_hot_water_preparation = True

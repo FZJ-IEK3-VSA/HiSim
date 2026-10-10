@@ -118,10 +118,6 @@ def test_describe_shows_a_preset_the_law_that_preset_assigns(capsys) -> None:
 @pytest.mark.parametrize(
     "class_path, fact",
     [
-        (
-            "hisim.components.heat_distribution_system.HeatDistributionControllerConfig",
-            "set_heating_threshold_outside_temperature_in_celsius",
-        ),
         ("hisim.components.building.BuildingConfig", "roof_area_in_m2"),
         ("hisim.components.generic_pv_system.PVSystemConfig", "pv_peak_power_in_watt"),
         ("hisim.components.generic_boiler.GenericBoilerConfig", "energy_carrier"),

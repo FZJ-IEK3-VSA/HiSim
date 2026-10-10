@@ -8,8 +8,7 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating
     inputs:
-      - Weather
-      - HeatDistributionController
+      - HeatingCurveController
       - CondensingGasBoiler
       - SimpleHotWaterStorage
   HeatDistributionController:
@@ -17,10 +16,16 @@ components:
     preset: building_derived
     config:
       heating_system: RADIATOR
+    inputs:
+      - HeatingCurveController
+      - Building
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    config:
       heating_reference_temperature_in_celsius: -12.2
     inputs:
       - Weather
-      - Building
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: building_derived

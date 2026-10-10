@@ -1,12 +1,12 @@
 # The air-to-water heat pump (hplib) with its two L1 controllers and its space-heating buffer (D12 b, D25: the
 # assembly WITH the buffer), charging a DHW cylinder through its `dhw` circuit. Control is hardcoded here (D21):
 # ControllerSH switches the heat pump on the buffer temperature against the flow temperature the site's
-# HeatDistributionController asks for, ControllerDHW on the cylinder temperature; an energy manager may only raise
+# HeatingCurveController sets, ControllerDHW on the cylinder temperature; an energy manager may only raise
 # the two L1 set points, through `ems_modifier` and `ems_modifier_dhw`.
 #
 # The members expand as one block in the order their lines stand here, the twin's ControllerSH, ControllerDHW,
 # HeatPump, Buffer. The sizing facts the members read from the site (heating load, design temperature, room set
-# point, emitter type, heating threshold) bind their one provider by the engine's bare-fact rule, as in the twin; the
+# point, emitter type) bind their one provider by the engine's bare-fact rule, as in the twin; the
 # buffer reads the heat pump's maximal thermal power inside the block. The defaults reproduce
 # household_heatpump_building_sizer (D9): a parameter at its preset's value, AUTO or none writes no config line (G9).
 #
@@ -44,7 +44,7 @@ components:
     preset: standard
     inputs:
       - {$port: weather}                                    # DailyAverageOutsideTemperature
-      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   ControllerDHW:
@@ -85,7 +85,7 @@ interface:
                        wires: {TemperatureAmbient: DailyAverageOutsideTemperatures,
                                TemperatureInputPrimary: DailyAverageOutsideTemperatures}}
                       # the class's default connections from Weather are not these two (G2): named as the twin writes them
-    flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (G1)
+    heating_curve:    {into: [ControllerSH], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     electricity:      {carrier: electricity, outputs: [HeatPump.ElectricalInputPowerSH]}
     electricity_for_dhw: {carrier: electricity, outputs: [HeatPump.ElectricalInputPowerDHW]}
     ems_modifier:     {into: [ControllerSH], partner: L2GenericEnergyManagementSystem, optional: true}

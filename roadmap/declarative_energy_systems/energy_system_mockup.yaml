@@ -71,13 +71,19 @@ components:
     # conditioned_floor_area_in_m2; reads heating_reference_temperature_in_celsius
     # off the weather, which owns it (D-21)
 
+  heating_curve:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived                # the L2 controller of the supply set point and the heating season
+    inputs:
+      - weather
+      - ems                                 # dropped with the ems, see building above
+
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived                # reads heating_load_in_watt — one provider, nothing to write
     inputs:
-      - weather
       - building
-      - ems                                 # dropped with the ems, see building above
+      - heating_curve
 
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
@@ -96,7 +102,7 @@ components:
     preset: standard
     inputs:
       - weather
-      - hds_controller
+      - heating_curve
       - buffer_storage
       - ems
     sizing_sources:
@@ -300,7 +306,7 @@ variants:
               - { from: heat_pump,   tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED], weight: 999 }
               - { from: heating_rod, tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED], weight: 999 }
         # With this option selected, R15.3 drops the four bare `- ems` items (building,
-        # hds_controller, both heat-pump controllers) and the battery with its sizing
+        # heating_curve, both heat-pump controllers) and the battery with its sizing
         # line, exactly as R14.3 drops references into a disabled group. With
         # `ems_and_battery` selected, the five direct feeds above are what goes instead.
 

@@ -40,9 +40,14 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
+      - HeatingCurveController
+      - Building
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
       - L2EMSElectricityController
       - Weather
-      - Building
   DistrictHeatingController:
     class: hisim.components.generic_district_heating.DistrictHeatingController
     preset: standard
@@ -50,8 +55,7 @@ components:
       with_domestic_hot_water_preparation: true
       parallel_space_heating_and_dhw_option: true
     inputs:
-      - Weather
-      - HeatDistributionController
+      - HeatingCurveController
       - HeatDistributionSystem
       - DHWStorage
   DistrictHeating:

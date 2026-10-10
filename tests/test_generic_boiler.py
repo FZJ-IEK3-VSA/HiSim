@@ -397,9 +397,9 @@ class BoilerStep:
 
     """One step of a 20 kW condensing gas boiler whose inputs read fake outputs, a namespace of helpers."""
 
-    #: The order of the fakes: control signal, operating mode, lift, space-heating return, hot-water return and the
-    #: controller's hot-water supply set temperature.
-    INPUT_ORDER = ("control_signal", "operating_mode", "lift", "space_heating_return", "hot_water_return", "set")
+    #: The order of the fakes: control signal, operating mode, lift, space-heating return, hot-water return, the
+    #: controller's hot-water supply set temperature and its hot-water part-load ratio.
+    INPUT_ORDER = ("control_signal", "operating_mode", "lift", "space_heating_return", "hot_water_return", "set", "ratio")
 
     #: The hot-water set temperature a step uses unless the test names one, in °C: the 80 °C maximal flow
     #: temperature itself, so that only the maximum limits the supply.
@@ -423,6 +423,7 @@ class BoilerStep:
             (boiler.water_input_temperature_sh_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
             (boiler.supply_temperature_set_for_dhw_in_celsius_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
+            (boiler.dhw_part_load_command.ratio_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
         ]
         fakes = []
         for number, (channel, load_type, unit) in enumerate(channels):
@@ -439,10 +440,11 @@ class BoilerStep:
     def run(**inputs: float) -> Tuple[Any, Callable[[Any], float]]:
         """Step a fresh boiler once with these inputs (see :attr:`INPUT_ORDER`), return it and a reader of outputs.
 
-        A missing return is 0 °C, a missing set temperature :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS`.
+        A missing return is 0 °C, a missing set temperature :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS`, a missing
+        part-load ratio 1, the whole step.
         """
         boiler, stsv, fakes = BoilerStep.build()
-        values = {"set": BoilerStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS, **inputs}
+        values = {"set": BoilerStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS, "ratio": 1.0, **inputs}
         for name, fake in zip(BoilerStep.INPUT_ORDER, fakes):
             stsv.set_output_value(fake, values.get(name, 0.0))
         boiler.i_simulate(0, stsv, False)

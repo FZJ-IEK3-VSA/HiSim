@@ -10,6 +10,7 @@ components:
     inputs:
       - Weather
       - HeatDistributionController
+      - CondensingGasBoiler
       - SimpleHotWaterStorage
   HeatDistributionController:
     class: hisim.components.heat_distribution_system.HeatDistributionController

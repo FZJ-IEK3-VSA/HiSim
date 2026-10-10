@@ -144,6 +144,8 @@ class Units(str, enum.Enum):
     # Unphysical
     ANY = "-"
     PERCENT = "%"
+    # A dimensionless fraction from 0 to 1, such as a part-load ratio; aggregated as a mean, never summed
+    FRACTION = "fraction"
 
     # Power
     WATT = "W"
@@ -228,6 +230,7 @@ UNITS_USING_MEAN_AGGREGATION: frozenset[Units] = frozenset(
         Units.WATT_PER_SQUARE_METER,
         Units.KG_PER_SEC,
         Units.PERCENT,
+        Units.FRACTION,
         Units.PASCAL,
     }
 )

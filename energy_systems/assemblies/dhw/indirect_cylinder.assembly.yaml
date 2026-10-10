@@ -40,14 +40,14 @@ tests:
     - {output: DHWStorage.WaterTemperatureFromHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: DHWStorage.WaterTemperatureFromSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}   # no solar coil
     - {output: DHWStorage.WaterMeanTemperatureInStorage, unit: CELSIUS, min: 0, max: 100}
-    - {output: DHWStorage.WaterTemperatureAtEndOfStep, unit: CELSIUS, min: 0, max: 100}
+    - {output: DHWStorage.WaterTemperatureAtEndOfStepInCelsius, unit: CELSIUS, min: 0, max: 100}
     - {output: DHWStorage.StandbyTemperatureLoss, unit: CELSIUS, min: 0, max: 10}          # a drop per step, well below 1 K
     - {output: DHWStorage.ThermalEnergyInStorage, unit: WATT_HOUR, min: 0, max: 150000}    # 1000 l at 100 °C: 116 kWh
     - {output: DHWStorage.ThermalEnergyFromHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}
     - {output: DHWStorage.ThermalEnergyFromSecondaryHeatGenerator, unit: WATT_HOUR, min: -10000, max: 10000}
     - {output: DHWStorage.ThermalEnergyConsumptionDHW, unit: WATT_HOUR, min: -15000, max: 0}
       # booked negative, a draw out of the cylinder: a 60 kW shower peak x 0.25 h
-    - {output: DHWStorage.ThermalEnergyUnmetDHW, unit: WATT_HOUR, min: 0, max: 15000}
+    - {output: DHWStorage.ThermalEnergyUnmetDHWInWattHour, unit: WATT_HOUR, min: 0, max: 15000}
       # at most the whole demand of the step, the same shower peak
     - {output: DHWStorage.ThermalEnergyIncreaseInStorage, unit: WATT_HOUR, min: -25000, max: 25000}
     - {output: DHWStorage.StandbyHeatLoss, unit: WATT, min: 0, max: 500}                   # a 1000 l cylinder: 100-200 W

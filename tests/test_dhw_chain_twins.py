@@ -218,8 +218,8 @@ class DhwTwins:
 
     @classmethod
     def tank_name(cls, results: pd.DataFrame) -> str:
-        """The tank's component name: the one component with a ``ThermalEnergyUnmetDHW`` output."""
-        marker = f" - {SimpleDHWStorage.ThermalEnergyUnmetDHW} ["
+        """The tank's component name: the one component with a ``ThermalEnergyUnmetDHWInWattHour`` output."""
+        marker = f" - {SimpleDHWStorage.ThermalEnergyUnmetDHWInWattHour} ["
         owners = [name.split(" - ")[0] for name in results.columns if marker in name]
         assert len(owners) == 1, owners
         return str(owners[0])
@@ -245,17 +245,29 @@ def test_every_energy_system_file_with_a_tank_is_checked() -> None:
 def check_tank_closure(results: pd.DataFrame) -> None:
     """The tank's balance closes on every step to a millionth of the step's largest term."""
     tank = DhwTwins.tank_name(results)
-    seconds = DhwTwins.SECONDS_PER_TIMESTEP
-    primary = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyFromHeatGenerator)
-    secondary = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyFromSecondaryHeatGenerator)
-    tap = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyConsumptionDHW)
-    loss = DhwTwins.column(results, tank, SimpleDHWStorage.StandbyHeatLoss) * seconds / 3600.0
-    stored = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyIncreaseInStorage)
-    residual = primary + secondary + tap - loss - stored
-    largest = np.maximum.reduce([abs(primary), abs(secondary), abs(tap), abs(loss), abs(stored)])
-    assert np.all(np.abs(residual) <= 1e-6 * largest + 1e-9), float(np.max(np.abs(residual)))
+    seconds_per_timestep = DhwTwins.SECONDS_PER_TIMESTEP
+    primary_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyFromHeatGenerator)
+    secondary_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyFromSecondaryHeatGenerator)
+    tap_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyConsumptionDHW)
+    loss_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.StandbyHeatLoss) * seconds_per_timestep / 3600.0
+    stored_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyIncreaseInStorage)
+    residual_in_watt_hour = (
+        primary_in_watt_hour + secondary_in_watt_hour + tap_in_watt_hour - loss_in_watt_hour - stored_in_watt_hour
+    )
+    largest_in_watt_hour = np.maximum.reduce(
+        [
+            abs(primary_in_watt_hour),
+            abs(secondary_in_watt_hour),
+            abs(tap_in_watt_hour),
+            abs(loss_in_watt_hour),
+            abs(stored_in_watt_hour),
+        ]
+    )
+    assert np.all(np.abs(residual_in_watt_hour) <= 1e-6 * largest_in_watt_hour + 1e-9), float(
+        np.max(np.abs(residual_in_watt_hour))
+    )
     # the tap drew on some step of the day, so the check covered the valve
-    assert np.any(tap < 0.0)
+    assert np.any(tap_in_watt_hour < 0.0)
 
 
 def check_circuits(results: pd.DataFrame, circuits: Dict[str, str]) -> int:
@@ -268,13 +280,17 @@ def check_circuits(results: pd.DataFrame, circuits: Dict[str, str]) -> int:
     checked = 0
     for circuit, owner in circuits.items():
         component, classname = owner.split("|")
-        booked = DhwTwins.column(results, component, DhwTwins.BOOKED_DHW_POWER[classname])
-        received = DhwTwins.column(results, tank, received_field[circuit])
-        flow = DhwTwins.column(results, component, DhwTwins.DHW_MASS_FLOW[classname])
-        tolerance = flow * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * DhwTwins.CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN
-        difference = np.abs(booked - received)
-        assert np.all(difference <= tolerance + 1e-6), (circuit, float(np.max(difference)))
-        assert np.any(booked > 0.0), f"the {circuit} circuit never charged in the window"
+        booked_in_watt = DhwTwins.column(results, component, DhwTwins.BOOKED_DHW_POWER[classname])
+        received_in_watt = DhwTwins.column(results, tank, received_field[circuit])
+        mass_flow_in_kg_per_second = DhwTwins.column(results, component, DhwTwins.DHW_MASS_FLOW[classname])
+        tolerance_in_watt = (
+            mass_flow_in_kg_per_second
+            * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K
+            * DhwTwins.CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN
+        )
+        difference_in_watt = np.abs(booked_in_watt - received_in_watt)
+        assert np.all(difference_in_watt <= tolerance_in_watt + 1e-6), (circuit, float(np.max(difference_in_watt)))
+        assert np.any(booked_in_watt > 0.0), f"the {circuit} circuit never charged in the window"
         checked += 1
     return checked
 

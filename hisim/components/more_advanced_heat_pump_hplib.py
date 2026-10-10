@@ -679,7 +679,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
     TemperatureInputSecondarySH = "TemperatureInputSecondarySH"  # °C
     TemperatureInputSecondaryDHW = "TemperatureInputSecondaryDHW"  # °C
     #: The hot-water supply temperature the hot-water controller aims at: the hot-water supply never exceeds it.
-    SupplyTemperatureSetDHW = "SupplyTemperatureSetDHW"  # °C
+    SupplyTemperatureSetDHWInCelsius = "SupplyTemperatureSetDHWInCelsius"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
 
@@ -944,9 +944,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 mandatory=True,
             )
 
-            self.supply_temperature_set_dhw_channel: ComponentInput = self.add_input(
+            self.supply_temperature_set_dhw_in_celsius_channel: ComponentInput = self.add_input(
                 object_name=self.component_name,
-                field_name=self.SupplyTemperatureSetDHW,
+                field_name=self.SupplyTemperatureSetDHWInCelsius,
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 mandatory=False,
@@ -1396,9 +1396,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHW,
+                MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHWInCelsius,
                 hpc_dhw_classname,
-                MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetDHW,
+                MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetDHWInCelsius,
             )
         )
         return connections
@@ -1543,9 +1543,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         The flow is authoritative because the storage at the other end integrates exactly this flow, so the heat
         pump books what the storage receives. While the outlet is hplib's own (not throttled,
-        :meth:`throttled_dhw_supply`), hplib's own thermal power differs from it only through its specific heat of
-        water, 4200 J/(kg K) instead of HiSim's 4180 J/(kg K): the booked heat is hplib's times 4180/4200, about
-        0.48 % less.
+        :meth:`throttled_dhw_supply_temperature_in_celsius`), hplib's own thermal power differs from it only
+        through its specific heat of water, 4200 J/(kg K) instead of HiSim's 4180 J/(kg K): the booked heat is
+        hplib's times 4180/4200, about 0.48 % less.
 
         Args:
             mass_flow_in_kg_per_second: The circuit's mass flow, in kg/s.
@@ -1601,33 +1601,37 @@ class MoreAdvancedHeatPumpHPLib(Component):
             )
         return -thermal_power_in_watt / eer
 
-    def throttled_dhw_supply(
-        self, t_out_c: float, t_in_c: float, supply_temperature_set_c: Optional[float] = None
+    def throttled_dhw_supply_temperature_in_celsius(
+        self,
+        outlet_temperature_in_celsius: float,
+        return_temperature_in_celsius: float,
+        supply_temperature_set_in_celsius: Optional[float] = None,
     ) -> float:
         """The hot-water circuit's supply within the heat pump's limit (spec §5.2, owner 2026-10-09).
 
         An outlet above the limit is throttled to it, or to the return if that is hotter; the flow stays, so the
         circuit then carries ``m c (T_limit - T_in)`` and the electricity follows at the step's COP
-        (:meth:`booked_heating_powers`). The limit is ``maximal_dhw_supply_temperature_in_celsius``, or the hot-water
-        controller's set temperature ``supply_temperature_set_c`` when that is lower (its 60 °C ``t_max`` plus the
-        energy manager's raise), so a charge ends at its target inside the step. For example, with a 60 °C set
-        temperature a 58.0 °C return and hplib's 63.0 °C outlet give 60.0 °C; with the 75 °C maximum and no set
-        temperature, a 72.0 °C return and a 77.0 °C outlet give 75.0 °C.
+        (:meth:`booked_heating_powers_in_watt`). The limit is ``maximal_dhw_supply_temperature_in_celsius``, or
+        the hot-water controller's set temperature ``supply_temperature_set_in_celsius`` when that is lower (its
+        60 °C ``t_max`` plus the energy manager's raise), so a charge ends at its target inside the step. For
+        example, with a 60 °C set temperature a 58.0 °C return and hplib's 63.0 °C outlet give 60.0 °C; with the
+        75 °C maximum and no set temperature, a 72.0 °C return and a 77.0 °C outlet give 75.0 °C.
 
         Args:
-            t_out_c: The outlet the heat pump's own law gives, °C.
-            t_in_c: The circuit's return temperature, the tank's step mean, °C.
-            supply_temperature_set_c: The hot-water controller's set temperature, °C, or None when none is wired.
+            outlet_temperature_in_celsius: The outlet the heat pump's own law gives, °C.
+            return_temperature_in_celsius: The circuit's return temperature, the tank's step mean, °C.
+            supply_temperature_set_in_celsius: The hot-water controller's set temperature, °C, or None when none
+                is wired.
 
         Returns:
             The supply temperature the circuit carries, °C.
         """
-        limit = float(self.config.maximal_dhw_supply_temperature_in_celsius)
-        if supply_temperature_set_c is not None:
-            limit = min(limit, supply_temperature_set_c)
-        if t_out_c <= limit:
-            return t_out_c
-        return max(limit, t_in_c)
+        limit_in_celsius = float(self.config.maximal_dhw_supply_temperature_in_celsius)
+        if supply_temperature_set_in_celsius is not None:
+            limit_in_celsius = min(limit_in_celsius, supply_temperature_set_in_celsius)
+        if outlet_temperature_in_celsius <= limit_in_celsius:
+            return outlet_temperature_in_celsius
+        return max(limit_in_celsius, return_temperature_in_celsius)
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
@@ -1657,15 +1661,17 @@ class MoreAdvancedHeatPumpHPLib(Component):
             const_thermal_power_truefalse_dhw: bool = bool(stsv.get_input_value(self.const_thermal_power_truefalse_dhw))
             const_thermal_power_value_dhw = stsv.get_input_value(self.const_thermal_power_value_dhw)
             t_in_secondary_dhw = stsv.get_input_value(self.t_in_secondary_dhw)
-            supply_temperature_set_dhw: Optional[float] = None
-            if self.supply_temperature_set_dhw_channel.source_output is not None:
-                supply_temperature_set_dhw = stsv.get_input_value(self.supply_temperature_set_dhw_channel)
+            supply_temperature_set_dhw_in_celsius: Optional[float] = None
+            if self.supply_temperature_set_dhw_in_celsius_channel.source_output is not None:
+                supply_temperature_set_dhw_in_celsius = stsv.get_input_value(
+                    self.supply_temperature_set_dhw_in_celsius_channel
+                )
         else:
             on_off_dhw = 0
             const_thermal_power_truefalse_dhw = False
             const_thermal_power_value_dhw = 0
             t_in_secondary_dhw = 0
-            supply_temperature_set_dhw = None
+            supply_temperature_set_dhw_in_celsius = None
 
         if on_off_dhw != 0:
             on_off = on_off_dhw
@@ -1822,7 +1828,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                         "heat its water carries at hplib's mass flow and outlet temperature, which a constant "
                         "power would contradict. Set thermalpower_dhw_is_constant to false."
                     )
-                t_out_dhw = self.throttled_dhw_supply(t_out_dhw, t_in_secondary_dhw, supply_temperature_set_dhw)
+                t_out_dhw = self.throttled_dhw_supply_temperature_in_celsius(
+                    t_out_dhw, t_in_secondary_dhw, supply_temperature_set_dhw_in_celsius
+                )
                 dhw_powers = self.booked_heating_powers_in_watt(
                     mass_flow_in_kg_per_second=m_dot_dhw,
                     outlet_temperature_in_celsius=t_out_dhw,
@@ -1865,7 +1873,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_out_dhw = t_in_secondary_dhw + p_th_dhw_target_in_watt / (
                     m_dot_dhw * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 )
-                t_out_dhw = self.throttled_dhw_supply(t_out_dhw, t_in_secondary_dhw, supply_temperature_set_dhw)
+                t_out_dhw = self.throttled_dhw_supply_temperature_in_celsius(
+                    t_out_dhw, t_in_secondary_dhw, supply_temperature_set_dhw_in_celsius
+                )
                 dhw_powers = self.booked_heating_powers_in_watt(
                     mass_flow_in_kg_per_second=m_dot_dhw,
                     outlet_temperature_in_celsius=t_out_dhw,
@@ -2261,21 +2271,27 @@ class MoreAdvancedHeatPumpHPLib(Component):
         return interpolated
 
     def cached_hplib_result_at_grid_point(
-        self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int, operation_mode: str, p_th_min: float
+        self,
+        t_in_primary_in_celsius: float,
+        t_in_secondary_in_celsius: float,
+        t_amb_in_celsius: float,
+        mode: int,
+        operation_mode: str,
+        p_th_min_in_watt: float,
     ) -> Any:
         """The results of hplib at one point of its 0.1 K grid, from the cache or computed and cached.
 
         The source and ambient temperatures are rounded to 0.1 K, the return is a grid point already; the stated
         SCOP's calibration is applied once, before the result is cached.
         """
-        t_in_primary = round(t_in_primary, 1)
-        t_in_secondary = round(t_in_secondary, 1)
-        t_amb = round(t_amb, 1)
+        t_in_primary_in_celsius = round(t_in_primary_in_celsius, 1)
+        t_in_secondary_in_celsius = round(t_in_secondary_in_celsius, 1)
+        t_amb_in_celsius = round(t_amb_in_celsius, 1)
 
         my_data_class = CalculationRequest(
-            t_in_primary=t_in_primary,
-            t_in_secondary=t_in_secondary,
-            t_amb=t_amb,
+            t_in_primary=t_in_primary_in_celsius,
+            t_in_secondary=t_in_secondary_in_celsius,
+            t_amb=t_amb_in_celsius,
             mode=mode,
             operation_mode=operation_mode,
         )
@@ -2286,7 +2302,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
             results = self.calculation_cache[my_hash_key]
         else:
             results = self.heatpump.simulate(
-                t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode, p_th_min=p_th_min
+                t_in_primary=t_in_primary_in_celsius,
+                t_in_secondary=t_in_secondary_in_celsius,
+                t_amb=t_amb_in_celsius,
+                mode=mode,
+                p_th_min=p_th_min_in_watt,
             )
             # The stated SCOP's calibration (hisim-4g9.15), applied once before the result is cached.
             results = self.scop_calibration.apply(self.heatpump, results, mode)
@@ -3415,7 +3435,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     # Outputs
     State_dhw = "StateDHW"
     #: The hot-water supply temperature the controller aims at: ``t_max`` plus the energy manager's raise.
-    SupplyTemperatureSetDHW = "SupplyTemperatureSetDHW"
+    SupplyTemperatureSetDHWInCelsius = "SupplyTemperatureSetDHWInCelsius"
     ThermalPower_dhw_is_constant = "ThermalPowerDHWConst"  # if heatpump has fix power for dhw
     Value_thermalpower_dhw_is_constant = "ThermalPowerHPForDHWConst"  # if heatpump has fix power for dhw
 
@@ -3480,9 +3500,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             output_description=f"here a description for {self.State_dhw} will follow.",
         )
 
-        self.supply_temperature_set_dhw_channel: ComponentOutput = self.add_output(
+        self.supply_temperature_set_dhw_in_celsius_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.SupplyTemperatureSetDHW,
+            self.SupplyTemperatureSetDHWInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description=(
@@ -3642,7 +3662,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
 
         stsv.set_output_value(self.state_dhw_channel, self.state_dhw)
-        stsv.set_output_value(self.supply_temperature_set_dhw_channel, self.supply_temperature_set_dhw_in_celsius)
+        stsv.set_output_value(
+            self.supply_temperature_set_dhw_in_celsius_channel, self.supply_temperature_set_dhw_in_celsius
+        )
         stsv.set_output_value(
             self.thermalpower_dhw_is_constant_channel,
             self.thermalpower_dhw_is_constant,

@@ -63,10 +63,10 @@ class ResolutionRuns:
     REFERENCE_SECONDS: int = 60
 
     #: Relative tolerance per compared resolution, for the generators' heat net of the stored heat.
-    GENERATOR_HEAT_TOLERANCE: Dict[int, float] = {900: 0.01, 3600: 0.015}
+    GENERATOR_HEAT_RELATIVE_TOLERANCE: Dict[int, float] = {900: 0.01, 3600: 0.015}
 
     #: Relative tolerance of the heat drawn at the tap, at every compared resolution.
-    TAP_HEAT_TOLERANCE: float = 0.01
+    TAP_HEAT_RELATIVE_TOLERANCE: float = 0.01
 
     #: The sums already computed in this test process, by twin and resolution.
     computed: ClassVar[Dict[Tuple[str, int], Dict[str, float]]] = {}
@@ -83,8 +83,9 @@ class ResolutionRuns:
         """The window's hot-water sums of one twin at one resolution, in kWh, each run once per test process.
 
         Returns:
-            ``tap``: the heat drawn at the tap (positive); ``generators``: the heat both charging circuits brought;
-            ``stored``: the change of the heat the tank holds over the window.
+            ``tap_heat_in_kilowatt_hour``: the heat drawn at the tap (positive);
+            ``generator_heat_in_kilowatt_hour``: the heat both charging circuits brought;
+            ``stored_heat_in_kilowatt_hour``: the change of the heat the tank holds over the window.
         """
         key = (twin, seconds_per_timestep)
         if key not in cls.computed:
@@ -116,15 +117,15 @@ class ResolutionRuns:
         built = run_energy_system(energy_system, parameters, result_directory=str(work / "results"))
         results = built.simulator.results_data_frame
 
-        def total_kwh(field: str) -> float:
+        def total_in_kilowatt_hour(field: str) -> float:
             (column,) = [name for name in results.columns if f" - {field} [" in name and name.startswith("DHW")]
             return float(results[column].sum()) / 1000.0
 
         return {
-            "tap": -total_kwh(SimpleDHWStorage.ThermalEnergyConsumptionDHW),
-            "generators": total_kwh(SimpleDHWStorage.ThermalEnergyFromHeatGenerator)
-            + total_kwh(SimpleDHWStorage.ThermalEnergyFromSecondaryHeatGenerator),
-            "stored": total_kwh(SimpleDHWStorage.ThermalEnergyIncreaseInStorage),
+            "tap_heat_in_kilowatt_hour": -total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyConsumptionDHW),
+            "generator_heat_in_kilowatt_hour": total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyFromHeatGenerator)
+            + total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyFromSecondaryHeatGenerator),
+            "stored_heat_in_kilowatt_hour": total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyIncreaseInStorage),
         }
 
 
@@ -136,8 +137,10 @@ def test_the_hot_water_heat_agrees_across_resolutions(
     """The tap's heat within 1 %, the generators' heat net of the stored heat within the resolution's tolerance."""
     reference = ResolutionRuns.sums(twin, ResolutionRuns.REFERENCE_SECONDS, tmp_path_factory)
     compared = ResolutionRuns.sums(twin, seconds_per_timestep, tmp_path_factory)
-    assert compared["tap"] == pytest.approx(reference["tap"], rel=ResolutionRuns.TAP_HEAT_TOLERANCE)
-    assert compared["generators"] - compared["stored"] == pytest.approx(
-        reference["generators"] - reference["stored"],
-        rel=ResolutionRuns.GENERATOR_HEAT_TOLERANCE[seconds_per_timestep],
+    assert compared["tap_heat_in_kilowatt_hour"] == pytest.approx(
+        reference["tap_heat_in_kilowatt_hour"], rel=ResolutionRuns.TAP_HEAT_RELATIVE_TOLERANCE
+    )
+    assert compared["generator_heat_in_kilowatt_hour"] - compared["stored_heat_in_kilowatt_hour"] == pytest.approx(
+        reference["generator_heat_in_kilowatt_hour"] - reference["stored_heat_in_kilowatt_hour"],
+        rel=ResolutionRuns.GENERATOR_HEAT_RELATIVE_TOLERANCE[seconds_per_timestep],
     )

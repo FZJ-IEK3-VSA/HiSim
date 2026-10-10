@@ -421,7 +421,9 @@ def boiler_with_fake_inputs(with_supply_temperature_set: bool = False) -> Any:
         (boiler.water_input_temperature_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS),
     ]
     if with_supply_temperature_set:
-        channels.append((boiler.supply_temperature_set_dhw_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS))
+        channels.append(
+            (boiler.supply_temperature_set_dhw_in_celsius_channel, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        )
     fakes = []
     for number, (channel, load_type, unit) in enumerate(channels):
         fake = cp.ComponentOutput(
@@ -451,12 +453,14 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries_from_the_tanks_s
     def output(channel: Any) -> float:
         return float(stsv.values[channel.global_index])
 
-    mass_flow = output(boiler.water_output_mass_flow_dhw_channel)
-    supply = output(boiler.water_output_temperature_dhw_channel)
-    booked = output(boiler.thermal_output_power_dhw_channel)
-    assert supply == pytest.approx(67.3)
-    assert booked == hydronics.circuit_power_w(mass_flow, supply, 47.3)
-    assert booked == pytest.approx(20000.0 * boiler.max_combustion_efficiency, rel=1e-12)
+    mass_flow_in_kg_per_second = output(boiler.water_output_mass_flow_dhw_channel)
+    supply_temperature_in_celsius = output(boiler.water_output_temperature_dhw_channel)
+    booked_power_in_watt = output(boiler.thermal_output_power_dhw_channel)
+    assert supply_temperature_in_celsius == pytest.approx(67.3)
+    assert booked_power_in_watt == hydronics.circuit_power_w(
+        mass_flow_in_kg_per_second, supply_temperature_in_celsius, 47.3
+    )
+    assert booked_power_in_watt == pytest.approx(20000.0 * boiler.max_combustion_efficiency, rel=1e-12)
     assert output(boiler.energy_demand_dhw_channel) == pytest.approx(20000.0 * 900 / 3600)
 
 
@@ -495,16 +499,18 @@ def test_a_charge_above_the_maximal_flow_temperature_is_throttled_and_burns_what
     def output(channel: Any) -> float:
         return float(stsv.values[channel.global_index])
 
-    mass_flow = output(boiler.water_output_mass_flow_dhw_channel)
-    booked = output(boiler.thermal_output_power_dhw_channel)
-    fuel = output(boiler.total_fuel_input_power_channel)
+    mass_flow_in_kg_per_second = output(boiler.water_output_mass_flow_dhw_channel)
+    booked_power_in_watt = output(boiler.thermal_output_power_dhw_channel)
+    fuel_power_in_watt = output(boiler.total_fuel_input_power_channel)
     assert output(boiler.water_output_temperature_dhw_channel) == 80.0
-    assert booked == hydronics.circuit_power_w(mass_flow, 80.0, 70.0)
-    assert booked == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 3.0, rel=1e-12)
-    assert fuel == pytest.approx(booked / boiler.combustion_efficiency_at_burner_power(20000.0), rel=1e-12)
-    assert fuel == pytest.approx(20000.0 / 3.0, rel=1e-12)
-    assert output(boiler.energy_demand_dhw_channel) == pytest.approx(fuel * 900 / 3600)
-    assert output(boiler.combustion_heat_loss_channel) == pytest.approx(fuel - booked)
+    assert booked_power_in_watt == hydronics.circuit_power_w(mass_flow_in_kg_per_second, 80.0, 70.0)
+    assert booked_power_in_watt == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 3.0, rel=1e-12)
+    assert fuel_power_in_watt == pytest.approx(
+        booked_power_in_watt / boiler.combustion_efficiency_at_burner_power(20000.0), rel=1e-12
+    )
+    assert fuel_power_in_watt == pytest.approx(20000.0 / 3.0, rel=1e-12)
+    assert output(boiler.energy_demand_dhw_channel) == pytest.approx(fuel_power_in_watt * 900 / 3600)
+    assert output(boiler.combustion_heat_loss_channel) == pytest.approx(fuel_power_in_watt - booked_power_in_watt)
 
 
 @pytest.mark.base
@@ -524,10 +530,12 @@ def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
     def output(channel: Any) -> float:
         return float(stsv.values[channel.global_index])
 
-    booked = output(boiler.thermal_output_power_dhw_channel)
+    booked_power_in_watt = output(boiler.thermal_output_power_dhw_channel)
     assert output(boiler.water_output_temperature_dhw_channel) == 70.0
-    assert booked == hydronics.circuit_power_w(output(boiler.water_output_mass_flow_dhw_channel), 70.0, 60.0)
-    assert booked == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 2.0, rel=1e-12)
+    assert booked_power_in_watt == hydronics.circuit_power_w(
+        output(boiler.water_output_mass_flow_dhw_channel), 70.0, 60.0
+    )
+    assert booked_power_in_watt == pytest.approx(20000.0 * boiler.max_combustion_efficiency / 2.0, rel=1e-12)
     assert output(boiler.total_fuel_input_power_channel) == pytest.approx(10000.0, rel=1e-12)
 
     stsv.set_output_value(fakes[4], 45.0)

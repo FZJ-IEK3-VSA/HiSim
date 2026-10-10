@@ -258,19 +258,24 @@ def test_the_hot_water_circuit_books_the_heat_its_water_carries(
     from hisim.config import concrete  # pylint: disable=import-outside-toplevel
 
     heater = _make_electric_heating()
-    maximum = concrete(heater.config.maximum_electric_power_w)
-    power, energy, supply, mass_flow = heater._calculate_dhw_outputs(  # pylint: disable=protected-access
-        return_temperature_in_celsius, lift_in_kelvin
+    maximum_power_in_watt = concrete(heater.config.maximum_electric_power_w)
+    thermal_power_in_watt, thermal_energy_in_watt_hour, supply_temperature_in_celsius, mass_flow_in_kg_per_second = (
+        heater._calculate_dhw_outputs(return_temperature_in_celsius, lift_in_kelvin)  # pylint: disable=protected-access
     )
-    limit = heater.config.maximal_dhw_supply_temperature_in_celsius
-    assert supply == min(return_temperature_in_celsius + lift_in_kelvin, limit)
-    assert power == hydronics.circuit_power_w(mass_flow, supply, return_temperature_in_celsius)
-    regulated = min(maximum * lift_in_kelvin / 100.0, maximum)
-    if supply < return_temperature_in_celsius + lift_in_kelvin:
-        assert power < regulated  # throttled: the flow carries less than the regulated power
+    supply_limit_in_celsius = heater.config.maximal_dhw_supply_temperature_in_celsius
+    assert supply_temperature_in_celsius == min(return_temperature_in_celsius + lift_in_kelvin, supply_limit_in_celsius)
+    assert thermal_power_in_watt == hydronics.circuit_power_w(
+        mass_flow_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
+    )
+    regulated_power_in_watt = min(maximum_power_in_watt * lift_in_kelvin / 100.0, maximum_power_in_watt)
+    if supply_temperature_in_celsius < return_temperature_in_celsius + lift_in_kelvin:
+        # throttled: the flow carries less than the regulated power
+        assert thermal_power_in_watt < regulated_power_in_watt
     else:
-        assert power == pytest.approx(regulated, rel=1e-12)
-    assert energy == pytest.approx(power * heater.my_simulation_parameters.seconds_per_timestep / 3600.0)
+        assert thermal_power_in_watt == pytest.approx(regulated_power_in_watt, rel=1e-12)
+    assert thermal_energy_in_watt_hour == pytest.approx(
+        thermal_power_in_watt * heater.my_simulation_parameters.seconds_per_timestep / 3600.0
+    )
 
 
 @pytest.mark.base
@@ -284,11 +289,14 @@ def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
     from hisim.config import concrete  # pylint: disable=import-outside-toplevel
 
     heater = _make_electric_heating()
-    regulated = concrete(heater.config.maximum_electric_power_w) * 25.0 / 100.0
-    power, _, supply, mass_flow = heater._calculate_dhw_outputs(60.0, 25.0, 75.0)  # pylint: disable=protected-access
-    assert supply == 75.0
-    assert power == hydronics.circuit_power_w(mass_flow, 75.0, 60.0)
-    assert power == pytest.approx(regulated * 15.0 / 25.0, rel=1e-12)
-    power, _, supply, _ = heater._calculate_dhw_outputs(45.0, 25.0, 75.0)  # pylint: disable=protected-access
-    assert supply == 70.0
-    assert power == pytest.approx(regulated, rel=1e-12)
+    regulated_power_in_watt = concrete(heater.config.maximum_electric_power_w) * 25.0 / 100.0
+    calculate_dhw_outputs = heater._calculate_dhw_outputs  # pylint: disable=protected-access
+    thermal_power_in_watt, _, supply_temperature_in_celsius, mass_flow_in_kg_per_second = calculate_dhw_outputs(
+        60.0, 25.0, 75.0
+    )
+    assert supply_temperature_in_celsius == 75.0
+    assert thermal_power_in_watt == hydronics.circuit_power_w(mass_flow_in_kg_per_second, 75.0, 60.0)
+    assert thermal_power_in_watt == pytest.approx(regulated_power_in_watt * 15.0 / 25.0, rel=1e-12)
+    thermal_power_in_watt, _, supply_temperature_in_celsius, _ = calculate_dhw_outputs(45.0, 25.0, 75.0)
+    assert supply_temperature_in_celsius == 70.0
+    assert thermal_power_in_watt == pytest.approx(regulated_power_in_watt, rel=1e-12)

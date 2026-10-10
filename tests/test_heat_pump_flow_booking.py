@@ -255,7 +255,7 @@ class SingleStep:
         """
         fakes: List[cp.ComponentOutput] = []
         for component_input in heat_pump.inputs:
-            if component_input.field_name == MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHW and (
+            if component_input.field_name == MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHWInCelsius and (
                 component_input.field_name not in values
             ):
                 continue
@@ -351,7 +351,9 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
     )
     hplib_thermal_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] * 4200.0 * 5.0
     assert booked_power_in_watt == pytest.approx(hplib_thermal_power_in_watt * 4180.0 / 4200.0, rel=1e-9)
-    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH] == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH] == (
+        booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    )
 
 
 @pytest.mark.base
@@ -359,8 +361,10 @@ def test_hplib_s_results_are_interpolated_linearly_between_its_grid_points() -> 
     """Between two 0.1 K grid points every result is the linear blend of the two: continuous in the return."""
     heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
 
-    def results(t_in_secondary: float):
-        return heat_pump.get_cached_results_or_run_hplib_simulation(-7.0, t_in_secondary, -7.0, 1, "heating_sh", 1500.0)
+    def results(return_temperature_in_celsius: float):
+        return heat_pump.get_cached_results_or_run_hplib_simulation(
+            -7.0, return_temperature_in_celsius, -7.0, 1, "heating_sh", 1500.0
+        )
 
     lower, upper, between = results(47.0), results(47.1), results(47.04)
     for key in ("T_out", "m_dot", "P_th", "P_el", "COP"):
@@ -487,30 +491,39 @@ def test_a_hot_water_outlet_above_the_maximal_supply_temperature_is_throttled() 
         },
     )
     assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW] == 75.0
-    booked = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
-    assert booked == flow_heat(
+    booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
+    assert booked_power_in_watt == flow_thermal_power_in_watt(
         outputs,
         MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW,
         MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW,
         MoreAdvancedHeatPumpHPLib.TemperatureInputDHW,
     )
-    assert booked == pytest.approx(
+    assert booked_power_in_watt == pytest.approx(
         outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW] * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * 2.96,
         rel=1e-9,
     )
-    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW] == booked / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    assert (
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW]
+        == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    )
 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("t_out_c", "t_in_c", "expected_c"), [(77.0, 72.0, 75.0), (75.0, 70.0, 75.0), (79.0, 76.0, 76.0)]
+    ("outlet_temperature_in_celsius", "return_temperature_in_celsius", "expected_in_celsius"),
+    [(77.0, 72.0, 75.0), (75.0, 70.0, 75.0), (79.0, 76.0, 76.0)],
 )
 def test_the_hot_water_supply_stays_within_the_limit_and_never_below_the_return(
-    t_out_c: float, t_in_c: float, expected_c: float
+    outlet_temperature_in_celsius: float, return_temperature_in_celsius: float, expected_in_celsius: float
 ) -> None:
     """Above the 75 °C limit the supply is the limit, or the return when that is hotter; below it is unchanged."""
     heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
-    assert heat_pump.throttled_dhw_supply(t_out_c, t_in_c) == expected_c
+    assert (
+        heat_pump.throttled_dhw_supply_temperature_in_celsius(
+            outlet_temperature_in_celsius, return_temperature_in_celsius
+        )
+        == expected_in_celsius
+    )
 
 
 @pytest.mark.base
@@ -527,38 +540,62 @@ def test_a_hot_water_outlet_above_the_controllers_set_temperature_stops_at_it() 
             MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 10.0,
             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 30.0,
             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 58.0,
-            MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHW: 60.0,
+            MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHWInCelsius: 60.0,
         },
     )
     assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW] == 60.0
-    booked = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
-    assert booked == pytest.approx(
+    booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
+    assert booked_power_in_watt == pytest.approx(
         outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW] * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * 2.0,
         rel=1e-9,
     )
-    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW] == booked / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    assert (
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW]
+        == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    )
 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("t_out_c", "t_in_c", "set_c", "expected_c"),
+    (
+        "outlet_temperature_in_celsius",
+        "return_temperature_in_celsius",
+        "set_temperature_in_celsius",
+        "expected_in_celsius",
+    ),
     [(63.0, 58.0, 60.0, 60.0), (59.0, 54.0, 60.0, 59.0), (77.0, 72.0, 80.0, 75.0), (66.0, 62.0, 70.0, 66.0)],
 )
 def test_the_hot_water_supply_stays_below_the_set_temperature_and_the_maximum(
-    t_out_c: float, t_in_c: float, set_c: float, expected_c: float
+    outlet_temperature_in_celsius: float,
+    return_temperature_in_celsius: float,
+    set_temperature_in_celsius: float,
+    expected_in_celsius: float,
 ) -> None:
     """The limit is the lower of the controller's set temperature and the 75 °C maximum."""
     heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
-    assert heat_pump.throttled_dhw_supply(t_out_c, t_in_c, set_c) == expected_c
+    assert (
+        heat_pump.throttled_dhw_supply_temperature_in_celsius(
+            outlet_temperature_in_celsius, return_temperature_in_celsius, set_temperature_in_celsius
+        )
+        == expected_in_celsius
+    )
 
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("start_temperature_c", "modifier_k", "expected_state", "expected_set_c"),
+    (
+        "start_temperature_in_celsius",
+        "modifier_in_kelvin",
+        "expected_state",
+        "expected_set_temperature_in_celsius",
+    ),
     [(59.4, 0.0, 2, 60.0), (59.5, 0.0, 0, 60.0), (69.4, 10.0, 2, 70.0), (69.5, 10.0, 0, 70.0)],
 )
 def test_the_hot_water_charge_ends_within_half_a_kelvin_of_the_set_temperature(
-    start_temperature_c: float, modifier_k: float, expected_state: int, expected_set_c: float
+    start_temperature_in_celsius: float,
+    modifier_in_kelvin: float,
+    expected_state: int,
+    expected_set_temperature_in_celsius: float,
 ) -> None:
     """A running charge ends once the tank's start temperature is within 0.5 K of t_max plus the raise.
 
@@ -579,12 +616,15 @@ def test_the_hot_water_charge_ends_within_half_a_kelvin_of_the_set_temperature(
     fft.add_global_index_of_components([*fakes, controller])
     stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, controller]))
     values = {
-        MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage: start_temperature_c,
-        MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier: modifier_k,
+        MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage: start_temperature_in_celsius,
+        MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier: modifier_in_kelvin,
     }
     for fake in fakes:
         stsv.values[fake.global_index] = values[fake.field_name]
     controller.state_dhw = 2
     controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
     assert controller.state_dhw == expected_state
-    assert stsv.values[controller.supply_temperature_set_dhw_channel.global_index] == expected_set_c
+    assert (
+        stsv.values[controller.supply_temperature_set_dhw_in_celsius_channel.global_index]
+        == expected_set_temperature_in_celsius
+    )

@@ -174,13 +174,13 @@ sign change, and the plain iterate otherwise.
 ### 4.3 Hot water at the tap (kept from #864)
 
 The tap draw is internal to the DHW tank, not a circuit to another component. #864's thermostatic mixing valve
-(`SimpleDHWStorage.hot_water_draw`, with `ThermalEnergyUnmetDHW`) is kept and expressed on `(m, T)`: the household
+(`SimpleDHWStorage.hot_water_draw`, with `ThermalEnergyUnmetDHWInWattHour`) is kept and expressed on `(m, T)`: the household
 asks for `m_d` at `T_warm`; a tank above `T_warm` lets `m_hot = m_d (T_warm − T_cold)/(T − T_cold)` leave and the
 same mass of mains water enter at `T_cold`. In the node equation that is one inflow `m_hot` at `T_cold`. Because
 `m_hot` depends on the tank temperature, the tank solves the valve on its own step mean with a local scalar
 iteration (all inside one `i_simulate`, no simulator iteration): then the heat drawn,
 `m_hot c (T̄ − T_cold) dt`, equals the demand exactly while `T̄ > T_warm`. Below `T_warm` all of `m_d` passes
-unmixed and the shortfall is `ThermalEnergyUnmetDHW`; below `T_cold` nothing is drawn. #864's
+unmixed and the shortfall is `ThermalEnergyUnmetDHWInWattHour`; below `T_cold` nothing is drawn. #864's
 `check_water_mass` (a vessel without water is refused at construction) is kept.
 
 The DHW tank publishes its start temperature `T0` as the circuits' return on the first pass of every step, and its
@@ -248,10 +248,10 @@ D1 and D2 say. Without the limit, a full-power charge decided on `T0` (D4) heate
 supply is also capped at its controller's set temperature, the value the controller already aims at:
 `T_sup = min(T_set, T_max, T̄ + ΔT)`, with the flow as before and the heat `m c (T_sup − T̄)`; the fuel or
 electricity follows from that heat (§5.1). The boiler's `T_set` is its controller's 60 °C warm-water aim plus its
-10 K hysteresis, 70 °C (`GenericBoilerController.SupplyTemperatureSetDhw`); the electric heater's is its
-controller's 60 °C aim plus its 15 K hysteresis, 75 °C (`ElectricHeatingController.SupplyTemperatureSetForDHW`);
+10 K hysteresis, 70 °C (`GenericBoilerController.SupplyTemperatureSetDhwInCelsius`); the electric heater's is its
+controller's 60 °C aim plus its 15 K hysteresis, 75 °C (`ElectricHeatingController.SupplyTemperatureSetForDHWInCelsius`);
 the heat pump's is its hot-water controller's `t_max`, 60 °C, plus the energy manager's raise while it is active
-(`MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetDHW`); `T_max` (80 °C, 80 °C, 75 °C) stays the upper
+(`MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetDHWInCelsius`); `T_max` (80 °C, 80 °C, 75 °C) stays the upper
 bound. So a charge ends at its target inside the step rather than a whole
 step past it, which made the fuel and electricity depend on the step length (gas fuel +4.4 % at 3600 s against
 60 s over a year before the cap). This is an in-step supply cap at the controller's target, not a forecast: the
@@ -475,7 +475,7 @@ the translator follows them; the translation map (`roadmap/renovisor/translation
 | HDS `ThermalPowerRequestedFromStorage`, `ThermalPowerGrantedByStorage`, `SupplyTemperatureFloor` | dropped |
 | boiler `ThermalPowerSetpoint` feed-forward, `MINIMUM_TEMPERATURE_LIFT_IN_KELVIN`, `fuel_power_for_thermal_power` | dropped (D1: power control kept, fuel from the forward law) |
 | `combustion_efficiency_at_burner_power`, the power-band guard | kept |
-| `hot_water_draw`, `ThermalEnergyUnmetDHW`, `check_water_mass` | kept, on `(m, T)` (§4.3) |
+| `hot_water_draw`, `ThermalEnergyUnmetDHWInWattHour`, `check_water_mass` | kept, on `(m, T)` (§4.3) |
 | `StorageForecast`, `DhwChargeYield` and the controllers' forecast inputs | dropped (D4) |
 | cooling-into-storage refusal | kept until hisim-9uoo.15 / 9uoo.17 land |
 | `tests/test_water_storage_energy_balance.py` | winter-week, tap and boiler-law scenarios kept, assertions rewritten to node closure; forecast and yield tests dropped |

@@ -163,7 +163,7 @@ class ElectricHeating(Component):
     # Inputs for DHW
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     #: The hot-water supply temperature the controller aims at: the heater's hot-water supply never exceeds it.
-    SupplyTemperatureSetForDHW = "SupplyTemperatureSetForDHW"
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
@@ -214,9 +214,9 @@ class ElectricHeating(Component):
             Units.CELSIUS,
             True,
         )
-        self.supply_temperature_set_for_dhw_channel: ComponentInput = self.add_input(
+        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
             self.component_name,
-            ElectricHeating.SupplyTemperatureSetForDHW,
+            ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             False,
@@ -364,9 +364,9 @@ class ElectricHeating(Component):
                 component_class.DeltaTemperatureNeededForDHW,
             ),
             ComponentConnection(
-                ElectricHeating.SupplyTemperatureSetForDHW,
+                ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
                 controller_classname,
-                component_class.SupplyTemperatureSetForDHW,
+                component_class.SupplyTemperatureSetForDHWInCelsius,
             ),
         ]
 
@@ -482,7 +482,7 @@ class ElectricHeating(Component):
             ) = self._calculate_dhw_outputs(
                 water_input_temperature_for_dhw_deg_c,
                 delta_temperature_needed_for_dhw_in_celsius,
-                self.supply_temperature_set_for_dhw(stsv),
+                self.supply_temperature_set_for_dhw_in_celsius(stsv),
             )
             # set sh outputs
             thermal_power_sh_delivered_in_watt = 0.0
@@ -504,7 +504,7 @@ class ElectricHeating(Component):
             ) = self._calculate_dhw_outputs(
                 water_input_temperature_for_dhw_deg_c,
                 delta_temperature_needed_for_dhw_in_celsius,
-                self.supply_temperature_set_for_dhw(stsv),
+                self.supply_temperature_set_for_dhw_in_celsius(stsv),
             )
 
             # Now calculate for space heating
@@ -577,11 +577,11 @@ class ElectricHeating(Component):
                 f"Delta temperature is {delta_temperature} °C in timestep {timestep}." "This is way too high. "
             )
 
-    def supply_temperature_set_for_dhw(self, stsv: SingleTimeStepValues) -> Optional[float]:
+    def supply_temperature_set_for_dhw_in_celsius(self, stsv: SingleTimeStepValues) -> Optional[float]:
         """The hot-water supply temperature the controller aims at, or None when no controller states one."""
-        if self.supply_temperature_set_for_dhw_channel.source_output is None:
+        if self.supply_temperature_set_for_dhw_in_celsius_channel.source_output is None:
             return None
-        return float(stsv.get_input_value(self.supply_temperature_set_for_dhw_channel))
+        return float(stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel))
 
     def _calculate_dhw_outputs(
         self,
@@ -947,7 +947,7 @@ class ElectricHeatingController(Component):
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"
     #: The hot-water supply temperature the controller aims at: its 60 °C aim plus its hysteresis, 75 °C by default.
-    SupplyTemperatureSetForDHW = "SupplyTemperatureSetForDHW"
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     OperatingMode = "HeatingMode"
 
     def __init__(
@@ -996,9 +996,9 @@ class ElectricHeatingController(Component):
             Units.CELSIUS,
             output_description=f"here a description for {self.DeltaTemperatureNeededForDHW} will follow.",
         )
-        self.supply_temperature_set_for_dhw_channel: ComponentOutput = self.add_output(
+        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.SupplyTemperatureSetForDHW,
+            self.SupplyTemperatureSetForDHWInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description=(
@@ -1124,7 +1124,7 @@ class ElectricHeatingController(Component):
         )
 
         stsv.set_output_value(
-            self.supply_temperature_set_for_dhw_channel,
+            self.supply_temperature_set_for_dhw_in_celsius_channel,
             self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset,
         )
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)

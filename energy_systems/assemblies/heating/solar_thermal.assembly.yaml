@@ -67,7 +67,7 @@ tests:
       # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; never negative: the collector clips its efficiency at zero
     - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: 0, max: 5000}         # the power band x 0.25 h
     - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
-    - {output: Collector.CollectorTemperatureAtStepMean, unit: CELSIUS, min: 0, max: 130}
+    - {output: Collector.CollectorTemperatureAtStepMeanInCelsius, unit: CELSIUS, min: 0, max: 130}
       # what the Controller compares: the cylinder's step mean (cold water at 5-20 °C up to a DHW cylinder's
       # ~100 °C) plus the collector's 2 x 10 K lift while it has heat there, whether or not the pump runs
     - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W

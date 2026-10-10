@@ -87,12 +87,14 @@ class Tank:
         return float(stsv.values[channel.global_index])
 
     @staticmethod
-    def closure_residual_j(
-        storage: simple_water_storage.SimpleDHWStorage, t0_c: float, step: simple_water_storage.DhwTankStep
+    def closure_residual_in_joule(
+        storage: simple_water_storage.SimpleDHWStorage,
+        start_temperature_in_celsius: float,
+        step: simple_water_storage.DhwTankStep,
     ) -> float:
         """``sum of inflow heats - loss - C (T_end - T0)`` of one tank step, in J."""
-        stored = storage.heat_capacity_in_joule_per_kelvin * (step.node.t_end_c - t0_c)
-        return float(sum(step.node.heat_in_j_per_inflow) - step.node.loss_j - stored)
+        stored_in_joule = storage.heat_capacity_in_joule_per_kelvin * (step.node.t_end_c - start_temperature_in_celsius)
+        return float(sum(step.node.heat_in_j_per_inflow) - step.node.loss_j - stored_in_joule)
 
 
 #: (start temperature, primary flow and supply, secondary flow and supply, demand kg/s): a boiler charge, a solar
@@ -108,38 +110,58 @@ CASES = [
 
 @pytest.mark.base
 @pytest.mark.parametrize("seconds_per_timestep", [60, 900, 3600])
-@pytest.mark.parametrize("t0_c, primary, secondary, demand_kg_per_s", CASES)
+@pytest.mark.parametrize("start_temperature_in_celsius, primary, secondary, demand_in_kg_per_second", CASES)
 def test_the_tank_closes_on_every_step(
-    seconds_per_timestep: int, t0_c: float, primary: Tuple[float, float], secondary: Tuple[float, float],
-    demand_kg_per_s: float,
+    seconds_per_timestep: int,
+    start_temperature_in_celsius: float,
+    primary: Tuple[float, float],
+    secondary: Tuple[float, float],
+    demand_in_kg_per_second: float,
 ) -> None:
     """The circuits' heat, minus the tap's and the loss, is the heat the tank stores, to a millionth of the largest."""
     storage = Tank.build(seconds_per_timestep)
     inflows = [hydronics.Inflow(*primary), hydronics.Inflow(*secondary)]
-    step = storage.solve_tank_step(t0_c, inflows, demand_kg_per_s)
-    largest = max(
-        [abs(heat) for heat in step.node.heat_in_j_per_inflow]
-        + [abs(step.node.loss_j), storage.heat_capacity_in_joule_per_kelvin * abs(step.node.t_end_c - t0_c), 1.0]
+    step = storage.solve_tank_step(start_temperature_in_celsius, inflows, demand_in_kg_per_second)
+    largest_in_joule = max(
+        [abs(heat_in_joule) for heat_in_joule in step.node.heat_in_j_per_inflow]
+        + [
+            abs(step.node.loss_j),
+            storage.heat_capacity_in_joule_per_kelvin * abs(step.node.t_end_c - start_temperature_in_celsius),
+            1.0,
+        ]
     )
-    assert abs(Tank.closure_residual_j(storage, t0_c, step)) <= 1e-6 * largest
+    assert abs(Tank.closure_residual_in_joule(storage, start_temperature_in_celsius, step)) <= 1e-6 * largest_in_joule
 
 
 @pytest.mark.base
 @pytest.mark.parametrize("seconds_per_timestep", [60, 900, 3600])
-@pytest.mark.parametrize("t0_c, primary, secondary, demand_kg_per_s", CASES)
+@pytest.mark.parametrize("start_temperature_in_celsius, primary, secondary, demand_in_kg_per_second", CASES)
 def test_the_tank_never_leaves_the_range_of_what_it_mixes(
-    seconds_per_timestep: int, t0_c: float, primary: Tuple[float, float], secondary: Tuple[float, float],
-    demand_kg_per_s: float,
+    seconds_per_timestep: int,
+    start_temperature_in_celsius: float,
+    primary: Tuple[float, float],
+    secondary: Tuple[float, float],
+    demand_in_kg_per_second: float,
 ) -> None:
     """The step mean and the end temperature lie between the coldest and the hottest temperature the tank mixes."""
     storage = Tank.build(seconds_per_timestep)
     step = storage.solve_tank_step(
-        t0_c, [hydronics.Inflow(*primary), hydronics.Inflow(*secondary)], demand_kg_per_s
+        start_temperature_in_celsius,
+        [hydronics.Inflow(*primary), hydronics.Inflow(*secondary)],
+        demand_in_kg_per_second,
     )
-    mixed = [t0_c, storage.drain_water_temperature, storage.ambient_temperature_in_celsius]
-    mixed += [temperature for flow, temperature in (primary, secondary) if flow > 0.0]
-    for temperature in (step.node.t_mean_c, step.node.t_end_c):
-        assert min(mixed) - 1e-9 <= temperature <= max(mixed) + 1e-9
+    mixed_in_celsius = [
+        start_temperature_in_celsius,
+        storage.drain_water_temperature,
+        storage.ambient_temperature_in_celsius,
+    ]
+    mixed_in_celsius += [
+        temperature_in_celsius
+        for flow_in_kg_per_second, temperature_in_celsius in (primary, secondary)
+        if flow_in_kg_per_second > 0.0
+    ]
+    for temperature_in_celsius in (step.node.t_mean_c, step.node.t_end_c):
+        assert min(mixed_in_celsius) - 1e-9 <= temperature_in_celsius <= max(mixed_in_celsius) + 1e-9
 
 
 @pytest.mark.base
@@ -151,14 +173,18 @@ def test_the_tap_draws_exactly_the_demand_above_the_tap_temperature(seconds_per_
     ``m_hot c (T̄ - T_cold) dt``.
     """
     storage = Tank.build(seconds_per_timestep)
-    demand = 0.05
-    step = storage.solve_tank_step(60.0, [hydronics.Inflow(0.0, 60.0), hydronics.Inflow(0.0, 60.0)], demand)
-    span = storage.warm_water_temperature - storage.drain_water_temperature
-    demand_heat = demand * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * span * seconds_per_timestep
-    drawn = -step.node.heat_in_j_per_inflow[2]
+    demand_in_kg_per_second = 0.05
+    step = storage.solve_tank_step(
+        60.0, [hydronics.Inflow(0.0, 60.0), hydronics.Inflow(0.0, 60.0)], demand_in_kg_per_second
+    )
+    span_in_kelvin = storage.warm_water_temperature - storage.drain_water_temperature
+    demand_heat_in_joule = (
+        demand_in_kg_per_second * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * span_in_kelvin * seconds_per_timestep
+    )
+    drawn_in_joule = -step.node.heat_in_j_per_inflow[2]
     assert step.node.t_mean_c > storage.warm_water_temperature
-    assert step.hot_water_mass_flow_kg_per_s < demand
-    assert drawn == pytest.approx(demand_heat, rel=1e-9)
+    assert step.hot_water_mass_flow_in_kg_per_second < demand_in_kg_per_second
+    assert drawn_in_joule == pytest.approx(demand_heat_in_joule, rel=1e-9)
     assert step.unmet_fraction == 0.0
 
 
@@ -166,14 +192,16 @@ def test_the_tap_draws_exactly_the_demand_above_the_tap_temperature(seconds_per_
 def test_the_tap_passes_the_demand_unmixed_below_the_tap_temperature_and_books_the_shortfall() -> None:
     """A lukewarm tank lets out all of the demand; the heat it gives plus the unmet heat is the demand."""
     storage = Tank.build(900)
-    demand = 0.15
-    step = storage.solve_tank_step(35.0, [hydronics.Inflow(0.0, 35.0), hydronics.Inflow(0.0, 35.0)], demand)
-    span = storage.warm_water_temperature - storage.drain_water_temperature
-    demand_heat = demand * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * span * 900
-    drawn = -step.node.heat_in_j_per_inflow[2]
-    assert step.hot_water_mass_flow_kg_per_s == demand
+    demand_in_kg_per_second = 0.15
+    step = storage.solve_tank_step(
+        35.0, [hydronics.Inflow(0.0, 35.0), hydronics.Inflow(0.0, 35.0)], demand_in_kg_per_second
+    )
+    span_in_kelvin = storage.warm_water_temperature - storage.drain_water_temperature
+    demand_heat_in_joule = demand_in_kg_per_second * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * span_in_kelvin * 900
+    drawn_in_joule = -step.node.heat_in_j_per_inflow[2]
+    assert step.hot_water_mass_flow_in_kg_per_second == demand_in_kg_per_second
     assert 0.0 < step.unmet_fraction < 1.0
-    assert drawn + step.unmet_fraction * demand_heat == pytest.approx(demand_heat, rel=1e-9)
+    assert drawn_in_joule + step.unmet_fraction * demand_heat_in_joule == pytest.approx(demand_heat_in_joule, rel=1e-9)
 
 
 @pytest.mark.base
@@ -182,7 +210,7 @@ def test_a_tank_at_the_mains_temperature_gives_nothing() -> None:
     storage = Tank.build(900)
     storage.ambient_temperature_in_celsius = 10.0
     step = storage.solve_tank_step(10.0, [hydronics.Inflow(0.0, 10.0), hydronics.Inflow(0.0, 10.0)], 0.1)
-    assert step.hot_water_mass_flow_kg_per_s == 0.0
+    assert step.hot_water_mass_flow_in_kg_per_second == 0.0
     assert step.unmet_fraction == 1.0
     assert step.node.heat_in_j_per_inflow[2] == 0.0
 
@@ -193,10 +221,10 @@ def test_one_hour_without_a_draw_equals_four_quarter_hours() -> None:
     inflows = [hydronics.Inflow(0.1, 65.0), hydronics.Inflow(0.0, 40.0)]
     hour = Tank.build(3600).solve_tank_step(40.0, inflows, 0.0)
     quarter = Tank.build(900)
-    temperature = 40.0
+    temperature_in_celsius = 40.0
     for _ in range(4):
-        temperature = quarter.solve_tank_step(temperature, inflows, 0.0).node.t_end_c
-    assert temperature == pytest.approx(hour.node.t_end_c, abs=1e-9)
+        temperature_in_celsius = quarter.solve_tank_step(temperature_in_celsius, inflows, 0.0).node.t_end_c
+    assert temperature_in_celsius == pytest.approx(hour.node.t_end_c, abs=1e-9)
 
 
 @pytest.mark.base
@@ -231,11 +259,13 @@ def test_the_tank_publishes_its_step_mean_to_the_circuits_and_its_start_temperat
     ):
         assert Tank.output(stsv, channel) == step.node.t_mean_c
     assert Tank.output(stsv, storage.water_temperature_mean_channel) == 50.0
-    assert Tank.output(stsv, storage.water_temperature_at_end_of_step_channel) == step.node.t_end_c
+    assert Tank.output(stsv, storage.water_temperature_at_end_of_step_in_celsius_channel) == step.node.t_end_c
     assert storage.state.mean_water_temperature_in_celsius == step.node.t_end_c
     # the circuit's heat as both ends derive it from the three published values
-    heat_wh = Tank.output(stsv, storage.thermal_energy_from_heat_generator_channel)
-    assert heat_wh * 3600.0 == pytest.approx(hydronics.circuit_heat_j(0.2, 70.0, step.node.t_mean_c, 900), rel=1e-12)
+    heat_in_watt_hour = Tank.output(stsv, storage.thermal_energy_from_heat_generator_channel)
+    assert heat_in_watt_hour * 3600.0 == pytest.approx(
+        hydronics.circuit_heat_j(0.2, 70.0, step.node.t_mean_c, 900), rel=1e-12
+    )
 
 
 @pytest.mark.base
@@ -250,8 +280,8 @@ def test_a_step_mean_within_the_deadband_of_the_last_published_one_is_published_
     storage.i_simulate(0, stsv, False)
     storage.i_restore_state()
     storage.i_simulate(0, stsv, False)
-    converged = Tank.output(stsv, storage.water_temperature_to_heat_generator_channel)
-    storage.last_published_step_mean_in_celsius = converged + 5e-10
+    converged_in_celsius = Tank.output(stsv, storage.water_temperature_to_heat_generator_channel)
+    storage.last_published_step_mean_in_celsius = converged_in_celsius + 5e-10
     storage.i_restore_state()
     storage.i_simulate(0, stsv, False)
-    assert Tank.output(stsv, storage.water_temperature_to_heat_generator_channel) == converged + 5e-10
+    assert Tank.output(stsv, storage.water_temperature_to_heat_generator_channel) == converged_in_celsius + 5e-10

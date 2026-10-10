@@ -87,6 +87,10 @@ DisplayConfig` — `hisim/component.py` deliberately keeps no compatibility alia
 them, so the layering is visible at every call site.
 
 ### Component model (`hisim/component.py`)
+The rules every component follows -- the component kinds (data source, physics, L1 and L2 controller, meter),
+black boxes that talk only through port quantities, who decides what -- are in
+`system_docs/component_design_principles.md`.
+
 Every device is a `Component` subclass. Each component:
 - Declares `ComponentInput` and `ComponentOutput` objects in `__init__` via `add_input()` / `add_output()`
 - Implements four lifecycle methods:
@@ -208,7 +212,8 @@ Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_set
    else. A field the surrounding system decides — a power from the building's heating load, a carrier
    from the generator beside it — is a `sized_field(rule=...)`, left `AUTO` by the preset; a class that
    computes such a value for others declares it in `SIZING_CONTRIBUTIONS`.
-3. Subclass `Component`, declare inputs/outputs in `__init__`, implement the four lifecycle methods.
+3. Subclass `Component`, declare inputs/outputs in `__init__`, implement the four lifecycle methods. Decide
+   first which kind it is (`system_docs/component_design_principles.md`) and keep to that kind's role.
 4. Add a test in `tests/test_my_component.py`; use `SimulationParameters.full_year(year=2021, seconds_per_timestep=60)` for a minimal test setup.
 5. `hisim energy-system describe hisim.components.my_component.MyComponent` prints what the class now
    offers — its presets, what each sets, and the law behind every sizable field.

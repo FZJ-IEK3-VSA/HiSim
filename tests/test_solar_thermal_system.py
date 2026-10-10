@@ -584,3 +584,35 @@ def test_the_collector_circuit_carries_its_heat_only_while_the_pump_runs_and_the
     assert circuit.mass_flow_kg_per_s == pytest.approx(expected_mass_flow_in_kg_per_second, rel=1e-12)
     assert circuit.t_supply_c == expected_supply_temperature_in_celsius
     assert circuit.power_w == pytest.approx(max(collector_heat_in_watt, 0.0) if pump_runs else 0.0, rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("pump_runs", "is_old_pump", "expected_power_in_watt"),
+    [(True, False, 10.0), (True, True, 35.0), (False, False, 0.0), (False, True, 0.0)],
+)
+def test_the_solar_pump_draws_its_kind_s_power_only_while_it_runs(
+    pump_runs: bool, is_old_pump: bool, expected_power_in_watt: float
+) -> None:
+    """A pump that drew power while standing, or the wrong kind's power, would misstate the system's electricity."""
+    assert (
+        solar_thermal_system.SolarThermalSystem.pump_power_in_watt(pump_runs=pump_runs, is_old_pump=is_old_pump)
+        == expected_power_in_watt
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("delta_temperature_n_k", [0.0, -5.0, float("nan"), float("inf")])
+def test_a_collector_without_a_finite_positive_inlet_to_mean_difference_is_refused(delta_temperature_n_k: float) -> None:
+    """A difference of 0 K would divide the collector's flow by zero, a negative one would give a negative flow."""
+    with pytest.raises(ValueError, match="delta_temperature_n_k"):
+        solar_thermal_system.SolarThermalSystemConfig(
+            component_id=ComponentID(name="SolarThermalSystem"), delta_temperature_n_k=delta_temperature_n_k
+        )
+
+
+@pytest.mark.base
+def test_the_flat_plate_preset_has_a_valid_inlet_to_mean_difference() -> None:
+    """The refusal of a non-positive difference must not refuse the preset's own 10 K."""
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    assert config.delta_temperature_n_k == 10

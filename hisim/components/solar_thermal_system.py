@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import datetime
+import math
 from typing import ClassVar, List, Optional, Tuple
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
@@ -238,6 +239,23 @@ class SolarThermalSystemConfig(ConfigBase):
 
     #: Temperature difference between the collector inlet and the collector's mean temperature, in K.
     delta_temperature_n_k: float = 10
+
+    def __post_init__(self) -> None:
+        """Refuse an inlet-to-mean temperature difference that is not a finite positive number of kelvin.
+
+        The collector lifts its water by twice this difference, and its flow is the collector heat over that lift.
+        A difference of 0 K divides by zero, and a negative one gives a negative flow and a supply below the inlet.
+        For example, ``delta_temperature_n_k=10`` is accepted, ``0`` and ``-5`` are refused.
+
+        Raises:
+            ValueError: If ``delta_temperature_n_k`` is not finite or not above 0 K.
+        """
+        if not math.isfinite(self.delta_temperature_n_k) or self.delta_temperature_n_k <= 0:
+            raise ValueError(
+                f"The collector's inlet-to-mean temperature difference delta_temperature_n_k must be a finite number "
+                f"above 0 K, got {self.delta_temperature_n_k!r}: the collector lifts its water by twice this difference "
+                "and its flow is the collector heat over that lift."
+            )
 
     @preset
     @classmethod
@@ -844,9 +862,9 @@ class SolarThermalSystem(Component):
         self.plane_of_array_key = None
 
     #: The electricity of the solar pump while it runs, in W, for a current high-efficiency circulator.
-    PUMP_POWER_IN_WATT: ClassVar[float] = 10
+    PUMP_POWER_IN_WATT: ClassVar[float] = 10.0
     #: The electricity of an old, uncontrolled solar pump while it runs, in W.
-    OLD_PUMP_POWER_IN_WATT: ClassVar[float] = 35
+    OLD_PUMP_POWER_IN_WATT: ClassVar[float] = 35.0
 
     @staticmethod
     def required_mass_flow_in_kg_per_second(
@@ -866,6 +884,26 @@ class SolarThermalSystem(Component):
         """
         lift_in_kelvin = 2 * inlet_to_mean_temperature_difference_in_kelvin
         return max(collector_heat_in_watt, 0.0) / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin)
+
+    @staticmethod
+    def pump_power_in_watt(*, pump_runs: bool, is_old_pump: bool) -> float:
+        """Return the electricity the solar pump draws in a step, from whether it runs and its kind, in W.
+
+        A running pump draws ``PUMP_POWER_IN_WATT`` (10 W) if it is a current high-efficiency circulator and
+        ``OLD_PUMP_POWER_IN_WATT`` (35 W) if it is an old, uncontrolled one; a pump that stands draws nothing.
+
+        Args:
+            pump_runs: Whether the controller runs the solar pump in this step.
+            is_old_pump: Whether the installed pump is an old one rather than a current one.
+
+        Returns:
+            The pump's electric power, in W.
+        """
+        if not pump_runs:
+            return 0.0
+        if is_old_pump:
+            return SolarThermalSystem.OLD_PUMP_POWER_IN_WATT
+        return SolarThermalSystem.PUMP_POWER_IN_WATT
 
     @staticmethod
     def collector_circuit(
@@ -893,9 +931,11 @@ class SolarThermalSystem(Component):
         """
         if not pump_runs or collector_heat_in_watt <= 0:
             return hydronics.CircuitStep.idle(t_return_c=inlet_temperature_in_celsius)
-        lift_in_kelvin = 2 * inlet_to_mean_temperature_difference_in_kelvin
-        mass_flow_in_kg_per_second = collector_heat_in_watt / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin)
-        supply_temperature_in_celsius = inlet_temperature_in_celsius + lift_in_kelvin
+        mass_flow_in_kg_per_second = SolarThermalSystem.required_mass_flow_in_kg_per_second(
+            collector_heat_in_watt=collector_heat_in_watt,
+            inlet_to_mean_temperature_difference_in_kelvin=inlet_to_mean_temperature_difference_in_kelvin,
+        )
+        supply_temperature_in_celsius = inlet_temperature_in_celsius + 2 * inlet_to_mean_temperature_difference_in_kelvin
         return hydronics.CircuitStep(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second,
             t_supply_c=supply_temperature_in_celsius,
@@ -968,11 +1008,8 @@ class SolarThermalSystem(Component):
             * self.my_simulation_parameters.seconds_per_timestep
             / hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         )
-        # the solar pump draws its electricity while the controller runs it
-        electric_power_demand_solar_pump_w = (
-            (self.OLD_PUMP_POWER_IN_WATT if self.config.old_solar_pump else self.PUMP_POWER_IN_WATT)
-            if control_signal != 0
-            else 0
+        electric_power_demand_solar_pump_w = self.pump_power_in_watt(
+            pump_runs=control_signal != 0, is_old_pump=self.config.old_solar_pump
         )
         water_temperature_output_deg_c = circuit.t_supply_c
         mass_flow_output_kg_s = circuit.mass_flow_kg_per_s

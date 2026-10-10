@@ -118,8 +118,10 @@ class ResolutionRuns:
         results = built.simulator.results_data_frame
 
         def total_in_kilowatt_hour(field: str) -> float:
-            (column,) = [name for name in results.columns if f" - {field} [" in name and name.startswith("DHW")]
-            return float(results[column].sum()) / 1000.0
+            """Return the sum of the tank's energy output ``field``, given in Wh per step, over the window, in kWh."""
+            matches = [name for name in results.columns if f" - {field} [" in name and name.startswith("DHW")]
+            assert len(matches) == 1, (field, matches)
+            return float(results[matches[0]].sum()) / 1000.0
 
         return {
             "tap_heat_in_kilowatt_hour": total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyConsumptionDHW),

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import enum
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Tuple
 
 from hisim.component import ComponentInput, SingleTimeStepValues
 
@@ -47,33 +47,27 @@ class DiverterValve:
         set_temperatures: SetTemperatureConfig,
         parallel_space_heating_and_dhw_option: bool = False,
     ) -> HeatingMode:
-        """Set conditions for the district heating controller mode."""
+        """Return the mode a dual-circuit generator's diverter valve sets for this step, from the tank and buffer temperatures.
 
-        def dhw_heating_needed(
-            controller_mode: HeatingMode,
-            actual_water_temperature_in_celsius: Optional[float],
-            set_water_temperature_in_celsius: Optional[float],
-        ) -> bool:
-            if not with_domestic_hot_water_preparation:
-                return False
+        A dual-circuit generator (a boiler, an electric heater, a district-heating substation) heats either its
+        space-heating circuit or the hot-water tank, or both at once if ``parallel_space_heating_and_dhw_option`` is
+        set. Without the parallel option a hot-water charge has priority over space heating. Whether the tank needs a
+        charge is :meth:`hot_water_charge_needed`; space heating is needed in the heating season while the water is
+        below its set temperature plus the hysteresis. For example, with the parallel option, a tank at 44 °C (60 °C
+        set, 15 K hysteresis) on a winter day gives the parallel mode, and the parallel charge goes on up to 60 °C.
 
-            assert actual_water_temperature_in_celsius is not None
-            assert set_water_temperature_in_celsius is not None
-            assert set_temperatures.hysteresis_water_temperature_offset_in_celsius is not None
+        Args:
+            with_domestic_hot_water_preparation: Whether the generator has a hot-water tank at all.
+            current_controller_mode: The controller's mode at the start of the step.
+            daily_average_outside_temperature_in_celsius: The day's mean outside temperature, in °C.
+            water_temperature_input_sh_in_celsius: The space-heating water temperature, in °C.
+            water_temperature_input_dhw_in_celsius: The hot-water tank's temperature, in °C, or None without a tank.
+            set_temperatures: The set temperatures, the hysteresis and the heating threshold.
+            parallel_space_heating_and_dhw_option: Whether both circuits may be heated at once.
 
-            if actual_water_temperature_in_celsius < (
-                set_water_temperature_in_celsius
-                - set_temperatures.hysteresis_water_temperature_offset_in_celsius
-            ):
-                return True
-
-            if (
-                controller_mode == HeatingMode.DOMESTIC_HOT_WATER
-                and actual_water_temperature_in_celsius < set_water_temperature_in_celsius
-            ):
-                return True
-
-            return False
+        Returns:
+            The mode for this step.
+        """
 
         def space_heating_needed(
             current_water_temperature_in_celsius: float,
@@ -100,11 +94,17 @@ class DiverterValve:
             water_temperature_input_sh_in_celsius,
             set_temperatures.set_temperature_space_heating_in_celsius,
         )
-        needs_dhw_heating = dhw_heating_needed(
-            current_controller_mode,
-            water_temperature_input_dhw_in_celsius,
-            set_temperatures.set_temperature_dhw_in_celsius,
-        )
+        needs_dhw_heating = False
+        if with_domestic_hot_water_preparation:
+            assert water_temperature_input_dhw_in_celsius is not None
+            assert set_temperatures.set_temperature_dhw_in_celsius is not None
+            assert set_temperatures.hysteresis_water_temperature_offset_in_celsius is not None
+            needs_dhw_heating = DiverterValve.hot_water_charge_needed(
+                controller_mode=current_controller_mode,
+                storage_temperature_in_celsius=water_temperature_input_dhw_in_celsius,
+                set_temperature_in_celsius=set_temperatures.set_temperature_dhw_in_celsius,
+                hysteresis_in_kelvin=set_temperatures.hysteresis_water_temperature_offset_in_celsius,
+            )
         mode = HeatingMode.OFF
 
         if not parallel_space_heating_and_dhw_option:
@@ -121,6 +121,44 @@ class DiverterValve:
                 mode = HeatingMode.SPACE_HEATING
 
         return mode
+
+    #: The controller modes in which a hot-water charge is running, so the latch keeps it going up to the set temperature.
+    CHARGING_MODES: ClassVar[Tuple[HeatingMode, ...]] = (
+        HeatingMode.DOMESTIC_HOT_WATER,
+        HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL,
+    )
+
+    @staticmethod
+    def hot_water_charge_needed(
+        *,
+        controller_mode: HeatingMode,
+        storage_temperature_in_celsius: float,
+        set_temperature_in_celsius: float,
+        hysteresis_in_kelvin: float,
+    ) -> bool:
+        """Return whether the hot-water tank is to be charged in this step, from its temperature and the current mode.
+
+        The rule is a two-point control with a latch. A charge starts when the tank is below the switch-on point, the
+        set temperature less the hysteresis. A charge that is running, in the hot-water mode alone or in parallel
+        with space heating (:attr:`CHARGING_MODES`), goes on until the tank reaches the set temperature. For example,
+        with a 60 °C set temperature and a 15 K hysteresis, a tank at 44 °C starts a charge, a tank at 50 °C goes on
+        charging if a charge is running and stays idle otherwise, and a tank at 60 °C ends the charge.
+
+        Why the parallel mode latches too: a charge beside space heating would otherwise end at the switch-on point
+        and top the tank up to 45 °C instead of charging it to 60 °C.
+
+        Args:
+            controller_mode: The controller's mode at the start of the step.
+            storage_temperature_in_celsius: The tank's temperature, in °C.
+            set_temperature_in_celsius: The warm-water temperature a charge ends at, in °C.
+            hysteresis_in_kelvin: How far below the set temperature a charge starts, in K.
+
+        Returns:
+            Whether the tank is charged in this step.
+        """
+        if storage_temperature_in_celsius < set_temperature_in_celsius - hysteresis_in_kelvin:
+            return True
+        return controller_mode in DiverterValve.CHARGING_MODES and storage_temperature_in_celsius < set_temperature_in_celsius
 
     @staticmethod
     def determine_summer_heating_mode(

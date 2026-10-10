@@ -162,8 +162,8 @@ storages stop carrying their own mixing, booking and loss code. Stage A (PR #890
 parameters (owner, 2026-10-04): water `c = 4180 J/(kg K)`, pinned equal to `PhysicsConfig`'s; water density
 `992 kg/m³`, the value at 40 °C both storages use today, so stages C and D replace arithmetic without moving a number
 (`PhysicsConfig`'s 1000 is aligned in stage C as one deliberate change); the §6 accelerator uses a secant step after
-six of the node's own iterates when the estimated contraction lies in [0, 1), under-relaxation by 0.5 on a residual
-sign change, and the plain iterate otherwise.
+six of the node's own iterates when the estimated contraction lies in [0, 1) (capped at 0.9 since 2026-10-10, §6),
+under-relaxation by 0.5 on a residual sign change, and the plain iterate otherwise.
 
 ### 4.2 Properties
 
@@ -420,7 +420,8 @@ shows the watt outputs dominate.
 a fixed-point map, a node's `T̄`, with `add_output(..., is_accelerated=True)`; the hot-water tank declares its two
 step-mean outputs. After the component has run, the simulator replaces the value it computed
 (`hisim/fixed_point_acceleration.py`): up to six passes on a step the plain value, after them a secant (Aitken) step
-on the output's own fixed-point residual while the secant's contraction estimate lies in [0, 1), and the
+on the output's own fixed-point residual while the secant's contraction estimate `θ̂` lies in [0, 0.9]
+(`SecantAcceleration.MAXIMAL_CONTRACTION_FACTOR`, so the step `r / (1 − θ̂)` is at most ten times the residual), and the
 under-relaxed value (weight 0.5) when the residual changes sign (an oscillation, which a contraction with `θ > 0`
 should not produce, but a circuit whose heat falls steeply with `T̄` can, such as the heat pump's hot-water supply
 capped at its controller's set temperature). A new value within 1e-9 of the one the output stood at keeps that
@@ -432,7 +433,13 @@ extrapolation kept under forced convergence the heat-pump twin's year at 3600 s 
 acceleration changes only how fast the fixed point is reached, never which one; the iteration history belongs to
 the simulator, which runs the iteration, so every component stays a function of its inputs and its saved state.
 Until 2026-10-10 the tank kept this history itself, published `T0` on the first pass of a step and clamped the
-extrapolation to the range of the temperatures it mixes.
+extrapolation to the range of the temperatures it mixes. That clamp was lost when the acceleration moved into the
+simulator, which knows no output's range, and the extrapolation was unbounded: two passes at 55.000 and 55.001 °C with
+residuals of 0.0100 and 0.009999 K estimate `θ̂ = 0.999` and jumped to 65.00 °C. The bound on the contraction estimate
+replaces the clamp generically (owner, 2026-10-10, review of #909): above `θ̂ = 0.9` the plain iterate is published.
+Measured on the six twins below, full year 2021 at 60, 900 and 3600 s without the warm start: the bound leaves 16 of
+the 18 runs bit-identical; the heat-pump twin moves by float noise at 900 s (4e-14) and at 3600 s takes 2992 forced
+steps instead of 2980 (mean passes 8.79 → 8.81), its space-heating electricity 0.4 % lower.
 
 Measured on the six twins with a hot-water tank, full year 2021, mean passes per step and forced steps (more than
 ten passes), before (the tank's own memory) and after (the simulator's acceleration), both with the simulator's warm

@@ -52,7 +52,7 @@ def test_the_acceleration_waits_six_iterations() -> None:
         assert accelerated_iterate(published_values=published, computed_values=computed) == computed[-1]
 
 
-@pytest.mark.parametrize("theta", [0.05, 0.57, 0.95])
+@pytest.mark.parametrize("theta", [0.05, 0.57, 0.89])
 def test_the_secant_lands_on_the_fixed_point_of_a_contraction(theta: float) -> None:
     """For a linear contraction ``F(x) = theta x + b`` the secant step is the fixed point; a wrong formula misses."""
     fixed_point = 55.0
@@ -86,6 +86,28 @@ def test_a_non_contracting_estimate_falls_back_to_the_plain_iterate() -> None:
     """A secant step on an expanding map would jump away from the fixed point; the plain iterate is kept."""
     published, computed = plain_history(lambda x: 1.2 * x - 5.0, 30.0, SecantAcceleration.AFTER_ITERATIONS + 1)
     assert accelerated_iterate(published_values=published, computed_values=computed) == computed[-1]
+
+
+@pytest.mark.parametrize("theta", [0.91, 0.95, 0.999])
+def test_a_contraction_above_the_maximal_factor_falls_back_to_the_plain_iterate(theta: float) -> None:
+    """A secant step is the residual over ``1 - theta``; above 0.9 it would be more than ten times the residual."""
+    fixed_point = 55.0
+
+    def contraction(x: float) -> float:
+        """Return the contraction's image of ``x``."""
+        return theta * x + (1.0 - theta) * fixed_point
+
+    published, computed = plain_history(contraction, 20.0, SecantAcceleration.AFTER_ITERATIONS + 1)
+    assert accelerated_iterate(published_values=published, computed_values=computed) == computed[-1]
+
+
+def test_a_noisy_contraction_estimate_near_one_does_not_jump() -> None:
+    """Two passes 1 mK apart whose residuals differ by 1 µK estimate theta = 0.999; the secant would jump 10 K to 65 °C."""
+    published = [50.0, 51.0, 52.0, 53.0, 54.0, 55.000, 55.001]
+    computed = [51.0, 52.0, 53.0, 54.0, 55.0, 55.0100, 55.010999]
+    accelerated = accelerated_iterate(published_values=published, computed_values=computed)
+    assert accelerated == 55.010999
+    assert abs(accelerated - published[-1]) <= 10.0 * abs(computed[-1] - published[-1])
 
 
 def test_coincident_iterates_fall_back_to_the_plain_iterate() -> None:

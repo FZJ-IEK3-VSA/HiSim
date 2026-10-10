@@ -51,6 +51,11 @@ class SecantAcceleration:
     #: The weight of the new value when an oscillating iteration is under-relaxed, dimensionless.
     UNDER_RELAXATION_WEIGHT: ClassVar[float] = 0.5
 
+    #: The largest estimated contraction factor the secant extrapolates at, dimensionless. The secant step is the
+    #: residual over ``1 - theta``, so at 0.9 it is at most ten times the residual; closer to 1 an estimate from two
+    #: noisy passes would turn a residual of 0.01 K into a jump of 10 K, and the plain iterate is used instead.
+    MAXIMAL_CONTRACTION_FACTOR: ClassVar[float] = 0.9
+
     #: A new value that differs from the published one by at most this keeps the published value, in the output's
     #: unit: far below the simulator's tolerance of 1e-4, above the float noise of a converged iteration (about
     #: 1e-13 for a temperature of 70 °C). A component that switches on the sign of a balance would otherwise turn an
@@ -81,12 +86,15 @@ def accelerated_iterate(*, published_values: Sequence[float], computed_values: S
       ``w = SecantAcceleration.UNDER_RELAXATION_WEIGHT``.
     * Otherwise the secant step on the residual, ``x - r (x - x_prev) / (r - r_prev)``, which is Aitken's
       delta-squared extrapolation of a plain iteration. It is taken only when the secant's estimate of the
-      contraction factor ``theta = 1 + (r - r_prev) / (x - x_prev)`` lies in [0, 1), the range of a monotone
-      contraction; outside it, and when two iterates coincide, the plain iterate is returned.
+      contraction factor ``theta = 1 + (r - r_prev) / (x - x_prev)`` lies in
+      [0, ``SecantAcceleration.MAXIMAL_CONTRACTION_FACTOR``], a monotone contraction whose step ``r / (1 - theta)``
+      is at most ten times the residual; outside it, and when two iterates coincide, the plain iterate is returned.
 
     A zero residual returns the published value in every branch, so a fixed point is never moved. For example, the
     contraction ``F(x) = 0.5 x + 20``, iterated plainly from 10, is at 39.84 after seven passes; the secant step
-    from its last two passes lands on its fixed point, 40.
+    from its last two passes lands on its fixed point, 40. Two passes at 55.000 and 55.001 °C with residuals of
+    0.0100 and 0.009999 K estimate ``theta = 0.999``; the secant would jump to 65 °C, so the plain iterate, 55.010999 °C,
+    is returned.
 
     Args:
         published_values: The value the output stood at in each pass of the step, oldest first.
@@ -124,7 +132,7 @@ def accelerated_iterate(*, published_values: Sequence[float], computed_values: S
         return computed_last
     slope = _finite("The secant slope", (residual - residual_previous) / (published_last - published_previous))
     contraction_factor = 1.0 + slope
-    if not 0.0 <= contraction_factor < 1.0:
+    if not 0.0 <= contraction_factor <= SecantAcceleration.MAXIMAL_CONTRACTION_FACTOR:
         return computed_last
     return _finite("The secant extrapolation", published_last - residual / slope)
 

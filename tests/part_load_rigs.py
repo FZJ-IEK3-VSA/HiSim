@@ -4,11 +4,17 @@ A rig points every input a test drives at a fake output and steps the component 
 ``tests/test_dhw_storage_node.py`` steps the hot-water tank, so a test sets exactly the values the component reads.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.components import generic_boiler, simple_water_storage
+from hisim.components import (
+    generic_boiler,
+    generic_electric_heating,
+    more_advanced_heat_pump_hplib,
+    simple_water_storage,
+)
+from hisim.components.more_advanced_heat_pump_hplib import PositionHotWaterStorageInSystemSetup
 from hisim.components.dual_circuit_system import HeatingMode
 from hisim.config import ComponentID, SizingContext
 from hisim.part_load import PartLoadRule
@@ -302,3 +308,262 @@ class BoilerControllerRig:
             ("outside_c", 0.0),
         ):
             stsv.set_output_value(fakes[name], value)
+
+
+class AllInputsRig:
+    """A component whose every input reads a fake output of its own, set and read by field name."""
+
+    @staticmethod
+    def build(component: Any) -> Tuple[Any, Dict[str, Any]]:
+        """Point every input of ``component`` at its own fake output; return the step values and the fakes by name.
+
+        Args:
+            component: The component under test.
+
+        Returns:
+            The step values and the fakes keyed by the field name of the input each one feeds.
+        """
+        channels = [(component_input, lt.LoadTypes.ANY, lt.Units.ANY) for component_input in component.inputs]
+        stsv, fakes = Rig.wire(component, channels)
+        return stsv, {component_input.field_name: fake for component_input, fake in zip(component.inputs, fakes)}
+
+    @staticmethod
+    def step(
+        component: Any,
+        stsv: Any,
+        fakes: Dict[str, Any],
+        values: Dict[str, float],
+        *,
+        timestep: int = 0,
+        force_convergence: bool = False,
+    ) -> Dict[str, float]:
+        """Write ``values`` into the fakes (every other fake reads 0), simulate one pass and return the outputs by name.
+
+        Args:
+            component: The component under test.
+            stsv: Its step values.
+            fakes: Its fakes by input field name.
+            values: The input values by field name.
+            timestep: The step number passed to ``i_simulate``.
+            force_convergence: Whether the pass is forced.
+
+        Returns:
+            Every output of the component by field name.
+        """
+        for field_name, fake in fakes.items():
+            stsv.set_output_value(fake, values.get(field_name, 0.0))
+        component.i_simulate(timestep, stsv, force_convergence)
+        return {output.field_name: Rig.output(stsv, output) for output in component.outputs}
+
+
+class HeatPumpRig:
+    """A 10 kW generic air/water heat pump charging the hot-water tank, one step on fake inputs."""
+
+    @staticmethod
+    def build(
+        seconds_per_timestep: int, minimum_running_time_in_seconds: Optional[int] = None, **extra: Any
+    ) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Return the heat pump with hot water and a parallel storage, running for ten minutes already, and its rig.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            minimum_running_time_in_seconds: With a value, the heat pump cycles and keeps a charge running for this
+                long; without, it does not cycle.
+            **extra: Further simulation-parameter arguments.
+
+        Returns:
+            The heat pump, its step values and its fakes by input field name.
+        """
+        config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+        config.set_thermal_output_power_in_watt = 10000.0
+        config.heating_reference_temperature_in_celsius = -7.0
+        config.flow_temperature_in_celsius = 52.0
+        config.cycling_mode = minimum_running_time_in_seconds is not None
+        if minimum_running_time_in_seconds is not None:
+            config.minimum_running_time_in_seconds = minimum_running_time_in_seconds
+            config.minimum_idle_time_in_seconds = 600
+        config.minimum_thermal_output_power_in_watt = 1500.0
+        config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
+        config.with_domestic_hot_water_preparation = True
+        config.position_hot_water_storage_in_system = PositionHotWaterStorageInSystemSetup.PARALLEL
+        heat_pump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+            config=config, my_simulation_parameters=Parameters.one_day(seconds_per_timestep, **extra)
+        )
+        heat_pump.state = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibState(
+            time_on_heating=600,
+            time_off=0,
+            time_on_cooling=0,
+            on_off_previous=2,
+            cumulative_thermal_energy_tot_in_watt_hour=0,
+            cumulative_thermal_energy_space_heating_in_watt_hour=0,
+            cumulative_thermal_energy_dhw_in_watt_hour=0,
+            cumulative_electrical_energy_tot_in_watt_hour=0,
+            cumulative_electrical_energy_space_heating_in_watt_hour=0,
+            cumulative_electrical_energy_dhw_in_watt_hour=0,
+            counter_switch_space_heating=0,
+            counter_switch_dhw=0,
+            counter_onoff=0,
+            delta_t_secondary_side=5,
+            delta_t_primary_side=0,
+        )
+        stsv, fakes = AllInputsRig.build(heat_pump)
+        return heat_pump, stsv, fakes
+
+    @classmethod
+    def charge(
+        cls,
+        seconds_per_timestep: int,
+        ratio: float,
+        state_dhw: float = 2.0,
+        minimum_running_time_in_seconds: Optional[int] = None,
+    ) -> Dict[str, float]:
+        """Return every output of one hot-water step from a 55 °C tank at 2 °C outside, set temperature 60 °C.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            ratio: The part-load ratio the hot-water controller commands.
+            state_dhw: The hot-water controller's state, 2 for a charge.
+            minimum_running_time_in_seconds: The heat pump's minimum running time, s, or None for no cycling.
+
+        Returns:
+            The heat pump's outputs by field name.
+        """
+        heat_pump, stsv, fakes = cls.build(seconds_per_timestep, minimum_running_time_in_seconds)
+        pump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+        return AllInputsRig.step(
+            heat_pump,
+            stsv,
+            fakes,
+            {
+                pump.OnOffSwitchDHW: state_dhw,
+                pump.TemperatureInputPrimary: 2.0,
+                pump.TemperatureAmbient: 2.0,
+                pump.TemperatureInputSecondarySH: 35.0,
+                pump.TemperatureInputSecondaryDHW: 55.0,
+                pump.SupplyTemperatureSetForDHWInCelsius: 60.0,
+                pump.PartLoadRatioDHW: ratio,
+            },
+        )
+
+
+class HeatPumpControllerDhwRig:
+    """The heat pump's hot-water controller on fake inputs: the tank's start and end temperature and the raise."""
+
+    @staticmethod
+    def build(seconds_per_timestep: int, **extra: Any) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Return the controller with the standard 40/60 °C band, its step values and its fakes by field name.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            **extra: Further simulation-parameter arguments.
+
+        Returns:
+            The controller, its step values and its fakes.
+        """
+        controller_class = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+        config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard(
+            "HeatPumpControllerDHW"
+        )
+        controller = controller_class(config=config, my_simulation_parameters=Parameters.one_day(seconds_per_timestep, **extra))
+        stsv, fakes = AllInputsRig.build(controller)
+        return controller, stsv, fakes
+
+    @staticmethod
+    def values(*, start_c: float, end_c: float, raise_k: float = 0.0, ratio_run: float = 1.0) -> Dict[str, float]:
+        """Return the controller's inputs by field name for a tank start and end temperature, a raise and a ratio run.
+
+        Args:
+            start_c: The tank's start-of-step temperature, °C.
+            end_c: The tank's end-of-step temperature, °C.
+            raise_k: The energy manager's raise of the set temperature, K.
+            ratio_run: The part-load ratio the heat pump reports it ran with.
+
+        Returns:
+            The input values by field name.
+        """
+        controller_class = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+        return {
+            controller_class.WaterTemperatureInputFromDHWStorage: start_c,
+            controller_class.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius: end_c,
+            controller_class.DHWStorageTemperatureModifier: raise_k,
+            controller_class.PartLoadRatioRunDHW: ratio_run,
+        }
+
+
+class ElectricHeaterRig:
+    """A 6 kW electric heater charging the hot-water tank, one step on fake inputs."""
+
+    @classmethod
+    def charge(cls, seconds_per_timestep: int, ratio: float) -> Dict[str, float]:
+        """Return every output of one hot-water step from a 50 °C tank mean, a 25 K lift and a 75 °C set temperature.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            ratio: The part-load ratio the controller commands.
+
+        Returns:
+            The heater's outputs by field name.
+        """
+        config = generic_electric_heating.ElectricHeatingConfig.preset_resistive("ElectricHeating")
+        config.with_domestic_hot_water_preparation = True
+        config.maximum_electric_power_w = 6000.0
+        heater_class = generic_electric_heating.ElectricHeating
+        heater = heater_class(my_simulation_parameters=Parameters.one_day(seconds_per_timestep), config=config)
+        stsv, fakes = AllInputsRig.build(heater)
+        return AllInputsRig.step(
+            heater,
+            stsv,
+            fakes,
+            {
+                heater_class.HeatingMode: HeatingMode.DOMESTIC_HOT_WATER.value,
+                heater_class.DeltaTemperatureNeededForDHW: 25.0,
+                heater_class.SupplyTemperatureSetForDHWInCelsius: 75.0,
+                heater_class.WaterInputTemperatureDhw: 50.0,
+                heater_class.PartLoadRatioDhw: ratio,
+            },
+        )
+
+
+class ElectricHeatingControllerRig:
+    """The electric heater's controller with hot water on fake inputs."""
+
+    @staticmethod
+    def build(seconds_per_timestep: int, **extra: Any) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Return the controller, its step values and its fakes by field name.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            **extra: Further simulation-parameter arguments.
+
+        Returns:
+            The controller, its step values and its fakes.
+        """
+        config = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
+        config.set_heating_threshold_outside_temperature_in_celsius = 16.0
+        config.specific_heating_load_of_building_in_watt_per_m2 = 40.0
+        config.with_domestic_hot_water_preparation = True
+        controller = generic_electric_heating.ElectricHeatingController(
+            my_simulation_parameters=Parameters.one_day(seconds_per_timestep, **extra), config=config
+        )
+        stsv, fakes = AllInputsRig.build(controller)
+        return controller, stsv, fakes
+
+    @staticmethod
+    def values(*, start_c: float, end_c: float, ratio_run: float = 1.0) -> Dict[str, float]:
+        """Return the controller's inputs by field name on a cold day, for a tank start and end temperature and a ratio run.
+
+        Args:
+            start_c: The tank's start-of-step temperature, °C.
+            end_c: The tank's end-of-step temperature, °C.
+            ratio_run: The part-load ratio the heater reports it ran with.
+
+        Returns:
+            The input values by field name.
+        """
+        controller_class = generic_electric_heating.ElectricHeatingController
+        return {
+            controller_class.WaterTemperatureInputFromWarmWaterStorage: start_c,
+            controller_class.WaterTemperatureAtEndOfStepFromWarmWaterStorageInCelsius: end_c,
+            controller_class.DailyAverageOutsideTemperature: 0.0,
+            controller_class.PartLoadRatioRunDhw: ratio_run,
+        }

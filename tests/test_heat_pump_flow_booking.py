@@ -253,7 +253,8 @@ class SingleStep:
     def step(heat_pump: MoreAdvancedHeatPumpHPLib, values: Dict[str, float]) -> Dict[str, float]:
         """Step ``heat_pump`` once with its inputs set from ``values`` by field name (0 for the rest).
 
-        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one.
+        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one, and the
+        controller's part-load ratio reads 1, the whole step.
 
         Returns:
             Every output of the heat pump by field name.
@@ -275,8 +276,9 @@ class SingleStep:
             fakes.append(fake)
         fft.add_global_index_of_components([*fakes, heat_pump])
         stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes, heat_pump]))
+        defaults = {MoreAdvancedHeatPumpHPLib.PartLoadRatioDHW: 1.0}
         for fake in fakes:
-            stsv.values[fake.global_index] = values.get(fake.field_name, 0.0)
+            stsv.values[fake.global_index] = values.get(fake.field_name, defaults.get(fake.field_name, 0.0))
         heat_pump.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
         return {output.field_name: stsv.values[output.global_index] for output in heat_pump.outputs}
 

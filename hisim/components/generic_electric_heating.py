@@ -11,6 +11,7 @@ from dataclasses_json import dataclass_json
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.components import dual_circuit_system
+from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
@@ -165,6 +166,12 @@ class ElectricHeating(Component):
     """Electric Heating class.
 
     This component refers to direct electric heating like radiators, electric boilers, fan heaters etc.
+
+    A hot-water charge runs the part-load ratio its controller commands (``PartLoadRatioDhw``): 1, the whole step, at
+    and below the part-load threshold, and above it the fraction of the step that ends the tank at the controller's
+    target. Below 1 the heater publishes the averaged flow at the full-load supply temperature and books the heat that
+    flow carries, which is its electricity. It reports the ratio it ran with (``PartLoadRatioRunDhw``): the commanded
+    ratio while it charges the tank, 0 otherwise.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -182,12 +189,16 @@ class ElectricHeating(Component):
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
+    #: The fraction of the step a hot-water charge runs, commanded by the controller.
+    PartLoadRatioDhw = "PartLoadRatioDhw"
 
     #: The lift at which the hot-water side runs at its maximal power, in K: it regulates its power as
     #: ``P = P_max lift / 100 K``, so a 25 K lift draws a quarter of the maximal power.
     REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN: ClassVar[float] = 100.0
 
     # Output
+    #: The fraction of the step the hot-water charge ran, reported back to the controller.
+    PartLoadRatioRunDhw = "PartLoadRatioRunDhw"
     ThermalOutputShPower = "ThermalOutputShPower"
     ThermalOutputShEnergy = "ThermalOutputShEnergy"
 
@@ -272,6 +283,12 @@ class ElectricHeating(Component):
                 LoadTypes.WARM_WATER,
                 Units.KG_PER_SEC,
                 True,
+            )
+            self.dhw_part_load_command = PartLoadCommand(
+                self,
+                input_name=ElectricHeating.PartLoadRatioDhw,
+                ratio_run_output_name=ElectricHeating.PartLoadRatioRunDhw,
+                device_description="the heater's hot-water charge",
             )
 
         # Outputs Space Heating
@@ -370,10 +387,10 @@ class ElectricHeating(Component):
     def get_default_connections_from_electric_heating_controller(
         self,
     ):
-        """Return the heater's default connections from its controller: mode, hot-water lift and set temperature.
+        """Return the heater's default connections from its controller: mode, hot-water lift, set temperature and ratio.
 
-        The set temperature is connected only when the heater prepares hot water, because only then does it declare
-        the input that reads it.
+        The set temperature and the hot-water part-load ratio are connected only when the heater prepares hot water,
+        because only then does it declare the inputs that read them.
         """
         component_class = ElectricHeatingController
         controller_classname = component_class.get_classname()
@@ -395,6 +412,13 @@ class ElectricHeating(Component):
                     ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
                     controller_classname,
                     component_class.SupplyTemperatureSetForDHWInCelsius,
+                )
+            )
+            connections.append(
+                ComponentConnection(
+                    ElectricHeating.PartLoadRatioDhw,
+                    controller_classname,
+                    component_class.PartLoadRatioDhw,
                 )
             )
         return connections
@@ -468,25 +492,31 @@ class ElectricHeating(Component):
         """Heat the rooms and the hot water as the controller's mode asks, and publish the heat and electricity.
 
         A direct electric heater turns its electricity into heat one to one, so every heat it publishes is also its
-        electricity. Under ``force_convergence`` the outputs of the iteration before stay.
+        electricity. It computes every pass from its inputs, forced ones included: under ``force_convergence`` its
+        controller holds the mode and the part-load ratio, and the heater books the heat its water carries from the
+        tank's step mean of that pass, as the tank does.
 
         Raises:
             ValueError: If the mode is unknown, or the hot water takes the whole maximal power in parallel mode.
         """
-        if force_convergence:
-            return
         heating_mode = HeatingMode(stsv.get_input_value(self.heating_mode_channel))
+        hot_water_ratio_run = 0.0
         if heating_mode in (
             HeatingMode.DOMESTIC_HOT_WATER,
             HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL,
         ):
-            hot_water = self.hot_water_circuit_of_step(stsv, timestep)
+            hot_water_ratio_run = self.dhw_part_load_command.ratio(stsv)
+            hot_water = self.hot_water_circuit_of_step(stsv, timestep).at_part_load(
+                part_load_ratio=hot_water_ratio_run, t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
+            )
         elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
             hot_water = hydronics.CircuitStep.idle(
                 t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
             )
         else:
             raise ValueError("Unknown heating mode")
+        if self.config.with_domestic_hot_water_preparation:
+            self.dhw_part_load_command.publish_ratio_run(stsv, hot_water_ratio_run)
         space_heating = self.space_heating_delivery(stsv, heating_mode, hot_water.power_w)
         self.publish_heat(stsv, space_heating, hot_water)
 
@@ -931,7 +961,15 @@ class ElectricHeatingControllerConfig(ConfigBase):
 
 
 class ElectricHeatingController(Component):
-    """Electric Heating Controller."""
+    """Electric Heating Controller.
+
+    It decides the heater's mode on the hot-water tank's start-of-step temperature and the daily outside temperature,
+    and owns how much of a step a hot-water charge runs (:class:`hisim.part_load.PartLoadControl`): the part-load ratio
+    ``PartLoadRatioDhw`` is 1 whenever the charge runs at and below the part-load threshold; above it the ratio follows
+    :class:`hisim.part_load.PartLoadRule` from the ratio the heater reports it ran with (``PartLoadRatioRunDhw``) and
+    the tank's start and end temperatures, so that the tank ends the step at the temperature at which the controller
+    ends the charge (``TargetTemperatureDhwInCelsius``, :meth:`charge_end_temperature_in_celsius`).
+    """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -940,6 +978,10 @@ class ElectricHeatingController(Component):
 
     # Relevant when used for dhw as well
     WaterTemperatureInputFromWarmWaterStorage = "WaterTemperatureInputFromWarmWaterStorage"
+    #: The hot-water tank's temperature at the end of the step, which the part-load ratio is set against.
+    WaterTemperatureAtEndOfStepFromWarmWaterStorageInCelsius = "WaterTemperatureAtEndOfStepFromWarmWaterStorageInCelsius"
+    #: The fraction of the step the heater's hot-water charge ran, as the heater reports it.
+    PartLoadRatioRunDhw = "PartLoadRatioRunDhw"
 
     # Outputs
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
@@ -947,6 +989,10 @@ class ElectricHeatingController(Component):
     #: The hot-water supply temperature the controller aims at: its 60 °C aim plus its hysteresis, 75 °C by default.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     OperatingMode = "HeatingMode"
+    #: The fraction of the step the heater's hot-water charge runs.
+    PartLoadRatioDhw = "PartLoadRatioDhw"
+    #: The tank temperature at which the controller ends a hot-water charge, its warm-water aim.
+    TargetTemperatureDhwInCelsius = "TargetTemperatureDhwInCelsius"
 
     def __init__(
         self,
@@ -986,6 +1032,15 @@ class ElectricHeatingController(Component):
             Units.CELSIUS,
             True,
         )
+        self.dhw_part_load = PartLoadControl(
+            self,
+            end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromWarmWaterStorageInCelsius,
+            ratio_run_input_name=self.PartLoadRatioRunDhw,
+            ratio_output_name=self.PartLoadRatioDhw,
+            target_output_name=self.TargetTemperatureDhwInCelsius,
+            device_description="the heater's hot-water charge",
+            controls_a_store=self.config.with_domestic_hot_water_preparation,
+        )
 
         self.delta_temperature_for_dhw_to_electric_heating_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1021,6 +1076,24 @@ class ElectricHeatingController(Component):
 
         if self.config.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
+            self.add_default_connections(self.get_default_connections_from_electric_heating())
+
+    def get_default_connections_from_electric_heating(self) -> List[ComponentConnection]:
+        """Return the default connection from the heater: the part-load ratio its hot-water charge ran with.
+
+        The controller sets the next ratio from the ratio the heater reports, so the heater's report is wired back to
+        it; only a controller with hot water reads it.
+
+        Returns:
+            The one connection of ``PartLoadRatioRunDhw``.
+        """
+        return [
+            ComponentConnection(
+                ElectricHeatingController.PartLoadRatioRunDhw,
+                ElectricHeating.get_classname(),
+                ElectricHeating.PartLoadRatioRunDhw,
+            )
+        ]
 
     def get_default_connections_from_simple_dhw_storage(
         self,
@@ -1035,6 +1108,11 @@ class ElectricHeatingController(Component):
                 # the tank's start-of-step temperature T0: the controller decides on a value the step's
                 # iteration does not move
                 SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
+            ),
+            ComponentConnection(
+                ElectricHeatingController.WaterTemperatureAtEndOfStepFromWarmWaterStorageInCelsius,
+                storage_classname,
+                SimpleDHWStorage.WaterTemperatureAtEndOfStepInCelsius,
             ),
         ]
 
@@ -1098,9 +1176,14 @@ class ElectricHeatingController(Component):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Simulate the electric heating comtroller."""
+        """Decide the heater's mode on the tank's start temperature and the outside temperature, and the hot-water ratio.
+
+        Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratio: it
+        becomes the ratio the heater reports it ran with, so the charge stops changing.
+        """
 
         if force_convergence:
+            self.dhw_part_load.publish_held(stsv)
             return
 
         # Retrieves inputs
@@ -1129,6 +1212,40 @@ class ElectricHeatingController(Component):
             self.supply_temperature_set_for_dhw_in_celsius_channel, self.hot_water_supply_temperature_set_in_celsius
         )
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
+        self.dhw_part_load.publish(
+            stsv,
+            device_runs=self.controller_mode
+            in (HeatingMode.DOMESTIC_HOT_WATER, HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL),
+            start_temperature_in_celsius=water_temperature_input_from_warm_water_storage_in_celsius or 0.0,
+            target_temperature_in_celsius=self.charge_end_temperature_in_celsius(
+                self.controller_mode,
+                warm_water_temperature_aim_in_celsius=self.warm_water_temperature_aim_in_celsius,
+                hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
+            ),
+        )
+
+    @staticmethod
+    def charge_end_temperature_in_celsius(
+        mode: HeatingMode, *, warm_water_temperature_aim_in_celsius: float, hysteresis_in_kelvin: float
+    ) -> float:
+        """Return the tank temperature at which the controller ends a hot-water charge in a mode, in °C.
+
+        The diverter valve keeps a charge that runs alone going until the tank starts a step at the warm-water aim. A
+        charge beside space heating, in the parallel mode, is kept going only while the tank is below the switch-on
+        point, the aim less the hysteresis. Example: with the 60 °C aim and the 15 K hysteresis, 60 °C alone and 45 °C
+        beside space heating.
+
+        Args:
+            mode: The controller's mode in this pass.
+            warm_water_temperature_aim_in_celsius: The controller's warm-water aim, °C.
+            hysteresis_in_kelvin: The controller's hysteresis below the aim, K.
+
+        Returns:
+            The temperature the charge ends at, °C.
+        """
+        if mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
+            return warm_water_temperature_aim_in_celsius - hysteresis_in_kelvin
+        return warm_water_temperature_aim_in_celsius
 
     def determine_operating_mode(
         self, daily_avg_outside_temperature_in_celsius: float, dhw_current_temperature_deg_c: Optional[float]

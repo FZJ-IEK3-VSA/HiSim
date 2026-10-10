@@ -15,7 +15,7 @@ import hashlib
 import importlib
 import math
 from enum import Enum, unique
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
@@ -49,6 +49,7 @@ from hisim.config import (
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
+from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import (
     ComponentType,
@@ -260,6 +261,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
     Model will switch between both states, but priority is on dhw.
     Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
+
+    A hot-water charge its hot-water controller commands runs the part-load ratio the controller sends
+    (``PartLoadRatioDHW``): 1, the whole step, at and below the part-load threshold, and above it the fraction of the
+    step that ends the tank at the controller's target. Below 1 the heat pump publishes the averaged flow at hplib's
+    capped outlet and books ``P_th = m c (T_out - T̄)`` and ``P_el = P_th / COP`` from it, at the tank's step mean as on a
+    whole step, and the ratio of the brine pump's electricity. A charge the heat pump keeps running against its
+    controller (its minimum running time) runs the whole step. It reports the ratio it ran with
+    (``PartLoadRatioRunDHW``): the commanded ratio, 1 for a charge it keeps running on its own, 0 otherwise.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -272,10 +281,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
     TemperatureInputSecondaryDHW = "TemperatureInputSecondaryDHW"  # °C
     #: The hot-water supply temperature the hot-water controller aims at: the hot-water supply never exceeds it.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
+    #: The fraction of the step a hot-water charge runs, commanded by the hot-water controller.
+    PartLoadRatioDHW = "PartLoadRatioDHW"
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
 
     # Outputs
+    #: The fraction of the step the hot-water charge ran, reported back to the hot-water controller.
+    PartLoadRatioRunDHW = "PartLoadRatioRunDHW"
     ThermalOutputPowerSH = "ThermalOutputPowerSH"  # W
     ThermalOutputPowerDHW = "ThermalOutputPowerDHW"  # W
     ThermalOutputPowerTotal = "ThermalOutputPowerTotalHeatpump"  # W
@@ -522,6 +535,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 mandatory=True,
+            )
+
+            self.dhw_part_load_command = PartLoadCommand(
+                self,
+                input_name=self.PartLoadRatioDHW,
+                ratio_run_output_name=self.PartLoadRatioRunDHW,
+                device_description="the heat pump's hot-water charge",
             )
 
         if (
@@ -959,6 +979,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetForDHWInCelsius,
             )
         )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.PartLoadRatioDHW,
+                hpc_dhw_classname,
+                MoreAdvancedHeatPumpHPLibControllerDHW.PartLoadRatioDHW,
+            )
+        )
         return connections
 
     def get_default_connections_from_weather(
@@ -1080,6 +1107,43 @@ class MoreAdvancedHeatPumpHPLib(Component):
     def i_prepare_simulation(self) -> None:
         """Prepare simulation."""
         pass
+
+    @classmethod
+    def part_loaded_hot_water(
+        cls, full_load: "HeatPumpOperation", *, part_load_ratio: float, return_temperature_in_celsius: float
+    ) -> "HeatPumpOperation":
+        """Return a hot-water step's flow and powers when the heat pump runs a fraction of the step at full load.
+
+        The circuit carries the averaged flow, the full-load flow times the ratio, at the full-load outlet temperature;
+        the thermal and electrical power follow from that flow at the step's COP (:meth:`booked_heating_powers_in_watt`),
+        and the brine pump, which runs only while the compressor does, draws the ratio of its power. A ratio of 1
+        returns the full-load step unchanged. Example: 0.4 kg/s from 52 to 57 °C at a COP of 2.5 and a 100 W brine pump,
+        at a ratio of 0.25, give 0.1 kg/s, 2090 W of heat, 836 W of electricity and 25 W for the brine pump.
+
+        Args:
+            full_load: The hot-water step at full load over the whole step.
+            part_load_ratio: The fraction of the step the heat pump runs, from 0 to 1.
+            return_temperature_in_celsius: The circuit's return temperature, the tank's step mean, in °C.
+
+        Returns:
+            The hot-water step at that ratio.
+        """
+        if part_load_ratio >= 1.0:
+            return full_load
+        mass_flow_in_kg_per_second = part_load_ratio * full_load.mass_flow_hot_water_in_kg_per_second
+        powers = cls.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=full_load.outlet_temperature_hot_water_in_celsius,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            cop=full_load.cop,
+        )
+        return replace(
+            full_load,
+            mass_flow_hot_water_in_kg_per_second=mass_flow_in_kg_per_second,
+            thermal_power_hot_water_in_watt=powers.thermal_power_in_watt,
+            electrical_power_hot_water_in_watt=powers.electrical_power_in_watt,
+            electrical_power_brine_pump_in_watt=part_load_ratio * full_load.electrical_power_brine_pump_in_watt,
+        )
 
     @staticmethod
     def booked_heating_powers_in_watt(
@@ -1335,10 +1399,55 @@ class MoreAdvancedHeatPumpHPLib(Component):
             raise ValueError("Cycling mode of the advanced HPLib unknown.")
 
         operation = self.operation_in_mode(on_off, conditions, timers)
+        if self.with_domestic_hot_water_preparation:
+            operation = self.hot_water_at_part_load(
+                stsv,
+                operation,
+                on_off=on_off,
+                on_off_dhw=on_off_dhw,
+                return_temperature_in_celsius=conditions.hot_water_return_temperature_in_celsius,
+            )
         timers_after = self.advanced_run_timers(
             on_off=on_off, timers=timers, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
         )
         self.publish_operation(stsv, on_off, conditions, operation, timers_after)
+
+    def hot_water_at_part_load(
+        self,
+        stsv: SingleTimeStepValues,
+        operation: "HeatPumpOperation",
+        *,
+        on_off: float,
+        on_off_dhw: float,
+        return_temperature_in_celsius: float,
+    ) -> "HeatPumpOperation":
+        """Run a hot-water step at the part-load ratio the hot-water controller commands, and report the ratio run.
+
+        A charge the controller commands runs the commanded ratio; a charge the heat pump keeps running against its
+        controller (its minimum running time) runs the whole step and reports 1; any other step reports 0.
+
+        Args:
+            stsv: The step's values, to read the commanded ratio from and to publish the ratio run to.
+            operation: The step at full load in the mode the heat pump runs.
+            on_off: The mode the heat pump runs, 2 for hot water.
+            on_off_dhw: The hot-water controller's signal, 2 for a charge.
+            return_temperature_in_celsius: The hot-water circuit's return temperature, the tank's step mean, in °C.
+
+        Returns:
+            The step at the ratio run.
+        """
+        ratio_run = 0.0
+        if on_off == 2 and on_off_dhw == 2:
+            ratio_run = self.dhw_part_load_command.ratio(stsv)
+            operation = self.part_loaded_hot_water(
+                operation,
+                part_load_ratio=ratio_run,
+                return_temperature_in_celsius=return_temperature_in_celsius,
+            )
+        elif on_off == 2:
+            ratio_run = 1.0
+        self.dhw_part_load_command.publish_ratio_run(stsv, ratio_run)
+        return operation
 
     def step_conditions(self, stsv: SingleTimeStepValues) -> "HeatPumpStepConditions":
         """Return the temperatures the heat pump reads in this step: source, ambient, returns and set points.
@@ -3141,18 +3250,33 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     It takes data from DHW Storage --> generic hot water storage modular
     sends signal to the heat pump for activation or deactivation.
 
+    The controller also owns how much of a step a hot-water charge runs (:class:`hisim.part_load.PartLoadControl`):
+    it switches the charge on and off on the tank's start-of-step temperature as before, and commands the part-load
+    ratio ``PartLoadRatioDHW`` with it. At and below the part-load threshold the ratio is 1 whenever the charge runs.
+    Above it the ratio follows :class:`hisim.part_load.PartLoadRule` from the ratio the heat pump reports it ran with
+    (``PartLoadRatioRunDHW``) and the tank's start and end temperatures, so that the tank ends the step where the
+    controller ends the charge (``TargetTemperatureDHWInCelsius``): its set temperature, raised by the energy manager,
+    less :attr:`SWITCH_OFF_TOLERANCE_IN_KELVIN`.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
+    #: The hot-water tank's temperature at the end of the step, which the part-load ratio is set against.
+    WaterTemperatureAtEndOfStepFromDHWStorageInCelsius = "WaterTemperatureAtEndOfStepFromDHWStorageInCelsius"
+    #: The fraction of the step the heat pump's hot-water charge ran, as the heat pump reports it.
+    PartLoadRatioRunDHW = "PartLoadRatioRunDHW"
     DHWStorageTemperatureModifier = "DHWStorageTemperatureModifier"
 
     # Outputs
     State_dhw = "StateDHW"
     #: The hot-water supply temperature the controller aims at: ``t_max`` plus the energy manager's raise.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
+    #: The fraction of the step the heat pump's hot-water charge runs.
+    PartLoadRatioDHW = "PartLoadRatioDHW"
+    #: The tank temperature at which the controller ends a hot-water charge.
+    TargetTemperatureDHWInCelsius = "TargetTemperatureDHWInCelsius"
 
     #: How far below its set temperature the tank's start temperature may stay for the charge to end, K. The heat
     #: pump's hot-water supply stops at the set temperature (``t_max`` plus the energy manager's raise), so the tank
@@ -3205,6 +3329,15 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             mandatory=False,
         )
 
+        self.dhw_part_load = PartLoadControl(
+            self,
+            end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius,
+            ratio_run_input_name=self.PartLoadRatioRunDHW,
+            ratio_output_name=self.PartLoadRatioDHW,
+            target_output_name=self.TargetTemperatureDHWInCelsius,
+            device_description="the heat pump's hot-water charge",
+        )
+
         self.state_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.State_dhw,
@@ -3229,6 +3362,24 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
         self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+        self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
+
+    def get_default_connections_from_more_advanced_heat_pump(self) -> List[ComponentConnection]:
+        """Return the default connection from the heat pump: the part-load ratio its hot-water charge ran with.
+
+        The controller sets the next ratio from the ratio the heat pump reports, so the heat pump's report is wired
+        back to it.
+
+        Returns:
+            The one connection of ``PartLoadRatioRunDHW``.
+        """
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.PartLoadRatioRunDHW,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.PartLoadRatioRunDHW,
+            )
+        ]
 
     def get_default_connections_from_simple_dhw_storage(
         self,
@@ -3247,6 +3398,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 # the tank's start-of-step temperature T0: the controller decides on a value the step's
                 # iteration does not move
                 component_class.WaterTemperatureAtStartOfStepInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius,
+                dhw_classname,
+                component_class.WaterTemperatureAtEndOfStepInCelsius,
             )
         )
         return connections
@@ -3366,7 +3524,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         """Decide whether the heat pump charges the hot-water tank, and publish the decision and the set temperature.
 
         The decision (:meth:`next_state`) is taken on the tank's start-of-step temperature, which does not change
-        while the step iterates. Under ``force_convergence`` the controller keeps its decision.
+        while the step iterates. Under ``force_convergence`` the controller keeps its decision, and its part-load ratio
+        becomes the ratio the heat pump reports it ran with.
         """
         if not force_convergence:
             storage_temperature_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
@@ -3397,6 +3556,36 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         stsv.set_output_value(
             self.supply_temperature_set_for_dhw_in_celsius_channel, self.supply_temperature_set_for_dhw_in_celsius
         )
+
+        if force_convergence:
+            self.dhw_part_load.publish_held(stsv)
+        else:
+            self.dhw_part_load.publish(
+                stsv,
+                device_runs=self.state_dhw == HeatPumpDhwState.ON,
+                start_temperature_in_celsius=self.water_temperature_input_from_dhw_storage_in_celsius,
+                target_temperature_in_celsius=self.charge_end_temperature_in_celsius(
+                    self.supply_temperature_set_for_dhw_in_celsius
+                ),
+            )
+
+    @classmethod
+    def charge_end_temperature_in_celsius(cls, supply_temperature_set_in_celsius: float) -> float:
+        """Return the tank temperature at which the controller ends a hot-water charge, in °C.
+
+        The charge ends once the tank's start temperature reaches the set temperature less
+        :attr:`SWITCH_OFF_TOLERANCE_IN_KELVIN`, because the heat pump's supply is capped at the set temperature and the
+        tank only approaches it. Example: a 60 °C set temperature ends the charge at 59.5 °C; raised by 10 K by the
+        energy manager, at 69.5 °C.
+
+        Args:
+            supply_temperature_set_in_celsius: The controller's hot-water set temperature, with the energy manager's
+                raise, °C.
+
+        Returns:
+            The temperature the charge ends at, °C.
+        """
+        return supply_temperature_set_in_celsius - cls.SWITCH_OFF_TOLERANCE_IN_KELVIN
 
     @staticmethod
     def get_cost_capex(

@@ -125,11 +125,12 @@ partners:
       ports:
         dhw: {circuit: dhw}
   HeatPumpControllerDHW:
-    # Reads the cylinder under test, the one SimpleDHWStorage of its system.
+    # Reads the cylinder under test, the one SimpleDHWStorage of its system, and the heat pump it joins with, without
+    # requiring it.
     component:
       class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
       preset: standard
-      inputs: [{$port: cylinder}]
+      inputs: [{$port: cylinder}, HeatPump]
       ports:
         cylinder: {partner: SimpleDHWStorage}
   HeatPumpControllerSH:

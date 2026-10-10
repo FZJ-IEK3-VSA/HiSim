@@ -44,7 +44,7 @@ components:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
       maximum_electric_power_w: {$param: power_in_watt}
     inputs:
-      - Controller                                          # HeatingMode, DeltaTemperatureNeededForDHW, SupplyTemperatureSetForDHW
+      - Controller                                          # HeatingMode, DeltaTemperatureNeededForDHW, SupplyTemperatureSetForDHWInCelsius
       - {$port: building}                                   # TheoreticalHeatingDemand, TheoreticalHeatingEnergyDemand
       - {$port: dhw}                                        # WaterInputTemperatureDhw, the cylinder's return leg
 
@@ -77,7 +77,7 @@ tests:
     - {output: Heater.ElectricOutputDhwEnergy, unit: WATT_HOUR, min: 0, max: 6250}
     - {output: Controller.DeltaTemperatureNeededForDHW, unit: CELSIUS, min: 0, max: 80}
       # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 38 K)
-    - {output: Controller.SupplyTemperatureSetForDHW, unit: CELSIUS, min: 60, max: 80}
+    - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 60, max: 80}
       # the controller's hot-water target, its aim plus its hysteresis (75 °C by default)
   monotone:
     - {parameter: power_in_watt, kpi: Total energy consumption, member: Heater, direction: increasing}

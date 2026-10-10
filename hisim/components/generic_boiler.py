@@ -362,7 +362,7 @@ class GenericBoiler(Component):
     OperatingMode = "OperatingMode"
     TemperatureDelta = "TemperatureDelta"
     #: The hot-water supply temperature the controller aims at: the boiler's hot-water supply never exceeds it.
-    SupplyTemperatureSetDhw = "SupplyTemperatureSetDhw"
+    SupplyTemperatureSetDhwInCelsius = "SupplyTemperatureSetDhwInCelsius"
     WaterInputTemperatureSh = "WaterInputTemperatureSh"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
 
@@ -418,9 +418,9 @@ class GenericBoiler(Component):
             lt.Units.KELVIN,
             True,
         )
-        self.supply_temperature_set_dhw_channel: ComponentInput = self.add_input(
+        self.supply_temperature_set_dhw_in_celsius_channel: ComponentInput = self.add_input(
             self.component_name,
-            GenericBoiler.SupplyTemperatureSetDhw,
+            GenericBoiler.SupplyTemperatureSetDhwInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             False,
@@ -588,9 +588,9 @@ class GenericBoiler(Component):
         )
         connections.append(
             ComponentConnection(
-                GenericBoiler.SupplyTemperatureSetDhw,
+                GenericBoiler.SupplyTemperatureSetDhwInCelsius,
                 l1_controller_classname,
-                component_class.SupplyTemperatureSetDhw,
+                component_class.SupplyTemperatureSetDhwInCelsius,
             )
         )
         return connections
@@ -792,11 +792,11 @@ class GenericBoiler(Component):
         supply_limit_in_celsius = self.maximal_flow_temperature_in_celsius
         if (
             operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value
-            and self.supply_temperature_set_dhw_channel.source_output is not None
+            and self.supply_temperature_set_dhw_in_celsius_channel.source_output is not None
         ):
             # the hot-water charge ends at the controller's target inside the step (spec §5.1, owner 2026-10-09)
             supply_limit_in_celsius = min(
-                supply_limit_in_celsius, stsv.get_input_value(self.supply_temperature_set_dhw_channel)
+                supply_limit_in_celsius, stsv.get_input_value(self.supply_temperature_set_dhw_in_celsius_channel)
             )
         if supply_temperature_in_celsius > supply_limit_in_celsius:
             # Throttled (spec §5.1, D1 as amended 2026-10-09): the supply stops at the limit, or at the return if that
@@ -834,12 +834,15 @@ class GenericBoiler(Component):
         Returns:
             The combustion efficiency, the share of the fuel power that becomes heat.
         """
-        delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
-        if delta_power <= 0 or fuel_power_in_watt <= self.minimal_thermal_power_in_watt:
+        delta_power_in_watt = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
+        if delta_power_in_watt <= 0 or fuel_power_in_watt <= self.minimal_thermal_power_in_watt:
             return float(self.min_combustion_efficiency)
-        slope = (self.max_combustion_efficiency - self.min_combustion_efficiency) / delta_power
+        efficiency_slope_per_watt = (
+            self.max_combustion_efficiency - self.min_combustion_efficiency
+        ) / delta_power_in_watt
         return float(
-            self.min_combustion_efficiency + (fuel_power_in_watt - self.minimal_thermal_power_in_watt) * slope
+            self.min_combustion_efficiency
+            + (fuel_power_in_watt - self.minimal_thermal_power_in_watt) * efficiency_slope_per_watt
         )
 
     @staticmethod
@@ -1279,7 +1282,7 @@ class GenericBoilerController(Component):
     OperatingMode = "OperatingMode"
     TemperatureDelta = "TemperatureDelta"
     #: The hot-water supply temperature the controller aims at: its 60 °C aim plus its hysteresis, 70 °C by default.
-    SupplyTemperatureSetDhw = "SupplyTemperatureSetDhw"
+    SupplyTemperatureSetDhwInCelsius = "SupplyTemperatureSetDhwInCelsius"
 
     def __init__(
         self,
@@ -1367,9 +1370,9 @@ class GenericBoilerController(Component):
             lt.Units.KELVIN,
             output_description="Temperature difference between actual and set water temperature.",
         )
-        self.supply_temperature_set_dhw_channel: ComponentOutput = self.add_output(
+        self.supply_temperature_set_dhw_in_celsius_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.SupplyTemperatureSetDhw,
+            self.SupplyTemperatureSetDhwInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=(
@@ -1551,7 +1554,7 @@ class GenericBoilerController(Component):
             stsv.set_output_value(self.operating_mode_channel, self.controller_mode.value)
             stsv.set_output_value(self.temperature_delta_channel, temperature_delta)
             stsv.set_output_value(
-                self.supply_temperature_set_dhw_channel,
+                self.supply_temperature_set_dhw_in_celsius_channel,
                 self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset,
             )
 

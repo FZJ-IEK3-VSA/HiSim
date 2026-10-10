@@ -761,15 +761,17 @@ def test_the_gas_house_runs_a_day_its_meter_reads_the_boilers_fuel_and_its_balan
         (column,) = [name for name in results.columns if name.startswith(f"{component} - {output} [")]
         return results[column]
 
-    fuel = series("heating-Boiler", "EnergyDemandSh") + series("heating-Boiler", "EnergyDemandDhw")
-    metered = series("gas-GasMeter", "GasConsumption")
-    assert fuel.sum() > 0
-    assert list(metered) == pytest.approx(list(fuel), rel=1e-12)
-    fuel_in_kwh = fuel.sum() * 1e-3
+    fuel_energy_in_watt_hour = series("heating-Boiler", "EnergyDemandSh") + series("heating-Boiler", "EnergyDemandDhw")
+    metered_energy_in_watt_hour = series("gas-GasMeter", "GasConsumption")
+    assert fuel_energy_in_watt_hour.sum() > 0
+    assert list(metered_energy_in_watt_hour) == pytest.approx(list(fuel_energy_in_watt_hour), rel=1e-12)
+    fuel_energy_in_kilowatt_hour = fuel_energy_in_watt_hour.sum() * 1e-3
     kpis = KpiFinder(json.loads((gas_house_run / "all_kpis.json").read_text(encoding="utf-8")))
-    assert kpis.value(name="Total gas consumption", source="gas-GasMeter") == pytest.approx(fuel_in_kwh, abs=0.05)
+    assert kpis.value(name="Total gas consumption", source="gas-GasMeter") == pytest.approx(
+        fuel_energy_in_kilowatt_hour, abs=0.05
+    )
     assert kpis.value(name="Total Gas consumption (energy)", source="heating-Boiler") == pytest.approx(
-        fuel_in_kwh, abs=0.1
+        fuel_energy_in_kilowatt_hour, abs=0.1
     )
     assert json.loads((gas_house_run / "balance_report.json").read_text(encoding="utf-8"))["verdict"] == "closes"
 

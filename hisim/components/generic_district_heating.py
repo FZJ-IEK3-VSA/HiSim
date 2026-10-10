@@ -197,7 +197,7 @@ class DistrictHeating(Component):
 
     # Inputs for DHW
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
-    SupplyTemperatureSetForDHW = "SupplyTemperatureSetForDHW"
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
@@ -273,9 +273,9 @@ class DistrictHeating(Component):
             True,
         )
         if self.config.with_domestic_hot_water_preparation:
-            self.supply_temperature_set_for_dhw_channel: ComponentInput = self.add_input(
+            self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
                 self.component_name,
-                DistrictHeating.SupplyTemperatureSetForDHW,
+                DistrictHeating.SupplyTemperatureSetForDHWInCelsius,
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
@@ -415,9 +415,9 @@ class DistrictHeating(Component):
         )
         connections.append(
             ComponentConnection(
-                DistrictHeating.SupplyTemperatureSetForDHW,
+                DistrictHeating.SupplyTemperatureSetForDHWInCelsius,
                 controller_classname,
-                component_class.SupplyTemperatureSetForDHW,
+                component_class.SupplyTemperatureSetForDHWInCelsius,
             )
         )
         return connections
@@ -563,7 +563,7 @@ class DistrictHeating(Component):
                 water_mass_flow_rate_in_kg_per_s,
             ) = self._calculate_dhw_outputs(
                 water_input_temperature_for_dhw_deg_c,
-                stsv.get_input_value(self.supply_temperature_set_for_dhw_channel),
+                stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel),
                 delta_temperature_needed_for_dhw_in_celsius,
             )
 
@@ -616,7 +616,7 @@ class DistrictHeating(Component):
                 water_mass_flow_rate_for_dhw_in_kg_per_s,
             ) = self._calculate_dhw_outputs(
                 water_input_temperature_for_dhw_deg_c,
-                stsv.get_input_value(self.supply_temperature_set_for_dhw_channel),
+                stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel),
                 delta_temperature_needed_for_dhw_in_celsius,
             )
 
@@ -1073,7 +1073,7 @@ class DistrictHeatingController(Component):
     DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"
     #: The supply temperature the substation's hot-water circuit aims at: the tank's start temperature plus
     #: the lift the controller asks for, zero while no hot water is asked for.
-    SupplyTemperatureSetForDHW = "SupplyTemperatureSetForDHW"
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     OperatingMode = "HeatingMode"
 
     def __init__(
@@ -1144,9 +1144,9 @@ class DistrictHeatingController(Component):
             Units.CELSIUS,
             output_description=f"here a description for {self.DeltaTemperatureNeededForSH} will follow.",
         )
-        self.supply_temperature_set_for_dhw_channel: ComponentOutput = self.add_output(
+        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.SupplyTemperatureSetForDHW,
+            self.SupplyTemperatureSetForDHWInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description=(
@@ -1322,7 +1322,7 @@ class DistrictHeatingController(Component):
             delta_temperature_for_space_heating_in_celsius,
         )
         stsv.set_output_value(
-            self.supply_temperature_set_for_dhw_channel,
+            self.supply_temperature_set_for_dhw_in_celsius_channel,
             (
                 water_temperature_input_from_warm_water_storage_in_celsius + delta_temperature_for_dhw_in_celsius
                 if water_temperature_input_from_warm_water_storage_in_celsius is not None

@@ -243,7 +243,7 @@ class SolarThermalSystem(Component):
     WaterTemperatureOutput: ClassVar[str] = "WaterTemperatureOutput"
     #: The collector's outlet temperature at the storage's step mean, whether or not the pump runs: what its
     #: controller compares.
-    CollectorTemperatureAtStepMean: ClassVar[str] = "CollectorTemperatureAtStepMean"
+    CollectorTemperatureAtStepMeanInCelsius: ClassVar[str] = "CollectorTemperatureAtStepMeanInCelsius"
     ElectricityConsumptionOutput: ClassVar[str] = "ElectricityConsumptionOutput"
     #: The irradiance on the collector plane times the collector area: the solar power the collectors receive (W).
     SolarPowerOnCollector: ClassVar[str] = "SolarPowerOnCollector"
@@ -391,9 +391,9 @@ class SolarThermalSystem(Component):
                 "collector heat there over c times twice the inlet-to-mean difference. The controller reads it."
             ),
         )
-        self.collector_temperature_at_step_mean_channel: ComponentOutput = self.add_output(
+        self.collector_temperature_at_step_mean_deg_c_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.CollectorTemperatureAtStepMean,
+            field_name=self.CollectorTemperatureAtStepMeanInCelsius,
             load_type=loadtypes.LoadTypes.TEMPERATURE,
             unit=loadtypes.Units.CELSIUS,
             output_description=(
@@ -905,7 +905,7 @@ class SolarThermalSystem(Component):
             required_mass_flow_output_kg_s,
         )
         stsv.set_output_value(
-            self.collector_temperature_at_step_mean_channel, collector_temperature_at_step_mean_deg_c
+            self.collector_temperature_at_step_mean_deg_c_output_channel, collector_temperature_at_step_mean_deg_c
         )
         stsv.set_output_value(
             self.electricity_consumption_output_channel,
@@ -997,7 +997,7 @@ class SolarThermalSystemController(Component):
     #: The storage's step mean, on which the pump switches on (spec §5.3).
     MeanWaterTemperatureInStorage: ClassVar[str] = "MeanWaterTemperatureInStorage"
     #: The storage's start-of-step temperature, on which the pump stops once the storage is full (spec §5.3).
-    StorageTemperatureAtStartOfStep: ClassVar[str] = "StorageTemperatureAtStartOfStep"
+    StorageTemperatureAtStartOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtStartOfStepInCelsius"
     CollectorTemperature: ClassVar[str] = "CollectorTemperature"
     MassFlow: ClassVar[str] = "MassFlow"
 
@@ -1039,9 +1039,9 @@ class SolarThermalSystemController(Component):
             True,
         )
 
-        self.storage_temperature_at_start_input_channel: ComponentInput = self.add_input(
+        self.storage_temperature_at_start_deg_c_input_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.StorageTemperatureAtStartOfStep,
+            self.StorageTemperatureAtStartOfStepInCelsius,
             loadtypes.LoadTypes.TEMPERATURE,
             loadtypes.Units.CELSIUS,
             True,
@@ -1096,7 +1096,7 @@ class SolarThermalSystemController(Component):
         )
         connections.append(
             ComponentConnection(
-                SolarThermalSystemController.StorageTemperatureAtStartOfStep,
+                SolarThermalSystemController.StorageTemperatureAtStartOfStepInCelsius,
                 storage_classname,
                 # the storage's start-of-step temperature: the full-tank stop stays on T0 (D4)
                 SimpleDHWStorage.WaterMeanTemperatureInStorage,
@@ -1121,7 +1121,7 @@ class SolarThermalSystemController(Component):
             ComponentConnection(
                 SolarThermalSystemController.CollectorTemperature,
                 storage_classname,
-                SolarThermalSystem.CollectorTemperatureAtStepMean,
+                SolarThermalSystem.CollectorTemperatureAtStepMeanInCelsius,
             )
         )
         connections.append(
@@ -1164,7 +1164,7 @@ class SolarThermalSystemController(Component):
             collector_temperature_deg_c = stsv.get_input_value(self.collector_temperature_input_channel)
             required_mass_flow_kg_s = stsv.get_input_value(self.required_mass_flow_input_channel)
             storage_temperature_at_start_deg_c = stsv.get_input_value(
-                self.storage_temperature_at_start_input_channel
+                self.storage_temperature_at_start_deg_c_input_channel
             )
 
             self.get_controller_state(

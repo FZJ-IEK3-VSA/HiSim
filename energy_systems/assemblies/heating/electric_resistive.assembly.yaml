@@ -36,6 +36,7 @@ components:
       parallel_space_heating_and_dhw_option: true           # space heating and hot water in the same step, as the twin
     inputs:
       - {$port: weather}                                    # DailyAverageOutsideTemperature
+      - Heater                                              # PartLoadRatioRunDhw, the ratio the hot-water charge ran
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromWarmWaterStorage
   Heater:
     class: hisim.components.generic_electric_heating.ElectricHeating
@@ -79,6 +80,12 @@ tests:
       # the lift the cylinder asks for: from a cold cylinder to the 60 °C aim plus the hysteresis (measured 0 to 38 K)
     - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 60, max: 80}
       # the controller's hot-water target, its aim plus its hysteresis (75 °C by default)
+    - {output: Controller.TargetTemperatureDhwInCelsius, unit: CELSIUS, min: 40, max: 80}
+      # where the controller ends a hot-water charge: its 60 °C aim alone, its 45 °C switch-on point beside space heating
+    - {output: Controller.PartLoadRatioDhw, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the hot-water charge runs: 1 at and below the part-load threshold
+    - {output: Heater.PartLoadRatioRunDhw, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the hot-water charge ran, reported back to the controller
   monotone:
     - {parameter: power_in_watt, kpi: Total energy consumption, member: Heater, direction: increasing}
       # a larger appliance covers at least as much of the demand: 66.4 kWh at 2 kW, 101.0 kWh at 20 kW on the test day

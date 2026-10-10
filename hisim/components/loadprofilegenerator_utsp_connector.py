@@ -347,6 +347,8 @@ class UtspLpgConnector(cp.Component):
     the specified household.
     """
 
+    KIND = cp.ComponentKind.DATA_SOURCE
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs

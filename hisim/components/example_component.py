@@ -7,7 +7,7 @@ from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import ComponentKind, Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, preset, sized_field
 from hisim import loadtypes as lt
 from hisim.economics.facts import CostRelevance
@@ -103,6 +103,8 @@ class ExampleComponent(Component):
         Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

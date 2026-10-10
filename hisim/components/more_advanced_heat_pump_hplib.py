@@ -25,6 +25,7 @@ from hplib import hplib as hpl
 
 # Import modules from HiSim
 from hisim.component import (
+    ComponentKind,
     Component,
     ComponentInput,
     ComponentOutput,
@@ -270,6 +271,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
     controller (its minimum running time) runs the whole step. It reports the ratio it ran with
     (``PartLoadRatioRunDHW``): the commanded ratio, 1 for a charge it keeps running on its own, 0 otherwise.
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 
@@ -2699,6 +2702,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
 
     """
 
+    KIND = ComponentKind.L1_CONTROLLER
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
@@ -3258,6 +3263,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     controller ends the charge (``TargetTemperatureDHWInCelsius``): its set temperature, raised by the energy manager,
     less :attr:`SWITCH_OFF_TOLERANCE_IN_KELVIN`.
     """
+
+    KIND = ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

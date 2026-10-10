@@ -90,6 +90,8 @@ class NightSetbackController(cp.Component):
     during the night.
     """
 
+    KIND = cp.ComponentKind.L2_CONTROLLER
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     BuildingTemperatureModifier: str = "BuildingTemperatureModifier"

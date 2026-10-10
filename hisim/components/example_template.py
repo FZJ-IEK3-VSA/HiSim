@@ -60,7 +60,7 @@ from typing import ClassVar, Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import ComponentKind, Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, preset, sized_field
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
@@ -203,6 +203,8 @@ class ComponentName(Component):
         OutputWithoutState: Name of the stateless output field, a power in watts capped
             at the sized ``rated_power_in_watt``.
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

@@ -75,6 +75,8 @@ class ElectricityMeter(DynamicComponent):
     It calculates the electricity production and consumption dynamically for all components.
     """
 
+    KIND = cp.ComponentKind.METER
+
     # Lifecycle cost engine declaration (cost_spec.md §9.2): energy is billed at this
     # carrier boundary; the meter hardware itself is additionally priced via get_cost_facts().
     cost_relevance = CostRelevance.METER

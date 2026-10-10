@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import Component, SingleTimeStepValues
+from hisim.component import ComponentKind, Component, SingleTimeStepValues
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -73,6 +73,8 @@ class RandomNumbers(Component):
     Key methods:
         - i_simulate: Outputs the pre-generated random value for the current timestep
     """
+
+    KIND = ComponentKind.DATA_SOURCE
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

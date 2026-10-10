@@ -110,6 +110,8 @@ class PVSystem(cp.Component):
 
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     # Lifecycle cost engine declaration (cost_spec.md §9.2).
     cost_relevance = CostRelevance.PRICED
 

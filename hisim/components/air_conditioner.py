@@ -321,6 +321,8 @@ class AirConditionerConfig(ConfigBase):
 class AirConditioner(cp.Component):
     """Simulates an air conditioner that provides heating and cooling based on a modulating signal."""
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Input and output channel names
@@ -908,6 +910,8 @@ class AirConditionerControllerState:
 
 class AirConditionerController(cp.Component):
     """Controller component for modulating air conditioner behavior based on temperature."""
+
+    KIND = cp.ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

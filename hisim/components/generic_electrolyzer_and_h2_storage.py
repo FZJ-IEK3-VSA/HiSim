@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import ComponentKind, Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
@@ -261,6 +261,8 @@ class ElectrolyzerSimulation:
 
 class AdvancedElectrolyzer(Component):
     """Advanced Electrolyzer class."""
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 
@@ -631,6 +633,8 @@ class HydrogenStorageSimulation:
 
 class HydrogenStorage(Component):
     """Hydrogen storage class."""
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 

@@ -12,6 +12,14 @@ from hisim.caching.locations import CacheLocations
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
+class PartLoadThresholdError(ValueError):
+    """A ``part_load_above_seconds`` that is not a step length: not a number, a ``bool``, or negative.
+
+    Raised by :class:`SimulationParameters` at construction, so a simulation-parameters file with such a value is
+    refused before anything runs.
+    """
+
+
 class WeatherYearError(ValueError):
     """A ``weather_year`` that is not a year HiSim can select weather data for.
 
@@ -54,6 +62,7 @@ class SimulationParameters:
         log_connections: bool = False,
         cache_directories: Optional[Sequence[str]] = None,
         weather_year: Optional[int] = None,
+        part_load_above_seconds: Optional[float] = None,
     ):
         """Initialize the SimulationParameters.
 
@@ -94,6 +103,11 @@ class SimulationParameters:
                 weather file's rows are laid onto the calendar year by position. ``self.year``
                 stays the calendar year either way. An int from 1900 to 2100; anything else raises
                 :class:`WeatherYearError`.
+            part_load_above_seconds: The step length above which a device its controller has switched on runs
+                only the fraction of the step that brings its store to the controller's target (:mod:`hisim.part_load`).
+                At and below it every device runs whole steps, as before. ``None`` (the default) means
+                :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT`, 600 s; a number at least 0 otherwise, anything else raises
+                :class:`PartLoadThresholdError`.
         """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
@@ -131,6 +145,55 @@ class SimulationParameters:
         # than a dataclass field for the same round-trip reason as the three above: unset, every
         # key, record and file this object produces stays byte-identical.
         self.weather_year: Optional[int] = self.validated_weather_year(weather_year)
+        # The part-load threshold (hisim.part_load). A plain attribute for the same round-trip
+        # reason as the four above: at its default, every key, record and file this object produces stays
+        # byte-identical.
+        self.part_load_above_seconds: float = self.validated_part_load_above_seconds(part_load_above_seconds)
+
+    #: The step length above which devices run part load, s, when the parameters name none. 600 s keeps every 60 s
+    #: run, the reference, on whole steps, and lets a 900 s run, RenoVisor's resolution, run part load.
+    PART_LOAD_ABOVE_SECONDS_DEFAULT: ClassVar[int] = 600
+
+    @classmethod
+    def validated_part_load_above_seconds(cls, part_load_above_seconds: Any) -> float:
+        """Returns the part-load threshold: :attr:`PART_LOAD_ABOVE_SECONDS_DEFAULT` for ``None``, else the value given.
+
+        Example: ``None`` gives 600; ``900`` gives 900, which keeps a 900 s run on whole steps.
+
+        Args:
+            part_load_above_seconds: The threshold handed to the constructor, s, or ``None``.
+
+        Returns:
+            The threshold in seconds.
+
+        Raises:
+            PartLoadThresholdError: If ``part_load_above_seconds`` is a ``bool``, not a number, not finite, or
+                negative.
+        """
+        if part_load_above_seconds is None:
+            return cls.PART_LOAD_ABOVE_SECONDS_DEFAULT
+        if isinstance(part_load_above_seconds, bool) or not isinstance(part_load_above_seconds, (int, float)):
+            raise PartLoadThresholdError(
+                f"part_load_above_seconds must be a number of seconds, not {part_load_above_seconds!r} "
+                f"({type(part_load_above_seconds).__name__})."
+            )
+        if not part_load_above_seconds >= 0 or part_load_above_seconds == float("inf"):
+            raise PartLoadThresholdError(
+                f"part_load_above_seconds must be a finite number >= 0, not {part_load_above_seconds}."
+            )
+        return part_load_above_seconds
+
+    def runs_part_load(self) -> bool:
+        """Whether this run's steps are longer than the part-load threshold, so generators may run part load.
+
+        Example: a 900 s run with the default 600 s threshold runs part load; a 60 s run never does, nor a 600 s
+        run, since the rule applies strictly above the threshold.
+        """
+        return self.seconds_per_timestep > self.part_load_above_seconds
+
+    def part_load_threshold_is_default(self) -> bool:
+        """Whether the part-load threshold is the default, so keys, records and files omit it."""
+        return self.part_load_above_seconds == self.PART_LOAD_ABOVE_SECONDS_DEFAULT
 
     #: The years a ``weather_year`` may name, inclusive.
     WEATHER_YEAR_RANGE: ClassVar[Tuple[int, int]] = (1900, 2100)
@@ -411,7 +474,9 @@ class SimulationParameters:
                 self.timesteps,
                 self.country,
             )
-        ) + ("" if self.weather_year is None else f"###weather={self.weather_year}")
+        ) + ("" if self.weather_year is None else f"###weather={self.weather_year}") + (
+            "" if self.part_load_threshold_is_default() else f"###part_load_above={self.part_load_above_seconds}"
+        )
 
     def get_unique_key_as_list(self) -> List[str]:
         """Gets unique key from a simulation parameter class as list."""
@@ -422,7 +487,11 @@ class SimulationParameters:
             f"Seconds per timestep: {self.seconds_per_timestep}",
             f"Total number of timesteps: {self.timesteps}",
             f"Country: {self.country}",
-        ] + ([] if self.weather_year is None else [f"Weather year: {self.weather_year}"])
+        ] + ([] if self.weather_year is None else [f"Weather year: {self.weather_year}"]) + (
+            []
+            if self.part_load_threshold_is_default()
+            else [f"Part load above: {self.part_load_above_seconds} s per timestep"]
+        )
 
     def cache_locations(self) -> "CacheLocations":
         """The ordered cache directories this calculation reads, and the first writable one it writes.

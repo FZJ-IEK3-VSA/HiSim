@@ -59,7 +59,7 @@ from hisim.energy_system.source_lines import LineIndex
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.simulationparameters import SimulationParameters, WeatherYearError
+from hisim.simulationparameters import PartLoadThresholdError, SimulationParameters, WeatherYearError
 
 
 class SimulationParametersReader:
@@ -137,7 +137,8 @@ class SimulationParametersReader:
 
         Raises:
             EnergySystemFormatError: ``EF-07`` if a date or an option cannot be interpreted, if
-                a key is not a parameter at all, or if ``weather_year`` is not a year in range.
+                a key is not a parameter at all, if ``weather_year`` is not a year in range, or if
+                ``part_load_above_seconds`` is not a step length.
         """
         prepared = dict(values)
         for key in cls.DATE_KEYS:
@@ -146,7 +147,7 @@ class SimulationParametersReader:
         prepared[cls.OPTIONS_KEY] = cls._options(prepared.get(cls.OPTIONS_KEY) or [], location)
         try:
             return SimulationParameters(**prepared)
-        except (TypeError, WeatherYearError) as error:
+        except (TypeError, WeatherYearError, PartLoadThresholdError) as error:
             raise EnergySystemFormatError(
                 EnergySystemErrorId.MALFORMED_BLOCK,
                 location,

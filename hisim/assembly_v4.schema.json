@@ -659,6 +659,7 @@
           "enum": [
             "ANY",
             "PERCENT",
+            "FRACTION",
             "WATT",
             "KILOWATT",
             "KWH_PER_TIMESTEP",
@@ -890,6 +891,7 @@
           "enum": [
             "ANY",
             "PERCENT",
+            "FRACTION",
             "WATT",
             "KILOWATT",
             "KWH_PER_TIMESTEP",

@@ -1,4 +1,4 @@
-"""Rigs for the part-load tests: simulation parameters, components on fake inputs, and a tank iterated with a regulator.
+"""Rigs for the part-load tests: simulation parameters, components on fake inputs, and a tank iterated with the rule.
 
 A rig points every input a test drives at a fake output and steps the component on its own, the way
 ``tests/test_dhw_storage_node.py`` steps the hot-water tank, so a test sets exactly the values the component reads.
@@ -11,7 +11,7 @@ from hisim import loadtypes as lt
 from hisim.components import generic_boiler, simple_water_storage
 from hisim.components.dual_circuit_system import HeatingMode
 from hisim.config import ComponentID, SizingContext
-from hisim.part_load import PartLoadRatioRegulator
+from hisim.part_load import PartLoadRule
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -103,7 +103,7 @@ class TankRig:
         return tank, stsv, fakes
 
     @classmethod
-    def regulated_step(
+    def ruled_step(
         cls,
         *,
         seconds_per_timestep: int,
@@ -113,43 +113,47 @@ class TankRig:
         full_load_mass_flow_in_kg_per_second: float,
         supply_temperature_in_celsius: float,
         passes: int,
-    ) -> Tuple[float, float]:
-        """Iterate one tank step with a regulator commanding a heater's fraction, as the simulator would.
+    ) -> Tuple[List[float], float]:
+        """Iterate one tank step with :class:`PartLoadRule` commanding a heater's fraction, as the simulator would.
 
-        Each pass restores the tank to the step start, lets the regulator read the end temperature of the previous
-        pass and publish a ratio, and steps the tank with the averaged flow at that ratio: controller, device and
-        tank in that order.
+        Each pass restores the tank to the step start, applies the rule to the ratio the heater ran in the previous
+        pass and the tank's end temperature for it, and steps the tank with the averaged flow at the new ratio:
+        controller, device and tank in that order. The first pass starts from the whole step, as a heater that ran
+        nothing before does under the rule. Nothing but the ratio run and the end temperature carries from one pass to
+        the next, as in the simulator.
 
         Args:
-            seconds_per_timestep: The step length, s.
-            start_temperature_in_celsius: The tank's start temperature, °C.
-            target_temperature_in_celsius: The regulator's target, °C.
-            draw_in_liter_per_step: The household's warm-water demand over the step, l.
-            full_load_mass_flow_in_kg_per_second: The heater's flow at full load, kg/s.
-            supply_temperature_in_celsius: The heater's supply temperature, °C.
+            seconds_per_timestep: The step length, in s.
+            start_temperature_in_celsius: The tank's start temperature, in °C.
+            target_temperature_in_celsius: The controller's target, in °C.
+            draw_in_liter_per_step: The household's warm-water demand over the step, in l.
+            full_load_mass_flow_in_kg_per_second: The heater's flow at full load, in kg/s.
+            supply_temperature_in_celsius: The heater's supply temperature, in °C.
             passes: How many passes to iterate.
 
         Returns:
-            The last published ratio and the tank's end temperature for it, °C.
+            The ratio of every pass and the tank's end temperature for the last one, in °C.
         """
         tank, stsv, fakes = cls.build(seconds_per_timestep, start_temperature_in_celsius)
-        regulator = PartLoadRatioRegulator()
         tank.i_save_state()
         stsv.set_output_value(fakes[0], draw_in_liter_per_step)
         stsv.set_output_value(fakes[1], supply_temperature_in_celsius)
         end_temperature_in_celsius = start_temperature_in_celsius
-        ratio = 1.0
+        ratio_run = 0.0
+        ratios: List[float] = []
         for _ in range(passes):
             tank.i_restore_state()
-            ratio = regulator.next_ratio(
+            ratio_run = PartLoadRule.next_part_load_ratio(
+                ratio_run=ratio_run,
                 start_temperature_in_celsius=start_temperature_in_celsius,
                 end_temperature_in_celsius=end_temperature_in_celsius,
                 target_temperature_in_celsius=target_temperature_in_celsius,
             )
-            stsv.set_output_value(fakes[2], ratio * full_load_mass_flow_in_kg_per_second)
+            ratios.append(ratio_run)
+            stsv.set_output_value(fakes[2], ratio_run * full_load_mass_flow_in_kg_per_second)
             tank.i_simulate(0, stsv, False)
             end_temperature_in_celsius = Rig.output(stsv, tank.water_temperature_at_end_of_step_in_celsius_channel)
-        return ratio, end_temperature_in_celsius
+        return ratios, end_temperature_in_celsius
 
 
 class BoilerRig:
@@ -202,8 +206,8 @@ class BoilerRig:
             mode: The operating mode the controller commands.
 
         Returns:
-            The flow (kg/s), supply (°C), heat (W), fuel (W) and fuel energy (Wh) of the hot-water circuit, and the
-            space-heating heat (W).
+            The flow (kg/s), supply (°C), heat (W), fuel (W) and fuel energy (Wh) of the hot-water circuit, the
+            ratio the boiler reports it ran with, and the space-heating heat (W).
         """
         boiler, stsv, fakes = cls.build(seconds_per_timestep)
         for name, value in (
@@ -223,7 +227,8 @@ class BoilerRig:
             "heat_w": Rig.output(stsv, boiler.thermal_output_power_dhw_channel),
             "fuel_w": Rig.output(stsv, boiler.total_fuel_input_power_channel),
             "fuel_wh": Rig.output(stsv, boiler.energy_demand_dhw_channel),
-            "sh_heat_w": Rig.output(stsv, boiler.thermal_output_power_sh_channel),
+            "ratio_run": Rig.output(stsv, boiler.dhw_part_load_command.ratio_run_channel),
+            "space_heating_heat_w": Rig.output(stsv, boiler.thermal_output_power_sh_channel),
         }
 
 
@@ -260,6 +265,7 @@ class BoilerControllerRig:
                 lt.LoadTypes.TEMPERATURE,
                 lt.Units.CELSIUS,
             ),
+            "ratio_run": (controller.dhw_part_load.ratio_run_channel, lt.LoadTypes.ANY, lt.Units.FRACTION),
             "flow_set_c": (
                 controller.heating_flow_temperature_from_heat_distribution_system_channel,
                 lt.LoadTypes.TEMPERATURE,
@@ -275,19 +281,23 @@ class BoilerControllerRig:
         return controller, stsv, dict(zip(names, fakes))
 
     @staticmethod
-    def set_inputs(stsv: Any, fakes: Dict[str, Any], *, tank_start_c: float, tank_end_c: float) -> None:
-        """Write a cold winter day with a warm buffer and the given tank temperatures into the fakes.
+    def set_inputs(
+        stsv: Any, fakes: Dict[str, Any], *, tank_start_c: float, tank_end_c: float, ratio_run: float = 1.0
+    ) -> None:
+        """Write a cold winter day with a warm buffer, the given tank temperatures and the boiler's ratio run.
 
         Args:
             stsv: The controller's step values.
             fakes: The fakes by name.
             tank_start_c: The tank's start-of-step temperature, °C.
             tank_end_c: The tank's end-of-step temperature, °C.
+            ratio_run: The part-load ratio the boiler reports it ran with, from 0 to 1.
         """
         for name, value in (
             ("buffer_c", 60.0),
             ("tank_start_c", tank_start_c),
             ("tank_end_c", tank_end_c),
+            ("ratio_run", ratio_run),
             ("flow_set_c", 40.0),
             ("outside_c", 0.0),
         ):

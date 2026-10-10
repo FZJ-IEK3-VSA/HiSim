@@ -60,6 +60,7 @@ components:
     inputs:
       - {$port: weather}                                    # DailyAverageOutsideTemperature
       - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - Boiler                                              # PartLoadRatioRunDhw, the ratio the hot-water charge ran
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
       - Buffer                                              # WaterTemperatureInputFromWaterStorage
   Buffer:
@@ -110,6 +111,8 @@ tests:
       # the tank temperature at which the controller ends a hot-water charge, its 60 °C warm-water aim
     - {output: Controller.PartLoadRatioDhw, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the hot-water charge runs: 1 at and below the part-load threshold
+    - {output: Boiler.PartLoadRatioRunDhw, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the hot-water charge ran, reported back to the controller
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}

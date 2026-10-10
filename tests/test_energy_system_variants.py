@@ -357,7 +357,7 @@ def test_direct_metering_leaves_no_energy_management_behind() -> None:
     assert [item.source for entry in live.values() for item in entry.inputs if item.source == "ems"] == []
     assert {item.consumer for item in record.dropped_input_items if item.source == "ems"} == {
         "building",
-        "hds_controller",
+        "heating_curve",
         "heat_pump_controller_sh",
         "heat_pump_controller_dhw",
     }

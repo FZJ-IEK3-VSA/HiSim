@@ -58,6 +58,11 @@ class ParameterNormalisation:
     #: one normalises, names and renders exactly as it did before the key existed.
     WEATHER_YEAR_KEY: ClassVar[str] = "weather_year"
 
+    #: Key holding the part-load threshold (``SimulationParameters.part_load_above_seconds``). Present in a normalised
+    #: mapping, and written to a file, only when the parameters set one other than the default, so that every
+    #: parameter set at the default normalises, names and renders exactly as it did before the key existed.
+    PART_LOAD_KEY: ClassVar[str] = "part_load_above_seconds"
+
     #: Fields deliberately left out of the comparison, each because it describes the machine or
     #: the invocation rather than the simulation. ``cache_dir_path`` is the one that matters:
     #: eleven setups point it at a cluster directory behind an existence probe, so keeping it
@@ -90,6 +95,8 @@ class ParameterNormalisation:
         reduced[cls.YEAR_KEY] = int(parameters.year)
         if parameters.weather_year is not None:
             reduced[cls.WEATHER_YEAR_KEY] = int(parameters.weather_year)
+        if not parameters.part_load_threshold_is_default():
+            reduced[cls.PART_LOAD_KEY] = parameters.part_load_above_seconds
         return reduced
 
     @classmethod
@@ -216,6 +223,9 @@ class ParameterFileName:
     #: Prefix of the part a set weather year appends to the purpose, as in ``2021_hourly_kpis_weather2019``.
     WEATHER_PREFIX: ClassVar[str] = "weather"
 
+    #: Prefix of the part a part-load threshold other than the default appends, as in ``2021_hourly_kpis_partload900``.
+    PART_LOAD_PREFIX: ClassVar[str] = "partload"
+
     @classmethod
     def stem(cls, normalised: Mapping[str, Any]) -> str:
         """Builds the file stem describing one normalised parameter set.
@@ -225,7 +235,8 @@ class ParameterFileName:
 
         Returns:
             A stem such as ``one_week_minutely_kpis``, without the format suffix, and
-            ``one_week_minutely_kpis_weather2019`` when the set names a weather year.
+            ``one_week_minutely_kpis_weather2019`` when the set names a weather year, and ``..._partload900``
+            when it sets a part-load threshold other than the default.
         """
         parts = [
             cls.horizon(normalised["start_date"], normalised["end_date"]),
@@ -235,6 +246,9 @@ class ParameterFileName:
         weather_year = normalised.get(ParameterNormalisation.WEATHER_YEAR_KEY)
         if weather_year is not None:
             parts.append(f"{cls.WEATHER_PREFIX}{weather_year}")
+        part_load_above_seconds = normalised.get(ParameterNormalisation.PART_LOAD_KEY)
+        if part_load_above_seconds is not None:
+            parts.append(f"{cls.PART_LOAD_PREFIX}{part_load_above_seconds:g}")
         return cls.SEPARATOR.join(parts)
 
     @classmethod
@@ -382,6 +396,9 @@ class ParameterFileWriter:
         weather_year = normalised.get(ParameterNormalisation.WEATHER_YEAR_KEY)
         if weather_year is not None:
             lines.append(f"{ParameterNormalisation.WEATHER_YEAR_KEY}: {cls.scalar(weather_year)}")
+        part_load_above_seconds = normalised.get(ParameterNormalisation.PART_LOAD_KEY)
+        if part_load_above_seconds is not None:
+            lines.append(f"{ParameterNormalisation.PART_LOAD_KEY}: {cls.scalar(part_load_above_seconds)}")
         lines.append(f"{ParameterNormalisation.OPTIONS_KEY}:{'' if options else ' []'}")
         lines += [f"  - {name}" for name in options]
         return header + "\n".join(lines) + "\n"

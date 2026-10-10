@@ -106,6 +106,10 @@ tests:
       # set minus actual: a cold buffer below a 60 °C cylinder target is at most about 60 K (measured -3.3 to 24 K)
     - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 60, max: 80}
       # the controller's hot-water target, its aim plus its hysteresis (70 °C by default)
+    - {output: Controller.TargetTemperatureDhwInCelsius, unit: CELSIUS, min: 40, max: 80}
+      # the tank temperature at which the controller ends a hot-water charge, its 60 °C warm-water aim
+    - {output: Controller.PartLoadRatioDhw, unit: FRACTION, min: 0, max: 1}
+      # the fraction of the step the hot-water charge runs: 1 at and below the part-load threshold
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}

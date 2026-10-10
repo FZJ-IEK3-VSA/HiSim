@@ -36,12 +36,18 @@ components:
       - occupancy
       - hds
 
+  heating_curve:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived                # the supply set point and the heating season, by the weather
+    inputs:
+      - weather
+
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - weather
       - building
+      - heating_curve
 
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
@@ -66,8 +72,7 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating                      # reads the boiler's power band — one boiler, nothing to write
     inputs:
-      - weather
-      - hds_controller
+      - heating_curve
       - input: WaterTemperatureInputFromWaterStorage
         from: hds.WaterTemperatureOutput
 

@@ -78,24 +78,31 @@ components:
     sizing_sources:
       heating_reference_temperature_in_celsius: weather.heating_reference_temperature_in_celsius # unique provider, written for re-execution
       weather_identity: weather.weather_identity # unique provider, written for re-execution
+  heating_curve:
+    class: hisim.components.heating_curve.HeatingCurveController
+    config: # built from preset: building_derived
+      set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
+      heat_distribution_system_type: FLOORHEATING # sized from hds_controller.heat_distribution_system_type=FLOORHEATING
+      heating_reference_temperature_in_celsius: -7.0 # sized from weather.heating_reference_temperature_in_celsius=-7.0
+      set_heating_temperature_for_building_in_celsius: 20.0 # sized from building.set_heating_temperature_in_celsius=20.0
+    inputs:
+      - weather
+    sizing_sources:
+      heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
+      conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
+      heat_distribution_system_type: hds_controller.heat_distribution_system_type # unique provider, written for re-execution
+      heating_reference_temperature_in_celsius: weather.heating_reference_temperature_in_celsius # unique provider, written for re-execution
+      set_heating_temperature_in_celsius: building.set_heating_temperature_in_celsius # unique provider, written for re-execution
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     config: # built from preset: building_derived
       heating_system: FLOORHEATING
-      set_heating_threshold_outside_temperature_in_celsius: 18.0 # sized from building.heating_load_in_watt=7780.752200000001, building.conditioned_floor_area_in_m2=121.2
-      heating_reference_temperature_in_celsius: -7.0 # sized from weather.heating_reference_temperature_in_celsius=-7.0
-      set_heating_temperature_for_building_in_celsius: 20.0 # sized from building.set_heating_temperature_in_celsius=20.0
-      set_cooling_temperature_for_building_in_celsius: 25.0 # sized from building.set_cooling_temperature_in_celsius=25.0
       heating_load_of_building_in_watt: 7780.75 # sized from building.heating_load_in_watt=7780.752200000001
     inputs:
-      - weather
       - building
+      - heating_curve
     sizing_sources:
       heating_load_in_watt: building.heating_load_in_watt # unique provider, written for re-execution
-      conditioned_floor_area_in_m2: building.conditioned_floor_area_in_m2 # unique provider, written for re-execution
-      heating_reference_temperature_in_celsius: weather.heating_reference_temperature_in_celsius # unique provider, written for re-execution
-      set_heating_temperature_in_celsius: building.set_heating_temperature_in_celsius # unique provider, written for re-execution
-      set_cooling_temperature_in_celsius: building.set_cooling_temperature_in_celsius # unique provider, written for re-execution
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
     config: # built from preset: building_derived
@@ -145,7 +152,6 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     config: # built from preset: modulating
       is_modulating: true
-      set_heating_threshold_outside_temperature_in_celsius: 16.0
       minimal_thermal_power_in_watt: 0.0 # sized from boiler.minimal_thermal_power_in_watt=0.0
       maximal_thermal_power_in_watt: 8558.827420000001 # sized from boiler.maximal_thermal_power_in_watt=8558.827420000001
       set_temperature_difference_for_full_power: 5.0
@@ -155,8 +161,7 @@ components:
       secondary_mode: false
       hysteresis_water_temperature_offset: 10.0
     inputs:
-      - weather
-      - hds_controller
+      - heating_curve
       - input: WaterTemperatureInputFromWaterStorage
         from: hds.WaterTemperatureOutput
     sizing_sources:

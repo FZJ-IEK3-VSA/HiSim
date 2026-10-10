@@ -163,7 +163,7 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
             "ports:", "bind: {space_heating: two}, ports:"
         ),
     )
-    house = site(Real.WEATHER, Real.OCCUPANCY, Real.HEAT_DISTRIBUTION_CONTROLLER, *distributions)
+    house = site(Real.WEATHER, Real.OCCUPANCY, Real.HEAT_DISTRIBUTION_CONTROLLER, Real.HEATING_CURVE, *distributions)
     boilers = ("one: {assembly: heating/gas_condensing_boiler}", "two: {assembly: heating/gas_condensing_boiler}")
     message = refusal(house + imports(Gas.CONNECTION, Gas.CYLINDER, *boilers))
     assert message.startswith("EF-7B at import 'cylinder'") and "one.dhw, two.dhw" in message

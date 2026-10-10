@@ -131,17 +131,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     my_hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
         "HeatDistributionController"
     ).resolve(
-        SizingContext(
-            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-            heating_reference_temperature_in_celsius=-7.0,
-            set_heating_temperature_in_celsius=(
-                my_building_information.set_heating_temperature_for_building_in_celsius
-            ),
-            set_cooling_temperature_in_celsius=(
-                my_building_information.set_cooling_temperature_for_building_in_celsius
-            ),
-        )
+        SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
     )
     my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
         config=my_hds_controller_config
@@ -306,55 +296,47 @@ def test_get_cost_capex_raises_on_unknown_heating_system() -> None:
         )
 
 
-@pytest.mark.base
-def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None:
-    """The controller's heating threshold follows the building's specific heating load.
+class TestHeatDistributionValve:
 
-    The number the default building produces is 18 °C, not the 16 °C the deleted
-    ``get_default_heat_distribution_controller_config`` hard-coded: the standard building
-    asks for 7780.75 W over 121.2 m², i.e. 64.2 W/m², which lands in the middle band. The
-    ratio itself is nowhere on the controller — the law reads the building's heating load
-    and its floor area from the context and divides them there. The three bands of
-    :meth:`HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency`
-    are pinned through the context as well, so the law is tested where the setups meet it
-    rather than only as a bare function.
-    """
-    # The design temperature is the weather's, not the building's (D-21): the building reads it,
-    # so it is stated once here and then carried into the controller's context beside the facts
-    # ``for_building`` derives, which no longer include it.
-    default_building = building.BuildingConfig.preset_german_single_family_home("Building")
-    default_building.heating_reference_temperature_in_celsius = -7.0
-    resolved = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
-        "HeatDistributionController"
-    ).resolve(
-        SizingContext.for_building(default_building).with_facts(
-            heating_reference_temperature_in_celsius=-7.0
-        )
+    """The heat-distribution controller's valve: its transitions on the building's demand and its published state."""
+
+    Mode = heat_distribution_system.HeatDistributionValveMode
+
+    #: The valve's transition table: the mode before the pass, the building's theoretical demand in W, the next mode.
+    TRANSITIONS = [
+        (Mode.OFF, 300.0, Mode.HEATING),
+        (Mode.OFF, -300.0, Mode.COOLING),
+        (Mode.OFF, 0.0, Mode.OFF),
+        (Mode.HEATING, 300.0, Mode.HEATING),
+        (Mode.HEATING, -300.0, Mode.HEATING),
+        (Mode.HEATING, 0.0, Mode.OFF),
+        (Mode.COOLING, -300.0, Mode.COOLING),
+        (Mode.COOLING, 300.0, Mode.COOLING),
+        (Mode.COOLING, 0.0, Mode.OFF),
+    ]
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("mode", "demand_in_watt", "expected"), TRANSITIONS)
+    def test_every_transition_of_the_valve(
+        self, mode: heat_distribution_system.HeatDistributionValveMode, demand_in_watt: float, expected: heat_distribution_system.HeatDistributionValveMode
+    ) -> None:
+        """Catches a valve that opens without a demand, or one that closes while the building still needs heat."""
+        assert heat_distribution_system.HeatDistributionController.next_valve_mode(mode, demand_in_watt) is expected
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("mode", "is_heating_season", "expected_state"),
+        [
+            (Mode.HEATING, True, 1),
+            (Mode.HEATING, False, 0),
+            (Mode.COOLING, True, -1),
+            (Mode.COOLING, False, -1),
+            (Mode.OFF, True, 0),
+            (Mode.OFF, False, 0),
+        ],
     )
-
-    assert resolved.set_heating_threshold_outside_temperature_in_celsius == 18.0
-
-    # The three bands, through the context: a well insulated building keeps heating off
-    # until 16 °C, the middle band until 18 °C, a leaky one already needs it at 20 °C.
-    floor_area_in_m2 = 100.0
-    bands_in_watt_per_m2_to_threshold = {
-        40.0: 16.0,
-        50.0: 16.0,  # the band edge belongs to the efficient side
-        64.2: 18.0,
-        80.0: 18.0,  # and so does this one
-        100.0: 20.0,
-    }
-    for specific_load_in_watt_per_m2, expected_threshold_in_celsius in bands_in_watt_per_m2_to_threshold.items():
-        context = SizingContext(
-            heating_load_in_watt=specific_load_in_watt_per_m2 * floor_area_in_m2,
-            conditioned_floor_area_in_m2=floor_area_in_m2,
-            heating_reference_temperature_in_celsius=-7.0,
-            set_heating_temperature_in_celsius=20.0,
-            set_cooling_temperature_in_celsius=25.0,
-        )
-        banded = heat_distribution_system.HeatDistributionControllerConfig.preset_building_derived(
-            "HeatDistributionController"
-        ).resolve(context)
-        assert banded.set_heating_threshold_outside_temperature_in_celsius == expected_threshold_in_celsius, (
-            f"{specific_load_in_watt_per_m2} W/m² must give {expected_threshold_in_celsius} °C"
-        )
+    def test_the_valve_heats_only_in_the_heating_season(
+        self, mode: heat_distribution_system.HeatDistributionValveMode, is_heating_season: bool, expected_state: int
+    ) -> None:
+        """Catches a valve that passes heat outside the heating season the heating curve publishes."""
+        assert heat_distribution_system.HeatDistributionController.valve_state(mode, is_heating_season=is_heating_season) == expected_state

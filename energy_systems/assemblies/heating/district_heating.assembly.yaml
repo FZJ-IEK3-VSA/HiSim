@@ -2,11 +2,11 @@
 # (no buffer: the connection is the supply end of the space_heating circuit) and charging a DHW cylinder through its
 # `dhw` circuit (D29: this assembly serves DHW). One assembly per generator (owner, 2026-10-07). Control is hardcoded
 # here (D21): the Controller opens the valve on the distribution's water temperature against the flow temperature the
-# site's HeatDistributionController asks for, and on the cylinder temperature; it reads no energy manager, so the
+# site's HeatingCurveController sets, and on the cylinder temperature; it reads no energy manager, so the
 # assembly offers no `ems_modifier`.
 #
 # The members expand as one block in the order their lines stand here, the twin's DistrictHeatingController,
-# DistrictHeating. The sizing facts the members read from the site (heating load, heating threshold) bind their one
+# DistrictHeating. The sizing facts the members read from the site (heating load) bind their one
 # provider by the engine's bare-fact rule (§6). The heat taken from the network goes to the one district-heat provider of
 # the file (§5.1), whose meter observes both heat outputs. The site's HeatDistributionSystem states its position without
 # a storage, NO_STORAGE_MASS_FLOW_FIX, as a site config line until hydronic stage D derives it from the circuit (D25).
@@ -32,8 +32,7 @@ components:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
       parallel_space_heating_and_dhw_option: true           # space heating and hot water in the same step, as the twin
     inputs:
-      - {$port: weather}                                    # DailyAverageOutsideTemperature
-      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - {$port: distribution_temperature}                   # WaterTemperatureInputFromHeatDistributionSystem
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromWarmWaterStorage
   Generator:
@@ -49,8 +48,7 @@ components:
 
 interface:
   needs:
-    weather:          {into: [Controller], partner: Weather}
-    flow_temperature: {into: [Controller], partner: HeatDistributionController}   # a set-point need (G1)
+    heating_curve:    {into: [Controller], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     distribution_temperature: {into: [Controller], partner: HeatDistribution}
                       # the controller's space-heating measured variable, the distribution's water temperature: a need,
                       # not a circuit end (the distribution reads nothing from the controller)

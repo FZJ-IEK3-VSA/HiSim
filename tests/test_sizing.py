@@ -324,7 +324,6 @@ def test_size_terms_and_sizing_context_fields_are_one_registry():
 #: for. Listed here as literals because a fact name is wire format: a ``sizing_sources`` line in a
 #: checked-in energy system spells it out, so a rename is a breaking change and has to fail here.
 BATCH_ONE_FACTS: Dict[str, str] = {
-    "set_heating_threshold_outside_temperature_in_celsius": "the emitter circuit's heating threshold",
     "roof_area_in_m2": "the building's roof, which sizes a PV array",
     "pv_peak_power_in_watt": "the array's peak power, which sizes a battery",
     "energy_carrier": "the fuel the heat generator burns",

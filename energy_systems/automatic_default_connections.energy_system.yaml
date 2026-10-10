@@ -48,7 +48,7 @@ components:
     preset: standard
     inputs:
       - Weather
-      - HeatDistributionController
+      - HeatingCurveController
       - SimpleHotWaterStorage
   HeatDistributionSystem:
     class: hisim.components.heat_distribution_system.HeatDistribution
@@ -61,8 +61,13 @@ components:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     preset: building_derived
     inputs:
-      - Weather
+      - HeatingCurveController
       - Building
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: building_derived
+    inputs:
+      - Weather
   SimpleHotWaterStorage:
     class: hisim.components.simple_water_storage.SimpleHotWaterStorage
     preset: buffer

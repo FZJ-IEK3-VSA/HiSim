@@ -191,8 +191,10 @@
             "hisim.components.generic_pv_system.PVSystem",
             "hisim.components.heat_distribution_system.HeatDistribution",
             "hisim.components.heat_distribution_system.HeatDistributionController",
+            "hisim.components.heating_curve.HeatingCurveController",
             "hisim.components.heating_meter.HeatingMeter",
             "hisim.components.idealized_electric_heater.IdealizedElectricHeater",
+            "hisim.components.idealized_electric_heater.IdealizedElectricHeaterController",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
             "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
@@ -2763,16 +2765,6 @@
                   "is_modulating": {
                     "type": "boolean"
                   },
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
                   "minimal_thermal_power_in_watt": {
                     "anyOf": [
                       {
@@ -3307,16 +3299,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
                   "with_domestic_hot_water_preparation": {
                     "type": "boolean"
                   },
@@ -3331,9 +3313,7 @@
               "sizing_sources": {
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
-                  "enum": [
-                    "set_heating_threshold_outside_temperature_in_celsius"
-                  ]
+                  "enum": []
                 }
               }
             }
@@ -4295,10 +4275,73 @@
                       "LOW_TEMPERATURE_RADIATOR"
                     ]
                   },
+                  "heating_load_of_building_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "heating_load_in_watt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.heating_curve.HeatingCurveController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "building_derived"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
                   "set_heating_threshold_outside_temperature_in_celsius": {
                     "anyOf": [
                       {
                         "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "heat_distribution_system_type": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "RADIATOR",
+                          "FLOORHEATING",
+                          "LOW_TEMPERATURE_RADIATOR"
+                        ]
                       },
                       {
                         "const": "AUTO"
@@ -4324,26 +4367,6 @@
                         "const": "AUTO"
                       }
                     ]
-                  },
-                  "set_cooling_temperature_for_building_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
-                  "heating_load_of_building_in_watt": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
                   }
                 }
               },
@@ -4352,9 +4375,9 @@
                 "propertyNames": {
                   "enum": [
                     "conditioned_floor_area_in_m2",
+                    "heat_distribution_system_type",
                     "heating_load_in_watt",
                     "heating_reference_temperature_in_celsius",
-                    "set_cooling_temperature_in_celsius",
                     "set_heating_temperature_in_celsius"
                   ]
                 }
@@ -4431,6 +4454,43 @@
                   "set_cooling_temperature_for_building_in_celsius": {
                     "type": "number"
                   }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.idealized_electric_heater.IdealizedElectricHeaterController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {}
                 }
               },
               "sizing_sources": {
@@ -4873,19 +4933,6 @@
                   "mode": {
                     "type": "integer"
                   },
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
                   "set_cooling_threshold_outside_temperature_in_celsius": {
                     "anyOf": [
                       {
@@ -4933,8 +4980,7 @@
                 "propertyNames": {
                   "enum": [
                     "heat_distribution_system_type",
-                    "set_heating_temperature_in_celsius",
-                    "set_heating_threshold_outside_temperature_in_celsius"
+                    "set_heating_temperature_in_celsius"
                   ]
                 }
               }

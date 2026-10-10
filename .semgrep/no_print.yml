@@ -1,0 +1,37 @@
+# No print() in hisim/ (bead hisim-o6a.11; system_docs/coding_style.md, "Types, formatting and checks").
+#
+# All output of the package goes through hisim.log, the one module that may call print(). A finding is
+# fixed by calling hisim.log (log.information, log.warning, log.error, ...) instead.
+#
+# ALLOWLIST below: hisim/log.py itself, plus the modules that printed when the rule was introduced
+# (2026-10-10). Those entries are temporary: the cleanup bead moves each one onto hisim.log and removes
+# its line here. Never add a module to the temporary part.
+#
+# Run:  semgrep --config .semgrep/ --error --metrics=off hisim/
+rules:
+  - id: hisim-no-print
+    languages: [python]
+    severity: ERROR
+    message: >-
+      print() outside hisim/log.py. All output of the hisim package goes through hisim.log
+      (log.information, log.warning, log.error, ...); see system_docs/coding_style.md.
+    pattern: print(...)
+    paths:
+      include:
+        - /hisim/
+      exclude:
+        # The logger: the one module that writes to the console.
+        - /hisim/log.py
+        # Temporary: modules that printed when the rule was introduced; removed by the cleanup bead.
+        - /hisim/cli.py
+        - /hisim/cli_grouping.py
+        - /hisim/cli_render.py
+        - /hisim/hisim_main.py
+        - /hisim/economics/__main__.py
+        - /hisim/economics/staged_cli.py
+        - /hisim/energy_system/assemblies/describe.py
+        - /hisim/energy_system/recording/probe_session.py
+        - /hisim/renovisor/run.py
+        - /hisim/renovisor/verify/__init__.py
+        - /hisim/renovisor/contract/refresh.py
+        - /hisim/components/more_advanced_heat_pump_hplib.py

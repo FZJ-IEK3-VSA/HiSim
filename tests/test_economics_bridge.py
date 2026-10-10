@@ -768,8 +768,8 @@ class TestUsefulHeat:
         _Output("Building", "TheoreticalHeatingEnergyDemand", loadtypes.Units.WATT_HOUR),
         _Output("DHWStorage", "ThermalEnergyConsumptionDHW", loadtypes.Units.WATT_HOUR),
     ]
-    # Two timesteps: 3 kWh of room heat, and 1 kWh of hot water signed as heat leaving the tank.
-    FRAME = pd.DataFrame({0: [1000.0, 2000.0], 1: [-400.0, -600.0]})
+    # Two timesteps: 3 kWh of room heat, and 1 kWh of hot water the tank's tap delivers into the house.
+    FRAME = pd.DataFrame({0: [1000.0, 2000.0], 1: [400.0, 600.0]})
     ROOMS = UsefulHeatKind.ROOM_HEATING.value
     HOT_WATER = UsefulHeatKind.HOT_WATER.value
 
@@ -786,7 +786,7 @@ class TestUsefulHeat:
         )
 
     def test_each_source_is_read_by_its_own_sign_convention(self):
-        """3 kWh into the rooms and 1 kWh leaving the tank are 3 and 1 kWh of useful heat."""
+        """3 kWh into the rooms and 1 kWh out of the tap are 3 and 1 kWh of useful heat."""
         by_kind, failures = self._by_kind(self._both(), self.FRAME)
 
         assert not failures
@@ -798,7 +798,7 @@ class TestUsefulHeat:
         A tank reporting heat flowing *into* it through the tap is not delivering hot water, and
         neither `abs` of each timestep nor `abs` of the sum is a denominator anyone stands behind.
         """
-        frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [-400.0, 600.0]})
+        frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [400.0, -600.0]})
 
         by_kind, failures = self._by_kind(self._both(), frame)
 
@@ -811,7 +811,7 @@ class TestUsefulHeat:
 
     def test_rounding_noise_of_the_wrong_sign_is_not_a_reverse_flow(self):
         """A nanowatt-hour above zero is float noise, below `SIGN_TOLERANCE_IN_KWH` by far."""
-        frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [-1000.0, 1e-9]})
+        frame = pd.DataFrame({0: [1000.0, 2000.0], 1: [1000.0, -1e-9]})
 
         by_kind, failures = self._by_kind(self._both(), frame)
 

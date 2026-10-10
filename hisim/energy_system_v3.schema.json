@@ -2657,6 +2657,9 @@
                   "temperature_delta_in_celsius": {
                     "type": "number"
                   },
+                  "maximal_flow_temperature_in_celsius": {
+                    "type": "number"
+                  },
                   "device_co2_footprint_in_kg": {
                     "anyOf": [
                       {
@@ -3418,6 +3421,9 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "maximal_dhw_supply_temperature_in_celsius": {
+                    "type": "number"
                   }
                 }
               },
@@ -4620,6 +4626,9 @@
                   "flow_temperature_in_celsius": {
                     "type": "number"
                   },
+                  "maximal_dhw_supply_temperature_in_celsius": {
+                    "type": "number"
+                  },
                   "standardized_scop_en14825_w35": {
                     "anyOf": [
                       {
@@ -4816,12 +4825,6 @@
                     "type": "number"
                   },
                   "t_max_dhw_storage_in_celsius": {
-                    "type": "number"
-                  },
-                  "thermalpower_dhw_is_constant": {
-                    "type": "boolean"
-                  },
-                  "p_th_max_dhw_in_watt": {
                     "type": "number"
                   }
                 }
@@ -5548,10 +5551,7 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                  "component_id": {},
-                  "set_temperature_difference_for_on": {
-                    "type": "number"
-                  }
+                  "component_id": {}
                 }
               },
               "sizing_sources": {

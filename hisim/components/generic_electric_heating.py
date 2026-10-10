@@ -1,15 +1,17 @@
 """Electric Heating Module."""
 
 # Owned
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from hisim import hydronics
 from hisim.energy_port import EnergyPort
-from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim.components import dual_circuit_system
+from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
     Component,
@@ -40,7 +42,6 @@ from hisim.components.heat_distribution_system import HeatDistributionController
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
-    PhysicsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import (
@@ -92,6 +93,11 @@ class ElectricHeatingConfig(ConfigBase):
     #: it delivers. Sizable: left ``AUTO`` it is the building's heating load exactly, the
     #: appliance covering the design load with no reserve.
     maximum_electric_power_w: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT, unit=Units.WATT)
+    #: The highest supply temperature the hot-water side delivers, °C. A charge whose return plus lift would exceed
+    #: it is throttled to it. 80 °C is the usual upper setting of the thermostat of a
+    #: domestic electric water heater, whose safety cut-out acts above it (EN 60335-2-21); it lies above the
+    #: controller's 75 °C hot-water supply aim (the 60 °C aim plus its 15 K hysteresis).
+    maximal_dhw_supply_temperature_in_celsius: float = field(default=80.0, metadata={"unit": Units.CELSIUS})
 
     @staticmethod
     def sizing_facts(config: "ElectricHeatingConfig", ctx: SizingContext) -> dict:
@@ -140,6 +146,21 @@ class ElectricHeatingConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
+@dataclass(frozen=True)
+class SpaceHeatingDelivery:
+
+    """The heat an electric heater delivers to the rooms in one step.
+
+    A value object, so the power and the energy cannot be swapped by position. The energy is the building's stated
+    demand energy, or the available power over the step when that is lower.
+    """
+
+    #: The heat flow into the rooms, in W.
+    power_in_watt: float
+    #: The heat of the step, in Wh.
+    energy_in_watt_hour: float
+
+
 class ElectricHeating(Component):
     """Electric Heating class.
 
@@ -157,8 +178,14 @@ class ElectricHeating(Component):
 
     # Inputs for DHW
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
+    #: The hot-water supply temperature the controller aims at: the heater's hot-water supply never exceeds it.
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
+
+    #: The lift at which the hot-water side runs at its maximal power, in K: it regulates its power as
+    #: ``P = P_max lift / 100 K``, so a 25 K lift draws a quarter of the maximal power.
+    REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN: ClassVar[float] = 100.0
 
     # Output
     ThermalOutputShPower = "ThermalOutputShPower"
@@ -222,8 +249,17 @@ class ElectricHeating(Component):
             True,
         )
 
+        # The tank's step mean, the hot-water circuit's return; a heater without a tank has no such input.
+        self.water_input_temperature_dhw_channel: Optional[ComponentInput] = None
         if self.config.with_domestic_hot_water_preparation:
-            self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
+            self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
+                self.component_name,
+                ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
+            self.water_input_temperature_dhw_channel = self.add_input(
                 self.component_name,
                 ElectricHeating.WaterInputTemperatureDhw,
                 LoadTypes.TEMPERATURE,
@@ -334,11 +370,14 @@ class ElectricHeating(Component):
     def get_default_connections_from_electric_heating_controller(
         self,
     ):
-        """Get Controller Electric Heating default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
+        """Return the heater's default connections from its controller: mode, hot-water lift and set temperature.
+
+        The set temperature is connected only when the heater prepares hot water, because only then does it declare
+        the input that reads it.
+        """
         component_class = ElectricHeatingController
         controller_classname = component_class.get_classname()
-        return [
+        connections = [
             ComponentConnection(
                 ElectricHeating.HeatingMode,
                 controller_classname,
@@ -350,6 +389,15 @@ class ElectricHeating(Component):
                 component_class.DeltaTemperatureNeededForDHW,
             ),
         ]
+        if self.config.with_domestic_hot_water_preparation:
+            connections.append(
+                ComponentConnection(
+                    ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
+                    controller_classname,
+                    component_class.SupplyTemperatureSetForDHWInCelsius,
+                )
+            )
+        return connections
 
     def get_default_connections_from_building(
         self,
@@ -382,7 +430,7 @@ class ElectricHeating(Component):
             ComponentConnection(
                 ElectricHeating.WaterInputTemperatureDhw,
                 hws_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
             ),
             ComponentConnection(
                 ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage,
@@ -417,170 +465,181 @@ class ElectricHeating(Component):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Simulate the electric heating."""
+        """Heat the rooms and the hot water as the controller's mode asks, and publish the heat and electricity.
+
+        A direct electric heater turns its electricity into heat one to one, so every heat it publishes is also its
+        electricity. Under ``force_convergence`` the outputs of the iteration before stay.
+
+        Raises:
+            ValueError: If the mode is unknown, or the hot water takes the whole maximal power in parallel mode.
+        """
         if force_convergence:
             return
-
-        # Retrieve inputs
         heating_mode = HeatingMode(stsv.get_input_value(self.heating_mode_channel))
-
-        if heating_mode == HeatingMode.SPACE_HEATING:
-            # Get relevant inputs
-            theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
-            theoretical_thermal_building_energy_in_watthour = stsv.get_input_value(
-                self.theoretical_thermal_building_energy_channel
+        if heating_mode in (
+            HeatingMode.DOMESTIC_HOT_WATER,
+            HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL,
+        ):
+            hot_water = self.hot_water_circuit_of_step(stsv, timestep)
+        elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
+            hot_water = hydronics.CircuitStep.idle(
+                t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
             )
-
-            if theoretical_thermal_building_in_watt >= 0:
-                thermal_power_sh_delivered_in_watt = theoretical_thermal_building_in_watt
-                thermal_energy_sh_delivered_in_watthour = theoretical_thermal_building_energy_in_watthour
-            else:
-                thermal_power_sh_delivered_in_watt = 0.0
-                thermal_energy_sh_delivered_in_watthour = 0.0
-            # dhw outputs
-            thermal_power_dhw_delivered_w = 0.0
-            thermal_energy_dhw_delivered_in_watt_hour = 0.0
-            water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
-            water_output_temperature_for_dhw_deg_c = 0.0
-
-        elif heating_mode == HeatingMode.DOMESTIC_HOT_WATER:
-            # Get relevant inputs
-            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
-            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
-
-            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-
-            # Calculate
-            (
-                thermal_power_dhw_delivered_w,
-                thermal_energy_dhw_delivered_in_watt_hour,
-                water_output_temperature_for_dhw_deg_c,
-                water_mass_flow_rate_for_dhw_in_kg_per_s,
-            ) = self._calculate_dhw_outputs(
-                water_input_temperature_for_dhw_deg_c,
-                delta_temperature_needed_for_dhw_in_celsius,
-            )
-            # set sh outputs
-            thermal_power_sh_delivered_in_watt = 0.0
-            thermal_energy_sh_delivered_in_watthour = 0.0
-
-        elif heating_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
-            # Get relevant inputs
-            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
-            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
-
-            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-
-            # Calculate first for dhw
-            (
-                thermal_power_dhw_delivered_w,
-                thermal_energy_dhw_delivered_in_watt_hour,
-                water_output_temperature_for_dhw_deg_c,
-                water_mass_flow_rate_for_dhw_in_kg_per_s,
-            ) = self._calculate_dhw_outputs(
-                water_input_temperature_for_dhw_deg_c,
-                delta_temperature_needed_for_dhw_in_celsius,
-            )
-
-            # Now calculate for space heating
-            # Calculate
-            maximum_electric_power_in_watt = concrete(self.config.maximum_electric_power_w)
-            if maximum_electric_power_in_watt - thermal_power_dhw_delivered_w <= 0:
-                raise ValueError(
-                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher "
-                    f"than maximal electric load {maximum_electric_power_in_watt}. "
-                )
-            theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
-            theoretical_thermal_building_energy_in_watthour = stsv.get_input_value(
-                self.theoretical_thermal_building_energy_channel
-            )
-            available_electric_load_in_watt = maximum_electric_power_in_watt - thermal_power_dhw_delivered_w
-
-            if theoretical_thermal_building_in_watt >= 0:
-                if theoretical_thermal_building_in_watt > available_electric_load_in_watt:
-                    logging.debug(
-                        "The needed thermal power for space heating is higher than the maximum connected load."
-                    )
-                thermal_power_sh_delivered_in_watt = min(
-                    theoretical_thermal_building_in_watt, available_electric_load_in_watt
-                )
-                thermal_energy_sh_delivered_in_watthour = min(
-                    theoretical_thermal_building_energy_in_watthour,
-                    available_electric_load_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
-                )
-            else:
-                thermal_power_sh_delivered_in_watt = 0.0
-                thermal_energy_sh_delivered_in_watthour = 0.0
-
-        elif heating_mode == HeatingMode.OFF:
-            thermal_power_dhw_delivered_w = 0.0
-            thermal_energy_dhw_delivered_in_watt_hour = 0.0
-            water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
-            water_output_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-            thermal_power_sh_delivered_in_watt = 0.0
-            thermal_energy_sh_delivered_in_watthour = 0.0
-
         else:
             raise ValueError("Unknown heating mode")
+        space_heating = self.space_heating_delivery(stsv, heating_mode, hot_water.power_w)
+        self.publish_heat(stsv, space_heating, hot_water)
 
-        # set outputs
-        stsv.set_output_value(self.thermal_output_power_dhw_channel, thermal_power_dhw_delivered_w)
-        stsv.set_output_value(self.thermal_output_energy_dhw_channel, thermal_energy_dhw_delivered_in_watt_hour)
-        stsv.set_output_value(
-            self.water_output_temperature_dhw_channel,
-            water_output_temperature_for_dhw_deg_c,
+    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.CircuitStep:
+        """Return the hot-water circuit of a step that charges the tank, from the controller's lift and set point.
+
+        Raises:
+            ValueError: If the lift is negative or above 100 K.
+        """
+        lift_in_kelvin = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
+        self._check_delta_temperature(lift_in_kelvin, timestep)
+        return self.hot_water_circuit(
+            return_temperature_in_celsius=DualCircuitHotWater.return_temperature_in_celsius(
+                stsv, self.water_input_temperature_dhw_channel
+            ),
+            lift_in_kelvin=lift_in_kelvin,
+            supply_temperature_set_in_celsius=stsv.get_input_value(
+                self.supply_temperature_set_for_dhw_in_celsius_channel
+            ),
+            maximal_supply_temperature_in_celsius=self.config.maximal_dhw_supply_temperature_in_celsius,
+            maximal_power_in_watt=concrete(self.config.maximum_electric_power_w),
         )
-        stsv.set_output_value(self.water_mass_flow_dhw_output_channel, water_mass_flow_rate_for_dhw_in_kg_per_s)
-        stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_sh_delivered_in_watt)
-        stsv.set_output_value(self.thermal_output_energy_sh_channel, thermal_energy_sh_delivered_in_watthour)
-        # set electric power and energy
-        # stromdirektheizung -> electricpower =thermalpower
-        stsv.set_output_value(self.electric_output_power_sh_channel, thermal_power_sh_delivered_in_watt)
-        stsv.set_output_value(self.electric_output_energy_sh_channel, thermal_energy_sh_delivered_in_watthour)
-        stsv.set_output_value(self.electric_output_power_dhw_channel, thermal_power_dhw_delivered_w)
-        stsv.set_output_value(self.electric_output_energy_dhw_channel, thermal_energy_dhw_delivered_in_watt_hour)
 
-    def _check_delta_temperature(self, delta_temperature: float, timestep: int):
+    def space_heating_delivery(
+        self, stsv: SingleTimeStepValues, heating_mode: "dual_circuit_system.HeatingMode", hot_water_power_in_watt: float
+    ) -> "SpaceHeatingDelivery":
+        """Return the heat the heater delivers to the rooms in this step, as power and energy.
+
+        In space-heating mode the heater covers the building's heating demand; in parallel mode it covers it up to
+        the power the hot water leaves; otherwise it delivers nothing. A negative demand (a cooling demand) gets no
+        heat.
+
+        Raises:
+            ValueError: If the hot water takes the whole maximal power in parallel mode.
+        """
+        if heating_mode not in (HeatingMode.SPACE_HEATING, HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL):
+            return SpaceHeatingDelivery(power_in_watt=0.0, energy_in_watt_hour=0.0)
+        demand_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
+        demand_in_watt_hour = stsv.get_input_value(self.theoretical_thermal_building_energy_channel)
+        if demand_in_watt < 0:
+            return SpaceHeatingDelivery(power_in_watt=0.0, energy_in_watt_hour=0.0)
+        if heating_mode == HeatingMode.SPACE_HEATING:
+            return SpaceHeatingDelivery(power_in_watt=demand_in_watt, energy_in_watt_hour=demand_in_watt_hour)
+        maximum_electric_power_in_watt = concrete(self.config.maximum_electric_power_w)
+        if maximum_electric_power_in_watt - hot_water_power_in_watt <= 0:
+            raise ValueError(
+                f"Electric load for DHW {hot_water_power_in_watt}W is equal or higher "
+                f"than maximal electric load {maximum_electric_power_in_watt}. "
+            )
+        available_electric_load_in_watt = maximum_electric_power_in_watt - hot_water_power_in_watt
+        if demand_in_watt > available_electric_load_in_watt:
+            logging.debug("The needed thermal power for space heating is higher than the maximum connected load.")
+        return SpaceHeatingDelivery(
+            power_in_watt=min(demand_in_watt, available_electric_load_in_watt),
+            energy_in_watt_hour=min(
+                demand_in_watt_hour,
+                available_electric_load_in_watt
+                * self.my_simulation_parameters.seconds_per_timestep
+                / hydronics.UnitConversion.JOULES_PER_WATT_HOUR,
+            ),
+        )
+
+    def publish_heat(
+        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingDelivery", hot_water: hydronics.CircuitStep
+    ) -> None:
+        """Publish the rooms' heat, the hot-water circuit and the electricity, which equals the heat."""
+        hot_water_energy_in_watt_hour = (
+            hot_water.power_w
+            * self.my_simulation_parameters.seconds_per_timestep
+            / hydronics.UnitConversion.JOULES_PER_WATT_HOUR
+        )
+        stsv.set_output_value(self.thermal_output_power_dhw_channel, hot_water.power_w)
+        stsv.set_output_value(self.thermal_output_energy_dhw_channel, hot_water_energy_in_watt_hour)
+        stsv.set_output_value(self.water_output_temperature_dhw_channel, hot_water.t_supply_c)
+        stsv.set_output_value(self.water_mass_flow_dhw_output_channel, hot_water.mass_flow_kg_per_s)
+        stsv.set_output_value(self.thermal_output_power_sh_channel, space_heating.power_in_watt)
+        stsv.set_output_value(self.thermal_output_energy_sh_channel, space_heating.energy_in_watt_hour)
+        # a direct electric heater: its electricity is its heat
+        stsv.set_output_value(self.electric_output_power_sh_channel, space_heating.power_in_watt)
+        stsv.set_output_value(self.electric_output_energy_sh_channel, space_heating.energy_in_watt_hour)
+        stsv.set_output_value(self.electric_output_power_dhw_channel, hot_water.power_w)
+        stsv.set_output_value(self.electric_output_energy_dhw_channel, hot_water_energy_in_watt_hour)
+
+    def _check_delta_temperature(self, delta_temperature: float, timestep: int) -> None:
+        """Refuse a hot-water lift that is negative or above 100 K, naming the step.
+
+        Raises:
+            ValueError: If the lift is negative, which would ask a heater to cool, or above 100 K.
+        """
         if delta_temperature < 0:
             raise ValueError(
                 f"Delta temperature is {delta_temperature} °C"
                 "but it should not be negative because electric heating cannot provide cooling. "
                 "Please check your electric heating controller."
             )
-        if delta_temperature > 100:
+        if delta_temperature > self.REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN:
             raise ValueError(
                 f"Delta temperature is {delta_temperature} °C in timestep {timestep}." "This is way too high. "
             )
 
-    def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
+    @staticmethod
+    def hot_water_circuit(
+        *,
+        return_temperature_in_celsius: float,
+        lift_in_kelvin: float,
+        supply_temperature_set_in_celsius: float,
+        maximal_supply_temperature_in_celsius: float,
+        maximal_power_in_watt: float,
+    ) -> hydronics.CircuitStep:
+        """Return the electric heater's hot-water circuit for one step: its flow, its supply and the heat it carries.
 
-        # calculate thermal power delivered Q = m * cw * dT
-        if delta_temperature_needed_in_celsius > 0:
-            # regulate thermal output power based on deltaT needed
-            thermal_power_delivered_w = min(
-                concrete(self.config.maximum_electric_power_w) * delta_temperature_needed_in_celsius / 100.0,
-                concrete(self.config.maximum_electric_power_w),
-            )
-            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
-                PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                * delta_temperature_needed_in_celsius
-            )
-        else:
-            thermal_power_delivered_w = 0
-            water_mass_flow_rate_in_kg_per_s = 0
+        The heater holds the lift its controller asks for and regulates its power as
+        ``P = P_max lift / REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN``, at most ``P_max``; it pumps
+        ``m = P / (c lift)`` and supplies the return plus the lift, capped at the lower of its maximal supply
+        temperature and the controller's set temperature
+        (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`). The heat is what the water carries,
+        ``m c (T_sup - T_ret)``, which is ``P`` while nothing caps the supply. Without a lift the circuit moves no
+        water. For example, a 6 kW heater asked for a 25 K lift on a 50 °C return heats with 1.5 kW at
+        0.0144 kg/s and supplies 75 °C; with a 70 °C set temperature it supplies 70 °C and carries 1.2 kW.
 
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
-        thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+        Args:
+            return_temperature_in_celsius: The circuit's return temperature, the tank's step mean, in °C.
+            lift_in_kelvin: The lift the controller asks for, in K; 0 or less asks for no hot water.
+            supply_temperature_set_in_celsius: The supply temperature the controller aims at, in °C.
+            maximal_supply_temperature_in_celsius: The heater's maximal hot-water supply temperature, in °C.
+            maximal_power_in_watt: The heater's maximal electric power, in W.
+
+        Returns:
+            The circuit's mass flow, supply temperature and heat.
+        """
+        if lift_in_kelvin <= 0:
+            return hydronics.CircuitStep.idle(t_return_c=return_temperature_in_celsius)
+        regulated_power_in_watt = min(
+            maximal_power_in_watt * lift_in_kelvin / ElectricHeating.REGULATION_LIFT_AT_FULL_POWER_IN_KELVIN,
+            maximal_power_in_watt,
         )
-        return (
-            thermal_power_delivered_w,
-            thermal_energy_delivered_in_watt_hour,
-            water_target_temperature_deg_c,
-            water_mass_flow_rate_in_kg_per_s,
+        mass_flow_in_kg_per_second = regulated_power_in_watt / (
+            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin
+        )
+        supply_temperature_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
+            unthrottled_supply_c=return_temperature_in_celsius + lift_in_kelvin,
+            return_c=return_temperature_in_celsius,
+            maximal_supply_c=maximal_supply_temperature_in_celsius,
+            set_supply_c=supply_temperature_set_in_celsius,
+        )
+        return hydronics.CircuitStep(
+            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+            t_supply_c=supply_temperature_in_celsius,
+            power_w=hydronics.circuit_power_w(
+                mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+                t_supply_c=supply_temperature_in_celsius,
+                t_return_c=return_temperature_in_celsius,
+            ),
         )
 
     def get_cost_opex(
@@ -885,6 +944,8 @@ class ElectricHeatingController(Component):
     # Outputs
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"
+    #: The hot-water supply temperature the controller aims at: its 60 °C aim plus its hysteresis, 75 °C by default.
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     OperatingMode = "HeatingMode"
 
     def __init__(
@@ -933,6 +994,17 @@ class ElectricHeatingController(Component):
             Units.CELSIUS,
             output_description=f"here a description for {self.DeltaTemperatureNeededForDHW} will follow.",
         )
+        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.SupplyTemperatureSetForDHWInCelsius,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            output_description=(
+                "The hot-water supply temperature the controller aims at, the warm-water aim plus the hysteresis "
+                "(75 °C by default). The heater's hot-water supply stops at it, so a charge ends at its target inside "
+                "the step."
+            ),
+        )
 
         self.controller_mode: HeatingMode
         self.previous_controller_mode: HeatingMode
@@ -960,7 +1032,9 @@ class ElectricHeatingController(Component):
             ComponentConnection(
                 ElectricHeatingController.WaterTemperatureInputFromWarmWaterStorage,
                 storage_classname,
-                SimpleDHWStorage.WaterTemperatureToHeatGenerator,
+                # the tank's start-of-step temperature T0: the controller decides on a value the step's
+                # iteration does not move
+                SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
             ),
         ]
 
@@ -989,6 +1063,10 @@ class ElectricHeatingController(Component):
         # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
         self.warm_water_temperature_aim_in_celsius: float = 60.0
+        # the supply temperature a hot-water charge aims at: the warm-water aim plus the hysteresis
+        self.hot_water_supply_temperature_set_in_celsius: float = (
+            self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset
+        )
         self.controller_mode = HeatingMode.OFF
         self.previous_controller_mode = self.controller_mode
 
@@ -1047,6 +1125,9 @@ class ElectricHeatingController(Component):
             delta_temperature_for_dhw_in_celsius,
         )
 
+        stsv.set_output_value(
+            self.supply_temperature_set_for_dhw_in_celsius_channel, self.hot_water_supply_temperature_set_in_celsius
+        )
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
 
     def determine_operating_mode(
@@ -1077,14 +1158,11 @@ class ElectricHeatingController(Component):
             delta_temperature_for_dhw_in_celsius = 0.0
 
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
-            # delta temperature should not be negative because district heating cannot provide cooling
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = float(
-                max(
-                    self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
-                    0.0,
-                )
-                + self.config.hysteresis_water_temperature_offset
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
+                aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
+                storage_temperature_in_celsius=dhw_current_temperature_deg_c,
+                hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
             )
 
         elif self.controller_mode == HeatingMode.OFF:
@@ -1092,12 +1170,10 @@ class ElectricHeatingController(Component):
 
         elif self.controller_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = float(
-                max(
-                    self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
-                    0.0,
-                )
-                + self.config.hysteresis_water_temperature_offset
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
+                aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
+                storage_temperature_in_celsius=dhw_current_temperature_deg_c,
+                hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
             )
 
         else:

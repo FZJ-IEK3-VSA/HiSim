@@ -74,12 +74,12 @@ def test_heat_pump_hplib_new() -> None:
         lt.Units.ANY,
         component_id=ComponentID("Fake_on_off_switch"),
     )
-    const_thermal_power_value_dhw = cp.ComponentOutput(
-        "Fake_const_thermal_power_value_dhw",
-        "Fake_const_thermal_power_value_dhw",
+    supply_temperature_set_for_dhw = cp.ComponentOutput(
+        "Fake_supply_temperature_set_for_dhw",
+        "Fake_supply_temperature_set_for_dhw",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=ComponentID("Fake_const_thermal_power_value_dhw"),
+        component_id=ComponentID("Fake_supply_temperature_set_for_dhw"),
     )
     t_in_primary = cp.ComponentOutput(
         "Fake_t_in_primary",
@@ -154,7 +154,7 @@ def test_heat_pump_hplib_new() -> None:
         [
             on_off_switch_space_heating,
             on_off_switch_dhw,
-            const_thermal_power_value_dhw,
+            supply_temperature_set_for_dhw,
             t_in_primary,
             t_in_secondary_space_heating,
             t_in_secondary_dhw,
@@ -166,7 +166,7 @@ def test_heat_pump_hplib_new() -> None:
 
     heatpump.on_off_switch_space_heating.source_output = on_off_switch_space_heating
     heatpump.on_off_switch_dhw.source_output = on_off_switch_dhw
-    heatpump.const_thermal_power_value_dhw.source_output = const_thermal_power_value_dhw
+    heatpump.supply_temperature_set_for_dhw_in_celsius_channel.source_output = supply_temperature_set_for_dhw
     heatpump.t_in_primary.source_output = t_in_primary
     heatpump.t_in_secondary_space_heating.source_output = t_in_secondary_space_heating
     heatpump.t_in_secondary_dhw.source_output = t_in_secondary_dhw
@@ -177,7 +177,7 @@ def test_heat_pump_hplib_new() -> None:
         [
             on_off_switch_space_heating,
             on_off_switch_dhw,
-            const_thermal_power_value_dhw,
+            supply_temperature_set_for_dhw,
             t_in_primary,
             t_in_secondary_space_heating,
             t_in_secondary_dhw,
@@ -187,7 +187,7 @@ def test_heat_pump_hplib_new() -> None:
     )
     stsv.values[on_off_switch_space_heating.global_index] = 1
     stsv.values[on_off_switch_dhw.global_index] = 0
-    stsv.values[const_thermal_power_value_dhw.global_index] = 0
+    stsv.values[supply_temperature_set_for_dhw.global_index] = 60.0
     stsv.values[t_in_primary.global_index] = -7
     stsv.values[t_in_secondary_space_heating.global_index] = 47.0
     stsv.values[t_in_secondary_dhw.global_index] = 55.0

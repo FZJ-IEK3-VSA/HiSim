@@ -14,7 +14,9 @@ from typing import ClassVar, List, Optional, Tuple
 import pandas as pd
 from dataclasses_json import dataclass_json
 
-from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim.components import dual_circuit_system
+from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
+from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, ComponentType
 from hisim.component import (
@@ -46,7 +48,6 @@ from hisim.components.weather import Weather
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
-    PhysicsConfig,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import (
@@ -173,6 +174,39 @@ class DistrictHeatingConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
+@dataclass(frozen=True)
+class SpaceHeatingCircuit:
+
+    """The substation's space-heating circuit in one step: its heat, its supply and the flow it heats.
+
+    A value object, so the four quantities cannot be swapped by position. The flow is the heat distribution
+    system's, which pumps it.
+    """
+
+    #: The heat the circuit delivers, in W.
+    thermal_power_in_watt: float
+    #: The heat of the step, in Wh.
+    thermal_energy_in_watt_hour: float
+    #: The circuit's supply temperature, in °C.
+    supply_temperature_in_celsius: float
+    #: The circuit's mass flow, in kg/s.
+    mass_flow_in_kg_per_second: float
+
+    @staticmethod
+    def idle(*, supply_temperature_in_celsius: float) -> "SpaceHeatingCircuit":
+        """Return the circuit of a step without space heating: no heat, no flow, its supply at its return.
+
+        Args:
+            supply_temperature_in_celsius: The circuit's return temperature, which the idle supply equals, in °C.
+        """
+        return SpaceHeatingCircuit(
+            thermal_power_in_watt=0.0,
+            thermal_energy_in_watt_hour=0.0,
+            supply_temperature_in_celsius=supply_temperature_in_celsius,
+            mass_flow_in_kg_per_second=0.0,
+        )
+
+
 class DistrictHeating(Component):
     """District heating component.
 
@@ -196,6 +230,7 @@ class DistrictHeating(Component):
 
     # Inputs for DHW
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
@@ -210,6 +245,10 @@ class DistrictHeating(Component):
     WaterOutputDhwMassFlowRate = "WaterOutputDhwMassFlowRate"
     #: The heat taken from the network in this step, what the meter bills: space heating plus hot water (Wh).
     DistrictHeatDrawn = "DistrictHeatDrawn"
+
+    #: The lift over which the hot-water circuit's pump flow carries the connected load, in K: the pump runs at
+    #: ``m = P_connected / (c * 100 K)``, so a connected load of 15 kW pumps 0.0359 kg/s.
+    DHW_PUMP_DESIGN_LIFT_IN_KELVIN: ClassVar[float] = 100.0
 
     def __init__(
         self,
@@ -266,8 +305,17 @@ class DistrictHeating(Component):
             Units.KG_PER_SEC,
             True,
         )
+        # The tank's step mean, the hot-water circuit's return; a substation without a tank has no such input.
+        self.water_input_temperature_dhw_channel: Optional[ComponentInput] = None
         if self.config.with_domestic_hot_water_preparation:
-            self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
+            self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
+                self.component_name,
+                DistrictHeating.SupplyTemperatureSetForDHWInCelsius,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
+            self.water_input_temperature_dhw_channel = self.add_input(
                 self.component_name,
                 DistrictHeating.WaterInputTemperatureDhw,
                 LoadTypes.TEMPERATURE,
@@ -400,6 +448,14 @@ class DistrictHeating(Component):
                 component_class.DeltaTemperatureNeededForSH,
             )
         )
+        if self.config.with_domestic_hot_water_preparation:
+            connections.append(
+                ComponentConnection(
+                    DistrictHeating.SupplyTemperatureSetForDHWInCelsius,
+                    controller_classname,
+                    component_class.SupplyTemperatureSetForDHWInCelsius,
+                )
+            )
         return connections
 
     def get_default_connections_from_heat_distribution_system(
@@ -438,7 +494,7 @@ class DistrictHeating(Component):
             ComponentConnection(
                 DistrictHeating.WaterInputTemperatureDhw,
                 hws_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
             )
         )
         connections.append(
@@ -470,217 +526,133 @@ class DistrictHeating(Component):
         """Doublecheck."""
         pass
 
+    #: The largest lift the controller may ask for, in K; a larger one points at a broken controller.
+    MAXIMAL_PLAUSIBLE_LIFT_IN_KELVIN: ClassVar[float] = 100.0
+
     def i_simulate(
         self,
         timestep: int,
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Simulate the district heating."""
+        """Run the circuits the controller's mode asks for and publish their heat and the heat drawn from the network.
+
+        The substation books the heat its circuits' water carries, and the network bills the sum of both circuits.
+        Under ``force_convergence`` the outputs of the iteration before stay, which keeps the balance consistent:
+        the storages integrate what the frozen supply carries.
+
+        Raises:
+            ValueError: If the mode is unknown, a lift is implausible, or the hot water takes the whole connected
+                load in parallel mode.
+        """
         if force_convergence:
             return
-
-        # Retrieve inputs
         heating_mode = HeatingMode(stsv.get_input_value(self.heating_mode_channel))
-
-        if heating_mode == HeatingMode.SPACE_HEATING:
-            # Get relevant inputs
-            delta_temperature_needed_for_sh_in_celsius = stsv.get_input_value(self.delta_temperature_for_sh_channel)
-            self._check_delta_temperature(delta_temperature_needed_for_sh_in_celsius, timestep)
-
-            water_input_temperature_for_sh_deg_c = stsv.get_input_value(self.water_input_temperature_sh_channel)
-            water_mass_flow_rate_for_sh_in_kg_per_s = stsv.get_input_value(self.water_input_mass_flow_rate_sh_channel)
-
-            # Calculate
-            (
-                thermal_power_delivered_in_w,
-                thermal_energy_delivered_in_watt_hour,
-                water_output_temperature_deg_c,
-            ) = self._calculate_space_heating_outputs(
-                water_mass_flow_rate_for_sh_in_kg_per_s,
-                delta_temperature_needed_for_sh_in_celsius,
-                water_input_temperature_for_sh_deg_c,
-                available_load_in_w=concrete(self.config.connected_load_in_w),
+        if heating_mode in (
+            HeatingMode.DOMESTIC_HOT_WATER,
+            HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL,
+        ):
+            hot_water = self.hot_water_circuit_of_step(stsv, timestep)
+        elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
+            hot_water = hydronics.CircuitStep.idle(
+                t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
             )
-
-            district_heat_in_watt_hour = thermal_energy_delivered_in_watt_hour
-            # Set outputs
-            stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_delivered_in_w)
-            stsv.set_output_value(
-                self.thermal_output_energy_sh_channel,
-                thermal_energy_delivered_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                water_output_temperature_deg_c,
-            )
-            stsv.set_output_value(
-                self.water_mass_flow_sh_output_channel,
-                water_mass_flow_rate_for_sh_in_kg_per_s,
-            )
-
-            stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_dhw_channel, 0)
-            current_dhw_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                current_dhw_water_temperature_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_dhw_output_channel, 0)
-
-        elif heating_mode == HeatingMode.DOMESTIC_HOT_WATER:
-            # Get relevant inputs
-            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
-            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
-
-            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-
-            # Calculate
-            (
-                thermal_power_delivered_in_w,
-                thermal_energy_delivered_in_watt_hour,
-                water_output_temperature_deg_c,
-                water_mass_flow_rate_in_kg_per_s,
-            ) = self._calculate_dhw_outputs(
-                water_input_temperature_for_dhw_deg_c,
-                delta_temperature_needed_for_dhw_in_celsius,
-            )
-
-            district_heat_in_watt_hour = thermal_energy_delivered_in_watt_hour
-            # Set outputs
-            stsv.set_output_value(
-                self.thermal_output_power_dhw_channel,
-                thermal_power_delivered_in_w,
-            )
-            stsv.set_output_value(
-                self.thermal_output_energy_dhw_channel,
-                thermal_energy_delivered_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                water_output_temperature_deg_c,
-            )
-            stsv.set_output_value(
-                self.water_mass_flow_dhw_output_channel,
-                water_mass_flow_rate_in_kg_per_s,
-            )
-
-            stsv.set_output_value(self.thermal_output_power_sh_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_sh_channel, 0)
-            current_sh_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_sh_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                current_sh_water_temperature_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
-
-        elif heating_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
-            # Get relevant inputs
-            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
-            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
-
-            delta_temperature_needed_for_sh_in_celsius = stsv.get_input_value(self.delta_temperature_for_sh_channel)
-            self._check_delta_temperature(delta_temperature_needed_for_sh_in_celsius, timestep)
-
-            water_input_temperature_for_sh_deg_c = stsv.get_input_value(self.water_input_temperature_sh_channel)
-            water_mass_flow_rate_for_sh_in_kg_per_s = stsv.get_input_value(self.water_input_mass_flow_rate_sh_channel)
-
-            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-
-            # Calculate first for dhw
-            (
-                thermal_power_delivered_for_dhw_w,
-                thermal_energy_delivered_for_dhw_in_watt_hour,
-                water_output_temperature_for_dhw_deg_c,
-                water_mass_flow_rate_for_dhw_in_kg_per_s,
-            ) = self._calculate_dhw_outputs(
-                water_input_temperature_for_dhw_deg_c,
-                delta_temperature_needed_for_dhw_in_celsius,
-            )
-
-            # Set outputs
-            stsv.set_output_value(
-                self.thermal_output_power_dhw_channel,
-                thermal_power_delivered_for_dhw_w,
-            )
-            stsv.set_output_value(
-                self.thermal_output_energy_dhw_channel,
-                thermal_energy_delivered_for_dhw_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                water_output_temperature_for_dhw_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_dhw_output_channel, water_mass_flow_rate_for_dhw_in_kg_per_s)
-            # Now calculate for space heating
-            # Calculate
-            # raise value error if thermal power delivered of both are higher than maximal load
-            connected_load_in_w = concrete(self.config.connected_load_in_w)
-            if connected_load_in_w - thermal_power_delivered_for_dhw_w <= 0:
-                raise ValueError(
-                    f"Thermal load for DHW {thermal_power_delivered_for_dhw_w}W is equal or higher "
-                    f"than maximal connected load {connected_load_in_w}. "
-                )
-            (
-                thermal_power_delivered_for_sh_w,
-                thermal_energy_delivered_for_sh_in_watt_hour,
-                water_output_temperature_for_sh_deg_c,
-            ) = self._calculate_space_heating_outputs(
-                water_mass_flow_rate_for_sh_in_kg_per_s,
-                delta_temperature_needed_for_sh_in_celsius,
-                water_input_temperature_for_sh_deg_c,
-                available_load_in_w=connected_load_in_w - thermal_power_delivered_for_dhw_w,
-            )
-
-            district_heat_in_watt_hour = (
-                thermal_energy_delivered_for_dhw_in_watt_hour + thermal_energy_delivered_for_sh_in_watt_hour
-            )
-            # Set outputs
-            stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_delivered_for_sh_w)
-            stsv.set_output_value(
-                self.thermal_output_energy_sh_channel,
-                thermal_energy_delivered_for_sh_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                water_output_temperature_for_sh_deg_c,
-            )
-            stsv.set_output_value(
-                self.water_mass_flow_sh_output_channel,
-                water_mass_flow_rate_for_sh_in_kg_per_s,
-            )
-
-        elif heating_mode == HeatingMode.OFF:
-            district_heat_in_watt_hour = 0.0
-            stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_dhw_channel, 0)
-            current_dhw_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                current_dhw_water_temperature_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_dhw_output_channel, 0)
-
-            stsv.set_output_value(self.thermal_output_power_sh_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_sh_channel, 0)
-            current_sh_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_sh_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                current_sh_water_temperature_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
         else:
             raise ValueError("Unknown heating mode")
-        stsv.set_output_value(self.district_heat_drawn_channel, district_heat_in_watt_hour)
+        if heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL):
+            space_heating = self.space_heating_circuit_of_step(stsv, timestep, heating_mode, hot_water.power_w)
+        else:
+            space_heating = SpaceHeatingCircuit.idle(
+                supply_temperature_in_celsius=stsv.get_input_value(self.water_input_temperature_sh_channel)
+            )
+        self.publish_circuits(stsv, space_heating, hot_water)
 
-    def _check_delta_temperature(self, delta_temperature: float, timestep: int):
+    def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.CircuitStep:
+        """Return the hot-water circuit of a step with a hot-water request, from the controller's lift and set point.
+
+        Raises:
+            ValueError: If the lift is negative or implausibly large.
+        """
+        lift_in_kelvin = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
+        self._check_delta_temperature(lift_in_kelvin, timestep)
+        return self.hot_water_circuit(
+            return_temperature_in_celsius=DualCircuitHotWater.return_temperature_in_celsius(
+                stsv, self.water_input_temperature_dhw_channel
+            ),
+            lift_in_kelvin=lift_in_kelvin,
+            supply_temperature_set_in_celsius=stsv.get_input_value(
+                self.supply_temperature_set_for_dhw_in_celsius_channel
+            ),
+            connected_load_in_watt=concrete(self.config.connected_load_in_w),
+        )
+
+    def space_heating_circuit_of_step(
+        self,
+        stsv: SingleTimeStepValues,
+        timestep: int,
+        heating_mode: "dual_circuit_system.HeatingMode",
+        hot_water_power_in_watt: float,
+    ) -> "SpaceHeatingCircuit":
+        """Return the space-heating circuit of a step with a space-heating request.
+
+        In parallel mode the space heating gets the connected load the hot water leaves.
+
+        Raises:
+            ValueError: If the lift is implausible, or the hot water takes the whole connected load in parallel mode.
+        """
+        lift_in_kelvin = stsv.get_input_value(self.delta_temperature_for_sh_channel)
+        self._check_delta_temperature(lift_in_kelvin, timestep)
+        connected_load_in_watt = concrete(self.config.connected_load_in_w)
+        if heating_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
+            if connected_load_in_watt - hot_water_power_in_watt <= 0:
+                raise ValueError(
+                    f"Thermal load for DHW {hot_water_power_in_watt}W is equal or higher "
+                    f"than maximal connected load {connected_load_in_watt}. "
+                )
+            available_load_in_watt = connected_load_in_watt - hot_water_power_in_watt
+        else:
+            available_load_in_watt = connected_load_in_watt
+        return self._calculate_space_heating_outputs(
+            stsv.get_input_value(self.water_input_mass_flow_rate_sh_channel),
+            lift_in_kelvin,
+            stsv.get_input_value(self.water_input_temperature_sh_channel),
+            available_load_in_w=available_load_in_watt,
+        )
+
+    def publish_circuits(
+        self, stsv: SingleTimeStepValues, space_heating: "SpaceHeatingCircuit", hot_water: hydronics.CircuitStep
+    ) -> None:
+        """Publish both circuits and the heat drawn from the network, which is the sum of their heats."""
+        hot_water_energy_in_watt_hour = (
+            hot_water.power_w
+            * self.my_simulation_parameters.seconds_per_timestep
+            / hydronics.UnitConversion.JOULES_PER_WATT_HOUR
+        )
+        stsv.set_output_value(self.thermal_output_power_dhw_channel, hot_water.power_w)
+        stsv.set_output_value(self.thermal_output_energy_dhw_channel, hot_water_energy_in_watt_hour)
+        stsv.set_output_value(self.water_output_temperature_dhw_channel, hot_water.t_supply_c)
+        stsv.set_output_value(self.water_mass_flow_dhw_output_channel, hot_water.mass_flow_kg_per_s)
+        stsv.set_output_value(self.thermal_output_power_sh_channel, space_heating.thermal_power_in_watt)
+        stsv.set_output_value(self.thermal_output_energy_sh_channel, space_heating.thermal_energy_in_watt_hour)
+        stsv.set_output_value(self.water_output_temperature_sh_channel, space_heating.supply_temperature_in_celsius)
+        stsv.set_output_value(self.water_mass_flow_sh_output_channel, space_heating.mass_flow_in_kg_per_second)
+        stsv.set_output_value(
+            self.district_heat_drawn_channel, hot_water_energy_in_watt_hour + space_heating.thermal_energy_in_watt_hour
+        )
+
+    def _check_delta_temperature(self, delta_temperature: float, timestep: int) -> None:
+        """Refuse a lift that is negative or larger than :attr:`MAXIMAL_PLAUSIBLE_LIFT_IN_KELVIN`, naming the step.
+
+        Raises:
+            ValueError: If the lift is negative, which would ask the substation to cool, or implausibly large.
+        """
         if delta_temperature < 0:
             raise ValueError(
                 f"Delta temperature is {delta_temperature} °C"
                 "but it should not be negative because district heating cannot provide cooling. "
                 "Please check your district heating controller."
             )
-        if delta_temperature > 100:
+        if delta_temperature > self.MAXIMAL_PLAUSIBLE_LIFT_IN_KELVIN:
             raise ValueError(
                 f"Delta temperature is {delta_temperature} °C in timestep {timestep}." "This is way too high. "
             )
@@ -691,13 +663,16 @@ class DistrictHeating(Component):
         delta_temperature_needed_in_celsius: float,
         water_input_temperature_deg_c: float,
         available_load_in_w: float,
-    ) -> Tuple[float, float, float]:
+    ) -> "SpaceHeatingCircuit":
+        """Return the space-heating circuit at the distribution system's flow, its lift limited by the available load.
+
+        The substation lifts the distribution system's flow by the lift its controller asks for, unless that heat
+        exceeds the available load; then the lift is what the load can carry. For example, 0.2 kg/s asked for a
+        10 K lift take 8360 W; with 5 kW available the lift is 5.98 K.
+        """
+        specific_heat_in_joule_per_kg_per_kelvin = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
         thermal_power_delivered_in_w = (
-            water_mass_flow_rate_in_kg_per_s
-            * PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-            * delta_temperature_needed_in_celsius
+            water_mass_flow_rate_in_kg_per_s * specific_heat_in_joule_per_kg_per_kelvin * delta_temperature_needed_in_celsius
         )
 
         if thermal_power_delivered_in_w > available_load_in_w:
@@ -705,49 +680,71 @@ class DistrictHeating(Component):
             logging.debug("The needed thermal power for space heating is higher than the maximum connected load.")
             thermal_power_delivered_in_w = available_load_in_w
             delta_temperature_achieved = thermal_power_delivered_in_w / (
-                water_mass_flow_rate_in_kg_per_s
-                * PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+                water_mass_flow_rate_in_kg_per_s * specific_heat_in_joule_per_kg_per_kelvin
             )
             water_output_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_achieved
         else:
             water_output_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
 
         thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_in_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+            thermal_power_delivered_in_w
+            * self.my_simulation_parameters.seconds_per_timestep
+            / hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         )
-        return thermal_power_delivered_in_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
-
-    def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
-
-        # calculate thermal power delivered Q = m * cw * dT
-        if delta_temperature_needed_in_celsius > 0:
-            # regulate thermal output power based on deltaT needed
-            connected_load_in_w = concrete(self.config.connected_load_in_w)
-            thermal_power_delivered_in_w = min(
-                connected_load_in_w * delta_temperature_needed_in_celsius / 100.0, connected_load_in_w
-            )
-            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_in_w / (
-                PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                * delta_temperature_needed_in_celsius
-            )
-        else:
-            thermal_power_delivered_in_w = 0
-            water_mass_flow_rate_in_kg_per_s = 0
-
-        water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
-        thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_in_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+        return SpaceHeatingCircuit(
+            thermal_power_in_watt=thermal_power_delivered_in_w,
+            thermal_energy_in_watt_hour=thermal_energy_delivered_in_watt_hour,
+            supply_temperature_in_celsius=water_output_temperature_deg_c,
+            mass_flow_in_kg_per_second=water_mass_flow_rate_in_kg_per_s,
         )
-        return (
-            thermal_power_delivered_in_w,
-            thermal_energy_delivered_in_watt_hour,
-            water_target_temperature_deg_c,
-            water_mass_flow_rate_in_kg_per_s,
+
+    @staticmethod
+    def hot_water_circuit(
+        *,
+        return_temperature_in_celsius: float,
+        lift_in_kelvin: float,
+        supply_temperature_set_in_celsius: float,
+        connected_load_in_watt: float,
+    ) -> hydronics.CircuitStep:
+        """Return the substation's hot-water circuit for one step: its flow, its supply and the heat it carries.
+
+        The substation is a power-limited heat exchanger. While the controller asks for hot water (a positive lift),
+        its pump runs at ``m = P_connected / (c DHW_PUMP_DESIGN_LIFT_IN_KELVIN)`` and it supplies the return plus
+        the design lift, which is what the connected load can carry at that flow, throttled at the controller's set
+        temperature (:func:`hisim.hydronics.throttled_supply_temperature_c`) and never below the return. A connected
+        load of 0 W therefore pumps no water and carries no heat. The heat it
+        books, and the network bills, is what that water carries, ``m c (T_sup - T_ret)``. Without a request the
+        circuit moves no water. For example, a 15 kW connection with a 50 °C return and a 70 °C set temperature pumps
+        0.0359 kg/s, supplies 70 °C and delivers 3 kW.
+
+        Args:
+            return_temperature_in_celsius: The circuit's return temperature, the tank's step mean, in °C.
+            lift_in_kelvin: The lift the controller asks for, in K; 0 or less asks for no hot water.
+            supply_temperature_set_in_celsius: The supply temperature the controller aims at, in °C.
+            connected_load_in_watt: The substation's connected load, in W.
+
+        Returns:
+            The circuit's mass flow, supply temperature and heat.
+        """
+        if lift_in_kelvin <= 0:
+            return hydronics.CircuitStep.idle(t_return_c=return_temperature_in_celsius)
+        specific_heat_in_joule_per_kg_per_kelvin = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
+        mass_flow_in_kg_per_second = connected_load_in_watt / (
+            specific_heat_in_joule_per_kg_per_kelvin * DistrictHeating.DHW_PUMP_DESIGN_LIFT_IN_KELVIN
+        )
+        supply_temperature_in_celsius = hydronics.throttled_supply_temperature_c(
+            unthrottled_supply_c=return_temperature_in_celsius + DistrictHeating.DHW_PUMP_DESIGN_LIFT_IN_KELVIN,
+            return_c=return_temperature_in_celsius,
+            supply_limit_c=supply_temperature_set_in_celsius,
+        )
+        return hydronics.CircuitStep(
+            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+            t_supply_c=supply_temperature_in_celsius,
+            power_w=hydronics.circuit_power_w(
+                mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+                t_supply_c=supply_temperature_in_celsius,
+                t_return_c=return_temperature_in_celsius,
+            ),
         )
 
     def get_cost_opex(
@@ -1027,6 +1024,9 @@ class DistrictHeatingController(Component):
     # Outputs
     DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"
+    #: The supply temperature the substation's hot-water circuit aims at: the tank's start temperature plus the lift
+    #: the controller asks for. Declared only with hot-water preparation.
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     OperatingMode = "HeatingMode"
 
     def __init__(
@@ -1097,6 +1097,18 @@ class DistrictHeatingController(Component):
             Units.CELSIUS,
             output_description=f"here a description for {self.DeltaTemperatureNeededForSH} will follow.",
         )
+        if self.config.with_domestic_hot_water_preparation:
+            self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(
+                self.component_name,
+                self.SupplyTemperatureSetForDHWInCelsius,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                output_description=(
+                    "The supply temperature the hot-water circuit aims at: the tank's start temperature plus the lift "
+                    "asked for (DeltaTemperatureNeededForDHW), so the tank's start temperature itself while no hot "
+                    "water is asked for."
+                ),
+            )
 
         self.controller_mode: HeatingMode
         self.previous_controller_mode: HeatingMode
@@ -1127,7 +1139,9 @@ class DistrictHeatingController(Component):
             ComponentConnection(
                 DistrictHeatingController.WaterTemperatureInputFromWarmWaterStorage,
                 storage_classname,
-                SimpleDHWStorage.WaterTemperatureToHeatGenerator,
+                # the tank's start-of-step temperature T0: the controller decides on a value the step's
+                # iteration does not move
+                SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         return connections
@@ -1262,6 +1276,11 @@ class DistrictHeatingController(Component):
             self.delta_temperature_for_sh_to_district_heating_channel,
             delta_temperature_for_space_heating_in_celsius,
         )
+        if water_temperature_input_from_warm_water_storage_in_celsius is not None:
+            stsv.set_output_value(
+                self.supply_temperature_set_for_dhw_in_celsius_channel,
+                water_temperature_input_from_warm_water_storage_in_celsius + delta_temperature_for_dhw_in_celsius,
+            )
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
 
     def determine_operating_mode(
@@ -1302,14 +1321,11 @@ class DistrictHeatingController(Component):
             )
             delta_temperature_for_dhw_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
-            # delta temperature should not be negative because district heating cannot provide cooling
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = float(
-                max(
-                    self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
-                    0.0,
-                )
-                + self.config.hysteresis_water_temperature_offset_in_celsius
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
+                aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
+                storage_temperature_in_celsius=dhw_current_temperature_deg_c,
+                hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset_in_celsius,
             )
             delta_temperature_for_space_heating_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.OFF:
@@ -1317,12 +1333,10 @@ class DistrictHeatingController(Component):
             delta_temperature_for_space_heating_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = float(
-                max(
-                    self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
-                    0.0,
-                )
-                + self.config.hysteresis_water_temperature_offset_in_celsius
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
+                aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
+                storage_temperature_in_celsius=dhw_current_temperature_deg_c,
+                hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset_in_celsius,
             )
             delta_temperature_for_space_heating_in_celsius = float(
                 max(

@@ -1,11 +1,11 @@
 """The hplib heat pump books the heat its water carries: ``P_th = m c (T_out - T_in)`` and ``P_el = P_th / COP``.
 
-hplib answers a return temperature rounded to 0.1 K with a thermal power, a mass flow and an outlet temperature,
-the flow computed with hplib's own specific heat of water, 4200 J/(kg K). The storage at the other end of the
-circuit integrates that flow at the unrounded return, so the heat pump books the heat the flow carries at HiSim's
-water ``c`` (:data:`hisim.hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K`), from the return temperature it read, and its
-electricity at the step's COP. The fixed-flow mode (a series storage or none) runs the pump at its nominal flow and
-books by the same rule.
+hplib answers a return temperature with a thermal power, a mass flow and an outlet temperature, interpolated
+between its 0.1 K grid points, the flow computed with hplib's own specific heat of water, 4200 J/(kg K). The storage
+at the other end of the circuit integrates that flow at the same return, so the heat pump books the heat the flow
+carries at HiSim's water ``c`` (:data:`hisim.hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K`), from the return temperature
+it read, and its electricity at the step's COP; in the parallel mode that heat is hplib's own times 4180/4200.
+The fixed-flow mode (a series storage or none) runs the pump at its nominal flow and books by the same rule.
 
 The unit tests step the component once in each mode; the run tests simulate every recorded heat-pump twin, the
 grouped twins RenoVisor translates from and the composed heat-pump file for a winter day, and check every step.
@@ -23,9 +23,13 @@ import yaml
 from hisim import component as cp
 from hisim import hydronics
 from hisim import loadtypes as lt
+from hisim.components.more_advanced_heat_pump_hplib_model import HplibResult
 from hisim.components.more_advanced_heat_pump_hplib import (
+    HeatPumpDhwState,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
+    MoreAdvancedHeatPumpHPLibControllerDHW,
+    MoreAdvancedHeatPumpHPLibControllerDHWConfig,
     MoreAdvancedHeatPumpHPLibState,
     PositionHotWaterStorageInSystemSetup,
 )
@@ -146,7 +150,7 @@ def check_every_step(outputs: Mapping[str, ArrayLike]) -> Dict[str, int]:
     running_steps: Dict[str, int] = {}
     for circuit, (mass_flow, t_out, t_in, thermal, electrical) in HeatPumpTwins.CIRCUITS.items():
         mass_flow_in_kg_per_second = np.asarray(outputs[mass_flow], dtype=float)
-        carried_thermal_power_in_watt = mass_flow_in_kg_per_second * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K * (
+        carried_thermal_power_in_watt = mass_flow_in_kg_per_second * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * (
             np.asarray(outputs[t_out], dtype=float) - np.asarray(outputs[t_in], dtype=float)
         )
         booked_power_in_watt = np.asarray(outputs[thermal], dtype=float)
@@ -241,13 +245,23 @@ class SingleStep:
         )
         return heat_pump
 
+    #: The hot-water set temperature a step uses unless the test names one, in °C: the 75 °C maximal hot-water supply
+    #: itself, so that only the maximum limits the hot-water supply.
+    UNLIMITING_SET_TEMPERATURE_IN_CELSIUS = 75.0
+
     @staticmethod
     def step(heat_pump: MoreAdvancedHeatPumpHPLib, values: Dict[str, float]) -> Dict[str, float]:
         """Step ``heat_pump`` once with its inputs set from ``values`` by field name (0 for the rest).
 
+        The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one.
+
         Returns:
             Every output of the heat pump by field name.
         """
+        values = {
+            MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius: SingleStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
+            **values,
+        }
         fakes: List[cp.ComponentOutput] = []
         for component_input in heat_pump.inputs:
             fake = cp.ComponentOutput(
@@ -269,12 +283,14 @@ class SingleStep:
 
 def flow_thermal_power_in_watt(outputs: Dict[str, float], mass_flow: str, t_out: str, t_in: str) -> float:
     """The heat a circuit's water carries, ``m c (T_out - T_in)`` in W, from the heat pump's own outputs."""
-    return hydronics.circuit_power_w(outputs[mass_flow], outputs[t_out], outputs[t_in])
+    return hydronics.circuit_power_w(
+        mass_flow_kg_per_s=outputs[mass_flow], t_supply_c=outputs[t_out], t_return_c=outputs[t_in]
+    )
 
 
 @pytest.mark.base
 def test_the_booked_powers_are_the_flow_s_heat_and_that_heat_over_the_cop() -> None:
-    """For hplib's 8400 W at 0.4 kg/s and 35.0 °C from a return of 30.04 °C (30.0 °C rounded), 8293.12 W is booked."""
+    """A flow of 0.4 kg/s from a return of 30.04 °C to 35.0 °C books 0.4 * 4180 * 4.96 = 8293.12 W, over the COP."""
     powers = MoreAdvancedHeatPumpHPLib.booked_heating_powers_in_watt(
         mass_flow_in_kg_per_second=0.4,
         outlet_temperature_in_celsius=35.0,
@@ -317,7 +333,11 @@ def test_active_cooling_without_a_positive_eer_is_refused(eer: float) -> None:
 
 @pytest.mark.base
 def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -> None:
-    """A return of 47.04 °C: hplib computes at 47.0 °C, the heat pump books its flow from 47.04 °C."""
+    """A return of 47.04 °C: hplib's results at 47.0 and 47.1 °C are interpolated, and the flow is booked from 47.04.
+
+    The interpolated outlet is 52.04 °C, the 5 K lift hplib holds; the booked heat is the interpolated flow's at
+    HiSim's 4180 J/(kg K), about 0.5 % below hplib's own heat at its 4200 J/(kg K).
+    """
     outputs = SingleStep.step(
         SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
         {
@@ -328,7 +348,7 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 50.0,
         },
     )
-    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == 52.0
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == pytest.approx(52.04, abs=1e-9)
     booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
     assert booked_power_in_watt == flow_thermal_power_in_watt(
         outputs,
@@ -336,12 +356,43 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
         MoreAdvancedHeatPumpHPLib.TemperatureOutputSH,
         MoreAdvancedHeatPumpHPLib.TemperatureInputSH,
     )
-    # hplib's own heat, m * 4200 J/(kg K) * 5 K, is about 1.3 % more than the flow carries at 4.96 K and 4180.
     hplib_thermal_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] * 4200.0 * 5.0
-    assert booked_power_in_watt == pytest.approx(hplib_thermal_power_in_watt * 4180.0 / 4200.0 * 4.96 / 5.0, rel=1e-9)
+    assert booked_power_in_watt == pytest.approx(hplib_thermal_power_in_watt * 4180.0 / 4200.0, rel=1e-9)
     assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH] == (
         booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
     )
+
+
+@pytest.mark.base
+def test_hplib_s_results_are_interpolated_linearly_between_its_grid_points() -> None:
+    """Between two 0.1 K grid points every result is the linear blend of the two: continuous in the return."""
+    heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
+
+    def results(return_temperature_in_celsius: float) -> HplibResult:
+        """Return hplib's interpolated answer at this return, -7 °C outside."""
+        return heat_pump.get_cached_results_or_run_hplib_simulation(
+            source_temperature_in_celsius=-7.0,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            ambient_temperature_in_celsius=-7.0,
+            mode=1,
+            operation_mode="heating_building",
+            minimal_thermal_power_in_watt=1500.0,
+        )
+
+    lower, upper, between = results(47.0), results(47.1), results(47.04)
+    for field in (
+        "outlet_temperature_in_celsius",
+        "mass_flow_in_kg_per_second",
+        "thermal_power_in_watt",
+        "electrical_power_in_watt",
+        "cop",
+    ):
+        assert getattr(between, field) == pytest.approx(
+            0.6 * getattr(lower, field) + 0.4 * getattr(upper, field), rel=1e-12
+        )
+    # on either side of a grid point the results meet: no step at 47.1 °C
+    assert results(47.1 - 1e-9).mass_flow_in_kg_per_second == pytest.approx(upper.mass_flow_in_kg_per_second, rel=1e-6)
+    assert results(47.1 + 1e-9).mass_flow_in_kg_per_second == pytest.approx(upper.mass_flow_in_kg_per_second, rel=1e-6)
 
 
 @pytest.mark.base
@@ -427,18 +478,216 @@ def test_the_run_check_holds_on_an_active_cooling_step() -> None:
 
 
 @pytest.mark.base
-def test_a_constant_hot_water_power_with_a_parallel_storage_is_refused() -> None:
-    """A constant power would book heat that hplib's flow does not carry, so the step refuses it by name."""
-    heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
-    with pytest.raises(ValueError, match="thermalpower_dhw_is_constant"):
-        SingleStep.step(
-            heat_pump,
-            {
-                MoreAdvancedHeatPumpHPLib.OnOffSwitchDHW: 2,
-                MoreAdvancedHeatPumpHPLib.ThermalPowerIsConstantForDHW: 1,
-                MoreAdvancedHeatPumpHPLib.MaxThermalPowerValueForDHW: 5000.0,
-                MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 2.0,
-                MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 2.0,
-                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 45.0,
-            },
+def test_a_hot_water_outlet_above_the_maximal_supply_temperature_is_throttled() -> None:
+    """A 72.04 °C return: hplib's interpolated outlet, 77.04 °C, stops at the 75 °C limit; the flow books up to it.
+
+    The flow stays hplib's, so the circuit carries ``m c (75 - 72.04)`` and the electricity is that heat over the COP.
+    """
+    outputs = SingleStep.step(
+        SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
+        {
+            MoreAdvancedHeatPumpHPLib.OnOffSwitchDHW: 2,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 30.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 72.04,
+        },
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW] == 75.0
+    booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
+    assert booked_power_in_watt == flow_thermal_power_in_watt(
+        outputs,
+        MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW,
+        MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW,
+        MoreAdvancedHeatPumpHPLib.TemperatureInputDHW,
+    )
+    assert booked_power_in_watt == pytest.approx(
+        outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW] * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 2.96,
+        rel=1e-9,
+    )
+    assert (
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW]
+        == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    )
+
+
+@pytest.mark.base
+def test_a_hot_water_outlet_above_the_controllers_set_temperature_stops_at_it() -> None:
+    """With the controller's 60 °C set temperature, a 58 °C return's interpolated outlet stops at 60 °C.
+
+    The flow stays hplib's, so the circuit carries ``m c (60 - 58)`` and the electricity is that heat over the COP.
+    """
+    outputs = SingleStep.step(
+        SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
+        {
+            MoreAdvancedHeatPumpHPLib.OnOffSwitchDHW: 2,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 30.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 58.0,
+            MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius: 60.0,
+        },
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW] == 60.0
+    booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW]
+    assert booked_power_in_watt == pytest.approx(
+        outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW] * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 2.0,
+        rel=1e-9,
+    )
+    assert (
+        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW]
+        == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
+    )
+
+
+class DhwControllerTable:
+
+    """The transitions of the heat pump's hot-water controller with the default 40/60 °C band, a namespace.
+
+    Each row is (state before, tank start temperature in °C, energy manager's raise in K, state after). The rows
+    cover every transition of :meth:`MoreAdvancedHeatPumpHPLibControllerDHW.next_state` and the boundary values of
+    each condition: the switch-on below 40 °C, the switch-off within 0.5 K of 60 °C plus the raise, and the surplus
+    switch-on below 59.5 °C while a raise is active.
+    """
+
+    OFF = HeatPumpDhwState.OFF
+    ON = HeatPumpDhwState.ON
+    ROWS = [
+        (OFF, 39.99, 0.0, ON),  # cold tank: on
+        (OFF, 40.0, 0.0, OFF),  # at the minimum: no switch-on (strict)
+        (OFF, 50.0, 0.0, OFF),  # inside the band: keeps off
+        (ON, 50.0, 0.0, ON),  # inside the band: keeps on
+        (ON, 59.49, 0.0, ON),  # just below the switch-off point
+        (ON, 59.5, 0.0, OFF),  # at the switch-off point: off
+        (OFF, 59.49, 10.0, ON),  # surplus switch-on just below 59.5 °C
+        (OFF, 59.5, 10.0, OFF),  # surplus switch-on stops at 59.5 °C: keeps off in the raised band
+        (ON, 65.0, 10.0, ON),  # charging in the raised band [59.5, 69.5)
+        (ON, 69.49, 10.0, ON),  # just below the raised switch-off point
+        (ON, 69.5, 10.0, OFF),  # at the raised switch-off point: off
+        (ON, 61.0, 0.0, OFF),  # the raise came and went: off without it
+    ]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("state", "storage_temperature_in_celsius", "raise_in_kelvin", "expected"), DhwControllerTable.ROWS)
+def test_the_hot_water_controller_takes_every_transition_of_its_table(
+    state: HeatPumpDhwState, storage_temperature_in_celsius: float, raise_in_kelvin: float, expected: HeatPumpDhwState
+) -> None:
+    """A transition off its edge would start or end charges at the wrong tank temperature.
+
+    The surplus switch-on stopping at 59.5 °C rather than 60 °C is the row that keeps a raise that comes and goes
+    within a step from toggling the charge.
+    """
+    assert (
+        MoreAdvancedHeatPumpHPLibControllerDHW.next_state(
+            state=state,
+            storage_temperature_in_celsius=storage_temperature_in_celsius,
+            raise_in_kelvin=raise_in_kelvin,
+            minimum_temperature_in_celsius=40.0,
+            maximum_temperature_in_celsius=60.0,
         )
+        == expected
+    )
+
+
+def dhw_controller_with_fake_inputs() -> Tuple[MoreAdvancedHeatPumpHPLibControllerDHW, cp.SingleTimeStepValues, Dict[str, cp.ComponentOutput]]:
+    """Return a default hot-water controller whose inputs read fake outputs, the step values and the fakes by name."""
+    controller = MoreAdvancedHeatPumpHPLibControllerDHW(
+        my_simulation_parameters=SimulationParameters.one_day_only(2021, 60),
+        config=MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW"),
+    )
+    fakes: Dict[str, cp.ComponentOutput] = {}
+    for component_input in controller.inputs:
+        fake = cp.ComponentOutput(
+            "Fake", component_input.field_name, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake")
+        )
+        component_input.source_output = fake
+        fakes[component_input.field_name] = fake
+    fft.add_global_index_of_components([*fakes.values(), controller])
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([*fakes.values(), controller]))
+    return controller, stsv, fakes
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("start_temperature_in_celsius", "raise_in_kelvin", "expected_state", "expected_set_temperature_in_celsius"),
+    [(59.4, 0.0, HeatPumpDhwState.ON, 60.0), (59.5, 0.0, HeatPumpDhwState.OFF, 60.0), (69.4, 10.0, HeatPumpDhwState.ON, 70.0), (69.5, 10.0, HeatPumpDhwState.OFF, 70.0)],
+)
+def test_the_hot_water_charge_ends_within_half_a_kelvin_of_the_set_temperature(
+    start_temperature_in_celsius: float,
+    raise_in_kelvin: float,
+    expected_state: HeatPumpDhwState,
+    expected_set_temperature_in_celsius: float,
+) -> None:
+    """A charge that ended only above the set temperature would never end, since the supply is capped at it.
+
+    The controller publishes the set temperature it decides on, ``t_max`` plus the raise, and the state as the
+    heat pump's hot-water signal.
+    """
+    controller, stsv, fakes = dhw_controller_with_fake_inputs()
+    stsv.set_output_value(
+        fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage], start_temperature_in_celsius
+    )
+    stsv.set_output_value(fakes[MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier], raise_in_kelvin)
+    controller.state_dhw = HeatPumpDhwState.ON
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+    assert controller.state_dhw == expected_state
+    assert stsv.values[controller.state_dhw_channel.global_index] == expected_state.value
+    assert (
+        stsv.values[controller.supply_temperature_set_for_dhw_in_celsius_channel.global_index]
+        == expected_set_temperature_in_celsius
+    )
+
+
+@pytest.mark.base
+def test_a_zero_tank_temperature_on_the_first_pass_keeps_the_last_reading() -> None:
+    """A 0 °C reading, the zeroed value of a pass before the tank ran, must not start a charge.
+
+    The controller keeps the temperature it read last instead; without that, a controller simulated before the tank
+    would switch on at every step's first pass and, since it keeps its decision between passes, charge all day.
+    """
+    controller, stsv, fakes = dhw_controller_with_fake_inputs()
+    storage_fake = fakes[MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage]
+    stsv.set_output_value(storage_fake, 50.0)
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+    stsv.set_output_value(storage_fake, 0.0)
+    controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
+    assert controller.state_dhw == HeatPumpDhwState.OFF
+    assert controller.water_temperature_input_from_dhw_storage_in_celsius == 50.0
+
+
+@pytest.mark.base
+def test_passive_cooling_books_the_heat_its_flow_draws_and_only_the_brine_pump_s_electricity() -> None:
+    """Passive cooling through the brine runs no compressor; booking compressor electricity or another heat would fail.
+
+    A 25 °C return cooled towards a 20 °C set temperature at the nominal 0.333 kg/s: the circuit draws
+    ``0.333 * 4180 * 5`` W, its supply is 20 °C, and only the brine pump's 100 W is electricity.
+    """
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    config.set_thermal_output_power_in_watt = 10000.0
+    config.heating_reference_temperature_in_celsius = -7.0
+    config.flow_temperature_in_celsius = 35.0
+    config.cycling_mode = False
+    config.minimum_thermal_output_power_in_watt = 1500.0
+    config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
+    config.group_id = 2
+    config.fluid_primary_side = "brine"
+    config.specific_heat_capacity_of_primary_fluid = 3800.0
+    config.electrical_input_power_brine_pump_in_watt = 100.0
+    config.passive_cooling_with_brine = True
+    heat_pump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
+    outputs = SingleStep.step(
+        heat_pump,
+        {
+            MoreAdvancedHeatPumpHPLib.OnOffSwitchSH: -1,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 10.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 28.0,
+            MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 25.0,
+            MoreAdvancedHeatPumpHPLib.SetHeatingTemperatureSH: 20.0,
+        },
+    )
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == pytest.approx(20.0, abs=1e-12)
+    assert outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH] == pytest.approx(-0.333 * 4180.0 * 5.0, rel=1e-12)
+    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerTotal] == 100.0
+    assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling] == 0.0
+    assert outputs[MoreAdvancedHeatPumpHPLib.COP] == 0.0

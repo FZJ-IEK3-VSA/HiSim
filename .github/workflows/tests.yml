@@ -64,13 +64,15 @@ jobs:
             marker: "extendedbase"
             # 6.9 GB peak (~5.5 GB above idle) for one process; four could pass 16 GB. Its two 220 s
             # participant canaries sit in one module each (test_p3_parity_participants_*.py), so
-            # loadfile can give them a worker each.
+            # loadfile can give them a worker each. test_dhw_chain_time_resolution.py's four twins without a
+            # heat pump (about 65 s on a local machine, several minutes in CI) run as one module on one worker.
             workers: 2
           - name: extendedbase2
             marker: "extendedbase2"
             # test_hisim_main_python.py peaks at 11.3 GB: a second process beside it would risk the 16 GB
             # limit, so the shard runs serially (it also holds the heat-pump booking runs of
-            # test_heat_pump_flow_booking.py).
+            # test_heat_pump_flow_booking.py, the hot-water chain runs of test_dhw_chain_twins.py and the two
+            # heat-pump twins of test_dhw_chain_time_resolution.py).
             workers: 0
           - name: postprocessingoptions
             marker: "postprocessingoptions"
@@ -153,6 +155,16 @@ jobs:
         path: tests/.coverage.*
         include-hidden-files: true
         if-no-files-found: warn
+    # The iterations per step of every energy-system file with a hot-water tank, one JSON per file, written by
+    # tests/test_dhw_chain_twins.py (hydronic coupling spec §6), so a drift of the convergence is seen.
+    - name: Upload the iteration histograms
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: iteration-histogram-${{ matrix.name }}
+        path: results/iteration_histogram/
+        if-no-files-found: ignore
     # Kept even when the job failed; see the action for why that is safe.
     - name: Save the HiSim inputs cache
       if: always()

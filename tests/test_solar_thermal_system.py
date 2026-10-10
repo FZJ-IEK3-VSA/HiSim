@@ -7,6 +7,7 @@ import pandas as pd
 import pvlib
 import pytest
 from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate, flat_plate_precalc
+from hisim import hydronics
 from hisim import sim_repository, component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
 from hisim.loadtypes import LoadTypes, Units
@@ -404,7 +405,7 @@ def test_the_fast_collector_equals_the_series_path(
 
 @pytest.mark.base
 def test_the_timestep_output_equals_the_series_path() -> None:
-    """``i_simulate``'s thermal power equals the old Series path at hand-picked steps of a real year.
+    """The collector heat equals the old Series path at hand-picked steps of a year, and ``i_simulate`` books it.
 
     Every hour of a summer and a winter day in Aachen, each at three inlet temperatures simulated
     one after the other within the same timestep -- the way convergence iterations call it -- so
@@ -455,9 +456,163 @@ def test_the_timestep_output_equals_the_series_path() -> None:
                     stsv.values[my_weather.air_temperature_output.global_index],
                     inlet_deg_c,
                 )
-                fast = stsv.values[my_sts.thermal_power_w_output_channel.global_index]
+                fast = my_sts.area_m2 * my_sts.collector_curve.heat_in_watt_per_m2(
+                    inlet_temperature_in_celsius=inlet_deg_c,
+                    ambient_temperature_in_celsius=stsv.values[my_weather.air_temperature_output.global_index],
+                    irradiance_in_watt_per_m2=float(my_sts.plane_of_array_irradiance_w_m2),
+                )
                 assert _bits(fast) == _bits(reference), (
                     f"timestep {timestep}, inlet {inlet_deg_c} °C: {fast!r} against the Series path's {reference!r}"
                 )
+                # the booked heat is what the circuit's water carries: the collector heat to the last digits
+                booked_w = stsv.values[my_sts.thermal_power_w_output_channel.global_index]
+                assert booked_w == pytest.approx(max(reference, 0.0), rel=1e-12, abs=1e-9)
                 compared += 1
     assert compared == 2 * 24 * 3
+
+
+@pytest.mark.base
+def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_and_its_controller_reads_it() -> None:
+    """A collector circuit whose water carried another heat than the collector's would unbalance the tank.
+
+    At noon on 2 July in Aachen, with the tank's step mean at 40 °C: the pump runs ``Q(40) / (c * 20 K)`` and the
+    supply is 60 °C, so the water carries ``Q(40)``; the flow the controller reads is the same whether or not the
+    pump runs. With the pump off the circuit moves no water and its supply is its return.
+    """
+
+    repo = sim_repository.SimRepository()
+    mysim = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=3600)
+    my_weather = weather.Weather(config=weather.WeatherConfig.preset_aachen("Weather"), my_simulation_parameters=mysim)
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    config.area_m2 = 4
+    my_sts = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=mysim)
+    my_sts.set_sim_repo(repo)
+    my_sts.i_prepare_simulation()
+    fakes = [
+        component.ComponentOutput("Fake", name, LoadTypes.ANY, Units.ANY, component_id=ComponentID("Fake" + name))
+        for name in ("ControlSignal", "InletTemperature")
+    ]
+    control, inlet = fakes
+    my_sts.control_signal_channel.source_output = control
+    my_sts.water_temperature_input_channel.source_output = inlet
+    my_sts.t_out_channel.source_output = my_weather.air_temperature_output
+    my_sts.dhi_channel.source_output = my_weather.dhi_output
+    my_sts.ghi_channel.source_output = my_weather.ghi_output
+    fft.add_global_index_of_components([my_weather, my_sts, *fakes])
+    stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_weather, my_sts, *fakes]))
+    timestep = 183 * 24 + 12
+    my_weather.i_simulate(timestep, stsv, False)
+    air_temperature_deg_c = stsv.values[my_weather.air_temperature_output.global_index]
+    stsv.values[inlet.global_index] = 40.0
+
+    def output(channel: Any) -> float:
+        return float(stsv.values[channel.global_index])
+
+    stsv.values[control.global_index] = 1
+    my_sts.i_simulate(timestep, stsv, False)
+    heat_w = my_sts.area_m2 * my_sts.collector_curve.heat_in_watt_per_m2(
+        inlet_temperature_in_celsius=40.0,
+        ambient_temperature_in_celsius=air_temperature_deg_c,
+        irradiance_in_watt_per_m2=float(my_sts.plane_of_array_irradiance_w_m2),
+    )
+    assert heat_w > 0.0
+    flow_kg_s = output(my_sts.water_mass_flow_kg_s_output_channel)
+    assert flow_kg_s == pytest.approx(heat_w / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * 20.0), rel=1e-12)
+    assert output(my_sts.water_temperature_deg_c_output_channel) == 60.0
+    assert output(my_sts.thermal_power_w_output_channel) == hydronics.circuit_power_w(
+        mass_flow_kg_per_s=flow_kg_s, t_supply_c=60.0, t_return_c=40.0
+    )
+    assert output(my_sts.thermal_power_w_output_channel) == pytest.approx(heat_w, rel=1e-12)
+    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow_kg_s
+
+    stsv.values[control.global_index] = 0
+    my_sts.i_simulate(timestep, stsv, False)
+    assert output(my_sts.water_mass_flow_kg_s_output_channel) == 0.0
+    assert output(my_sts.water_temperature_deg_c_output_channel) == 40.0
+    assert output(my_sts.thermal_power_w_output_channel) == 0.0
+    assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow_kg_s
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("required_mass_flow_in_kg_per_second", "storage_temperature_at_start_in_celsius", "expected"),
+    [
+        (0.01, 44.0, True),  # heat enough, a tank to fill: runs
+        (0.01, 61.0, False),  # a full tank: stops
+        (0.01, 60.0, True),  # exactly at the 60 °C aim: still runs (the stop is strictly above)
+        (0.004, 44.0, False),  # below the minimum flow: stops
+        (0.005, 44.0, True),  # exactly the minimum flow: runs
+        (0.0, 44.0, False),  # no collector heat: stops
+    ],
+)
+def test_the_pump_runs_on_its_minimum_flow_and_stops_on_a_full_tank_at_the_steps_start(
+    required_mass_flow_in_kg_per_second: float, storage_temperature_at_start_in_celsius: float, expected: bool
+) -> None:
+    """A pump that ran below its minimum flow or into a full tank would book pump electricity for no useful heat.
+
+    The edges are the 0.005 kg/s minimum flow (inclusive) and the 60 °C aim (the stop is strictly above it).
+    """
+    assert (
+        solar_thermal_system.SolarThermalSystemController.pump_runs(
+            required_mass_flow_in_kg_per_second=required_mass_flow_in_kg_per_second,
+            storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+        )
+        is expected
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("collector_heat_in_watt", "pump_runs", "expected_mass_flow_in_kg_per_second", "expected_supply_temperature_in_celsius"),
+    [(836.0, True, 0.01, 60.0), (836.0, False, 0.0, 40.0), (0.0, True, 0.0, 40.0), (-50.0, True, 0.0, 40.0)],
+)
+def test_the_collector_circuit_carries_its_heat_only_while_the_pump_runs_and_the_collector_has_heat(
+    collector_heat_in_watt: float,
+    pump_runs: bool,
+    expected_mass_flow_in_kg_per_second: float,
+    expected_supply_temperature_in_celsius: float,
+) -> None:
+    """A circuit that moved water without heat, or with the pump off, would cool the tank or book phantom heat."""
+    circuit = solar_thermal_system.SolarThermalSystem.collector_circuit(
+        collector_heat_in_watt=collector_heat_in_watt,
+        inlet_temperature_in_celsius=40.0,
+        inlet_to_mean_temperature_difference_in_kelvin=10.0,
+        pump_runs=pump_runs,
+    )
+    assert circuit.mass_flow_kg_per_s == pytest.approx(expected_mass_flow_in_kg_per_second, rel=1e-12)
+    assert circuit.t_supply_c == expected_supply_temperature_in_celsius
+    assert circuit.power_w == pytest.approx(max(collector_heat_in_watt, 0.0) if pump_runs else 0.0, rel=1e-12)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("pump_runs", "is_old_pump", "expected_power_in_watt"),
+    [(True, False, 10.0), (True, True, 35.0), (False, False, 0.0), (False, True, 0.0)],
+)
+def test_the_solar_pump_draws_its_kind_s_power_only_while_it_runs(
+    pump_runs: bool, is_old_pump: bool, expected_power_in_watt: float
+) -> None:
+    """A pump that drew power while standing, or the wrong kind's power, would misstate the system's electricity."""
+    assert (
+        solar_thermal_system.SolarThermalSystem.pump_power_in_watt(pump_runs=pump_runs, is_old_pump=is_old_pump)
+        == expected_power_in_watt
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("delta_temperature_n_k", [0.0, -5.0, float("nan"), float("inf")])
+def test_a_collector_without_a_finite_positive_inlet_to_mean_difference_is_refused(delta_temperature_n_k: float) -> None:
+    """A difference of 0 K would divide the collector's flow by zero, a negative one would give a negative flow."""
+    with pytest.raises(ValueError, match="delta_temperature_n_k"):
+        solar_thermal_system.SolarThermalSystemConfig(
+            component_id=ComponentID(name="SolarThermalSystem"), delta_temperature_n_k=delta_temperature_n_k
+        )
+
+
+@pytest.mark.base
+def test_the_flat_plate_preset_has_a_valid_inlet_to_mean_difference() -> None:
+    """The refusal of a non-positive difference must not refuse the preset's own 10 K."""
+    config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
+    assert config.delta_temperature_n_k == 10

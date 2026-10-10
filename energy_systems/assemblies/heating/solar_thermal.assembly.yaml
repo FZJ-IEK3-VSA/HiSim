@@ -37,14 +37,15 @@ components:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
     preset: standard
     inputs:
-      - Collector                                           # CollectorTemperature, MassFlow
-      - {$port: cylinder_temperature}                       # MeanWaterTemperatureInStorage
+      - Collector                                           # MassFlow, the flow its heat at the step mean needs
+      - {$port: cylinder_temperature}                       # the start-of-step temperature, for the full-tank stop
 
 interface:
   needs:
     weather:          {into: [Collector], partner: Weather}
     cylinder_temperature: {into: [Controller], partner: SimpleDHWStorage}
-                      # the controller's measured variable, the cylinder's mean temperature: a need, not a circuit end
+                      # the controller's measured variable, the cylinder's start-of-step temperature: a need, not a
+                      # circuit end
     electricity:      {carrier: electricity, outputs: [Collector.ElectricityConsumptionOutput]}
   provides:
     solar_coil:       {circuit: solar_dhw, member: Collector}

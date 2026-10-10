@@ -2,12 +2,12 @@
 
 Every run checks the declared balances and fails when one does not close, so a run that finishes is one whose
 generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. A winter day at 3600 s of the gas
-and the heat-pump household and the first half of January of the solar-thermal one, in which its pump runs, are
-the fast ``base`` checks of the ports; the second January week at 900 s of each recorded generator household is
-the ``system_setups`` run. Each generator declares what it takes (fuel, electricity,
-district heat, ambient heat, solar), the heat it gives per use (space heating, hot water) and what it loses; the
-Sankey links it to its meter, its storages and the environment. The storages and the heat distribution system are
-undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).
+and the heat-pump household is the fast ``base`` check of the ports; the first three weeks of January of the
+solar-thermal one, in which its pump runs, run in the ``extendedbase2`` shard; the second January week at 900 s of
+each recorded generator household is the ``system_setups`` run. Each generator declares what it takes (fuel,
+electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water) and what it
+loses; the Sankey links it to its meter, its storages and the environment. The storages and the heat distribution
+system are undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).
 """
 
 import json
@@ -213,16 +213,17 @@ def test_the_generator_closes_and_links_its_carriers(setup: str, tmp_path: Path)
     assert expected_links <= sankey_links(results)
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase2
 def test_a_solar_collector_whose_pump_runs_delivers_heat_and_closes(tmp_path: Path) -> None:
-    """The pump runs on 15 January: the collector delivers hot-water heat and its pump's electricity is a loss.
+    """The pump runs on 20 January: the collector delivers hot-water heat and its pump's electricity is a loss.
 
     Not a summer day: a window that does not start on 1 January still reads the weather from 1 January
-    (hisim-9g2), so a June day is a January day in disguise and its pump stands. The first half of January
-    at 900 s holds the year's first day on which the pump runs (15 January).
+    (hisim-9g2), so a June day is a January day in disguise and its pump stands. The first three weeks of January
+    at 900 s hold the year's first day on which the pump delivers more than 0.5 kWh (20 January; the pump stands
+    whenever the boiler has charged the tank above 60 °C).
     """
     results = run_household(
-        tmp_path, "household_gas_solar_thermal_building_sizer", start="2021-01-01", end="2021-01-16"
+        tmp_path, "household_gas_solar_thermal_building_sizer", start="2021-01-01", end="2021-01-21"
     )
     entry = balance_entry(results, "SolarThermalSystem")
     assert entry["verdict"] == "closes" and abs(entry["residual_kwh"]) <= 1e-9

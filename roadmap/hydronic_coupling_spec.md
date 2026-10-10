@@ -261,7 +261,8 @@ D1 and D2 say. Without the limit, a full-power charge decided on `T0` (D4) heate
 
 **Hot-water supply capped at the controller's set temperature (owner, 2026-10-09).** A generator's hot-water
 supply is also capped at its controller's set temperature, the value the controller already aims at:
-`T_sup = min(T_set, T_max, T̄ + ΔT)`, with the flow as before and the heat `m c (T_sup − T̄)`; the fuel or
+`T_sup = max(min(T_set, T_max, T̄ + ΔT), T̄)` (never below the return, as §5.4's throttle; `ΔT ≥ 0` for every hot-water
+circuit), with the flow as before and the heat `m c (T_sup − T̄)`; the fuel or
 electricity follows from that heat (§5.1). The boiler's `T_set` is its controller's 60 °C warm-water aim plus its
 10 K hysteresis, 70 °C (`GenericBoilerController.SupplyTemperatureSetForDHWInCelsius`); the electric heater's is its
 controller's 60 °C aim plus its 15 K hysteresis, 75 °C (`ElectricHeatingController.SupplyTemperatureSetForDHWInCelsius`);
@@ -331,8 +332,9 @@ no outlet limit; 75 °C is the highest flow temperature air/water heat pumps on 
 70-75 °C), and it lies above the hot-water controller's switch-off point, 60 °C plus the energy manager's 10 K
 surplus raise. A throttled step keeps hplib's flow and COP; its electricity is the throttled heat over that COP.
 Below that maximum the hot-water outlet is capped at the hot-water controller's set temperature, `t_max` (60 °C)
-plus the energy manager's raise while it is active (owner, 2026-10-09; §5): `T_out = min(T_set, T_max, hplib's
-T_out)`, the flow stays hplib's, the heat is `m c (T_out − T̄)` and the electricity that heat over the COP.
+plus the energy manager's raise while it is active (owner, 2026-10-09; §5): `T_out = max(min(T_set, T_max, hplib's
+T_out), T̄)` (hplib's hot-water outlet lies above its inlet `T̄`), the flow stays hplib's, the heat is `m c (T_out − T̄)`
+and the electricity that heat over the COP.
 
 ### 5.3 Solar thermal
 

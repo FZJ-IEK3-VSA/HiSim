@@ -15,7 +15,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim.components import dual_circuit_system
-from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, ComponentType
@@ -305,6 +305,8 @@ class DistrictHeating(Component):
             Units.KG_PER_SEC,
             True,
         )
+        # The tank's step mean, the hot-water circuit's return; a substation without a tank has no such input.
+        self.water_input_temperature_dhw_channel: Optional[ComponentInput] = None
         if self.config.with_domestic_hot_water_preparation:
             self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
                 self.component_name,
@@ -313,7 +315,7 @@ class DistrictHeating(Component):
                 Units.CELSIUS,
                 True,
             )
-            self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
+            self.water_input_temperature_dhw_channel = self.add_input(
                 self.component_name,
                 DistrictHeating.WaterInputTemperatureDhw,
                 LoadTypes.TEMPERATURE,
@@ -552,7 +554,9 @@ class DistrictHeating(Component):
         ):
             hot_water = self.hot_water_circuit_of_step(stsv, timestep)
         elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
-            hot_water = hydronics.CircuitStep.idle(t_return_c=self.hot_water_return_temperature_in_celsius(stsv))
+            hot_water = hydronics.CircuitStep.idle(
+                t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
+            )
         else:
             raise ValueError("Unknown heating mode")
         if heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL):
@@ -563,12 +567,6 @@ class DistrictHeating(Component):
             )
         self.publish_circuits(stsv, space_heating, hot_water)
 
-    def hot_water_return_temperature_in_celsius(self, stsv: SingleTimeStepValues) -> float:
-        """Return the hot-water circuit's return temperature, the tank's step mean, in °C; 0 without hot water."""
-        if not self.config.with_domestic_hot_water_preparation:
-            return 0.0
-        return stsv.get_input_value(self.water_input_temperature_dhw_channel)
-
     def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.CircuitStep:
         """Return the hot-water circuit of a step with a hot-water request, from the controller's lift and set point.
 
@@ -578,7 +576,9 @@ class DistrictHeating(Component):
         lift_in_kelvin = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
         self._check_delta_temperature(lift_in_kelvin, timestep)
         return self.hot_water_circuit(
-            return_temperature_in_celsius=self.hot_water_return_temperature_in_celsius(stsv),
+            return_temperature_in_celsius=DualCircuitHotWater.return_temperature_in_celsius(
+                stsv, self.water_input_temperature_dhw_channel
+            ),
             lift_in_kelvin=lift_in_kelvin,
             supply_temperature_set_in_celsius=stsv.get_input_value(
                 self.supply_temperature_set_for_dhw_in_celsius_channel
@@ -710,8 +710,9 @@ class DistrictHeating(Component):
 
         The substation is a power-limited heat exchanger. While the controller asks for hot water (a positive lift),
         its pump runs at ``m = P_connected / (c DHW_PUMP_DESIGN_LIFT_IN_KELVIN)`` and it supplies the return plus
-        what the connected load can carry at that flow, ``P_connected / (m c)``, throttled at the controller's set
-        temperature (:func:`hisim.hydronics.throttled_supply_temperature_c`) and never below the return. The heat it
+        the design lift, which is what the connected load can carry at that flow, throttled at the controller's set
+        temperature (:func:`hisim.hydronics.throttled_supply_temperature_c`) and never below the return. A connected
+        load of 0 W therefore pumps no water and carries no heat. The heat it
         books, and the network bills, is what that water carries, ``m c (T_sup - T_ret)``. Without a request the
         circuit moves no water. For example, a 15 kW connection with a 50 °C return and a 70 °C set temperature pumps
         0.0359 kg/s, supplies 70 °C and delivers 3 kW.
@@ -732,8 +733,7 @@ class DistrictHeating(Component):
             specific_heat_in_joule_per_kg_per_kelvin * DistrictHeating.DHW_PUMP_DESIGN_LIFT_IN_KELVIN
         )
         supply_temperature_in_celsius = hydronics.throttled_supply_temperature_c(
-            unthrottled_supply_c=return_temperature_in_celsius
-            + connected_load_in_watt / (mass_flow_in_kg_per_second * specific_heat_in_joule_per_kg_per_kelvin),
+            unthrottled_supply_c=return_temperature_in_celsius + DistrictHeating.DHW_PUMP_DESIGN_LIFT_IN_KELVIN,
             return_c=return_temperature_in_celsius,
             supply_limit_c=supply_temperature_set_in_celsius,
         )
@@ -1283,25 +1283,6 @@ class DistrictHeatingController(Component):
             )
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
 
-    @staticmethod
-    def hot_water_lift_in_kelvin(
-        *, aim_temperature_in_celsius: float, storage_temperature_in_celsius: float, hysteresis_in_kelvin: float
-    ) -> float:
-        """Return the lift a hot-water request asks the substation for, in K: the tank below the aim plus the hysteresis.
-
-        A tank above the aim still gets the hysteresis as its lift, since a substation cannot cool. For example, with
-        a 60 °C aim and a 10 K hysteresis, a tank at 50 °C asks for 20 K, one at 62 °C for 10 K.
-
-        Args:
-            aim_temperature_in_celsius: The warm-water temperature the controller aims at, in °C.
-            storage_temperature_in_celsius: The tank's start-of-step temperature, in °C.
-            hysteresis_in_kelvin: The controller's hysteresis, in K.
-
-        Returns:
-            The lift, in K.
-        """
-        return float(max(aim_temperature_in_celsius - storage_temperature_in_celsius, 0.0) + hysteresis_in_kelvin)
-
     def determine_operating_mode(
         self,
         daily_avg_outside_temperature_in_celsius: float,
@@ -1341,7 +1322,7 @@ class DistrictHeatingController(Component):
             delta_temperature_for_dhw_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = self.hot_water_lift_in_kelvin(
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
                 aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 storage_temperature_in_celsius=dhw_current_temperature_deg_c,
                 hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset_in_celsius,
@@ -1352,7 +1333,7 @@ class DistrictHeatingController(Component):
             delta_temperature_for_space_heating_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = self.hot_water_lift_in_kelvin(
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
                 aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 storage_temperature_in_celsius=dhw_current_temperature_deg_c,
                 hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset_in_celsius,

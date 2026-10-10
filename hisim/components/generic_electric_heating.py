@@ -11,7 +11,7 @@ from dataclasses_json import dataclass_json
 from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.components import dual_circuit_system
-from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
     Component,
@@ -234,13 +234,6 @@ class ElectricHeating(Component):
             Units.CELSIUS,
             True,
         )
-        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
-            self.component_name,
-            ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
-        )
         self.theoretical_thermal_building_power_channel: ComponentInput = self.add_input(
             self.component_name,
             self.TheoreticalHeatingDemand,
@@ -256,8 +249,17 @@ class ElectricHeating(Component):
             True,
         )
 
+        # The tank's step mean, the hot-water circuit's return; a heater without a tank has no such input.
+        self.water_input_temperature_dhw_channel: Optional[ComponentInput] = None
         if self.config.with_domestic_hot_water_preparation:
-            self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
+            self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
+                self.component_name,
+                ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
+            self.water_input_temperature_dhw_channel = self.add_input(
                 self.component_name,
                 ElectricHeating.WaterInputTemperatureDhw,
                 LoadTypes.TEMPERATURE,
@@ -368,11 +370,14 @@ class ElectricHeating(Component):
     def get_default_connections_from_electric_heating_controller(
         self,
     ):
-        """Get Controller Electric Heating default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
+        """Return the heater's default connections from its controller: mode, hot-water lift and set temperature.
+
+        The set temperature is connected only when the heater prepares hot water, because only then does it declare
+        the input that reads it.
+        """
         component_class = ElectricHeatingController
         controller_classname = component_class.get_classname()
-        return [
+        connections = [
             ComponentConnection(
                 ElectricHeating.HeatingMode,
                 controller_classname,
@@ -383,12 +388,16 @@ class ElectricHeating(Component):
                 controller_classname,
                 component_class.DeltaTemperatureNeededForDHW,
             ),
-            ComponentConnection(
-                ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
-                controller_classname,
-                component_class.SupplyTemperatureSetForDHWInCelsius,
-            ),
         ]
+        if self.config.with_domestic_hot_water_preparation:
+            connections.append(
+                ComponentConnection(
+                    ElectricHeating.SupplyTemperatureSetForDHWInCelsius,
+                    controller_classname,
+                    component_class.SupplyTemperatureSetForDHWInCelsius,
+                )
+            )
+        return connections
 
     def get_default_connections_from_building(
         self,
@@ -473,17 +482,13 @@ class ElectricHeating(Component):
         ):
             hot_water = self.hot_water_circuit_of_step(stsv, timestep)
         elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
-            hot_water = hydronics.CircuitStep.idle(t_return_c=self.hot_water_return_temperature_in_celsius(stsv))
+            hot_water = hydronics.CircuitStep.idle(
+                t_return_c=DualCircuitHotWater.return_temperature_in_celsius(stsv, self.water_input_temperature_dhw_channel)
+            )
         else:
             raise ValueError("Unknown heating mode")
         space_heating = self.space_heating_delivery(stsv, heating_mode, hot_water.power_w)
         self.publish_heat(stsv, space_heating, hot_water)
-
-    def hot_water_return_temperature_in_celsius(self, stsv: SingleTimeStepValues) -> float:
-        """Return the hot-water circuit's return temperature, the tank's step mean, in °C; 0 without hot water."""
-        if not self.config.with_domestic_hot_water_preparation:
-            return 0.0
-        return stsv.get_input_value(self.water_input_temperature_dhw_channel)
 
     def hot_water_circuit_of_step(self, stsv: SingleTimeStepValues, timestep: int) -> hydronics.CircuitStep:
         """Return the hot-water circuit of a step that charges the tank, from the controller's lift and set point.
@@ -494,7 +499,9 @@ class ElectricHeating(Component):
         lift_in_kelvin = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
         self._check_delta_temperature(lift_in_kelvin, timestep)
         return self.hot_water_circuit(
-            return_temperature_in_celsius=self.hot_water_return_temperature_in_celsius(stsv),
+            return_temperature_in_celsius=DualCircuitHotWater.return_temperature_in_celsius(
+                stsv, self.water_input_temperature_dhw_channel
+            ),
             lift_in_kelvin=lift_in_kelvin,
             supply_temperature_set_in_celsius=stsv.get_input_value(
                 self.supply_temperature_set_for_dhw_in_celsius_channel
@@ -1085,25 +1092,6 @@ class ElectricHeatingController(Component):
         """Write important variables to report."""
         return self.electric_heating_controller_config.get_string_dict()
 
-    @staticmethod
-    def hot_water_lift_in_kelvin(
-        *, aim_temperature_in_celsius: float, storage_temperature_in_celsius: float, hysteresis_in_kelvin: float
-    ) -> float:
-        """Return the lift a hot-water charge asks the heater for, in K: the tank's distance below the aim plus the hysteresis.
-
-        A tank above the aim still gets the hysteresis as its lift, since a heater cannot cool. For example, with a
-        60 °C aim and a 15 K hysteresis, a tank at 50 °C asks for 25 K, one at 62 °C for 15 K.
-
-        Args:
-            aim_temperature_in_celsius: The warm-water temperature the controller aims at, in °C.
-            storage_temperature_in_celsius: The tank's start-of-step temperature, in °C.
-            hysteresis_in_kelvin: The controller's hysteresis, in K.
-
-        Returns:
-            The lift, in K.
-        """
-        return float(max(aim_temperature_in_celsius - storage_temperature_in_celsius, 0.0) + hysteresis_in_kelvin)
-
     def i_simulate(
         self,
         timestep: int,
@@ -1171,7 +1159,7 @@ class ElectricHeatingController(Component):
 
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = self.hot_water_lift_in_kelvin(
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
                 aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 storage_temperature_in_celsius=dhw_current_temperature_deg_c,
                 hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
@@ -1182,7 +1170,7 @@ class ElectricHeatingController(Component):
 
         elif self.controller_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_for_dhw_in_celsius = self.hot_water_lift_in_kelvin(
+            delta_temperature_for_dhw_in_celsius = DualCircuitHotWater.lift_in_kelvin(
                 aim_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 storage_temperature_in_celsius=dhw_current_temperature_deg_c,
                 hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,

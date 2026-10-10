@@ -84,6 +84,8 @@ def test_controller_determine_operating_mode(
         (15000, 70, 0, 70, 0, 70, 0),
         # the set temperature 120 °C lies beyond the connected load: the supply stops at return + 100 K
         (15000, 20, 100, 120, 15000, 120, 0.03588516746411483),
+        # a connected load of 0 W: no flow and no heat; the supply is the set temperature, not 0 / 0
+        (0, 50, 20, 70, 0, 70, 0),
     ],
 )
 def test_the_hot_water_circuit_reaches_the_set_temperature_within_the_connected_load(

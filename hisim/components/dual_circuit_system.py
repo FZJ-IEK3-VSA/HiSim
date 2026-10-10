@@ -2,7 +2,9 @@
 
 from dataclasses import dataclass
 import enum
-from typing import Optional
+from typing import ClassVar, Optional
+
+from hisim.component import ComponentInput, SingleTimeStepValues
 
 
 class HeatingMode(enum.Enum):
@@ -145,3 +147,59 @@ class DiverterValve:
         # (equality case is handled as "on" above)
 
         return heating_mode
+
+
+class DualCircuitHotWater:
+
+    """The hot-water rules a dual-circuit generator and its controller share: the lift a charge asks for, and the return.
+
+    A dual-circuit generator, the electric heater or the district-heating substation, heats either its space-heating
+    circuit or the hot-water tank's coil, switched by a diverter valve. Its controller asks for a hot-water charge as a
+    lift above the tank's start-of-step temperature, and the generator reads the tank's step mean as the return of its
+    hot-water circuit. Both components use these functions, so the two generators follow the same rules.
+    """
+
+    #: The hot-water return temperature a generator without a hot-water tank uses for its idle hot-water circuit, in °C.
+    #: Its hot-water circuit never runs, so the value only marks the circuit's published supply temperature.
+    RETURN_TEMPERATURE_WITHOUT_TANK_IN_CELSIUS: ClassVar[float] = 0.0
+
+    @staticmethod
+    def lift_in_kelvin(
+        *, aim_temperature_in_celsius: float, storage_temperature_in_celsius: float, hysteresis_in_kelvin: float
+    ) -> float:
+        """Return the lift a hot-water charge asks a dual-circuit generator for, from the tank's temperature, in K.
+
+        The lift is the tank's distance below the controller's aim plus the controller's hysteresis. A tank at or above
+        the aim still gets the hysteresis as its lift, since the generator cannot cool. For example, with a 60 °C aim
+        and a 15 K hysteresis, a tank at 50 °C asks for 25 K, one at 62 °C for 15 K.
+
+        Args:
+            aim_temperature_in_celsius: The warm-water temperature the controller aims at, in °C.
+            storage_temperature_in_celsius: The tank's start-of-step temperature, in °C.
+            hysteresis_in_kelvin: The controller's hysteresis, in K.
+
+        Returns:
+            The lift, in K.
+        """
+        return float(max(aim_temperature_in_celsius - storage_temperature_in_celsius, 0.0) + hysteresis_in_kelvin)
+
+    @staticmethod
+    def return_temperature_in_celsius(
+        stsv: SingleTimeStepValues, return_temperature_channel: Optional[ComponentInput]
+    ) -> float:
+        """Return a dual-circuit generator's hot-water return temperature, the tank's step mean, from its input, in °C.
+
+        A generator without a hot-water tank declares no return input; it then gets
+        ``RETURN_TEMPERATURE_WITHOUT_TANK_IN_CELSIUS``. For example, a heater whose return input reads 52.3 °C gets
+        52.3 °C, and a heater without a tank gets 0 °C.
+
+        Args:
+            stsv: The step values the generator reads its inputs from.
+            return_temperature_channel: The generator's input of the tank's step mean, or None if it has no tank.
+
+        Returns:
+            The return temperature of the hot-water circuit, in °C.
+        """
+        if return_temperature_channel is None:
+            return DualCircuitHotWater.RETURN_TEMPERATURE_WITHOUT_TANK_IN_CELSIUS
+        return stsv.get_input_value(return_temperature_channel)

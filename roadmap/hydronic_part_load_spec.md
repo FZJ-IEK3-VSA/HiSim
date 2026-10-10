@@ -83,8 +83,9 @@ The cost is a small, documented jump in results at the threshold itself, a step 
 - **Target**: the store temperature at which the controller ends the charge; the controller publishes it.
 - **Target band**: `[target, target + 0.05 K]`, the end temperatures the controller accepts
   (`PartLoadRule.TARGET_BAND_IN_KELVIN`); the **aim** is its middle, target + 0.025 K.
-- **Pass**: one evaluation of every component in the order they were added; the simulator repeats passes until no
-  output moves by more than 1e-4, and forces convergence on the passes after the twelfth.
+- **Pass**: one evaluation of every component, kind by kind (data sources, L2 controllers, L1 controllers, physics,
+  meters) and within one kind in the order they were added; the simulator repeats passes until no output moves by
+  more than 1e-4, and forces convergence on the passes after the twelfth.
 - **Threshold**: `SimulationParameters.part_load_above_seconds`, default 600 s. Above it, PLR may be below 1.
 
 ## 4. The mechanism (`hisim/part_load.py`)
@@ -144,9 +145,10 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   the controller's newer ratio when the controller reads the store's answer to the older one. The iteration then
   follows `x_k = x_{k−1} − x_{k−2} + c` in `x = ln r`, whose roots lie on the unit circle: the ratio circles its fixed
   point with a period of six passes and settles only by chance. Measured on the gas twin, full year at 900 s: 1013
-  forced steps in the twin's order, 46 with the controller moved before the boiler (§11). This is an open decision
-  (hisim-fxix.16): the order of the files (which moves 60 s results by about 1e-12) or a port that tells the controller
-  which flow the store's reading answers.
+  forced steps in the twin's order, 46 with the controller moved before the boiler (§11). Owner decision
+  (2026-10-10, hisim-fxix.16): the simulator evaluates every L1 controller before the physics, whatever the order of
+  the file (`Component.KIND`, `Simulator.evaluation_positions`), so the controller always reads the store's answer
+  to the ratio its device reports.
 - **Two devices**: §7.
 
 ## 5. Devices
@@ -272,6 +274,28 @@ The heat-pump and electric-heating twins already list each controller before its
 District heating has no part load; its loop (§8) gives the same results as before (hot-water heat +0.35 % / +0.99 %,
 no forced step at 900 s, 23 at 3600 s).
 
+**The kind order (K), 2026-10-10.** The same year with the simulator's kind order (§4.3), measured on the stack
+rebased onto the energy manager's hysteresis (hisim-4g9.31), against the 60 s run of the same head; P is #918 on the
+same base in the twins' order:
+
+| twin | step | hot-water fuel or electricity P / K | collector P / K | passes P / K | steps with a forced pass P / K | partial steps converged P / K |
+|---|---|---|---|---|---|---|
+| gas | 900 s | +0.27 % / -0.00 % | – | 4.26 / 3.29 | 1013 / 44 | 5 of 739 / 718 of 759 |
+| gas | 3600 s | +0.18 % / -0.01 % | – | 4.85 / 3.75 | 679 / 47 | 0 of 572 / 614 of 643 |
+| heat pump | 900 s | -0.45 % / +2.84 % | – | 6.00 / 7.13 | 5020 / 7805 | 213 of 2159 / 238 of 5364 |
+| heat pump | 3600 s | +14.14 % / +16.81 % | – | 7.49 / 7.75 | 2231 / 2364 | 65 of 894 / 72 of 1141 |
+| electric | 900 s | +0.12 % / +0.12 % | – | 6.37 / 5.84 | 730 / 730 | 10002 of 10266 / the same |
+| gas + solar | 900 s | +2.14 % / +0.27 % | -11.87 % / -1.70 % | 4.40 / 3.61 | 1193 / 113 | collector 0 of 140 / 1451 of 1460 |
+| gas + solar | 3600 s | +1.74 % / -0.09 % | -9.62 % / +0.47 % | 5.23 / 4.21 | 839 / 206 | collector 0 of 159 / 175 of 271 |
+| heat pump + solar | 900 s | +1.62 % / +1.88 % | +0.76 % / +0.03 % | 4.60 / 4.49 | 1491 / 988 | collector 1 of 148 / 1158 of 1189 |
+| heat pump + solar | 3600 s | +12.82 % / +14.14 % | +2.37 % / -1.19 % | 5.77 / 5.58 | 1086 / 981 | collector 0 of 119 / 193 of 291 |
+
+The boiler and collector twins settle as R′ did. The heat-pump twin needs more forced steps in the kind order (at 60 s
+53324 instead of 31946): its forced steps are the energy manager's loop at the heat pump's own draw (hisim-4g9.28),
+in which the raise, the building's demand and the heat pump's power switch from pass to pass (the same outputs still
+move on the eleventh pass in both orders), and in the kind order that loop reaches forced convergence more often.
+Its 60 s hot-water electricity moves from 1158.3 to 1119.6 kWh with it.
+
 Findings:
 
 1. **The evaluation order decides.** In the boiler and solar twins the device is evaluated before its controller and
@@ -279,7 +303,7 @@ Findings:
    rule's plain iteration settles on almost no partial step: 5 of 739 partial boiler steps of the gas twin converge
    at 900 s, none at 3600 s; the others end at `force_convergence` on average 0.5 to 0.7 K from the target. With the
    controller first (R′) 718 of 759 converge, and the gas twin needs fewer passes than with the search (3.42 against
-   4.20 at 900 s). Open decision: hisim-fxix.16.
+   4.20 at 900 s). Decided: the kind order (hisim-fxix.16, see the table above).
 2. **A draw larger than the rise the step still needs** makes the iteration alternate (§4.3). The electric heater,
    whose controller is evaluated first, tops the tank up beside space heating at 45 °C in a third of its winter steps;
    with the draws of those steps 730 of its 900 s steps need a forced pass (the search: 212), and its hot-water
@@ -303,7 +327,7 @@ Epic hisim-fxix.
 | Bead | Content | PR |
 |---|---|---|
 | hisim-naze (P1) | threshold, rule, the boiler | #915 |
-| hisim-fxix.16 (P1) | the evaluation order that keeps the rule from settling in the boiler and collector twins | owner decision |
+| hisim-fxix.16 (P1) | the evaluation order that keeps the rule from settling in the boiler and collector twins: the kind order | simulator-kind-order |
 | hisim-fxix.12 (P1) | the heat pump's hot-water side | #916 |
 | hisim-fxix.11 (P1) | the collector | #917 |
 | hisim-hhj2 (P1) | the quasi-steady buffer-less distribution loop | #918 |

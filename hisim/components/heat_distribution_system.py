@@ -1113,6 +1113,18 @@ class HeatDistributionValveMode(str, Enum):
     COOLING = "cooling"
 
 
+@dataclass(frozen=True)
+class HeatDistributionControllerState:
+    """The heat-distribution controller's state from one step to the next: the mode of its valve.
+
+    ``i_simulate`` reads the mode the last step converged to and writes this pass's mode as the end-of-step state;
+    ``i_save_state`` makes the converged pass's mode the next step's start, so every pass of a step starts from the
+    same mode.
+    """
+
+    valve_mode: HeatDistributionValveMode
+
+
 class HeatDistributionController(cp.L1ControllerComponent):
     """L1 controller of the heat distribution: it opens the circuit's valve for heating or cooling, or closes it.
 
@@ -1150,8 +1162,6 @@ class HeatDistributionController(cp.L1ControllerComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.state_controller: int = 0
-
         # Inputs
         self.theoretical_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -1176,8 +1186,9 @@ class HeatDistributionController(cp.L1ControllerComponent):
             output_description="The valve: 1 open for heating, -1 open for cooling, 0 closed.",
         )
 
-        self.controller_heat_distribution_mode = HeatDistributionValveMode.OFF
-        self.previous_controller_heat_distribution_mode = HeatDistributionValveMode.OFF
+        #: The valve's mode at the start of the step, and the mode the latest free pass of the step decided.
+        self.state = HeatDistributionControllerState(valve_mode=HeatDistributionValveMode.OFF)
+        self.end_of_step_state = self.state
 
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_heating_curve())
@@ -1218,12 +1229,15 @@ class HeatDistributionController(cp.L1ControllerComponent):
         pass
 
     def i_save_state(self) -> None:
-        """Save the current state."""
-        self.previous_controller_heat_distribution_mode = self.controller_heat_distribution_mode
+        """Make the valve mode the converged pass decided the next step's start."""
+        self.state = self.end_of_step_state
 
     def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.controller_heat_distribution_mode = self.controller_heat_distribution_mode
+        """Restore nothing: a pass reads only the start-of-step state, which no pass changes.
+
+        The end-of-step state is not reset either. A free pass overwrites it; under forced convergence the controller
+        is frozen, so the step ends with the mode of its last free pass, the mode its frozen ``State`` output shows.
+        """
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -1241,11 +1255,9 @@ class HeatDistributionController(cp.L1ControllerComponent):
             return
         theoretical_thermal_building_demand_in_watt = stsv.get_input_value(self.theoretical_thermal_building_demand_channel)
         is_heating_season = stsv.get_input_value(self.heating_season_channel) > 0.5
-        self.controller_heat_distribution_mode = self.next_valve_mode(
-            self.controller_heat_distribution_mode, theoretical_thermal_building_demand_in_watt
-        )
-        self.state_controller = self.valve_state(self.controller_heat_distribution_mode, is_heating_season=is_heating_season)
-        stsv.set_output_value(self.state_channel, self.state_controller)
+        valve_mode = self.next_valve_mode(self.state.valve_mode, theoretical_thermal_building_demand_in_watt)
+        self.end_of_step_state = HeatDistributionControllerState(valve_mode=valve_mode)
+        stsv.set_output_value(self.state_channel, self.valve_state(valve_mode, is_heating_season=is_heating_season))
 
     @staticmethod
     def next_valve_mode(mode: HeatDistributionValveMode, theoretical_thermal_building_demand_in_watt: float) -> HeatDistributionValveMode:

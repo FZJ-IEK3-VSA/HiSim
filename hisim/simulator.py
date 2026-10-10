@@ -6,7 +6,7 @@ import os
 import datetime
 import enum
 from dataclasses import dataclass
-from typing import AbstractSet, Callable, ClassVar, List, Tuple, Optional, Dict, Any, Sequence, Type, Union
+from typing import AbstractSet, Any, Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, Union
 import time
 import pandas as pd
 
@@ -456,15 +456,19 @@ class Simulator:
         """Return the positions of components in the order a pass evaluates them, from their kinds and their wiring.
 
         The components are evaluated kind by kind, in :attr:`EVALUATION_ORDER_OF_KINDS`. Components of one kind keep
-        the order they were added in, except the physics: there every device an L1 controller commands goes before
-        the other physics the controller reads (:class:`hisim.evaluation_order.PhysicsOrder`). For example, the kinds
-        (physics, L1 controller, data source, physics) without wiring give the positions (2, 1, 0, 3): the data source,
-        the controller, then the two devices in their order. If the controller at 1 commands the device at 3 and reads
-        the one at 0, the positions are (2, 1, 3, 0).
+        the order they were added in, with two exceptions. An L2 controller that reads another L2 controller's output
+        comes after it (:meth:`l2_positions_after_their_sources`). Among the physics, every device an L1 controller
+        commands goes before the other physics the controller reads (:class:`hisim.evaluation_order.PhysicsOrder`).
+        For example, the kinds (physics, L1 controller, data source, physics) without wiring give the positions
+        (2, 1, 0, 3): the data source, the controller, then the two devices in their order. If the controller at 1
+        commands the device at 3 and reads the one at 0, the positions are (2, 1, 3, 0). The kinds (L2, L2) where the
+        first reads the second give (1, 0).
 
         Why: a controller evaluated after its device would pair the device's answer to its previous command with its
         newer one, and one whose store is evaluated before its device pairs the device's report with the store's
-        answer of the pass before; an iteration that pairs them so can circle its fixed point instead of settling.
+        answer of the pass before; an iteration that pairs them so can circle its fixed point instead of settling. An
+        L2 signal read by another L2 controller, such as the energy manager's raise the heating curve applies, reaches
+        the reader, and through it the L1 controllers, in the same pass.
 
         Args:
             kinds: The kind base class of every component (:meth:`hisim.component.ComponentKinds.of`), in the order
@@ -484,12 +488,43 @@ class Simulator:
         if unknown:
             raise ValueError(f"Not kind base classes, so not placeable in a pass: {unknown}.")
         by_kind = sorted(range(len(kinds)), key=lambda position: rank_of_kind[kinds[position]])
+        l2_positions = [position for position in by_kind if kinds[position] is cp.L2ControllerComponent]
+        ordered_l2 = iter(Simulator.l2_positions_after_their_sources(l2_positions, sources))
         physics = PhysicsOrder.ordered(kinds, sources)
         reordered_physics = iter(physics.positions)
-        positions = tuple(
-            next(reordered_physics) if kinds[position] is cp.PhysicsComponent else position for position in by_kind
-        )
-        return EvaluationOrder(positions=positions, cycles=physics.cycles)
+        positions: List[int] = []
+        for position in by_kind:
+            if kinds[position] is cp.L2ControllerComponent:
+                positions.append(next(ordered_l2))
+            elif kinds[position] is cp.PhysicsComponent:
+                positions.append(next(reordered_physics))
+            else:
+                positions.append(position)
+        return EvaluationOrder(positions=tuple(positions), cycles=physics.cycles)
+
+    @staticmethod
+    def l2_positions_after_their_sources(positions: Sequence[int], sources: Sequence[AbstractSet[int]]) -> List[int]:
+        """Return the positions of the L2 controllers reordered so that each comes after the L2 controllers it reads.
+
+        The order added is kept wherever the reads allow it: the next controller is always the first one, in the order
+        added, whose L2 sources have all been placed. Controllers that read each other in a cycle keep the order added.
+        For example, positions [3, 7] where 3 reads 7 give [7, 3]; where neither reads the other they stay [3, 7].
+
+        Args:
+            positions: The positions of the L2 controllers, in the order added.
+            sources: For every component, the positions of the components whose outputs it reads.
+
+        Returns:
+            The same positions, in evaluation order.
+        """
+        remaining = list(positions)
+        placed: List[int] = []
+        while remaining:
+            ready = [position for position in remaining if not (set(sources[position]) & set(remaining)) - {position}]
+            chosen = ready[0] if ready else remaining[0]
+            placed.append(chosen)
+            remaining.remove(chosen)
+        return placed
 
     def evaluation_plan(self) -> List[ComponentWrapper]:
         """Return the wrapped components in the order a pass evaluates them, and warn about a cycle in that order.

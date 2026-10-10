@@ -80,8 +80,10 @@ tests:
     - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 60, max: 80}
       # the controller's hot-water target, its aim plus its hysteresis (75 °C by default)
   monotone:
-    - {parameter: power_in_watt, kpi: Total energy consumption, member: Heater, direction: increasing}
-      # a larger appliance covers at least as much of the demand: 66.4 kWh at 2 kW, 101.0 kWh at 20 kW on the test day
+    - {parameter: power_in_watt, kpi: Energy consumption for space heating, member: Heater, direction: increasing}
+      # a larger appliance covers at least as much of the space-heating demand. The total is not monotone on the one
+      # test day: with every hot-water charge running to the 60 °C aim, a stronger heater ends the day's last charge at
+      # a slightly different tank temperature (total 99.1 kWh at 14 kW, 98.9 kWh at 20 kW, measured in the kind order)
   expect:
     - {kpi: Total energy consumption, member: Heater, min: 85, max: 115}
       # 98.9 kWh measured at the defaults on the test day (1 January, Aachen), 7.0 kWh of it for DHW

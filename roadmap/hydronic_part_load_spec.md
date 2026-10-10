@@ -248,7 +248,53 @@ Amendments to the hydronic spec, to be written into `hydronic_coupling_spec.md` 
 
 ## 11. Measured results
 
-Added with the stack's last part (#918), full year 2021 against 60 s.
+Full year 2021, the shipped predefined occupancy profile, measured on 2026-10-10 on the stack's last part (#918),
+against the 60 s run of the same head. The 60 s runs of the gas and the gas + solar twin equal #914 bit for bit in
+every common column, with the same passes. "Forced" counts the steps the simulator flags at `force_convergence`
+(twelve passes or more). R is the memoryless rule of §4 in the twins' component order; R′ the same code with every
+part-load controller moved before its device in the file (§4.3); I the pass-counting search this rule replaced
+(measured on the stack before #909's review fixes, so on a different 60 s base).
+
+| twin | step | hot-water fuel or electricity R / R′ / I | collector R / R′ / I | passes R / R′ / I | forced R / R′ / I |
+|---|---|---|---|---|---|
+| gas | 900 s | +0.27 % / -0.00 % / -0.00 % | – | 4.26 / 3.42 / 4.20 | 1013 / 46 / 24 |
+| gas | 3600 s | +0.18 % / -0.01 % / -0.06 % | – | 4.85 / 3.89 / 4.66 | 679 / 50 / 71 |
+| heat pump | 900 s | -1.17 % / – / -1.21 % | – | 5.66 / – / 6.00 | 4504 / – / 4556 |
+| heat pump | 3600 s | +13.00 % / – / +6.01 % | – | 7.24 / – / 8.04 | 2082 / – / 2438 |
+| electric | 900 s | +0.12 % / – / +0.01 % | – | 6.37 / – / 6.66 | 742 / – / 532 |
+| electric | 3600 s | +0.74 % / – / -0.07 % | – | 8.46 / – / 8.43 | 1015 / – / 562 |
+| gas + solar | 900 s | +2.14 % / +0.27 % / +0.21 % | -11.87 % / -1.74 % / -1.41 % | 4.40 / 3.74 / 4.57 | 1193 / 121 / 73 |
+| gas + solar | 3600 s | +1.74 % / -0.08 % / +0.97 % | -9.62 % / +0.43 % / -6.76 % | 5.23 / 4.34 / 5.12 | 839 / 212 / 191 |
+| heat pump + solar | 900 s | +1.83 % / +1.73 % / +1.61 % | +1.18 % / +0.08 % / +0.34 % | 4.64 / 4.63 / 5.26 | 2254 / 1876 / 2122 |
+| heat pump + solar | 3600 s | +12.92 % / +13.67 % / +13.79 % | +2.76 % / -0.64 % / -2.70 % | 5.75 / 5.63 / 6.31 | 1064 / 953 / 1191 |
+
+The heat-pump and electric-heating twins already list each controller before its device, so R′ equals R there.
+District heating has no part load; its loop (§8) gives the same results as before (hot-water heat +0.35 % / +0.99 %,
+no forced step at 900 s, 23 at 3600 s).
+
+Findings:
+
+1. **The evaluation order decides.** In the boiler and solar twins the device is evaluated before its controller and
+   the tank after both, so the controller pairs a ratio with the tank's answer to the one before (§4.3). There the
+   rule's plain iteration settles on almost no partial step: 5 of 739 partial boiler steps of the gas twin converge
+   at 900 s, none at 3600 s; the others end at `force_convergence` on average 0.5 to 0.7 K from the target. With the
+   controller first (R′) 718 of 759 converge, and the gas twin needs fewer passes than with the search (3.42 against
+   4.20 at 900 s). Open decision: hisim-fxix.16.
+2. **A draw larger than the rise the step still needs** makes the iteration alternate (§4.3). The electric heater,
+   whose controller is evaluated first, tops the tank up beside space heating at 45 °C in a third of its winter steps;
+   with the draws of those steps 730 of its 900 s steps need a forced pass (the search: 212), and its hot-water
+   electricity rises from +0.01 % to +0.12 % at 900 s and from -0.07 % to +0.74 % at 3600 s.
+3. **Converged partial steps land in the band**: in every twin and run the tank ends 0.01 to 0.04 K above the target
+   on average, and every converged partial step but one ends at most 0.05 K above it (the one, a heat-pump step of the
+   heat pump + solar twin at 3600 s in R′, ended 0.53 K off).
+4. **Heat pump**: the energy manager's raise still switches the target from one pass to the next; 206 of 1129 partial
+   steps converge at 900 s (the search: 192 of 1292) and 51 of 596 at 3600 s, where the hot-water electricity ends at
+   +13.0 % (the search: +6.0 %).
+5. **Collector and backup** (with the controllers first, R′): the collector yields -1.7 % / +0.4 % against 60 s and the
+   boiler's hot-water gas is +0.27 % / -0.08 %; in the heat pump + solar twin the heat pump's lower target lets the
+   collector take the step, its ratio decaying towards 0 as §7 describes.
+6. **Wall time**: the year at 900 s takes 17 s for the gas twin (21 s with the controller first, measured with six
+   runs sharing six cores), 33 s for the heat pump; at 60 s 178 s and 336 s.
 
 ## 12. Beads
 

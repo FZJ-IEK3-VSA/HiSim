@@ -967,8 +967,8 @@ class ElectricHeatingController(Component):
     and owns how much of a step a hot-water charge runs (:class:`hisim.part_load.PartLoadControl`): the part-load ratio
     ``PartLoadRatioDhw`` is 1 whenever the charge runs at and below the part-load threshold; above it the ratio follows
     :class:`hisim.part_load.PartLoadRule` from the ratio the heater reports it ran with (``PartLoadRatioRunDhw``) and
-    the tank's start and end temperatures, so that the tank ends the step at the temperature at which the controller
-    ends the charge (``TargetTemperatureDhwInCelsius``, :meth:`charge_end_temperature_in_celsius`).
+    the tank's start and end temperatures, so that the tank ends the step at the warm-water aim, where the diverter
+    valve ends a charge in both of its charging modes (``TargetTemperatureDhwInCelsius``).
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -1217,35 +1217,8 @@ class ElectricHeatingController(Component):
             device_runs=self.controller_mode
             in (HeatingMode.DOMESTIC_HOT_WATER, HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL),
             start_temperature_in_celsius=water_temperature_input_from_warm_water_storage_in_celsius or 0.0,
-            target_temperature_in_celsius=self.charge_end_temperature_in_celsius(
-                self.controller_mode,
-                warm_water_temperature_aim_in_celsius=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
-            ),
+            target_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
         )
-
-    @staticmethod
-    def charge_end_temperature_in_celsius(
-        mode: HeatingMode, *, warm_water_temperature_aim_in_celsius: float, hysteresis_in_kelvin: float
-    ) -> float:
-        """Return the tank temperature at which the controller ends a hot-water charge in a mode, in °C.
-
-        The diverter valve keeps a charge that runs alone going until the tank starts a step at the warm-water aim. A
-        charge beside space heating, in the parallel mode, is kept going only while the tank is below the switch-on
-        point, the aim less the hysteresis. Example: with the 60 °C aim and the 15 K hysteresis, 60 °C alone and 45 °C
-        beside space heating.
-
-        Args:
-            mode: The controller's mode in this pass.
-            warm_water_temperature_aim_in_celsius: The controller's warm-water aim, °C.
-            hysteresis_in_kelvin: The controller's hysteresis below the aim, K.
-
-        Returns:
-            The temperature the charge ends at, °C.
-        """
-        if mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
-            return warm_water_temperature_aim_in_celsius - hysteresis_in_kelvin
-        return warm_water_temperature_aim_in_celsius
 
     def determine_operating_mode(
         self, daily_avg_outside_temperature_in_celsius: float, dhw_current_temperature_deg_c: Optional[float]

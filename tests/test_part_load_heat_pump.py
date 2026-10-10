@@ -216,26 +216,3 @@ def test_the_electric_heater_books_the_commanded_fraction_and_reports_it() -> No
     assert part[heater.ThermalOutputDhwEnergy] == pytest.approx(750.0 * 900.0 / 3600.0, rel=1e-12)
     assert (part[heater.PartLoadRatioRunDhw], full[heater.PartLoadRatioRunDhw]) == (0.5, 1.0)
     assert ElectricHeaterRig.charge(900, ratio=1.0) == full
-
-
-@pytest.mark.base
-@pytest.mark.parametrize(
-    "mode, target_c",
-    [
-        (generic_electric_heating.HeatingMode.DOMESTIC_HOT_WATER, 60.0),
-        (generic_electric_heating.HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL, 45.0),
-    ],
-)
-def test_the_electric_heaters_target_is_where_its_mode_ends_the_charge(
-    mode: generic_electric_heating.HeatingMode, target_c: float
-) -> None:
-    """A charge alone ends at the 60 °C aim; beside space heating the diverter valve ends it at 45 °C.
-
-    A target at 60 °C in the parallel mode would never stop a charge the controller ends at 45 °C.
-    """
-    assert (
-        generic_electric_heating.ElectricHeatingController.charge_end_temperature_in_celsius(
-            mode, warm_water_temperature_aim_in_celsius=60.0, hysteresis_in_kelvin=15.0
-        )
-        == target_c
-    )

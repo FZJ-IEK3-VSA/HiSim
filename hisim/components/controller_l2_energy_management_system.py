@@ -155,12 +155,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     )
 
     #: The half-width of the band around zero surplus within which the energy manager keeps the previous step's
-    #: decision to raise the set temperatures, in W (:meth:`raises_set_temperatures`). Wide against float noise:
-    #: a battery that balances the house leaves a surplus of about +-5e-12 W, and the simulator accepts a step once
-    #: no output moves by more than 1e-4 between passes, so a converged surplus moves by less than about 1e-3 W
-    #: even where several ports add up. Negligible in energy: while the surplus lies within the band, at most 0.01 W
-    #: goes to or comes from the grid whichever decision is kept, at most 88 Wh in a year at any step length.
-    SURPLUS_HYSTERESIS_BAND_IN_WATT: ClassVar[float] = 0.01
+    #: decision to raise the set temperatures, in W (:meth:`raises_set_temperatures`). Wide against noise: a battery
+    #: that balances the house leaves a surplus of about +-5e-12 W, and the simulator accepts a step once no output
+    #: moves by more than 1e-4 between passes, so a converged surplus moves by less than about 1e-3 W even where
+    #: several ports add up; 1 W keeps a margin of 1000 over that. Small in energy: while the surplus lies within
+    #: the band, at most 1 W goes to or comes from the grid whichever decision is kept, at most 8.8 kWh in a year
+    #: (1 W for 8760 h) at any step length, and far less in practice, because the surplus rarely sits in the band.
+    SURPLUS_HYSTERESIS_BAND_IN_WATT: ClassVar[float] = 1.0
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
@@ -773,8 +774,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         taken its share; positive means electricity would go to the grid. The decision has a hysteresis band of
         ``SURPLUS_HYSTERESIS_BAND_IN_WATT`` around zero: above the band the set temperatures are raised, below it
         they are not, and within it, edges included, the decision of the previous step is kept. For example, with
-        the band of 0.01 W, a surplus of 5e-12 W keeps the previous decision, a surplus of 0.5 W raises, and a
-        surplus of -0.5 W does not.
+        the band of 1 W, a surplus of 5e-12 W or of 0.5 W keeps the previous decision, a surplus of 5 W raises, and
+        a surplus of -5 W does not.
 
         Why: when the battery balances the house exactly, the surplus is zero up to float noise, and a decision on
         its sign alone would switch the raise on and off between the passes of one step.

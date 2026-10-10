@@ -69,8 +69,13 @@ A **circuit** is one closed water loop between exactly two components. It has:
   over the step (a mixed vessel, or the HDS pipe water of §4.6). The other end is algebraic: it maps the
   temperature it receives to the one it sends back within the iteration (a generator, the HDS heat exchange).
 
-A circuit's outputs are `MassFlow<circuit>` (kg/s, by the pump owner only), `SupplyTemperature<circuit>` and
-`ReturnTemperature<circuit>` (°C, each by its owner); the other end reads them.
+A circuit's outputs are its mass flow (kg/s, by the pump owner only), its supply temperature and its return
+temperature (°C, each by its owner); the other end reads them. Each component names them under its own output
+names, which predate this spec: the boiler's hot-water circuit is `WaterOutputMassFlowDhw` and
+`WaterOutputTemperatureDhw`, the heat pump's `MassFlowOutputDHW` and `TemperatureOutputDHW`, and the hot-water tank
+publishes the return as `StepMeanWaterTemperatureToHeatGeneratorInCelsius` (renamed 2026-10-10, owner; it was
+`WaterTemperatureToHeatGenerator`). A uniform `MassFlow<circuit>` naming is not scheduled; the energy-balance stage
+names the three outputs of each circuit in its `HydronicPort` instead.
 
 ### 3.2 A node publishes the step mean of its temperature
 
@@ -108,11 +113,13 @@ class HydronicPort:
     supply_temperature: str # output name (°C) of the supply owner
     return_temperature: str # output name (°C) of the return owner
     role: lt.EnergyRole     # OUT for the supply owner, IN for the receiver
-    def kilowatt_hours(self, m, t_sup, t_ret, seconds_per_timestep) -> float:
-        return m * WATER_C * (t_sup - t_ret) * seconds_per_timestep / 3.6e6
+    @staticmethod
+    def heat_in_kilowatt_hour(*, mass_flow_in_kg_per_second, supply_temperature_in_celsius,
+                              return_temperature_in_celsius, seconds_per_timestep) -> float:
+        return hydronics.circuit_heat_kwh(...)  # m c (T_sup - T_ret) dt / 3.6e6, keyword-only
 ```
 
-The balance check applies `kilowatt_hours` to the three columns; both ends declare the same port with opposite
+The balance check applies `heat_in_kilowatt_hour` to the three columns; both ends declare the same port with opposite
 roles, so a circuit balances by construction and a mismatch can only come from inside a component. Components
 keep their `ThermalPower*`/`ThermalEnergy*` outputs for KPIs and reports, computed by the same function from their
 port values; the electricity and fuel meters read only fuel or electricity outputs (§5). On the
@@ -174,19 +181,27 @@ sign change, and the plain iterate otherwise.
 ### 4.3 Hot water at the tap (kept from #864)
 
 The tap draw is internal to the DHW tank, not a circuit to another component. #864's thermostatic mixing valve
-(`SimpleDHWStorage.hot_water_draw`, with `ThermalEnergyUnmetDHWInWattHour`) is kept and expressed on `(m, T)`: the household
+(`hydronics.mixing_valve_draw`, solved on the step mean by `SimpleDHWStorage.solve_tank_step`, with
+`ThermalEnergyUnmetDHWInWattHour`) is kept and expressed on `(m, T)`: the household
 asks for `m_d` at `T_warm`; a tank above `T_warm` lets `m_hot = m_d (T_warm − T_cold)/(T − T_cold)` leave and the
 same mass of mains water enter at `T_cold`. In the node equation that is one inflow `m_hot` at `T_cold`. Because
 `m_hot` depends on the tank temperature, the tank solves the valve on its own step mean with a local scalar
 iteration (all inside one `i_simulate`, no simulator iteration): then the heat drawn,
 `m_hot c (T̄ − T_cold) dt`, equals the demand exactly while `T̄ > T_warm`. Below `T_warm` all of `m_d` passes
 unmixed and the shortfall is `ThermalEnergyUnmetDHWInWattHour`; below `T_cold` nothing is drawn. #864's
-`check_water_mass` (a vessel without water is refused at construction) is kept.
+`check_water_mass` (a vessel without water is refused at construction) is kept, as
+`SimpleDHWStorage.refuse_a_tank_without_water`. The local iteration is the Illinois variant of regula falsi,
+`hydronics.solve_bracketed_fixed_point`, bracketed by the range of every temperature the tank mixes
+(`hydronics.TemperatureRange`). The tap's heat, `ThermalEnergyConsumptionDHW` and `ThermalPowerConsumptionDHW`, is
+booked positive, the heat the tap delivers (owner, 2026-10-10; the energy was booked negative before, and the cost
+engine's useful-heat source reads it as heat into the house).
 
-The DHW tank publishes its start temperature `T0` as the circuits' return on the first pass of every step, and its
-computed step mean from the second pass on (owner, 2026-10-09). The simulator starts every step from zeroed outputs,
-so a generator simulated before the tank has answered a 0 °C return in the first pass, and the step mean computed
-from that answer is a worse start than `T0`; the fixed point does not change.
+The DHW tank publishes the step mean it computes from its inputs and its saved state, on every pass (owner,
+2026-10-10). Until then it published its start temperature `T0` on the first pass of every step and accelerated
+later passes from its own iteration history (§6); both are iteration memory inside the component, which component
+design principle 5 rules out ("`i_simulate` is a function of the inputs and the saved state"). The first pass now
+starts from the previous step's converged values (the simulator's warm start, hisim-4g9.23) and the acceleration
+lives in the simulator (§6).
 
 ### 4.4 The space-heating buffer
 
@@ -248,11 +263,15 @@ D1 and D2 say. Without the limit, a full-power charge decided on `T0` (D4) heate
 supply is also capped at its controller's set temperature, the value the controller already aims at:
 `T_sup = min(T_set, T_max, T̄ + ΔT)`, with the flow as before and the heat `m c (T_sup − T̄)`; the fuel or
 electricity follows from that heat (§5.1). The boiler's `T_set` is its controller's 60 °C warm-water aim plus its
-10 K hysteresis, 70 °C (`GenericBoilerController.SupplyTemperatureSetDhwInCelsius`); the electric heater's is its
+10 K hysteresis, 70 °C (`GenericBoilerController.SupplyTemperatureSetForDHWInCelsius`); the electric heater's is its
 controller's 60 °C aim plus its 15 K hysteresis, 75 °C (`ElectricHeatingController.SupplyTemperatureSetForDHWInCelsius`);
 the heat pump's is its hot-water controller's `t_max`, 60 °C, plus the energy manager's raise while it is active
-(`MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetDHWInCelsius`); `T_max` (80 °C, 80 °C, 75 °C) stays the upper
-bound. So a charge ends at its target inside the step rather than a whole
+(`MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetForDHWInCelsius`); `T_max` (80 °C, 80 °C, 75 °C) stays the upper
+bound. The rule is one library function, `hydronics.capped_hot_water_supply_temperature_c`, which the three
+generators call; their set-temperature inputs are mandatory, and a set temperature above `T_max`, which a charge
+could never reach, is refused (owner, 2026-10-10; the inputs were optional before, and an unwired one silently
+dropped the cap). The district-heating substation throttles at its set temperature with the same library rule,
+`hydronics.throttled_supply_temperature_c`. So a charge ends at its target inside the step rather than a whole
 step past it, which made the fuel and electricity depend on the step length (gas fuel +4.4 % at 3600 s against
 60 s over a year before the cap). This is an in-step supply cap at the controller's target, not a forecast: the
 controller still decides on `T0` (D4, §10). A supply capped at the set temperature brings the tank towards it but
@@ -283,7 +302,9 @@ efficiency at the commanded burner power, `combustion_efficiency_at_burner_power
 2026-10-09; this replaced the inverse of the efficiency law). The electric heater's is `ElectricHeatingConfig.maximal_dhw_supply_temperature_in_celsius`,
 80 °C, the usual upper thermostat setting of a domestic electric water heater; its electricity is the throttled heat.
 A hot-water step whose controller asks for no lift moves no water, so the boiler does not fire on it (owner,
-2026-10-09).
+2026-10-09); the same holds for a space-heating step without a lift, which booked the burner's heat at zero flow
+before (owner, 2026-10-10). A boiler that does not fire publishes zero fuel power (`TotalFuelConsumption`); before
+2026-10-10 it published its commanded burner power while off.
 
 ### 5.2 Heat pump (D2: hplib's flow is authoritative)
 
@@ -322,11 +343,16 @@ efficiency curve is evaluated at, and the flow is sized for `2 ΔT_n`: the colle
 `m = Q_coll(T̄)/(c · 2 ΔT_n)`, reads the node's `T̄` and publishes `T_sup = T̄ + 2 ΔT_n`, so its water carries exactly
 `Q_coll(T̄)`. While the pump stands or the collector has no heat, the circuit moves no water and its supply is its
 return. The pump decides on the step mean, an exception to D4 for the solar controller only (owner, 2026-10-09):
-the collector publishes the flow `Q_coll(T̄)/(c · 2 ΔT_n)` and the outlet temperature `T̄ + 2 ΔT_n` (`T̄` while
-`Q_coll(T̄) ≤ 0`) whether or not the pump runs, and the controller reads them with the node's `T̄`; the pump runs
-when the collector heat at `T̄` is positive and the switch-on lift is reached. Deciding on `T0` made the collector's
-yield and the tank's hot-water fuel depend on the step length. The controller's full-tank stop (the tank above its
-60 °C aim) stays on `T0`: on `T̄` it has no fixed point when the pump's own heat lifts the step mean across 60 °C, and
+the collector publishes the flow `Q_coll(T̄)/(c · 2 ΔT_n)` (`RequiredWaterMassFlowOutput`) whether or not the pump
+runs, and the pump runs while that flow reaches the controller's minimum. Deciding on `T0` made the collector's
+yield and the tank's hot-water fuel depend on the step length. The controller's former switch-on comparison, the
+collector's outlet at `T̄` against `T̄` plus `set_temperature_difference_for_on`, is removed with that field and the
+collector's `CollectorTemperatureAtStepMeanInCelsius` output (owner, 2026-10-10): the difference was `2 ΔT_n`
+whenever the collector had heat and 0 otherwise, so the comparison only repeated the minimum flow below 20 K and
+stopped the pump for good from 20 K on; results are unchanged with the default 10 K. The controller's full-tank stop (the tank above its
+60 °C aim, `SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS`) stays on `T0`, which the controller reads from
+the tank's `WaterTemperatureAtStartOfStepInCelsius`: on `T̄` it has no fixed point when the pump's own heat lifts the
+step mean across 60 °C, and
 such a step ended at `force_convergence` (owner decision, 2026-10-09: the stop stays on `T0` because on `T̄` it has
 no fixed point; the gas-and-solar twin's year has 21507 forced steps at 60 s with the stop on `T̄`, 13 with it on
 `T0`, and 1110 against 11 at 900 s). The controller's minimum pump flow is halved to
@@ -388,16 +414,44 @@ is absolute and applies to watt outputs too; a derived power at `m c ≈ 700 W/K
 ~1.5e-7 K, which adds `ln(1e-3)/ln θ` iterations. A per-output tolerance is considered only if the histogram
 shows the watt outputs dominate.
 
-**Node-side acceleration.** A node that has iterated more than six times on a step accelerates its published
-`T̄` from its own last iterates (secant / Aitken on its own fixed-point residual; only temperatures it already
-receives, so the ports stay pure), and under-relaxes only when it detects a sign change between iterates (an
-oscillation, which a contraction with `θ > 0` should not produce, but a circuit whose heat falls steeply with `T̄`
-can, such as the heat pump's hot-water supply capped at its controller's set temperature; the rounding staircase
-of §5.2 that first showed it is interpolated away since stage C). The acceleration changes only how fast the fixed point is reached, never which one. Its first target is
-the firing boiler step, which must come back under the limit of 10. A node whose new step mean lies within 1e-9 K
-of the one it published last publishes that float unchanged: a converged iteration can alternate between two
-neighbouring floats, which a component deciding on the sign of a balance turns into a cycle of its own (owner,
-2026-10-09: a stopgap, kept until the energy manager's knife-edge switch is fixed properly, hisim-4g9.31).
+**Acceleration in the simulator (owner, 2026-10-10).** A component declares an output whose value is the image of
+a fixed-point map, a node's `T̄`, with `add_output(..., is_accelerated=True)`; the hot-water tank declares its two
+step-mean outputs. After the component has run, the simulator replaces the value it computed
+(`hisim/fixed_point_acceleration.py`): up to six passes on a step the plain value, after them a secant (Aitken) step
+on the output's own fixed-point residual while the secant's contraction estimate lies in [0, 1), and the
+under-relaxed value (weight 0.5) when the residual changes sign (an oscillation, which a contraction with `θ > 0`
+should not produce, but a circuit whose heat falls steeply with `T̄` can, such as the heat pump's hot-water supply
+capped at its controller's set temperature). A new value within 1e-9 of the one the output stood at keeps that
+value: a converged iteration can alternate between two neighbouring floats, which a component deciding on the sign
+of a balance (the energy manager, hisim-4g9.31) turns into a cycle of its own. Once the simulator forces
+convergence it only holds values within that deadband and extrapolates nothing: the controllers are then frozen,
+and a secant from a history that spans their switching aims at a fixed point that no longer exists (with the
+extrapolation kept under forced convergence the heat-pump twin's year at 3600 s aborted on a 100-pass cycle). The
+acceleration changes only how fast the fixed point is reached, never which one; the iteration history belongs to
+the simulator, which runs the iteration, so every component stays a function of its inputs and its saved state.
+Until 2026-10-10 the tank kept this history itself, published `T0` on the first pass of a step and clamped the
+extrapolation to the range of the temperatures it mixes.
+
+Measured on the six twins with a hot-water tank, full year 2021, mean passes per step and forced steps (more than
+ten passes), before (the tank's own memory) and after (the simulator's acceleration), both with the simulator's warm
+start (hisim-4g9.23):
+
+| twin | 60 s before | 60 s after | 900 s before | 900 s after | 3600 s before | 3600 s after |
+|---|---|---|---|---|---|---|
+| gas | 4.06, 0 | 3.90, 0 | 4.10, 0 | 3.95, 0 | 4.20, 0 | 4.06, 0 |
+| heat pump | 5.06, 30904 | 4.48, 30589 | 5.71, 3937 | 5.36, 3797 | 7.12, 1893 | 6.82, 1915 |
+| electric heating | 5.04, 0 | 4.75, 0 | 6.16, 0 | 5.90, 0 | 7.61, 0 | 7.41, 0 |
+| district heating | 4.00, 0 | 3.27, 0 | 4.00, 0 | 3.34, 0 | 4.00, 0 | 3.43, 0 |
+| gas + solar | 4.10, 14 | 3.92, 14 | 4.20, 13 | 4.04, 10 | 4.34, 7 | 4.21, 7 |
+| heat pump + solar | 4.63, 9977 | 4.04, 10309 | 4.99, 1906 | 4.49, 1826 | aborted at step 4426 | 5.06, 646 |
+
+The hot-water KPIs (tap heat, generators' hot-water heat and fuel or electricity, unmet heat) of the gas, electric,
+district-heating and gas-and-solar twins agree within 0.2 % (the collector heat of the gas-and-solar twin within
+1.3 % at 900 s, its pump decisions being whole-step); the heat-pump twins' within 0.8 %, their forced steps being
+the energy manager's cycles (hisim-4g9.28, hisim-4g9.31). Without the warm start (the state of this stage alone) the
+heat-pump twins' forced steps at 900 s rise by 6 % (heat pump, 7909 → 8396) and 10 % (heat pump + solar,
+1561 → 1725), fall by 11 % at 60 s (heat pump, 97983 → 86860), and the other twins are unchanged or better; the
+heat-pump-and-solar year at 3600 s no longer aborts either way.
 
 **Iteration histogram test.** The recorded twins run at 60, 900 and 3600 s and the iterations per step
 (`simulator.py:426` returns the count) are asserted: at 900 s no step reaches `force_convergence` (more than 10
@@ -449,7 +503,7 @@ Each is a unit test asserting every node's per-step balance (relative 1e-6) and 
 
 | Component | Change |
 |---|---|
-| `hydronics.py` (new) | `MixedNode.step`, water `c`, `HydronicPort` arithmetic, node acceleration |
+| `hydronics.py` (new) | `MixedNode.step`, water `c` (`Water`), circuit heat, supply caps, tap valve, bracketed solve; the acceleration is `fixed_point_acceleration.py`, applied by the simulator (§6) |
 | `SimpleHotWaterStorage`, `SimpleDHWStorage` | fully mixed path: node step, publish `T̄`, `T_end`, `T0`; drop mass mixing (`:372-397`), start-temperature booking, explicit loss. Stratification path unchanged (D5) |
 | `HeatDistribution` | same-step return; pipe-water node without a buffer; drop the lag (`:471-491`) |
 | `GenericBoiler` + controller | keep `control_signal`, `modulate_power` and fixed lift; supply from `T̄`; controller reads `T0` |
@@ -475,7 +529,7 @@ the translator follows them; the translation map (`roadmap/renovisor/translation
 | HDS `ThermalPowerRequestedFromStorage`, `ThermalPowerGrantedByStorage`, `SupplyTemperatureFloor` | dropped |
 | boiler `ThermalPowerSetpoint` feed-forward, `MINIMUM_TEMPERATURE_LIFT_IN_KELVIN`, `fuel_power_for_thermal_power` | dropped (D1: power control kept, fuel from the forward law) |
 | `combustion_efficiency_at_burner_power`, the power-band guard | kept |
-| `hot_water_draw`, `ThermalEnergyUnmetDHWInWattHour`, `check_water_mass` | kept, on `(m, T)` (§4.3) |
+| `hot_water_draw` (now `hydronics.mixing_valve_draw` and `solve_tank_step`), `ThermalEnergyUnmetDHWInWattHour`, `check_water_mass` (now `refuse_a_tank_without_water`) | kept, on `(m, T)` (§4.3) |
 | `StorageForecast`, `DhwChargeYield` and the controllers' forecast inputs | dropped (D4) |
 | cooling-into-storage refusal | kept until hisim-9uoo.15 / 9uoo.17 land |
 | `tests/test_water_storage_energy_balance.py` | winter-week, tap and boiler-law scenarios kept, assertions rewritten to node closure; forecast and yield tests dropped |
@@ -588,6 +642,9 @@ charge takes whole steps; within a step every flow is constant, as §4.1 assumes
 
 **D7 — Simulator: no change.** Node-side acceleration and the iteration histogram test only; the convergence
 burden sits in the nodes. A per-output tolerance only if the histogram shows the watt outputs dominate (§6).
+*Amendment (owner, 2026-10-10):* the iteration memory moves out of the nodes. The simulator accelerates the outputs
+a component declares accelerated (§6) and starts every step from the previous step's converged values (the warm
+start, hisim-4g9.23); both are generic and know nothing about a component.
 
 **D8 — Staging: staged PRs straight into main,** each re-blessing the goldens it changes (§9.5). Consequence:
 goldens and RenoVisor results move in several steps, and each stage that changes results is announced on

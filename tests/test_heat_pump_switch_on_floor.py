@@ -21,7 +21,6 @@ def context(room_setpoint: float = ROOM_SETPOINT) -> SizingContext:
     return SizingContext(
         set_heating_temperature_in_celsius=room_setpoint,
         heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
-        set_heating_threshold_outside_temperature_in_celsius=20.0,
     )
 
 
@@ -148,6 +147,5 @@ def test_the_preset_cannot_resolve_without_the_room_setpoint() -> None:
         MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard("SH").resolve(
             SizingContext(
                 heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
-                set_heating_threshold_outside_temperature_in_celsius=20.0,
             )
         )

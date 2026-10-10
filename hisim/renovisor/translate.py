@@ -1713,7 +1713,7 @@ def _heat_distribution(state: _TranslationState, generator: HeatGenerator) -> No
         Targets.HEATING_SYSTEM,
         member.name,
         source=path,
-        note="the emitter and the heat pump's space-heating controller both read it as a fact",
+        note="the emitter, the heating curve and the heat pump's space-heating controller read it as a fact",
     ):
         state.listed(path, requested.value)
         return

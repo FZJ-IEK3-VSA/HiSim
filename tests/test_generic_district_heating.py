@@ -19,27 +19,27 @@ from hisim import simulator as sim
 @pytest.mark.parametrize(
     [
         "with_warm_water",
-        "daily_avg_outside_temperature_deg_c",
+        "is_heating_season",
         "sh_current_water_temperature",
         "sh_target_water_temperature",
         "dhw_input_temperature",
         "expected_mode",
     ],
     [
-        (False, 0, 20, 70, None, HeatingMode.SPACE_HEATING),
-        (False, 0, 55, 25, None, HeatingMode.OFF),
-        (False, 0, 40, 23, None, HeatingMode.OFF),
-        (False, 20, 20, 25, None, HeatingMode.OFF),
-        (True, 0, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
-        (True, 20, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
-        (True, 0, 40, 25, 50, HeatingMode.OFF),
-        (True, 0, 25, 60, 50, HeatingMode.SPACE_HEATING),
-        (True, 20, 25, 30, 50, HeatingMode.OFF),
+        (False, True, 20, 70, None, HeatingMode.SPACE_HEATING),
+        (False, True, 55, 25, None, HeatingMode.OFF),
+        (False, True, 40, 23, None, HeatingMode.OFF),
+        (False, False, 20, 25, None, HeatingMode.OFF),
+        (True, True, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
+        (True, False, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
+        (True, True, 40, 25, 50, HeatingMode.OFF),
+        (True, True, 25, 60, 50, HeatingMode.SPACE_HEATING),
+        (True, False, 25, 30, 50, HeatingMode.OFF),
     ],
 )
 def test_controller_determine_operating_mode(
     with_warm_water: bool,
-    daily_avg_outside_temperature_deg_c: float,
+    is_heating_season: bool,
     sh_current_water_temperature: float,
     sh_target_water_temperature: float,
     dhw_input_temperature: float | None,
@@ -50,7 +50,7 @@ def test_controller_determine_operating_mode(
     testee = given_default_controller_testee(with_warm_water=with_warm_water)
 
     testee.determine_operating_mode(
-        daily_avg_outside_temperature_deg_c,
+        is_heating_season,
         sh_current_water_temperature,
         sh_target_water_temperature,
         dhw_input_temperature,
@@ -171,7 +171,6 @@ def given_default_controller_testee(
     )
     config = DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController")
     config.with_domestic_hot_water_preparation = with_warm_water
-    config.set_heating_threshold_outside_temperature_in_celsius = 16.0
     return DistrictHeatingController(simulation_parameters, config)
 
 
@@ -232,9 +231,9 @@ def test_the_controller_sets_the_tank_s_start_temperature_plus_the_lift_it_asks_
         controller,
         {
             DistrictHeatingController.WaterTemperatureInputFromWarmWaterStorage: tank_temperature_in_celsius,
-            DistrictHeatingController.DailyAverageOutsideTemperature: 20.0,
+            DistrictHeatingController.HeatingSeason: 0.0,
             DistrictHeatingController.WaterTemperatureInputFromHeatDistributionSystem: 30.0,
-            DistrictHeatingController.HeatingFlowTemperatureFromHeatDistributionSystem: 30.0,
+            DistrictHeatingController.SpaceHeatingSupplyTemperatureSetInCelsius: 30.0,
         },
     )
     lift_in_kelvin = outputs[DistrictHeatingController.DeltaTemperatureNeededForDHW]

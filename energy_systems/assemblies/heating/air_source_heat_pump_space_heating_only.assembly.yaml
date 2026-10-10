@@ -3,7 +3,7 @@
 # class builds its DHW outputs only with DHW preparation, so the contract of each shape is its own. This one has no
 # `dhw` circuit, no DHW controller and no DHW electricity; DHW comes from another assembly or is not served.
 # ControllerSH switches the heat pump on the buffer temperature against the flow temperature the site's
-# HeatDistributionController asks for; an energy manager may only raise that set point, through `ems_modifier`. The
+# HeatingCurveController sets; an energy manager may only raise that set point, through `ems_modifier`. The
 # sizing facts the members read from the site bind their one provider by the engine's bare-fact rule (§6, D29).
 
 schema_version: 4
@@ -37,7 +37,7 @@ components:
     preset: standard
     inputs:
       - {$port: weather}                                    # DailyAverageOutsideTemperature
-      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - {$port: ems_modifier}                               # SimpleHotWaterStorageTemperatureModifier
       - Buffer                                              # WaterTemperatureInput
   HeatPump:
@@ -68,7 +68,7 @@ interface:
                        wires: {TemperatureAmbient: DailyAverageOutsideTemperatures,
                                TemperatureInputPrimary: DailyAverageOutsideTemperatures}}
                       # the class's default connections from Weather are not these two (G2): named as the twin writes them
-    flow_temperature: {into: [ControllerSH], partner: HeatDistributionController}   # a set-point need (G1)
+    heating_curve:    {into: [ControllerSH], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     electricity:      {carrier: electricity, outputs: [HeatPump.ElectricalInputPowerSH]}
     ems_modifier:     {into: [ControllerSH], partner: L2GenericEnergyManagementSystem, optional: true}
   provides:

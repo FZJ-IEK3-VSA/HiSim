@@ -39,7 +39,7 @@ from hisim.config import (
 )
 from hisim.components.building import Building
 from hisim.components.weather import Weather
-from hisim.components.heat_distribution_system import HeatDistributionControllerConfig
+from hisim.components.heating_curve import HeatingCurveControllerConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
@@ -880,15 +880,16 @@ class ElectricHeatingControllerConfig(ConfigBase):
     )
 
     component_id: ComponentID
-    #: Daily average outside temperature above which space heating stops. Sizable: left ``AUTO``
-    #: it is the heat distribution controller's step table over the building's specific heating
-    #: load -- 16 °C up to 50 W/m², 18 °C up to 80 W/m², 20 °C above that -- because a badly
-    #: insulated house cools out in the mornings and evenings of the shoulder season and has to
-    #: be heated earlier in the year.
+    #: Daily average outside temperature above which space heating stops. The electric heater heats
+    #: the rooms directly and has no heating curve, so its controller holds the threshold itself.
+    #: Sizable: left ``AUTO`` it is the heating curve's step table over the building's specific
+    #: heating load -- 16 °C up to 50 W/m², 18 °C up to 80 W/m², 20 °C above that -- because a
+    #: badly insulated house cools out in the mornings and evenings of the shoulder season and has
+    #: to be heated earlier in the year.
     set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=HeatDistributionControllerConfig.HEATING_THRESHOLD_LAW,
+        rule=HeatingCurveControllerConfig.HEATING_THRESHOLD_LAW,
         note=(
-            "the heat distribution controller's step table: 16 °C up to 50 W/m² of specific"
+            "the heating curve's step table: 16 °C up to 50 W/m² of specific"
             " heating load, 18 °C up to 80 W/m², 20 °C above that"
         ),
     )
@@ -1139,7 +1140,10 @@ class ElectricHeatingController(L1ControllerComponent):
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=self.controller_mode,
-            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+            is_heating_season=DiverterValve.is_heating_season(
+                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                heating_threshold_in_celsius=concrete(self.config.set_heating_threshold_outside_temperature_in_celsius),
+            ),
             water_temperature_input_sh_in_celsius=0,  # artificial because no sh water used
             water_temperature_input_dhw_in_celsius=(
                 dhw_current_temperature_deg_c if self.config.with_domestic_hot_water_preparation else None
@@ -1148,9 +1152,6 @@ class ElectricHeatingController(L1ControllerComponent):
                 set_temperature_space_heating_in_celsius=60,  # artificial because no sh water used
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
-                outside_temperature_threshold_in_celsius=concrete(
-                    self.config.set_heating_threshold_outside_temperature_in_celsius
-                ),
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )

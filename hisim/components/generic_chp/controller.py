@@ -308,6 +308,8 @@ class L1CHPController(cp.Component):
     (3) EMS controller (controller_l2_energy_management_system) -> optional if electricity should be involved in control.
     """
 
+    KIND = cp.ComponentKind.L1_CONTROLLER
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs

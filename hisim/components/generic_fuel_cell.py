@@ -90,6 +90,8 @@ class FuelCell(cp.Component):
 
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Inputs

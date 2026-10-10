@@ -17,7 +17,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import hydronics
 from hisim import loadtypes as lt
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import Component, ComponentInput, ComponentKind, ComponentOutput, SingleTimeStepValues
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.fixed_point_acceleration import (
     AccelerationHistoryError,
@@ -194,6 +194,7 @@ class LoopNode(Component):
     """
 
     MODELS_NO_DEVICE: ClassVar[bool] = True
+    KIND = ComponentKind.PHYSICS
 
     #: The input of the charging circuit's supply temperature, in °C.
     SupplyTemperatureInCelsius: ClassVar[str] = "SupplyTemperatureInCelsius"
@@ -262,6 +263,7 @@ class LoopGenerator(Component):
     """A generator that holds a 15 K lift above the return it reads, the case a node's iteration converges slowest in."""
 
     MODELS_NO_DEVICE: ClassVar[bool] = True
+    KIND = ComponentKind.PHYSICS
 
     #: The input of the return temperature, the node's step mean, in °C.
     ReturnTemperatureInCelsius: ClassVar[str] = "ReturnTemperatureInCelsius"

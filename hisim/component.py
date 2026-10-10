@@ -13,6 +13,7 @@ compatibility alias is left behind on purpose: ``hisim.component`` is the compon
 from __future__ import annotations
 import os
 import dataclasses as dc
+import enum
 import typing
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Optional
@@ -239,8 +240,61 @@ class ComponentNameMismatchError(ValueError):
     """A component was constructed with a name other than its config's ``component_id.key``."""
 
 
+class ComponentKind(enum.Enum):
+    """The role a component plays in a simulation, which fixes where the simulator evaluates it within a pass.
+
+    Every component is one of five kinds. A data source (weather, a load profile) reads nothing from other
+    components. An L2 controller (the energy management system) coordinates devices through signals to their L1
+    controllers. An L1 controller (a boiler's or a heat pump's controller) commands exactly one device. Physics (a
+    heat pump, a storage tank, a building) simulates a device and decides nothing. A meter reads port quantities
+    for the reports, and nothing in the simulation reads it.
+
+    The simulator evaluates the components of a pass kind by kind, in this order: data sources, L2 controllers,
+    L1 controllers, physics, meters (:attr:`hisim.simulator.Simulator.EVALUATION_ORDER_OF_KINDS`). A controller
+    then commands before its device runs, and the device's answer reaches the controller in the next pass
+    together with the store's answer to the same command.
+    """
+
+    DATA_SOURCE = "data_source"
+    L2_CONTROLLER = "l2_controller"
+    L1_CONTROLLER = "l1_controller"
+    PHYSICS = "physics"
+    METER = "meter"
+
+
+class ComponentKindNotDeclaredError(TypeError):
+    """A component class declares no :attr:`Component.KIND`, so the simulator cannot place it in a pass."""
+
+
 class Component:
     """Base class for all components."""
+
+    #: The component's kind (:class:`ComponentKind`). Every concrete component class declares it once, in its own
+    #: class body or through a base class of its own; there is no default, so a class that declares none is
+    #: refused when it is added to a simulator (:meth:`get_kind`).
+    KIND: ClassVar[ComponentKind]
+
+    @classmethod
+    def get_kind(cls) -> ComponentKind:
+        """Return the kind the component class declares.
+
+        For example, ``Weather.get_kind()`` returns ``ComponentKind.DATA_SOURCE``.
+
+        Returns:
+            The class's :attr:`KIND`.
+
+        Raises:
+            ComponentKindNotDeclaredError: If the class declares no kind, or something that is not a
+                :class:`ComponentKind`.
+        """
+        # The first class in the method resolution order that sets KIND is the one an attribute lookup would find.
+        kind = next((base.__dict__["KIND"] for base in cls.__mro__ if "KIND" in base.__dict__), None)
+        if not isinstance(kind, ComponentKind):
+            raise ComponentKindNotDeclaredError(
+                f"The component class {cls.get_full_classname()} declares no KIND; set KIND to one of "
+                f"{[member.name for member in ComponentKind]} in its class body."
+            )
+        return kind
 
     # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
     # components must return facts from `get_cost_facts()` or have an adapter table entry,

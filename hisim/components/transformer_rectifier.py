@@ -12,6 +12,7 @@ import pandas as pd
 
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import (
+    ComponentKind,
     CapexCostDataClass,
     ComponentInput,
     ComponentOutput,
@@ -144,6 +145,8 @@ class Transformer(StatelessComponent):
         Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 

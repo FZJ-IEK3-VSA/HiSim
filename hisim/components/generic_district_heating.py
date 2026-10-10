@@ -20,6 +20,7 @@ from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, ComponentType
 from hisim.component import (
+    ComponentKind,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
@@ -217,6 +218,8 @@ class DistrictHeating(Component):
     the connection can deliver is configurable via
     :attr:`DistrictHeatingConfig.connected_load_in_w`.
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 
@@ -1008,6 +1011,8 @@ class DistrictHeatingControllerConfig(ConfigBase):
 
 class DistrictHeatingController(Component):
     """District Heating Controller."""
+
+    KIND = ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

@@ -313,6 +313,8 @@ class SimpleWaterStorageState:
 class SimpleWaterStorage(cp.Component):
     """SimpleWaterStorage class with generic functions."""
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     @utils.measure_execution_time

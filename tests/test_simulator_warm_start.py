@@ -20,7 +20,7 @@ import pytest
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import Component, ComponentInput, ComponentKind, ComponentOutput, SingleTimeStepValues
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
@@ -54,6 +54,9 @@ class WarmStartSource(Component):
     """
 
     MODELS_NO_DEVICE: ClassVar[bool] = True
+
+    #: Physics, as the reader is: a pass evaluates the two in the order they were added.
+    KIND = ComponentKind.PHYSICS
 
     #: The one output the reader reads.
     Value: ClassVar[str] = "Value"
@@ -106,6 +109,9 @@ class WarmStartReader(Component):
     """
 
     MODELS_NO_DEVICE: ClassVar[bool] = True
+
+    #: Physics, as the source is: a pass evaluates the two in the order they were added.
+    KIND = ComponentKind.PHYSICS
 
     #: The input connected to the source's output.
     ValueIn: ClassVar[str] = "ValueIn"

@@ -133,6 +133,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     """
 
+    KIND = cp.ComponentKind.L2_CONTROLLER
+
     cost_relevance = CostRelevance.PRICED
 
     #: The weight each kind of participant the controller ranks is fed at by default: its rank in the

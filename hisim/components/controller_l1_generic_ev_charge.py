@@ -173,6 +173,8 @@ class L1Controller(cp.Component):
     (3) EMS (controller_l2_energy_management_system) - optional
     """
 
+    KIND = cp.ComponentKind.L1_CONTROLLER
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs

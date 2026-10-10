@@ -11,6 +11,7 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import (
+    ComponentKind,
     Component,
     ComponentConnection,
     ComponentInput,
@@ -90,6 +91,8 @@ class CarBattery(Component):
     Components to connect to:
     (1) CarBattery controller (controller_l1_generic_ev_charge)
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 

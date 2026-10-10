@@ -10,6 +10,7 @@ from dataclasses_json import dataclass_json
 import pandas as pd
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import (
+    ComponentKind,
     CapexCostDataClass,
     Component,
     ComponentInput,
@@ -141,6 +142,8 @@ class CHP(Component):
     Simulate chp efficiency (cop) as well as electrical (p_el) &
     thermal power (p_th), massflow (m_dot) and output temperature (t_out).
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 

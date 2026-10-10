@@ -397,7 +397,9 @@ The simulator iterates every component in order until no output changes by more 
 (`hisim/component.py:189-195`, `hisim/simulator.py:393-422`); after 10 tries it sets `force_convergence`, which
 freezes controllers, and after 100 it aborts (`simulator.py:415-419`). D7: the iteration is not changed; since the
 D7 amendment (owner, 2026-10-09) every step starts from the values the previous step converged to, and only step 0
-from zeros.
+from zeros. Since 2026-10-10 (owner, hisim-fxix.16) a pass evaluates the components kind by kind (data sources, L2
+controllers, L1 controllers, physics, meters; `Component.KIND`), in the order they were added within one kind; the
+outputs and result columns keep the order added.
 
 **Why it converges.** For a node fed by one circuit whose supply follows the return 1:1 (a generator holding its
 lift), the derivative of the node's `T̄` with respect to the inflow temperature is

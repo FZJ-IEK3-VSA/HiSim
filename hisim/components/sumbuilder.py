@@ -58,6 +58,8 @@ class SumBuilderConfig(ConfigBase):
 class CalculateOperation(cp.Component):
     """Arbitrary mathematical operations."""
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
@@ -170,6 +172,8 @@ class SumBuilderForTwoInputs(Component):
     time step, and writes the result to one output channel.
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Arithmetic over other components' outputs: it owns no device, so there is nothing to
@@ -257,6 +261,8 @@ class SumBuilderForTwoInputs(Component):
 
 class SumBuilderForThreeInputs(Component):
     """Sum builder for three inputs."""
+
+    KIND = cp.ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

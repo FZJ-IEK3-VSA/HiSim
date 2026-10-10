@@ -11,14 +11,22 @@ Every component is exactly one of four kinds; controllers come in two levels.
 | Kind | Examples | Reads | Sends | Decides |
 |---|---|---|---|---|
 | Data source | weather, CSV loader, UTSP/LPG connector | nothing from other components | data, to anyone | nothing |
-| Physics | heat pump, boiler, storage tank, building, heat distribution, PV, battery | data sources, port quantities of the physics it is connected to, commands of its L1 controller | port quantities to the physics it is connected to; sensor values | nothing; it only enforces its own physical and safety limits |
+| Physics | heat pump, boiler, storage tank, building, heat distribution, PV, battery | data sources, port quantities of the physics it is connected to, commands of its L1 controller | port quantities to the physics it is connected to; sensor values | nothing; it only enforces its own physical and safety limits, including minimum run and idle times (device protection) |
 | L1 controller | heat pump controller, boiler controller, heat distribution controller | data sources, sensor values of physics, signals of L2 controllers | commands to exactly one device | on/off, mode, set point and run fraction of its device |
-| L2 controller | energy management system, PtX energy management | anything | incentive signals to L1 controllers, never to a device | coordination between devices: priorities, prices, set-point shifts |
-| Meter | electricity, gas, heat and fuel meters | anything | reports for KPIs and post-processing | nothing; it never acts on what it reads |
+| L2 controller | energy management system, PtX energy management, heating curve | anything except meters | incentive signals to L1 controllers, never to a device | coordination between devices: priorities, prices, set-point shifts |
+| Meter | electricity, gas, heat and fuel meters | port quantities of physics | reports for KPIs and post-processing; nothing in the simulation reads a meter | nothing; it never acts on what it reads |
 
 - A data source does not react to the simulation: its outputs for a step are the same in every iteration.
-- A command to a device comes only from an L1 controller. An L2 controller only changes what an L1 controller
-  aims for; how the device responds within its limits is the L1 controller's decision.
+- A command to a device comes only from an L1 controller, and every device has exactly one L1 controller, which
+  decides between all its services (a heat pump's space heating and hot water are modes of one controller). An
+  L2 controller only changes what an L1 controller aims for; how the device responds within its limits is the
+  L1 controller's decision.
+- A set point several L1 controllers share, such as the heating curve's supply temperature, comes from an L2
+  controller, never from one L1 controller to another.
+- Minimum run and idle times protect the device, so physics enforces them, like a maximum temperature. A
+  controller may hold stricter times of its own.
+- Nothing in the simulation reads a meter. A controller that needs a balance, such as the energy manager's grid
+  balance, sums the physics ports itself; the meter sums them independently for the bill.
 
 ## B. Principles
 

@@ -170,7 +170,7 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
 |---|---|---|---|
 | `GenericBoiler`, hot water, every fuel | `GenericBoilerController` | its warm-water aim, 60 °C (the charge ends at `T0 ≥ 60 °C`) | `PLR m_full` at the full-load supply; heat `m c (T_sup − T_ret)`; fuel `PLR · fuel_full` |
 | `MoreAdvancedHeatPumpHPLib`, hot water | `MoreAdvancedHeatPumpHPLibControllerDHW` | its set temperature (with the energy manager's raise) less the 0.5 K switch-off tolerance | `PLR m_full` at hplib's capped outlet; `P_th = m c (T_out − T̄)`, `P_el = P_th / COP(T̄)`; the brine pump's electricity `PLR · P_pump` |
-| `ElectricHeating`, hot water | `ElectricHeatingController` | where its mode ends the charge: the 60 °C aim alone, the 45 °C switch-on point beside space heating (the diverter valve's parallel mode; pending the owner's question on the diverter valve) | `PLR m_full` at the full-load supply; heat and electricity `m c (T_sup − T_ret)` |
+| `ElectricHeating`, hot water | `ElectricHeatingController` | the 60 °C warm-water aim, where the diverter valve ends a charge alone and beside space heating (its parallel mode latches like the hot-water mode) | `PLR m_full` at the full-load supply; heat and electricity `m c (T_sup − T_ret)` |
 | `SolarThermalSystem`, pump | `SolarThermalSystemController` | its warm-water aim, 60 °C (the pump stops at `T0 > 60 °C`) | `PLR m_full` at the collector's full-load outlet; heat `m c (T_out − T_in)`; pump electricity `PLR · P_pump` |
 
 Each device publishes its ratio run (`PartLoadRatioRunDhw`, the solar pump `PartLoadRatioRun`), and its controller

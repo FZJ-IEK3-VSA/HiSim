@@ -16,7 +16,7 @@ import importlib
 import math
 from enum import Enum, unique
 from dataclasses import dataclass, field
-from typing import Any, Callable, ClassVar, List, Optional, Dict, Tuple
+from typing import Any, ClassVar, List, Optional, Dict, Tuple
 
 import pandas as pd
 import numpy as np
@@ -60,7 +60,6 @@ from hisim.loadtypes import (
     Units,
 )
 from hisim.components.configuration import (
-    PhysicsConfig,
     EmissionFactorsAndCostsForFuelsConfig,
 )
 
@@ -68,6 +67,18 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.economics.facts import CostRelevance
+from hisim.components.more_advanced_heat_pump_hplib_model import (
+    CalculationRequest,
+    HeatingCircuitPowers,
+    HeatPumpEnergyTotals,
+    HeatPumpOperation,
+    HeatPumpRunTimers,
+    HeatPumpStepConditions,
+    HeatPumpSwitchCounters,
+    HplibResult,
+    ScopCalibration,
+    StandardizedSeasonalCop,
+)
 
 
 @unique
@@ -92,423 +103,6 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     PARALLEL = "PARALLEL"
     SERIES = "SERIES"
     NO_STORAGE = "NO_STORAGE"
-
-
-@unique
-class ScopApplication(str, Enum):
-    """The two EN 14825 applications a datasheet rates a heat pump's SCOP for."""
-
-    W35 = "W35"
-    W55 = "W55"
-
-
-class StandardizedSeasonalCop:
-    """The seasonal COP of an hplib heat pump by the bin method of EN 14825, average climate.
-
-    What a manufacturer states on the datasheet or ErP fiche is a SCOP rated this way, so
-    computing the same figure for hplib's curve fit is what lets the fit be calibrated to it
-    (:class:`ScopCalibration`). The method, in the simplified form the calibration needs:
-
-    * the heating season is :attr:`BINS`, one outdoor temperature per bin with its hours;
-    * the building's demand falls linearly from the design load at :attr:`DESIGN_TEMPERATURE` to
-      zero at :attr:`HEATING_LIMIT_TEMPERATURE`;
-    * the design load is the machine's thermal output at A-7/W52 divided by the part load of
-      A-7, :attr:`DESIGN_SIZING_PART_LOAD` (the machine covers A-7 exactly, as EN 14825's
-      reference sizing has it);
-    * the outlet temperature follows the application's line, :attr:`FLOW_LINES`, through two
-      points and extended beyond them;
-    * the machine modulates at the COP hplib gives for the bin (hplib's own 25 % electrical floor
-      is the only part-load limit it knows), and whatever the demand exceeds its output is met by
-      an electric back-up heater at COP 1, as is a bin where hplib's COP is 1 or less.
-
-    Source: EN 14825:2022, average climate (bins -10 to +15 °C, 4910 h) and the variable-outlet
-    lines of its low- (W35) and medium-temperature (W55) applications. For a brine/water machine
-    (hplib group 2) the brine enters at :attr:`BRINE_TEMPERATURE` in every bin, EN 14825's rating
-    condition, while the ambient term still follows the bin. Any other hplib group is refused.
-
-    Example::
-
-        StandardizedSeasonalCop.of(heatpump, ScopApplication.W55)   # 3.40 for hplib's generic air/water fit
-    """
-
-    #: Outdoor bin temperature in °C and its hours in the EN 14825 average heating season.
-    BINS: ClassVar[Tuple[Tuple[int, int], ...]] = (
-        (-10, 1), (-9, 25), (-8, 23), (-7, 24), (-6, 27), (-5, 68), (-4, 91), (-3, 89), (-2, 165),
-        (-1, 173), (0, 240), (1, 280), (2, 320), (3, 357), (4, 356), (5, 303), (6, 330), (7, 326),
-        (8, 348), (9, 335), (10, 315), (11, 215), (12, 169), (13, 151), (14, 105), (15, 74),
-    )
-
-    #: Design outdoor temperature of the average climate, °C.
-    DESIGN_TEMPERATURE: ClassVar[float] = -10.0
-
-    #: Outdoor temperature at which the heating demand is zero, °C.
-    HEATING_LIMIT_TEMPERATURE: ClassVar[float] = 16.0
-
-    #: The rating point the design load is taken from: A-7/W52.
-    SIZING_OUTDOOR_TEMPERATURE: ClassVar[float] = -7.0
-    SIZING_FLOW_TEMPERATURE: ClassVar[float] = 52.0
-
-    #: Part load at A-7, (-7 - 16) / (-10 - 16) ≈ 0.885: the design load is the A-7 output over it.
-    DESIGN_SIZING_PART_LOAD: ClassVar[float] = (SIZING_OUTDOOR_TEMPERATURE - HEATING_LIMIT_TEMPERATURE) / (
-        DESIGN_TEMPERATURE - HEATING_LIMIT_TEMPERATURE
-    )
-
-    #: Brine temperature of every bin for a brine/water machine, °C.
-    BRINE_TEMPERATURE: ClassVar[float] = 0.0
-
-    #: hplib's secondary-side temperature rise: the outlet is the inlet plus this, K.
-    SECONDARY_TEMPERATURE_RISE: ClassVar[float] = 5.0
-
-    #: The hplib groups the rating covers, by the kind of machine each is.
-    RATED_GROUPS: ClassVar[Dict[int, str]] = {1: "air/water", 2: "brine/water"}
-
-    #: Outlet-temperature line per application, as two (outdoor °C, outlet °C) points.
-    FLOW_LINES: ClassVar[Dict[ScopApplication, Tuple[Tuple[float, float], Tuple[float, float]]]] = {
-        ScopApplication.W35: ((-7.0, 34.0), (12.0, 24.0)),
-        ScopApplication.W55: ((-7.0, 52.0), (12.0, 30.0)),
-    }
-
-    @classmethod
-    def flow_temperature(cls, application: ScopApplication, outdoor_temperature: float) -> float:
-        """Return the application's outlet temperature at one outdoor temperature, °C."""
-        (t_1, f_1), (t_2, f_2) = cls.FLOW_LINES[application]
-        return f_1 + (f_2 - f_1) * (outdoor_temperature - t_1) / (t_2 - t_1)
-
-    @classmethod
-    def part_load(cls, outdoor_temperature: float) -> float:
-        """Return the building's demand at one outdoor temperature as a share of the design load."""
-        return (outdoor_temperature - cls.HEATING_LIMIT_TEMPERATURE) / (
-            cls.DESIGN_TEMPERATURE - cls.HEATING_LIMIT_TEMPERATURE
-        )
-
-    @classmethod
-    def mean_outlet_temperature(cls, application: ScopApplication) -> float:
-        """Return the application's outlet temperature averaged over the season, weighted by heat, °C.
-
-        28.9 °C for W35 and 40.7 °C for W55: where the rating actually spends its heat, which is
-        why :class:`ScopCalibration` anchors each rating's factor there.
-        """
-        weights = [(hours * cls.part_load(outdoor), outdoor) for outdoor, hours in cls.BINS]
-        return sum(weight * cls.flow_temperature(application, outdoor) for weight, outdoor in weights) / sum(
-            weight for weight, _outdoor in weights
-        )
-
-    @classmethod
-    def of(
-        cls, heatpump: Any, application: ScopApplication, calibration: Optional["ScopCalibration"] = None
-    ) -> float:
-        """Return the seasonal COP of one hplib heat pump for one application.
-
-        Args:
-            heatpump: An ``hplib.HeatPump`` of group 1 (air/water) or 2 (brine/water); it is only
-                read, through pure ``simulate`` calls.
-            application: The rating's application, which picks the outlet-temperature line.
-            calibration: Applied to every call when given, so the calibrated machine is rated.
-
-        Returns:
-            Heat delivered over electricity drawn across the season.
-
-        Raises:
-            ValueError: When the machine is of any other hplib group, for which the bins' source
-                temperature is not defined here.
-        """
-        if heatpump.group_id not in cls.RATED_GROUPS:
-            raise ValueError(
-                "the EN 14825 rating here covers air/water (hplib group 1) and brine/water (group 2) "
-                f"machines only, and this one is hplib group {heatpump.group_id:g}."
-            )
-
-        def run(outdoor: float, flow: float) -> Tuple[float, float]:
-            source = outdoor if heatpump.group_id == 1 else cls.BRINE_TEMPERATURE
-            result = heatpump.simulate(
-                t_in_primary=source,
-                t_in_secondary=flow - cls.SECONDARY_TEMPERATURE_RISE,
-                t_amb=outdoor,
-                mode=1,
-                p_th_min=0,
-            )
-            if calibration is not None:
-                result = calibration.apply(heatpump, result, 1)
-            return float(result["P_th"]), float(result["COP"])
-
-        design_load, _cop = run(cls.SIZING_OUTDOOR_TEMPERATURE, cls.SIZING_FLOW_TEMPERATURE)
-        design_load /= cls.DESIGN_SIZING_PART_LOAD
-        heat = 0.0
-        electricity = 0.0
-        for outdoor, hours in cls.BINS:
-            demand = design_load * cls.part_load(outdoor)
-            output, cop = run(outdoor, cls.flow_temperature(application, outdoor))
-            by_heat_pump = min(demand, output) if cop > 1 else 0.0
-            heat += hours * demand
-            electricity += hours * ((by_heat_pump / cop if by_heat_pump else 0.0) + demand - by_heat_pump)
-        return heat / electricity
-
-
-class ScopCalibration:
-    """Scales an hplib heat pump's COP to the SCOP its datasheet states (hisim-4g9.15).
-
-    hplib evaluates a linear curve fit; for ``model="Generic"`` it is the fit over its whole
-    database group, so the simulated machine is the average unit of its group. A stated
-    standardised SCOP says how much better or worse the real unit is. Every heating call multiplies
-    hplib's COP by a factor for its own outlet temperature and divides the compressor's
-    electricity by it; the thermal output is unchanged, so the building gets the same heat for
-    less or more electricity. The factors are solved (:meth:`of`) so that the calibrated machine,
-    rated by :class:`StandardizedSeasonalCop`, gives exactly the stated SCOPs.
-
-    * Both ratings stated: the factor is linear in the outlet temperature between the two
-      :attr:`ANCHORS` and held at the nearer anchor's value outside. The anchors are the
-      heat-weighted mean outlets of the two rating lines (28.9 and 40.7 °C), where each rating
-      spends its heat; anchoring at the nominal 35 / 55 °C instead is ill-conditioned and drives
-      the 55 °C factor to 0.2–0.5 for wide pairs (decision with Noah, 2026-09-23; the check against
-      measured units is hisim-x2mu).
-    * One stated: its factor everywhere.
-    * The heating rod is never calibrated: a call where hplib runs the rod alone (COP 1) is left
-      as it is, and in hplib's compressor-plus-rod branch only the compressor's share is scaled.
-    * Cooling (mode 2) is out of scope and left as hplib returns it.
-
-    What the solve rests on: each rating is continuous and non-decreasing in each factor (a bin
-    whose calibrated COP falls to 1 switches to the back-up heater at COP 1, which draws the same
-    electricity, so there is no jump); it is 1 when the factors are so small that every bin runs
-    its back-up heater, and however large they grow it stays bounded by the back-up heater's share
-    of the season, which no factor scales. So a bracketed solve finds a rating's factor whenever
-    one exists, and a stated SCOP outside what the fit can reach is refused by name.
-
-    Example::
-
-        calibration = ScopCalibration.of(heatpump, scop_w35=4.6, scop_w55=3.4)
-        calibration.apply(heatpump, heatpump.simulate(...), mode=1)
-    """
-
-    #: How close the calibrated rating must come to the stated SCOP.
-    TOLERANCE: ClassVar[float] = 1e-5
-
-    #: The factors the solve searches between. At 0.001 no hplib COP comes near 1, so every bin
-    #: runs its back-up heater and the rating is 1; at 1000 the compressor draws a thousandth of
-    #: hplib's electricity, and the back-up heater's share is all that still bounds a rating.
-    MINIMUM_FACTOR: ClassVar[float] = 1e-3
-    MAXIMUM_FACTOR: ClassVar[float] = 1e3
-
-    #: The rounds one bracketed solve may take; the Illinois method needs twenty to thirty.
-    MAXIMUM_ITERATIONS: ClassVar[int] = 100
-
-    #: The outlet temperatures the W35 and the W55 factor hold at, °C (28.9 and 40.7): the
-    #: heat-weighted mean outlets of the two rating lines, computed once.
-    ANCHORS: ClassVar[Tuple[float, float]] = (
-        StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W35),
-        StandardizedSeasonalCop.mean_outlet_temperature(ScopApplication.W55),
-    )
-
-    def __init__(self, factors: Dict[ScopApplication, float]) -> None:
-        """Hold the factor per stated application; an empty map calibrates nothing."""
-        self.factors = dict(factors)
-
-    @classmethod
-    def of(
-        cls, heatpump: Any, scop_w35: Optional[float], scop_w55: Optional[float], machine: str = "hplib's fit"
-    ) -> "ScopCalibration":
-        """Return the factors that bring the fit, rated by the bin method, to the stated SCOPs.
-
-        One rating: its factor is the root of ``rated(factor) = stated`` (:meth:`solve`). Two
-        ratings: for a given W55 factor the W35 factor that rates W35 exactly is solved, and the
-        W55 rating of that pair rises with the W55 factor (the W55 factor moves the W55 line's hot
-        bins more than the W35 factor it displaces moves its mild ones; checked on the Generic
-        air/water and brine/water fits for W35 ratings from 1.1 to 10 over the whole factor range),
-        so the W55 factor is solved on it in turn. A single ratio ``stated / rated`` is not exact:
-        the back-up heater's share of the season is not scaled, and with two ratings each factor
-        reaches into the other rating's line. A typical pair takes a few hundred ratings, some tens
-        of milliseconds.
-
-        Args:
-            heatpump: An ``hplib.HeatPump`` of group 1 or 2, only read.
-            scop_w35: The stated W35 rating, or ``None``.
-            scop_w55: The stated W55 rating, or ``None``.
-            machine: How a refusal names the fit, e.g. "hplib's Generic air/water fit".
-
-        Raises:
-            ValueError: When no factors between :attr:`MINIMUM_FACTOR` and :attr:`MAXIMUM_FACTOR`
-                reach the stated SCOPs; the message names the rating that cannot be met and the
-                limit the fit reaches.
-        """
-        stated = {
-            application: float(value)
-            for application, value in ((ScopApplication.W35, scop_w35), (ScopApplication.W55, scop_w55))
-            if value is not None
-        }
-        if not stated:
-            return cls({})
-        ratings = " and ".join(f"{application.value} {value}" for application, value in stated.items())
-        refused = f"the stated SCOP{'s' if len(stated) > 1 else ''} {ratings} cannot be met: "
-        lowest, highest = cls.MINIMUM_FACTOR, cls.MAXIMUM_FACTOR
-        if len(stated) == 1:
-            ((application, target),) = stated.items()
-
-            def single(factor: float) -> float:
-                return StandardizedSeasonalCop.of(heatpump, application, cls({application: factor}))
-
-            at_lowest, at_highest = single(lowest), single(highest)
-            if target <= at_lowest:
-                raise ValueError(refused + cls.unreachable(machine, application, at_lowest, False, False, None))
-            if target >= at_highest:
-                raise ValueError(refused + cls.unreachable(machine, application, at_highest, True, True, None))
-            return cls({application: cls.solve(single, target, cls.TOLERANCE / 10)})
-
-        w35, w55 = stated[ScopApplication.W35], stated[ScopApplication.W55]
-
-        def rated(application: ScopApplication, factor_w35: float, factor_w55: float) -> float:
-            calibration = cls({ScopApplication.W35: factor_w35, ScopApplication.W55: factor_w55})
-            return StandardizedSeasonalCop.of(heatpump, application, calibration)
-
-        def w35_factor(factor_w55: float) -> float:
-            # Solved finer than the outer solve's tolerance, so its rest does not stall that solve.
-            return cls.solve(lambda factor: rated(ScopApplication.W35, factor, factor_w55), w35, cls.TOLERANCE / 1000)
-
-        def w55_rating(factor_w55: float) -> float:
-            return rated(ScopApplication.W55, w35_factor(factor_w55), factor_w55)
-
-        highest_w35 = rated(ScopApplication.W35, highest, highest)
-        if w35 >= highest_w35:
-            raise ValueError(refused + cls.unreachable(machine, ScopApplication.W35, highest_w35, True, True, None))
-        # The W55 factors at which some W35 factor in range still rates W35 exactly: from where the
-        # highest W35 factor just reaches it to where the lowest one just does.
-        first = cls.solve(lambda factor: rated(ScopApplication.W35, highest, factor), w35, cls.TOLERANCE / 1000)
-        last = cls.solve(lambda factor: rated(ScopApplication.W35, lowest, factor), w35, cls.TOLERANCE / 1000)
-        condition = f"with W35 at {w35}, "
-        lowest_w55 = w55_rating(first)
-        if w55 <= lowest_w55:
-            # At the lowest W55 factor the W55 factor itself would have to go lower; above it, the W35
-            # factor that holds W35 would have to go above the range.
-            anchor, beyond = (ScopApplication.W55, False) if first <= lowest else (ScopApplication.W35, True)
-            raise ValueError(
-                refused
-                + condition
-                + cls.unreachable(machine, ScopApplication.W55, lowest_w55, False, beyond, anchor)
-            )
-        highest_w55 = w55_rating(last)
-        if w55 >= highest_w55:
-            # Mirrored: the W55 factor would have to go higher, or the W35 factor below the range.
-            anchor, beyond = (ScopApplication.W55, True) if last >= highest else (ScopApplication.W35, False)
-            raise ValueError(
-                refused
-                + condition
-                + cls.unreachable(machine, ScopApplication.W55, highest_w55, True, beyond, anchor)
-            )
-        factor_w55 = cls.solve(w55_rating, w55, cls.TOLERANCE / 10)
-        return cls({ScopApplication.W35: w35_factor(factor_w55), ScopApplication.W55: factor_w55})
-
-    @classmethod
-    def unreachable(
-        cls,
-        machine: str,
-        application: ScopApplication,
-        limit: float,
-        above: bool,
-        factor_above: bool,
-        anchor: Optional[ScopApplication],
-    ) -> str:
-        """Return the sentence that refuses one rating beyond what the fit reaches.
-
-        Args:
-            machine: How the sentence names the fit.
-            application: The rating that cannot be met.
-            limit: The furthest the fit rates it.
-            above: Whether the stated rating is above that limit (else below it).
-            factor_above: Whether reaching it would need a factor above :attr:`MAXIMUM_FACTOR`
-                (else below :attr:`MINIMUM_FACTOR`).
-            anchor: The anchor whose factor would have to leave the range, or ``None`` for a
-                single rating, whose factor holds everywhere.
-        """
-        bound = f"above {cls.MAXIMUM_FACTOR:g}" if factor_above else f"below {cls.MINIMUM_FACTOR:g}"
-        where = ""
-        if anchor is not None:
-            temperature = cls.ANCHORS[0 if anchor is ScopApplication.W35 else 1]
-            where = f" at the {anchor.value} anchor ({temperature:.1f} °C)"
-        sentence = (
-            f"{machine} cannot rate {'above' if above else 'below'} {application.value} {limit:.2f}; a "
-            f"{'higher' if above else 'lower'} {application.value} rating would need a factor {bound}{where}"
-        )
-        if above and factor_above and anchor in (None, application):
-            sentence += ", and the back-up heater's share of the season, which no factor scales, caps it there"
-        return sentence + "."
-
-    @classmethod
-    def solve(cls, rating: Callable[[float], float], target: float, tolerance: float) -> float:
-        """Return the factor at which a non-decreasing rating meets a target, to a tolerance.
-
-        The Illinois method (regula falsi that halves the stale end's miss when the same end moves
-        twice) on the factor's logarithm between :attr:`MINIMUM_FACTOR` and :attr:`MAXIMUM_FACTOR`;
-        a step that would leave the bracket bisects instead. A target the rating does not cross
-        in that range returns the nearer bound: the callers check the bounds first where a miss
-        must be refused, and the nested solve relies on the clamp.
-
-        Raises:
-            RuntimeError: When :attr:`MAXIMUM_ITERATIONS` rounds pass without meeting the
-                tolerance, which a continuous rating does not allow.
-        """
-        low, high = math.log(cls.MINIMUM_FACTOR), math.log(cls.MAXIMUM_FACTOR)
-        miss_low = rating(cls.MINIMUM_FACTOR) - target
-        if miss_low >= 0:
-            return cls.MINIMUM_FACTOR
-        miss_high = rating(cls.MAXIMUM_FACTOR) - target
-        if miss_high <= 0:
-            return cls.MAXIMUM_FACTOR
-        moved = 0
-        for _round in range(cls.MAXIMUM_ITERATIONS):
-            point = (low * miss_high - high * miss_low) / (miss_high - miss_low)
-            if not low < point < high:
-                point = (low + high) / 2
-            miss = rating(math.exp(point)) - target
-            if abs(miss) < tolerance:
-                return math.exp(point)
-            if miss < 0:
-                low, miss_low = point, miss
-                if moved < 0:
-                    miss_high /= 2
-                moved = -1
-            else:
-                high, miss_high = point, miss
-                if moved > 0:
-                    miss_low /= 2
-                moved = 1
-        raise RuntimeError(
-            f"the SCOP calibration's solve for a rating of {target} did not converge in "
-            f"{cls.MAXIMUM_ITERATIONS} rounds (bracket {math.exp(low):.6g} to {math.exp(high):.6g})."
-        )
-
-    def factor(self, outlet_temperature: float) -> float:
-        """Return the factor for one outlet temperature, °C: linear between the anchors, held outside."""
-        if not self.factors:
-            return 1.0
-        if len(self.factors) == 1:
-            return next(iter(self.factors.values()))
-        return float(
-            np.interp(
-                outlet_temperature,
-                self.ANCHORS,
-                (self.factors[ScopApplication.W35], self.factors[ScopApplication.W55]),
-            )
-        )
-
-    def apply(self, heatpump: Any, results: Dict[str, Any], mode: int) -> Dict[str, Any]:
-        """Return hplib's results for one call with the calibration applied (a new dictionary)."""
-        if not self.factors or mode != 1:
-            return results
-        cop = float(results["COP"])
-        if cop <= 1:
-            return results
-        factor = self.factor(float(results["T_out"]))
-        p_th = float(results["P_th"])
-        p_el = float(results["P_el"])
-        rod = float(heatpump.p_th_ref)
-        compressor = float(heatpump.p_el_ref)
-        if abs(p_el - (compressor + rod)) < 1e-6 * max(p_el, 1.0):
-            # hplib's compressor-plus-rod branch: only the compressor's share is calibrated.
-            calibrated_el = compressor / factor + rod
-        else:
-            calibrated_el = p_el / factor
-        calibrated = dict(results)
-        calibrated["P_el"] = calibrated_el
-        calibrated["COP"] = p_th / calibrated_el
-        return calibrated
 
 
 @dataclass_json
@@ -547,7 +141,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: Flow temperature the curve fit is evaluated at, on the secondary (sink) side.
     flow_temperature_in_celsius: float = 52.0
     #: The highest supply temperature the hot-water circuit delivers, °C; hplib itself has no outlet limit. A
-    #: charge whose outlet would exceed it is throttled to it (hydronic coupling spec §5.2). 75 °C is the highest
+    #: charge whose outlet would exceed it is throttled to it. 75 °C is the highest
     #: flow temperature air/water heat pumps on the market reach (propane (R290) units' datasheets state 70-75 °C),
     #: and it lies above the hot-water controller's switch-off point, its 60 °C upper set temperature plus the
     #: energy manager's 10 K surplus raise, so every charge can end.
@@ -673,13 +267,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
     # Inputs
     OnOffSwitchSH = "OnOffSwitchSH"  # 1 = on space heating,  0 = 0ff , -1 = cooling
     OnOffSwitchDHW = "OnOffSwitchDHW"  # 2 = on DHW , 0 = 0ff
-    ThermalPowerIsConstantForDHW = "ThermalPowerIsConstantForDHW"  # true/false
-    MaxThermalPowerValueForDHW = "MaxThermalPowerValueForDHW"  # max. Leistungswert
     TemperatureInputPrimary = "TemperatureInputPrimary"  # °C
     TemperatureInputSecondarySH = "TemperatureInputSecondarySH"  # °C
     TemperatureInputSecondaryDHW = "TemperatureInputSecondaryDHW"  # °C
     #: The hot-water supply temperature the hot-water controller aims at: the hot-water supply never exceeds it.
-    SupplyTemperatureSetDHWInCelsius = "SupplyTemperatureSetDHWInCelsius"  # °C
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
 
@@ -841,11 +433,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.heatpump.delta_t = 5
         self.scop_calibration = self.calibration_of(config, self.heatpump)
 
-        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-        )
+        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
 
         # protect erros for Water/Water Heatpumps
         if self.parameters["Group"].iloc[0] == 1.0 or self.parameters["Group"].iloc[0] == 4.0:
@@ -920,22 +508,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 mandatory=True,
             )
 
-            self.const_thermal_power_truefalse_dhw: ComponentInput = self.add_input(
-                object_name=self.component_name,
-                field_name=self.ThermalPowerIsConstantForDHW,
-                load_type=LoadTypes.ANY,
-                unit=Units.ANY,
-                mandatory=True,
-            )
-
-            self.const_thermal_power_value_dhw: ComponentInput = self.add_input(
-                object_name=self.component_name,
-                field_name=self.MaxThermalPowerValueForDHW,
-                load_type=LoadTypes.ANY,
-                unit=Units.ANY,
-                mandatory=True,
-            )
-
             self.t_in_secondary_dhw: ComponentInput = self.add_input(
                 object_name=self.component_name,
                 field_name=self.TemperatureInputSecondaryDHW,
@@ -944,12 +516,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 mandatory=True,
             )
 
-            self.supply_temperature_set_dhw_in_celsius_channel: ComponentInput = self.add_input(
+            self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
                 object_name=self.component_name,
-                field_name=self.SupplyTemperatureSetDHWInCelsius,
+                field_name=self.SupplyTemperatureSetForDHWInCelsius,
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
-                mandatory=False,
+                mandatory=True,
             )
 
         if (
@@ -1382,23 +954,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.ThermalPowerIsConstantForDHW,
+                MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius,
                 hpc_dhw_classname,
-                MoreAdvancedHeatPumpHPLibControllerDHW.ThermalPower_dhw_is_constant,
-            )
-        )
-        connections.append(
-            ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.MaxThermalPowerValueForDHW,
-                hpc_dhw_classname,
-                MoreAdvancedHeatPumpHPLibControllerDHW.Value_thermalpower_dhw_is_constant,
-            )
-        )
-        connections.append(
-            ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetDHWInCelsius,
-                hpc_dhw_classname,
-                MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetDHWInCelsius,
+                MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetForDHWInCelsius,
             )
         )
         return connections
@@ -1451,7 +1009,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW,
                 dhw_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
             )
         )
         return connections
@@ -1542,8 +1100,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         ``0.4 * 4200 * 5.0 = 8400`` W.
 
         The flow is authoritative because the storage at the other end integrates exactly this flow, so the heat
-        pump books what the storage receives. While the outlet is hplib's own (not throttled,
-        :meth:`throttled_dhw_supply_temperature_in_celsius`), hplib's own thermal power differs from it only
+        pump books what the storage receives. While the outlet is hplib's own (not capped,
+        :meth:`capped_hot_water_outlet_in_celsius`), hplib's own thermal power differs from it only
         through its specific heat of water, 4200 J/(kg K) instead of HiSim's 4180 J/(kg K): the booked heat is
         hplib's times 4180/4200, about 0.48 % less.
 
@@ -1569,7 +1127,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 f"got {cop}."
             )
         thermal_power_in_watt = hydronics.circuit_power_w(
-            mass_flow_in_kg_per_second, outlet_temperature_in_celsius, return_temperature_in_celsius
+            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+            t_supply_c=outlet_temperature_in_celsius,
+            t_return_c=return_temperature_in_celsius,
         )
         return HeatingCircuitPowers(
             thermal_power_in_watt=thermal_power_in_watt, electrical_power_in_watt=thermal_power_in_watt / cop
@@ -1601,536 +1161,698 @@ class MoreAdvancedHeatPumpHPLib(Component):
             )
         return -thermal_power_in_watt / eer
 
-    def throttled_dhw_supply_temperature_in_celsius(
-        self,
-        outlet_temperature_in_celsius: float,
-        return_temperature_in_celsius: float,
-        supply_temperature_set_in_celsius: Optional[float] = None,
-    ) -> float:
-        """The hot-water circuit's supply within the heat pump's limit (spec §5.2, owner 2026-10-09).
+    #: The time constant of the heat pump's start-up in the fixed-flow mode, in s: a machine that has run for ``t``
+    #: seconds delivers ``1 - e^(-t / 360 s)`` of its target power, so it reaches 63 % after six minutes.
+    START_UP_TIME_CONSTANT_IN_SECONDS: ClassVar[float] = 360.0
 
-        An outlet above the limit is throttled to it, or to the return if that is hotter; the flow stays, so the
-        circuit then carries ``m c (T_limit - T_in)`` and the electricity follows at the step's COP
-        (:meth:`booked_heating_powers_in_watt`). The limit is ``maximal_dhw_supply_temperature_in_celsius``, or
-        the hot-water controller's set temperature ``supply_temperature_set_in_celsius`` when that is lower (its
-        60 °C ``t_max`` plus the energy manager's raise), so a charge ends at its target inside the step. For
-        example, with a 60 °C set temperature a 58.0 °C return and hplib's 63.0 °C outlet give 60.0 °C; with the
-        75 °C maximum and no set temperature, a 72.0 °C return and a 77.0 °C outlet give 75.0 °C.
+    #: The lift hplib holds between return and outlet in the parallel mode and on the hot-water side, in K.
+    NOMINAL_LIFT_IN_KELVIN: ClassVar[float] = 5.0
+
+    #: The lift that stands for zero in the fixed-flow modes, in K: hplib divides by the lift, so a set temperature
+    #: equal to the return is answered with this vanishing lift instead of zero.
+    VANISHING_LIFT_IN_KELVIN: ClassVar[float] = 0.00000001
+
+    @staticmethod
+    def fixed_flow_outlet_temperature_in_celsius(
+        *,
+        return_temperature_in_celsius: float,
+        lift_in_kelvin: float,
+        mass_flow_in_kg_per_second: float,
+        minimal_thermal_power_in_watt: float,
+        time_on_heating_in_seconds: float,
+        specific_heat_capacity_in_joule_per_kg_per_kelvin: float,
+    ) -> float:
+        """Return the outlet temperature of a circuit the heat pump runs at a fixed flow, in °C.
+
+        In the fixed-flow mode (a storage in series, or none) the pump runs the nominal flow and the heat pump aims
+        at the power that flow carries over the lift, at least its minimal thermal power. While the machine starts,
+        it delivers ``1 - e^(-t / START_UP_TIME_CONSTANT_IN_SECONDS)`` of that power, ``t`` being how long it has
+        been heating. The outlet is the return plus that power over ``m c``. For example, 0.333 kg/s over a 5 K lift
+        aims at 6959.7 W; after ten minutes of running it delivers 81 % of it and supplies 4.05 K above the return.
 
         Args:
-            outlet_temperature_in_celsius: The outlet the heat pump's own law gives, °C.
-            return_temperature_in_celsius: The circuit's return temperature, the tank's step mean, °C.
-            supply_temperature_set_in_celsius: The hot-water controller's set temperature, °C, or None when none
-                is wired.
+            return_temperature_in_celsius: The circuit's return temperature, in °C.
+            lift_in_kelvin: The lift the heat pump aims at, in K.
+            mass_flow_in_kg_per_second: The fixed flow, in kg/s, above 0.
+            minimal_thermal_power_in_watt: The lowest thermal power the machine modulates down to, in W.
+            time_on_heating_in_seconds: How long the machine has been heating before this step, in s.
+            specific_heat_capacity_in_joule_per_kg_per_kelvin: The specific heat of the circuit's water, in J/(kg K).
 
         Returns:
-            The supply temperature the circuit carries, °C.
+            The outlet temperature, in °C.
         """
-        limit_in_celsius = float(self.config.maximal_dhw_supply_temperature_in_celsius)
-        if supply_temperature_set_in_celsius is not None:
-            limit_in_celsius = min(limit_in_celsius, supply_temperature_set_in_celsius)
-        if outlet_temperature_in_celsius <= limit_in_celsius:
-            return outlet_temperature_in_celsius
-        return max(limit_in_celsius, return_temperature_in_celsius)
+        thermal_power_at_lift_in_watt = (
+            mass_flow_in_kg_per_second * specific_heat_capacity_in_joule_per_kg_per_kelvin * lift_in_kelvin
+        )
+        if thermal_power_at_lift_in_watt <= minimal_thermal_power_in_watt:
+            target_power_in_watt = minimal_thermal_power_in_watt
+        else:
+            target_power_in_watt = thermal_power_at_lift_in_watt
+        target_power_in_watt = target_power_in_watt * (
+            1 - np.exp(-time_on_heating_in_seconds / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
+        )
+        return float(
+            return_temperature_in_celsius
+            + target_power_in_watt / (mass_flow_in_kg_per_second * specific_heat_capacity_in_joule_per_kg_per_kelvin)
+        )
+
+    @staticmethod
+    def on_off_after_minimum_times(
+        *,
+        on_off: float,
+        on_off_previous: float,
+        timers: "HeatPumpRunTimers",
+        minimum_running_time_in_seconds: float,
+        minimum_idle_time_in_seconds: float,
+    ) -> float:
+        """Return the operating signal after the heat pump's minimum running and idle times, in cycling mode.
+
+        A machine that heated (1 space heating, 2 hot water) for less than its minimum running time keeps heating
+        in the same mode when it is asked to stop; one that cooled (-1) for less than it keeps cooling; one that
+        was off (0) for less than its minimum idle time stays off. For example, a machine asked to stop after five
+        minutes of space heating with a minimum running time of ten minutes keeps heating.
+
+        Args:
+            on_off: The signal the controllers ask for: 1 space heating, 2 hot water, -1 cooling, 0 off.
+            on_off_previous: The signal of the step before.
+            timers: How long the machine has been heating, cooling and off.
+            minimum_running_time_in_seconds: The minimum running time, in s.
+            minimum_idle_time_in_seconds: The minimum idle time, in s.
+
+        Returns:
+            The signal the machine runs on.
+        """
+        if on_off_previous == 1 and timers.time_on_heating_in_seconds < minimum_running_time_in_seconds:
+            if on_off == 0:
+                return 1
+        elif on_off_previous == 2 and timers.time_on_heating_in_seconds < minimum_running_time_in_seconds:
+            if on_off == 0:
+                return 2
+        elif on_off_previous == -1 and timers.time_on_cooling_in_seconds < minimum_running_time_in_seconds:
+            return -1
+        elif on_off_previous == 0 and timers.time_off_in_seconds < minimum_idle_time_in_seconds:
+            return 0
+        return on_off
+
+    @staticmethod
+    def advanced_run_timers(
+        *, on_off: float, timers: "HeatPumpRunTimers", seconds_per_timestep: int
+    ) -> "HeatPumpRunTimers":
+        """Return the heating, cooling and off timers after a step in a mode.
+
+        The timer of the mode the machine runs in grows by the step, the two others restart at 0; space heating and
+        hot water share the heating timer. For example, a machine that heated for 600 s and heats on through a 60 s
+        step has heated for 660 s and has been off and cooling for 0 s.
+
+        Args:
+            on_off: The signal the machine runs on: 1 or 2 heating, -1 cooling, 0 off.
+            timers: The timers before the step.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The timers after the step.
+
+        Raises:
+            ValueError: If ``on_off`` is no known signal.
+        """
+        if on_off in (1, 2):
+            return HeatPumpRunTimers(
+                time_on_heating_in_seconds=timers.time_on_heating_in_seconds + seconds_per_timestep,
+                time_on_cooling_in_seconds=0,
+                time_off_in_seconds=0,
+            )
+        if on_off == -1:
+            return HeatPumpRunTimers(
+                time_on_heating_in_seconds=0,
+                time_on_cooling_in_seconds=timers.time_on_cooling_in_seconds + seconds_per_timestep,
+                time_off_in_seconds=0,
+            )
+        if on_off == 0:
+            return HeatPumpRunTimers(
+                time_on_heating_in_seconds=0,
+                time_on_cooling_in_seconds=0,
+                time_off_in_seconds=timers.time_off_in_seconds + seconds_per_timestep,
+            )
+        raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the component."""
+        """Run the heat pump in the mode its controllers ask for and publish its circuits, powers and counters.
 
-        # Load input values
-        # on_off: float
-        on_off_space_heating: float = stsv.get_input_value(self.on_off_switch_space_heating)
-        t_in_primary = stsv.get_input_value(self.t_in_primary)
-        t_in_secondary_space_heating = stsv.get_input_value(self.t_in_secondary_space_heating)
-        t_amb = stsv.get_input_value(self.t_amb)
-        time_on_heating = self.state.time_on_heating
-        time_on_cooling = self.state.time_on_cooling
-        time_off = self.state.time_off
+        Reads the controllers' signals and the circuits' return temperatures, applies the minimum running and idle
+        times in cycling mode, computes the step in the resulting mode (:meth:`operation_in_mode`) and publishes it
+        (:meth:`publish_operation`).
 
-        if (
+        Raises:
+            ValueError: If the cycling mode lacks its minimum times or the signal is no known mode.
+        """
+        conditions = self.step_conditions(stsv)
+        timers = HeatPumpRunTimers(
+            time_on_heating_in_seconds=self.state.time_on_heating,
+            time_on_cooling_in_seconds=self.state.time_on_cooling,
+            time_off_in_seconds=self.state.time_off,
+        )
+        on_off_sh: float = stsv.get_input_value(self.on_off_switch_sh)
+        on_off_dhw: float = (
+            stsv.get_input_value(self.on_off_switch_dhw) if self.with_domestic_hot_water_preparation else 0
+        )
+        on_off = on_off_dhw if on_off_dhw != 0 else on_off_sh
+
+        # cycling means periodic turning on and off of the heat pump
+        if self.cycling_mode is True:
+            if self.minimum_running_time_in_seconds is None or self.minimum_idle_time_in_seconds is None:
+                raise ValueError(
+                    """When the cycling mode is true, the minimum running time and minimum idle time of the heat pump
+                    must be given an integer value."""
+                )
+            on_off = self.on_off_after_minimum_times(
+                on_off=on_off,
+                on_off_previous=self.state.on_off_previous,
+                timers=timers,
+                minimum_running_time_in_seconds=self.minimum_running_time_in_seconds,
+                minimum_idle_time_in_seconds=self.minimum_idle_time_in_seconds,
+            )
+        elif self.cycling_mode is not False:
+            raise ValueError("Cycling mode of the advanced HPLib unknown.")
+
+        operation = self.operation_in_mode(on_off, conditions, timers)
+        timers_after = self.advanced_run_timers(
+            on_off=on_off, timers=timers, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.publish_operation(stsv, on_off, conditions, operation, timers_after)
+
+    def step_conditions(self, stsv: SingleTimeStepValues) -> "HeatPumpStepConditions":
+        """Return the temperatures the heat pump reads in this step: source, ambient, returns and set points.
+
+        A set point that this configuration does not read, such as the space-heating set temperature in the
+        parallel mode, is None; without hot-water preparation the hot-water return is 0 °C, the value its idle
+        outputs have always carried.
+        """
+        reads_space_heating_set_temperature = (
             self.position_hot_water_storage_in_system
             in [
                 PositionHotWaterStorageInSystemSetup.SERIES,
                 PositionHotWaterStorageInSystemSetup.NO_STORAGE,
             ]
             or self.passive_cooling_with_brine
-        ):
-            set_temperature_hp_space_heating = stsv.get_input_value(self.set_temperature_hp_space_heating)
-
-        if self.with_domestic_hot_water_preparation:
-            on_off_dhw: float = stsv.get_input_value(self.on_off_switch_dhw)
-            const_thermal_power_truefalse_dhw: bool = bool(stsv.get_input_value(self.const_thermal_power_truefalse_dhw))
-            const_thermal_power_value_dhw = stsv.get_input_value(self.const_thermal_power_value_dhw)
-            t_in_secondary_dhw = stsv.get_input_value(self.t_in_secondary_dhw)
-            supply_temperature_set_dhw_in_celsius: Optional[float] = None
-            if self.supply_temperature_set_dhw_in_celsius_channel.source_output is not None:
-                supply_temperature_set_dhw_in_celsius = stsv.get_input_value(
-                    self.supply_temperature_set_dhw_in_celsius_channel
-                )
-        else:
-            on_off_dhw = 0
-            const_thermal_power_truefalse_dhw = False
-            const_thermal_power_value_dhw = 0
-            t_in_secondary_dhw = 0
-            supply_temperature_set_dhw_in_celsius = None
-
-        if on_off_dhw != 0:
-            on_off = on_off_dhw
-        else:
-            on_off = on_off_space_heating
-
-        # cycling means periodic turning on and off of the heat pump
-        if self.cycling_mode is True:
-            # Parameter
-            time_on_min = self.minimum_running_time_in_seconds  # [s]
-            time_off_min = self.minimum_idle_time_in_seconds
-            on_off_previous = self.state.on_off_previous
-
-            if time_on_min is None or time_off_min is None:
-                raise ValueError(
-                    """When the cycling mode is true, the minimum running time and minimum idle time of the heat pump
-                    must be given an integer value."""
-                )
-
-            # Overwrite on_off to realize minimum time of or time off
-            if on_off_previous == 1 and time_on_heating < time_on_min:
-                if on_off == 0:
-                    on_off = 1
-            elif on_off_previous == 2 and time_on_heating < time_on_min:
-                if on_off == 0:
-                    on_off = 2
-            elif on_off_previous == -1 and time_on_cooling < time_on_min:
-                on_off = -1
-            elif on_off_previous == 0 and time_off < time_off_min:
-                on_off = 0
-
-        # heat pump is turned on and off only according to heat pump controller
-        elif self.cycling_mode is False:
-            pass
-        else:
-            raise ValueError("Cycling mode of the advanced HPLib unknown.")
-
-        if on_off == 1:  # Calculation for building heating
-            if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
-                self.heatpump.delta_t = 5
-                results = self.get_cached_results_or_run_hplib_simulation(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_space_heating,
-                    t_amb=t_amb,
-                    mode=1,
-                    operation_mode="heating_building",
-                    p_th_min=self.minimum_thermal_output_power,
-                )
-
-                p_th_dhw = 0.0
-                p_el_dhw = 0.0
-                p_el_cooling = 0.0
-                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
-                cop = results["COP"]
-                eer = results["EER"]
-                t_out_space_heating = results["T_out"]
-                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
-                m_dot_space_heating = results["m_dot"]
-                m_dot_dhw = 0.0
-                space_heating_powers = self.booked_heating_powers_in_watt(
-                    mass_flow_in_kg_per_second=m_dot_space_heating,
-                    outlet_temperature_in_celsius=t_out_space_heating,
-                    return_temperature_in_celsius=t_in_secondary_space_heating,
-                    cop=cop,
-                )
-                p_th_space_heating, p_el_space_heating = space_heating_powers.thermal_power_in_watt, space_heating_powers.electrical_power_in_watt
-                time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
-                time_on_cooling = 0
-                time_off = 0
-
-            else:
-                m_dot_space_heating = self.m_dot_ref
-
-                self.heatpump.delta_t = min(set_temperature_hp_space_heating - t_in_secondary_space_heating, 5)
-
-                if self.heatpump.delta_t == 0:
-                    self.heatpump.delta_t = 0.00000001
-
-                results = self.get_cached_results_or_run_hplib_simulation(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_space_heating,
-                    t_amb=t_amb,
-                    mode=1,
-                    operation_mode="heating_building",
-                    p_th_min=self.minimum_thermal_output_power,
-                )
-
-                cop = results["COP"]
-                eer = results["EER"]
-
-                p_th_space_heating_theoretical = (
-                    m_dot_space_heating
-                    * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                    * self.heatpump.delta_t
-                )
-                if p_th_space_heating_theoretical <= self.minimum_thermal_output_power:
-                    p_th_space_heating_target_in_watt = self.minimum_thermal_output_power
-                else:
-                    p_th_space_heating_target_in_watt = p_th_space_heating_theoretical
-                # time shifting while the heat pump starts
-                p_th_space_heating_target_in_watt = p_th_space_heating_target_in_watt * (1 - np.exp(-time_on_heating / 360))
-
-                # The pump runs at the nominal flow; the power sets the outlet, and the flow books the heat.
-                t_out_space_heating = t_in_secondary_space_heating + p_th_space_heating_target_in_watt / (
-                    m_dot_space_heating * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                )
-                space_heating_powers = self.booked_heating_powers_in_watt(
-                    mass_flow_in_kg_per_second=m_dot_space_heating,
-                    outlet_temperature_in_celsius=t_out_space_heating,
-                    return_temperature_in_celsius=t_in_secondary_space_heating,
-                    cop=cop,
-                )
-                p_th_space_heating, p_el_space_heating = space_heating_powers.thermal_power_in_watt, space_heating_powers.electrical_power_in_watt
-
-                self.heatpump.delta_t = t_out_space_heating - t_in_secondary_space_heating
-
-                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
-                p_th_dhw = 0.0
-                p_el_dhw = 0.0
-                p_el_cooling = 0.0
-                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
-                m_dot_dhw = 0.0
-                time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
-                time_on_cooling = 0
-                time_off = 0
-
-        elif on_off == 2:  # Calculate outputs for dhw mode
-            self.heatpump.delta_t = 5
-            self.minimum_thermal_output_power = 0.0
-            if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
-                results = self.get_cached_results_or_run_hplib_simulation(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_dhw,
-                    t_amb=t_amb,
-                    mode=1,
-                    operation_mode="heating_dhw",
-                    p_th_min=self.minimum_thermal_output_power,
-                )
-
-                p_th_space_heating = 0.0
-                p_el_space_heating = 0.0
-                p_el_cooling = 0.0
-                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
-                cop = results["COP"]
-                eer = results["EER"]
-                t_out_space_heating = t_in_secondary_space_heating
-                t_out_dhw = results["T_out"]
-                m_dot_space_heating = 0.0
-                m_dot_dhw = results["m_dot"]
-                if const_thermal_power_truefalse_dhw:
-                    raise ValueError(
-                        f"{self.component_name}: the hot-water controller asks for a constant thermal power of "
-                        f"{const_thermal_power_value_dhw} W, but with a parallel storage the heat pump books the "
-                        "heat its water carries at hplib's mass flow and outlet temperature, which a constant "
-                        "power would contradict. Set thermalpower_dhw_is_constant to false."
-                    )
-                t_out_dhw = self.throttled_dhw_supply_temperature_in_celsius(
-                    t_out_dhw, t_in_secondary_dhw, supply_temperature_set_dhw_in_celsius
-                )
-                dhw_powers = self.booked_heating_powers_in_watt(
-                    mass_flow_in_kg_per_second=m_dot_dhw,
-                    outlet_temperature_in_celsius=t_out_dhw,
-                    return_temperature_in_celsius=t_in_secondary_dhw,
-                    cop=cop,
-                )
-                p_th_dhw, p_el_dhw = dhw_powers.thermal_power_in_watt, dhw_powers.electrical_power_in_watt
-                time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
-                time_on_cooling = 0
-                time_off = 0
-
-            else:
-                m_dot_dhw = self.m_dot_ref
-
-                results = self.get_cached_results_or_run_hplib_simulation(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_dhw,
-                    t_amb=t_amb,
-                    mode=1,
-                    operation_mode="heating_dhw",
-                    p_th_min=self.minimum_thermal_output_power,
-                )
-
-                cop = results["COP"]
-                eer = results["EER"]
-
-                p_th_dhw_theoretical = (
-                    m_dot_dhw
-                    * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                    * self.heatpump.delta_t
-                )
-                if p_th_dhw_theoretical <= self.minimum_thermal_output_power:
-                    p_th_dhw_target_in_watt = self.minimum_thermal_output_power
-                else:
-                    p_th_dhw_target_in_watt = p_th_dhw_theoretical
-                # time shifting while the heat pump starts
-                p_th_dhw_target_in_watt = p_th_dhw_target_in_watt * (1 - np.exp(-time_on_heating / 360))
-
-                # The pump runs at the nominal flow; the power sets the outlet, and the flow books the heat.
-                t_out_dhw = t_in_secondary_dhw + p_th_dhw_target_in_watt / (
-                    m_dot_dhw * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                )
-                t_out_dhw = self.throttled_dhw_supply_temperature_in_celsius(
-                    t_out_dhw, t_in_secondary_dhw, supply_temperature_set_dhw_in_celsius
-                )
-                dhw_powers = self.booked_heating_powers_in_watt(
-                    mass_flow_in_kg_per_second=m_dot_dhw,
-                    outlet_temperature_in_celsius=t_out_dhw,
-                    return_temperature_in_celsius=t_in_secondary_dhw,
-                    cop=cop,
-                )
-                p_th_dhw, p_el_dhw = dhw_powers.thermal_power_in_watt, dhw_powers.electrical_power_in_watt
-
-                t_out_space_heating = t_in_secondary_space_heating
-                p_th_space_heating = 0.0
-                p_el_space_heating = 0.0
-                p_el_cooling = 0.0
-                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
-                m_dot_space_heating = 0.0
-                time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
-                time_on_cooling = 0
-                time_off = 0
-
-        elif on_off == -1:
-            if self.passive_cooling_with_brine:
-                # passiv cooling with brine
-                cop = 0
-                eer = 1
-
-                m_dot_space_heating = self.m_dot_ref
-
-                self.heatpump.delta_t = min(t_in_secondary_space_heating - set_temperature_hp_space_heating, 5)
-
-                if self.heatpump.delta_t == 0:
-                    self.heatpump.delta_t = 0.00000001
-
-                p_th_space_heating = -(
-                    m_dot_space_heating
-                    * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                    * self.heatpump.delta_t
-                )
-
-                t_out_space_heating = t_in_secondary_space_heating + (
-                    p_th_space_heating / (m_dot_space_heating * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
-                )
-                p_th_space_heating = hydronics.circuit_power_w(m_dot_space_heating, t_out_space_heating, t_in_secondary_space_heating)
-
-                self.heatpump.delta_t = t_out_space_heating - t_in_secondary_space_heating
-
-                p_th_dhw = 0.0
-                p_el_dhw = 0.0
-                p_el_space_heating = 0.0
-                p_el_cooling = 0.0
-                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
-                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
-                m_dot_dhw = 0.0
-                time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
-                time_on_heating = 0
-                time_off = 0
-
-            else:
-                # Calulate outputs for cooling mode, aktive cooling with hp
-                self.heatpump.delta_t = 5
-                results = self.get_cached_results_or_run_hplib_simulation(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_space_heating,
-                    t_amb=t_amb,
-                    mode=2,
-                    operation_mode="cooling_building",
-                    p_th_min=self.minimum_thermal_output_power,
-                )
-                p_th_dhw = 0.0
-                p_el_space_heating = 0.0
-                p_el_dhw = 0.0
-                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
-                cop = results["COP"]
-                eer = results["EER"]
-                t_out_space_heating = results["T_out"]
-                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
-                m_dot_space_heating = results["m_dot"]
-                m_dot_dhw = 0.0
-                # The circuit's water carries the heat drawn (negative); hplib's EER relates it to the electricity.
-                p_th_space_heating = hydronics.circuit_power_w(m_dot_space_heating, t_out_space_heating, t_in_secondary_space_heating)
-                p_el_cooling = self.active_cooling_electrical_power_in_watt(thermal_power_in_watt=p_th_space_heating, eer=eer)
-                time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
-                time_on_heating = 0
-                time_off = 0
-
-        elif on_off == 0:
-            # Calulate outputs for off mode
-            p_th_space_heating = 0.0
-            p_th_dhw = 0.0
-            p_el_space_heating = 0.0
-            p_el_dhw = 0.0
-            p_el_cooling = 0.0
-            p_el_brine_pump = 0.0
-            # None values or nans will cause troubles in post processing, that is why there are not used here
-            # cop = None
-            # t_out = None
-            cop = 0.0
-            eer = 0.0
-            t_out_space_heating = t_in_secondary_space_heating
-            t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
-            m_dot_space_heating = 0.0
-            m_dot_dhw = 0.0
-            time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
-            time_on_heating = 0
-            time_on_cooling = 0
-
-        else:
-            raise ValueError("Unknown mode for Advanced HPLib On_Off.")
-
-        p_th_tot_in_watt = p_th_dhw + p_th_space_heating
-        p_el_tot_in_watt = p_el_dhw + p_el_space_heating + p_el_cooling + p_el_brine_pump
-
-        thermal_power_from_environment = p_th_tot_in_watt - p_el_tot_in_watt
-
-        thermal_energy_hp_tot_in_watt_hour = (
-            p_th_tot_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
         )
-        thermal_energy_hp_space_heating_in_watt_hour = p_th_space_heating * self.my_simulation_parameters.seconds_per_timestep / 3600
-        thermal_energy_hp_dhw_in_watt_hour = p_th_dhw * self.my_simulation_parameters.seconds_per_timestep / 3600
-
-        electrical_energy_hp_tot_in_watt_hour = (
-            p_el_tot_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
-        )
-        electrical_energy_hp_space_heating_in_watt_hour = p_el_space_heating * self.my_simulation_parameters.seconds_per_timestep / 3600
-        electrical_energy_hp_dhw_in_watt_hour = p_el_dhw * self.my_simulation_parameters.seconds_per_timestep / 3600
-
-        cumulative_hp_thermal_energy_tot_in_watt_hour = (
-            self.state.cumulative_thermal_energy_tot_in_watt_hour + abs(thermal_energy_hp_tot_in_watt_hour)
-        )
-        cumulative_hp_thermal_energy_space_heating_in_watt_hour = (
-            self.state.cumulative_thermal_energy_space_heating_in_watt_hour + abs(thermal_energy_hp_space_heating_in_watt_hour)
-        )
-        cumulative_hp_thermal_energy_dhw_in_watt_hour = (
-            self.state.cumulative_thermal_energy_dhw_in_watt_hour + abs(thermal_energy_hp_dhw_in_watt_hour)
+        return HeatPumpStepConditions(
+            source_temperature_in_celsius=stsv.get_input_value(self.t_in_primary),
+            ambient_temperature_in_celsius=stsv.get_input_value(self.t_amb),
+            space_heating_return_temperature_in_celsius=stsv.get_input_value(self.t_in_secondary_sh),
+            hot_water_return_temperature_in_celsius=(
+                stsv.get_input_value(self.t_in_secondary_dhw) if self.with_domestic_hot_water_preparation else 0
+            ),
+            space_heating_set_temperature_in_celsius=(
+                stsv.get_input_value(self.set_temperature_hp_sh) if reads_space_heating_set_temperature else None
+            ),
+            hot_water_supply_set_temperature_in_celsius=(
+                stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel)
+                if self.with_domestic_hot_water_preparation
+                else None
+            ),
         )
 
-        cumulative_hp_electrical_energy_tot_in_watt_hour = (
-            self.state.cumulative_electrical_energy_tot_in_watt_hour + abs(electrical_energy_hp_tot_in_watt_hour)
+    def operation_in_mode(
+        self, on_off: float, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers"
+    ) -> "HeatPumpOperation":
+        """Return the heat pump's powers, outlets and flows for one step in the mode ``on_off`` selects.
+
+        1 heats the building, 2 the hot water, -1 cools the building (passively through the brine, or actively),
+        0 is off.
+
+        Raises:
+            ValueError: If ``on_off`` is no known mode.
+        """
+        if on_off == 1:
+            return self.space_heating(conditions, timers)
+        if on_off == 2:
+            return self.hot_water(conditions, timers)
+        if on_off == -1:
+            return self.passive_cooling(conditions) if self.passive_cooling_with_brine else self.active_cooling(conditions)
+        if on_off == 0:
+            return HeatPumpOperation.idle(conditions)
+        raise ValueError("Unknown mode for Advanced HPLib On_Off.")
+
+    def space_heating(self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers") -> "HeatPumpOperation":
+        """Return a space-heating step: at hplib's flow with a parallel storage, at the nominal flow otherwise."""
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+            return self.space_heating_at_hplib_flow(conditions)
+        return self.space_heating_at_fixed_flow(conditions, timers)
+
+    def hot_water(self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers") -> "HeatPumpOperation":
+        """Return a hot-water step: at hplib's flow with a parallel storage, at the nominal flow otherwise.
+
+        A hot-water step holds the nominal 5 K lift and modulates down to no minimal power.
+        """
+        self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
+        self.minimum_thermal_output_power = 0.0
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+            return self.hot_water_at_hplib_flow(conditions)
+        return self.hot_water_at_fixed_flow(conditions, timers)
+
+    def hplib_result(
+        self, conditions: "HeatPumpStepConditions", *, return_temperature_in_celsius: float, mode: int, operation_mode: str
+    ) -> "HplibResult":
+        """Return hplib's answer at the step's source and ambient temperatures and one circuit's return.
+
+        Args:
+            conditions: The step's temperatures.
+            return_temperature_in_celsius: The return temperature of the circuit hplib is asked for, in °C.
+            mode: hplib's mode, 1 heating, 2 cooling.
+            operation_mode: The circuit hplib is evaluated for, part of the cache key.
+        """
+        return self.get_cached_results_or_run_hplib_simulation(
+            source_temperature_in_celsius=conditions.source_temperature_in_celsius,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            ambient_temperature_in_celsius=conditions.ambient_temperature_in_celsius,
+            mode=mode,
+            operation_mode=operation_mode,
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
         )
-        cumulative_hp_electrical_energy_space_heating_in_watt_hour = (
-            self.state.cumulative_electrical_energy_space_heating_in_watt_hour + abs(electrical_energy_hp_space_heating_in_watt_hour)
+
+    def space_heating_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
+        """Return a space-heating step with a parallel storage: hplib's flow and outlet, the heat that flow carries.
+
+        hplib holds a 5 K lift and answers the buffer's return with an outlet, a flow and a COP; the heat pump books
+        the heat that flow carries and that heat over the COP (:meth:`booked_heating_powers_in_watt`).
+        """
+        self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
+        return_in_celsius = conditions.space_heating_return_temperature_in_celsius
+        results = self.hplib_result(
+            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_building"
         )
-        cumulative_hp_electrical_energy_dhw_in_watt_hour = (
-            self.state.cumulative_electrical_energy_dhw_in_watt_hour + abs(electrical_energy_hp_dhw_in_watt_hour)
+        powers = self.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=results.outlet_temperature_in_celsius,
+            return_temperature_in_celsius=return_in_celsius,
+            cop=results.cop,
+        )
+        return HeatPumpOperation.space_heating(
+            conditions,
+            powers=powers,
+            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
+            cop=results.cop,
+            eer=results.eer,
+            outlet_temperature_in_celsius=results.outlet_temperature_in_celsius,
+            mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
         )
 
-        # Counter for switching in space-heating mode
-        if self.state.on_off_previous != on_off and on_off == 1:
-            counter_switch_space_heating = self.state.counter_switch_space_heating + 1
-        else:
-            counter_switch_space_heating = self.state.counter_switch_space_heating
+    def space_heating_at_fixed_flow(
+        self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers"
+    ) -> "HeatPumpOperation":
+        """Return a space-heating step in the fixed-flow mode: the nominal flow, the outlet from the target power.
 
-        # Counter for switching in dhw mode
-        if self.state.on_off_previous != on_off and on_off == 2:
-            counter_switch_dhw = self.state.counter_switch_dhw + 1
-        else:
-            counter_switch_dhw = self.state.counter_switch_dhw
+        The heat pump aims at the lift to its space-heating set temperature, at most 5 K, and its outlet follows from
+        that power at the nominal flow (:meth:`fixed_flow_outlet_temperature_in_celsius`); it books the heat that
+        flow carries.
+        """
+        assert conditions.space_heating_set_temperature_in_celsius is not None
+        return_in_celsius = conditions.space_heating_return_temperature_in_celsius
+        mass_flow_in_kg_per_second = self.m_dot_ref
+        self.heatpump.delta_t = min(
+            conditions.space_heating_set_temperature_in_celsius - return_in_celsius, self.NOMINAL_LIFT_IN_KELVIN
+        )
+        if self.heatpump.delta_t == 0:
+            self.heatpump.delta_t = self.VANISHING_LIFT_IN_KELVIN
+        results = self.hplib_result(
+            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_building"
+        )
+        outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
+            return_temperature_in_celsius=return_in_celsius,
+            lift_in_kelvin=self.heatpump.delta_t,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
+            specific_heat_capacity_in_joule_per_kg_per_kelvin=(
+                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            ),
+        )
+        powers = self.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+            return_temperature_in_celsius=return_in_celsius,
+            cop=results.cop,
+        )
+        self.heatpump.delta_t = outlet_in_celsius - return_in_celsius
+        return HeatPumpOperation.space_heating(
+            conditions,
+            powers=powers,
+            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
+            cop=results.cop,
+            eer=results.eer,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+        )
 
-        # Counter for switching on Off Mode of HP
-        if self.state.on_off_previous == 0 and on_off != 0:
-            counter_onoff = self.state.counter_onoff + 1
-        else:
-            counter_onoff = self.state.counter_onoff
+    def capped_hot_water_outlet_in_celsius(
+        self, conditions: "HeatPumpStepConditions", outlet_temperature_in_celsius: float
+    ) -> float:
+        """Return the hot-water outlet after the cap at the maximal supply and the controller's set temperature, in °C.
 
+        hplib has no outlet limit, so the heat pump caps its hot-water supply at the lower of
+        ``maximal_dhw_supply_temperature_in_celsius`` and its hot-water controller's set temperature
+        (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`); the flow stays, and the circuit carries
+        the heat of the capped supply.
+        """
+        assert conditions.hot_water_supply_set_temperature_in_celsius is not None
+        return hydronics.capped_hot_water_supply_temperature_c(
+            unthrottled_supply_c=outlet_temperature_in_celsius,
+            return_c=conditions.hot_water_return_temperature_in_celsius,
+            maximal_supply_c=self.config.maximal_dhw_supply_temperature_in_celsius,
+            set_supply_c=conditions.hot_water_supply_set_temperature_in_celsius,
+        )
+
+    def hot_water_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
+        """Return a hot-water step with a parallel storage: hplib's flow, its outlet capped, the heat the flow carries.
+
+        hplib answers the tank's return; the outlet is capped (:meth:`capped_hot_water_outlet_in_celsius`), and the
+        heat pump books the heat the flow carries and that heat over hplib's COP.
+        """
+        return_in_celsius = conditions.hot_water_return_temperature_in_celsius
+        results = self.hplib_result(
+            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_dhw"
+        )
+        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, results.outlet_temperature_in_celsius)
+        powers = self.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+            return_temperature_in_celsius=return_in_celsius,
+            cop=results.cop,
+        )
+        return HeatPumpOperation.hot_water(
+            conditions,
+            powers=powers,
+            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
+            cop=results.cop,
+            eer=results.eer,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+            mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
+        )
+
+    def hot_water_at_fixed_flow(
+        self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers"
+    ) -> "HeatPumpOperation":
+        """Return a hot-water step in the fixed-flow mode: the nominal flow, a 5 K target lift, the outlet capped.
+
+        The outlet follows from the target power at the nominal flow (:meth:`fixed_flow_outlet_temperature_in_celsius`)
+        and is capped (:meth:`capped_hot_water_outlet_in_celsius`); the heat pump books the heat the flow carries.
+        """
+        return_in_celsius = conditions.hot_water_return_temperature_in_celsius
+        mass_flow_in_kg_per_second = self.m_dot_ref
+        results = self.hplib_result(
+            conditions, return_temperature_in_celsius=return_in_celsius, mode=1, operation_mode="heating_dhw"
+        )
+        outlet_in_celsius = self.fixed_flow_outlet_temperature_in_celsius(
+            return_temperature_in_celsius=return_in_celsius,
+            lift_in_kelvin=self.heatpump.delta_t,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power,
+            time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
+            specific_heat_capacity_in_joule_per_kg_per_kelvin=(
+                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            ),
+        )
+        outlet_in_celsius = self.capped_hot_water_outlet_in_celsius(conditions, outlet_in_celsius)
+        powers = self.booked_heating_powers_in_watt(
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+            return_temperature_in_celsius=return_in_celsius,
+            cop=results.cop,
+        )
+        return HeatPumpOperation.hot_water(
+            conditions,
+            powers=powers,
+            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
+            cop=results.cop,
+            eer=results.eer,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+        )
+
+    def passive_cooling(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
+        """Return a passive cooling step through the brine: the nominal flow cooled by up to 5 K, no compressor.
+
+        The circuit is cooled towards the space-heating set temperature, by at most 5 K; only the brine pump draws
+        electricity, so the COP is 0 and the EER is reported as 1.
+        """
+        assert conditions.space_heating_set_temperature_in_celsius is not None
+        return_in_celsius = conditions.space_heating_return_temperature_in_celsius
+        mass_flow_in_kg_per_second = self.m_dot_ref
+        self.heatpump.delta_t = min(
+            return_in_celsius - conditions.space_heating_set_temperature_in_celsius, self.NOMINAL_LIFT_IN_KELVIN
+        )
+        if self.heatpump.delta_t == 0:
+            self.heatpump.delta_t = self.VANISHING_LIFT_IN_KELVIN
+        heat_drawn_in_watt = -(
+            mass_flow_in_kg_per_second
+            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            * self.heatpump.delta_t
+        )
+        outlet_in_celsius = return_in_celsius + (
+            heat_drawn_in_watt
+            / (mass_flow_in_kg_per_second * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
+        )
+        thermal_power_in_watt = hydronics.circuit_power_w(
+            mass_flow_kg_per_s=mass_flow_in_kg_per_second, t_supply_c=outlet_in_celsius, t_return_c=return_in_celsius
+        )
+        self.heatpump.delta_t = outlet_in_celsius - return_in_celsius
+        return HeatPumpOperation.cooling(
+            conditions,
+            thermal_power_in_watt=thermal_power_in_watt,
+            electrical_power_cooling_in_watt=0.0,
+            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
+            cop=0,
+            eer=1,
+            outlet_temperature_in_celsius=outlet_in_celsius,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+        )
+
+    def active_cooling(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
+        """Return an active cooling step: hplib's flow and outlet in cooling mode, the electricity at its EER.
+
+        The circuit's water carries the heat drawn, which is negative, and the compressor's electricity is that heat
+        over hplib's EER (:meth:`active_cooling_electrical_power_in_watt`).
+        """
+        self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
+        return_in_celsius = conditions.space_heating_return_temperature_in_celsius
+        results = self.hplib_result(
+            conditions, return_temperature_in_celsius=return_in_celsius, mode=2, operation_mode="cooling_building"
+        )
+        thermal_power_in_watt = hydronics.circuit_power_w(
+            mass_flow_kg_per_s=results.mass_flow_in_kg_per_second,
+            t_supply_c=results.outlet_temperature_in_celsius,
+            t_return_c=return_in_celsius,
+        )
+        return HeatPumpOperation.cooling(
+            conditions,
+            thermal_power_in_watt=thermal_power_in_watt,
+            electrical_power_cooling_in_watt=self.active_cooling_electrical_power_in_watt(
+                thermal_power_in_watt=thermal_power_in_watt, eer=results.eer
+            ),
+            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
+            cop=results.cop,
+            eer=results.eer,
+            outlet_temperature_in_celsius=results.outlet_temperature_in_celsius,
+            mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
+        )
+
+    @staticmethod
+    def stepped_energy_totals(
+        *,
+        operation: "HeatPumpOperation",
+        state: "MoreAdvancedHeatPumpHPLibState",
+        seconds_per_timestep: int,
+    ) -> "HeatPumpEnergyTotals":
+        """Return the step's thermal and electrical energies in Wh and the running totals after the step.
+
+        Each energy is its power times the step length; each running total grows by the magnitude of its step's
+        energy, so a cooling step's negative heat counts towards the thermal total.
+
+        Args:
+            operation: The step's powers.
+            state: The heat pump's state at the start of the step, with the totals so far.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The step's energies and the totals after it.
+        """
+        seconds_per_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
+        thermal_total_in_watt_hour = operation.total_thermal_power_in_watt * seconds_per_timestep / seconds_per_hour
+        thermal_space_heating_in_watt_hour = (
+            operation.thermal_power_space_heating_in_watt * seconds_per_timestep / seconds_per_hour
+        )
+        thermal_hot_water_in_watt_hour = (
+            operation.thermal_power_hot_water_in_watt * seconds_per_timestep / seconds_per_hour
+        )
+        electrical_total_in_watt_hour = (
+            operation.total_electrical_power_in_watt * seconds_per_timestep / seconds_per_hour
+        )
+        electrical_space_heating_in_watt_hour = (
+            operation.electrical_power_space_heating_in_watt * seconds_per_timestep / seconds_per_hour
+        )
+        electrical_hot_water_in_watt_hour = (
+            operation.electrical_power_hot_water_in_watt * seconds_per_timestep / seconds_per_hour
+        )
+        return HeatPumpEnergyTotals(
+            thermal_total_in_watt_hour=thermal_total_in_watt_hour,
+            thermal_space_heating_in_watt_hour=thermal_space_heating_in_watt_hour,
+            thermal_hot_water_in_watt_hour=thermal_hot_water_in_watt_hour,
+            electrical_total_in_watt_hour=electrical_total_in_watt_hour,
+            electrical_space_heating_in_watt_hour=electrical_space_heating_in_watt_hour,
+            electrical_hot_water_in_watt_hour=electrical_hot_water_in_watt_hour,
+            cumulative_thermal_total_in_watt_hour=(
+                state.cumulative_thermal_energy_tot_in_watt_hour + abs(thermal_total_in_watt_hour)
+            ),
+            cumulative_thermal_space_heating_in_watt_hour=(
+                state.cumulative_thermal_energy_sh_in_watt_hour + abs(thermal_space_heating_in_watt_hour)
+            ),
+            cumulative_thermal_hot_water_in_watt_hour=(
+                state.cumulative_thermal_energy_dhw_in_watt_hour + abs(thermal_hot_water_in_watt_hour)
+            ),
+            cumulative_electrical_total_in_watt_hour=(
+                state.cumulative_electrical_energy_tot_in_watt_hour + abs(electrical_total_in_watt_hour)
+            ),
+            cumulative_electrical_space_heating_in_watt_hour=(
+                state.cumulative_electrical_energy_sh_in_watt_hour + abs(electrical_space_heating_in_watt_hour)
+            ),
+            cumulative_electrical_hot_water_in_watt_hour=(
+                state.cumulative_electrical_energy_dhw_in_watt_hour + abs(electrical_hot_water_in_watt_hour)
+            ),
+        )
+
+    @staticmethod
+    def switch_counters(*, on_off: float, state: "MoreAdvancedHeatPumpHPLibState") -> "HeatPumpSwitchCounters":
+        """Return the space-heating, hot-water and on/off switch counters after a step.
+
+        A counter grows by one when the machine enters its mode in this step: space heating or hot water from any
+        other mode, and on from off. For example, a machine that was off and heats the building in this step counts
+        one more space-heating switch and one more switch on.
+        """
+        return HeatPumpSwitchCounters(
+            space_heating=state.counter_switch_sh + (1 if state.on_off_previous != on_off and on_off == 1 else 0),
+            hot_water=state.counter_switch_dhw + (1 if state.on_off_previous != on_off and on_off == 2 else 0),
+            on_off=state.counter_onoff + (1 if state.on_off_previous == 0 and on_off != 0 else 0),
+        )
+
+    def publish_primary_side(
+        self, stsv: SingleTimeStepValues, on_off: float, conditions: "HeatPumpStepConditions", operation: "HeatPumpOperation"
+    ) -> None:
+        """Publish the brine or water source circuit of a machine with a primary circuit of its own.
+
+        The source circuit carries the heat taken from the environment at a fixed 5 K difference; while the machine
+        is off it moves nothing.
+
+        Raises:
+            ValueError: If the primary fluid's specific heat is not configured.
+        """
+        if self.specific_heat_capacity_of_primary_fluid is None:
+            raise ValueError("specific heat capacity on primary side has to be a value not none!")
+        temperature_difference_primary_side = self.PRIMARY_SIDE_TEMPERATURE_DIFFERENCE_IN_KELVIN
+        m_dot_water_primary = operation.thermal_power_from_environment_in_watt / (
+            self.specific_heat_capacity_of_primary_fluid * temperature_difference_primary_side
+        )
+        if on_off == 0:
+            temperature_difference_primary_side = 0.0
+            m_dot_water_primary = 0.0
+        t_out_primary = conditions.source_temperature_in_celsius - temperature_difference_primary_side
+        self.state.delta_t_primary_side = temperature_difference_primary_side
+        stsv.set_output_value(self.m_dot_water_primary, m_dot_water_primary)
+        stsv.set_output_value(self.temp_brine_primary_side_in, conditions.source_temperature_in_celsius)
+        stsv.set_output_value(self.temp_brine_primary_side_out, t_out_primary)
+        stsv.set_output_value(self.temperature_difference_primary_side, temperature_difference_primary_side)
+
+    #: The temperature difference across the source circuit of a brine or water source machine, in K.
+    PRIMARY_SIDE_TEMPERATURE_DIFFERENCE_IN_KELVIN: ClassVar[float] = 5.0
+
+    def publish_operation(
+        self,
+        stsv: SingleTimeStepValues,
+        on_off: float,
+        conditions: "HeatPumpStepConditions",
+        operation: "HeatPumpOperation",
+        timers: "HeatPumpRunTimers",
+    ) -> None:
+        """Publish the step's circuits, powers, energies, totals and counters, and store them in the state.
+
+        The energies and running totals come from :meth:`stepped_energy_totals`, the counters from
+        :meth:`switch_counters`.
+        """
+        totals = self.stepped_energy_totals(
+            operation=operation, state=self.state, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
+        )
+        counters = self.switch_counters(on_off=on_off, state=self.state)
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
-            if self.specific_heat_capacity_of_primary_fluid is not None:
-                specific_heat_capacity_of_primary_fluid = self.specific_heat_capacity_of_primary_fluid
-            else:
-                raise ValueError("specific heat capacity on primary side has to be a value not none!")
+            self.publish_primary_side(stsv, on_off, conditions, operation)
 
-            temperature_difference_primary_side = 5.0
-            m_dot_water_primary = thermal_power_from_environment / (specific_heat_capacity_of_primary_fluid *
-                                                                    temperature_difference_primary_side)
-
-            if on_off == 0:
-                temperature_difference_primary_side = 0.0
-                m_dot_water_primary = 0.0
-
-            t_out_primary = t_in_primary - temperature_difference_primary_side
-
-            self.state.delta_t_primary_side = temperature_difference_primary_side
-
-            stsv.set_output_value(self.m_dot_water_primary, m_dot_water_primary)
-            stsv.set_output_value(self.temp_brine_primary_side_in, t_in_primary)
-            stsv.set_output_value(self.temp_brine_primary_side_out, t_out_primary)
-            stsv.set_output_value(self.temperature_difference_primary_side, temperature_difference_primary_side)
-
-        # write values for output time series
-        stsv.set_output_value(self.p_th_space_heating, p_th_space_heating)
-        stsv.set_output_value(self.p_th_tot, p_th_tot_in_watt)
-        stsv.set_output_value(self.p_el_space_heating, p_el_space_heating)
-        stsv.set_output_value(self.p_el_cooling, p_el_cooling)
-        # the configured pump power is never None here: the constructor replaces an unset one by 0
-        stsv.set_output_value(self.p_el_brine_pump, p_el_brine_pump)
-        stsv.set_output_value(self.p_el_tot, p_el_tot_in_watt)
-        stsv.set_output_value(self.cop, cop)
-        stsv.set_output_value(self.eer, eer)
+        stsv.set_output_value(self.p_th_sh, operation.thermal_power_space_heating_in_watt)
+        stsv.set_output_value(self.p_th_tot, operation.total_thermal_power_in_watt)
+        stsv.set_output_value(self.p_el_sh, operation.electrical_power_space_heating_in_watt)
+        stsv.set_output_value(self.p_el_cooling, operation.electrical_power_cooling_in_watt)
+        stsv.set_output_value(self.p_el_brine_pump, operation.electrical_power_brine_pump_in_watt)
+        stsv.set_output_value(self.p_el_tot, operation.total_electrical_power_in_watt)
+        stsv.set_output_value(self.cop, operation.cop)
+        stsv.set_output_value(self.eer, operation.eer)
         stsv.set_output_value(self.heatpump_state, on_off)
-        stsv.set_output_value(self.t_in_space_heating, t_in_secondary_space_heating)
-        stsv.set_output_value(self.t_out_space_heating, t_out_space_heating)
-        stsv.set_output_value(self.m_dot_space_heating, m_dot_space_heating)
-        stsv.set_output_value(self.time_on_heating, time_on_heating)
-        stsv.set_output_value(self.time_on_cooling, time_on_cooling)
-        stsv.set_output_value(self.time_off, time_off)
-        stsv.set_output_value(self.thermal_power_from_environment, thermal_power_from_environment)
-        stsv.set_output_value(self.thermal_power_delivered_for_space_heating, max(p_th_space_heating, 0.0))
-        stsv.set_output_value(self.thermal_power_drawn_for_cooling, max(-p_th_space_heating, 0.0))
-        stsv.set_output_value(self.thermal_energy_hp_tot_channel, thermal_energy_hp_tot_in_watt_hour)
-        stsv.set_output_value(self.thermal_energy_hp_space_heating_channel, thermal_energy_hp_space_heating_in_watt_hour)
-        stsv.set_output_value(self.electrical_energy_hp_tot_channel, electrical_energy_hp_tot_in_watt_hour)
-        stsv.set_output_value(self.electrical_energy_hp_space_heating_channel, electrical_energy_hp_space_heating_in_watt_hour)
+        stsv.set_output_value(self.t_in_sh, conditions.space_heating_return_temperature_in_celsius)
+        stsv.set_output_value(self.t_out_sh, operation.outlet_temperature_space_heating_in_celsius)
+        stsv.set_output_value(self.m_dot_sh, operation.mass_flow_space_heating_in_kg_per_second)
+        stsv.set_output_value(self.time_on_heating, timers.time_on_heating_in_seconds)
+        stsv.set_output_value(self.time_on_cooling, timers.time_on_cooling_in_seconds)
+        stsv.set_output_value(self.time_off, timers.time_off_in_seconds)
+        stsv.set_output_value(self.thermal_power_from_environment, operation.thermal_power_from_environment_in_watt)
         stsv.set_output_value(
-            self.cumulative_hp_thermal_energy_tot_channel, cumulative_hp_thermal_energy_tot_in_watt_hour
+            self.thermal_power_delivered_for_space_heating, max(operation.thermal_power_space_heating_in_watt, 0.0)
         )
         stsv.set_output_value(
-            self.cumulative_hp_thermal_energy_space_heating_channel, cumulative_hp_thermal_energy_space_heating_in_watt_hour
+            self.thermal_power_drawn_for_cooling, max(-operation.thermal_power_space_heating_in_watt, 0.0)
+        )
+        stsv.set_output_value(self.thermal_energy_hp_tot_channel, totals.thermal_total_in_watt_hour)
+        stsv.set_output_value(self.thermal_energy_hp_sh_channel, totals.thermal_space_heating_in_watt_hour)
+        stsv.set_output_value(self.electrical_energy_hp_tot_channel, totals.electrical_total_in_watt_hour)
+        stsv.set_output_value(self.electrical_energy_hp_sh_channel, totals.electrical_space_heating_in_watt_hour)
+        stsv.set_output_value(self.cumulative_hp_thermal_energy_tot_channel, totals.cumulative_thermal_total_in_watt_hour)
+        stsv.set_output_value(
+            self.cumulative_hp_thermal_energy_sh_channel, totals.cumulative_thermal_space_heating_in_watt_hour
         )
         stsv.set_output_value(
-            self.cumulative_hp_electrical_energy_tot_channel, cumulative_hp_electrical_energy_tot_in_watt_hour
+            self.cumulative_hp_electrical_energy_tot_channel, totals.cumulative_electrical_total_in_watt_hour
         )
         stsv.set_output_value(
-            self.cumulative_hp_electrical_energy_space_heating_channel, cumulative_hp_electrical_energy_space_heating_in_watt_hour
+            self.cumulative_hp_electrical_energy_sh_channel, totals.cumulative_electrical_space_heating_in_watt_hour
         )
-        stsv.set_output_value(self.counter_on_off_channel, counter_onoff)
+        stsv.set_output_value(self.counter_on_off_channel, counters.on_off)
         stsv.set_output_value(self.delta_t_hp_secondary_side_channel, self.heatpump.delta_t)
 
         if self.with_domestic_hot_water_preparation:
-            stsv.set_output_value(self.p_th_dhw, p_th_dhw)
-            stsv.set_output_value(self.p_el_dhw, p_el_dhw)
-            stsv.set_output_value(self.t_in_dhw, t_in_secondary_dhw)
-            stsv.set_output_value(self.t_out_dhw, t_out_dhw)
-            stsv.set_output_value(self.m_dot_dhw, m_dot_dhw)
-            stsv.set_output_value(self.thermal_energy_hp_dhw_channel, thermal_energy_hp_dhw_in_watt_hour)
-            stsv.set_output_value(self.electrical_energy_hp_dhw_channel, electrical_energy_hp_dhw_in_watt_hour)
+            stsv.set_output_value(self.p_th_dhw, operation.thermal_power_hot_water_in_watt)
+            stsv.set_output_value(self.p_el_dhw, operation.electrical_power_hot_water_in_watt)
+            stsv.set_output_value(self.t_in_dhw, conditions.hot_water_return_temperature_in_celsius)
+            stsv.set_output_value(self.t_out_dhw, operation.outlet_temperature_hot_water_in_celsius)
+            stsv.set_output_value(self.m_dot_dhw, operation.mass_flow_hot_water_in_kg_per_second)
+            stsv.set_output_value(self.thermal_energy_hp_dhw_channel, totals.thermal_hot_water_in_watt_hour)
+            stsv.set_output_value(self.electrical_energy_hp_dhw_channel, totals.electrical_hot_water_in_watt_hour)
             stsv.set_output_value(
-                self.cumulative_hp_thermal_energy_dhw_channel, cumulative_hp_thermal_energy_dhw_in_watt_hour
+                self.cumulative_hp_thermal_energy_dhw_channel, totals.cumulative_thermal_hot_water_in_watt_hour
             )
             stsv.set_output_value(
-                self.cumulative_hp_electrical_energy_dhw_channel, cumulative_hp_electrical_energy_dhw_in_watt_hour
+                self.cumulative_hp_electrical_energy_dhw_channel, totals.cumulative_electrical_hot_water_in_watt_hour
             )
-            stsv.set_output_value(self.counter_switch_dhw_channel, counter_switch_dhw)
-            stsv.set_output_value(self.counter_switch_space_heating_channel, counter_switch_space_heating)
+            stsv.set_output_value(self.counter_switch_dhw_channel, counters.hot_water)
+            stsv.set_output_value(self.counter_switch_sh_channel, counters.space_heating)
 
-        # write values to state
-        self.state.time_on_heating = time_on_heating
-        self.state.time_on_cooling = time_on_cooling
-        self.state.time_off = time_off
+        self.state.time_on_heating = timers.time_on_heating_in_seconds
+        self.state.time_on_cooling = timers.time_on_cooling_in_seconds
+        self.state.time_off = timers.time_off_in_seconds
         self.state.on_off_previous = on_off
-        self.state.cumulative_thermal_energy_tot_in_watt_hour = cumulative_hp_thermal_energy_tot_in_watt_hour
-        self.state.cumulative_thermal_energy_space_heating_in_watt_hour = cumulative_hp_thermal_energy_space_heating_in_watt_hour
-        self.state.cumulative_thermal_energy_dhw_in_watt_hour = cumulative_hp_thermal_energy_dhw_in_watt_hour
-        self.state.cumulative_electrical_energy_tot_in_watt_hour = cumulative_hp_electrical_energy_tot_in_watt_hour
-        self.state.cumulative_electrical_energy_space_heating_in_watt_hour = cumulative_hp_electrical_energy_space_heating_in_watt_hour
-        self.state.cumulative_electrical_energy_dhw_in_watt_hour = cumulative_hp_electrical_energy_dhw_in_watt_hour
-        self.state.counter_switch_space_heating = counter_switch_space_heating
-        self.state.counter_switch_dhw = counter_switch_dhw
-        self.state.counter_onoff = counter_onoff
+        self.state.cumulative_thermal_energy_tot_in_watt_hour = totals.cumulative_thermal_total_in_watt_hour
+        self.state.cumulative_thermal_energy_sh_in_watt_hour = totals.cumulative_thermal_space_heating_in_watt_hour
+        self.state.cumulative_thermal_energy_dhw_in_watt_hour = totals.cumulative_thermal_hot_water_in_watt_hour
+        self.state.cumulative_electrical_energy_tot_in_watt_hour = totals.cumulative_electrical_total_in_watt_hour
+        self.state.cumulative_electrical_energy_sh_in_watt_hour = totals.cumulative_electrical_space_heating_in_watt_hour
+        self.state.cumulative_electrical_energy_dhw_in_watt_hour = totals.cumulative_electrical_hot_water_in_watt_hour
+        self.state.counter_switch_sh = counters.space_heating
+        self.state.counter_switch_dhw = counters.hot_water
+        self.state.counter_onoff = counters.on_off
         self.state.delta_t_secondary_side = self.heatpump.delta_t
 
     @staticmethod
@@ -2225,73 +1947,105 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         return opex_cost_data_class
 
-    #: The grid hplib's results are cached on, K: 0.1 K in every temperature it is called with.
-    HPLIB_GRID_IN_KELVIN: ClassVar[float] = 0.1
+    #: The decimals hplib's results are cached on: every temperature it is called with is rounded to 0.1 K.
+    HPLIB_GRID_DECIMALS: ClassVar[int] = 1
+
+    #: The grid hplib's results are cached on, in K.
+    HPLIB_GRID_IN_KELVIN: ClassVar[float] = 10.0**-HPLIB_GRID_DECIMALS
+
+    #: The decimals a return temperature's grid index is rounded to before it is floored: 47.0 °C times 10 is
+    #: 469.99999999999994 in floats, and rounding to 9 decimals puts it on grid point 470 instead of 469.
+    GRID_INDEX_ROUNDING_DECIMALS: ClassVar[int] = 9
+
+    #: Below this weight of the upper grid point the return lies on the lower one, and only that is evaluated.
+    GRID_POINT_SHARE_TOLERANCE: ClassVar[float] = 1e-12
 
     def get_cached_results_or_run_hplib_simulation(
-        self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int, operation_mode: str, p_th_min: float
-    ) -> Any:
-        """The results of hplib at a return temperature, interpolated linearly between the cached 0.1 K grid points.
+        self,
+        *,
+        source_temperature_in_celsius: float,
+        return_temperature_in_celsius: float,
+        ambient_temperature_in_celsius: float,
+        mode: int,
+        operation_mode: str,
+        minimal_thermal_power_in_watt: float,
+    ) -> "HplibResult":
+        """Return hplib's results at a return temperature, interpolated linearly between the cached grid points.
 
         hplib is called, and its results are cached, at grid points 0.1 K apart. The source and ambient temperatures
         come from the weather and stay constant while a step iterates, so they are rounded to the grid. The return
-        temperature ``t_in_secondary`` is the storage's step mean, which moves from iteration to iteration: it is
-        not rounded, the results of the two neighbouring grid points are interpolated linearly in it, so the heat
-        pump's answer is continuous in the return and the storage's step mean has a fixed point (spec §5.2, D2's
-        remedy, owner 2026-10-09). Every number of the result is interpolated, ``T_out``, ``m_dot``, ``P_th``,
-        ``P_el`` and ``COP`` alike. For example, a return of 47.04 °C takes 60 % of hplib's results at 47.0 °C and
-        40 % of those at 47.1 °C; its outlet is 52.04 °C.
+        temperature is the storage's step mean, which moves from iteration to iteration: it is not rounded, and the
+        results of the two neighbouring grid points are interpolated linearly in it, so the heat pump's answer is
+        continuous in the return and the storage's step mean has a fixed point. Every number of the result is
+        interpolated (:meth:`HplibResult.interpolated`). For example, a return of 47.04 °C takes 60 % of hplib's
+        results at 47.0 °C and 40 % of those at 47.1 °C; its outlet is 52.04 °C.
 
         Args:
-            t_in_primary: The source temperature, °C, rounded to the grid.
-            t_in_secondary: The return temperature, °C, interpolated.
-            t_amb: The ambient temperature, °C, rounded to the grid.
+            source_temperature_in_celsius: The source temperature, in °C, rounded to the grid.
+            return_temperature_in_celsius: The return temperature, in °C, interpolated.
+            ambient_temperature_in_celsius: The ambient temperature, in °C, rounded to the grid.
             mode: hplib's mode, 1 heating, 2 cooling.
             operation_mode: The circuit hplib is evaluated for, part of the cache key.
-            p_th_min: The minimal thermal power hplib modulates down to, W.
+            minimal_thermal_power_in_watt: The minimal thermal power hplib modulates down to, in W.
 
         Returns:
-            hplib's result dictionary at the return temperature.
+            hplib's result at the return temperature.
         """
         cells_per_kelvin = 1.0 / self.HPLIB_GRID_IN_KELVIN
-        lower_index = math.floor(round(t_in_secondary * cells_per_kelvin, 9))
-        share_of_upper = t_in_secondary * cells_per_kelvin - lower_index
-        lower = self.cached_hplib_result_at_grid_point(
-            t_in_primary, lower_index / cells_per_kelvin, t_amb, mode, operation_mode, p_th_min
-        )
-        if share_of_upper <= 1e-12:
+        lower_index = math.floor(round(return_temperature_in_celsius * cells_per_kelvin, self.GRID_INDEX_ROUNDING_DECIMALS))
+        share_of_upper = return_temperature_in_celsius * cells_per_kelvin - lower_index
+
+        def at_grid_point(index: int) -> "HplibResult":
+            """Return hplib's cached result at the grid point with this index."""
+            return self.cached_hplib_result_at_grid_point(
+                source_temperature_in_celsius=source_temperature_in_celsius,
+                return_temperature_in_celsius=index / cells_per_kelvin,
+                ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+                mode=mode,
+                operation_mode=operation_mode,
+                minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
+            )
+
+        lower = at_grid_point(lower_index)
+        if share_of_upper <= self.GRID_POINT_SHARE_TOLERANCE:
             return lower
-        upper = self.cached_hplib_result_at_grid_point(
-            t_in_primary, (lower_index + 1) / cells_per_kelvin, t_amb, mode, operation_mode, p_th_min
-        )
-        interpolated = dict(lower)
-        for key, value in lower.items():
-            if isinstance(value, (int, float, np.floating)) and not isinstance(value, bool):
-                interpolated[key] = float(value) + share_of_upper * (float(upper[key]) - float(value))
-        return interpolated
+        return HplibResult.interpolated(lower=lower, upper=at_grid_point(lower_index + 1), share_of_upper=share_of_upper)
 
     def cached_hplib_result_at_grid_point(
         self,
-        t_in_primary_in_celsius: float,
-        t_in_secondary_in_celsius: float,
-        t_amb_in_celsius: float,
+        *,
+        source_temperature_in_celsius: float,
+        return_temperature_in_celsius: float,
+        ambient_temperature_in_celsius: float,
         mode: int,
         operation_mode: str,
-        p_th_min_in_watt: float,
-    ) -> Any:
-        """The results of hplib at one point of its 0.1 K grid, from the cache or computed and cached.
+        minimal_thermal_power_in_watt: float,
+    ) -> "HplibResult":
+        """Return hplib's result at one point of its 0.1 K grid, from the cache or computed and cached.
 
-        The source and ambient temperatures are rounded to 0.1 K, the return is a grid point already; the stated
-        SCOP's calibration is applied once, before the result is cached.
+        The source, return and ambient temperatures are rounded to the grid; the stated SCOP's calibration
+        (:class:`ScopCalibration`) is applied once, before the result is cached, so a cached result is the calibrated
+        machine's.
+
+        Args:
+            source_temperature_in_celsius: The source temperature, in °C.
+            return_temperature_in_celsius: The return temperature, in °C, a grid point.
+            ambient_temperature_in_celsius: The ambient temperature, in °C.
+            mode: hplib's mode, 1 heating, 2 cooling.
+            operation_mode: The circuit hplib is evaluated for, part of the cache key.
+            minimal_thermal_power_in_watt: The minimal thermal power hplib modulates down to, in W.
+
+        Returns:
+            hplib's result at the grid point.
         """
-        t_in_primary_in_celsius = round(t_in_primary_in_celsius, 1)
-        t_in_secondary_in_celsius = round(t_in_secondary_in_celsius, 1)
-        t_amb_in_celsius = round(t_amb_in_celsius, 1)
+        source_on_grid_in_celsius = round(source_temperature_in_celsius, self.HPLIB_GRID_DECIMALS)
+        return_on_grid_in_celsius = round(return_temperature_in_celsius, self.HPLIB_GRID_DECIMALS)
+        ambient_on_grid_in_celsius = round(ambient_temperature_in_celsius, self.HPLIB_GRID_DECIMALS)
 
         my_data_class = CalculationRequest(
-            t_in_primary=t_in_primary_in_celsius,
-            t_in_secondary=t_in_secondary_in_celsius,
-            t_amb=t_amb_in_celsius,
+            t_in_primary=source_on_grid_in_celsius,
+            t_in_secondary=return_on_grid_in_celsius,
+            t_amb=ambient_on_grid_in_celsius,
             mode=mode,
             operation_mode=operation_mode,
         )
@@ -2302,18 +2056,18 @@ class MoreAdvancedHeatPumpHPLib(Component):
             results = self.calculation_cache[my_hash_key]
         else:
             results = self.heatpump.simulate(
-                t_in_primary=t_in_primary_in_celsius,
-                t_in_secondary=t_in_secondary_in_celsius,
-                t_amb=t_amb_in_celsius,
+                t_in_primary=source_on_grid_in_celsius,
+                t_in_secondary=return_on_grid_in_celsius,
+                t_amb=ambient_on_grid_in_celsius,
                 mode=mode,
-                p_th_min=p_th_min_in_watt,
+                p_th_min=minimal_thermal_power_in_watt,
             )
-            # The stated SCOP's calibration (hisim-4g9.15), applied once before the result is cached.
+            # the stated SCOP's calibration, applied once before the result is cached
             results = self.scop_calibration.apply(self.heatpump, results, mode)
 
             self.calculation_cache[my_hash_key] = results
 
-        return results
+        return HplibResult.from_hplib(results)
 
     def get_component_kpi_entries(
         self,
@@ -2685,21 +2439,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
         return list_of_kpi_entries
 
 
-@dataclass(frozen=True)
-class HeatingCircuitPowers:
-    """The thermal and electrical power a running heating circuit of the hplib heat pump books for one step.
-
-    Both are derived from the same water flow: the thermal power is the heat the circuit's water carries, the
-    electrical power that heat over the step's coefficient of performance. A value object, so the two powers
-    cannot be swapped by position.
-    """
-
-    #: The heat the circuit's water carries, in W.
-    thermal_power_in_watt: float
-    #: The electricity the compressor draws for that heat, in W.
-    electrical_power_in_watt: float
-
-
 @dataclass
 class MoreAdvancedHeatPumpHPLibState:
     """MoreAdvancedHeatPumpHPLibState class."""
@@ -2740,32 +2479,6 @@ class MoreAdvancedHeatPumpHPLibState:
             self.counter_onoff,
             self.delta_t_secondary_side,
             self.delta_t_primary_side,
-        )
-
-
-@dataclass
-class CalculationRequest:
-    """Class for caching HPLib parameters so that HPLib.simulate does not need to run so often."""
-
-    t_in_primary: float
-    t_in_secondary: float
-    t_amb: float
-    mode: int
-    operation_mode: str
-
-    def get_key(self):
-        """Get key of class with important parameters."""
-
-        return (
-            str(self.t_in_primary)
-            + " "
-            + str(self.t_in_secondary)
-            + " "
-            + str(self.t_amb)
-            + " "
-            + str(self.mode)
-            + " "
-            + str(self.operation_mode)
         )
 
 
@@ -3390,23 +3103,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     t_min_dhw_storage_in_celsius: float = 40.0
     #: upper set temperature of DHW Storage, given in °C
     t_max_dhw_storage_in_celsius: float = 60.0
-    #: set thermal power delivered for dhw on constant value --> max. Value of heatpump.
-    #: false: modulation, true: constant power for dhw. The heat pump refuses true with a parallel
-    #: storage, at its first hot-water step, because it books the heat its flow carries, which a
-    #: constant power would contradict; in the fixed-flow mode (a series storage or none) true is ignored.
-    thermalpower_dhw_is_constant: bool = False
-    #: max. Power of Heatpump for not modulation dhw production; only read when
-    #: ``thermalpower_dhw_is_constant`` is true, which a parallel storage refuses and the fixed-flow
-    #: mode ignores, so no heat pump uses it
-    p_th_max_dhw_in_watt: float = 5000.0
 
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
         """The one hot-water controller the fleet runs, reheating the vessel from 40 to 60 °C.
 
-        The field defaults are that controller: a modulating machine, so the constant-power
-        limit below is not read, and the 40/60 °C band that keeps the vessel above the
+        The field defaults are that controller: the 40/60 °C band that keeps the vessel above the
         legionella temperature without cycling the machine on every tap.
 
         Args:
@@ -3416,6 +3119,20 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
             The configuration, fully concrete -- the class has no sizable field.
         """
         return cls(component_id=ComponentID(name=name))
+
+
+@unique
+class HeatPumpDhwState(int, Enum):
+
+    """The hot-water states of the hplib heat pump's hot-water controller, with the signal values it publishes.
+
+    The heat pump reads the value as its hot-water switch: 2 asks for a hot-water charge, 0 for none.
+    """
+
+    #: No hot-water charge.
+    OFF = 0
+    #: A hot-water charge.
+    ON = 2
 
 
 class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
@@ -3435,16 +3152,14 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     # Outputs
     State_dhw = "StateDHW"
     #: The hot-water supply temperature the controller aims at: ``t_max`` plus the energy manager's raise.
-    SupplyTemperatureSetDHWInCelsius = "SupplyTemperatureSetDHWInCelsius"
-    ThermalPower_dhw_is_constant = "ThermalPowerDHWConst"  # if heatpump has fix power for dhw
-    Value_thermalpower_dhw_is_constant = "ThermalPowerHPForDHWConst"  # if heatpump has fix power for dhw
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
 
     #: How far below its set temperature the tank's start temperature may stay for the charge to end, K. The heat
     #: pump's hot-water supply stops at the set temperature (``t_max`` plus the energy manager's raise), so the tank
     #: approaches it but never passes it; the charge ends once the tank is within 0.5 K of it, as a boiler's charge
-    #: ends at its target (spec §5.5, owner 2026-10-09). The surplus switch-on stops at the same point below ``t_max``:
-    #: were it at ``t_max``, a tank between ``t_max - 0.5 K`` and ``t_max`` would be switched on by the raise and off
-    #: without it, and the energy manager's raise, which follows the heat pump's draw, would toggle it within a step.
+    #: ends at its target. The surplus switch-on stops at the same point below ``t_max``: were it at ``t_max``, a tank
+    #: between ``t_max - 0.5 K`` and ``t_max`` would be switched on by the raise and off without it, and the energy
+    #: manager's raise, which follows the heat pump's draw, would toggle it within a step.
     SWITCH_OFF_TOLERANCE_IN_KELVIN: ClassVar[float] = 0.5
 
     def __init__(
@@ -3466,13 +3181,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
         self.config: MoreAdvancedHeatPumpHPLibControllerDHWConfig = config
 
-        self.state_dhw: int
-        self.previous_state_dhw: int
+        self.state_dhw: HeatPumpDhwState
+        self.previous_state_dhw: HeatPumpDhwState
         self.water_temperature_input_from_dhw_storage_in_celsius_previous: float
         self.water_temperature_input_from_dhw_storage_in_celsius: float
-        self.supply_temperature_set_dhw_in_celsius: float
-        self.thermalpower_dhw_is_constant: bool
-        self.p_th_max_dhw: float
+        self.supply_temperature_set_for_dhw_in_celsius: float
 
         self.build()
 
@@ -3497,12 +3210,14 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             self.State_dhw,
             LoadTypes.ANY,
             Units.ANY,
-            output_description=f"here a description for {self.State_dhw} will follow.",
+            output_description=(
+                "The hot-water mode the controller commands the heat pump: 2 charges the hot-water tank, 0 does not."
+            ),
         )
 
-        self.supply_temperature_set_dhw_in_celsius_channel: ComponentOutput = self.add_output(
+        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.SupplyTemperatureSetDHWInCelsius,
+            self.SupplyTemperatureSetForDHWInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description=(
@@ -3510,22 +3225,6 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 "(60 °C by default). The heat pump's hot-water supply stops at it, so a charge ends at its target "
                 "inside the step."
             ),
-        )
-
-        self.thermalpower_dhw_is_constant_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.ThermalPower_dhw_is_constant,
-            LoadTypes.ANY,
-            Units.ANY,
-            output_description=f"here a description for {self.ThermalPower_dhw_is_constant} will follow.",
-        )
-
-        self.thermalpower_dhw_is_constant_value_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.Value_thermalpower_dhw_is_constant,
-            LoadTypes.ANY,
-            Units.ANY,
-            output_description=f"here a description for {self.Value_thermalpower_dhw_is_constant} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
@@ -3547,7 +3246,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 dhw_classname,
                 # the tank's start-of-step temperature T0: the controller decides on a value the step's
                 # iteration does not move
-                component_class.WaterMeanTemperatureInStorage,
+                component_class.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         return connections
@@ -3579,17 +3278,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         The function sets important constants and parameters for the calculations.
         """
 
-        self.state_dhw = 0
-        self.water_temperature_input_from_dhw_storage_in_celsius = 40.0
-        self.supply_temperature_set_dhw_in_celsius = self.config.t_max_dhw_storage_in_celsius
-        self.thermalpower_dhw_is_constant = self.config.thermalpower_dhw_is_constant
-        self.p_th_max_dhw = self.config.p_th_max_dhw_in_watt
-
-        if self.thermalpower_dhw_is_constant:
-            print(f"INFO: DHW Power is constant with {self.p_th_max_dhw} Watt.")
-        elif self.thermalpower_dhw_is_constant is False:
-            print("INFO: DHW Power is modulating")
-            self.p_th_max_dhw = 0.0
+        self.state_dhw = HeatPumpDhwState.OFF
+        self.water_temperature_input_from_dhw_storage_in_celsius = self.INITIAL_STORAGE_TEMPERATURE_IN_CELSIUS
+        self.supply_temperature_set_for_dhw_in_celsius = self.config.t_max_dhw_storage_in_celsius
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -3617,61 +3308,93 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         """Write important variables to report."""
         return self.heatpump_controller_dhw_config.get_string_dict()
 
+    #: The tank temperature the controller assumes before it has read one, in °C: the lower end of the default band.
+    INITIAL_STORAGE_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 40.0
+
+    @staticmethod
+    def next_state(
+        *,
+        state: "HeatPumpDhwState",
+        storage_temperature_in_celsius: float,
+        raise_in_kelvin: float,
+        minimum_temperature_in_celsius: float,
+        maximum_temperature_in_celsius: float,
+    ) -> "HeatPumpDhwState":
+        """Return the hot-water state after one decision on the tank's start-of-step temperature.
+
+        The transitions, applied in this order, the last that applies winning:
+
+        | condition | next state |
+        |---|---|
+        | the tank is below ``minimum_temperature_in_celsius`` | ON |
+        | the tank is at or above ``maximum + raise - SWITCH_OFF_TOLERANCE_IN_KELVIN`` | OFF |
+        | a raise above 0 and the tank below ``maximum - SWITCH_OFF_TOLERANCE_IN_KELVIN`` | ON |
+        | none of these | the state as it was |
+
+        The raise is the energy manager's increase of the set temperature while it has surplus electricity. For
+        example, with the 40/60 °C band and no raise a tank at 50 °C keeps its state, one at 39 °C switches on and
+        one at 59.5 °C switches off; with a 10 K raise, a tank at 59 °C switches on and charges until 69.5 °C.
+
+        Args:
+            state: The state before the decision.
+            storage_temperature_in_celsius: The tank's start-of-step temperature, in °C.
+            raise_in_kelvin: The energy manager's raise of the set temperature, in K, 0 or more.
+            minimum_temperature_in_celsius: The tank temperature below which a charge starts, in °C.
+            maximum_temperature_in_celsius: The set temperature without a raise, in °C.
+
+        Returns:
+            The state after the decision.
+        """
+        next_state = state
+        if storage_temperature_in_celsius < minimum_temperature_in_celsius:
+            next_state = HeatPumpDhwState.ON
+        switch_off_tolerance_in_kelvin = MoreAdvancedHeatPumpHPLibControllerDHW.SWITCH_OFF_TOLERANCE_IN_KELVIN
+        if storage_temperature_in_celsius >= (
+            maximum_temperature_in_celsius + raise_in_kelvin - switch_off_tolerance_in_kelvin
+        ):
+            # the tank has reached its target, to which the heat pump's supply is capped
+            next_state = HeatPumpDhwState.OFF
+        if raise_in_kelvin > 0 and storage_temperature_in_celsius < (
+            maximum_temperature_in_celsius - switch_off_tolerance_in_kelvin
+        ):
+            # on with surplus electricity, below where the unraised charge ends, so a raise that comes and goes
+            # within a step cannot switch the charge on and off
+            next_state = HeatPumpDhwState.ON
+        return next_state
+
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heat pump controller for dhw."""
+        """Decide whether the heat pump charges the hot-water tank, and publish the decision and the set temperature.
 
-        if force_convergence:
-            # self.state_dhw = self.previous_state_dhw
-            pass
-        else:
-            self.water_temperature_input_from_dhw_storage_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
+        The decision (:meth:`next_state`) is taken on the tank's start-of-step temperature, which does not change
+        while the step iterates. Under ``force_convergence`` the controller keeps its decision.
+        """
+        if not force_convergence:
+            storage_temperature_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+            if storage_temperature_in_celsius == 0:
+                # The simulator starts every step from zeroed outputs, so a controller simulated before the tank
+                # reads 0 °C on the first pass and would start a charge; it keeps the temperature it read last
+                # instead. This guard goes once the controller restores its decision on every pass.
+                storage_temperature_in_celsius = self.water_temperature_input_from_dhw_storage_in_celsius_previous
+            self.water_temperature_input_from_dhw_storage_in_celsius = storage_temperature_in_celsius
+            raise_in_kelvin = stsv.get_input_value(self.storage_temperature_modifier_channel)
+            self.supply_temperature_set_for_dhw_in_celsius = self.config.t_max_dhw_storage_in_celsius + raise_in_kelvin
+            self.state_dhw = self.next_state(
+                state=self.state_dhw,
+                storage_temperature_in_celsius=storage_temperature_in_celsius,
+                raise_in_kelvin=raise_in_kelvin,
+                minimum_temperature_in_celsius=self.config.t_min_dhw_storage_in_celsius,
+                maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
             )
-            if self.water_temperature_input_from_dhw_storage_in_celsius == 0:
-                # for avoiding errors: sometimes timestep output of dhw storage sends zero as input, so hp will switch to dhw, even this is not necessary
-                self.water_temperature_input_from_dhw_storage_in_celsius = (
-                    self.water_temperature_input_from_dhw_storage_in_celsius_previous
-                )
-
-            temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)
-
-            t_min_dhw_storage_in_celsius = self.config.t_min_dhw_storage_in_celsius
-            t_max_dhw_storage_in_celsius = self.config.t_max_dhw_storage_in_celsius
-
-            if self.water_temperature_input_from_dhw_storage_in_celsius < t_min_dhw_storage_in_celsius:  # on
-                self.state_dhw = 2
-
-            self.supply_temperature_set_dhw_in_celsius = t_max_dhw_storage_in_celsius + temperature_modifier
-            if (
-                self.water_temperature_input_from_dhw_storage_in_celsius
-                >= self.supply_temperature_set_dhw_in_celsius - self.SWITCH_OFF_TOLERANCE_IN_KELVIN
-            ):  # off: the tank has reached its target, to which the heat pump's supply is capped
-                self.state_dhw = 0
-
-            if (
-                temperature_modifier > 0
-                and self.water_temperature_input_from_dhw_storage_in_celsius
-                < t_max_dhw_storage_in_celsius - self.SWITCH_OFF_TOLERANCE_IN_KELVIN
-            ):  # on with surplus electricity, below where the unraised charge ends, so a raise that comes and goes
-                # within a step cannot switch the charge on and off
-                self.state_dhw = 2
 
         self.previous_state_dhw = self.state_dhw
         self.water_temperature_input_from_dhw_storage_in_celsius_previous = (
             self.water_temperature_input_from_dhw_storage_in_celsius
         )
 
-        stsv.set_output_value(self.state_dhw_channel, self.state_dhw)
+        stsv.set_output_value(self.state_dhw_channel, self.state_dhw.value)
         stsv.set_output_value(
-            self.supply_temperature_set_dhw_in_celsius_channel, self.supply_temperature_set_dhw_in_celsius
+            self.supply_temperature_set_for_dhw_in_celsius_channel, self.supply_temperature_set_for_dhw_in_celsius
         )
-        stsv.set_output_value(
-            self.thermalpower_dhw_is_constant_channel,
-            self.thermalpower_dhw_is_constant,
-        )
-
-        if self.thermalpower_dhw_is_constant is True:
-            stsv.set_output_value(self.thermalpower_dhw_is_constant_value_channel, self.p_th_max_dhw)
 
     @staticmethod
     def get_cost_capex(

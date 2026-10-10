@@ -541,7 +541,7 @@ class UsefulHeatSource:
 
     `output_constant` is the name of the class constant holding the column name, resolved through
     `_declared_output_name`. `sign` is `INTO_THE_HOUSE` for a column that counts delivered heat as positive and
-    `LEAVING_THE_SOURCE` for one that counts it as negative (a hot-water tank). The extraction sums `sign * column` and
+    `LEAVING_THE_SOURCE` for one that counts it as negative. The extraction sums `sign * column` and
     refuses a timestep of the other sign (`bridge._useful_heat_by_kind`).
     """
 
@@ -594,9 +594,9 @@ class UsefulHeatSources:
             UsefulHeatKind.ROOM_HEATING, "TheoreticalHeatingEnergyDemand", UsefulHeatSource.INTO_THE_HOUSE
         ),
         # The heat in the hot water drawn off, from the fresh-water to the tap temperature. The
-        # tank writes it as c * m * (T_fresh - T_tap), i.e. as heat leaving the tank (<= 0).
+        # tank writes it as the heat its tap delivers into the house (>= 0).
         "SimpleDHWStorage": UsefulHeatSource(
-            UsefulHeatKind.HOT_WATER, "ThermalEnergyConsumptionDHW", UsefulHeatSource.LEAVING_THE_SOURCE
+            UsefulHeatKind.HOT_WATER, "ThermalEnergyConsumptionDHW", UsefulHeatSource.INTO_THE_HOUSE
         ),
     }
 

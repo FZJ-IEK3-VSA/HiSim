@@ -62,16 +62,18 @@ def dhw_storage_with_fake_inputs(seconds_per_timestep: int) -> Any:
 
 @pytest.mark.base
 def test_an_intermediate_iterate_above_the_range_does_not_abort_the_run() -> None:
-    """What the loop computed in an earlier iteration of the timestep is no reason to fail."""
+    """A pass that ends above the range must not fail; only the converged step is checked, by i_doublecheck."""
     storage, stsv = dhw_storage_with_fake_inputs(3600)
-    storage.state.mean_water_temperature_in_celsius = 60.0
-    storage.mean_water_temperature_in_water_storage_in_celsius = 93.25  # the discarded iterate
+    storage.state = simple_water_storage.DhwTankState(temperature_at_start_of_step_in_celsius=60.0)
+    storage.i_save_state()
+    storage.state = simple_water_storage.DhwTankState(temperature_at_start_of_step_in_celsius=93.25)  # an iterate
+    storage.i_restore_state()
 
     storage.i_simulate(0, stsv, False)
 
-    # The hour without flows only loses the tank's standby heat: the step starts from the state's 60 °C, not from
+    # The hour without flows only loses the tank's standby heat: the step starts from the saved 60 °C, not from
     # the discarded iterate, and ends a little below it.
-    assert 59.8 < storage.mean_water_temperature_in_water_storage_in_celsius < 60.0
+    assert 59.8 < storage.state.temperature_at_start_of_step_in_celsius < 60.0
     storage.i_doublecheck(0, stsv)
 
 
@@ -80,7 +82,7 @@ def test_an_intermediate_iterate_above_the_range_does_not_abort_the_run() -> Non
 def test_a_converged_temperature_outside_the_range_still_fails(converged_temperature: float) -> None:
     """The check is kept, only moved: a converged value outside 0..90 degC fails the timestep."""
     storage, stsv = dhw_storage_with_fake_inputs(900)
-    storage.mean_water_temperature_in_water_storage_in_celsius = converged_temperature
+    storage.state = simple_water_storage.DhwTankState(temperature_at_start_of_step_in_celsius=converged_temperature)
 
     with pytest.raises(ValueError, match="DHW water storage is with"):
         storage.i_doublecheck(0, stsv)
@@ -148,7 +150,7 @@ def test_the_gas_house_keeps_its_storages_in_range_for_a_winter_week(
 
     results = built.simulator.results_data_frame
     for column in (
-        "DHWStorage - WaterMeanTemperatureInStorage [Temperature - °C]",
+        "DHWStorage - WaterTemperatureAtStartOfStepInCelsius [Temperature - °C]",
         "SimpleHotWaterStorage - WaterMeanTemperatureInStorage [Temperature - °C]",
     ):
         assert len(results[column]) == 7 * 24 * 3600 // seconds_per_timestep

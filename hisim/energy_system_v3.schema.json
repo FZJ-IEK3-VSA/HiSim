@@ -4826,12 +4826,6 @@
                   },
                   "t_max_dhw_storage_in_celsius": {
                     "type": "number"
-                  },
-                  "thermalpower_dhw_is_constant": {
-                    "type": "boolean"
-                  },
-                  "p_th_max_dhw_in_watt": {
-                    "type": "number"
                   }
                 }
               },
@@ -5557,10 +5551,7 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                  "component_id": {},
-                  "set_temperature_difference_for_on": {
-                    "type": "number"
-                  }
+                  "component_id": {}
                 }
               },
               "sizing_sources": {

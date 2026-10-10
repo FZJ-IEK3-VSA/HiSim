@@ -37,14 +37,15 @@ components:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
     preset: standard
     inputs:
-      - Collector                                           # CollectorTemperature (at the step mean), MassFlow
-      - {$port: cylinder_temperature}                       # step mean and start-of-step temperature
+      - Collector                                           # MassFlow, the flow its heat at the step mean needs
+      - {$port: cylinder_temperature}                       # the start-of-step temperature, for the full-tank stop
 
 interface:
   needs:
     weather:          {into: [Collector], partner: Weather}
     cylinder_temperature: {into: [Controller], partner: SimpleDHWStorage}
-                      # the controller's measured variable, the cylinder's mean temperature: a need, not a circuit end
+                      # the controller's measured variable, the cylinder's start-of-step temperature: a need, not a
+                      # circuit end
     electricity:      {carrier: electricity, outputs: [Collector.ElectricityConsumptionOutput]}
   provides:
     solar_coil:       {circuit: solar_dhw, member: Collector}
@@ -67,9 +68,6 @@ tests:
       # 20 m² x 1200 W/m² x 0.8 ≈ 19.2 kW; never negative: the collector clips its efficiency at zero
     - {output: Collector.ThermalEnergyOutput, unit: WATT_HOUR, min: 0, max: 5000}         # the power band x 0.25 h
     - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
-    - {output: Collector.CollectorTemperatureAtStepMeanInCelsius, unit: CELSIUS, min: 0, max: 130}
-      # what the Controller compares: the cylinder's step mean (cold water at 5-20 °C up to a DHW cylinder's
-      # ~100 °C) plus the collector's 2 x 10 K lift while it has heat there, whether or not the pump runs
     - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W
     - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m² = 24 kW, with margin
     - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power

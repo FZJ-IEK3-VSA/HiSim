@@ -57,6 +57,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         *,
         component_id: cfg.ComponentID,
         display_config: Optional[cfg.DisplayConfig] = None,
+        is_accelerated: bool = False,
     ):
         """Defines a component output.
 
@@ -86,6 +87,10 @@ class ComponentOutput:  # noqa: too-few-public-methods
         :class:`~hisim.postprocessing.kpi_computation.kpi_structure.KpiSource` exactly as the
         component names it itself. ``None`` only on an output built by hand, outside a component.
 
+        ``is_accelerated`` marks an output whose value is the image of a fixed-point map of what the other
+        components answered, such as a water node's step mean: the simulator then accelerates its iteration
+        (:mod:`hisim.fixed_point_acceleration`).
+
         Raises:
             ValueError: If ``field_name`` or ``object_name`` is not a well-formed identifier.
                 The prefix is normally the already-validated component name, but a direct
@@ -110,6 +115,8 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.source_component_class: Optional[str] = source_component_class
         self.component_id: cfg.ComponentID = component_id
         self.display_config: Optional[cfg.DisplayConfig] = display_config
+        #: Whether the simulator accelerates this output's fixed-point iteration.
+        self.is_accelerated: bool = is_accelerated
 
     @property
     def building_label(self) -> str:
@@ -411,8 +418,15 @@ class Component:
         postprocessing_flag: Optional[List[Any]] = None,
         energy_port: Optional[EnergyPort] = None,
         output_description: Optional[str] = None,
+        *,
+        is_accelerated: bool = False,
     ) -> ComponentOutput:
-        """Adds an output definition; ``energy_port`` declares its role in the energy balance."""
+        """Adds an output definition; ``energy_port`` declares its role in the energy balance.
+
+        ``is_accelerated`` asks the simulator to accelerate the output's fixed-point iteration
+        (:mod:`hisim.fixed_point_acceleration`); it suits an output that a component computes from what other
+        components answered to its previous value, such as a water node's step mean.
+        """
         if output_description is None:
             raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
@@ -426,6 +440,7 @@ class Component:
             output_description,
             component_id=self.config.component_id,
             display_config=self.my_display_config,
+            is_accelerated=is_accelerated,
         )
         self.outputs.append(outp)
         return outp

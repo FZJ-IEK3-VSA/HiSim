@@ -1,4 +1,4 @@
-"""The hot-water chain gives the same heat at 60, 900 and 3600 s (hydronic coupling spec §9.4, §9.5 C).
+"""The hot-water chain gives the same heat at 60, 900 and 3600 s.
 
 The hot-water tank is a fully mixed node whose step is exact for constant inflows, and every generator books the heat
 its water carries into it, so the heat drawn at the tap and the heat the generators deliver no longer depend on the
@@ -11,10 +11,10 @@ each resolution, and:
 * the generators' hot-water heat, net of the heat the tank holds more or less at the end of the window, agrees
   within 1 % at 900 s and within 1.5 % at 3600 s.
 
-The 3600 s excess is the standby loss of a hotter tank: a controller decides on the tank's start temperature (D4), so
-an hour-long charge keeps the tank near its supply cap, the controller's set temperature, longer than a quarter-hour
-one. Reaching 1 % at 3600 s is open (spec §7). The windows start on 1 January, since a window starting later reads
-its weather from 1 January (hisim-9g2).
+The 3600 s excess is the standby loss of a hotter tank: a controller decides on the tank's start temperature, which
+does not move while the step iterates, so an hour-long charge keeps the tank near its supply cap, the controller's set
+temperature, longer than a quarter-hour one. The windows start on 1 January, since a window starting later reads its
+weather from 1 January.
 """
 
 from pathlib import Path
@@ -122,7 +122,7 @@ class ResolutionRuns:
             return float(results[column].sum()) / 1000.0
 
         return {
-            "tap_heat_in_kilowatt_hour": -total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyConsumptionDHW),
+            "tap_heat_in_kilowatt_hour": total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyConsumptionDHW),
             "generator_heat_in_kilowatt_hour": total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyFromHeatGenerator)
             + total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyFromSecondaryHeatGenerator),
             "stored_heat_in_kilowatt_hour": total_in_kilowatt_hour(SimpleDHWStorage.ThermalEnergyIncreaseInStorage),

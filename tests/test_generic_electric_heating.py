@@ -17,9 +17,11 @@ from typing import List
 import pandas as pd
 import pytest
 
+from hisim import hydronics
 from hisim import loadtypes as lt
 from hisim.component import ComponentOutput
 from hisim.config import DisplayConfig
+from hisim.components.dual_circuit_system import HeatingMode
 from hisim.components.generic_electric_heating import ElectricHeating, ElectricHeatingConfig
 from hisim.simulationparameters import SimulationParameters
 
@@ -243,60 +245,91 @@ def test_electric_heating_controller_display_config_default_instances_are_isolat
 
 @pytest.mark.base
 @pytest.mark.parametrize(
-    "return_temperature_in_celsius, lift_in_kelvin", [(50.0, 25.0), (44.2, 115.0), (60.0, 0.0)]
+    (
+        "return_temperature_in_celsius",
+        "lift_in_kelvin",
+        "supply_temperature_set_in_celsius",
+        "expected_supply_temperature_in_celsius",
+        "expected_power_share",
+    ),
+    [
+        (50.0, 25.0, 80.0, 75.0, 0.25),  # a quarter of the maximal power, nothing caps the supply
+        (60.0, 25.0, 75.0, 75.0, 0.25 * 15.0 / 25.0),  # the controller's 75 °C caps: three fifths of the heat
+        (45.0, 25.0, 75.0, 70.0, 0.25),  # below the set temperature: not capped
+        (44.2, 115.0, 80.0, 80.0, 35.8 / 115.0),  # full power, but the 80 °C maximum caps the supply
+        (78.0, 25.0, 75.0, 78.0, 0.0),  # the return above the cap: the supply stays at the return
+        (60.0, 0.0, 75.0, 60.0, 0.0),  # no lift: the circuit idles at its return
+    ],
 )
 def test_the_hot_water_circuit_books_the_heat_its_water_carries(
-    return_temperature_in_celsius: float, lift_in_kelvin: float
+    return_temperature_in_celsius: float,
+    lift_in_kelvin: float,
+    supply_temperature_set_in_celsius: float,
+    expected_supply_temperature_in_celsius: float,
+    expected_power_share: float,
 ) -> None:
-    """The heater supplies the return plus the lift at P_max lift / 100 (at most P_max) and books m c dT.
+    """A heater that booked its regulated power instead of what its water carries would bill a capped charge in full.
 
-    A 25 K lift takes a quarter of the maximal power; a lift above 100 K would take all of it, but its supply stops
-    at the 80 °C maximum and the heat is what the flow carries up to it; without a lift the circuit moves no water,
-    books nothing and its supply is its return.
+    The heater regulates ``P = P_max lift / 100 K`` (at most ``P_max``), pumps ``P / (c lift)`` and supplies the
+    return plus the lift, capped at the lower of the 80 °C maximum and the controller's set temperature; the heat
+    is the share of the regulated power the capped lift carries.
     """
-    from hisim import hydronics  # pylint: disable=import-outside-toplevel
-    from hisim.config import concrete  # pylint: disable=import-outside-toplevel
-
-    heater = _make_electric_heating()
-    maximum_power_in_watt = concrete(heater.config.maximum_electric_power_w)
-    thermal_power_in_watt, thermal_energy_in_watt_hour, supply_temperature_in_celsius, mass_flow_in_kg_per_second = (
-        heater._calculate_dhw_outputs(return_temperature_in_celsius, lift_in_kelvin)  # pylint: disable=protected-access
+    maximal_power_in_watt = 40000.0
+    circuit = ElectricHeating.hot_water_circuit(
+        return_temperature_in_celsius=return_temperature_in_celsius,
+        lift_in_kelvin=lift_in_kelvin,
+        supply_temperature_set_in_celsius=supply_temperature_set_in_celsius,
+        maximal_supply_temperature_in_celsius=80.0,
+        maximal_power_in_watt=maximal_power_in_watt,
     )
-    supply_limit_in_celsius = heater.config.maximal_dhw_supply_temperature_in_celsius
-    assert supply_temperature_in_celsius == min(return_temperature_in_celsius + lift_in_kelvin, supply_limit_in_celsius)
-    assert thermal_power_in_watt == hydronics.circuit_power_w(
-        mass_flow_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
-    )
-    regulated_power_in_watt = min(maximum_power_in_watt * lift_in_kelvin / 100.0, maximum_power_in_watt)
-    if supply_temperature_in_celsius < return_temperature_in_celsius + lift_in_kelvin:
-        # throttled: the flow carries less than the regulated power
-        assert thermal_power_in_watt < regulated_power_in_watt
-    else:
-        assert thermal_power_in_watt == pytest.approx(regulated_power_in_watt, rel=1e-12)
-    assert thermal_energy_in_watt_hour == pytest.approx(
-        thermal_power_in_watt * heater.my_simulation_parameters.seconds_per_timestep / 3600.0
+    assert circuit.t_supply_c == pytest.approx(expected_supply_temperature_in_celsius, rel=1e-15)
+    assert circuit.power_w == pytest.approx(expected_power_share * maximal_power_in_watt, rel=1e-12, abs=1e-9)
+    assert circuit.power_w == hydronics.circuit_power_w(
+        mass_flow_kg_per_s=circuit.mass_flow_kg_per_s,
+        t_supply_c=circuit.t_supply_c,
+        t_return_c=return_temperature_in_celsius,
     )
 
 
 @pytest.mark.base
-def test_a_hot_water_charge_stops_at_the_controllers_set_temperature() -> None:
-    """With the controller's 75 °C set temperature, a 25 K lift on a 60 °C return supplies 75 °C.
-
-    The flow stays that of the full 25 K charge, so the water carries three fifths of the regulated power, and that
-    heat is the electricity. A supply below the set temperature is not throttled.
-    """
-    from hisim import hydronics  # pylint: disable=import-outside-toplevel
-    from hisim.config import concrete  # pylint: disable=import-outside-toplevel
+def test_the_idle_hot_water_circuit_supplies_its_return_while_the_rooms_are_heated() -> None:
+    """An idle circuit whose supply was not its return would carry heat nobody booked into the tank."""
+    from tests.test_generic_district_heating import step_with_fake_inputs  # pylint: disable=import-outside-toplevel  # shared helper
 
     heater = _make_electric_heating()
-    regulated_power_in_watt = concrete(heater.config.maximum_electric_power_w) * 25.0 / 100.0
-    calculate_dhw_outputs = heater._calculate_dhw_outputs  # pylint: disable=protected-access
-    thermal_power_in_watt, _, supply_temperature_in_celsius, mass_flow_in_kg_per_second = calculate_dhw_outputs(
-        60.0, 25.0, 75.0
+    outputs = step_with_fake_inputs(
+        heater,
+        {
+            ElectricHeating.HeatingMode: HeatingMode.SPACE_HEATING.value,
+            ElectricHeating.TheoreticalHeatingDemand: 3000.0,
+            ElectricHeating.TheoreticalHeatingEnergyDemand: 750.0,
+            ElectricHeating.WaterInputTemperatureDhw: 52.5,
+            ElectricHeating.SupplyTemperatureSetForDHWInCelsius: 75.0,
+        },
     )
-    assert supply_temperature_in_celsius == 75.0
-    assert thermal_power_in_watt == hydronics.circuit_power_w(mass_flow_in_kg_per_second, 75.0, 60.0)
-    assert thermal_power_in_watt == pytest.approx(regulated_power_in_watt * 15.0 / 25.0, rel=1e-12)
-    thermal_power_in_watt, _, supply_temperature_in_celsius, _ = calculate_dhw_outputs(45.0, 25.0, 75.0)
-    assert supply_temperature_in_celsius == 70.0
-    assert thermal_power_in_watt == pytest.approx(regulated_power_in_watt, rel=1e-12)
+    assert outputs[ElectricHeating.WaterOutputDhwTemperature] == 52.5
+    assert outputs[ElectricHeating.WaterOutputDhwMassFlowRate] == 0.0
+    assert outputs[ElectricHeating.ThermalOutputShPower] == 3000.0
+    assert outputs[ElectricHeating.ElectricOutputShPower] == 3000.0
+
+
+@pytest.mark.base
+def test_the_controller_states_its_hot_water_set_temperature() -> None:
+    """A controller that published another set temperature than it charges to would cap the heater elsewhere."""
+    from hisim.components.generic_electric_heating import (  # pylint: disable=import-outside-toplevel  # only here
+        ElectricHeatingController,
+        ElectricHeatingControllerConfig,
+    )
+    from tests.test_generic_district_heating import step_with_fake_inputs  # pylint: disable=import-outside-toplevel  # shared helper
+
+    config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
+    # pinned rather than resolved, as above: no building to size them from
+    config.set_heating_threshold_outside_temperature_in_celsius = 16.0
+    config.specific_heating_load_of_building_in_watt_per_m2 = 40.0
+    controller = ElectricHeatingController(
+        SimulationParameters.one_day_only(year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP), config
+    )
+    outputs = step_with_fake_inputs(controller, {ElectricHeatingController.DailyAverageOutsideTemperature: 20.0})
+    assert outputs[ElectricHeatingController.SupplyTemperatureSetForDHWInCelsius] == (
+        60.0 + config.hysteresis_water_temperature_offset
+    )

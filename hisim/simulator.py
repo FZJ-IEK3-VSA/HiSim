@@ -15,6 +15,7 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim import sim_repository
 import hisim.component as cp
 import hisim.dynamic_component as dcp
+from hisim.fixed_point_acceleration import StepAcceleration
 from hisim import log
 from hisim.economics.facts import (
     CostRelevance,
@@ -224,6 +225,8 @@ class Simulator:
         #: (:meth:`add_progress_callback`). Empty unless a caller registers one, and then the loop
         #: behaves and logs exactly as it always did.
         self._progress_callbacks: List[ProgressCallback] = []
+        #: The accelerated outputs' step-value indices per wrapped component (:meth:`accelerated_output_indices`).
+        self._accelerated_output_indices: Optional[List[List[int]]] = None
 
     def add_progress_callback(self, callback: ProgressCallback) -> None:
         """Register a callable that is told how far the time loop has come.
@@ -386,6 +389,8 @@ class Simulator:
 
         # Creates List with values
         stsv = previous_stsv.clone()
+        accelerated_indices = self.accelerated_output_indices()
+        step_acceleration = StepAcceleration()
         # Creates a buffer List with values
         previous_values = previous_stsv.clone()
         iterative_tries = 0
@@ -394,11 +399,16 @@ class Simulator:
         # Starts loop
         while continue_calculation:
             # Loops through components
-            for wrapped_component in self.wrapped_components:
+            for wrapped_component, indices in zip(self.wrapped_components, accelerated_indices):
                 # Executes restore state for each component
                 wrapped_component.restore_state()
+                published = step_acceleration.published_values_of(indices, stsv)
                 # Executes i_simulate for component
                 wrapped_component.calculate_component(timestep, stsv, force_convergence)
+                if indices and force_convergence:
+                    step_acceleration.hold(indices, stsv, published)
+                elif indices:
+                    step_acceleration.accelerate(indices, stsv, published)
 
             # Stops simulation for too small difference between
             # actual values and previous values
@@ -424,6 +434,18 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.doublecheck(timestep, stsv)
         return (stsv, iterative_tries, force_convergence)
+
+    def accelerated_output_indices(self) -> List[List[int]]:
+        """Return, for every wrapped component in order, the step-value indices of its accelerated outputs.
+
+        Computed once, at the first time step, when every output has its index; most lists are empty.
+        """
+        if self._accelerated_output_indices is None:
+            self._accelerated_output_indices = [
+                [output.global_index for output in wrapped_component.component_outputs if output.is_accelerated]
+                for wrapped_component in self.wrapped_components
+            ]
+        return self._accelerated_output_indices
 
     def prepare_simulation_directory(self):
         """Prepares the simulation directory, creating it if necessary.

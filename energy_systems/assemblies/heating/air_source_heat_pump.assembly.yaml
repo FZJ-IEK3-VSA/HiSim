@@ -62,7 +62,7 @@ components:
       standardized_scop_en14825_w35: {$param: scop_en14825_w35}
       standardized_scop_en14825_w55: {$param: scop_en14825_w55}
     inputs:
-      - ControllerDHW                                       # StateDHW, ThermalPowerDHWConst, SupplyTemperatureSetDHWInCelsius
+      - ControllerDHW                                       # StateDHW, SupplyTemperatureSetForDHWInCelsius
       - ControllerSH
       - {$port: dhw}                                        # TemperatureInputSecondaryDHW, the cylinder's return leg
       - Buffer                                              # TemperatureInputSecondarySH
@@ -137,7 +137,7 @@ tests:
     - {output: HeatPump.ElectricalEnergyDHW, unit: WATT_HOUR, min: 0, max: 6250}             # 25 kW x 0.25 h
     - {output: HeatPump.CumulativeThermalEnergyDHW, unit: WATT_HOUR, min: 0, max: 1000000}
     - {output: HeatPump.CumulativeElectricalEnergyDHW, unit: WATT_HOUR, min: 0, max: 500000}
-    - {output: ControllerDHW.SupplyTemperatureSetDHWInCelsius, unit: CELSIUS, min: 40, max: 80}
+    - {output: ControllerDHW.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 40, max: 80}
       # the hot-water target: t_max (60 °C) plus the energy manager's raise (10 K), which caps the heat pump's supply
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}

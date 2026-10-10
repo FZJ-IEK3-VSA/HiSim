@@ -148,38 +148,27 @@ def add_global_index_of_real_components(
 ) -> None:
     """Sets the global index for real component outputs.
 
-    Iterates over each component in the list and assigns a global_index to every
-    ``ComponentOutput`` instance found among the component's instance attributes.
-    The component's ``__dict__`` is scanned directly for attributes whose value
-    is a ``ComponentOutput``; this does not rely on an ``.outputs`` collection.
+    Iterates over each component in the list and assigns a global_index to every output it declared, in the order of
+    its ``.outputs`` collection, as the simulator registers them. This includes outputs a component declared through a
+    helper part it composes (such as :class:`hisim.part_load.PartLoadControl`), which no attribute of the component
+    holds.
 
     The indices start after the offset provided by number_of_fake_inputs,
     ensuring fake-component indices come first in the global ordering.
 
     Args:
-        list_of_components (list): List of component instances. Each component is
-            inspected via ``__dict__`` and every attribute whose value is a
-            ``ComponentOutput`` is assigned the next global index.
+        list_of_components (list): List of component instances, each with its ``.outputs`` collection.
         number_of_fake_inputs (int): Offset to apply so fake-component indices
             come first in the global index sequence.
 
     Returns:
         None: Mutates the global_index attribute on each ComponentOutput.
-
-    Note:
-        Unlike :func:`get_number_of_outputs`, which counts outputs through a
-        component's ``.outputs`` attribute, this function discovers
-        ``ComponentOutput`` objects by scanning ``__dict__``. A component that
-        stores its outputs only inside an ``.outputs`` list (rather than as
-        individual attributes) would therefore not be indexed here. Aligning the
-        two approaches could be considered for consistency.
     """
     counter = 0 + number_of_fake_inputs
     for component in list_of_components:
-        for attr_name, attr_value in component.__dict__.items():
-            if isinstance(attr_value, ComponentOutput):
-                getattr(component, attr_name).global_index = counter
-                counter = counter + 1
+        for output in component.outputs:
+            output.global_index = counter
+            counter = counter + 1
 
 
 def add_global_index_of_fake_components(list_of_components: list) -> int:

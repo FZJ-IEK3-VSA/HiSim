@@ -13,14 +13,17 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   collector books equals the heat the tank received from that circuit, up to what the simulator's convergence
   tolerance leaves open (the tank's step mean is converged to about 1e-4 K, so the two ends may differ by ``m c``
   times that), and every circuit charges on some step;
-* the iterations per step: in a file without a heat pump at most ``MAXIMAL_FORCED_STEP_SHARE`` of the steps reach
-  the simulator's ``force_convergence``. These are boiler charges that start kilowatts away from their final value
-  and need a pass or two more than the simulator allows to reach its absolute tolerance; they are forced within
-  about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). The heat-pump files are recorded, not
-  asserted: their forced steps come from the energy manager, which switches its set-temperature raise on the sign of
-  a surplus that includes the heat pump's own draw, so a float's flip turns it on and off within a step, and from
-  controllers that decide once for a whole step, which a converged iteration cannot always reconcile with the
-  plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
+* the iterations per step: in a file without a heat pump at most ``MAXIMAL_FORCED_STEP_SHARE`` of the steps have a
+  pass under the simulator's ``force_convergence`` (more than twelve passes). These are boiler charges that start
+  kilowatts away from their final value and need a pass or two more than the simulator allows to reach its absolute
+  tolerance; they are forced within about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). A step
+  that converges on its twelfth pass, as a controller's part-load search above the part-load threshold can, is
+  flagged forced by the simulator although none of its passes was; the histogram records both counts. The heat-pump
+  files are recorded, not asserted: their forced steps come from the energy manager, which switches its
+  set-temperature raise on the sign of a surplus that includes the heat pump's own draw, so a float's flip turns it
+  on and off within a step, and from controllers that decide once for a whole step, which a converged iteration
+  cannot always reconcile with the plant's state. Every file's histogram is written to
+  ``results/iteration_histogram/``.
 
 Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
 grouped twins, which RenoVisor translates from, and the composed files. Only the check that every file with a tank is
@@ -86,6 +89,10 @@ class DhwTwins:
 
     #: The step length of the runs, s.
     SECONDS_PER_TIMESTEP: int = 900
+
+    #: The passes the simulator runs before it forces convergence: it sets ``force_convergence`` once a step has taken
+    #: twelve passes without converging, so the thirteenth pass is the first forced one.
+    UNFORCED_PASSES: int = 12
 
     #: Per generator class, the output of its booked hot-water heat flow (W).
     BOOKED_DHW_POWER: Dict[str, str] = {
@@ -312,6 +319,7 @@ def record_histogram(name: str, passes: Tuple[int, ...], forced: Tuple[bool, ...
         "mean_passes": float(np.mean(passes)),
         "max_passes": int(max(passes)),
         "steps_at_force_convergence": int(sum(forced)),
+        "steps_with_a_forced_pass": int(sum(1 for count in passes if count > DhwTwins.UNFORCED_PASSES)),
         "histogram": {str(count): number for count, number in sorted(Counter(passes).items())},
     }
     directory = DhwTwins.ROOT / "results" / "iteration_histogram"
@@ -330,7 +338,8 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     classnames = {owner.split("|")[1] for owner in circuits.values()}
     summary = record_histogram(name, passes, forced)
     if MoreAdvancedHeatPumpHPLib.get_classname() not in classnames:
-        assert sum(forced) <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), summary
+        forced_pass_count = sum(1 for count in passes if count > DhwTwins.UNFORCED_PASSES)
+        assert forced_pass_count <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), summary
 
 
 @pytest.mark.extendedbase2

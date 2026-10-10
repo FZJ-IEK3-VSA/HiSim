@@ -32,6 +32,7 @@ from hisim.config import (
 from hisim import hydronics, loadtypes, log, utils
 from hisim.caching import atomic_cache_write
 from hisim.energy_port import EnergyPort
+from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -292,6 +293,12 @@ class SolarThermalSystem(Component):
 
     This class represents a solar thermal system that can be used
     for warm water and space heating.
+
+    The pump runs the part-load ratio its controller commands (``PartLoadRatio``): 1, the whole step, at and below the
+    part-load threshold, and above it the fraction of the step that ends the tank at the controller's target. Below 1
+    the collector publishes the averaged flow at its full-load outlet temperature and books the heat that flow carries;
+    the pump draws the ratio of its electricity. The collector reports the ratio its pump ran (``PartLoadRatioRun``):
+    the commanded ratio while the pump runs, 0 otherwise.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -304,8 +311,12 @@ class SolarThermalSystem(Component):
     ApparentZenith: ClassVar[str] = "ApparentZenith"
     TemperatureCollectorInletDegC: ClassVar[str] = "TemperatureCollectorInletDegC"
     ControlSignal: ClassVar[str] = "ControlSignal"
+    #: The fraction of the step the pump runs, commanded by the controller.
+    PartLoadRatio: ClassVar[str] = "PartLoadRatio"
 
     # Outputs
+    #: The fraction of the step the pump ran, reported back to the controller.
+    PartLoadRatioRun: ClassVar[str] = "PartLoadRatioRun"
     ThermalPowerOutput: ClassVar[str] = "ThermalPowerOutput"
     ThermalEnergyOutput: ClassVar[str] = "ThermalEnergyOutput"
     RequiredWaterMassFlowOutput: ClassVar[str] = "RequiredWaterMassFlowOutput"
@@ -421,6 +432,12 @@ class SolarThermalSystem(Component):
             loadtypes.LoadTypes.ANY,
             loadtypes.Units.BINARY,
             True,
+        )
+        self.part_load_command = PartLoadCommand(
+            self,
+            input_name=SolarThermalSystem.PartLoadRatio,
+            ratio_run_output_name=SolarThermalSystem.PartLoadRatioRun,
+            device_description="the solar pump",
         )
 
         # Add outputs
@@ -775,6 +792,13 @@ class SolarThermalSystem(Component):
                 component_class.ControlSignalToSolarThermalSystem,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.PartLoadRatio,
+                l1_controller_classname,
+                component_class.PartLoadRatio,
+            )
+        )
         return connections
 
     def i_save_state(self) -> None:
@@ -1002,13 +1026,19 @@ class SolarThermalSystem(Component):
             collector_heat_in_watt=collector_heat_at_return_w,
             inlet_to_mean_temperature_difference_in_kelvin=self.config.delta_temperature_n_k,
         )
+        pump_ratio_run = 0.0
+        if control_signal != 0:
+            pump_ratio_run = self.part_load_command.ratio(stsv)
+            circuit = circuit.at_part_load(part_load_ratio=pump_ratio_run, t_return_c=temperature_collector_inlet_deg_c)
+        self.part_load_command.publish_ratio_run(stsv, pump_ratio_run)
         thermal_power_output_w = circuit.power_w
         thermal_energy_output_wh: float = (
             thermal_power_output_w
             * self.my_simulation_parameters.seconds_per_timestep
             / hydronics.UnitConversion.JOULES_PER_WATT_HOUR
         )
-        electric_power_demand_solar_pump_w = self.pump_power_in_watt(
+        # the solar pump draws its electricity for the part of the step it runs
+        electric_power_demand_solar_pump_w = pump_ratio_run * self.pump_power_in_watt(
             pump_runs=control_signal != 0, is_old_pump=self.config.old_solar_pump
         )
         water_temperature_output_deg_c = circuit.t_supply_c
@@ -1095,6 +1125,13 @@ class SolarThermalSystemController(Component):
     Components to connect to:
     (1) SolarThermalSystem (control_signal)
 
+    The controller also owns how much of a step the pump runs (:class:`hisim.part_load.PartLoadControl`): it switches
+    the pump on and off as before, and commands the part-load ratio ``PartLoadRatio`` with it. At and below the
+    part-load threshold the ratio is 1 whenever the pump runs. Above it the ratio follows
+    :class:`hisim.part_load.PartLoadRule` from the ratio the collector reports its pump ran (``PartLoadRatioRun``) and
+    the storage's start and end temperatures, so that the storage ends the step at its warm-water aim, the temperature
+    above which it stops the pump (``TargetTemperatureInCelsius``, 60 °C). Nothing ranks it against a backup charging the same storage: each
+    controller aims at its own target.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -1102,11 +1139,19 @@ class SolarThermalSystemController(Component):
     # Inputs
     #: The storage's start-of-step temperature, on which the pump stops once the storage is full.
     StorageTemperatureAtStartOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtStartOfStepInCelsius"
+    #: The storage's temperature at the end of the step, which the part-load ratio is set against.
+    StorageTemperatureAtEndOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtEndOfStepInCelsius"
+    #: The fraction of the step the pump ran, as the collector reports it.
+    PartLoadRatioRun: ClassVar[str] = "PartLoadRatioRun"
     #: The flow the collector heat at the storage's step mean needs, on which the pump stops below its minimum.
     MassFlow: ClassVar[str] = "MassFlow"
 
     # Outputs
     ControlSignalToSolarThermalSystem: ClassVar[str] = "ControlSignalToSolarThermalSystem"
+    #: The fraction of the step the pump runs.
+    PartLoadRatio: ClassVar[str] = "PartLoadRatio"
+    #: The storage temperature above which the controller stops the pump, its warm-water aim.
+    TargetTemperatureInCelsius: ClassVar[str] = "TargetTemperatureInCelsius"
 
     #: Below this pump flow at the storage's step mean the controller stops the pump. The flow is sized for
     #: twice the collector's inlet-to-mean difference (20 K), so 0.005 kg/s is the collector heat of about 420 W
@@ -1151,6 +1196,15 @@ class SolarThermalSystemController(Component):
             True,
         )
 
+        self.part_load = PartLoadControl(
+            self,
+            end_temperature_input_name=self.StorageTemperatureAtEndOfStepInCelsius,
+            ratio_run_input_name=self.PartLoadRatioRun,
+            ratio_output_name=self.PartLoadRatio,
+            target_output_name=self.TargetTemperatureInCelsius,
+            device_description="the solar pump",
+        )
+
         # Configure Output Channels
         self.control_signal_to_solar_thermal_system_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1181,12 +1235,19 @@ class SolarThermalSystemController(Component):
                 SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.StorageTemperatureAtEndOfStepInCelsius,
+                storage_classname,
+                SimpleDHWStorage.WaterTemperatureAtEndOfStepInCelsius,
+            )
+        )
         return connections
 
     def get_default_connections_from_solar_thermal_system(
         self,
     ) -> List[ComponentConnection]:
-        """Return the connection of the collector's required mass flow to this controller's input.
+        """Return the connections from the collector: its required mass flow and the part-load ratio its pump ran.
 
         Returns:
             The connection list.
@@ -1201,10 +1262,17 @@ class SolarThermalSystemController(Component):
                 SolarThermalSystem.RequiredWaterMassFlowOutput,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.PartLoadRatioRun,
+                storage_classname,
+                SolarThermalSystem.PartLoadRatioRun,
+            )
+        )
         return connections
 
     def i_save_state(self) -> None:
-        """Saves the state."""
+        """Save the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
@@ -1221,7 +1289,11 @@ class SolarThermalSystemController(Component):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Simulate the solar thermal system controller."""
+        """Decide whether the pump runs and, above the part-load threshold, the fraction of the step it runs.
+
+        The pump's on/off decision follows :meth:`pump_runs`; under ``force_convergence`` the controller returns to the
+        state it last decided, and its part-load ratio becomes the ratio the collector reports its pump ran with.
+        """
         if force_convergence:
             # states are saved after each timestep, outputs after each iteration
             # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
@@ -1243,6 +1315,15 @@ class SolarThermalSystemController(Component):
             self.control_signal_to_solar_thermal_system_channel,
             self.state.on_off,
         )
+        if force_convergence:
+            self.part_load.publish_held(stsv)
+        else:
+            self.part_load.publish(
+                stsv,
+                device_runs=self.state.on_off != 0,
+                start_temperature_in_celsius=stsv.get_input_value(self.storage_temperature_at_start_deg_c_input_channel),
+                target_temperature_in_celsius=self.WARM_WATER_AIM_IN_CELSIUS,
+            )
 
     @staticmethod
     def pump_runs(*, required_mass_flow_in_kg_per_second: float, storage_temperature_at_start_in_celsius: float) -> bool:

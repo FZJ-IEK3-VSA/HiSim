@@ -52,3 +52,14 @@ Every component is exactly one of four kinds; controllers come in two levels.
 7. **Shared mechanisms stay generic.** Helpers such as `MixedNode.step` or the part-load iteration know nothing
    about a particular component.
 8. **Units are in the names** (AGENTS.md, "Guidelines for coding").
+9. **The SimRepository shares data that exists before the time loop.** Whole series for a precomputation (the
+   weather's year for the PV system and the building's solar gains), profiles (the occupancy's driving profiles
+   for the cars) and their digests for chained cache keys. The producer declares the keys as class constants and
+   writes them in `i_prepare_simulation`; readers use those constants. A value that changes from step to step goes
+   through a port, never through the repository.
+10. **One sign convention per port kind.** Every port kind has one sign convention, stated in its output's
+    description (for example: positive means energy into the component). A signed net value never goes into an
+    output whose name means one direction ("production", "consumption"). Existing outputs are aligned when they
+    are next touched.
+11. **A component's KPIs come from its own outputs and its own configuration.** A KPI does not re-derive another
+    component's physics or repeat its constants; it reads that component's outputs or KPIs instead.

@@ -1,0 +1,46 @@
+# Component design principles
+
+What every HiSim component follows, so that each one can be improved on its own -- a stratified tank, a dynamic
+heat pump, a new controller -- without breaking the others. New components follow these rules, reviews check
+them, and a component that breaks one gets a bead. Agreed with the owner on 2026-10-10.
+
+## A. Component kinds
+
+Every component is exactly one of four kinds; controllers come in two levels.
+
+| Kind | Examples | Reads | Sends | Decides |
+|---|---|---|---|---|
+| Data source | weather, CSV loader, UTSP/LPG connector | nothing from other components | data, to anyone | nothing |
+| Physics | heat pump, boiler, storage tank, building, heat distribution, PV, battery | data sources, port quantities of the physics it is connected to, commands of its L1 controller | port quantities to the physics it is connected to; sensor values | nothing; it only enforces its own physical and safety limits |
+| L1 controller | heat pump controller, boiler controller, heat distribution controller | data sources, sensor values of physics, signals of L2 controllers | commands to exactly one device | on/off, mode, set point and run fraction of its device |
+| L2 controller | energy management system, PtX energy management | anything | incentive signals to L1 controllers, never to a device | coordination between devices: priorities, prices, set-point shifts |
+| Meter | electricity, gas, heat and fuel meters | anything | reports for KPIs and post-processing | nothing; it never acts on what it reads |
+
+- A data source does not react to the simulation: its outputs for a step are the same in every iteration.
+- A command to a device comes only from an L1 controller. An L2 controller only changes what an L1 controller
+  aims for; how the device responds within its limits is the L1 controller's decision.
+
+## B. Principles
+
+1. **A component is a black box.** Others see it only through its wired inputs and outputs (and, at
+   configuration time, through the sizing contributions it declares). No component imports another's model to
+   compute with, reads its config or state, or uses the SimRepository to bypass the wiring.
+2. **Interfaces carry port quantities, not model internals.** Allowed: mass flows, temperatures at a defined
+   port or sensor, heat and power, on/off and mode signals, set points and incentive signals. Not allowed: model
+   coefficients of another component (slopes, UA, heat capacity, time constants), linearisations, "what if"
+   quantities that assume a model form. Test: would the output still mean the same with a more detailed model
+   behind it, for example a stratified tank with ten layers?
+3. **Each kind keeps to its role (A).** Physics simulates and never decides. An L1 controller decides for its one
+   device. An L2 controller coordinates only through signals to L1 controllers. A meter reads and never acts. A
+   priority between devices is therefore either static configuration of the L1 controllers (for example
+   different set points) or a signal of an L2 controller, never physics.
+4. **Every quantity has one owner.** The set point belongs to its controller; everyone else reads it from the
+   controller's output instead of keeping a copy. At a port, sender and receiver book the same energy.
+5. **Components are safe to iterate.** `i_simulate` is a function of the inputs and the saved state; the state
+   advances only in `i_save_state`. A converged step does not depend on the order the components are evaluated in.
+6. **The step length is the component's own business.** A component behaves the same at every step length. A
+   coarse-step adaptation stays inside the component, switches on above `part_load_above_seconds`, and 60 s is
+   the reference without any adaptation.
+7. **Shared mechanisms stay generic.** Helpers such as `MixedNode.step` or the part-load iteration know nothing
+   about a particular component.
+8. **Units are in the names** (AGENTS.md, "Guidelines for coding").

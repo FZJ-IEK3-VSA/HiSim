@@ -16,6 +16,9 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   `heat_flow_per_kelvin` is not enough: it names the quantity, not its unit. A module with its own established
   short suffixes (`hisim/hydronics.py`: `_w`, `_c`, `_j`, `_kg_per_s`, `_w_per_k`) keeps them. A dimensionless
   quantity says so in its name (`part_load_ratio`, `share_of_roof`).
+- Every component follows `system_docs/component_design_principles.md`: it is one of the component kinds (data
+  source, physics, L1 controller, L2 controller, meter) and keeps to that kind's role, and other components see it
+  only as a black box through its port quantities. Check a new component and every review against it.
 - Avoid monkeypatching whenever practical, especially in shared fixtures. Prefer explicit configuration, constructor arguments, or small test helpers; use monkeypatching only when the alternative would be substantially more fragile or invasive.
 
 ## Pull requests and merging

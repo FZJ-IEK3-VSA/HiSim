@@ -56,10 +56,11 @@ Where a rule has a CI check, the check is a **ratchet**: a committed baseline of
 shrink. A new violation fails the build; a fixed one leaves the baseline in the same pull request. The existing
 violations are fixed bead by bead, never in one big rewrite.
 
-1. **Small units.** A function has at most about 50 lines (hard limit 100), a file at most about 1000 lines (hard
-   limit 1500), and a function takes at most 6 arguments; more arguments become a parameter object (a dataclass).
-   A 468-line `i_simulate` can neither be unit-tested nor reviewed. CI: pylint size checks with a baseline
-   (hisim-o6a.12).
+1. **Small units.** A function has at most about 50 lines of code (hard limit 100), a file at most 750 lines of
+   code, and a function takes at most 6 arguments; more arguments become a parameter object (a dataclass). Only
+   code counts: comments, docstrings and blank lines do not, so documentation is never cut to meet a limit.
+   A 468-line `i_simulate` can neither be unit-tested nor reviewed. CI: a code-line count and pylint's argument
+   and branch checks, with a baseline (hisim-o6a.12).
 2. **Leave it better (the boy-scout rule).** Whoever changes a function leaves it cleaner than they found it:
    shorter, better named, tested. Every metric in this section only improves.
 3. **Typed, explicit data.** Structured data is a `@dataclass`, frozen where possible: no `dict[str, Any]` passed

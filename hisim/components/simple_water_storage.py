@@ -2,6 +2,7 @@
 
 # Owned
 import importlib
+import dataclasses
 from dataclasses import dataclass
 from typing import ClassVar, Dict, List, Any, Sequence, Tuple, Optional
 from enum import Enum, unique
@@ -326,26 +327,6 @@ class SimpleWaterStorage(cp.Component):
         super().__init__(name, my_simulation_parameters, my_config, my_display_config)
         self.my_simulation_parameters = my_simulation_parameters
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
-
-    def check_water_mass(self, water_mass_in_kg: float, storage_label: str) -> None:
-        """Refuse a vessel that holds no water.
-
-        A fully mixed vessel divides by its heat capacity ``M c`` on every step, so a vessel of zero or negative
-        volume is refused when it is built, with the configuration field to correct, rather than on its first step.
-        For example, ``volume_heating_water_storage_in_liter = 0`` fails here.
-
-        Args:
-            water_mass_in_kg: The water the vessel holds, kg.
-            storage_label: How the error message names the vessel, e.g. ``"DHW water storage"``.
-
-        Raises:
-            ValueError: If ``water_mass_in_kg`` is zero or negative.
-        """
-        if water_mass_in_kg <= 0:
-            raise ValueError(
-                f"The {storage_label} {self.component_name} holds {water_mass_in_kg} kg of water; "
-                "a water storage needs a positive volume_heating_water_storage_in_liter."
-            )
 
     #: Plausible range of a storage's converged mean water temperature. Outside it the run fails.
     PLAUSIBLE_MEAN_WATER_TEMPERATURE_RANGE_IN_CELSIUS: ClassVar[Tuple[float, float]] = (0.0, 90.0)
@@ -1196,8 +1177,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 energy_carrier=lt.LoadTypes.WATER
             ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
         )
-        # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
-        self.density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
+        self.density_water_at_40_degree_celsius_in_kg_per_liter = hydronics.Water.DENSITY_KG_PER_LITER
 
         # physical parameters of storage
         self.water_mass_in_storage_in_kg = (
@@ -1321,9 +1301,49 @@ class DhwTankStep:
     step mean is above the tap temperature (:func:`hisim.hydronics.mixing_valve_draw`).
     """
 
+    #: The tank's node step, the mains refill as its last inflow.
     node: hydronics.NodeStep
+    #: The tank water the tap valve let out, in kg/s.
     hot_water_mass_flow_in_kg_per_second: float
+    #: The share of the hot-water heat demand left unmet, dimensionless, from 0 to 1.
     unmet_fraction: float
+
+
+@dataclass(frozen=True)
+class DhwTankProperties:
+
+    """The constants of a hot-water tank that one tank step computes with.
+
+    A value object built once from the configuration, so the tank step is a pure function of its start temperature,
+    its inflows, the demand and these properties. For example, the 250 l preset tank holds 248 kg, has a heat
+    capacity of 1.04 MJ/K and loses 0.83 W/K to a 20 °C room.
+    """
+
+    #: The tank's heat capacity ``C = M c``, in J/K.
+    heat_capacity_in_joule_per_kelvin: float
+    #: The tank's loss coefficient ``UA`` to the room, in W/K.
+    loss_coefficient_in_watt_per_kelvin: float
+    #: The temperature of the room the tank stands in, in °C.
+    ambient_temperature_in_celsius: float
+    #: The temperature the household asks its warm water at, in °C.
+    tap_temperature_in_celsius: float
+    #: The temperature of the mains water that refills the tank, in °C.
+    mains_water_temperature_in_celsius: float
+    #: The step length, in s.
+    seconds_per_timestep: float
+
+
+@dataclass(frozen=True)
+class DhwTankState:
+
+    """The state of the hot-water tank between steps: its temperature at the start of the step.
+
+    A fully mixed tank has one temperature; the step's end temperature becomes the next step's start temperature.
+    Frozen, so saving and restoring copy it whole.
+    """
+
+    #: The tank's temperature at the start of the step, ``T0``, in °C.
+    temperature_at_start_of_step_in_celsius: float
 
 
 class SimpleDHWStorage(SimpleWaterStorage):
@@ -1337,11 +1357,16 @@ class SimpleDHWStorage(SimpleWaterStorage):
     ``T0 = 50 °C`` charged for 900 s by a boiler at 0.2 kg/s and 70 °C ends at 60.3 °C, with ``T̄ = 55.8 °C``.
 
     The tank publishes ``T̄`` as the return temperature of every charging circuit
-    (``WaterTemperatureToHeatGenerator`` and ``WaterTemperatureToSecondaryHeatGenerator``), so the heat each circuit
-    brings, ``m c (T_sup - T̄) dt``, is the same number for the generator and for the tank, and the tank's balance
+    (``StepMeanWaterTemperatureToHeatGeneratorInCelsius`` and
+    ``StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius``), so the heat each circuit brings,
+    ``m c (T_sup - T̄) dt``, is the same number for the generator and for the tank, and the tank's balance
     ``sum of circuits - tap - loss = C (T_end - T0)`` closes on every step. ``T0`` is published as
-    ``WaterMeanTemperatureInStorage``: generator controllers decide on it, a value that stays constant while the
-    step iterates. ``T_end`` is ``WaterTemperatureAtEndOfStepInCelsius``, the next step's ``T0``.
+    ``WaterTemperatureAtStartOfStepInCelsius``: generator controllers decide on it, a value that stays constant while
+    the step iterates. ``T_end`` is ``WaterTemperatureAtEndOfStepInCelsius``, the next step's ``T0``.
+
+    The step mean depends on the supplies the generators send back in answer to it, so it is a fixed point the
+    simulator iterates to; the tank declares its step-mean outputs accelerated
+    (:mod:`hisim.fixed_point_acceleration`), and computes them from its inputs and its saved state only.
 
     The tap is a thermostatic mixing valve (:func:`hisim.hydronics.mixing_valve_draw`): the household asks for
     ``m_d`` of warm water at ``T_warm`` (40 °C); above it the valve lets out only ``m_hot = m_d (T_warm - T_cold) /
@@ -1349,29 +1374,21 @@ class SimpleDHWStorage(SimpleWaterStorage):
     ``m_hot`` depends on ``T̄``, the tank solves the valve on its own step mean inside one call
     (:meth:`solve_tank_step`), so the heat drawn equals the demand exactly while ``T̄ > T_warm``. Below ``T_warm`` all
     of ``m_d`` leaves unmixed and the shortfall is ``ThermalEnergyUnmetDHWInWattHour``.
-
-    When the simulator iterates a step more than six times, the tank publishes an extrapolation of its own fixed
-    point instead of its raw step mean (:func:`hisim.hydronics.accelerated_node_mean`), clamped to the range of the
-    temperatures it mixes; this shortens the iteration and does not change where it ends.
     """
 
     cost_relevance = CostRelevance.PRICED
 
-    #: Litres to kilograms: the water density of the hydronics library, 0.992 kg/l (water at 40 °C).
-    WATER_DENSITY_IN_KG_PER_LITER: ClassVar[float] = hydronics.WATER_DENSITY_KG_PER_M3 / 1000.0
-
     #: The temperature of the room the tank stands in, which it loses its standby heat to.
     AMBIENT_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 20.0
+
+    #: The tank's temperature before its first step, in °C: a charged tank at the warm-water aim.
+    INITIAL_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 60.0
 
     #: The tap valve's local solve stops when the step mean it assumed and the one it got differ by at most this.
     TAP_SOLVE_TOLERANCE_IN_KELVIN: ClassVar[float] = 1e-10
 
     #: The most evaluations the tap valve's local solve may take before it fails the run.
     TAP_SOLVE_MAXIMUM_ITERATIONS: ClassVar[int] = 200
-
-    #: A step mean that moved by at most this from the one published last is published unchanged, K: far below the
-    #: simulator's 1e-4 tolerance, above the float noise of a converged iteration (about 1e-13 K at 70 °C).
-    PUBLISHED_MEAN_DEADBAND_IN_KELVIN: ClassVar[float] = 1e-9
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
@@ -1382,11 +1399,16 @@ class SimpleDHWStorage(SimpleWaterStorage):
     WaterConsumption = "WaterConsumption"
 
     # Output
-    WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
-    WaterTemperatureToSecondaryHeatGenerator = "WaterTemperatureToSecondaryHeatGenerator"
+    #: The tank's step mean, the return temperature of the primary charging circuit.
+    StepMeanWaterTemperatureToHeatGeneratorInCelsius = "StepMeanWaterTemperatureToHeatGeneratorInCelsius"
+    #: The tank's step mean, the return temperature of the secondary charging circuit.
+    StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius = (
+        "StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius"
+    )
     WaterTemperatureFromHeatGeneratorOutput = "WaterTemperatureFromHeatGenerator"
     WaterTemperatureFromSecondaryHeatGeneratorOutput = "WaterTemperatureFromSecondaryHeatGenerator"
-    WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
+    #: The tank's temperature at the start of the step, the sensor value its generators' controllers decide on.
+    WaterTemperatureAtStartOfStepInCelsius = "WaterTemperatureAtStartOfStepInCelsius"
     WaterTemperatureAtEndOfStepInCelsius = "WaterTemperatureAtEndOfStepInCelsius"
     StandbyTemperatureLoss = "StandbyTemperatureLoss"
     ThermalEnergyInStorage = "ThermalEnergyInStorage"
@@ -1424,22 +1446,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 60
-
         self.build()
 
-        self.state: SimpleWaterStorageState = SimpleWaterStorageState(
-            mean_water_temperature_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
-            temperature_loss_in_celsius_per_timestep=0,
-            heat_loss_in_watt=0,
-        )
-        self.previous_state = self.state.self_copy()
-        # The node's own iteration history on the current step, for the acceleration of its published step mean:
-        # the mean it had published when it computed each new one, and that new one. Reset at every step's start.
-        self.published_step_means_in_celsius: List[float] = []
-        self.computed_step_means_in_celsius: List[float] = []
-        # The step mean the tank published last, which the generators' current supply temperatures answer.
-        self.last_published_step_mean_in_celsius: float = self.mean_water_temperature_in_water_storage_in_celsius
+        self.state = DhwTankState(temperature_at_start_of_step_in_celsius=self.INITIAL_TEMPERATURE_IN_CELSIUS)
+        self.previous_state = dataclasses.replace(self.state)
 
         # =================================================================================================================================
         # Input channels
@@ -1485,23 +1495,25 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
         self.water_temperature_to_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.WaterTemperatureToHeatGenerator,
+            self.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=(
                 "The tank's step mean temperature T̄, the return temperature of the primary charging circuit: the "
                 "mean of the tank temperature over the step, which makes m c (T_sup - T̄) the heat the circuit brings."
             ),
+            is_accelerated=True,
         )
 
         self.water_temperature_secondary_heat_generator_output_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.WaterTemperatureToSecondaryHeatGenerator,
+            self.StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=(
                 "The tank's step mean temperature T̄, the return temperature of the secondary charging circuit."
             ),
+            is_accelerated=True,
         )
 
         self.water_temperature_from_heat_generator_channel: ComponentOutput = self.add_output(
@@ -1520,9 +1532,9 @@ class SimpleDHWStorage(SimpleWaterStorage):
             output_description="Water temperature [°C] from secondary DHW heat generator",
         )
 
-        self.water_temperature_mean_channel: ComponentOutput = self.add_output(
+        self.water_temperature_at_start_of_step_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.WaterMeanTemperatureInStorage,
+            self.WaterTemperatureAtStartOfStepInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=(
@@ -1576,8 +1588,8 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=(
-                "The heat the tap drew over the step, booked negative: m_hot c (T_cold - T̄) dt. It equals the "
-                "household's hot-water demand while T̄ is above the tap temperature, and falls short of it below."
+                "The heat the tap drew over the step, positive: m_hot c (T̄ - T_cold) dt. It equals the household's "
+                "hot-water demand while T̄ is above the tap temperature, and falls short of it below."
             ),
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
@@ -1823,38 +1835,46 @@ class SimpleDHWStorage(SimpleWaterStorage):
         Raises:
             ValueError: If the tank holds no water (a volume of zero or less).
         """
-        self.drain_water_temperature = configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
-
-        self.warm_water_temperature = (
-            configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand
-            - configuration.HouseholdWarmWaterDemandConfig.temperature_difference_hot
+        volume_in_liter = concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter)
+        self.water_mass_in_storage_in_kg = hydronics.Water.DENSITY_KG_PER_LITER * volume_in_liter
+        self.refuse_a_tank_without_water(
+            water_mass_in_kg=self.water_mass_in_storage_in_kg, component_name=self.component_name
+        )
+        storage_surface_in_m2 = self.calculate_surface_area_of_storage(storage_volume_in_liter=volume_in_liter)
+        warm_water_demand = configuration.HouseholdWarmWaterDemandConfig
+        self.tank = DhwTankProperties(
+            heat_capacity_in_joule_per_kelvin=self.water_mass_in_storage_in_kg * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K,
+            loss_coefficient_in_watt_per_kelvin=(
+                self.waterstorageconfig.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * storage_surface_in_m2
+            ),
+            ambient_temperature_in_celsius=self.AMBIENT_TEMPERATURE_IN_CELSIUS,
+            tap_temperature_in_celsius=(
+                warm_water_demand.ww_temperature_demand - warm_water_demand.temperature_difference_hot
+            ),
+            mains_water_temperature_in_celsius=warm_water_demand.freshwater_temperature,
+            seconds_per_timestep=self.seconds_per_timestep,
         )
 
-        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K
-        )
-        self.density_water_at_40_degree_celsius_in_kg_per_liter = self.WATER_DENSITY_IN_KG_PER_LITER
+    @staticmethod
+    def refuse_a_tank_without_water(*, water_mass_in_kg: float, component_name: str) -> None:
+        """Refuse a hot-water tank that holds no water, naming the configuration field to correct.
 
-        # physical parameters of storage
-        self.water_mass_in_storage_in_kg = (
-            self.density_water_at_40_degree_celsius_in_kg_per_liter
-            * concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter)
-        )
-        self.check_water_mass(self.water_mass_in_storage_in_kg, "DHW water storage")
-        self.heat_capacity_in_joule_per_kelvin = (
-            self.water_mass_in_storage_in_kg * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-        )
-        self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = (
-            self.waterstorageconfig.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
-        )
-        self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
-            storage_volume_in_liter=concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter),
-        )
-        self.loss_coefficient_in_watt_per_kelvin = (
-            self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * self.storage_surface_in_m2
-        )
+        A fully mixed tank divides by its heat capacity ``M c`` on every step, so a tank of zero or negative volume
+        is refused when it is built rather than on its first step. For example,
+        ``volume_heating_water_storage_in_liter = 0`` fails here.
 
-        self.ambient_temperature_in_celsius = self.AMBIENT_TEMPERATURE_IN_CELSIUS
+        Args:
+            water_mass_in_kg: The water the tank holds, in kg.
+            component_name: The tank's name, for the message.
+
+        Raises:
+            ValueError: If ``water_mass_in_kg`` is zero or negative.
+        """
+        if water_mass_in_kg <= 0:
+            raise ValueError(
+                f"The DHW water storage {component_name} holds {water_mass_in_kg} kg of water; "
+                "a water storage needs a positive volume_heating_water_storage_in_liter."
+            )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1865,227 +1885,182 @@ class SimpleDHWStorage(SimpleWaterStorage):
         return self.waterstorageconfig.get_string_dict()
 
     def i_save_state(self) -> None:
-        """Save the state at the start of a step and start the step's iteration history afresh.
-
-        The simulator calls this once per step, before the step's first iteration; the history the node accelerates
-        its published step mean from belongs to one step only.
-        """
-        self.previous_state = self.state.self_copy()
-        self.published_step_means_in_celsius = []
-        self.computed_step_means_in_celsius = []
+        """Save the tank's state at the start of a step, a whole copy."""
+        self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.state = self.previous_state.self_copy()
+        """Restore the tank's state at the start of the step, a whole copy."""
+        self.state = dataclasses.replace(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Check the converged mean water temperature of the timestep."""
+        """Check the converged end temperature of the step, the next step's start temperature."""
         self.check_converged_mean_water_temperature(
-            self.mean_water_temperature_in_water_storage_in_celsius, "DHW water storage"
+            self.state.temperature_at_start_of_step_in_celsius, "DHW water storage"
         )
 
+    @staticmethod
     def solve_tank_step(
-        self,
+        *,
         start_temperature_in_celsius: float,
         generator_inflows: Sequence[hydronics.Inflow],
         demand_in_kg_per_second: float,
+        tank: DhwTankProperties,
     ) -> DhwTankStep:
-        """Integrate the tank over one step with its charging circuits and its tap valve (spec §4.1, §4.3).
+        """Return the tank's step with its charging circuits and its tap valve, solved on its own step mean.
 
         The tap valve lets out ``m_hot`` of tank water, which depends on the tank's step mean ``T̄``
         (:func:`hisim.hydronics.mixing_valve_draw`), and ``T̄`` depends on ``m_hot`` through the node step
-        (:meth:`hisim.hydronics.MixedNode.step`, with the mains refill as one more inflow at ``T_cold``). The method
-        solves ``g(x) = x``, where ``g(x)`` is the node's step mean when the valve answers an assumed step mean
-        ``x``, by the Illinois variant of regula falsi on ``g(x) - x`` over the range of every temperature the tank
-        mixes (``T0``, the supplies that flow, the room, the mains): ``g`` never leaves that range, so the range
-        brackets the solution. The solve is deterministic, needs no start value from an earlier iteration, and stops at
-        :data:`TAP_SOLVE_TOLERANCE_IN_KELVIN`. Without a demand the node step is evaluated once.
+        (:meth:`hisim.hydronics.MixedNode.step`, with the mains refill as one more inflow at ``T_cold``). The fixed
+        point is solved within the range of every temperature the tank mixes (:class:`hisim.hydronics.TemperatureRange`),
+        which brackets it (:func:`hisim.hydronics.solve_bracketed_fixed_point`), to
+        :attr:`TAP_SOLVE_TOLERANCE_IN_KELVIN`. Without a demand the node step is evaluated once.
 
         Example: a 248 kg tank at 55 °C asked for 0.05 kg/s of 40 °C water over 900 s cools to a step mean of
         52.2 °C and lets out 0.0355 kg/s, about 30 % less than the demand; the heat drawn,
         ``m_hot c (T̄ - 10) dt``, equals the demand ``0.05 c (40 - 10) dt`` to the tolerance.
 
         Args:
-            start_temperature_in_celsius: The tank's temperature at the start of the step, °C.
+            start_temperature_in_celsius: The tank's temperature at the start of the step, in °C.
             generator_inflows: The supply of each charging circuit, in the order the tank books them.
-            demand_in_kg_per_second: The warm water the household asks for at the tap temperature, kg/s.
+            demand_in_kg_per_second: The warm water the household asks for at the tap temperature, in kg/s.
+            tank: The tank's constants.
 
         Returns:
             The node step with the refill as its last inflow, ``m_hot`` and the unmet share of the demand.
 
         Raises:
-            RuntimeError: If the solve has not converged after :data:`TAP_SOLVE_MAXIMUM_ITERATIONS` evaluations.
+            FixedPointNotFoundError: If the solve has not converged after :attr:`TAP_SOLVE_MAXIMUM_ITERATIONS`
+                evaluations.
         """
-        t_warm_in_celsius = self.warm_water_temperature
-        t_cold_in_celsius = self.drain_water_temperature
 
-        def node_step(hot_water_in_kg_per_second: float) -> hydronics.NodeStep:
-            return hydronics.MixedNode.step(
-                start_temperature_in_celsius,
-                list(generator_inflows) + [hydronics.Inflow(hot_water_in_kg_per_second, t_cold_in_celsius)],
-                self.loss_coefficient_in_watt_per_kelvin,
-                self.ambient_temperature_in_celsius,
-                self.seconds_per_timestep,
-                self.heat_capacity_in_joule_per_kelvin,
+        def tank_step_for(hot_water_in_kg_per_second: float, unmet_fraction: float) -> DhwTankStep:
+            """Return the tank step with this hot water let out and refilled from the mains."""
+            node = hydronics.MixedNode.step(
+                t0_c=start_temperature_in_celsius,
+                inflows=list(generator_inflows)
+                + [hydronics.Inflow(hot_water_in_kg_per_second, tank.mains_water_temperature_in_celsius)],
+                ua_w_per_k=tank.loss_coefficient_in_watt_per_kelvin,
+                t_amb_c=tank.ambient_temperature_in_celsius,
+                dt_s=tank.seconds_per_timestep,
+                heat_capacity_j_per_k=tank.heat_capacity_in_joule_per_kelvin,
             )
+            return DhwTankStep(node, hot_water_in_kg_per_second, unmet_fraction)
 
-        def answered(assumed_mean_in_celsius: float) -> DhwTankStep:
-            hot_water_in_kg_per_second, unmet_fraction = hydronics.mixing_valve_draw(
-                assumed_mean_in_celsius, t_warm_in_celsius, t_cold_in_celsius, demand_in_kg_per_second
+        def tank_step_at(assumed_mean_in_celsius: float) -> DhwTankStep:
+            """Return the tank step when the tap valve answers an assumed step mean."""
+            draw = hydronics.mixing_valve_draw(
+                t_tank_c=assumed_mean_in_celsius,
+                t_warm_c=tank.tap_temperature_in_celsius,
+                t_cold_c=tank.mains_water_temperature_in_celsius,
+                demand_kg_per_s=demand_in_kg_per_second,
             )
-            return DhwTankStep(node_step(hot_water_in_kg_per_second), hot_water_in_kg_per_second, unmet_fraction)
+            return tank_step_for(draw.hot_water_kg_per_s, draw.unmet_fraction)
 
         if demand_in_kg_per_second <= 0.0:
-            return DhwTankStep(node_step(0.0), 0.0, 0.0)
-
-        temperatures_in_celsius = [
-            start_temperature_in_celsius,
-            t_cold_in_celsius,
-            self.ambient_temperature_in_celsius,
-        ] + [inflow.temperature_c for inflow in generator_inflows if inflow.mass_flow_kg_per_s > 0.0]
-        low_in_celsius, high_in_celsius = min(temperatures_in_celsius), max(temperatures_in_celsius)
-        low_step, high_step = answered(low_in_celsius), answered(high_in_celsius)
-        low_residual_in_kelvin = low_step.node.t_mean_c - low_in_celsius
-        high_residual_in_kelvin = high_step.node.t_mean_c - high_in_celsius
-        if low_residual_in_kelvin <= self.TAP_SOLVE_TOLERANCE_IN_KELVIN:
-            return low_step
-        if high_residual_in_kelvin >= -self.TAP_SOLVE_TOLERANCE_IN_KELVIN:
-            return high_step
-        side = 0
-        for _ in range(self.TAP_SOLVE_MAXIMUM_ITERATIONS):
-            assumed_in_celsius = (
-                low_in_celsius * high_residual_in_kelvin - high_in_celsius * low_residual_in_kelvin
-            ) / (high_residual_in_kelvin - low_residual_in_kelvin)
-            candidate = answered(assumed_in_celsius)
-            residual_in_kelvin = candidate.node.t_mean_c - assumed_in_celsius
-            if (
-                abs(residual_in_kelvin) <= self.TAP_SOLVE_TOLERANCE_IN_KELVIN
-                or high_in_celsius - low_in_celsius <= self.TAP_SOLVE_TOLERANCE_IN_KELVIN
-            ):
-                return candidate
-            if residual_in_kelvin > 0.0:
-                low_in_celsius, low_residual_in_kelvin = assumed_in_celsius, residual_in_kelvin
-                if side == -1:
-                    high_residual_in_kelvin /= 2.0
-                side = -1
-            else:
-                high_in_celsius, high_residual_in_kelvin = assumed_in_celsius, residual_in_kelvin
-                if side == 1:
-                    low_residual_in_kelvin /= 2.0
-                side = 1
-        raise RuntimeError(
-            f"{self.component_name}: the tap valve's step mean did not converge within "
-            f"{self.TAP_SOLVE_MAXIMUM_ITERATIONS} evaluations (bracket {low_in_celsius} to {high_in_celsius} °C)."
+            return tank_step_for(0.0, 0.0)
+        mixed_range = hydronics.TemperatureRange.of_node(
+            t0_c=start_temperature_in_celsius,
+            inflows=generator_inflows,
+            fixed_temperatures_c=(tank.mains_water_temperature_in_celsius, tank.ambient_temperature_in_celsius),
         )
+        solved_step: DhwTankStep = hydronics.solve_bracketed_fixed_point(
+            evaluate=tank_step_at,
+            image_c=lambda step: step.node.t_mean_c,
+            low_c=mixed_range.low_c,
+            high_c=mixed_range.high_c,
+            tolerance_k=SimpleDHWStorage.TAP_SOLVE_TOLERANCE_IN_KELVIN,
+            maximum_evaluations=SimpleDHWStorage.TAP_SOLVE_MAXIMUM_ITERATIONS,
+        )
+        return solved_step
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Integrate the tank over the step and publish its step mean to its charging circuits.
+        """Integrate the tank over the step, publish its step mean to its charging circuits and book every heat.
 
         Reads the supply temperature and mass flow of both charging circuits and the household's warm-water demand,
-        solves the step with the tap valve (:meth:`solve_tank_step`), publishes the step mean ``T̄`` as both
-        circuits' return temperature (accelerated after six iterations, :func:`hisim.hydronics.accelerated_node_mean`)
-        and books every heat flow from the same node step, so the balance closes. The end temperature becomes the
-        state the next step starts from.
+        solves the step with the tap valve (:meth:`solve_tank_step`) from the saved start temperature, and publishes
+        the step mean ``T̄`` as both circuits' return temperature and every heat flow from the same node step, so
+        the balance closes (:meth:`publish_tank_step`). The end temperature becomes the state the next step starts
+        from.
         """
         demand_in_kg_per_second = (
             stsv.get_input_value(self.water_consumption_channel)
-            * self.density_water_at_40_degree_celsius_in_kg_per_liter
+            * hydronics.Water.DENSITY_KG_PER_LITER
             / self.seconds_per_timestep
         )
-        supply_temperature_primary_in_celsius = stsv.get_input_value(
-            self.water_temperature_heat_generator_input_channel
-        )
-        mass_flow_primary_in_kg_per_second = stsv.get_input_value(
-            self.water_mass_flow_rate_heat_generator_input_channel
-        )
-        supply_temperature_secondary_in_celsius = stsv.get_input_value(
-            self.water_temperature_secondary_heat_generator_input_channel
-        )
-        mass_flow_secondary_in_kg_per_second = stsv.get_input_value(
-            self.water_mass_flow_rate_secondary_heat_generator_input_channel
-        )
-
-        start_temperature_in_celsius = self.state.mean_water_temperature_in_celsius
         generator_inflows = [
-            hydronics.Inflow(mass_flow_primary_in_kg_per_second, supply_temperature_primary_in_celsius),
-            hydronics.Inflow(mass_flow_secondary_in_kg_per_second, supply_temperature_secondary_in_celsius),
+            hydronics.Inflow(
+                stsv.get_input_value(self.water_mass_flow_rate_heat_generator_input_channel),
+                stsv.get_input_value(self.water_temperature_heat_generator_input_channel),
+            ),
+            hydronics.Inflow(
+                stsv.get_input_value(self.water_mass_flow_rate_secondary_heat_generator_input_channel),
+                stsv.get_input_value(self.water_temperature_secondary_heat_generator_input_channel),
+            ),
         ]
-        tank = self.solve_tank_step(start_temperature_in_celsius, generator_inflows, demand_in_kg_per_second)
-        node = tank.node
-        heat_primary_in_joule, heat_secondary_in_joule, heat_tap_in_joule = node.heat_in_j_per_inflow
+        start_temperature_in_celsius = self.state.temperature_at_start_of_step_in_celsius
+        tank_step = self.solve_tank_step(
+            start_temperature_in_celsius=start_temperature_in_celsius,
+            generator_inflows=generator_inflows,
+            demand_in_kg_per_second=demand_in_kg_per_second,
+            tank=self.tank,
+        )
+        self.publish_tank_step(stsv, start_temperature_in_celsius, generator_inflows, demand_in_kg_per_second, tank_step)
+        self.state = DhwTankState(temperature_at_start_of_step_in_celsius=tank_step.node.t_end_c)
+
+    def publish_tank_step(
+        self,
+        stsv: SingleTimeStepValues,
+        start_temperature_in_celsius: float,
+        generator_inflows: Sequence[hydronics.Inflow],
+        demand_in_kg_per_second: float,
+        tank_step: DhwTankStep,
+    ) -> None:
+        """Publish the tank's temperatures and every heat of one step, all from the same node step.
+
+        The circuits' heats are the node's inflow heats, the tap's the refill's heat with its sign turned, so that a
+        heat the tap draws is positive; the unmet heat is the unmet share of the demand's heat.
+        """
+        node = tank_step.node
+        heat_primary_in_joule, heat_secondary_in_joule, heat_refill_in_joule = node.heat_in_j_per_inflow
+        heat_tap_in_joule = -heat_refill_in_joule
         dt_in_seconds = self.seconds_per_timestep
-
-        # The step mean the circuits see: the plain iterate, accelerated after six iterations on the step and kept
-        # inside the range of the temperatures the tank mixes.
-        self.published_step_means_in_celsius.append(self.last_published_step_mean_in_celsius)
-        self.computed_step_means_in_celsius.append(node.t_mean_c)
-        published_mean_in_celsius = hydronics.accelerated_node_mean(
-            self.published_step_means_in_celsius, self.computed_step_means_in_celsius
-        )
-        mixed_temperatures_in_celsius = [
-            start_temperature_in_celsius,
-            self.drain_water_temperature,
-            self.ambient_temperature_in_celsius,
-        ] + [inflow.temperature_c for inflow in generator_inflows if inflow.mass_flow_kg_per_s > 0.0]
-        published_mean_in_celsius = min(
-            max(published_mean_in_celsius, min(mixed_temperatures_in_celsius)), max(mixed_temperatures_in_celsius)
-        )
-        if len(self.computed_step_means_in_celsius) == 1:
-            # The first iteration of a step starts the circuits from the start temperature: the simulator begins
-            # every step from zeroed outputs, so a generator simulated before the tank has answered a 0 °C return,
-            # and the step mean computed from that answer is a worse start than T0.
-            published_mean_in_celsius = start_temperature_in_celsius
-        elif (
-            abs(published_mean_in_celsius - self.last_published_step_mean_in_celsius)
-            <= self.PUBLISHED_MEAN_DEADBAND_IN_KELVIN
-        ):
-            # Converged to the last few bits of a float: the iteration can alternate between two neighbouring floats,
-            # which a component that decides on the sign of a balance (the energy manager's surplus) turns into a
-            # cycle of its own. The tank keeps publishing the same float instead. A stopgap (owner 2026-10-09),
-            # removed once the energy manager's knife-edge switch is fixed at the source (hisim-4g9.31).
-            published_mean_in_celsius = self.last_published_step_mean_in_celsius
-        self.last_published_step_mean_in_celsius = published_mean_in_celsius
-
+        joules_per_watt_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
+        heat_capacity_in_joule_per_kelvin = self.tank.heat_capacity_in_joule_per_kelvin
         demand_heat_in_joule = (
-            demand_in_kg_per_second
-            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            * (self.warm_water_temperature - self.drain_water_temperature)
+            hydronics.hot_water_demand_power_w(
+                demand_kg_per_s=demand_in_kg_per_second,
+                t_warm_c=self.tank.tap_temperature_in_celsius,
+                t_cold_c=self.tank.mains_water_temperature_in_celsius,
+            )
             * dt_in_seconds
         )
-        joules_per_watt_hour = 3600.0
+        primary, secondary = generator_inflows
 
-        stsv.set_output_value(self.water_temperature_to_heat_generator_channel, published_mean_in_celsius)
-        stsv.set_output_value(self.water_temperature_secondary_heat_generator_output_channel, published_mean_in_celsius)
-        stsv.set_output_value(self.water_temperature_from_heat_generator_channel, supply_temperature_primary_in_celsius)
-        stsv.set_output_value(
-            self.water_temperature_from_secondary_heat_generator_channel, supply_temperature_secondary_in_celsius
-        )
-        stsv.set_output_value(self.water_temperature_mean_channel, start_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_to_heat_generator_channel, node.t_mean_c)
+        stsv.set_output_value(self.water_temperature_secondary_heat_generator_output_channel, node.t_mean_c)
+        stsv.set_output_value(self.water_temperature_from_heat_generator_channel, primary.temperature_c)
+        stsv.set_output_value(self.water_temperature_from_secondary_heat_generator_channel, secondary.temperature_c)
+        stsv.set_output_value(self.water_temperature_at_start_of_step_channel, start_temperature_in_celsius)
         stsv.set_output_value(self.water_temperature_at_end_of_step_in_celsius_channel, node.t_end_c)
-        stsv.set_output_value(self.temperature_loss_channel, node.loss_j / self.heat_capacity_in_joule_per_kelvin)
+        stsv.set_output_value(self.temperature_loss_channel, node.loss_j / heat_capacity_in_joule_per_kelvin)
         stsv.set_output_value(
-            self.thermal_energy_in_storage_channel,
-            self.heat_capacity_in_joule_per_kelvin * node.t_end_c / joules_per_watt_hour,
+            self.thermal_energy_in_storage_channel, heat_capacity_in_joule_per_kelvin * node.t_end_c / joules_per_watt_hour
         )
-        stsv.set_output_value(
-            self.thermal_energy_from_heat_generator_channel, heat_primary_in_joule / joules_per_watt_hour
-        )
+        stsv.set_output_value(self.thermal_energy_from_heat_generator_channel, heat_primary_in_joule / joules_per_watt_hour)
         stsv.set_output_value(
             self.thermal_energy_from_secondary_heat_generator_channel, heat_secondary_in_joule / joules_per_watt_hour
         )
         stsv.set_output_value(self.thermal_energy_dhw_channel, heat_tap_in_joule / joules_per_watt_hour)
         stsv.set_output_value(
             self.thermal_energy_unmet_dhw_in_watt_hour_channel,
-            tank.unmet_fraction * demand_heat_in_joule / joules_per_watt_hour,
+            tank_step.unmet_fraction * demand_heat_in_joule / joules_per_watt_hour,
         )
         stsv.set_output_value(
             self.thermal_energy_increase_in_storage_channel,
-            self.heat_capacity_in_joule_per_kelvin
-            * (node.t_end_c - start_temperature_in_celsius)
-            / joules_per_watt_hour,
+            heat_capacity_in_joule_per_kelvin * (node.t_end_c - start_temperature_in_celsius) / joules_per_watt_hour,
         )
         stsv.set_output_value(self.stand_by_heat_loss_channel, node.loss_j / dt_in_seconds)
-        stsv.set_output_value(self.thermal_power_dhw_channel, -heat_tap_in_joule / dt_in_seconds)
+        stsv.set_output_value(self.thermal_power_dhw_channel, heat_tap_in_joule / dt_in_seconds)
         stsv.set_output_value(self.thermal_power_from_heat_generator_channel, heat_primary_in_joule / dt_in_seconds)
         stsv.set_output_value(
             self.thermal_power_from_secondary_heat_generator_channel, heat_secondary_in_joule / dt_in_seconds
@@ -2093,14 +2068,8 @@ class SimpleDHWStorage(SimpleWaterStorage):
         stsv.set_output_value(self.water_mass_flow_rate_dhw_output_channel, demand_in_kg_per_second)
         stsv.set_output_value(
             self.hot_water_mass_flow_rate_from_storage_in_kg_per_second_channel,
-            tank.hot_water_mass_flow_in_kg_per_second,
+            tank_step.hot_water_mass_flow_in_kg_per_second,
         )
-
-        # Set state: the end temperature is the next step's start temperature.
-        self.state.heat_loss_in_watt = node.loss_j / dt_in_seconds
-        self.state.temperature_loss_in_celsius_per_timestep = node.loss_j / self.heat_capacity_in_joule_per_kelvin
-        self.state.mean_water_temperature_in_celsius = node.t_end_c
-        self.mean_water_temperature_in_water_storage_in_celsius = node.t_end_c
 
     @staticmethod
     def get_cost_capex(
@@ -2180,7 +2149,11 @@ class SimpleDHWStorage(SimpleWaterStorage):
                     list_of_kpi_entries.append(heat_loss_entry)
                 if output.field_name == self.ThermalEnergyUnmetDHWInWattHour and output.unit == lt.Units.WATT_HOUR:
                     # the hot-water heat the tank could not cover, summed over the run
-                    unmet_in_kilowatt_hour = round(float(postprocessing_results.iloc[:, index].sum()) * 1e-3, 1)
+                    unmet_in_kilowatt_hour = round(
+                        float(postprocessing_results.iloc[:, index].sum())
+                        / hydronics.UnitConversion.WATT_HOURS_PER_KILOWATT_HOUR,
+                        1,
+                    )
                     list_of_kpi_entries.append(
                         KpiEntry(
                             name="Unmet DHW heat demand",

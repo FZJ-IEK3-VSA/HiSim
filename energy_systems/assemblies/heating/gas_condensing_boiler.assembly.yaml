@@ -34,7 +34,7 @@ components:
     config:
       maximal_thermal_power_in_watt: {$param: power_in_watt}
     inputs:
-      - Controller                                          # ControlSignal, OperatingMode, TemperatureDelta, SupplyTemperatureSetDhwInCelsius
+      - Controller                                          # ControlSignal, OperatingMode, TemperatureDelta, SupplyTemperatureSetForDHWInCelsius
       - {$port: dhw}                                        # WaterInputTemperatureDhw, the cylinder's return leg
       - Buffer                                              # WaterInputTemperatureSh
   Controller:
@@ -90,7 +90,7 @@ tests:
     - {output: Boiler.WaterOutputTemperatureDhw, unit: CELSIUS, min: 0, max: 100}
     - {output: Controller.TemperatureDelta, unit: KELVIN, min: -20, max: 80}
       # set minus actual: a cold buffer below a 60 °C cylinder target is at most about 60 K (measured -0.7 to 24 K)
-    - {output: Controller.SupplyTemperatureSetDhwInCelsius, unit: CELSIUS, min: 60, max: 80}
+    - {output: Controller.SupplyTemperatureSetForDHWInCelsius, unit: CELSIUS, min: 60, max: 80}
       # the controller's hot-water target, its aim plus its hysteresis (70 °C by default)
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}

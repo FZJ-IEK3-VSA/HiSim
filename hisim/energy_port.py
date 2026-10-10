@@ -28,15 +28,15 @@ A power output (W, kW) is converted to energy with the timestep, an energy outpu
 kJ) is taken per step as it is; any other unit is refused when the output is declared
 (:meth:`EnergyPort.validate_unit`).
 
-Hydronic circuits (hydronic coupling spec, ``roadmap/hydronic_coupling_spec.md`` §3.5)
---------------------------------------------------------------------------------------
+Hydronic circuits
+-----------------
 
 A water circuit carries no energy output: it is a mass flow, a supply temperature and a return temperature, and
 its heat is derived from them, ``m c (T_sup - T_ret) dt``. A :class:`HydronicPort` names those three outputs and
-derives the heat with :func:`hisim.hydronics.kilowatt_hours`, the one rule. Both ends of a circuit declare the
+derives the heat with :func:`hisim.hydronics.circuit_heat_kwh`, the one rule. Both ends of a circuit declare the
 same port, the supply owner with role ``OUT`` and the receiver with role ``IN``, so a circuit balances by
-construction. No component declares one yet and the balance check does not read them yet (spec §9.5, stage E).
-The contract stage E implements:
+construction. No component declares one yet, and the balance check does not read them yet. The contract the
+balance check is to implement:
 
 * A port names no peer. The two ends come from the wiring: the component that reads the circuit's mass-flow
   output is the other end.
@@ -175,13 +175,17 @@ class EnergyPort:
 
 class HydronicPortError(ValueError):
 
-    """A hydronic port whose output names or role cannot describe a circuit."""
+    """A hydronic port whose output names or role cannot describe a circuit.
+
+    Raised when the port is declared, so a component with a malformed port fails when it is built rather than when
+    the balance check reads it. It is a ``ValueError``, as every invalid declaration of this module is.
+    """
 
 
 @dataclass(frozen=True)
 class HydronicPort:
 
-    """The three outputs of one water circuit, as one end of it declares them (spec §3.5).
+    """The three outputs of one water circuit, as one end of it declares them.
 
     ``mass_flow`` is the pump owner's output (kg/s), ``supply_temperature`` and ``return_temperature`` the
     outputs (°C) of the components the water leaves on each leg; each is a name under the component-key rule,
@@ -190,8 +194,8 @@ class HydronicPort:
 
     ``role`` is ``OUT`` for the supply owner and ``IN`` for the receiver; it says on which side of that end's
     balance the circuit's heat counts and never changes the heat's sign, which is the circuit's own (negative for
-    a cooling circuit, §3.4). :meth:`kilowatt_hours` returns that heat with the §3.4 sign whatever the role, and
-    the balance check (stage E) adds it on the ``IN`` side and subtracts it on the ``OUT`` side. The role is
+    a cooling circuit). :meth:`heat_in_kilowatt_hour` returns that heat with the circuit's sign whatever the role,
+    and the balance check adds it on the ``IN`` side and subtracts it on the ``OUT`` side. The role is
     checked at construction to be ``IN`` or ``OUT``, because :class:`~hisim.loadtypes.EnergyRole` also has
     ``LOSS`` and ``STORED_CHANGE``, which a circuit end cannot be.
     """
@@ -234,10 +238,35 @@ class HydronicPort:
             )
 
     @staticmethod
-    def kilowatt_hours(m: float, t_sup: float, t_ret: float, seconds_per_timestep: float) -> float:
-        """The circuit's heat over one step in kWh, ``m c (t_sup - t_ret) dt / 3.6e6``.
+    def heat_in_kilowatt_hour(
+        *,
+        mass_flow_in_kg_per_second: float,
+        supply_temperature_in_celsius: float,
+        return_temperature_in_celsius: float,
+        seconds_per_timestep: float,
+    ) -> float:
+        """Return the heat a circuit's water carries over one step, ``m c (T_sup - T_ret) dt``, in kWh.
 
-        Delegates to :func:`hisim.hydronics.kilowatt_hours`, which refuses a negative or non-finite flow, a
-        non-finite temperature and a step that is not positive.
+        The balance check applies it to the three outputs the port names, so both ends of a circuit derive the same
+        number. For example, 0.1 kg/s over 10 K for one hour carries 4.18 kWh. It delegates to
+        :func:`hisim.hydronics.circuit_heat_kwh`.
+
+        Args:
+            mass_flow_in_kg_per_second: The circuit's mass flow, in kg/s, at least 0.
+            supply_temperature_in_celsius: The supply temperature, in °C.
+            return_temperature_in_celsius: The return temperature, in °C.
+            seconds_per_timestep: The step duration, in s.
+
+        Returns:
+            The heat, in kWh; negative for a cooling circuit.
+
+        Raises:
+            HydronicsError: If the flow is negative or not finite, a temperature is not finite or the step is not
+                positive, as :func:`hisim.hydronics.circuit_heat_kwh` raises it.
         """
-        return hydronics.kilowatt_hours(m, t_sup, t_ret, seconds_per_timestep)
+        return hydronics.circuit_heat_kwh(
+            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+            t_supply_c=supply_temperature_in_celsius,
+            t_return_c=return_temperature_in_celsius,
+            dt_s=seconds_per_timestep,
+        )

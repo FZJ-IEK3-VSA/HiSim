@@ -13,9 +13,8 @@ from typing import Any, Dict
 import pytest
 from hplib import hplib as hpl
 
-from hisim.components.more_advanced_heat_pump_hplib import (
-    MoreAdvancedHeatPumpHPLib,
-    MoreAdvancedHeatPumpHPLibConfig,
+from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib, MoreAdvancedHeatPumpHPLibConfig
+from hisim.components.more_advanced_heat_pump_hplib_model import (
     ScopApplication,
     ScopCalibration,
     StandardizedSeasonalCop,
@@ -178,9 +177,16 @@ class TestTheComponent:
         """The fit as hplib ships it: no factor, and the cached call is hplib's own."""
         component = self.build(self.config())
         assert not component.scop_calibration.factors
-        cached = component.get_cached_results_or_run_hplib_simulation(2.0, 30.0, 2.0, 1, "heating_building", 1800.0)
+        cached = component.get_cached_results_or_run_hplib_simulation(
+            source_temperature_in_celsius=2.0,
+            return_temperature_in_celsius=30.0,
+            ambient_temperature_in_celsius=2.0,
+            mode=1,
+            operation_mode="heating_building",
+            minimal_thermal_power_in_watt=1800.0,
+        )
         raw = component.heatpump.simulate(t_in_primary=2.0, t_in_secondary=30.0, t_amb=2.0, mode=1, p_th_min=1800.0)
-        assert float(cached["P_el"]) == pytest.approx(float(raw["P_el"]))
+        assert cached.electrical_power_in_watt == pytest.approx(float(raw["P_el"]))
 
     def test_a_stated_pair_calibrates_every_heating_call(self) -> None:
         """The cached call carries the calibrated electricity, and the report names the factors."""
@@ -188,10 +194,17 @@ class TestTheComponent:
             self.config(standardized_scop_en14825_w35=4.6, standardized_scop_en14825_w55=3.4)
         )
         assert set(component.scop_calibration.factors) == {ScopApplication.W35, ScopApplication.W55}
-        cached = component.get_cached_results_or_run_hplib_simulation(2.0, 30.0, 2.0, 1, "heating_building", 1800.0)
+        cached = component.get_cached_results_or_run_hplib_simulation(
+            source_temperature_in_celsius=2.0,
+            return_temperature_in_celsius=30.0,
+            ambient_temperature_in_celsius=2.0,
+            mode=1,
+            operation_mode="heating_building",
+            minimal_thermal_power_in_watt=1800.0,
+        )
         raw = component.heatpump.simulate(t_in_primary=2.0, t_in_secondary=30.0, t_amb=2.0, mode=1, p_th_min=1800.0)
         factor = component.scop_calibration.factor(float(raw["T_out"]))
-        assert float(cached["P_el"]) == pytest.approx(float(raw["P_el"]) / factor)
+        assert cached.electrical_power_in_watt == pytest.approx(float(raw["P_el"]) / factor)
         assert any("SCOP calibration factor W55" in line for line in component.write_to_report())
 
     @pytest.mark.parametrize(

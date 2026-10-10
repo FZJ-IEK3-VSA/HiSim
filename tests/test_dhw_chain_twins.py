@@ -1,6 +1,6 @@
 """Every recorded twin's hot-water tank closes on every step, and both ends of its charging circuits agree.
 
-The hot-water tank (``SimpleDHWStorage``) is a fully mixed node (hydronic coupling spec §4): on every step the heat its
+The hot-water tank (``SimpleDHWStorage``) is a fully mixed node: on every step the heat its
 charging circuits bring, minus the heat its tap draws and its standby loss, is the heat it stores,
 ``C (T_end - T0)``. It publishes its step mean ``T̄`` as the return temperature of each charging circuit, so the heat a
 generator books for its hot-water circuit, ``m c (T_sup - T̄)``, is the heat the tank receives.
@@ -13,12 +13,12 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   collector books equals the heat the tank received from that circuit, up to what the simulator's convergence
   tolerance leaves open (the tank's step mean is converged to about 1e-4 K, so the two ends may differ by ``m c``
   times that), and every circuit charges on some step;
-* the iterations per step (hydronic coupling spec §6): no step of a file without a heat pump reaches the simulator's
+* the iterations per step: no step of a file without a heat pump reaches the simulator's
   ``force_convergence`` (more than eleven passes). The heat-pump files are recorded, not asserted: their forced
   steps come from the energy manager, which switches its set-temperature raise on the sign of a surplus that
   includes the heat pump's own draw, so a float's flip turns it on and off within a step, and from controllers
   that decide once for a whole step, which a converged iteration cannot always reconcile with the plant's
-  state; stage D resolves both. Every file's histogram is written to ``results/iteration_histogram/``.
+  state. Every file's histogram is written to ``results/iteration_histogram/``.
 
 Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
 grouped twins, which RenoVisor translates from, and the composed files. Only the check that every file with a tank is
@@ -165,7 +165,7 @@ class DhwTwins:
             forced: List[bool] = []
             process_one_timestep = simulator.process_one_timestep
 
-            def counting(step, stsv):  # the iteration count the simulator returns per step (§6)
+            def counting(step, stsv):  # the iteration count the simulator returns per step
                 result = process_one_timestep(step, stsv)
                 passes.append(result[1])
                 forced.append(bool(result[2]))
@@ -252,7 +252,7 @@ def check_tank_closure(results: pd.DataFrame) -> None:
     loss_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.StandbyHeatLoss) * seconds_per_timestep / 3600.0
     stored_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyIncreaseInStorage)
     residual_in_watt_hour = (
-        primary_in_watt_hour + secondary_in_watt_hour + tap_in_watt_hour - loss_in_watt_hour - stored_in_watt_hour
+        primary_in_watt_hour + secondary_in_watt_hour - tap_in_watt_hour - loss_in_watt_hour - stored_in_watt_hour
     )
     largest_in_watt_hour = np.maximum.reduce(
         [
@@ -267,7 +267,7 @@ def check_tank_closure(results: pd.DataFrame) -> None:
         np.max(np.abs(residual_in_watt_hour))
     )
     # the tap drew on some step of the day, so the check covered the valve
-    assert np.any(tap_in_watt_hour < 0.0)
+    assert np.any(tap_in_watt_hour > 0.0)
 
 
 def check_circuits(results: pd.DataFrame, circuits: Dict[str, str]) -> int:
@@ -285,7 +285,7 @@ def check_circuits(results: pd.DataFrame, circuits: Dict[str, str]) -> int:
         mass_flow_in_kg_per_second = DhwTwins.column(results, component, DhwTwins.DHW_MASS_FLOW[classname])
         tolerance_in_watt = (
             mass_flow_in_kg_per_second
-            * hydronics.WATER_SPECIFIC_HEAT_J_PER_KG_K
+            * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
             * DhwTwins.CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN
         )
         difference_in_watt = np.abs(booked_in_watt - received_in_watt)

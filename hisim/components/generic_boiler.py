@@ -11,7 +11,6 @@ and as non-modulating on_off controller (which is used especially for pellet and
 """
 
 # Owned
-import importlib
 from dataclasses import dataclass, field
 from typing import ClassVar, List, Optional, Tuple
 from enum import Enum, unique
@@ -209,7 +208,7 @@ class GenericBoilerConfig(ConfigBase):
     eff_th_max: float = 0.90
     temperature_delta_in_celsius: float = 20.0
     #: The highest supply temperature the boiler delivers, °C. A charge whose return plus lift would exceed it is
-    #: throttled to it (hydronic coupling spec §5.1). 80 °C is the usual upper flow-temperature setting of domestic
+    #: throttled to it. 80 °C is the usual upper flow-temperature setting of domestic
     #: gas, oil and solid-fuel boilers, whose safety high-limit cut-outs act above it (around 90-110 °C, EN 15502-1,
     #: EN 303-5); it lies above the controller's 70 °C hot-water flow aim, so every charge reaches its set point.
     maximal_flow_temperature_in_celsius: float = field(default=80.0, metadata={"unit": lt.Units.CELSIUS})
@@ -349,6 +348,107 @@ class GenericBoilerConfig(ConfigBase):
         )
 
 
+@dataclass(frozen=True)
+class BurnerModulation:
+
+    """A boiler burner's power band and how its combustion efficiency varies across it.
+
+    The burner modulates between a minimal and a maximal power, and its combustion efficiency, the share of the
+    fuel power that becomes heat, runs linearly from ``minimal_efficiency`` at the minimal to
+    ``maximal_efficiency`` at the maximal power. A value object built once from the boiler's configuration, so the
+    burner's laws are pure functions of their argument. For example, a 2-20 kW band from 0.6 to 0.9 burns at 0.75
+    at 11 kW.
+    """
+
+    #: The lowest power the burner modulates down to, in W.
+    minimal_power_in_watt: float
+    #: The highest power the burner reaches, in W.
+    maximal_power_in_watt: float
+    #: The combustion efficiency at and below the minimal power, dimensionless.
+    minimal_efficiency: float
+    #: The combustion efficiency at the maximal power, dimensionless.
+    maximal_efficiency: float
+
+    def commanded_power_in_watt(self, control_signal: float) -> float:
+        """Return the burner power a control signal commands, in W: its share of the maximum, at least the minimum.
+
+        A burner cannot modulate below its minimal power, so a signal that asks for less burns at the minimum. For
+        example, a 2-20 kW burner burns 2 kW at a signal of 0.05 and 10 kW at 0.5.
+
+        Args:
+            control_signal: The share of the maximal power, dimensionless, 0 to 1.
+
+        Returns:
+            The burner power, in W.
+        """
+        requested_power_in_watt = control_signal * self.maximal_power_in_watt
+        if requested_power_in_watt < self.minimal_power_in_watt:
+            return self.minimal_power_in_watt
+        return requested_power_in_watt
+
+    def efficiency_at(self, burner_power_in_watt: float) -> float:
+        """Return the combustion efficiency at a burner power, dimensionless: the boiler's modulation law.
+
+        ``eta(F) = eta_min + (F - F_min) (eta_max - eta_min) / (F_max - F_min)``. A burner at or below its minimal
+        power runs at the minimal efficiency, and so does a burner whose band is a single power.
+
+        Args:
+            burner_power_in_watt: The burner power, in W.
+
+        Returns:
+            The share of the fuel power that becomes heat.
+        """
+        band_in_watt = self.maximal_power_in_watt - self.minimal_power_in_watt
+        if band_in_watt <= 0 or burner_power_in_watt <= self.minimal_power_in_watt:
+            return float(self.minimal_efficiency)
+        efficiency_slope_per_watt = (self.maximal_efficiency - self.minimal_efficiency) / band_in_watt
+        return float(
+            self.minimal_efficiency + (burner_power_in_watt - self.minimal_power_in_watt) * efficiency_slope_per_watt
+        )
+
+
+@dataclass(frozen=True)
+class BoilerFiring:
+
+    """What one firing circuit of a boiler burns, carries and pumps in one step.
+
+    A value object returned by :meth:`GenericBoiler.fired_circuit`, so the four quantities cannot be swapped by
+    position.
+    """
+
+    #: The fuel power the burner burns, in W.
+    fuel_power_in_watt: float
+    #: The heat the circuit's water carries, in W.
+    thermal_power_in_watt: float
+    #: The circuit's mass flow, in kg/s.
+    mass_flow_in_kg_per_second: float
+    #: The circuit's supply temperature, in °C.
+    supply_temperature_in_celsius: float
+
+
+@dataclass(frozen=True)
+class BoilerCircuitChannels:
+
+    """The return input and the outputs of one of the boiler's two water circuits.
+
+    The boiler fires one circuit at a time, space heating or hot water; holding each circuit's channels in one
+    object lets the step publish either circuit by the same code, with every channel named.
+    """
+
+    #: The circuit's return temperature, in °C, read from the storage.
+    return_temperature: ComponentInput
+    #: The circuit's supply temperature, in °C.
+    supply_temperature: ComponentOutput
+    #: The circuit's mass flow, in kg/s.
+    mass_flow: ComponentOutput
+    #: The heat the circuit's water carries, in W.
+    thermal_power: ComponentOutput
+    #: The heat of the step, in Wh.
+    thermal_energy: ComponentOutput
+    #: The fuel energy the circuit burnt in the step, in Wh.
+    fuel_energy: ComponentOutput
+
+
 class GenericBoiler(Component):
     """GenericBoiler class.
 
@@ -362,7 +462,7 @@ class GenericBoiler(Component):
     OperatingMode = "OperatingMode"
     TemperatureDelta = "TemperatureDelta"
     #: The hot-water supply temperature the controller aims at: the boiler's hot-water supply never exceeds it.
-    SupplyTemperatureSetDhwInCelsius = "SupplyTemperatureSetDhwInCelsius"
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     WaterInputTemperatureSh = "WaterInputTemperatureSh"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
 
@@ -378,7 +478,7 @@ class GenericBoiler(Component):
     ThermalOutputPowerDhw = "ThermalOutputPowerDhw"
     ThermalOutputEnergyDhw = "ThermalOutputEnergyDhw"
     TotalFuelConsumption = "TotalFuelConsumption"
-    #: The fuel power (W) of this step that did not become booked heat: flue and burner loss (hisim-9uoo.4).
+    #: The fuel power (W) of this step that did not become booked heat: the flue and burner loss.
     CombustionHeatLoss = "CombustionHeatLoss"
 
     def __init__(
@@ -418,12 +518,12 @@ class GenericBoiler(Component):
             lt.Units.KELVIN,
             True,
         )
-        self.supply_temperature_set_dhw_in_celsius_channel: ComponentInput = self.add_input(
+        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentInput = self.add_input(
             self.component_name,
-            GenericBoiler.SupplyTemperatureSetDhwInCelsius,
+            GenericBoiler.SupplyTemperatureSetForDHWInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
-            False,
+            True,
         )
 
         self.total_fuel_input_power_channel: ComponentOutput = self.add_output(
@@ -431,7 +531,11 @@ class GenericBoiler(Component):
             GenericBoiler.TotalFuelConsumption,
             self.config.energy_carrier,
             lt.Units.WATT,
-            output_description=f"here a description for {self.TotalFuelConsumption} will follow.",
+            output_description=(
+                "The fuel power the burner burns in this step, W: the commanded burner power while it fires "
+                "unthrottled, the heat its circuit carries over the combustion efficiency while it is throttled, "
+                "and zero while it does not fire."
+            ),
         )
 
         fuel_carrier = EnergyPort.carrier_of_fuel(self.config.energy_carrier)
@@ -549,6 +653,22 @@ class GenericBoiler(Component):
             ),
             energy_port=EnergyPort(lt.EnergyRole.LOSS, fuel_carrier),
         )
+        self.space_heating_circuit = BoilerCircuitChannels(
+            return_temperature=self.water_input_temperature_sh_channel,
+            supply_temperature=self.water_output_temperature_sh_channel,
+            mass_flow=self.water_output_mass_flow_sh_channel,
+            thermal_power=self.thermal_output_power_sh_channel,
+            thermal_energy=self.thermal_output_energy_sh_channel,
+            fuel_energy=self.energy_demand_sh_channel,
+        )
+        self.hot_water_circuit = BoilerCircuitChannels(
+            return_temperature=self.water_input_temperature_dhw_channel,
+            supply_temperature=self.water_output_temperature_dhw_channel,
+            mass_flow=self.water_output_mass_flow_dhw_channel,
+            thermal_power=self.thermal_output_power_dhw_channel,
+            thermal_energy=self.thermal_output_energy_dhw_channel,
+            fuel_energy=self.energy_demand_dhw_channel,
+        )
         # Set important parameters
         self.build()
         self.fuel_consumption_in_liter: float = 0
@@ -588,9 +708,9 @@ class GenericBoiler(Component):
         )
         connections.append(
             ComponentConnection(
-                GenericBoiler.SupplyTemperatureSetDhwInCelsius,
+                GenericBoiler.SupplyTemperatureSetForDHWInCelsius,
                 l1_controller_classname,
-                component_class.SupplyTemperatureSetDhwInCelsius,
+                component_class.SupplyTemperatureSetForDHWInCelsius,
             )
         )
         return connections
@@ -599,10 +719,7 @@ class GenericBoiler(Component):
         self,
     ):
         """Get Simple hot water storage default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.simple_water_storage"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "SimpleHotWaterStorage")
+        component_class = SimpleHotWaterStorage
         connections = []
         hws_classname = component_class.get_classname()
         connections.append(
@@ -618,17 +735,14 @@ class GenericBoiler(Component):
         self,
     ):
         """Get Simple dhw storage default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.simple_water_storage"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "SimpleDHWStorage")
+        component_class = SimpleDHWStorage
         connections = []
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 GenericBoiler.WaterInputTemperatureDhw,
                 hws_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                component_class.StepMeanWaterTemperatureToHeatGeneratorInCelsius,
             )
         )
         return connections
@@ -647,14 +761,11 @@ class GenericBoiler(Component):
         self.min_combustion_efficiency = self.config.eff_th_min
         self.max_combustion_efficiency = self.config.eff_th_max
         self.maximal_flow_temperature_in_celsius = self.config.maximal_flow_temperature_in_celsius
-        # self.temperature_delta_in_celsius = (
-        #     self.config.temperature_delta_in_celsius
-        # )
-        # Get physical properties of water and fuel used for the combustion
-        self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=lt.LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+        self.burner = BurnerModulation(
+            minimal_power_in_watt=self.minimal_thermal_power_in_watt,
+            maximal_power_in_watt=self.maximal_thermal_power_in_watt,
+            minimal_efficiency=self.min_combustion_efficiency,
+            maximal_efficiency=self.max_combustion_efficiency,
         )
 
         # The fuel constants are derived by the config, which is also what contributes them
@@ -699,151 +810,163 @@ class GenericBoiler(Component):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Simulate the Generic Boiler."""
+        """Fire the circuit the controller asks for and publish both circuits, the fuel and the combustion loss.
+
+        The controller sends a control signal, an operating mode and a lift. In space-heating or hot-water mode with
+        a positive lift the boiler fires that mode's circuit (:meth:`fired_circuit`); the other circuit idles. Off,
+        or without a lift, the boiler does not fire: no circuit moves water, and no fuel is burnt.
+
+        Raises:
+            ValueError: If the control signal is outside [0, 1] or the operating mode is unknown.
+        """
         control_signal = stsv.get_input_value(self.control_signal_channel)
         operating_mode = stsv.get_input_value(self.operating_mode_channel)
-        temperature_delta = stsv.get_input_value(self.temperature_delta_channel)
-
+        lift_in_kelvin = stsv.get_input_value(self.temperature_delta_channel)
         if not 0 <= control_signal <= 1:
             raise ValueError(f"Expected a control signal between 0 and 1, not {control_signal}")
-        if operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value and temperature_delta <= 0:
-            # A hot-water charge without a lift moves no water, so its circuit carries no heat and the burner
-            # stays off on this step.
-            operating_mode = HeatingMode.OFF.value
 
-        # the burner's power and efficiency at the control signal, the forward law (D1)
-        if control_signal * self.maximal_thermal_power_in_watt < self.minimal_thermal_power_in_watt:
-            fuel_power_in_watt = self.minimal_thermal_power_in_watt
-        else:
-            fuel_power_in_watt = control_signal * self.maximal_thermal_power_in_watt
-        combustion_efficiency = self.combustion_efficiency_at_burner_power(fuel_power_in_watt)
-        thermal_power_in_watt = fuel_power_in_watt * combustion_efficiency
-        mass_flow_out_in_kg_per_second = (
-            thermal_power_in_watt
-            / (self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius * temperature_delta)
-            if temperature_delta > 0
-            else 0
-        )
-        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-
-        idle_sh = [
-            self.thermal_output_power_sh_channel,
-            self.thermal_output_energy_sh_channel,
-            self.energy_demand_sh_channel,
-            self.water_output_mass_flow_sh_channel,
-        ]
-        idle_dhw = [
-            self.thermal_output_power_dhw_channel,
-            self.thermal_output_energy_dhw_channel,
-            self.energy_demand_dhw_channel,
-            self.water_output_mass_flow_dhw_channel,
-        ]
         if operating_mode == HeatingMode.SPACE_HEATING.value:
-            circuit = (
-                self.water_input_temperature_sh_channel,
-                self.water_output_temperature_sh_channel,
-                self.water_output_mass_flow_sh_channel,
-                self.thermal_output_power_sh_channel,
-                self.thermal_output_energy_sh_channel,
-                self.energy_demand_sh_channel,
-            )
-            idle_channels, idle_supply = idle_dhw, (
-                self.water_output_temperature_dhw_channel,
-                self.water_input_temperature_dhw_channel,
-            )
+            fired, idle = self.space_heating_circuit, self.hot_water_circuit
         elif operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
-            circuit = (
-                self.water_input_temperature_dhw_channel,
-                self.water_output_temperature_dhw_channel,
-                self.water_output_mass_flow_dhw_channel,
-                self.thermal_output_power_dhw_channel,
-                self.thermal_output_energy_dhw_channel,
-                self.energy_demand_dhw_channel,
-            )
-            idle_channels, idle_supply = idle_sh, (
-                self.water_output_temperature_sh_channel,
-                self.water_input_temperature_sh_channel,
-            )
+            fired, idle = self.hot_water_circuit, self.space_heating_circuit
         elif operating_mode == HeatingMode.OFF.value:
-            # both circuits idle: no flow, supply equal to return, no fuel
-            for channel in idle_sh + idle_dhw:
-                stsv.set_output_value(channel, 0)
-            for supply_channel, return_channel in (
-                (self.water_output_temperature_sh_channel, self.water_input_temperature_sh_channel),
-                (self.water_output_temperature_dhw_channel, self.water_input_temperature_dhw_channel),
-            ):
-                stsv.set_output_value(supply_channel, stsv.get_input_value(return_channel))
-            stsv.set_output_value(self.total_fuel_input_power_channel, fuel_power_in_watt)
-            stsv.set_output_value(self.combustion_heat_loss_channel, 0.0)
+            self.publish_idle_boiler(stsv)
             return
         else:
             raise ValueError(f"Unknown operating mode {operating_mode}")
+        if lift_in_kelvin <= 0:
+            # a circuit without a lift moves no water, so it carries no heat and the burner stays off
+            self.publish_idle_boiler(stsv)
+            return
 
-        return_channel, supply_channel, flow_channel, power_channel, energy_channel, fuel_channel = circuit
-        return_temperature_in_celsius = stsv.get_input_value(return_channel)
-        supply_temperature_in_celsius = return_temperature_in_celsius + temperature_delta
-        if operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value:
-            # The hot-water circuit: the boiler pumps m = P_th / (c lift) and supplies the tank's step mean (its
-            # return) plus the lift; the heat it books is what that water carries, m c (T_sup - T_ret), which is
-            # P_th (spec §5.1, D1).
-            thermal_power_in_watt = hydronics.circuit_power_w(
-                mass_flow_out_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
+        return_temperature_in_celsius = stsv.get_input_value(fired.return_temperature)
+        unthrottled_supply_in_celsius = return_temperature_in_celsius + lift_in_kelvin
+        if fired is self.hot_water_circuit:
+            supply_temperature_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
+                unthrottled_supply_c=unthrottled_supply_in_celsius,
+                return_c=return_temperature_in_celsius,
+                maximal_supply_c=self.maximal_flow_temperature_in_celsius,
+                set_supply_c=stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel),
             )
-        supply_limit_in_celsius = self.maximal_flow_temperature_in_celsius
-        if (
-            operating_mode == HeatingMode.DOMESTIC_HOT_WATER.value
-            and self.supply_temperature_set_dhw_in_celsius_channel.source_output is not None
-        ):
-            # the hot-water charge ends at the controller's target inside the step (spec §5.1, owner 2026-10-09)
-            supply_limit_in_celsius = min(
-                supply_limit_in_celsius, stsv.get_input_value(self.supply_temperature_set_dhw_in_celsius_channel)
+        else:
+            supply_temperature_in_celsius = hydronics.throttled_supply_temperature_c(
+                unthrottled_supply_c=unthrottled_supply_in_celsius,
+                return_c=return_temperature_in_celsius,
+                supply_limit_c=self.maximal_flow_temperature_in_celsius,
             )
-        if supply_temperature_in_celsius > supply_limit_in_celsius:
-            # Throttled (spec §5.1, D1 as amended 2026-10-09): the supply stops at the limit, or at the return if that
-            # is hotter, and the circuit carries m c (T_sup - T_ret). The burner cycles at the power it was commanded
-            # to, so the fuel is that heat over the efficiency at the commanded power.
-            supply_temperature_in_celsius = max(supply_limit_in_celsius, return_temperature_in_celsius)
-            thermal_power_in_watt = hydronics.circuit_power_w(
-                mass_flow_out_in_kg_per_second, supply_temperature_in_celsius, return_temperature_in_celsius
-            )
-            fuel_power_in_watt = thermal_power_in_watt / combustion_efficiency
+        firing = self.fired_circuit(
+            burner=self.burner,
+            control_signal=control_signal,
+            lift_in_kelvin=lift_in_kelvin,
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            supply_temperature_in_celsius=supply_temperature_in_celsius,
+        )
+        self.publish_firing(stsv, fired, firing)
+        self.publish_idle_circuit(stsv, idle)
 
-        stsv.set_output_value(self.total_fuel_input_power_channel, fuel_power_in_watt)
-        # the loss of the fuel billed in this step: what of it did not become heat
-        stsv.set_output_value(self.combustion_heat_loss_channel, fuel_power_in_watt - thermal_power_in_watt)
-        stsv.set_output_value(power_channel, thermal_power_in_watt)
-        stsv.set_output_value(energy_channel, thermal_power_in_watt * seconds_per_timestep / 3.6e3)
-        stsv.set_output_value(fuel_channel, fuel_power_in_watt * seconds_per_timestep / 3.6e3)
-        stsv.set_output_value(supply_channel, supply_temperature_in_celsius)
-        stsv.set_output_value(flow_channel, mass_flow_out_in_kg_per_second)
-        for channel in idle_channels:
-            stsv.set_output_value(channel, 0)
-        stsv.set_output_value(idle_supply[0], stsv.get_input_value(idle_supply[1]))
+    @staticmethod
+    def fired_circuit(
+        *,
+        burner: "BurnerModulation",
+        control_signal: float,
+        lift_in_kelvin: float,
+        return_temperature_in_celsius: float,
+        supply_temperature_in_celsius: float,
+    ) -> "BoilerFiring":
+        """Return the fuel, heat and flow of a boiler circuit that fires at a control signal and holds a lift.
 
-    def combustion_efficiency_at_burner_power(self, fuel_power_in_watt: float) -> float:
-        """The combustion efficiency at a burner power: the boiler's modulation law.
-
-        The efficiency runs linearly from ``eff_th_min`` at the minimal to ``eff_th_max`` at the maximal burner
-        power, ``eta(F) = eta_min + (F - F_min) slope`` with ``slope = (eta_max - eta_min) / (F_max - F_min)``.
-        A burner below its minimal power runs at ``eff_th_min``, and so does a boiler whose band is one power.
-        For example, a 2-20 kW band from 0.6 to 0.9 burns at 0.75 at 11 kW.
+        The burner burns at the power the control signal commands and turns it into heat at its combustion
+        efficiency (:class:`BurnerModulation`). The pump runs the flow that carries that heat over the lift,
+        ``m = P_th / (c lift)``, and the circuit's heat is what its water carries from the return to the supply,
+        ``m c (T_sup - T_ret)``. Unthrottled, the supply is the return plus the lift, the heat is ``P_th`` and the
+        fuel is the commanded power. Throttled, the supply is below that, the flow stays, the heat is smaller, and
+        the burner cycles at its commanded power, so the fuel is the heat over the efficiency at that power. For
+        example, a 20 kW burner at full signal with a 30 K lift on a 70 °C return throttled to 80 °C carries a
+        third of its heat and burns a third of its fuel.
 
         Args:
-            fuel_power_in_watt: The burner power, W.
+            burner: The burner's power band and efficiency law.
+            control_signal: The share of the maximal burner power the controller commands, dimensionless, 0 to 1.
+            lift_in_kelvin: The lift the controller asks for, in K, above 0.
+            return_temperature_in_celsius: The circuit's return temperature, in °C.
+            supply_temperature_in_celsius: The circuit's supply temperature after any throttling, in °C, at most
+                the return plus the lift.
 
         Returns:
-            The combustion efficiency, the share of the fuel power that becomes heat.
+            The fuel power, the heat, the mass flow and the supply temperature of the circuit.
         """
-        delta_power_in_watt = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
-        if delta_power_in_watt <= 0 or fuel_power_in_watt <= self.minimal_thermal_power_in_watt:
-            return float(self.min_combustion_efficiency)
-        efficiency_slope_per_watt = (
-            self.max_combustion_efficiency - self.min_combustion_efficiency
-        ) / delta_power_in_watt
-        return float(
-            self.min_combustion_efficiency
-            + (fuel_power_in_watt - self.minimal_thermal_power_in_watt) * efficiency_slope_per_watt
+        commanded_power_in_watt = burner.commanded_power_in_watt(control_signal)
+        efficiency = burner.efficiency_at(commanded_power_in_watt)
+        mass_flow_in_kg_per_second = (
+            commanded_power_in_watt * efficiency / (hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * lift_in_kelvin)
         )
+        thermal_power_in_watt = hydronics.circuit_power_w(
+            mass_flow_kg_per_s=mass_flow_in_kg_per_second,
+            t_supply_c=supply_temperature_in_celsius,
+            t_return_c=return_temperature_in_celsius,
+        )
+        is_throttled = supply_temperature_in_celsius < return_temperature_in_celsius + lift_in_kelvin
+        fuel_power_in_watt = thermal_power_in_watt / efficiency if is_throttled else commanded_power_in_watt
+        return BoilerFiring(
+            fuel_power_in_watt=fuel_power_in_watt,
+            thermal_power_in_watt=thermal_power_in_watt,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            supply_temperature_in_celsius=supply_temperature_in_celsius,
+        )
+
+    def publish_firing(self, stsv: SingleTimeStepValues, circuit: "BoilerCircuitChannels", firing: "BoilerFiring") -> None:
+        """Publish a firing circuit's flow, supply, heat and fuel, and the boiler's fuel power and combustion loss.
+
+        The energies of the step are the powers times the step length; the combustion loss is the fuel power that
+        did not become the circuit's heat.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        joules_per_watt_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
+        stsv.set_output_value(self.total_fuel_input_power_channel, firing.fuel_power_in_watt)
+        stsv.set_output_value(
+            self.combustion_heat_loss_channel, firing.fuel_power_in_watt - firing.thermal_power_in_watt
+        )
+        stsv.set_output_value(circuit.thermal_power, firing.thermal_power_in_watt)
+        stsv.set_output_value(
+            circuit.thermal_energy, firing.thermal_power_in_watt * seconds_per_timestep / joules_per_watt_hour
+        )
+        stsv.set_output_value(
+            circuit.fuel_energy, firing.fuel_power_in_watt * seconds_per_timestep / joules_per_watt_hour
+        )
+        stsv.set_output_value(circuit.supply_temperature, firing.supply_temperature_in_celsius)
+        stsv.set_output_value(circuit.mass_flow, firing.mass_flow_in_kg_per_second)
+
+    @staticmethod
+    def publish_idle_circuit(stsv: SingleTimeStepValues, circuit: "BoilerCircuitChannels") -> None:
+        """Publish a circuit that does not fire: no flow, no heat, no fuel, and its supply equal to its return.
+
+        An idle circuit moves no water, so its supply temperature carries no information; it is set to the return
+        so that ``m c (T_sup - T_ret)`` is zero by both factors.
+        """
+        for channel in (circuit.thermal_power, circuit.thermal_energy, circuit.fuel_energy, circuit.mass_flow):
+            stsv.set_output_value(channel, 0.0)
+        stsv.set_output_value(circuit.supply_temperature, stsv.get_input_value(circuit.return_temperature))
+
+    def publish_idle_boiler(self, stsv: SingleTimeStepValues) -> None:
+        """Publish a boiler that does not fire: both circuits idle, no fuel power and no combustion loss."""
+        self.publish_idle_circuit(stsv, self.space_heating_circuit)
+        self.publish_idle_circuit(stsv, self.hot_water_circuit)
+        stsv.set_output_value(self.total_fuel_input_power_channel, 0.0)
+        stsv.set_output_value(self.combustion_heat_loss_channel, 0.0)
+
+    def combustion_efficiency_at_burner_power(self, fuel_power_in_watt: float) -> float:
+        """Return the combustion efficiency of this boiler's burner at a burner power, dimensionless.
+
+        It is :meth:`BurnerModulation.efficiency_at` of the boiler's configured burner; the KPI and cost code read
+        it for a whole run.
+
+        Args:
+            fuel_power_in_watt: The burner power, in W.
+
+        Returns:
+            The share of the fuel power that becomes heat.
+        """
+        return self.burner.efficiency_at(fuel_power_in_watt)
 
     @staticmethod
     def get_cost_capex(
@@ -1282,7 +1405,7 @@ class GenericBoilerController(Component):
     OperatingMode = "OperatingMode"
     TemperatureDelta = "TemperatureDelta"
     #: The hot-water supply temperature the controller aims at: its 60 °C aim plus its hysteresis, 70 °C by default.
-    SupplyTemperatureSetDhwInCelsius = "SupplyTemperatureSetDhwInCelsius"
+    SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
 
     def __init__(
         self,
@@ -1304,6 +1427,10 @@ class GenericBoilerController(Component):
         # warm water should always have at least 55°C, should be 60°C when leaving heat generator, see source below
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
         self.warm_water_temperature_aim_in_celsius: float = 60.0
+        # the supply temperature a hot-water charge aims at: the warm-water aim plus the hysteresis
+        self.hot_water_supply_temperature_set_in_celsius: float = (
+            self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset
+        )
 
         self.minimum_runtime_in_timesteps = self.whole_timesteps(
             "minimum_runtime_in_seconds", self.config.minimum_runtime_in_seconds
@@ -1370,9 +1497,9 @@ class GenericBoilerController(Component):
             lt.Units.KELVIN,
             output_description="Temperature difference between actual and set water temperature.",
         )
-        self.supply_temperature_set_dhw_in_celsius_channel: ComponentOutput = self.add_output(
+        self.supply_temperature_set_for_dhw_in_celsius_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.SupplyTemperatureSetDhwInCelsius,
+            self.SupplyTemperatureSetForDHWInCelsius,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=(
@@ -1442,7 +1569,7 @@ class GenericBoilerController(Component):
                 storage_classname,
                 # the tank's start-of-step temperature T0: the controller decides on a value the step's
                 # iteration does not move
-                SimpleDHWStorage.WaterMeanTemperatureInStorage,
+                SimpleDHWStorage.WaterTemperatureAtStartOfStepInCelsius,
             )
         )
         return connections
@@ -1554,8 +1681,7 @@ class GenericBoilerController(Component):
             stsv.set_output_value(self.operating_mode_channel, self.controller_mode.value)
             stsv.set_output_value(self.temperature_delta_channel, temperature_delta)
             stsv.set_output_value(
-                self.supply_temperature_set_dhw_in_celsius_channel,
-                self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset,
+                self.supply_temperature_set_for_dhw_in_celsius_channel, self.hot_water_supply_temperature_set_in_celsius
             )
 
     def determine_operating_mode(
@@ -1606,13 +1732,12 @@ class GenericBoilerController(Component):
             if self.config.is_modulating is True:
                 control_signal = self.modulate_power(
                     water_temperature_input_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
-                    set_heating_flow_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius
-                    + self.config.hysteresis_water_temperature_offset,
+                    set_heating_flow_temperature_in_celsius=self.hot_water_supply_temperature_set_in_celsius,
                 )
             else:
                 control_signal = 1
             temperature_delta = max(
-                (self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset)
+                self.hot_water_supply_temperature_set_in_celsius
                 - water_temperature_input_from_dhw_water_storage_in_celsius,
                 0,
             )

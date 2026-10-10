@@ -51,6 +51,8 @@ def test_solar_thermal_system() -> None:
         component_id=ComponentID("FakeControlState"),
     )
     my_sts.control_signal_channel.source_output = state_controller
+    # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
+    my_sts.part_load_command.ratio_channel.source_output = state_controller
 
     my_sts.set_sim_repo(repo)
     my_sts.i_prepare_simulation()
@@ -284,6 +286,8 @@ def test_the_timestep_reads_the_resolved_area() -> None:
     )
     for collector in collectors:
         collector.control_signal_channel.source_output = state_controller
+        # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
+        collector.part_load_command.ratio_channel.source_output = state_controller
         collector.set_sim_repo(repo)
         collector.i_prepare_simulation()
         collector.t_out_channel.source_output = my_weather.air_temperature_output
@@ -431,6 +435,8 @@ def test_the_timestep_output_equals_the_series_path() -> None:
     ]
     control, inlet = fake_outputs
     my_sts.control_signal_channel.source_output = control
+    # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
+    my_sts.part_load_command.ratio_channel.source_output = control
     my_sts.water_temperature_input_channel.source_output = inlet
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
@@ -496,6 +502,8 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     ]
     control, inlet = fakes
     my_sts.control_signal_channel.source_output = control
+    # the controller's part-load ratio reads the same fake, 1: the pump runs the whole step
+    my_sts.part_load_command.ratio_channel.source_output = control
     my_sts.water_temperature_input_channel.source_output = inlet
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output

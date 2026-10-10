@@ -340,3 +340,70 @@ class TestHeatDistributionValve:
     ) -> None:
         """Catches a valve that passes heat outside the heating season the heating curve publishes."""
         assert heat_distribution_system.HeatDistributionController.valve_state(mode, is_heating_season=is_heating_season) == expected_state
+
+
+class TestValveState:
+
+    """The heat-distribution controller's valve mode advances only between steps, not between the passes of one step."""
+
+    @staticmethod
+    def controller_with_inputs() -> tuple:
+        """Build the controller with its two inputs wired to stand-in outputs.
+
+        Returns:
+            The controller, the demand output, the heating-season output and the step values.
+        """
+        config = heat_distribution_system.HeatDistributionControllerConfig(
+            component_id=ComponentID(name="HeatDistributionController"), heating_load_of_building_in_watt=8000.0
+        )
+        controller = heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config
+        )
+        demand = cp.ComponentOutput("Building", "Demand", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=ComponentID("Building"))
+        season = cp.ComponentOutput("Curve", "Season", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Curve"))
+        controller.theoretical_thermal_building_demand_channel.source_output = demand
+        controller.heating_season_channel.source_output = season
+        outputs = [demand, season, *controller.outputs]
+        for index, output in enumerate(outputs):
+            output.global_index = index
+        stsv = cp.SingleTimeStepValues(len(outputs))
+        stsv.set_output_value(season, 1.0)
+        return controller, demand, stsv
+
+    @staticmethod
+    def published_state(
+        controller: heat_distribution_system.HeatDistributionController,
+        demand: cp.ComponentOutput,
+        stsv: cp.SingleTimeStepValues,
+        demand_in_watt: float,
+    ) -> float:
+        """Run one pass of the controller with this building demand and return the state it publishes.
+
+        Args:
+            controller: The controller.
+            demand: The stand-in output of the building's theoretical demand.
+            stsv: The step values.
+            demand_in_watt: The building's theoretical demand of the pass, in W.
+
+        Returns:
+            The published valve state: 1 heating, -1 cooling, 0 closed.
+        """
+        stsv.set_output_value(demand, demand_in_watt)
+        controller.i_restore_state()
+        controller.i_simulate(0, stsv, False)
+        return stsv.values[controller.state_channel.global_index]
+
+    @pytest.mark.base
+    def test_a_pass_starts_from_the_mode_the_last_step_converged_to(self) -> None:
+        """Catches a valve mode that advances inside ``i_simulate``, which would make a pass depend on the pass before.
+
+        A closed valve opens for heating on a positive demand in one pass; a later pass of the same step with a
+        negative demand starts again from the closed valve and opens it for cooling, as a fresh step would.
+        """
+        controller, demand, stsv = self.controller_with_inputs()
+        controller.i_save_state()
+        assert self.published_state(controller, demand, stsv, 300.0) == 1
+        assert self.published_state(controller, demand, stsv, -300.0) == -1
+        assert self.published_state(controller, demand, stsv, 300.0) == 1
+        controller.i_save_state()
+        assert self.published_state(controller, demand, stsv, -300.0) == 1  # an open heating valve stays open

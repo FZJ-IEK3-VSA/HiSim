@@ -57,6 +57,7 @@ components:
     preset: standard
     inputs:
       - L2EMSElectricityController
+      - MoreAdvancedHeatPumpHPLib
       - DHWStorage
   MoreAdvancedHeatPumpHPLib:
     class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib

@@ -20,8 +20,10 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   source, physics, L1 controller, L2 controller, meter) and keeps to that kind's role, and other components see it
   only as a black box through its port quantities. Check a new component and every review against it.
 - Code is designed and written as `system_docs/coding_style.md` says: business logic in pure, unit-tested functions;
-  Clean Code, SOLID, YAGNI and DRY; class-scoped constants; a purpose sentence in every docstring; no `print`
-  outside `hisim/log.py` (enforced by `.semgrep/no_print.yml`); commit messages and PR descriptions in its form.
+  Clean Code, SOLID, YAGNI and DRY; the code rules (small units, typed data, explicit state, fail fast, ratchets
+  in CI) and design patterns; controllers as testable state machines; class-scoped constants; a purpose sentence
+  in every docstring; no `print` outside `hisim/log.py` (enforced by `.semgrep/no_print.yml`); commit messages and
+  PR descriptions in its form.
 - Avoid monkeypatching whenever practical, especially in shared fixtures. Prefer explicit configuration, constructor arguments, or small test helpers; use monkeypatching only when the alternative would be substantially more fragile or invasive.
 
 ## Pull requests and merging

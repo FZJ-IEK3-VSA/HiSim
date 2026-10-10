@@ -127,6 +127,7 @@ components:
       eff_th_min: 0.6
       eff_th_max: 0.9
       temperature_delta_in_celsius: 20.0
+      maximal_flow_temperature_in_celsius: 80.0
       device_co2_footprint_in_kg: null
       investment_costs_in_euro: null
       lifetime_in_years: null

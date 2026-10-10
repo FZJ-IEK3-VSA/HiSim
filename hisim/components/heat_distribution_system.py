@@ -3,6 +3,7 @@
 import importlib
 from enum import Enum, unique
 from typing import Any, ClassVar, List, Optional, Tuple
+import dataclasses
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -118,19 +119,44 @@ class HeatDistributionConfig(ConfigBase):
 
 @dataclass
 class HeatDistributionSystemState:
-    """HeatDistributionSystemState class."""
+    """The heat distribution system's state from one step to the next: its circuit's temperatures and heat.
+
+    ``pipe_water_temperature_in_celsius`` is the temperature of the water in the pipes and emitters, the mean of the
+    loop's supply and return at the end of the step; only the quasi-steady loop reads it.
+    """
 
     water_output_temperature_in_celsius: float = 25.0
     water_input_temperature_in_celsius: float = 25.0
     thermal_power_delivered_in_watt: float = 0.0
+    pipe_water_temperature_in_celsius: float = 25.0
 
     def self_copy(self) -> "HeatDistributionSystemState":
-        """Copy the Heat Distribution State."""
-        return HeatDistributionSystemState(
-            self.water_output_temperature_in_celsius,
-            self.water_input_temperature_in_celsius,
-            self.thermal_power_delivered_in_watt,
-        )
+        """Return a copy of the whole state, for saving and restoring it between the passes of a step."""
+        return dataclasses.replace(self)
+
+
+@dataclass(frozen=True)
+class QuasiSteadyLoopStep:
+    """One quasi-steady step of the buffer-less distribution loop: its returns, its delivered heat and its pipe water.
+
+    ``return_temperature_in_celsius`` is the emitters' return at the end of the step, and
+    ``step_mean_return_temperature_in_celsius`` the return the generator sees on average over the step: lower than the
+    end return by the heat the pipe water took, so ``m c (T_sup - step_mean_return) dt = delivered dt + pipe-water heat
+    increase``.
+
+    Attributes:
+        return_temperature_in_celsius: The emitters' return at the end of the step, °C.
+        step_mean_return_temperature_in_celsius: The return the generator sees on average over the step, °C.
+        delivered_power_in_watt: The heat flow the emitters exchange with the building, W; negative when cooling.
+        pipe_water_temperature_in_celsius: The pipe water's temperature at the end of the step, °C.
+        pipe_water_heat_increase_in_joule: The change of the heat the pipe water holds over the step, J.
+    """
+
+    return_temperature_in_celsius: float
+    step_mean_return_temperature_in_celsius: float
+    delivered_power_in_watt: float
+    pipe_water_temperature_in_celsius: float
+    pipe_water_heat_increase_in_joule: float
 
 
 class HeatDistribution(cp.Component):
@@ -138,6 +164,17 @@ class HeatDistribution(cp.Component):
 
     It simulates the heat exchange between heat generator and building.
 
+    Without a buffer and with its own design flow (``NO_STORAGE_MASS_FLOW_FIX``, district heating), above the
+    part-load threshold and the loop's turnover criterion ``a = m_design dt / M_pipe > 1``, the loop is computed
+    quasi-steady within the step (:meth:`quasi_steady_loop_step`): while the distribution controller has heating on,
+    the emitters exchange the building's demand with this step's supply and the return follows from the emitter law,
+    the pipe water ends the step at the mean of supply and return, and the return the generator sees is the step mean
+    that closes the loop's balance, ``m c (T_sup - T_ret_mean) = Q_delivered + C_pipe (T_pipe,end - T_pipe,0) / dt``. A
+    generator that regulates its supply temperature therefore bills the delivered heat plus the pipe water's change of
+    stored heat. While the controller has heating off, the loop stands: the pipe water keeps its heat and the generator
+    sees its own supply back. A cooling step keeps the one-step-lagged behaviour of the dynamic path, as at every step
+    length: a substation that cannot cool passes its return through as its supply, and the loop then has no fixed
+    point within the step. Below the criterion the loop keeps its one-step-lagged behaviour, the reference.
     """
 
     cost_relevance = CostRelevance.PRICED
@@ -155,6 +192,31 @@ class HeatDistribution(cp.Component):
     WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
     WaterMassFlowHDS = "WaterMassFlowHDS"
+    #: The change of the heat the pipe water holds over the step (Wh), on the quasi-steady path; zero otherwise.
+    ThermalEnergyIncreaseOfPipeWaterInWattHour = "ThermalEnergyIncreaseOfPipeWaterInWattHour"
+
+    #: The inner diameter of the distribution circuit's pipe, m (Task 44 IEA Annex 38).
+    INNER_PIPE_DIAMETER_IN_M: ClassVar[float] = 16 / 1000
+    #: The outer diameter of the pipe, m (Task 44 IEA Annex 38).
+    OUTER_PIPE_DIAMETER_IN_M: ClassVar[float] = (16 + 2) / 1000
+    #: The length of pipe per m² of heated floor, m (heizsparer.de, floor heating circuits).
+    PIPE_LENGTH_PER_FLOOR_AREA_IN_M_PER_M2: ClassVar[float] = 8.8
+    #: The screed above the pipe, through which a standing loop gives its heat to the room: its height, m, its
+    #: thermal conductivity, W/(m K), and the heat transfer coefficient from it to still air, W/(m² K) (mdpi.com
+    #: 1996-1073/16/15/5850; heat flows only to the room, no floor covering).
+    SCREED_HEIGHT_IN_M: ClassVar[float] = 40 / 1000
+    SCREED_THERMAL_CONDUCTIVITY_IN_WATT_PER_METER_PER_KELVIN: ClassVar[float] = 1.4
+    SCREED_TO_AIR_HEAT_TRANSFER_IN_WATT_PER_SQUARE_METER_PER_KELVIN: ClassVar[float] = 5.8
+    #: The temperature of the loop's supply, return and pipe water before the first step, °C.
+    INITIAL_WATER_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 21.0
+    #: Joules in a watt-hour.
+    JOULES_PER_WATT_HOUR: ClassVar[float] = 3600.0
+    #: The distribution controller's state while it has cooling on; such a step is always computed on the dynamic,
+    #: one-step-lagged path, as below the part-load threshold.
+    COOLING_STATE: ClassVar[int] = -1
+    #: The turnover ratio ``a = m_design dt / M_pipe`` above which the loop is computed quasi-steady: once the pipe
+    #: water turns over more than once in a step, the generator and the pipe water agree within the step.
+    QUASI_STEADY_TURNOVER_RATIO: ClassVar[float] = 1.0
 
     # Similar components to connect to:
     # 1. Building
@@ -196,9 +258,10 @@ class HeatDistribution(cp.Component):
         self.build()
 
         self.state: HeatDistributionSystemState = HeatDistributionSystemState(
-            water_output_temperature_in_celsius=21.0,
-            water_input_temperature_in_celsius=21.0,
+            water_output_temperature_in_celsius=self.INITIAL_WATER_TEMPERATURE_IN_CELSIUS,
+            water_input_temperature_in_celsius=self.INITIAL_WATER_TEMPERATURE_IN_CELSIUS,
             thermal_power_delivered_in_watt=0,
+            pipe_water_temperature_in_celsius=self.INITIAL_WATER_TEMPERATURE_IN_CELSIUS,
         )
         self.previous_state: HeatDistributionSystemState = self.state.self_copy()
 
@@ -280,6 +343,17 @@ class HeatDistribution(cp.Component):
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             output_description=f"here a description for {self.WaterMassFlowHDS} will follow.",
+        )
+        self.pipe_water_heat_increase_in_watt_hour_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalEnergyIncreaseOfPipeWaterInWattHour,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT_HOUR,
+            output_description=(
+                "On the quasi-steady path: the change of the heat the pipe water holds over the step, C_pipe "
+                "(T_pipe,end - T_pipe,0). The generator's heat is the delivered heat (ThermalPowerDelivered) plus this. "
+                "It is stored heat, not delivered heat, and no meter or KPI counts it. Zero on the dynamic path."
+            ),
         )
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
@@ -384,6 +458,123 @@ class HeatDistribution(cp.Component):
             energy_carrier=lt.LoadTypes.WATER
         ).density_in_kg_per_m3
 
+        self.loop_is_quasi_steady: bool = (
+            self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
+            and self.my_simulation_parameters.runs_part_load()
+            and self.loop_turnover_ratio() > self.QUASI_STEADY_TURNOVER_RATIO
+        )
+
+    def pipe_length_in_m(self) -> float:
+        """Return the length of the distribution circuit's pipe, m: 8.8 m per m² of floor area.
+
+        Example: 121.2 m² of floor hold 1066.56 m of pipe.
+        """
+        return self.PIPE_LENGTH_PER_FLOOR_AREA_IN_M_PER_M2 * self.absolute_conditioned_floor_area_in_m2
+
+    def mass_of_pipe_water_in_kg(self) -> float:
+        """Return the water the distribution circuit's pipe holds, kg: 16 mm inner diameter over the pipe's length.
+
+        Example: 121.2 m² of floor hold 1067 m of pipe, 0.2145 m³ of water, 213 kg at the water density of
+        ``PhysicsConfig``.
+        """
+        inner_volume_of_hds_in_m3 = (np.pi / 4) * ((self.INNER_PIPE_DIAMETER_IN_M) ** 2) * self.pipe_length_in_m()
+        return float(inner_volume_of_hds_in_m3 * self.density_of_water_in_kg_per_m3)
+
+    def pipe_water_time_constant_in_seconds(self) -> float:
+        """Return the time constant in s with which the standing pipe water approaches the room temperature.
+
+        The pipe water's heat capacity times the resistance from the pipe's outer surface through the screed to the
+        room's still air: ``tau = M c (h / lambda + 1 / alpha) / A_outer``. Example: 213 kg of water under 4 cm of screed
+        in 1067 m of 18 mm pipe give about 2970 s.
+        """
+        heat_resistance_in_square_meter_kelvin_per_watt = (
+            self.SCREED_HEIGHT_IN_M / self.SCREED_THERMAL_CONDUCTIVITY_IN_WATT_PER_METER_PER_KELVIN
+            + 1 / self.SCREED_TO_AIR_HEAT_TRANSFER_IN_WATT_PER_SQUARE_METER_PER_KELVIN
+        )
+        outer_surface_in_square_meter = np.pi * self.OUTER_PIPE_DIAMETER_IN_M * self.pipe_length_in_m()
+        return float(
+            (self.mass_of_pipe_water_in_kg() * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
+            * (heat_resistance_in_square_meter_kelvin_per_watt / outer_surface_in_square_meter)
+        )
+
+    def loop_turnover_ratio(self) -> float:
+        """Return how often the design flow turns the pipe water over in one step, ``a = m_design dt / M_pipe``.
+
+        Example: 0.3 kg/s over 900 s through 213 kg of pipe water give 1.27.
+        """
+        return (
+            self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
+            * self.my_simulation_parameters.seconds_per_timestep
+            / self.mass_of_pipe_water_in_kg()
+        )
+
+    def quasi_steady_loop_step(
+        self,
+        *,
+        supply_temperature_in_celsius: float,
+        mass_flow_in_kg_per_second: float,
+        heat_demand_in_watt: float,
+        room_temperature_in_celsius: float,
+        exchanges_with_building: bool,
+        pipe_water_start_temperature_in_celsius: float,
+    ) -> QuasiSteadyLoopStep:
+        """Return the loop's step with the pipe water in quasi-steady state.
+
+        While the loop exchanges with the building (the controller has heating on), the emitters exchange
+        the building's demand with the supply by the emitter law (heating: the return at most down to the room
+        temperature; cooling: at most up to it), the pipe water ends at the mean of supply and return, and the
+        generator sees the step-mean return that closes the balance. While it does not, the loop stands: nothing is
+        exchanged, the pipe water keeps its temperature, and the generator sees its own supply back. Example: 0.3 kg/s
+        at 50 °C into a 3 kW demand return at 47.6 °C; 214 kg of pipe water warming from 48 to 48.8 °C over 900 s take
+        0.20 kWh (795 W), so the step-mean return is 47.0 °C and the generator brings 3.80 kW.
+
+        Args:
+            supply_temperature_in_celsius: The generator's supply this iteration, °C.
+            mass_flow_in_kg_per_second: The loop's flow, kg/s, above 0.
+            heat_demand_in_watt: The building's heat demand of the step, W; negative for a cooling demand.
+            room_temperature_in_celsius: The indoor air temperature, °C.
+            exchanges_with_building: Whether the emitters exchange heat with the building in this step.
+            pipe_water_start_temperature_in_celsius: The pipe water's temperature at the start of the step, °C.
+
+        Returns:
+            The end return, the step-mean return, the delivered heat flow and the pipe water's end temperature and
+            heat increase.
+        """
+        if not exchanges_with_building:
+            return QuasiSteadyLoopStep(
+                return_temperature_in_celsius=supply_temperature_in_celsius,
+                step_mean_return_temperature_in_celsius=supply_temperature_in_celsius,
+                delivered_power_in_watt=0.0,
+                pipe_water_temperature_in_celsius=pipe_water_start_temperature_in_celsius,
+                pipe_water_heat_increase_in_joule=0.0,
+            )
+        (
+            return_temperature_in_celsius,
+            delivered_power_in_watt,
+        ) = self.determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
+            water_temperature_input_in_celsius=supply_temperature_in_celsius,
+            water_mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            theoretical_thermal_buiding_demand_in_watt=heat_demand_in_watt,
+            residence_temperature_in_celsius=room_temperature_in_celsius,
+        )
+        pipe_water_end_in_celsius = (supply_temperature_in_celsius + return_temperature_in_celsius) / 2.0
+        heat_increase_in_joule = (
+            self.mass_of_pipe_water_in_kg()
+            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            * (pipe_water_end_in_celsius - pipe_water_start_temperature_in_celsius)
+        )
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        step_mean_return_in_celsius = supply_temperature_in_celsius - (
+            delivered_power_in_watt + heat_increase_in_joule / seconds_per_timestep
+        ) / (mass_flow_in_kg_per_second * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
+        return QuasiSteadyLoopStep(
+            return_temperature_in_celsius=return_temperature_in_celsius,
+            step_mean_return_temperature_in_celsius=step_mean_return_in_celsius,
+            delivered_power_in_watt=delivered_power_in_watt,
+            pipe_water_temperature_in_celsius=pipe_water_end_in_celsius,
+            pipe_water_heat_increase_in_joule=heat_increase_in_joule,
+        )
+
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         pass
@@ -433,6 +624,16 @@ class HeatDistribution(cp.Component):
             water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
                 self.water_mass_flow_rate_hp_in_kg_per_second_channel
             )
+
+        if self.loop_is_quasi_steady and state_controller != self.COOLING_STATE:
+            self.simulate_quasi_steady_loop(
+                stsv,
+                state_controller,
+                theoretical_thermal_building_demand_in_watt,
+                residence_temperature_input_in_celsius,
+                water_mass_flow_rate_in_kg_per_second,
+            )
+            return
 
         if water_mass_flow_rate_in_kg_per_second == 0:
             # important for heating system without buffer storage
@@ -495,10 +696,57 @@ class HeatDistribution(cp.Component):
             water_mass_flow_rate_in_kg_per_second,
         )
 
+        stsv.set_output_value(self.pipe_water_heat_increase_in_watt_hour_channel, 0.0)
+
         # write values to state
         self.state.water_output_temperature_in_celsius = water_temperature_output_in_celsius
         self.state.water_input_temperature_in_celsius = water_temperature_input_in_celsius
         self.state.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
+        if self.loop_is_quasi_steady:
+            # a cooling step of a quasi-steady loop: the next quasi-steady step starts from this step's pipe water
+            self.state.pipe_water_temperature_in_celsius = (
+                water_temperature_input_in_celsius + water_temperature_output_in_celsius
+            ) / 2.0
+
+    def simulate_quasi_steady_loop(
+        self,
+        stsv: cp.SingleTimeStepValues,
+        state_controller: float,
+        heat_demand_in_watt: float,
+        room_temperature_in_celsius: float,
+        mass_flow_in_kg_per_second: float,
+    ) -> None:
+        """Compute this step's loop quasi-steady and publish it in the same step, without the one-step lag.
+
+        The circuit's return output is the step-mean return of :meth:`quasi_steady_loop_step`, so the generator
+        books ``m c (T_sup - T_ret_mean)``, the delivered heat plus the pipe water's heat increase; the delivered
+        heat is this step's. The pipe water's end temperature is the next step's start.
+        """
+        supply_temperature_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+        loop = self.quasi_steady_loop_step(
+            supply_temperature_in_celsius=supply_temperature_in_celsius,
+            mass_flow_in_kg_per_second=mass_flow_in_kg_per_second,
+            heat_demand_in_watt=heat_demand_in_watt,
+            room_temperature_in_celsius=room_temperature_in_celsius,
+            exchanges_with_building=state_controller != 0,
+            pipe_water_start_temperature_in_celsius=self.state.pipe_water_temperature_in_celsius,
+        )
+        stsv.set_output_value(self.water_temperature_inlet_channel, supply_temperature_in_celsius)
+        stsv.set_output_value(self.water_temperature_outlet_channel, loop.step_mean_return_temperature_in_celsius)
+        stsv.set_output_value(
+            self.water_temperature_difference_channel,
+            supply_temperature_in_celsius - loop.step_mean_return_temperature_in_celsius,
+        )
+        stsv.set_output_value(self.thermal_power_delivered_channel, loop.delivered_power_in_watt)
+        stsv.set_output_value(self.water_mass_flow_channel, mass_flow_in_kg_per_second)
+        stsv.set_output_value(
+            self.pipe_water_heat_increase_in_watt_hour_channel,
+            loop.pipe_water_heat_increase_in_joule / self.JOULES_PER_WATT_HOUR,
+        )
+        self.state.water_output_temperature_in_celsius = loop.return_temperature_in_celsius
+        self.state.water_input_temperature_in_celsius = supply_temperature_in_celsius
+        self.state.thermal_power_delivered_in_watt = loop.delivered_power_in_watt
+        self.state.pipe_water_temperature_in_celsius = loop.pipe_water_temperature_in_celsius
 
     def determine_water_temperature_input_output_effective_thermal_power_without_mass_flow(
         self,
@@ -509,30 +757,8 @@ class HeatDistribution(cp.Component):
         # source1: https://www.mdpi.com/1996-1073/16/15/5850
         # source2: https://www.researchgate.net/publication/305659004_Modelling_and_Simulation_of_Underfloor_Heating_System_Supplied_from_Heat_Pump
         # source3: https://www.sciencedirect.com/science/article/pii/S0378778816312749?via%3Dihub
-        # assumption1: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-planen-heizkreise-berechnen
-        # assumption2: heat transfer direction just to the room --> other direction is adiabatic
-        # assumption3: still air and no floor covering considered
-
-        height_of_screed = 40 / 1000  # in m
-        thermal_conductivity_screed = 1.4  # in W/(m^2K)
-        heat_transfer_coefficient_screed_to_air = 5.8  # assumption3
-        inner_pipe_diameter = 16 / 1000  # in m  # Task 44 IEA Annex 38
-        outer_pipe_diameter = (16 + 2) / 1000  # in m  # Task 44 IEA Annex 38
-
-        heat_resistance_coefficient_hds_pipe_to_air = (
-            height_of_screed / thermal_conductivity_screed + 1 / heat_transfer_coefficient_screed_to_air
-        )
-
-        length_of_hds_pipe = 8.8 * self.absolute_conditioned_floor_area_in_m2  # in m -> assumption1
-        inner_volume_of_hds = (np.pi / 4) * ((inner_pipe_diameter) ** 2) * length_of_hds_pipe  # in m^3
-
-        outer_surface_of_hds_pipe = np.pi * outer_pipe_diameter * length_of_hds_pipe  # in m^2
-
-        mass_of_water_in_hds = inner_volume_of_hds * self.density_of_water_in_kg_per_m3
-
-        time_constant_hds = (
-            mass_of_water_in_hds * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-        ) * (heat_resistance_coefficient_hds_pipe_to_air / outer_surface_of_hds_pipe)
+        # the pipe, the screed and their time constant: pipe_water_time_constant_in_seconds
+        time_constant_hds = self.pipe_water_time_constant_in_seconds()
 
         water_temperature_input_in_celsius = residence_temperature_in_celsius + (
             (self.state.water_input_temperature_in_celsius - residence_temperature_in_celsius)

@@ -59,12 +59,14 @@ files are HiSim's declarative input and Python setups its imperative one. The
 `system_setups/*.simulation.json` parameter files stay, and both modes still read them.
 
 ### Linting / type checking
+How code is designed, written and documented, and the form of commit messages and PR descriptions:
+`system_docs/coding_style.md`.
 ```bash
 flake8 hisim tests
 mypy hisim/                        # uses mypy.ini
 ```
 
-Line length: 120 characters (black config in `pyproject.toml`).
+Line length: 170 characters (black in `pyproject.toml`, pylint in `.pylintrc`; system_docs/coding_style.md).
 
 ### Optional environment variables
 Set in a `.env` file in the repo root or as system env vars:

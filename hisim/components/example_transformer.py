@@ -12,7 +12,7 @@ from typing import ClassVar
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import ComponentKind, Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -96,6 +96,8 @@ class ExampleTransformer(Component):
         Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

@@ -132,6 +132,8 @@ class SimpleCHP(cp.Component):
     (1) CHP or fuel cell controller (hisim.components.generic_chp.controller)
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Inputs

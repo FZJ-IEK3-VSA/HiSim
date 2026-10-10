@@ -129,6 +129,8 @@ class TariffProvider(cp.Component):
     against.
     """
 
+    KIND = cp.ComponentKind.DATA_SOURCE
+
     cost_relevance = CostRelevance.FREE_OF_COST  # the contract prices energy, not hardware
 
     # Outputs

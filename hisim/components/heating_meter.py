@@ -66,6 +66,8 @@ class HeatingMeter(DynamicComponent):
     OPEX costs and CO2 emissions for district heating.
     """
 
+    KIND = cp.ComponentKind.METER
+
     cost_relevance = CostRelevance.METER
 
     # Outputs

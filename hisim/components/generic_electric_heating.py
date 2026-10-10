@@ -15,6 +15,7 @@ from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
+    ComponentKind,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
@@ -173,6 +174,8 @@ class ElectricHeating(Component):
     flow carries, which is its electricity. It reports the ratio it ran with (``PartLoadRatioRunDhw``): the commanded
     ratio while it charges the tank, 0 otherwise.
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 
@@ -970,6 +973,8 @@ class ElectricHeatingController(Component):
     the tank's start and end temperatures, so that the tank ends the step at the warm-water aim, where the diverter
     valve ends a charge in both of its charging modes (``TargetTemperatureDhwInCelsius``).
     """
+
+    KIND = ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

@@ -105,6 +105,8 @@ class SimpleAirConditioner(cp.Component):
     are zero.
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Input channel names
@@ -603,6 +605,8 @@ class SimpleAirConditionerController(cp.Component):
     The controller outputs a signed modulating power signal:
     ``-1.0`` for cooling at full capacity, ``0.0`` when off.
     """
+
+    KIND = cp.ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

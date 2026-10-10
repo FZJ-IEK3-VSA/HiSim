@@ -12,7 +12,7 @@ from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import ComponentKind, Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
@@ -60,6 +60,8 @@ class SimpleController(Component):
     output to 1 (on) when the level drops below the low threshold and to 0
     (off) when it exceeds the high threshold.
     """
+
+    KIND = ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

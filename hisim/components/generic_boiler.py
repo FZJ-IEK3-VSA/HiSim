@@ -26,6 +26,7 @@ from hisim.components.configuration import (
     PhysicsConfig,
 )
 from hisim.component import (
+    ComponentKind,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
@@ -488,6 +489,8 @@ class GenericBoiler(Component):
     ran with (``PartLoadRatioRunDhw``): the commanded ratio while it charges the tank, 0 otherwise. Cycling losses of
     the burner are not modelled.
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 
@@ -1489,6 +1492,8 @@ class GenericBoilerController(Component):
     aim, the temperature at which the controller ends the charge (``TargetTemperatureDhwInCelsius``, 60 °C), or at most
     a few hundredths of a kelvin above it.
     """
+
+    KIND = ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

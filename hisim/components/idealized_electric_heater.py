@@ -66,6 +66,8 @@ class IdealizedHeaterConfig(ConfigBase):
 class IdealizedElectricHeater(cp.Component):
     """Idealized Electric Heater System."""
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs

@@ -11,6 +11,7 @@ import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import (
+    ComponentKind,
     Component,
     ComponentInput,
     ComponentOutput,
@@ -196,6 +197,8 @@ class Battery(Component):
     Components to connect to:
     (1) Energy Management System
     """
+
+    KIND = ComponentKind.PHYSICS
 
     # Lifecycle cost engine declaration (cost_spec.md §9.2).
     cost_relevance = CostRelevance.PRICED

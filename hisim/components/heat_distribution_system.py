@@ -177,6 +177,8 @@ class HeatDistribution(cp.Component):
     point within the step. Below the criterion the loop keeps its one-step-lagged behaviour, the reference.
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Inputs
@@ -1199,6 +1201,8 @@ class HeatDistributionController(cp.Component):
     activation or deactivation.
 
     """
+
+    KIND = cp.ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

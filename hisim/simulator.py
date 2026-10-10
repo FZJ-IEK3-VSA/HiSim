@@ -6,7 +6,7 @@ import os
 import datetime
 import enum
 from dataclasses import dataclass
-from typing import Callable, List, Tuple, Optional, Dict, Any, Type, Union
+from typing import Callable, ClassVar, List, Tuple, Optional, Dict, Any, Sequence, Type, Union
 import time
 import pandas as pd
 
@@ -161,6 +161,17 @@ class Simulator:
     with convergence checking, and post-processing of results.
     """
 
+    #: The order in which the kinds of components are evaluated within a pass (:meth:`evaluation_positions`): what
+    #: reads nothing first, then the controllers from the coordinating level down, so that a command reaches its
+    #: device in the same pass, then the devices, and the meters, which nothing reads, last.
+    EVALUATION_ORDER_OF_KINDS: ClassVar[Tuple[cp.ComponentKind, ...]] = (
+        cp.ComponentKind.DATA_SOURCE,
+        cp.ComponentKind.L2_CONTROLLER,
+        cp.ComponentKind.L1_CONTROLLER,
+        cp.ComponentKind.PHYSICS,
+        cp.ComponentKind.METER,
+    )
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -224,6 +235,8 @@ class Simulator:
         #: (:meth:`add_progress_callback`). Empty unless a caller registers one, and then the loop
         #: behaves and logs exactly as it always did.
         self._progress_callbacks: List[ProgressCallback] = []
+        #: The wrapped components in the order a pass evaluates them (:meth:`evaluation_plan`).
+        self._evaluation_plan: Optional[List[ComponentWrapper]] = None
 
     def add_progress_callback(self, callback: ProgressCallback) -> None:
         """Register a callable that is told how far the time loop has come.
@@ -310,9 +323,12 @@ class Simulator:
         Raises:
             ValueError: If simulation parameters are not initialized or a duplicate
                 component name is added.
+            ComponentKindNotDeclaredError: If the component's class declares no kind.
         """
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
+        # Refused here rather than at the first step, so a class without a kind fails while the system is built.
+        type(component).get_kind()
         # ensure result directory exists before any connect_input calls log to it
         if not self._simulation_parameters.result_directory:
             self.prepare_simulation_directory()
@@ -390,6 +406,7 @@ class Simulator:
 
         # Creates List with values
         stsv = previous_stsv.clone()
+        evaluation_plan = self.evaluation_plan()
         # Creates a buffer List with values
         previous_values = previous_stsv.clone()
         iterative_tries = 0
@@ -398,7 +415,7 @@ class Simulator:
         # Starts loop
         while continue_calculation:
             # Loops through components
-            for wrapped_component in self.wrapped_components:
+            for wrapped_component in evaluation_plan:
                 # Executes restore state for each component
                 wrapped_component.restore_state()
                 # Executes i_simulate for component
@@ -428,6 +445,37 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.doublecheck(timestep, stsv)
         return (stsv, iterative_tries, force_convergence)
+
+    @staticmethod
+    def evaluation_positions(kinds: Sequence[cp.ComponentKind]) -> List[int]:
+        """Return the positions of components in the order a pass evaluates them, from their kinds in the order added.
+
+        The components are evaluated kind by kind, in :attr:`EVALUATION_ORDER_OF_KINDS`; components of one kind keep
+        the order they were added in. For example, the kinds (physics, L1 controller, data source, physics) give the
+        positions [2, 1, 0, 3]: the data source, the controller, then the two devices in their order.
+
+        Why: a controller evaluated after its device would pair the device's answer to its previous command with its
+        newer one, and an iteration that pairs them so can circle its fixed point instead of settling.
+
+        Args:
+            kinds: The kind of every component, in the order the components were added.
+
+        Returns:
+            The positions into ``kinds``, in evaluation order.
+        """
+        rank_of_kind = {kind: rank for rank, kind in enumerate(Simulator.EVALUATION_ORDER_OF_KINDS)}
+        return sorted(range(len(kinds)), key=lambda position: rank_of_kind[kinds[position]])
+
+    def evaluation_plan(self) -> List[ComponentWrapper]:
+        """Return the wrapped components in the order a pass evaluates them.
+
+        Computed once, at the first time step. Only the order of evaluation changes: the components, their outputs and
+        the result columns keep the order they were added in.
+        """
+        if self._evaluation_plan is None:
+            kinds = [type(wrapped_component.my_component).get_kind() for wrapped_component in self.wrapped_components]
+            self._evaluation_plan = [self.wrapped_components[position] for position in self.evaluation_positions(kinds)]
+        return self._evaluation_plan
 
     def prepare_simulation_directory(self):
         """Prepares the simulation directory, creating it if necessary.

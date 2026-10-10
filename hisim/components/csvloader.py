@@ -206,6 +206,8 @@ class CSVLoader(cp.Component):
 
     """
 
+    KIND = cp.ComponentKind.DATA_SOURCE
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     Output1: str = "CSVProfile"

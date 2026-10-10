@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pvlib
 from hisim.component import (
+    ComponentKind,
     CapexCostDataClass,
     Component,
     ComponentConnection,
@@ -300,6 +301,8 @@ class SolarThermalSystem(Component):
     the pump draws the ratio of its electricity. The collector reports the ratio its pump ran (``PartLoadRatioRun``):
     the commanded ratio while the pump runs, 0 otherwise.
     """
+
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.PRICED
 
@@ -1133,6 +1136,8 @@ class SolarThermalSystemController(Component):
     above which it stops the pump (``TargetTemperatureInCelsius``, 60 °C). Nothing ranks it against a backup charging the same storage: each
     controller aims at its own target.
     """
+
+    KIND = ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

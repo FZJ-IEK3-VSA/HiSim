@@ -242,6 +242,8 @@ class GenericHeatPump(cp.Component):
 
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Inputs
@@ -715,6 +717,8 @@ class GenericHeatPumpController(cp.Component):
         Mode index for operation type for this heat pump
 
     """
+
+    KIND = cp.ComponentKind.L1_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

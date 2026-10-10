@@ -132,6 +132,8 @@ class Building(cp.Component):
 
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs -> heating device

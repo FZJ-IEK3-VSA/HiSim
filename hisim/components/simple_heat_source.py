@@ -255,6 +255,8 @@ class SimpleHeatSourceState:
 class SimpleHeatSource(cp.Component):
     """Heat Source implementation."""
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Inputs

@@ -36,7 +36,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.component import Component, ComponentConnection, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import Component, ComponentConnection, ComponentInput, ComponentKind, ComponentOutput, SingleTimeStepValues
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.config import ComponentID, ConfigBase, DisplayConfig, FactContribution, Many, Sizable, Size, Sum
 from hisim.config import concrete, preset, sized_field
@@ -77,6 +77,9 @@ class KpiAggregation(enum.Enum):
 
 class MockComponent(Component):
     """The shared behaviour of every mock: helpers its constructor adds ports and default connections with."""
+
+    #: Physics unless a mock says otherwise: most mocks stand in for a device.
+    KIND = ComponentKind.PHYSICS
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -197,6 +200,8 @@ class MockWeather(MockComponent):
     Stands in for the real ``Weather`` in the mock assemblies.
     """
 
+    KIND = ComponentKind.DATA_SOURCE
+
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockWeatherConfig) -> None:
         """Builds the weather."""
         super().__init__(my_simulation_parameters, config)
@@ -232,6 +237,8 @@ class MockOccupancy(MockComponent):
 
     Stands in for the residents' occupancy (``UtspLpgConnector``) in the mock assemblies.
     """
+
+    KIND = ComponentKind.DATA_SOURCE
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockOccupancyConfig) -> None:
         """Builds the occupancy."""
@@ -498,6 +505,8 @@ class MockController(MockComponent):
     Stands in for a heater's thermostat (an L1 controller) in the mock assemblies.
     """
 
+    KIND = ComponentKind.L1_CONTROLLER
+
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockControllerConfig) -> None:
         """Builds the controller."""
         super().__init__(my_simulation_parameters, config)
@@ -544,6 +553,8 @@ class MockEms(MockComponent):
 
     Stands in for an energy manager in the mock assemblies.
     """
+
+    KIND = ComponentKind.L2_CONTROLLER
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockEmsConfig) -> None:
         """Builds the energy manager."""
@@ -959,6 +970,9 @@ class MockAggregator(DynamicComponent):
     constructor — one ``add_dynamic_default_connections`` call per source class — and nowhere else.
     """
 
+    #: A meter, as the real meters the mock observers stand in for.
+    KIND = ComponentKind.METER
+
     cost_relevance = CostRelevance.FREE_OF_COST
 
     #: KPI name to ``(output, aggregation)``.
@@ -1168,6 +1182,8 @@ class MockEnergyManager(MockAggregator):
     ``L2GenericEnergyManagementSystem`` in the weight refusal of the selector tests and in the library
     check's refusal of an observer port into a member an active option lacks.
     """
+
+    KIND = ComponentKind.L2_CONTROLLER
 
     GRID_BALANCE_KPI = "Grid balance"
 

@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Dict, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import ComponentKind, Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.components.generic_electrolyzer_h2 import read_electrolyzer_variant
 
 from hisim import loadtypes as lt
@@ -164,6 +164,8 @@ class PTXControllerConfig(ConfigBase):
 
 class PTXController(Component):
     """PtX  Controller."""
+
+    KIND = ComponentKind.L2_CONTROLLER
 
     cost_relevance = CostRelevance.FREE_OF_COST
 

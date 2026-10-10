@@ -110,6 +110,8 @@ class GasMeter(DynamicComponent):
     So far only gas consumers are represented here but gas producers can be added here too.
     """
 
+    KIND = cp.ComponentKind.METER
+
     cost_relevance = CostRelevance.METER
 
     # Outputs

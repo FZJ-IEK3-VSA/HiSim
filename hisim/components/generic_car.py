@@ -182,6 +182,8 @@ class Car(cp.Component):
     continue with a vehicle that never moves.
     """
 
+    KIND = cp.ComponentKind.PHYSICS
+
     cost_relevance = CostRelevance.PRICED
 
     # Outputs

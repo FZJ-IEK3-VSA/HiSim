@@ -97,9 +97,10 @@ The cost is a small, documented jump in results at the threshold itself, a step 
 - **Target band**: `[target, target + 0.05 K]`, the end temperatures the controller accepts
   (`PartLoadRule.TARGET_BAND_IN_KELVIN`); the **aim** is its middle, target + 0.025 K.
 - **Pass**: one evaluation of every component, kind by kind (data sources, L2 controllers, L1 controllers, physics,
-  meters) and within one kind in the order they were added, except that every device an L1 controller commands goes
-  before the other physics the controller reads (§4.3); the simulator repeats passes until no output moves by more
-  than 1e-4, and forces convergence on the passes after the twelfth.
+  meters) and within one kind in the order they were added, except that an L2 controller reading another L2 controller
+  follows it and that every device an L1 controller commands goes before the other physics the controller reads
+  (§4.3); the simulator repeats passes until no output moves by more than 1e-4, and forces convergence on the passes
+  after the twelfth.
 - **Threshold**: `SimulationParameters.part_load_above_seconds`, default 600 s. Above it, PLR may be below 1.
 
 ## 4. The mechanism (`hisim/part_load.py`)

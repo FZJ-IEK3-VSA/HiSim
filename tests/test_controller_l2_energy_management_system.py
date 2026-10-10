@@ -6,7 +6,7 @@ Investigate total consumption, total grid consumption and grid injection.
 
 import os
 import json
-from typing import Optional
+from typing import Optional, Tuple
 import pytest
 import numpy as np
 import pandas as pd
@@ -285,7 +285,7 @@ def test_house(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
-    )
+        )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -869,3 +869,129 @@ def test_a_device_that_publishes_no_dhw_power_grows_no_dhw_target() -> None:
         "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib_2",
         "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib_3",
     ]
+
+
+class TestSurplusHysteresis:
+
+    """The energy manager raises the set temperatures on a surplus, with a hysteresis band around zero surplus."""
+
+    BAND_IN_WATT = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.SURPLUS_HYSTERESIS_BAND_IN_WATT
+
+    #: The transition table: surplus after the battery in W, the previous step's decision, the decision.
+    TRANSITIONS = [
+        (500.0, False, True),
+        (500.0, True, True),
+        (0.0, False, False),
+        (0.0, True, True),
+        (5e-12, False, False),
+        (-5e-12, True, True),
+        (BAND_IN_WATT, False, False),
+        (-BAND_IN_WATT, True, True),
+        (BAND_IN_WATT * 1.5, False, True),
+        (-BAND_IN_WATT * 1.5, True, False),
+        (-500.0, False, False),
+        (-500.0, True, False),
+    ]
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("surplus_in_watt", "raised_in_previous_step", "expected"), TRANSITIONS)
+    def test_every_transition_of_the_table(self, surplus_in_watt: float, raised_in_previous_step: bool, expected: bool) -> None:
+        """Catches a decision that lags a real surplus, or that follows the sign of float noise inside the band.
+
+        Outside the band the sign decides at once; inside it, edges included, the previous step's decision holds.
+        """
+        decision = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.raises_set_temperatures(
+            surplus_after_battery_in_watt=surplus_in_watt, raised_in_previous_step=raised_in_previous_step
+        )
+        assert decision is expected
+
+    @pytest.mark.base
+    @pytest.mark.parametrize("surplus_in_watt", [float("nan"), float("inf"), float("-inf")])
+    def test_a_surplus_that_is_not_finite_is_refused(self, surplus_in_watt: float) -> None:
+        """Catches a NaN surplus passing as "within the band" and silently keeping the previous decision."""
+        with pytest.raises(ValueError, match="finite"):
+            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.raises_set_temperatures(
+                surplus_after_battery_in_watt=surplus_in_watt, raised_in_previous_step=False
+            )
+
+    @staticmethod
+    def manager_with_pv_and_hot_water_heat_pump() -> Tuple[
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        cp.ComponentOutput,
+        cp.SingleTimeStepValues,
+    ]:
+        """Build an energy manager fed by a PV system and a hot-water heat pump, and step values for it.
+
+        The PV system's production is a measured input; the heat pump is the one participant the manager steers. The
+        test wires the ports by hand and gives every output its index, as the simulator would.
+
+        Returns:
+            The manager, the PV system's electricity output in W, and the step values.
+        """
+        manager = _energy_manager()
+        pv_output = cp.ComponentOutput(
+            "PV",
+            "ElectricityOutput",
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            output_description="the PV system's production",
+            component_id=ComponentID(name="PV"),
+        )
+        manager.add_component_input_and_connect(
+            source_object_name="PV",
+            source_component_output="ElectricityOutput",
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.ComponentType.PV, lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            source_weight=999,
+        )
+        manager.inputs[-1].source_output = pv_output
+        heat_pump_output = _wire_measured_participant(manager, "HeatPump", lt.ComponentType.HEAT_PUMP_DHW, 3)
+        manager.add_component_output(
+            source_output_name="ElectricityToOrFromGridOfDHWHeatPump_",
+            source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_weight=3,
+            output_description="Target electricity for the hot-water heat pump.",
+        )
+        outputs = [pv_output, heat_pump_output, *manager.outputs]
+        for index, output in enumerate(outputs):
+            output.global_index = index
+        stsv = cp.SingleTimeStepValues(len(outputs))
+        stsv.set_output_value(heat_pump_output, 1000.0)
+        return manager, pv_output, stsv
+
+    @staticmethod
+    def hot_water_raise_in_kelvin(
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        pv_output: cp.ComponentOutput,
+        stsv: cp.SingleTimeStepValues,
+        surplus_in_watt: float,
+    ) -> float:
+        """Run one pass with the PV production that leaves this surplus beside the heat pump's 1000 W.
+
+        Returns:
+            The hot-water set-temperature raise the manager publishes, in K.
+        """
+        stsv.set_output_value(pv_output, 1000.0 + surplus_in_watt)
+        manager.i_restore_state()
+        manager.i_simulate(0, stsv, False)
+        return stsv.values[manager.domestic_hot_water_storage_temperature_modifier.global_index]
+
+    @pytest.mark.base
+    def test_the_band_keeps_the_decision_of_the_previous_step_not_of_the_previous_pass(self) -> None:
+        """Catches a decision that advances inside ``i_simulate``, which would make a pass depend on the pass before.
+
+        A surplus inside the band keeps the decision the last step converged to, whatever an earlier pass of the
+        same step decided; the converged decision becomes the next step's start only through ``i_save_state``.
+        """
+        manager, pv_output, stsv = self.manager_with_pv_and_hot_water_heat_pump()
+        offset_in_kelvin = manager.domestic_hot_water_storage_temperature_offset_value
+        manager.i_save_state()
+        assert self.hot_water_raise_in_kelvin(manager, pv_output, stsv, 200.0) == offset_in_kelvin
+        assert self.hot_water_raise_in_kelvin(manager, pv_output, stsv, 5e-12) == 0.0
+        assert self.hot_water_raise_in_kelvin(manager, pv_output, stsv, 200.0) == offset_in_kelvin
+        manager.i_save_state()
+        assert self.hot_water_raise_in_kelvin(manager, pv_output, stsv, -5e-12) == offset_in_kelvin
+        assert self.hot_water_raise_in_kelvin(manager, pv_output, stsv, -200.0) == 0.0

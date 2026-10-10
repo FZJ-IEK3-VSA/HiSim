@@ -405,9 +405,8 @@ class Simulator:
                 published = step_acceleration.published_values_of(indices, stsv)
                 # Executes i_simulate for component
                 wrapped_component.calculate_component(timestep, stsv, force_convergence)
-                if indices and force_convergence:
-                    step_acceleration.hold(indices, stsv, published)
-                elif indices:
+                # Forced convergence freezes the controllers, so the history no longer describes the map left to iterate.
+                if indices and not force_convergence:
                     step_acceleration.accelerate(indices, stsv, published)
 
             # Stops simulation for too small difference between

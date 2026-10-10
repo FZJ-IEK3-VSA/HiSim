@@ -1,7 +1,7 @@
 """The simulator accelerates the fixed-point iteration of the outputs a component declares accelerated.
 
 The pure rules of :mod:`hisim.fixed_point_acceleration` are tested first: the secant step, the under-relaxation of an
-oscillation, the fallbacks, the deadband and the refusals. The last tests run a toy loop through the simulator: a
+oscillation, the fallbacks and the refusals. The last tests run a toy loop through the simulator: a
 water node whose step mean answers a generator that holds a 15 K lift above it. The plain iteration of that loop
 needs more passes than the simulator allows before it forces convergence; with the node's step mean declared
 accelerated it converges within them, to the same answer.
@@ -24,7 +24,6 @@ from hisim.fixed_point_acceleration import (
     SecantAcceleration,
     StepAcceleration,
     accelerated_iterate,
-    held_value,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
@@ -148,15 +147,6 @@ def test_a_residual_that_overflows_is_refused() -> None:
     computed = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 1e308, 1e308]
     with pytest.raises(AccelerationHistoryError, match="previous residual"):
         accelerated_iterate(published_values=published, computed_values=computed)
-
-
-@pytest.mark.parametrize(
-    ("candidate_value", "expected"),
-    [(55.0 + 0.5e-9, 55.0), (55.0 - 1e-9, 55.0), (55.0 + 2e-9, 55.0 + 2e-9), (55.001, 55.001)],
-)
-def test_a_value_within_the_deadband_keeps_the_published_value(candidate_value: float, expected: float) -> None:
-    """Without the deadband an iteration alternating between two neighbouring floats would never settle."""
-    assert held_value(candidate_value=candidate_value, published_value=55.0) == expected
 
 
 class FakeStepValues:
@@ -357,10 +347,3 @@ def test_an_accelerated_node_converges_within_the_limit_to_the_plain_answer(tmp_
     assert max(plain_node.passes_by_step.values()) > 10
     assert max(fast_node.passes_by_step.values()) <= 10
     assert fast_mean_in_celsius == pytest.approx(plain_mean_in_celsius, abs=1e-3)
-
-
-def test_holding_keeps_the_published_value_within_the_deadband_and_extrapolates_nothing() -> None:
-    """Once convergence is forced the controllers are frozen; an extrapolation from their switching would mislead."""
-    stsv = FakeStepValues([55.0 + 0.5e-9, 61.0])
-    StepAcceleration.hold([0, 1], stsv, [55.0, 60.0])  # type: ignore[arg-type]  # a stand-in for the step values
-    assert stsv.values == [55.0, 61.0]

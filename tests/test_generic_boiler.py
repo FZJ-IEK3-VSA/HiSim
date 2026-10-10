@@ -644,3 +644,73 @@ def test_the_controller_states_its_hot_water_set_temperature() -> None:
     set_temperature_in_celsius = stsv.values[controller.supply_temperature_set_for_dhw_in_celsius_channel.global_index]
     assert set_temperature_in_celsius == 60.0 + config.hysteresis_water_temperature_offset
     assert set_temperature_in_celsius == controller.hot_water_supply_temperature_set_in_celsius
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("eff_th_min", "eff_th_max"),
+    [
+        (0.0, 0.9),  # no heat from a throttled step: the fuel divides by zero
+        (-0.1, 0.9),
+        (0.6, 0.0),
+        (float("nan"), 0.9),
+        (0.6, float("inf")),
+    ],
+)
+def test_a_boiler_with_impossible_combustion_efficiencies_is_refused(eff_th_min: float, eff_th_max: float) -> None:
+    """An efficiency of 0 or less, or one that is not finite, would divide by zero or book fuel without heat."""
+    with pytest.raises(ValueError, match="eff_th_m"):
+        generic_boiler.GenericBoilerConfig(
+            component_id=ComponentID(name="Boiler"),
+            energy_carrier=lt.LoadTypes.GAS,
+            boiler_type=generic_boiler.BoilerType.CONDENSING,
+            eff_th_min=eff_th_min,
+            eff_th_max=eff_th_max,
+        )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("eff_th_min", "eff_th_max"), [(0.6, 0.9), (0.9, 0.9), (0.01, 1.0)])
+def test_a_boiler_with_positive_combustion_efficiencies_is_accepted(eff_th_min: float, eff_th_max: float) -> None:
+    """The refusal must keep the edges ``eff_th_min == eff_th_max`` and ``eff_th_max == 1``, which real boilers use."""
+    config = generic_boiler.GenericBoilerConfig(
+        component_id=ComponentID(name="Boiler"),
+        energy_carrier=lt.LoadTypes.GAS,
+        boiler_type=generic_boiler.BoilerType.CONDENSING,
+        eff_th_min=eff_th_min,
+        eff_th_max=eff_th_max,
+    )
+    assert (config.eff_th_min, config.eff_th_max) == (eff_th_min, eff_th_max)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("maximal_flow_temperature_in_celsius", [0.0, -10.0, float("nan"), float("inf")])
+def test_a_boiler_without_a_finite_positive_maximal_flow_temperature_is_refused(maximal_flow_temperature_in_celsius: float) -> None:
+    """A maximum below every return would leave the space heating idle without a message."""
+    with pytest.raises(ValueError, match="maximal_flow_temperature_in_celsius"):
+        generic_boiler.GenericBoilerConfig(
+            component_id=ComponentID(name="Boiler"),
+            energy_carrier=lt.LoadTypes.GAS,
+            boiler_type=generic_boiler.BoilerType.CONDENSING,
+            maximal_flow_temperature_in_celsius=maximal_flow_temperature_in_celsius,
+        )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "preset",
+    [
+        generic_boiler.GenericBoilerConfig.preset_condensing_gas,
+        generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw,
+        generic_boiler.GenericBoilerConfig.preset_oil,
+        generic_boiler.GenericBoilerConfig.preset_oil_12kw,
+        generic_boiler.GenericBoilerConfig.preset_pellets,
+        generic_boiler.GenericBoilerConfig.preset_wood_chips,
+        generic_boiler.GenericBoilerConfig.preset_hydrogen,
+    ],
+)
+def test_every_boiler_preset_passes_the_config_checks(preset: Callable[[str], generic_boiler.GenericBoilerConfig]) -> None:
+    """A preset that the efficiency or flow-temperature checks refused could not be built at all."""
+    config = preset("Boiler")
+    assert 0.0 < config.eff_th_min <= config.eff_th_max <= 1.0  # the presets also keep the stricter physical bounds
+    assert config.maximal_flow_temperature_in_celsius > 0.0

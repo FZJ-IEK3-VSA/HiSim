@@ -12,6 +12,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 
 # Owned
 from dataclasses import dataclass, field
+import math
 from typing import ClassVar, List, Optional, Tuple
 from enum import Enum, unique
 import pandas as pd
@@ -218,6 +219,31 @@ class GenericBoilerConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: Optional[float] = None
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
     consumption_in_kilowatt_hour: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Refuse combustion efficiencies that are not finite and positive, and an unusable maximum flow temperature.
+
+        The burner's efficiency runs linearly from ``eff_th_min`` at its minimal to ``eff_th_max`` at its maximal
+        power, and its fuel is the heat over that efficiency. An efficiency of 0 divides by zero on a throttled step
+        and books fuel without heat on others. A maximum flow temperature that is not a finite positive number of
+        degrees lies below every return, so the boiler would silently never fire. For example, the defaults
+        0.6 / 0.9 / 80 °C are accepted, ``eff_th_min=0`` and ``maximal_flow_temperature_in_celsius=0`` are refused.
+
+        Raises:
+            ValueError: If ``eff_th_min`` or ``eff_th_max`` is not finite or not above 0, or if
+                ``maximal_flow_temperature_in_celsius`` is not finite or not above 0 °C.
+        """
+        for name, efficiency in (("eff_th_min", self.eff_th_min), ("eff_th_max", self.eff_th_max)):
+            if not math.isfinite(efficiency) or efficiency <= 0.0:
+                raise ValueError(
+                    f"The boiler's combustion efficiency {name} must be a finite number above 0, got {efficiency!r}: "
+                    "the burner's fuel is its heat over this efficiency."
+                )
+        if not math.isfinite(self.maximal_flow_temperature_in_celsius) or self.maximal_flow_temperature_in_celsius <= 0.0:
+            raise ValueError(
+                f"The boiler's maximal_flow_temperature_in_celsius must be a finite temperature above 0 °C, got "
+                f"{self.maximal_flow_temperature_in_celsius!r}: below the return the boiler would never fire."
+            )
 
     @staticmethod
     def sizing_facts(config: "GenericBoilerConfig", ctx: SizingContext) -> dict:

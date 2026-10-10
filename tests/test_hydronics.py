@@ -470,6 +470,23 @@ def test_an_idle_circuit_moves_no_water_and_supplies_its_return() -> None:
     assert idle == hydronics.CircuitStep(mass_flow_kg_per_s=0.0, t_supply_c=47.5, power_w=0.0)
 
 
+def test_a_circuit_at_part_load_carries_the_averaged_flow_at_its_full_load_supply() -> None:
+    """The documented example, and a ratio of 1 or outside [0, 1].
+
+    A part-loaded step that kept the full flow, or booked the full-load heat for the averaged flow, would book heat its
+    water does not carry; a ratio outside [0, 1] is a controller error that must stop the step.
+    """
+    full_load = hydronics.CircuitStep(mass_flow_kg_per_s=0.0144, t_supply_c=75.0, power_w=1504.8)
+    part = full_load.at_part_load(part_load_ratio=0.5, t_return_c=50.0)
+    assert part.mass_flow_kg_per_s == pytest.approx(0.0072, rel=1e-12)
+    assert part.t_supply_c == 75.0
+    assert part.power_w == pytest.approx(752.4, rel=1e-12)
+    assert full_load.at_part_load(part_load_ratio=1.0, t_return_c=50.0) is full_load
+    for ratio in (-0.1, 1.5):
+        with pytest.raises(ValueError, match="part-load ratio"):
+            full_load.at_part_load(part_load_ratio=ratio, t_return_c=50.0)
+
+
 # --- supply limits --------------------------------------------------------------------------------------------
 
 

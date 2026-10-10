@@ -6,9 +6,11 @@ A rig points every input a test drives at a fake output and steps the component 
 
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
+
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.components import generic_boiler, simple_water_storage
+from hisim.components import generic_boiler, simple_water_storage, solar_thermal_system
 from hisim.components.dual_circuit_system import HeatingMode
 from hisim.config import ComponentID, SizingContext
 from hisim.part_load import PartLoadRule
@@ -304,3 +306,133 @@ class BoilerControllerRig:
             ("outside_c", 0.0),
         ):
             stsv.set_output_value(fakes[name], value)
+
+
+class AllInputsRig:
+    """A component whose every input reads a fake output of its own, set and read by field name."""
+
+    @staticmethod
+    def build(component: Any) -> Tuple[Any, Dict[str, Any]]:
+        """Point every input of ``component`` at its own fake output; return the step values and the fakes by name.
+
+        Args:
+            component: The component under test.
+
+        Returns:
+            The step values and the fakes keyed by the field name of the input each one feeds.
+        """
+        channels = [(component_input, lt.LoadTypes.ANY, lt.Units.ANY) for component_input in component.inputs]
+        stsv, fakes = Rig.wire(component, channels)
+        return stsv, {component_input.field_name: fake for component_input, fake in zip(component.inputs, fakes)}
+
+    @staticmethod
+    def step(
+        component: Any,
+        stsv: Any,
+        fakes: Dict[str, Any],
+        values: Dict[str, float],
+        *,
+        timestep: int = 0,
+        force_convergence: bool = False,
+    ) -> Dict[str, float]:
+        """Write ``values`` into the fakes (every other fake reads 0), simulate one pass and return the outputs by name.
+
+        Args:
+            component: The component under test.
+            stsv: Its step values.
+            fakes: Its fakes by input field name.
+            values: The input values by field name.
+            timestep: The step number passed to ``i_simulate``.
+            force_convergence: Whether the pass is forced.
+
+        Returns:
+            Every output of the component by field name.
+        """
+        for field_name, fake in fakes.items():
+            stsv.set_output_value(fake, values.get(field_name, 0.0))
+        component.i_simulate(timestep, stsv, force_convergence)
+        return {output.field_name: Rig.output(stsv, output) for output in component.outputs}
+
+
+class CollectorRig:
+    """A flat-plate collector on a hot-water tank at noon, one step on fake inputs."""
+
+    @staticmethod
+    def charge(seconds_per_timestep: int, ratio: float, control_signal: float = 1.0) -> Dict[str, float]:
+        """Return every output of one step at a 45 °C tank mean, 800 W/m² global and 100 W/m² diffuse irradiance.
+
+        The sun stands 30° from the zenith due south (no weather file, no cache).
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            ratio: The part-load ratio the controller commands.
+            control_signal: The controller's pump signal, 1 for running.
+
+        Returns:
+            The collector's outputs by field name.
+        """
+        config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(
+            SizingContext(number_of_apartments=1)
+        )
+        collector = solar_thermal_system.SolarThermalSystem(
+            config=config, my_simulation_parameters=Parameters.one_day(seconds_per_timestep)
+        )
+        collector.apparent_zenith = np.array([30.0])
+        collector.solar_azimuth = np.array([180.0])
+        stsv, fakes = AllInputsRig.build(collector)
+        system = solar_thermal_system.SolarThermalSystem
+        return AllInputsRig.step(
+            collector,
+            stsv,
+            fakes,
+            {
+                system.ControlSignal: control_signal,
+                system.GlobalHorizontalIrradianceWM2: 800.0,
+                system.DiffuseHorizontalIrradianceWM2: 100.0,
+                system.TemperatureOutsideDegC: 20.0,
+                system.TemperatureCollectorInletDegC: 45.0,
+                system.PartLoadRatio: ratio,
+            },
+        )
+
+
+class SolarControllerRig:
+    """The solar pump's controller on fake inputs: the storage's temperatures and the collector's answer."""
+
+    @staticmethod
+    def build(seconds_per_timestep: int, **extra: Any) -> Tuple[Any, Any, Dict[str, Any]]:
+        """Return the controller, its step values and its fakes by field name.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+            **extra: Further simulation-parameter arguments.
+
+        Returns:
+            The controller, its step values and its fakes.
+        """
+        config = solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
+        controller = solar_thermal_system.SolarThermalSystemController(
+            my_simulation_parameters=Parameters.one_day(seconds_per_timestep, **extra), config=config
+        )
+        stsv, fakes = AllInputsRig.build(controller)
+        return controller, stsv, fakes
+
+    @staticmethod
+    def values(*, start_c: float, end_c: float, ratio_run: float = 1.0) -> Dict[str, float]:
+        """Return the controller's inputs for a sunny collector, the storage's temperatures and the pump's ratio run.
+
+        Args:
+            start_c: The storage's start-of-step temperature, °C.
+            end_c: The storage's end-of-step temperature, °C.
+            ratio_run: The part-load ratio the collector reports its pump ran with.
+
+        Returns:
+            The input values by field name.
+        """
+        controller_class = solar_thermal_system.SolarThermalSystemController
+        return {
+            controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
+            controller_class.StorageTemperatureAtEndOfStepInCelsius: end_c,
+            controller_class.MassFlow: 0.03,
+            controller_class.PartLoadRatioRun: ratio_run,
+        }

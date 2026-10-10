@@ -1,7 +1,7 @@
 # The condensing gas boiler with its modulating L1 controller and its space-heating buffer (D12 b, D25: the assembly
 # WITH the buffer), charging a DHW cylinder through its `dhw` circuit (D29: this assembly serves DHW; a boiler for
 # space heating only is an assembly of its own). Control is hardcoded here (D21): the Controller modulates the burner
-# on the buffer temperature against the flow temperature the site's HeatDistributionController asks for, and on the
+# on the buffer temperature against the flow temperature the site's HeatingCurveController sets, and on the
 # cylinder temperature; it reads no energy manager, so the assembly offers no `ems_modifier`.
 #
 # The members expand as one block in the order their lines stand here, the twin's CondensingGasBoiler,
@@ -22,10 +22,6 @@ parameters:
      description: 'Maximal fuel input power (the heat delivered is this times the combustion efficiency); AUTO
        is the class law, sized from the heating load and the apartments.'}
      # range: wall-hung condensing boilers of a flat (5 kW) up to a floor-standing one of a large old house (40 kW)
-  heating_threshold_in_celsius:
-    {type: float, unit: CELSIUS, default: 18.0, range: {min: 10.0, max: 22.0},
-     description: Daily mean outside temperature above which the controller stops space heating.}
-     # range: heating limits of German practice, 10 °C for a passive house up to 22 °C for an unrenovated one
 
 components:
   Boiler:
@@ -41,11 +37,9 @@ components:
     class: hisim.components.generic_boiler.GenericBoilerController
     preset: modulating
     config:
-      set_heating_threshold_outside_temperature_in_celsius: {$param: heating_threshold_in_celsius}
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
     inputs:
-      - {$port: weather}                                    # DailyAverageOutsideTemperature
-      - {$port: flow_temperature}                           # HeatingFlowTemperatureFromHeatDistributionSystem
+      - {$port: heating_curve}                              # SpaceHeatingSupplyTemperatureSetInCelsius, HeatingSeason
       - Boiler                                              # PartLoadRatioRunDhw, the ratio the hot-water charge ran
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromDHWStorage
       - Buffer                                              # WaterTemperatureInputFromWaterStorage
@@ -60,8 +54,7 @@ components:
 
 interface:
   needs:
-    weather:          {into: [Controller], partner: Weather}
-    flow_temperature: {into: [Controller], partner: HeatDistributionController}   # a set-point need (G1)
+    heating_curve:    {into: [Controller], partner: HeatingCurveController}       # a set-point need (G1): supply set point and heating season
     dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
                       # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
     fuel:             {carrier: natural_gas, outputs: [Boiler.EnergyDemandSh, Boiler.EnergyDemandDhw]}
@@ -118,10 +111,6 @@ tests:
     - {parameter: power_in_watt, kpi: Standby heat loss of Hot water storage, member: Buffer,
        direction: increasing}
       # the buffer's volume follows the boiler's power (SIZE_ACCORDING_TO_GAS_HEATER): a larger vessel has more surface
-    - {parameter: heating_threshold_in_celsius, kpi: Total Gas consumption (energy), member: Boiler,
-       direction: increasing}
-      # a higher heating limit heats on more days, never on fewer; on the test day (1 January) every limit of the
-      # range lies above the daily mean, so the sweep is flat
   expect:
     - {kpi: Total Gas consumption (energy), member: Boiler, min: 110, max: 150}
       # 129.7 kWh measured at the defaults on the test day (1 January, Aachen), 17.1 kWh of it for DHW

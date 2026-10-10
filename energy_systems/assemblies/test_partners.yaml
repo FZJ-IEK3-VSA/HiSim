@@ -43,14 +43,23 @@ partners:
         enable_opening_windows: true
         weather_identity: Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
       inputs: [Weather, UTSPConnector]
-  HeatDistributionController:
-    serves: [{partner: HeatDistributionController}, {fact: heat_distribution_system_type},
-             {fact: set_heating_threshold_outside_temperature_in_celsius}]
+  HeatingCurveController:
+    # The heating curve: the supply temperature set point and the heating season every space-heating L1 controller
+    # reads. The emitter type it is drawn for is the heat distribution controller's fact; that partner stands in every
+    # system the curve does, since the heat distribution beside a heating assembly requires it.
+    serves: [{partner: HeatingCurveController}]
     requires: [Weather, Building]
+    component:
+      class: hisim.components.heating_curve.HeatingCurveController
+      preset: building_derived
+      inputs: [Weather]
+  HeatDistributionController:
+    serves: [{partner: HeatDistributionController}, {fact: heat_distribution_system_type}]
+    requires: [Building, HeatingCurveController]
     component:
       class: hisim.components.heat_distribution_system.HeatDistributionController
       preset: building_derived
-      inputs: [Weather, Building]
+      inputs: [Building, HeatingCurveController]
   HeatDistributionSystem:
     # The other end of a heating assembly's space_heating circuit: it pumps and owns the return leg.
     serves: {circuit: space_heating, other_end: [SimpleHotWaterStorage]}
@@ -134,11 +143,11 @@ partners:
         cylinder: {partner: SimpleDHWStorage}
   HeatPumpControllerSH:
     # Reads the heat pump's buffer, which joins with the heat pump: it reads it without requiring it.
-    requires: [Weather, HeatDistributionController]
+    requires: [Weather, HeatingCurveController]
     component:
       class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
       preset: standard
-      inputs: [Weather, HeatDistributionController, Buffer]
+      inputs: [Weather, HeatingCurveController, Buffer]
   Buffer:
     # Reads the heat pump it joins with, without requiring it back.
     requires: [HeatDistributionSystem]
@@ -177,14 +186,13 @@ partners:
         fuel: {carrier: natural_gas, outputs: [EnergyDemandSh, EnergyDemandDhw]}
   GasBoilerController:
     # Reads the buffer and the cylinder, which join with the boiler: it reads them without requiring them.
-    requires: [Weather, HeatDistributionController]
+    requires: [HeatingCurveController]
     component:
       class: hisim.components.generic_boiler.GenericBoilerController
       preset: modulating
       config:
-        set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
-      inputs: [Weather, HeatDistributionController, GasBoiler, GasCylinder, GasBuffer]
+      inputs: [HeatingCurveController, GasBoiler, GasCylinder, GasBuffer]
   GasBuffer:
     # Reads the boiler it joins with, without requiring it back.
     requires: [HeatDistributionSystem]
@@ -226,14 +234,13 @@ partners:
       ports:
         fuel: {carrier: heating_oil, outputs: [EnergyDemandSh, EnergyDemandDhw]}
   OilBoilerController:
-    requires: [Weather, HeatDistributionController]
+    requires: [HeatingCurveController]
     component:
       class: hisim.components.generic_boiler.GenericBoilerController
       preset: modulating
       config:
-        set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
-      inputs: [Weather, HeatDistributionController, OilBoiler, OilCylinder, OilBuffer]
+      inputs: [HeatingCurveController, OilBoiler, OilCylinder, OilBuffer]
   OilBuffer:
     requires: [HeatDistributionSystem]
     component:
@@ -271,16 +278,15 @@ partners:
       ports:
         fuel: {carrier: pellets, outputs: [EnergyDemandSh, EnergyDemandDhw]}
   PelletBoilerController:
-    requires: [Weather, HeatDistributionController]
+    requires: [HeatingCurveController]
     component:
       class: hisim.components.generic_boiler.GenericBoilerController
       preset: on_off
       config:
-        set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
         minimum_runtime_in_seconds: 1800.0
         minimum_resting_time_in_seconds: 900.0
-      inputs: [Weather, HeatDistributionController, PelletBoiler, PelletCylinder, PelletBuffer]
+      inputs: [HeatingCurveController, PelletBoiler, PelletCylinder, PelletBuffer]
   PelletBuffer:
     requires: [HeatDistributionSystem]
     component:
@@ -320,16 +326,15 @@ partners:
       ports:
         fuel: {carrier: wood_chips, outputs: [EnergyDemandSh, EnergyDemandDhw]}
   WoodChipBoilerController:
-    requires: [Weather, HeatDistributionController]
+    requires: [HeatingCurveController]
     component:
       class: hisim.components.generic_boiler.GenericBoilerController
       preset: on_off
       config:
-        set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
         minimum_runtime_in_seconds: 3600.0
         minimum_resting_time_in_seconds: 1800.0
-      inputs: [Weather, HeatDistributionController, WoodChipBoiler, WoodChipCylinder, WoodChipBuffer]
+      inputs: [HeatingCurveController, WoodChipBoiler, WoodChipCylinder, WoodChipBuffer]
   WoodChipBuffer:
     requires: [HeatDistributionSystem]
     component:
@@ -369,14 +374,13 @@ partners:
       ports:
         fuel: {carrier: hydrogen, outputs: [EnergyDemandSh, EnergyDemandDhw]}
   HydrogenBoilerController:
-    requires: [Weather, HeatDistributionController]
+    requires: [HeatingCurveController]
     component:
       class: hisim.components.generic_boiler.GenericBoilerController
       preset: modulating
       config:
-        set_heating_threshold_outside_temperature_in_celsius: 18.0
         with_domestic_hot_water_preparation: true
-      inputs: [Weather, HeatDistributionController, HydrogenBoiler, HydrogenCylinder, HydrogenBuffer]
+      inputs: [HeatingCurveController, HydrogenBoiler, HydrogenCylinder, HydrogenBuffer]
   HydrogenBuffer:
     requires: [HeatDistributionSystem]
     component:
@@ -422,14 +426,14 @@ partners:
         fuel: {carrier: district_heat, outputs: [ThermalOutputShEnergy, ThermalOutputDhwEnergy]}
   DistrictHeatingConsumerController:
     # Reads the distribution and the cylinder, which join with the connection: it reads them without requiring them.
-    requires: [Weather, HeatDistributionController]
+    requires: [HeatingCurveController]
     component:
       class: hisim.components.generic_district_heating.DistrictHeatingController
       preset: standard
       config:
         with_domestic_hot_water_preparation: true
         parallel_space_heating_and_dhw_option: true
-      inputs: [Weather, HeatDistributionController, HeatDistributionSystemWithoutStorage, DistrictHeatingCylinder]
+      inputs: [HeatingCurveController, HeatDistributionSystemWithoutStorage, DistrictHeatingCylinder]
   DistrictHeatingCylinder:
     requires: [UTSPConnector]
     component:

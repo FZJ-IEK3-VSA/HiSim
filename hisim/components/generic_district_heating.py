@@ -41,11 +41,8 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim.components.heat_distribution_system import (
-    HeatDistributionController,
-    HeatDistribution,
-)
-from hisim.components.weather import Weather
+from hisim.components.heat_distribution_system import HeatDistribution
+from hisim.components.heating_curve import HeatingCurveController
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
@@ -955,28 +952,16 @@ class DistrictHeatingControllerConfig(ConfigBase):
 
     The valve logic in front of the connection: it decides each time step whether the heat
     taken from the network goes to space heating, to domestic hot water, to both at once or
-    nowhere, and it stops space heating once the daily average outside temperature has
-    risen above the heating threshold. The named default is :meth:`preset_standard`; the
-    threshold belongs to the emitter circuit rather than to the connection, so it is
-    sizable and ``.resolve(ctx)`` copies it from the heat distribution controller's facts::
+    nowhere. It aims space heating at the supply temperature the heating curve publishes and
+    heats only in the heating season the curve publishes, so the controller switches off on the
+    same day as the circuit it feeds. The named default is :meth:`preset_standard`::
 
-        DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController").resolve(
-            SizingContext(set_heating_threshold_outside_temperature_in_celsius=18.0)
-        )
-
-    Copying rather than restating is the point: a generator controller that switched off on
-    a different day than the circuit it feeds would heat into a circuit that has stopped.
+        DistrictHeatingControllerConfig.preset_standard("DistrictHeatingController")
     """
 
     MAIN_CLASS = "hisim.components.generic_district_heating.DistrictHeatingController"
 
     component_id: ComponentID
-    #: Daily average outside temperature above which nothing heats, copied from the emitter
-    #: circuit. Sizable: left ``AUTO`` it is the threshold the heat distribution controller
-    #: resolved to, so both switch off on the same day.
-    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=Size.SET_HEATING_THRESHOLD_OUTSIDE_TEMPERATURE_IN_CELSIUS
-    )
     #: Whether the connection this controls also prepares domestic hot water, in which case
     #: the controller reads the vessel's temperature and can prioritise it over space heating.
     with_domestic_hot_water_preparation: bool = False
@@ -990,19 +975,17 @@ class DistrictHeatingControllerConfig(ConfigBase):
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "DistrictHeatingControllerConfig":
-        """The one district heating controller the fleet runs, taking its limit from the emitter circuit.
+        """The one district heating controller the fleet runs.
 
         The field defaults are that controller: space heating only, exclusive of hot water
         where the connection prepares it as well, and a fifteen-kelvin hysteresis band on
-        the water temperature. What the preset does not fix is the heating threshold, which
-        stays ``AUTO`` so that it is copied from the heat distribution controller instead of
-        repeating its choice here.
+        the water temperature.
 
         Args:
             name: Instance name of the controller in the simulation.
 
         Returns:
-            The configuration, with its one sizable field still ``AUTO``.
+            The configuration.
         """
         return cls(component_id=ComponentID(name=name))
 
@@ -1014,10 +997,9 @@ class DistrictHeatingController(L1ControllerComponent):
 
     # Inputs
     WaterTemperatureInputFromHeatDistributionSystem = "WaterTemperatureInputFromHeatDistributionSystem"
-    # set heating  flow temperature
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
-
-    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+    # The heating curve's signals: the space-heating supply temperature to aim at, and the heating season.
+    SpaceHeatingSupplyTemperatureSetInCelsius = "SpaceHeatingSupplyTemperatureSetInCelsius"
+    HeatingSeason = "HeatingSeason"
 
     # Relevant when used for dhw as well
     WaterTemperatureInputFromWarmWaterStorage = "WaterTemperatureInputFromWarmWaterStorage"
@@ -1060,11 +1042,18 @@ class DistrictHeatingController(L1ControllerComponent):
             Units.CELSIUS,
             True,
         )
-        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
+        self.supply_temperature_set_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.HeatingFlowTemperatureFromHeatDistributionSystem,
+            self.SpaceHeatingSupplyTemperatureSetInCelsius,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
+            True,
+        )
+        self.heating_season_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingSeason,
+            LoadTypes.ANY,
+            Units.ANY,
             True,
         )
 
@@ -1076,13 +1065,6 @@ class DistrictHeatingController(L1ControllerComponent):
                 Units.CELSIUS,
                 True,
             )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.DailyAverageOutsideTemperature,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
-        )
 
         self.delta_temperature_for_dhw_to_district_heating_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1122,9 +1104,8 @@ class DistrictHeatingController(L1ControllerComponent):
             output_description="Operating mode of district heating.",
         )
 
-        self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_heat_distribution())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+        self.add_default_connections(self.get_default_connections_from_heating_curve())
 
         if self.config.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
@@ -1163,37 +1144,25 @@ class DistrictHeatingController(L1ControllerComponent):
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
-        """Get simple_water_storage default connections."""
+    @staticmethod
+    def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
+        """Return the connections of the supply temperature set point and the heating season from the heating curve.
 
-        connections = []
-        weather_classname = Weather.get_classname()
-        connections.append(
+        Returns:
+            The two connections.
+        """
+        return [
             ComponentConnection(
-                DistrictHeatingController.DailyAverageOutsideTemperature,
-                weather_classname,
-                Weather.DailyAverageOutsideTemperatures,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
-        """Get heat distribution controller default connections."""
-
-        connections = []
-        hds_controller_classname = HeatDistributionController.get_classname()
-        connections.append(
+                DistrictHeatingController.SpaceHeatingSupplyTemperatureSetInCelsius,
+                HeatingCurveController.get_classname(),
+                HeatingCurveController.SpaceHeatingSupplyTemperatureSetInCelsius,
+            ),
             ComponentConnection(
-                DistrictHeatingController.HeatingFlowTemperatureFromHeatDistributionSystem,
-                hds_controller_classname,
-                HeatDistributionController.HeatingFlowTemperature,
-            )
-        )
-        return connections
+                DistrictHeatingController.HeatingSeason,
+                HeatingCurveController.get_classname(),
+                HeatingCurveController.HeatingSeason,
+            ),
+        ]
 
     def build(
         self,
@@ -1247,23 +1216,17 @@ class DistrictHeatingController(L1ControllerComponent):
             self.water_temperature_input_channel_sh
         )
 
-        heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(
-            self.heating_flow_temperature_from_heat_distribution_system_channel
-        )
+        heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(self.supply_temperature_set_channel)
         water_temperature_input_from_warm_water_storage_in_celsius = None
         if self.config.with_domestic_hot_water_preparation:
             water_temperature_input_from_warm_water_storage_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_channel_dhw
             )
 
-        daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-            self.daily_avg_outside_temperature_input_channel
-        )
-
         # Determine which operating mode to use in dual-circuit system
         delta_temperature_for_dhw_in_celsius, delta_temperature_for_space_heating_in_celsius = (
             self.determine_operating_mode(
-                daily_avg_outside_temperature_in_celsius,
+                stsv.get_input_value(self.heating_season_channel) > 0.5,
                 water_temperature_input_from_heat_distibution_in_celsius,
                 heating_flow_temperature_from_heat_distribution_in_celsius,
                 water_temperature_input_from_warm_water_storage_in_celsius,
@@ -1286,7 +1249,7 @@ class DistrictHeatingController(L1ControllerComponent):
 
     def determine_operating_mode(
         self,
-        daily_avg_outside_temperature_in_celsius: float,
+        is_heating_season: bool,
         sh_current_temperature_deg_c: float,
         sh_set_temperature_deg_c: float,
         dhw_current_temperature_deg_c: Optional[float],
@@ -1296,7 +1259,7 @@ class DistrictHeatingController(L1ControllerComponent):
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=self.controller_mode,
-            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+            is_heating_season=is_heating_season,
             water_temperature_input_sh_in_celsius=sh_current_temperature_deg_c,
             water_temperature_input_dhw_in_celsius=(
                 dhw_current_temperature_deg_c if self.config.with_domestic_hot_water_preparation else None
@@ -1305,9 +1268,6 @@ class DistrictHeatingController(L1ControllerComponent):
                 set_temperature_space_heating_in_celsius=sh_set_temperature_deg_c,
                 set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset_in_celsius,
-                outside_temperature_threshold_in_celsius=concrete(
-                    self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
-                ),
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )

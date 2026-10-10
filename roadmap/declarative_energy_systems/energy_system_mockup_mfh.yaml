@@ -74,15 +74,23 @@ groups:
           - input: TemperatureInputPrimary
             from: weather.DailyAverageOutsideTemperatures
 
+      heating_curve:
+        class: hisim.components.heating_curve.HeatingCurveController
+        preset: building_derived            # one curve for the central heating: the supply set point and the season
+        inputs:
+          - weather
+          - ems
+        sizing_sources:                     # three HDS controllers provide the emitter type -> say which
+          heat_distribution_system_type: apt1_hds_controller.heat_distribution_system_type
+
       heat_pump_controller_sh:
         class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
         preset: standard
         inputs:
           - weather
+          - heating_curve
           - buffer_storage
           - ems
-          # no HDS controller input: three of them exist; the SH controller follows the
-          # buffer temperature instead (preset `standard` allows an unconnected HDS input? -> O7)
         sizing_sources:                     # heat pump + 3 DHW heaters provide the power band
           maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
 
@@ -204,9 +212,8 @@ groups:
         config:
           absolute_conditioned_floor_area_in_m2: 62   # O5: no per-unit building facts yet -> explicit
         inputs:
-          - weather
           - building
-          - ems
+          - heating_curve
 
       apt1_hds:
         class: hisim.components.heat_distribution_system.HeatDistribution
@@ -281,9 +288,8 @@ groups:
         config:
           absolute_conditioned_floor_area_in_m2: 88   # O5: no per-unit building facts yet -> explicit
         inputs:
-          - weather
           - building
-          - ems
+          - heating_curve
 
       apt2_hds:
         class: hisim.components.heat_distribution_system.HeatDistribution
@@ -358,9 +364,8 @@ groups:
         config:
           absolute_conditioned_floor_area_in_m2: 120   # O5: no per-unit building facts yet -> explicit
         inputs:
-          - weather
           - building
-          - ems
+          - heating_curve
 
       apt3_hds:
         class: hisim.components.heat_distribution_system.HeatDistribution
@@ -424,9 +429,9 @@ groups:
 #      format does not change for that; only the fact names do.
 #  O6  The Building has one occupancy input; three occupancies need an aggregating
 #      input (dynamic connection on the Building, like heat sources) — component work.
-#  O7  The heat pump SH controller expects one HDS controller; with three, the
-#      controller-of-controllers question is a modeling question, not a format one.
-#      Marked here because a format mockup must not paper over it.
+#  O7  The heat pump SH controller follows one heating curve; the three apartments'
+#      emitters differ, so the one curve of the central heating is drawn for the first
+#      apartment's emitter (a sizing_sources line), a modeling question, not a format one.
 #  O8  Readability at this size: 35 components, ~430 lines. The apartment groups
 #      are 95 % identical — the strongest argument yet for the R5 template layer
 #      (`template: apartment`, three named instances), which would cut this to

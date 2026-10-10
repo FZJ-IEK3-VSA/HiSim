@@ -47,14 +47,14 @@ The `Overrides` column counts the components the grouping table assigns `overrid
 
 ## `household_district_heating_building_sizer`
 
-Recorded from `system_setups/household_district_heating_building_sizer.py`, described in the grouped file as "District heating household system setup with building sizing support." 10 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Five of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_district_heating_building_sizer.py`, described in the grouped file as "District heating household system setup with building sizing support." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Five of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_district_heating_building_sizer"]
-    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>DistrictHeatingController<br/>DHWStorage<br/>FuelMeter"]
+    fixed["fixed in every configuration (6)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DistrictHeatingController<br/>DHWStorage<br/>FuelMeter"]
     knobs["knobs, stated at the baseline value (5)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>DistrictHeating<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -70,7 +70,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — ten components, of which the five knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the five knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -153,14 +153,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_gas_building_sizer`
 
-Recorded from `system_setups/household_gas_building_sizer.py`, described in the grouped file as "Basic household new system setup." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_gas_building_sizer.py`, described in the grouped file as "Basic household new system setup." 12 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_gas_building_sizer"]
-    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>DHWStorage<br/>GasMeter"]
+    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DHWStorage<br/>GasMeter"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>CondensingGasBoiler<br/>ModulatingBoilerController<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -176,7 +176,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — twelve components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -209,19 +209,19 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_gas_solar_thermal`
 
-Recorded from `system_setups/household_gas_solar_thermal.py`, described in the grouped file as "Household setup with gas boiler and solar thermal system for DHW." 13 components are shared by every configuration, and the grouped file declares no variant group.
+Recorded from `system_setups/household_gas_solar_thermal.py`, described in the grouped file as "Household setup with gas boiler and solar thermal system for DHW." 14 components are shared by every configuration, and the grouped file declares no variant group.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_gas_solar_thermal"]
-    fixed["fixed in every configuration (13)<br/>Building<br/>UTSPConnector<br/>Weather<br/>HeatDistributionSystem<br/>HeatDistributionController<br/>DHWStorage<br/>SimpleHotWaterStorage<br/>ElectricityMeter<br/>CondensingGasBoiler<br/>ModulatingBoilerController<br/>GasMeter<br/>SolarThermalSystem<br/>SolarThermalSystemController"]
+    fixed["fixed in every configuration (14)<br/>Building<br/>UTSPConnector<br/>Weather<br/>HeatDistributionSystem<br/>HeatDistributionController<br/>HeatingCurveController<br/>DHWStorage<br/>SimpleHotWaterStorage<br/>ElectricityMeter<br/>CondensingGasBoiler<br/>ModulatingBoilerController<br/>GasMeter<br/>SolarThermalSystem<br/>SolarThermalSystemController"]
 
     setup --> fixed
 ```
 
-The first box is the grouped file's shared `components:` section — 13 components, none of them a knob — and the setup has no variant group, so that is every component it has.
+The first box is the grouped file's shared `components:` section — 14 components, none of them a knob — and the setup has no variant group, so that is every component it has.
 
 ### Assignments
 
@@ -241,14 +241,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_gas_solar_thermal_building_sizer`
 
-Recorded from `system_setups/household_gas_solar_thermal_building_sizer.py`, described in the grouped file as "Basic household system setup. Shows how to set up a standard system." 13 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_gas_solar_thermal_building_sizer.py`, described in the grouped file as "Basic household system setup. Shows how to set up a standard system." 14 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_gas_solar_thermal_building_sizer"]
-    fixed["fixed in every configuration (6)<br/>UTSPConnector<br/>Weather<br/>SolarThermalSystem<br/>SolarThermalSystemController<br/>DHWStorage<br/>GasMeter"]
+    fixed["fixed in every configuration (7)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>SolarThermalSystem<br/>SolarThermalSystemController<br/>DHWStorage<br/>GasMeter"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>CondensingGasBoiler<br/>ModulatingBoilerController<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -264,7 +264,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — 13 components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — 14 components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -297,14 +297,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_heatpump_building_sizer`
 
-Recorded from `system_setups/household_heatpump_building_sizer.py`, described in the grouped file as "Basic household new system setup." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_heatpump_building_sizer.py`, described in the grouped file as "Basic household new system setup." 12 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_heatpump_building_sizer"]
-    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>HeatPumpControllerDHW<br/>DHWStorage"]
+    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>HeatPumpControllerDHW<br/>DHWStorage"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>MoreAdvancedHeatPumpHPLibControllerSH<br/>MoreAdvancedHeatPumpHPLib<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -320,7 +320,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — twelve components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -353,14 +353,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_heatpump_car_building_sizer`
 
-Recorded from `system_setups/household_heatpump_car_building_sizer.py`, described in the grouped file as "Basic household new system setup." 14 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_heatpump_car_building_sizer.py`, described in the grouped file as "Basic household new system setup." 15 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_heatpump_car_building_sizer"]
-    fixed["fixed in every configuration (7)<br/>UTSPConnector<br/>Weather<br/>HeatPumpControllerDHW<br/>DHWStorage<br/>Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0<br/>CarBattery_1<br/>L1EVChargeControl_1"]
+    fixed["fixed in every configuration (8)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>HeatPumpControllerDHW<br/>DHWStorage<br/>Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0<br/>CarBattery_1<br/>L1EVChargeControl_1"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>MoreAdvancedHeatPumpHPLibControllerSH<br/>MoreAdvancedHeatPumpHPLib<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -376,7 +376,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — 14 components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — 15 components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -409,14 +409,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_heatpump_solar_thermal_building_sizer`
 
-Recorded from `system_setups/household_heatpump_solar_thermal_building_sizer.py`, described in the grouped file as "Basic household system setup. Shows how to set up a standard system." 13 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_heatpump_solar_thermal_building_sizer.py`, described in the grouped file as "Basic household system setup. Shows how to set up a standard system." 14 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_heatpump_solar_thermal_building_sizer"]
-    fixed["fixed in every configuration (6)<br/>UTSPConnector<br/>Weather<br/>SolarThermalSystem<br/>SolarThermalSystemController<br/>DHWStorage<br/>HeatPumpControllerDHW"]
+    fixed["fixed in every configuration (7)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>SolarThermalSystem<br/>SolarThermalSystemController<br/>DHWStorage<br/>HeatPumpControllerDHW"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>MoreAdvancedHeatPumpHPLib<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem<br/>MoreAdvancedHeatPumpHPLibControllerSH"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -432,7 +432,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — 13 components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — 14 components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -465,14 +465,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_hydrogen_boiler_building_sizer`
 
-Recorded from `system_setups/household_hydrogen_boiler_building_sizer.py`, described in the grouped file as "Basic household new system setup." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_hydrogen_boiler_building_sizer.py`, described in the grouped file as "Basic household new system setup." 12 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_hydrogen_boiler_building_sizer"]
-    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>DHWStorage<br/>GasMeter"]
+    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DHWStorage<br/>GasMeter"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>CondensingHydrogenBoiler<br/>ModulatingBoilerController<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -488,7 +488,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — twelve components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -521,14 +521,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_oil_building_sizer`
 
-Recorded from `system_setups/household_oil_building_sizer.py`, described in the grouped file as "Household system setup with an oil-based heating system (building-sizer variant)." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_oil_building_sizer.py`, described in the grouped file as "Household system setup with an oil-based heating system (building-sizer variant)." 12 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_oil_building_sizer"]
-    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>DHWStorage<br/>FuelMeter"]
+    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DHWStorage<br/>FuelMeter"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>ConventionalOilBoiler<br/>ModulatingBoilerController<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -544,7 +544,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — twelve components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -577,14 +577,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_pellets_building_sizer`
 
-Recorded from `system_setups/household_pellets_building_sizer.py`, described in the grouped file as "Basic household new system setup." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_pellets_building_sizer.py`, described in the grouped file as "Basic household new system setup." 12 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_pellets_building_sizer"]
-    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>DHWStorage<br/>FuelMeter"]
+    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DHWStorage<br/>FuelMeter"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>ConventionalPelletBoiler<br/>PelletBoilerController<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -600,7 +600,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — twelve components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -633,14 +633,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_wood_chips_building_sizer`
 
-Recorded from `system_setups/household_wood_chips_building_sizer.py`, described in the grouped file as "Basic household new system setup." 11 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_wood_chips_building_sizer.py`, described in the grouped file as "Basic household new system setup." 12 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Seven of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_wood_chips_building_sizer"]
-    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>DHWStorage<br/>FuelMeter"]
+    fixed["fixed in every configuration (5)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DHWStorage<br/>FuelMeter"]
     knobs["knobs, stated at the baseline value (7)<br/>Building<br/>PVSystem<br/>HeatDistributionController<br/>ConventionalWoodChipBoiler<br/>WoodChipBoilerController<br/>SimpleHotWaterStorage<br/>HeatDistributionSystem"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -656,7 +656,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eleven components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — twelve components, of which the seven knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 
@@ -738,14 +738,14 @@ flowchart TD
 
 ## `automatic_default_connections`
 
-Recorded from `system_setups/automatic_default_connections.py`, described in the recorded twin as "Household with automatic default connections." Its 12 components are listed below. Not grouped yet: a single recorded configuration, no probe list, so the page can state its inventory and nothing else.
+Recorded from `system_setups/automatic_default_connections.py`, described in the recorded twin as "Household with automatic default connections." Its 13 components are listed below. Not grouped yet: a single recorded configuration, no probe list, so the page can state its inventory and nothing else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["automatic_default_connections"]
-    components["components (12)<br/>UTSPConnector<br/>Weather<br/>PVSystem<br/>Building<br/>MoreAdvancedHeatPumpHPLib<br/>HeatPumpControllerDHW<br/>MoreAdvancedHeatPumpHPLibControllerSH<br/>HeatDistributionSystem<br/>HeatDistributionController<br/>SimpleHotWaterStorage<br/>DHWStorage<br/>ElectricityMeter"]
+    components["components (13)<br/>UTSPConnector<br/>Weather<br/>PVSystem<br/>Building<br/>MoreAdvancedHeatPumpHPLib<br/>HeatPumpControllerDHW<br/>MoreAdvancedHeatPumpHPLibControllerSH<br/>HeatDistributionSystem<br/>HeatDistributionController<br/>HeatingCurveController<br/>SimpleHotWaterStorage<br/>DHWStorage<br/>ElectricityMeter"]
 
     setup --> components
 ```
@@ -766,14 +766,14 @@ flowchart TD
 
 ## `basic_household_only_heating`
 
-Recorded from `system_setups/basic_household_only_heating.py`, described in the recorded twin as "Shows a single household with only heating." Its 10 components are listed below. Not grouped yet: a single recorded configuration, no probe list, so the page can state its inventory and nothing else.
+Recorded from `system_setups/basic_household_only_heating.py`, described in the recorded twin as "Shows a single household with only heating." Its 11 components are listed below. Not grouped yet: a single recorded configuration, no probe list, so the page can state its inventory and nothing else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["basic_household_only_heating"]
-    components["components (10)<br/>ModulatingBoilerController<br/>HeatDistributionController<br/>HeatDistributionSystem<br/>SimpleHotWaterStorage<br/>CondensingGasBoiler<br/>Building<br/>Weather<br/>UTSPConnector<br/>ElectricityMeter<br/>GasMeter"]
+    components["components (11)<br/>ModulatingBoilerController<br/>HeatDistributionController<br/>HeatingCurveController<br/>HeatDistributionSystem<br/>SimpleHotWaterStorage<br/>CondensingGasBoiler<br/>Building<br/>Weather<br/>UTSPConnector<br/>ElectricityMeter<br/>GasMeter"]
 
     setup --> components
 ```

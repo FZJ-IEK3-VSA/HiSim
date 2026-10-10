@@ -191,6 +191,10 @@ is hidden state: it survives between calculations in one process and between tes
 - **A boolean reads as a statement**: `is_converged`, `runs_part_load`, `has_buffer`.
 - **No abbreviations a newcomer must guess** (`t0_c`, `hw_kg_s`, `ctrl`). Established terms of the field stay:
   `cop`, `dhw`, `pv`, `ua`.
+- **Space heating is never `sh`.** Write `space_heating` (`p_th_space_heating`, not `p_th_sh`), and
+  `SpaceHeating` in class, port and output names. Existing public `SH` names (`ElectricalInputPowerSH`,
+  `MoreAdvancedHeatPumpHPLibControllerSH`) are addresses in energy-system files and goldens and change only in
+  a planned migration.
 - **Field, output and connection names are referenced through the class constants** that declare them, never
   repeated as string literals (AGENTS.md).
 

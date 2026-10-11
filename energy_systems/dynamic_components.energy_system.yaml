@@ -34,6 +34,16 @@ components:
         weight: 1
         dispatch:
           target_input: LoadingPowerInput
+      - from: Battery1.MaximumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MAXIMUM_CHARGING_POWER
+        weight: 999
+      - from: Battery1.MinimumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MINIMUM_CHARGING_POWER
+        weight: 999
       - from: Battery2.AcBatteryPowerUsed
         component_type: BATTERY
         tags:
@@ -41,6 +51,16 @@ components:
         weight: 2
         dispatch:
           target_input: LoadingPowerInput
+      - from: Battery2.MaximumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MAXIMUM_CHARGING_POWER
+        weight: 999
+      - from: Battery2.MinimumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MINIMUM_CHARGING_POWER
+        weight: 999
       - from: CHP1.ElectricityOutput
         component_type: FUEL_CELL
         tags:

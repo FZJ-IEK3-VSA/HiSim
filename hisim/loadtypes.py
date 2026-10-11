@@ -422,6 +422,10 @@ class InandOutputType(str, enum.Enum):
     ELECTRICITY_CONSUMPTION_EMS_CONTROLLED = "Consumption with EMS control"
     ELECTRICITY_CONSUMPTION_UNCONTROLLED = "Consumption without any EMS control"
     STORAGE_CONTENT = "StorageContent"
+    #: The largest power a storage can take in the current step, given its state at the step's start.
+    MAXIMUM_CHARGING_POWER = "MaximumChargingPower"
+    #: The smallest power a storage charges with; an offer at or below it is not taken.
+    MINIMUM_CHARGING_POWER = "MinimumChargingPower"
     CHARGE_DISCHARGE = "ChargeDischarge"
     CHARGE = "Charge"
     DISCHARGE = "Discharge"

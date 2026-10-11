@@ -68,6 +68,17 @@ class Household:
         dispatch: {}
 """
 
+    #: The battery's charging limits, which the aggregator measures to compute the battery's share of a surplus.
+    BATTERY_LIMIT_FEEDS: ClassVar[str] = """      - from: battery.MaximumChargingPowerInWatt
+        component_type: BATTERY
+        tags: [MAXIMUM_CHARGING_POWER]
+        weight: 999
+      - from: battery.MinimumChargingPowerInWatt
+        component_type: BATTERY
+        tags: [MINIMUM_CHARGING_POWER]
+        weight: 999
+"""
+
     #: An author trying to wire the derived output from the battery's side.
     BATTERY_WIRE_ONTO_DERIVED_PORT: ClassVar[str] = """    inputs:
       - input: LoadingPowerInput
@@ -145,7 +156,7 @@ components:
         component_type: PV
         tags: [ELECTRICITY_PRODUCTION]
         weight: 999
-{battery_feed}  meter:
+{battery_feed}{cls.BATTERY_LIMIT_FEEDS}  meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:

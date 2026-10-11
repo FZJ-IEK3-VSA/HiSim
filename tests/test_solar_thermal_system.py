@@ -1,7 +1,7 @@
 """Tests for the solar thermal system component."""
 
 import datetime
-from typing import Any
+from typing import Any, Dict
 import numpy as np
 import pandas as pd
 import pvlib
@@ -14,6 +14,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
+from tests.part_load_rigs import Parameters, Rig
 
 
 @pytest.mark.base
@@ -543,29 +544,73 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow_kg_s
 
 
+class PumpTransitions:
+    """The solar pump's on/off transitions: the saved pump state, the collector's flow, the storage, the decision."""
+
+    #: The switch-on flow, kg/s.
+    ON_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_ON_MASS_FLOW_IN_KG_PER_S
+
+    #: The switch-off flow, kg/s.
+    OFF_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_OFF_MASS_FLOW_IN_KG_PER_S
+
+    #: Each row: whether the pump ran in the previous step, the required flow in kg/s, the storage's start temperature
+    #: in °C, whether the pump runs, and what the row checks.
+    TABLE = [
+        (False, 0.01, 44.0, True, "a standing pump with heat enough and a tank to fill switches on"),
+        (False, ON_IN_KG_PER_S, 44.0, True, "a standing pump switches on at exactly the switch-on flow"),
+        (False, 0.004, 44.0, False, "a standing pump stays off between the two flows"),
+        (False, OFF_IN_KG_PER_S, 44.0, False, "a standing pump stays off at the switch-off flow"),
+        (False, 0.0, 44.0, False, "a standing pump stays off without collector heat"),
+        (False, 0.01, 61.0, False, "a standing pump stays off for a full tank"),
+        (False, 0.01, 60.0, True, "exactly at the 60 °C aim a standing pump switches on (the stop is strictly above)"),
+        (True, 0.01, 44.0, True, "a running pump with heat enough keeps running"),
+        (True, 0.004, 44.0, True, "a running pump keeps running between the two flows"),
+        (True, OFF_IN_KG_PER_S, 44.0, True, "a running pump keeps running at exactly the switch-off flow"),
+        (True, 0.002, 44.0, False, "a running pump switches off below the switch-off flow"),
+        (True, 0.0, 44.0, False, "a running pump switches off without collector heat"),
+        (True, 0.01, 61.0, False, "a running pump switches off for a full tank"),
+        (True, 0.004, 61.0, False, "a full tank stops a running pump inside the band too"),
+    ]
+
+
+@pytest.mark.base
+def test_the_switch_off_flow_lies_clearly_below_the_switch_on_flow() -> None:
+    """Catches a hysteresis band of the wrong width between the pump's switch-on and switch-off flows.
+
+    A band of zero gives back the step with no consistent on/off state. A switch-off flow outside 3/7 to 1/2 of the
+    switch-on flow leaves the 7 K / 3 K band of a differential solar controller.
+    """
+    ratio = PumpTransitions.OFF_IN_KG_PER_S / PumpTransitions.ON_IN_KG_PER_S
+    assert 3 / 7 <= ratio <= 1 / 2
+
+
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("required_mass_flow_in_kg_per_second", "storage_temperature_at_start_in_celsius", "expected"),
-    [
-        (0.01, 44.0, True),  # heat enough, a tank to fill: runs
-        (0.01, 61.0, False),  # a full tank: stops
-        (0.01, 60.0, True),  # exactly at the 60 °C aim: still runs (the stop is strictly above)
-        (0.004, 44.0, False),  # below the minimum flow: stops
-        (0.005, 44.0, True),  # exactly the minimum flow: runs
-        (0.0, 44.0, False),  # no collector heat: stops
-    ],
+    (
+        "pump_ran_in_previous_step",
+        "required_mass_flow_in_kg_per_second",
+        "storage_temperature_at_start_in_celsius",
+        "expected",
+    ),
+    [row[:4] for row in PumpTransitions.TABLE],
+    ids=[row[4] for row in PumpTransitions.TABLE],
 )
-def test_the_pump_runs_on_its_minimum_flow_and_stops_on_a_full_tank_at_the_steps_start(
-    required_mass_flow_in_kg_per_second: float, storage_temperature_at_start_in_celsius: float, expected: bool
+def test_the_pump_switches_on_at_the_on_flow_off_below_the_off_flow_and_stops_on_a_full_tank(
+    pump_ran_in_previous_step: bool,
+    required_mass_flow_in_kg_per_second: float,
+    storage_temperature_at_start_in_celsius: float,
+    expected: bool,
 ) -> None:
-    """A pump that ran below its minimum flow or into a full tank would book pump electricity for no useful heat.
+    """Every transition of the pump's hysteresis, with the edges of both flows and of the 60 °C aim.
 
-    The edges are the 0.005 kg/s minimum flow (inclusive) and the 60 °C aim (the stop is strictly above it).
+    A pump without the band would switch on and off in one step whose own heat moves the flow across the threshold; a
+    band with the wrong edges would run the pump on too little heat or keep it standing on enough.
     """
     assert (
         solar_thermal_system.SolarThermalSystemController.pump_runs(
             required_mass_flow_in_kg_per_second=required_mass_flow_in_kg_per_second,
             storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+            pump_ran_in_previous_step=pump_ran_in_previous_step,
         )
         is expected
     )
@@ -624,3 +669,133 @@ def test_the_flat_plate_preset_has_a_valid_inlet_to_mean_difference() -> None:
     """The refusal of a non-positive difference must not refuse the preset's own 10 K."""
     config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem")
     assert config.delta_temperature_n_k == 10
+
+
+class SolarControllerSteps:
+    """Drive the solar controller on fake inputs through passes and steps as the simulator does, and read its signal."""
+
+    #: A step well into the run.
+    TIMESTEP: int = 100
+
+    #: A flow between the switch-off and the switch-on flow, kg/s.
+    BETWEEN_THE_FLOWS_IN_KG_PER_S: float = 0.004
+
+    #: A flow above the switch-on flow, kg/s.
+    ABOVE_THE_ON_FLOW_IN_KG_PER_S: float = 0.006
+
+    #: A flow below the switch-off flow, kg/s.
+    BELOW_THE_OFF_FLOW_IN_KG_PER_S: float = 0.002
+
+    @staticmethod
+    def build(seconds_per_timestep: int) -> Any:
+        """Return the controller, its step values and its fakes by input field name, every input on a fake output.
+
+        Args:
+            seconds_per_timestep: The step length, s.
+
+        Returns:
+            The controller, its step values and its fakes.
+        """
+        config = solar_thermal_system.SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
+        controller = solar_thermal_system.SolarThermalSystemController(
+            my_simulation_parameters=Parameters.one_day(seconds_per_timestep), config=config
+        )
+        stsv, fakes = Rig.wire(controller, [(entry, LoadTypes.ANY, Units.ANY) for entry in controller.inputs])
+        return controller, stsv, {entry.field_name: fake for entry, fake in zip(controller.inputs, fakes)}
+
+    @staticmethod
+    def values(mass_flow_in_kg_per_second: float, start_c: float = 45.0, ratio_run: float = 1.0) -> Dict[str, float]:
+        """Return the controller's inputs: the tank's start temperature, the collector's flow and its pump's ratio run.
+
+        The ratio run is the part-load ratio the collector reports its pump ran with; a forced pass reads it.
+        """
+        controller_class = solar_thermal_system.SolarThermalSystemController
+        return {
+            controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
+            controller_class.MassFlow: mass_flow_in_kg_per_second,
+            controller_class.PartLoadRatioRun: ratio_run,
+        }
+
+    @classmethod
+    def signal(
+        cls, controller: Any, stsv: Any, fakes: Dict[str, Any], values: Dict[str, float], force_convergence: bool = False
+    ) -> float:
+        """Run one pass from the saved state, as the simulator does, and return the on/off signal it publishes."""
+        controller.i_restore_state()
+        for field_name, fake in fakes.items():
+            stsv.set_output_value(fake, values.get(field_name, 0.0))
+        controller.i_simulate(cls.TIMESTEP, stsv, force_convergence)
+        return Rig.output(stsv, controller.control_signal_to_solar_thermal_system_channel)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("seconds_per_timestep", [60, 900])
+def test_the_pump_state_of_the_previous_step_chooses_the_flow_and_no_pass_remembers_another(
+    seconds_per_timestep: int,
+) -> None:
+    """Within a step the decision reads only the pass's inputs and the saved state; the state moves only between steps.
+
+    A controller that kept a pass's decision would hold a pump on in the next pass of the same step, which is the pass
+    memory that makes a converged step depend on the passes before it; one that saved nothing between steps would have
+    no hysteresis at all.
+    """
+    steps = SolarControllerSteps
+    controller, stsv, fakes = steps.build(seconds_per_timestep)
+    controller.i_save_state()  # the first step starts with the pump standing
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)) == 1
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 0
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)) == 1
+
+    controller.i_save_state()  # the step ended with the pump running
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 1
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S)) == 0
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 1
+
+    controller.i_save_state()  # the step ended with the pump running again
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S)) == 0
+    controller.i_save_state()  # the step ended with the pump standing
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("pump_ran_in_previous_step", [False, True])
+def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in_previous_step: bool) -> None:
+    """Passes with other inputs before a pass change nothing it publishes: the generic iteration-safety check.
+
+    A controller whose restore restored nothing, or that wrote its state in a pass, would publish a different signal
+    after the other passes than in a fresh step.
+    """
+    steps = SolarControllerSteps
+    fresh, fresh_stsv, fresh_fakes = steps.build(900)
+    iterated, iterated_stsv, iterated_fakes = steps.build(900)
+    for controller, stsv, fakes in ((fresh, fresh_stsv, fresh_fakes), (iterated, iterated_stsv, iterated_fakes)):
+        controller.i_save_state()
+        flow = steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S if pump_ran_in_previous_step else 0.0
+        steps.signal(controller, stsv, fakes, steps.values(flow))
+        controller.i_save_state()
+    for flow in (steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
+        steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(flow))
+    final = steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
+    expected = steps.signal(fresh, fresh_stsv, fresh_fakes, final)
+    assert steps.signal(iterated, iterated_stsv, iterated_fakes, final) == expected
+    assert expected == (1 if pump_ran_in_previous_step else 0)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("ratio_run", "expected_signal"), [(0.42, 1), (1.0, 1), (0.0, 0)])
+def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
+    ratio_run: float, expected_signal: int
+) -> None:
+    """A forced pass keeps the pump as the collector reports it ran, whatever the flow, and the next step starts from it.
+
+    A forced pass that decided on the flow again would keep switching a pump at the edge of its switch-on flow until
+    the simulator gives up; one that kept an earlier pass's decision would remember a pass.
+    """
+    steps = SolarControllerSteps
+    controller, stsv, fakes = steps.build(900)
+    controller.i_save_state()
+    flow = steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S if expected_signal else steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S
+    forced_values = steps.values(flow, ratio_run=ratio_run)
+    assert steps.signal(controller, stsv, fakes, forced_values, force_convergence=True) == expected_signal
+    controller.i_save_state()
+    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == expected_signal

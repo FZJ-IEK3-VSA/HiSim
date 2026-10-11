@@ -4,6 +4,7 @@ from copy import deepcopy
 import datetime
 import math
 from typing import ClassVar, List, Optional, Tuple
+import dataclasses
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 import numpy as np
@@ -1088,9 +1089,10 @@ class SolarThermalSystemState:
 class SolarThermalSystemControllerConfig(ConfigBase):
     """Configuration of the solar thermal system's controller: when the solar pump runs.
 
-    The controller runs the pump while the collector has heat enough for its minimum flow and stops it once the
-    vessel has reached its 60 °C aim. Both rules are the controller's own, so the configuration holds only the
-    controller's identity. The named default is :meth:`preset_standard`::
+    The controller switches the pump on when the collector has heat enough for its switch-on flow, keeps it running
+    down to a lower switch-off flow, and stops it once the vessel has reached its 60 °C aim. These rules are the
+    controller's own, so the configuration holds only the controller's identity. The named default is
+    :meth:`preset_standard`::
 
         SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
     """
@@ -1135,6 +1137,12 @@ class SolarThermalSystemController(L1ControllerComponent):
     the storage's start and end temperatures, so that the storage ends the step at its warm-water aim, the temperature
     above which it stops the pump (``TargetTemperatureInCelsius``, 60 °C). Nothing ranks it against a backup charging
     the same storage: each controller aims at its own target.
+
+    The on/off decision has a hysteresis, as a differential solar controller has: a pump that stood in the previous step
+    switches on at :attr:`SWITCH_ON_MASS_FLOW_IN_KG_PER_S`, a pump that ran keeps running down to the lower
+    :attr:`SWITCH_OFF_MASS_FLOW_IN_KG_PER_S`. Whether the pump ran in the previous step is the controller's saved
+    state (:class:`SolarThermalSystemControllerState`): set from the step's last pass in :meth:`i_save_state`, restored
+    before every pass, so the decision of a pass depends only on that pass's inputs and the saved state.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -1146,7 +1154,7 @@ class SolarThermalSystemController(L1ControllerComponent):
     StorageTemperatureAtEndOfStepInCelsius: ClassVar[str] = "StorageTemperatureAtEndOfStepInCelsius"
     #: The fraction of the step the pump ran, as the collector reports it.
     PartLoadRatioRun: ClassVar[str] = "PartLoadRatioRun"
-    #: The flow the collector heat at the storage's step mean needs, on which the pump stops below its minimum.
+    #: The flow the collector heat at the storage's step mean needs, on which the pump switches on and off.
     MassFlow: ClassVar[str] = "MassFlow"
 
     # Outputs
@@ -1156,10 +1164,20 @@ class SolarThermalSystemController(L1ControllerComponent):
     #: The storage temperature above which the controller stops the pump, its warm-water aim.
     TargetTemperatureInCelsius: ClassVar[str] = "TargetTemperatureInCelsius"
 
-    #: Below this pump flow at the storage's step mean the controller stops the pump. The flow is sized for
-    #: twice the collector's inlet-to-mean difference (20 K), so 0.005 kg/s is the collector heat of about 420 W
-    #: below which the pump has always stood (0.01 kg/s when the flow was sized for 10 K).
-    MINIMUM_MASS_FLOW_IN_KG_PER_S: ClassVar[float] = 0.005
+    #: The pump flow at the storage's step mean from which a pump that stood in the previous step switches on, in
+    #: kg/s. The flow is sized for twice the collector's inlet-to-mean difference (20 K), so 0.005 kg/s is the
+    #: collector heat of about 420 W below which the pump has always stood (0.01 kg/s when the flow was sized for
+    #: 10 K).
+    SWITCH_ON_MASS_FLOW_IN_KG_PER_S: ClassVar[float] = 0.005
+
+    #: The pump flow at the storage's step mean below which a pump that ran in the previous step switches off, in
+    #: kg/s: half the switch-on flow, about 210 W of collector heat. Differential solar controllers switch the pump
+    #: on at a collector-to-tank difference of about 7 K and off at about 3 K, a ratio of 3/7. Near the switching
+    #: point the collector heat, and with it this flow, grows about in proportion to that difference, so the
+    #: switch-off flow lies between 3/7 and 1/2 of the switch-on flow; half keeps the pump from running on heat its
+    #: 10 W hardly pays for. Without the band the pump's own heat lifts the storage's step mean, the collector heat
+    #: at that mean drops below the switch-on flow, and a step at the edge has no consistent on/off state.
+    SWITCH_OFF_MASS_FLOW_IN_KG_PER_S: ClassVar[float] = 0.0025
 
     #: The storage temperature above which the pump stops, in °C: warm water should leave the tank at 60 °C
     #: (https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser).
@@ -1217,9 +1235,10 @@ class SolarThermalSystemController(L1ControllerComponent):
             output_description="Control signal to solar pump in SolarThermalSystem",
         )
 
-        self.state: SolarThermalSystemControllerState = SolarThermalSystemControllerState(0, 0, 0)
-        self.previous_state: SolarThermalSystemControllerState = self.state.clone()
-        self.processed_state: SolarThermalSystemControllerState = self.state.clone()
+        #: The pump state of the step being iterated, as the latest pass decided it.
+        self.state = SolarThermalSystemControllerState(pump_runs=False)
+        #: The saved state: the pump state the previous step ended with.
+        self.previous_state = SolarThermalSystemControllerState(pump_runs=False)
 
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_solar_thermal_system())
@@ -1275,12 +1294,16 @@ class SolarThermalSystemController(L1ControllerComponent):
         return connections
 
     def i_save_state(self) -> None:
-        """Save the state."""
-        self.previous_state = self.state.clone()
+        """Save the pump state the step that just ended was left with, from its last pass, as the state to start from.
+
+        The simulator calls this at the start of every step, so the saved state is whether the pump ran in the
+        previous step: the hysteresis of :meth:`pump_runs` reads it.
+        """
+        self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restores previous state."""
-        self.state = self.previous_state.clone()
+        """Return to the saved state before a pass, so a pass never sees what an earlier pass of the step decided."""
+        self.state = dataclasses.replace(self.previous_state)
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1294,62 +1317,83 @@ class SolarThermalSystemController(L1ControllerComponent):
     ) -> None:
         """Decide whether the pump runs and, above the part-load threshold, the fraction of the step it runs.
 
-        The pump's on/off decision follows :meth:`pump_runs`; under ``force_convergence`` the controller returns to the
-        state it last decided, and its part-load ratio becomes the ratio the collector reports its pump ran with.
+        In an unforced pass the pump's on/off decision follows :meth:`pump_runs` from the pass's inputs and whether the
+        pump ran in the previous step (the saved state). Under ``force_convergence`` the controller keeps the pump as
+        the collector reports it ran (:meth:`pump_ran_as_reported`) and its part-load ratio becomes the ratio run, so
+        the device keeps running what it ran and the iteration stops moving. Both read only inputs and the saved state.
         """
+        storage_temperature_at_start_in_celsius = stsv.get_input_value(
+            self.storage_temperature_at_start_deg_c_input_channel
+        )
         if force_convergence:
-            # states are saved after each timestep, outputs after each iteration
-            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
-            self.state = self.processed_state.clone()
+            pump_runs = self.pump_ran_as_reported(ratio_run=self.part_load.ratio_run(stsv))
         else:
             pump_runs = self.pump_runs(
                 required_mass_flow_in_kg_per_second=stsv.get_input_value(self.required_mass_flow_input_channel),
-                storage_temperature_at_start_in_celsius=stsv.get_input_value(
-                    self.storage_temperature_at_start_deg_c_input_channel
-                ),
+                storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+                pump_ran_in_previous_step=self.previous_state.pump_runs,
             )
-            if pump_runs:
-                self.state.activate(timestep)
-            else:
-                self.state.deactivate(timestep)
-            self.processed_state = self.state.clone()
+        self.state = SolarThermalSystemControllerState(pump_runs=pump_runs)
 
-        stsv.set_output_value(
-            self.control_signal_to_solar_thermal_system_channel,
-            self.state.on_off,
-        )
+        stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, 1 if pump_runs else 0)
         if force_convergence:
             self.part_load.publish_held(stsv)
         else:
             self.part_load.publish(
                 stsv,
-                device_runs=self.state.on_off != 0,
-                start_temperature_in_celsius=stsv.get_input_value(
-                    self.storage_temperature_at_start_deg_c_input_channel
-                ),
+                device_runs=pump_runs,
+                start_temperature_in_celsius=storage_temperature_at_start_in_celsius,
                 target_temperature_in_celsius=self.WARM_WATER_AIM_IN_CELSIUS,
             )
 
     @staticmethod
-    def pump_runs(*, required_mass_flow_in_kg_per_second: float, storage_temperature_at_start_in_celsius: float) -> bool:
-        """Return whether the solar pump runs in this step.
+    def pump_runs(
+        *,
+        required_mass_flow_in_kg_per_second: float,
+        storage_temperature_at_start_in_celsius: float,
+        pump_ran_in_previous_step: bool,
+    ) -> bool:
+        """Return whether the solar pump runs in this step, from the collector's flow, the storage and the last step.
 
-        It runs while the flow the collector heat at the storage's step mean needs is at least
-        :attr:`MINIMUM_MASS_FLOW_IN_KG_PER_S`, which also means the collector has heat there, unless the storage
-        started the step above the 60 °C aim. The full-tank stop decides on the start-of-step temperature: on the step
-        mean it would have no fixed point when the pump's own heat lifts the mean across the aim. For example, a
-        collector that needs 0.01 kg/s runs the pump for a tank that started at 45 °C and not for one at 61 °C.
+        The flow is the one the collector heat at the storage's step mean needs. A pump that stood in the previous step
+        switches on when that flow is at least :attr:`SWITCH_ON_MASS_FLOW_IN_KG_PER_S` (0.005 kg/s); a pump that ran
+        keeps running while it is at least :attr:`SWITCH_OFF_MASS_FLOW_IN_KG_PER_S` (0.0025 kg/s). Either way the pump
+        stands if the storage started the step above the 60 °C aim. The full-tank stop decides on the start-of-step
+        temperature: on the step mean it would have no fixed point when the pump's own heat lifts the mean across the
+        aim. For example, a collector that needs 0.004 kg/s keeps a running pump on for a tank that started at 45 °C,
+        does not switch on a pump that stood, and runs neither for a tank that started at 61 °C.
 
         Args:
             required_mass_flow_in_kg_per_second: The flow the collector heat needs, in kg/s.
             storage_temperature_at_start_in_celsius: The storage's start-of-step temperature, in °C.
+            pump_ran_in_previous_step: Whether the pump ran in the previous step, the controller's saved state.
 
         Returns:
             True while the pump runs.
         """
         storage_is_full = storage_temperature_at_start_in_celsius > SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS
-        has_heat_enough = required_mass_flow_in_kg_per_second >= SolarThermalSystemController.MINIMUM_MASS_FLOW_IN_KG_PER_S
+        if pump_ran_in_previous_step:
+            least_mass_flow_in_kg_per_second = SolarThermalSystemController.SWITCH_OFF_MASS_FLOW_IN_KG_PER_S
+        else:
+            least_mass_flow_in_kg_per_second = SolarThermalSystemController.SWITCH_ON_MASS_FLOW_IN_KG_PER_S
+        has_heat_enough = required_mass_flow_in_kg_per_second >= least_mass_flow_in_kg_per_second
         return has_heat_enough and not storage_is_full
+
+    @staticmethod
+    def pump_ran_as_reported(*, ratio_run: float) -> bool:
+        """Return whether the pump ran in this pass, from the part-load ratio the collector reports its pump ran with.
+
+        The collector reports the fraction of the step its pump ran: 0 while it stood, more than 0 while it ran. A
+        forced pass keeps the pump as it ran, so the on/off signal stops changing without the controller remembering
+        an earlier pass. For example, a reported ratio of 0.42 means the pump ran.
+
+        Args:
+            ratio_run: The part-load ratio the collector reports, from 0 to 1.
+
+        Returns:
+            True if the pump ran.
+        """
+        return ratio_run > 0.0
 
     def get_cost_opex(
         self,
@@ -1378,38 +1422,14 @@ class SolarThermalSystemController(L1ControllerComponent):
         return []
 
 
+@dataclass(frozen=True)
 class SolarThermalSystemControllerState:
-    """Data class that saves the state of the controller."""
+    """The solar pump controller's state: whether the pump runs.
 
-    def __init__(
-        self,
-        on_off: int,
-        activation_time_step: int,
-        deactivation_time_step: int,
-    ) -> None:
-        """Initializes the solar pump controller state."""
-        self.on_off: int = on_off
-        self.activation_time_step: int = activation_time_step
-        self.deactivation_time_step: int = deactivation_time_step
+    The controller keeps two of them: the state of the step being iterated, as the latest pass decided it, and the
+    saved state, the one the previous step ended with, which the switch-on and switch-off flows of the hysteresis are
+    chosen by.
+    """
 
-    def clone(self) -> "SolarThermalSystemControllerState":
-        """Copies the current instance."""
-        return SolarThermalSystemControllerState(
-            on_off=self.on_off,
-            activation_time_step=self.activation_time_step,
-            deactivation_time_step=self.deactivation_time_step,
-        )
-
-    def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
-
-    def activate(self, timestep: int) -> None:
-        """Activates the solar pump and remembers the time step."""
-        self.on_off = 1
-        self.activation_time_step = timestep
-
-    def deactivate(self, timestep: int) -> None:
-        """Deactivates the solar pump and remembers the time step."""
-        self.on_off = 0
-        self.deactivation_time_step = timestep
+    #: Whether the pump runs.
+    pump_runs: bool

@@ -357,9 +357,10 @@ collector's outlet at `T̄` against `T̄` plus `set_temperature_difference_for_o
 collector's `CollectorTemperatureAtStepMeanInCelsius` output (owner, 2026-10-10): the difference was `2 ΔT_n`
 whenever the collector had heat and 0 otherwise, so the comparison only repeated the minimum flow below 20 K and
 stopped the pump for good from 20 K on; results are unchanged with the default 10 K. The controller's full-tank stop (the tank above its
-60 °C aim, `SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS`) stays on `T0`, which the controller reads from
+maximum storage temperature, `SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS`: 80 °C since
+2026-10-11, the backups' 60 °C warm-water aim before) stays on `T0`, which the controller reads from
 the tank's `WaterTemperatureAtStartOfStepInCelsius`: on `T̄` it has no fixed point when the pump's own heat lifts the
-step mean across 60 °C, and
+step mean across the maximum, and
 such a step ended at `force_convergence` (owner decision, 2026-10-09: the stop stays on `T0` because on `T̄` it has
 no fixed point; the gas-and-solar twin's year has 21507 forced steps at 60 s with the stop on `T̄`, 13 with it on
 `T0`, and 1110 against 11 at 900 s). The controller's minimum pump flow is halved to
@@ -367,11 +368,25 @@ no fixed point; the gas-and-solar twin's year has 21507 forced steps at 60 s wit
 hysteresis, as a differential solar controller does (on at about 7 K, off at about 3 K): a pump that stood in the
 previous step switches on at 0.005 kg/s, a pump that ran switches off below 0.0025 kg/s, and whether it ran is the
 controller's saved state (owner, 2026-10-11; hisim-fxix.19). The full-tank stop has a restart hysteresis too (owner,
-2026-10-11): once the tank starts a step above 60 °C the stop holds until it starts a step at least 3 K below the aim
-(`SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN`), as solar controllers restart a few kelvin
-below their maximum storage temperature; the stop is saved state as well. Without it a charge that ends just above
-60 °C (the boiler's part-load rule ends one at 60.025 °C) and the next step's standby loss switched the pump every
-second step.
+2026-10-11): once the tank starts a step above the maximum the stop holds until it starts a step at least 3 K below it
+(`SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN`), as solar controllers restart a few
+kelvin below their maximum storage temperature; the stop is saved state as well. Without it a tank that started a
+step just above the stop's temperature cooled below it by the next step's standby loss and restarted the pump, so
+the pump switched every second step.
+
+The maximum storage temperature is the solar controller's own, 80 °C (owner, 2026-10-11; hisim-fxix.22), above the
+60 °C warm-water aim the backups charge to. Real solar controllers let
+the sun heat the tank past the backup's set point up to a maximum installers set between about 60 and 80 °C, with a
+thermostatic mixing valve at the tap, which the tank's tap valve already is (`hydronics.mixing_valve_draw`: above the
+40 °C tap temperature the tap draws less tank water for the same heat, so the hot-water demand does not rise with the
+tank). With the maximum at 60 °C, the backups' aim, the restart band let the tank wait between 57 and 60 °C on sunny
+days while the backup supplied the rest. Measured on the part-load stack (with the collector's part load, #917,
+now parked), gas + solar, year 2021 at 900 s, collector heat 390.8 kWh without the band, 314.4 kWh with it; with
+80 °C: collector heat 314.4 → 934.1 kWh (gas + solar) and
+586.3 → 1103.0 kWh (heat pump + solar), the backup's hot-water heat 2814.2 → 2216.8 kWh and 2483.6 → 1991.9 kWh,
+the tank's standby loss 275.2 → 298.2 kWh and 236.0 → 262.9 kWh. A tank above 60 °C keeps the backups
+off, since each decides on `T0` against its own aim (§5.5), and the larger standby loss of the hotter tank is
+accepted (owner: "more losses of solar heat really don't matter").
 
 ### 5.4 District heating substation
 
@@ -400,8 +415,8 @@ and with the former strict `T0 > t_max + raise` a charge never ended (hot-water 
 `t_max` would be switched on with the raise and off without it, and the raise follows the heat pump's draw, so it
 can come and go within a step (hisim-4g9.28); with the stop at the same point the charge's state cannot toggle with
 it (forced steps of the heat-pump twin's year at 60 s: 112312 with the switch-on at `t_max`, 97983 with it at
-`t_max − 0.5 K`). One exception: the solar pump decides on the node's `T̄`
-(§5.3, owner 2026-10-09). The hot-water supply cap at the controller's set temperature (§5) is not a decision on
+`t_max − 0.5 K`). The solar pump decided on the node's `T̄` from 2026-10-09 to
+2026-10-11 and decides on `T0` since (§5.3). The hot-water supply cap at the controller's set temperature (§5) is not a decision on
 `T̄`: the controller's set temperature is a constant, and the controller still switches on `T0`.
 
 ## 6. Convergence with pure ports
@@ -664,6 +679,9 @@ node's step mean `T̄` and the collector's answer there to switch the pump on (�
 controller's set temperature (§5) relates to D4 as a limit, not a forecast: the generator stops its supply at the
 controller's target inside the step, while the controller still decides on `T0`; the heat pump's hot-water
 controller ends a charge within 0.5 K of its set temperature, since a capped supply never passes it (§5.5).
+*Amendment (owner, 2026-10-11):* the solar controller's full-tank stop is its own maximum storage temperature,
+80 °C, not the backups' 60 °C warm-water aim (§5.3, hisim-fxix.22); every controller still decides on `T0` against
+its own temperature, and nothing ranks the collector against the backup.
 
 **D5 — Stratification path: keep for now.** `heat_exchanger_is_present=False` and the `dt/3600` mixing stay as they
 are; bead hisim-fxix.1 tackles it later. Consequence: the node rule covers only the fully mixed path;

@@ -416,6 +416,12 @@ is absolute and applies to watt outputs too; a derived power at `m c ≈ 700 W/K
 ~1.5e-7 K, which adds `ln(1e-3)/ln θ` iterations. A per-output tolerance is considered only if the histogram
 shows the watt outputs dominate.
 
+**Acceleration removed (owner, 2026-10-11).** The simulator no longer accelerates any output: it replaced a
+component's output in the middle of the iteration, so the other components reacted to values no component had
+computed. `hisim/fixed_point_acceleration.py`, the `is_accelerated` flag and the simulator's use of it are gone; the
+hot-water tank publishes its step mean as it computes it. The slow tank-generator loops the acceleration covered are
+fixed at their cause in the components. The paragraph below records the design that was removed.
+
 **Acceleration in the simulator (owner, 2026-10-10).** A component declares an output whose value is the image of
 a fixed-point map, a node's `T̄`, with `add_output(..., is_accelerated=True)`; the hot-water tank declares its two
 step-mean outputs. After the component has run, the simulator replaces the value it computed
@@ -512,7 +518,7 @@ Each is a unit test asserting every node's per-step balance (relative 1e-6) and 
 
 | Component | Change |
 |---|---|
-| `hydronics.py` (new) | `MixedNode.step`, water `c` (`Water`), circuit heat, supply caps, tap valve, bracketed solve; the acceleration is `fixed_point_acceleration.py`, applied by the simulator (§6) |
+| `hydronics.py` (new) | `MixedNode.step`, water `c` (`Water`), circuit heat, supply caps, tap valve, bracketed solve; the simulator's acceleration of §6 was removed on 2026-10-11 |
 | `SimpleHotWaterStorage`, `SimpleDHWStorage` | fully mixed path: node step, publish `T̄`, `T_end`, `T0`; drop mass mixing (`:372-397`), start-temperature booking, explicit loss. Stratification path unchanged (D5) |
 | `HeatDistribution` | same-step return; pipe-water node without a buffer; drop the lag (`:471-491`) |
 | `GenericBoiler` + controller | keep `control_signal`, `modulate_power` and fixed lift; supply from `T̄`; controller reads `T0` |
@@ -654,6 +660,7 @@ burden sits in the nodes. A per-output tolerance only if the histogram shows the
 *Amendment (owner, 2026-10-10):* the iteration memory moves out of the nodes. The simulator accelerates the outputs
 a component declares accelerated (§6) and starts every step from the previous step's converged values (the warm
 start, hisim-4g9.23); both are generic and know nothing about a component.
+*Amendment (owner, 2026-10-11):* the acceleration is removed again (§6); the simulator only iterates.
 
 **D8 — Staging: staged PRs straight into main,** each re-blessing the goldens it changes (§9.5). Consequence:
 goldens and RenoVisor results move in several steps, and each stage that changes results is announced on

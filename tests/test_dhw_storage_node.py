@@ -335,15 +335,6 @@ def test_every_pass_with_the_same_inputs_publishes_the_same_step_mean() -> None:
 
 
 @pytest.mark.base
-def test_the_step_mean_outputs_ask_the_simulator_to_accelerate_them() -> None:
-    """Without the flag the simulator would iterate the tank's fixed point plainly, past its forced-convergence limit."""
-    storage = Tank.build(900)
-    assert storage.water_temperature_to_heat_generator_channel.is_accelerated
-    assert storage.water_temperature_secondary_heat_generator_output_channel.is_accelerated
-    assert not storage.water_temperature_at_start_of_step_channel.is_accelerated
-
-
-@pytest.mark.base
 def test_the_tap_heat_is_positive_in_energy_and_in_power() -> None:
     """A tap heat booked with two signs on one port would make every reader guess which one it got."""
     storage, stsv, fakes = Tank.with_fake_inputs(900)

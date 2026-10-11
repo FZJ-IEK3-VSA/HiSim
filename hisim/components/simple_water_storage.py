@@ -1365,8 +1365,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
     the step iterates. ``T_end`` is ``WaterTemperatureAtEndOfStepInCelsius``, the next step's ``T0``.
 
     The step mean depends on the supplies the generators send back in answer to it, so it is a fixed point the
-    simulator iterates to; the tank declares its step-mean outputs accelerated
-    (:mod:`hisim.fixed_point_acceleration`), and computes them from its inputs and its saved state only.
+    simulator iterates to; the tank computes it from its inputs and its saved state only.
 
     The tap is a thermostatic mixing valve (:func:`hisim.hydronics.mixing_valve_draw`): the household asks for
     ``m_d`` of warm water at ``T_warm`` (40 °C); above it the valve lets out only ``m_hot = m_d (T_warm - T_cold) /
@@ -1502,7 +1501,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 "The tank's step mean temperature T̄, the return temperature of the primary charging circuit: the "
                 "mean of the tank temperature over the step, which makes m c (T_sup - T̄) the heat the circuit brings."
             ),
-            is_accelerated=True,
         )
 
         self.water_temperature_secondary_heat_generator_output_channel: ComponentOutput = self.add_output(
@@ -1513,7 +1511,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
             output_description=(
                 "The tank's step mean temperature T̄, the return temperature of the secondary charging circuit."
             ),
-            is_accelerated=True,
         )
 
         self.water_temperature_from_heat_generator_channel: ComponentOutput = self.add_output(

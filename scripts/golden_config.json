@@ -11,7 +11,7 @@
     {"id": "household_wood_chips_building_sizer",           "path": "system_setups/household_wood_chips_building_sizer.py", "seconds": {"one_week_60s": 112, "full_year_60s": 411}},
     {"id": "household_heatpump_solar_thermal_building_sizer", "path": "system_setups/household_heatpump_solar_thermal_building_sizer.py", "seconds": {"one_week_60s": 243, "full_year_60s": 623}},
     {"id": "household_gas_solar_thermal_building_sizer",    "path": "system_setups/household_gas_solar_thermal_building_sizer.py", "seconds": {"one_week_60s": 254, "full_year_60s": 303}},
-    {"id": "household_heatpump_car_building_sizer",         "path": "system_setups/household_heatpump_car_building_sizer.py", "horizons": ["week"], "seconds": {"one_week_60s": 124, "full_year_60s": 690}},
+    {"id": "household_heatpump_car_building_sizer",         "path": "system_setups/household_heatpump_car_building_sizer.py", "seconds": {"one_week_60s": 124, "full_year_60s": 690}},
     {"id": "air_conditioned_house",                         "path": "system_setups/air_conditioned_house.py", "seconds": {"one_week_60s": 18, "full_year_60s": 120}},
     {"id": "basic_household",                               "path": "system_setups/basic_household.py", "seconds": {"one_week_60s": 17, "full_year_60s": 24}},
     {"id": "default_connections",                           "path": "system_setups/default_connections.py", "seconds": {"one_week_60s": 16, "full_year_60s": 25}},

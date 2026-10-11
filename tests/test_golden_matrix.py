@@ -87,7 +87,7 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
     """The shipped config expands to one pair per (setup, parameter_set) the setup's horizons permit.
 
     The expected counts are hand-written truths about the shipped config — twenty-two setups run the
-    week, and all of them but the one in :data:`CANNOT_RUN_A_FULL_YEAR` the full year as well (owner
+    week, and all of them but those in :data:`CANNOT_RUN_A_FULL_YEAR` (today none) the full year as well (owner
     decision 2026-10-11) — rather than re-derived through the very predicate under test, which would
     reproduce any logic error on both sides of the assertion. A new setup joining the config moves
     these literals on purpose: the reviewer of that change should see the gate grow.
@@ -96,14 +96,13 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
 
     assert len(config["setups"]) == 22
     assert len(build_matrix(config, horizon="week")["include"]) == 22
-    assert len(build_matrix(config, horizon="year")["include"]) == 21
-    assert len(build_matrix(config)["include"]) == 43
+    assert len(build_matrix(config, horizon="year")["include"]) == 22
+    assert len(build_matrix(config)["include"]) == 44
 
 
 #: The setups that cannot complete a full year yet, each with the bead whose fix lifts its week-only
 #: restriction in ``golden_config.json``. A setup leaves this table in the change that fixes it.
 CANNOT_RUN_A_FULL_YEAR: dict[str, str] = {
-    "household_heatpump_car_building_sizer": "hisim-4g9.56",
 }
 
 
@@ -307,7 +306,7 @@ def test_zero_shards_is_refused() -> None:
 
 
 def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
-    """The workflows' own calls: 22 week pairs in four shards, 21 full-year pairs in five or four.
+    """The workflows' own calls: 22 week pairs in four shards, 22 full-year pairs in five or four.
 
     golden-year cuts the year into five shards with the composed files counted, the bless
     (golden-update.yml) into four without them. Catches a shard holding no pair, which would
@@ -318,8 +317,8 @@ def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
     year = build_shards(config, 5, horizon="year", composed=composed_setups(config, REPO_ROOT))["include"]
     bless_year = build_shards(config, 4, horizon="year")["include"]
     assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
-    assert len(year) == 5 and sum(cell["count"] for cell in year) == 21
-    assert len(bless_year) == 4 and sum(cell["count"] for cell in bless_year) == 21
+    assert len(year) == 5 and sum(cell["count"] for cell in year) == 22
+    assert len(bless_year) == 4 and sum(cell["count"] for cell in bless_year) == 22
     assert all(cell["count"] > 0 for cell in [*week, *year, *bless_year])
 
 

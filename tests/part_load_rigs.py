@@ -534,8 +534,6 @@ class ElectricHeatingControllerRig:
             The controller, its step values and its fakes.
         """
         config = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
-        config.set_heating_threshold_outside_temperature_in_celsius = 16.0
-        config.specific_heating_load_of_building_in_watt_per_m2 = 40.0
         config.with_domestic_hot_water_preparation = True
         controller = generic_electric_heating.ElectricHeatingController(
             my_simulation_parameters=Parameters.one_day(seconds_per_timestep, **extra), config=config
@@ -559,7 +557,7 @@ class ElectricHeatingControllerRig:
         return {
             controller_class.WaterTemperatureInputFromWarmWaterStorage: start_c,
             controller_class.WaterTemperatureAtEndOfStepFromWarmWaterStorageInCelsius: end_c,
-            controller_class.DailyAverageOutsideTemperature: 0.0,
+            controller_class.HeatingSeason: 1.0,
             controller_class.PartLoadRatioRunDhw: ratio_run,
         }
 

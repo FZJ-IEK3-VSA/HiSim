@@ -32,15 +32,12 @@ from hisim.config import (
     Sizable,
     Size,
     SizingContext,
-    SizingLaw,
     concrete,
-    law,
     preset,
     sized_field,
 )
 from hisim.components.building import Building
-from hisim.components.weather import Weather
-from hisim.components.heating_curve import HeatingCurveControllerConfig
+from hisim.components.heating_curve import HeatingCurveController
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
@@ -880,49 +877,16 @@ class ElectricHeatingControllerConfig(ConfigBase):
     """Configuration of the direct electric heating appliance's controller.
 
     The switch in front of the appliance: each time step it decides whether the heat goes to
-    space heating, to domestic hot water, to both at once or nowhere, and it stops space
-    heating once the daily average outside temperature has risen above the heating threshold.
-    The named default is :meth:`preset_standard`; the two fields that describe the building
-    rather than the appliance are sizable, so the preset leaves them ``AUTO`` and
-    ``.resolve(ctx)`` derives both from the building's facts::
-
-        ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController").resolve(
-            SizingContext(heating_load_in_watt=7780.75, conditioned_floor_area_in_m2=121.2)
-        )
-
-    Direct electric heating has no water circuit and therefore no heat distribution controller
-    whose threshold could be copied, so the threshold is derived here from the building's
-    efficiency -- by reusing that controller's law rather than restating its step table, which
-    is what keeps an electrically heated house switching off on the same day a water-heated
-    one of the same efficiency does.
+    space heating, to domestic hot water, to both at once or nowhere. Space heating runs only in
+    the heating season, which the heating curve (:class:`~hisim.components.heating_curve.HeatingCurveController`)
+    publishes from the building's heating threshold; the controller reads it from there instead of
+    keeping a threshold of its own, so an electrically heated house switches off on the same day a
+    water-heated one of the same efficiency does. The named default is :meth:`preset_standard`.
     """
 
     MAIN_CLASS = "hisim.components.generic_electric_heating.ElectricHeatingController"
 
-    #: Sizing law of the building's specific heating load: its design heating load divided by
-    #: its conditioned floor area. Law terms carry no division, so this is a function law over
-    #: the two building facts; the operands and their order are the ones the setups divided by
-    #: hand, because the recorded value is the unrounded quotient.
-    SPECIFIC_HEATING_LOAD_LAW: ClassVar[SizingLaw] = law(
-        lambda ctx: ctx.heating_load_in_watt / ctx.conditioned_floor_area_in_m2,
-        reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
-        description="Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2",
-    )
-
     component_id: ComponentID
-    #: Daily average outside temperature above which space heating stops. The electric heater heats
-    #: the rooms directly and has no heating curve, so its controller holds the threshold itself.
-    #: Sizable: left ``AUTO`` it is the heating curve's step table over the building's specific
-    #: heating load -- 16 °C up to 50 W/m², 18 °C up to 80 W/m², 20 °C above that -- because a
-    #: badly insulated house cools out in the mornings and evenings of the shoulder season and has
-    #: to be heated earlier in the year.
-    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
-        rule=HeatingCurveControllerConfig.HEATING_THRESHOLD_LAW,
-        note=(
-            "the heating curve's step table: 16 °C up to 50 W/m² of specific"
-            " heating load, 18 °C up to 80 W/m², 20 °C above that"
-        ),
-    )
     #: Whether the appliance this controls also prepares domestic hot water, in which case the
     #: controller reads the vessel's temperature and can prioritise it over space heating.
     with_domestic_hot_water_preparation: bool = False
@@ -933,31 +897,21 @@ class ElectricHeatingControllerConfig(ConfigBase):
     #: Whether space heating and hot water may be served in the same time step. False makes the
     #: two exclusive, with hot water taking precedence.
     parallel_space_heating_and_dhw_option: bool = False
-    #: The building's design heating load per square metre of conditioned floor area. No code
-    #: path reads it -- neither controller nor appliance touches the field -- it is recorded
-    #: provenance for the threshold above, which the same ratio decides. Sizable so that the
-    #: number recorded is the one the threshold was derived from, and not a second hand-typed one.
-    specific_heating_load_of_building_in_watt_per_m2: Sizable[float] = sized_field(
-        rule=SPECIFIC_HEATING_LOAD_LAW,
-        note="the building's heating load per m² of conditioned floor area",
-    )
 
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "ElectricHeatingControllerConfig":
-        """The one electric heating controller the fleet runs, derived from the building it heats.
+        """The one electric heating controller the fleet runs.
 
         The field defaults are that controller: space heating only, exclusive of hot water
         where the appliance prepares it as well, and a fifteen-kelvin hysteresis band on the
-        vessel temperature. What the preset does not fix is the heating threshold and the
-        specific heating load behind it, which stay ``AUTO`` so that both come from the
-        building instead of being written down twice.
+        vessel temperature.
 
         Args:
             name: Instance name of the controller in the simulation.
 
         Returns:
-            The configuration, with its two sizable fields still ``AUTO``.
+            The configuration.
         """
         return cls(component_id=ComponentID(name=name))
 
@@ -965,8 +919,8 @@ class ElectricHeatingControllerConfig(ConfigBase):
 class ElectricHeatingController(L1ControllerComponent):
     """Electric Heating Controller.
 
-    It decides the heater's mode on the hot-water tank's start-of-step temperature and the daily outside temperature,
-    and owns how much of a step a hot-water charge runs (:class:`hisim.part_load.PartLoadControl`): the part-load ratio
+    It decides the heater's mode on the hot-water tank's start-of-step temperature and the heating season the heating
+    curve publishes, and owns how much of a step a hot-water charge runs (:class:`hisim.part_load.PartLoadControl`): the part-load ratio
     ``PartLoadRatioDhw`` is 1 whenever the charge runs at and below the part-load threshold; above it the ratio follows
     :class:`hisim.part_load.PartLoadRule` from the ratio the heater reports it ran with (``PartLoadRatioRunDhw``) and
     the tank's start and end temperatures, so that the tank ends the step at the warm-water aim, where the diverter
@@ -976,7 +930,8 @@ class ElectricHeatingController(L1ControllerComponent):
     cost_relevance = CostRelevance.FREE_OF_COST
 
     # Inputs
-    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+    #: 1 on a day of the heating season, 0 otherwise, as the heating curve publishes it.
+    HeatingSeason = "HeatingSeason"
 
     # Relevant when used for dhw as well
     WaterTemperatureInputFromWarmWaterStorage = "WaterTemperatureInputFromWarmWaterStorage"
@@ -1027,11 +982,11 @@ class ElectricHeatingController(L1ControllerComponent):
                 Units.CELSIUS,
                 True,
             )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
+        self.heating_season_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.DailyAverageOutsideTemperature,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
+            self.HeatingSeason,
+            LoadTypes.ANY,
+            Units.ANY,
             True,
         )
         self.dhw_part_load = PartLoadControl(
@@ -1074,7 +1029,7 @@ class ElectricHeatingController(L1ControllerComponent):
             output_description="Operating mode of electric heating.",
         )
 
-        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_heating_curve())
 
         if self.config.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
@@ -1118,17 +1073,18 @@ class ElectricHeatingController(L1ControllerComponent):
             ),
         ]
 
-    def get_default_connections_from_weather(
-        self,
-    ):
-        """Get weather default connections."""
+    @staticmethod
+    def get_default_connections_from_heating_curve() -> List[ComponentConnection]:
+        """Return the default connection from the heating curve: the heating season it publishes.
 
-        weather_classname = Weather.get_classname()
+        Returns:
+            The one connection of ``HeatingSeason``.
+        """
         return [
             ComponentConnection(
-                ElectricHeatingController.DailyAverageOutsideTemperature,
-                weather_classname,
-                Weather.DailyAverageOutsideTemperatures,
+                ElectricHeatingController.HeatingSeason,
+                HeatingCurveController.get_classname(),
+                HeatingCurveController.HeatingSeason,
             ),
         ]
 
@@ -1178,7 +1134,7 @@ class ElectricHeatingController(L1ControllerComponent):
         stsv: SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Decide the heater's mode on the tank's start temperature and the outside temperature, and the hot-water ratio.
+        """Decide the heater's mode on the tank's start temperature and the heating season, and the hot-water ratio.
 
         Under ``force_convergence`` every output keeps the value of the last pass, except the part-load ratio: it
         becomes the ratio the heater reports it ran with, so the charge stops changing.
@@ -1196,13 +1152,9 @@ class ElectricHeatingController(L1ControllerComponent):
                 self.water_temperature_input_channel_dhw
             )
 
-        daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-            self.daily_avg_outside_temperature_input_channel
-        )
-
         # Determine which operating mode to use in dual-circuit system
         delta_temperature_for_dhw_in_celsius = self.determine_operating_mode(
-            daily_avg_outside_temperature_in_celsius,
+            stsv.get_input_value(self.heating_season_channel) > 0.5,
             water_temperature_input_from_warm_water_storage_in_celsius,
         )
         stsv.set_output_value(
@@ -1222,18 +1174,21 @@ class ElectricHeatingController(L1ControllerComponent):
             target_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
         )
 
-    def determine_operating_mode(
-        self, daily_avg_outside_temperature_in_celsius: float, dhw_current_temperature_deg_c: Optional[float]
-    ) -> float:
-        """Determine operating mode."""
+    def determine_operating_mode(self, is_heating_season: bool, dhw_current_temperature_deg_c: Optional[float]) -> float:
+        """Set the controller's mode from the heating season and the tank's temperature, and return the hot-water lift.
+
+        Args:
+            is_heating_season: Whether the heating curve publishes this day as one of the heating season.
+            dhw_current_temperature_deg_c: The hot-water tank's start-of-step temperature, in °C; None without hot water.
+
+        Returns:
+            The lift the hot-water charge asks for, in K; 0 when no charge runs.
+        """
 
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=self.controller_mode,
-            is_heating_season=DiverterValve.is_heating_season(
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                heating_threshold_in_celsius=concrete(self.config.set_heating_threshold_outside_temperature_in_celsius),
-            ),
+            is_heating_season=is_heating_season,
             water_temperature_input_sh_in_celsius=0,  # artificial because no sh water used
             water_temperature_input_dhw_in_celsius=(
                 dhw_current_temperature_deg_c if self.config.with_domestic_hot_water_preparation else None

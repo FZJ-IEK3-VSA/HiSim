@@ -65,10 +65,18 @@
 # the assemblies reproduce the Python setup's full-year golden too. The matrix counts those runs
 # (golden_matrix.py --with-composed), which is why the config's checkout includes energy_systems/.
 #
-# SHARDS. The full-year pairs run as four shards of two (golden_matrix.py --shards 4):
-# a full-year pair peaks at about 6 GiB, so a 16 GB runner holds two at once
-# (golden_check.py --jobs 2, a child process per pair). Same wall time as a job per
-# pair, half the jobs, and one container start, install and cache save per two pairs.
+# SHARDS. The full-year pairs run as five shards, each running two simulations at once
+# (golden_matrix.py --shards 5): a full-year pair peaks at about 6 GiB (the heaviest
+# measured, the heat pump with solar thermal, at 5.2 GiB), so a 16 GB runner holds two at
+# once (golden_check.py --jobs 2, a child process per pair). Every setup of golden_config.json
+# runs the full year (owner decision 2026-10-11: the first week of January never runs a solar
+# collector's pump, so only a year exercises the solar systems); the one that cannot finish a
+# year yet keeps a week-only 'horizons' entry until its bead is fixed. That is 21 Python pairs
+# plus the composed files of the eight generator setups, 29 runs of about 87 runner-minutes in
+# all (64 when only those eight ran the year, in four shards). Five shards keep the slowest
+# shard near the old one, about 15 to 16 minutes of simulation (the heat pump with solar
+# thermal alone takes about 10); four would add about five minutes of wall time for the same
+# runner-minutes. The weights the shards are balanced by are "seconds" in golden_config.json.
 #
 # THE ASSEMBLY NIGHTLY TIER rides along (assemblies_spec.md §9.4, D24, lean v1 §13.1): the job
 # `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
@@ -214,7 +222,7 @@ jobs:
         id: gen
         if: steps.decide.outputs.proceed == 'true'
         run: |
-          echo "matrix=$(python3 scripts/golden_matrix.py --horizon year --shards 4 --with-composed \
+          echo "matrix=$(python3 scripts/golden_matrix.py --horizon year --shards 5 --with-composed \
             --config under-test/scripts/golden_config.json)" >> "$GITHUB_OUTPUT"
       # Kept on failure too: a job killed for running out of memory is the one
       # whose measurement matters most.

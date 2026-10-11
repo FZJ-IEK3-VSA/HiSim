@@ -97,7 +97,8 @@ tests/
 - **Two parameter sets per setup** (decision §14.5): `one_week_60s`
   (`one_week_only`) and `full_year_60s` (`full_year`), both 2021 @ 60s. The
   full-year run is deliberately included — many bugs only surface over long
-  horizons. Current list = 11 building_sizer setups × 2 = **22 pairs**.
+  horizons. Current list (2026-10-11) = 22 setups, all run the week and 21 the full
+  year = **43 pairs** (the heat pump with a car cannot finish a year yet, hisim-4g9.56).
 
 ### 6.2 `runner.py`
 - **Keep**: `load_config`, dataclasses, `build_simulation_parameters`,

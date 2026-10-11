@@ -87,20 +87,60 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
     """The shipped config expands to one pair per (setup, parameter_set) the setup's horizons permit.
 
     The expected counts are hand-written truths about the shipped config — twenty-two setups run the
-    week, only the original eight carry the full year — rather than re-derived through the very
-    predicate under test, which would reproduce any logic error on both sides of the assertion.
-    A new setup joining the config moves these literals on purpose: the reviewer of that change
-    should see the gate grow.
+    week, and all of them but the one in :data:`CANNOT_RUN_A_FULL_YEAR` the full year as well (owner
+    decision 2026-10-11) — rather than re-derived through the very predicate under test, which would
+    reproduce any logic error on both sides of the assertion. A new setup joining the config moves
+    these literals on purpose: the reviewer of that change should see the gate grow.
     """
     config = json.loads(REAL_CONFIG.read_text())
 
     assert len(config["setups"]) == 22
     assert len(build_matrix(config, horizon="week")["include"]) == 22
-    assert len(build_matrix(config, horizon="year")["include"]) == 8
-    assert len(build_matrix(config)["include"]) == 30
-    assert 30 < len(config["setups"]) * len(config["parameter_sets"]), (
-        "the shipped config restricts at least one setup, so the full product would overcount"
-    )
+    assert len(build_matrix(config, horizon="year")["include"]) == 21
+    assert len(build_matrix(config)["include"]) == 43
+
+
+#: The setups that cannot complete a full year yet, each with the bead whose fix lifts its week-only
+#: restriction in ``golden_config.json``. A setup leaves this table in the change that fixes it.
+CANNOT_RUN_A_FULL_YEAR: dict[str, str] = {
+    "household_heatpump_car_building_sizer": "hisim-4g9.56",
+}
+
+
+def test_every_shipped_setup_has_a_weighted_full_year_golden() -> None:
+    """Every setup of the shipped config runs the full year and records its full-year weight.
+
+    Catches a setup slipping back to the week alone (owner decision 2026-10-11: every energy system
+    has a full-year golden, because the first week of January never runs a solar collector's pump),
+    and a full-year pair weighing the 120 s default, which would pack several real one-to-twelve
+    minute runs onto one lane of a shard. The only setups excused are those of
+    :data:`CANNOT_RUN_A_FULL_YEAR`, and only while they are restricted to the week.
+    """
+    config = json.loads(REAL_CONFIG.read_text())
+
+    year_setups = {pair["setup"] for pair in build_matrix(config, horizon="year")["include"]}
+    unweighted = [s["id"] for s in config["setups"] if "full_year_60s" not in s.get("seconds", {})]
+
+    assert year_setups == {s["id"] for s in config["setups"]} - set(CANNOT_RUN_A_FULL_YEAR)
+    assert not unweighted, f"setups without a full_year_60s weight: {unweighted}"
+
+
+def test_every_system_setup_is_in_the_golden_config() -> None:
+    """Every ``system_setups/*.py`` that defines a ``setup_function`` is a setup of the shipped config.
+
+    Catches a new energy system joining ``system_setups/`` without a golden: the gate would never
+    notice a change to it. Drivers that call another setup's ``setup_function`` (the
+    ``economic_example/`` scripts) define none of their own and are not energy systems of their own.
+    """
+    config = json.loads(REAL_CONFIG.read_text())
+    configured = {Path(s["path"]).as_posix() for s in config["setups"]}
+    with_setup_function = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / "system_setups").glob("*.py")
+        if "def setup_function(" in path.read_text(encoding="utf-8")
+    }
+
+    assert with_setup_function - configured == set()
 
 
 def test_a_malformed_horizons_value_fails_the_matrix_loudly() -> None:
@@ -154,21 +194,19 @@ def test_the_matrix_and_the_runner_select_the_same_pairs() -> None:
 
 
 def test_a_setup_restricted_to_the_week_never_enters_the_year_matrix() -> None:
-    """The ``horizons`` restriction keeps a week-only setup out of the expensive full-year matrix.
+    """The ``horizons`` restriction keeps a week-only setup out of the full-year matrix.
 
-    Catches: the restriction being read but not applied, which would silently multiply the
-    full-year CI cost by the whole fleet.
+    Catches: the restriction being read but not applied, which would run a setup in a horizon its
+    config entry excludes. The shipped config restricts no setup, so the config here is synthetic.
     """
-    config = json.loads(REAL_CONFIG.read_text())
-    week_only = [s["id"] for s in config["setups"] if s.get("horizons") == ["week"]]
-    assert week_only, "the shipped config carries week-only setups"
+    config = _config()
+    config["setups"][1]["horizons"] = ["week"]
 
     year_setups = {pair["setup"] for pair in build_matrix(config, horizon="year")["include"]}
     week_setups = {pair["setup"] for pair in build_matrix(config, horizon="week")["include"]}
 
-    for setup_id in week_only:
-        assert setup_id not in year_setups
-        assert setup_id in week_setups
+    assert year_setups == {"s1"}
+    assert week_setups == {"s1", "s2"}
 
 
 # --------------------------------------------------------------------------- #
@@ -268,13 +306,21 @@ def test_zero_shards_is_refused() -> None:
         build_shards(_weighted_config(), 0)
 
 
-def test_the_shipped_config_shards_into_four_week_and_four_year_jobs() -> None:
-    """The workflows' own call: 22 week pairs and 8 full-year pairs, four shards each."""
+def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
+    """The workflows' own calls: 22 week pairs in four shards, 21 full-year pairs in five or four.
+
+    golden-year cuts the year into five shards with the composed files counted, the bless
+    (golden-update.yml) into four without them. Catches a shard holding no pair, which would
+    start a runner for nothing.
+    """
     config = json.loads(REAL_CONFIG.read_text())
     week = build_shards(config, 4, horizon="week")["include"]
-    year = build_shards(config, 4, horizon="year")["include"]
+    year = build_shards(config, 5, horizon="year", composed=composed_setups(config, REPO_ROOT))["include"]
+    bless_year = build_shards(config, 4, horizon="year")["include"]
     assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
-    assert len(year) == 4 and sum(cell["count"] for cell in year) == 8
+    assert len(year) == 5 and sum(cell["count"] for cell in year) == 21
+    assert len(bless_year) == 4 and sum(cell["count"] for cell in bless_year) == 21
+    assert all(cell["count"] > 0 for cell in [*week, *year, *bless_year])
 
 
 def test_the_cli_prints_shards_as_one_json_line(capsys: pytest.CaptureFixture[str]) -> None:

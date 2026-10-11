@@ -55,9 +55,9 @@ class SetupConfig:
     id: str
     path: str
     #: The horizons this setup participates in (``"day"``/``"week"``/``"year"``), or
-    #: ``None`` for all of them. The whole fleet runs the cheap week gate; only the
-    #: original eight carry the cost of the full-year matrix, and this field is how the
-    #: config says so.
+    #: ``None`` for all of them. Every shipped setup runs both the week and the full year
+    #: (owner decision 2026-10-11: every energy system has a full-year golden), so the
+    #: shipped config sets this nowhere; it stays for a setup that may join one horizon only.
     horizons: Optional[list[str]] = None
 
     def runs_factory(self, factory: str) -> bool:

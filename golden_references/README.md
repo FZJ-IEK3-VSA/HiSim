@@ -124,10 +124,15 @@ In CI this runs as two tiers (see `.github/workflows/`):
   full-year compute when a cheaper check already failed). It is triggered by those
   workflows completing (`workflow_run`), not by the pull request itself, so that
   waiting for them costs no runner; its result reaches the pull request as a
-  `golden-year` commit status rather than as an entry in the checks list. Four shards running
+  `golden-year` commit status rather than as an entry in the checks list. Five shards running
   two simulations at once, since a full-year pair needs about 6 GiB: the Python setups and, where
   the setup has one, its composed file (`golden_check.py --mode python composed`,
-  `golden_matrix.py --with-composed`).
+  `golden_matrix.py --with-composed`). Every setup of the config runs the full year (owner
+  decision 2026-10-11), because the first week of January never runs a solar collector's pump;
+  only a setup that cannot finish a year yet carries `"horizons": ["week"]`, named with its bead
+  in `CANNOT_RUN_A_FULL_YEAR` of `tests/test_golden_matrix.py` (today the heat pump with a car,
+  hisim-4g9.56). A setup without a golden for a configured pair fails the check before anything
+  runs; the next bless writes the missing file.
 
 ## Blessing (updating the goldens)
 

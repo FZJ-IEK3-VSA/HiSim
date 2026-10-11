@@ -75,8 +75,8 @@ head commit instead. A wait that costs a runner is a bug, not a cost.
 
 The golden gates run as shards (`scripts/golden_matrix.py --shards 4`): four week jobs, each
 running four pairs at once, every pair's Python setup, its recorded YAML twin and, where it has
-one, its composed file side by side in one pool (`golden_check.py --mode all`), and four
-full-year jobs running two simulations at once, the composed files among them
+one, its composed file side by side in one pool (`golden_check.py --mode all`), and five
+full-year jobs (`--shards 5`) running two simulations at once, the composed files among them
 (`--mode python composed`). A shard is
 expected to use all four cores, so "holding a runner idle" on one of them means a pair ran far
 past its weight (`"seconds"` in `scripts/golden_config.json`), and a shard near the memory limit

@@ -6,6 +6,8 @@ sends activation/deactivation siganls to components.
 The component with the lowest source weight is activated first.
 """
 
+import dataclasses
+import math
 from dataclasses import dataclass, field
 
 from types import MappingProxyType
@@ -84,27 +86,20 @@ class EMSConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
+@dataclass(frozen=True)
 class EMSState:
-    """Saves the state of the Energy Management System."""
+    """The energy manager's state from one time step to the next: whether it raised the set temperatures.
 
-    def __init__(
-        self,
-        production: float,
-        consumption_uncontrolled: float,
-        consumption_ems_controlled: float,
-    ) -> None:
-        """Initialize the heat pump controller state."""
-        self.production_in_watt = production
-        self.consumption_uncontrolled_in_watt = consumption_uncontrolled
-        self.consumption_ems_controlled_in_watt = consumption_ems_controlled
+    The energy manager raises the set temperatures of the building, the space-heating storage and the hot-water
+    storage while electricity is left over after the battery. Close to zero surplus it keeps the decision of the
+    step before (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`), so that decision is the one
+    value the manager carries from step to step. ``i_simulate`` reads it from the saved state and writes the
+    decision of the current pass as the end-of-step state; ``i_save_state`` makes the converged pass's decision
+    the next step's start.
+    """
 
-    def clone(self) -> "EMSState":
-        """Copy EMSState efficiently."""
-        return EMSState(
-            production=self.production_in_watt,
-            consumption_uncontrolled=self.consumption_uncontrolled_in_watt,
-            consumption_ems_controlled=self.consumption_ems_controlled_in_watt,
-        )
+    #: Whether the set temperatures are raised, in the step this state ends.
+    set_temperatures_are_raised: bool = False
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
@@ -158,6 +153,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             lt.ComponentType.BATTERY: 6,
         }
     )
+
+    #: The half-width of the band around zero surplus within which the energy manager keeps the previous step's
+    #: decision to raise the set temperatures, in W (:meth:`raises_set_temperatures`). Wide against float noise:
+    #: a battery that balances the house leaves a surplus of about +-5e-12 W, and the simulator accepts a step once
+    #: no output moves by more than 1e-4 between passes, so a converged surplus moves by less than about 1e-3 W
+    #: even where several ports add up. Negligible in energy: while the surplus lies within the band, at most 0.01 W
+    #: goes to or comes from the grid whichever decision is kept, at most 88 Wh in a year at any step length.
+    SURPLUS_HYSTERESIS_BAND_IN_WATT: ClassVar[float] = 0.01
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
@@ -270,8 +273,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             my_display_config=my_display_config,
         )
 
-        self.state = EMSState(production=0, consumption_uncontrolled=0, consumption_ems_controlled=0)
-        self.previous_state = self.state.clone()
+        self.state = EMSState()
+        self.previous_state = EMSState()
 
         self.component_types_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
@@ -668,13 +671,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return self.ems_config.get_string_dict()
 
     def i_save_state(self) -> None:
-        """Saves the state."""
-        # abändern, siehe Storage
-        self.previous_state = self.state
+        """Save the state the step ends with, the decision of the converged pass, as the next step's start."""
+        self.previous_state = dataclasses.replace(self.state)
 
     def i_restore_state(self) -> None:
-        """Restores the state."""
-        self.state = self.previous_state
+        """Restore the state the step started with, so every pass decides from the previous step's decision."""
+        self.state = dataclasses.replace(self.previous_state)
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -763,25 +765,68 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         return available_surplus_electricity_in_watt
 
+    @staticmethod
+    def raises_set_temperatures(*, surplus_after_battery_in_watt: float, raised_in_previous_step: bool) -> bool:
+        """Return whether the energy manager raises the set temperatures, from the surplus and its previous decision.
+
+        The surplus after the battery is the electricity left over once every participant, the battery last, has
+        taken its share; positive means electricity would go to the grid. The decision has a hysteresis band of
+        ``SURPLUS_HYSTERESIS_BAND_IN_WATT`` around zero: above the band the set temperatures are raised, below it
+        they are not, and within it, edges included, the decision of the previous step is kept. For example, with
+        the band of 0.01 W, a surplus of 5e-12 W keeps the previous decision, a surplus of 0.5 W raises, and a
+        surplus of -0.5 W does not.
+
+        Why: when the battery balances the house exactly, the surplus is zero up to float noise, and a decision on
+        its sign alone would switch the raise on and off between the passes of one step.
+
+        Args:
+            surplus_after_battery_in_watt: The surplus left after the battery, in W.
+            raised_in_previous_step: Whether the set temperatures were raised in the previous step.
+
+        Returns:
+            Whether the set temperatures are raised in this step.
+
+        Raises:
+            ValueError: If the surplus is NaN or infinite.
+        """
+        if not math.isfinite(surplus_after_battery_in_watt):
+            raise ValueError(
+                f"The surplus after the battery must be a finite power in W, got {surplus_after_battery_in_watt!r}."
+            )
+        band_in_watt = L2GenericEnergyManagementSystem.SURPLUS_HYSTERESIS_BAND_IN_WATT
+        if surplus_after_battery_in_watt > band_in_watt:
+            return True
+        if surplus_after_battery_in_watt < -band_in_watt:
+            return False
+        return raised_in_previous_step
+
     def modify_set_temperatures_for_components_in_case_of_surplus_electricity(
         self,
-        available_surplus_electricity_in_watt: float,
+        set_temperatures_are_raised: bool,
         stsv: cp.SingleTimeStepValues,
         inputs_sorted: List[ComponentInput],
         component_types_sorted: List[lt.ComponentType],
     ) -> None:
-        """In case surplus electricity is available, modify set temperatures for space heating and domestic hot water heat pumps.
+        """Publish the set-temperature raises for space heating and hot water, or zero raises.
 
-        Like this, the heat pumps will start heating up the water storages and the surplus energy can be stored as thermal energy.
-        See also SG-ready heatpumps: https://de.gridx.ai/wissen/sg-ready.
+        While the raise is on (:meth:`raises_set_temperatures`), the heat pumps heat up the building and the water
+        storages, and the surplus electricity is stored as heat. See also SG-ready heat pumps:
+        https://de.gridx.ai/wissen/sg-ready.
 
-        The temperature modification outputs go to the heat pumps, the heat distribution system and the building component (see network charts).
+        The temperature modification outputs go to the heat pumps, the heat distribution system and the building
+        component (see network charts).
+
+        Args:
+            set_temperatures_are_raised: Whether the set temperatures are raised in this pass.
+            stsv: The step values the raises are written to.
+            inputs_sorted: The participants' inputs, ranked.
+            component_types_sorted: The participants' component types, in the order of ``inputs_sorted``.
         """
         for index in range(len(inputs_sorted)):
             current_component_type = component_types_sorted[index]
 
             if current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
-                if available_surplus_electricity_in_watt > 0:
+                if set_temperatures_are_raised:
                     stsv.set_output_value(
                         self.building_indoor_temperature_modifier,
                         self.building_indoor_temperature_offset_value,
@@ -798,7 +843,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.ComponentType.HEAT_PUMP,
             ]:
-                if available_surplus_electricity_in_watt > 0:
+                if set_temperatures_are_raised:
                     stsv.set_output_value(
                         self.domestic_hot_water_storage_temperature_modifier,
                         self.domestic_hot_water_storage_temperature_offset_value,
@@ -856,22 +901,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         stsv.set_output_value(self.electricity_to_building_from_district_output, district_electricity_unused)
 
         # get total production and consumptions
-        self.state.production_in_watt = (
+        production_in_watt = (
             sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
             + district_electricity_unused
         )
-        self.state.consumption_uncontrolled_in_watt = sum(
+        consumption_uncontrolled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
-        self.state.consumption_ems_controlled_in_watt = sum(
+        consumption_ems_controlled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_ems_controlled_inputs]
         )
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        available_surplus_electricity_in_watt = (
-            self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
-        )
+        available_surplus_electricity_in_watt = production_in_watt - consumption_uncontrolled_in_watt
         if self.strategy == "optimize_own_consumption":
             available_surplus_electricity_in_watt = self.distribute_available_surplus_electricity_iterative(
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
@@ -880,8 +923,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
             )
+            set_temperatures_are_raised = self.raises_set_temperatures(
+                surplus_after_battery_in_watt=available_surplus_electricity_in_watt,
+                raised_in_previous_step=self.previous_state.set_temperatures_are_raised,
+            )
+            self.state = EMSState(set_temperatures_are_raised=set_temperatures_are_raised)
             self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
-                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
+                set_temperatures_are_raised=set_temperatures_are_raised,
                 stsv=stsv,
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
@@ -890,7 +938,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
-            self.state.consumption_uncontrolled_in_watt + self.state.consumption_ems_controlled_in_watt,
+            consumption_uncontrolled_in_watt + consumption_ems_controlled_in_watt,
         )
         """
         elif self.strategy == "seasonal_storage":

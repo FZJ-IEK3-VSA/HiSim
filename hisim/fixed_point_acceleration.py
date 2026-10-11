@@ -7,8 +7,8 @@ convergence. A component declares such an output with ``is_accelerated=True`` (:
 and the simulator then replaces, after the component has run, the value it computed by the next iterate of
 :func:`accelerated_iterate`: the plain value for the first iterations of a step, a secant extrapolation of the
 output's own fixed point after them, and an under-relaxed value when the iteration oscillates. Once the simulator
-forces convergence, which freezes the controllers, it stops extrapolating and only holds a value within the deadband
-(:func:`held_value`).
+forces convergence, which freezes the controllers, it stops accelerating: the history before spans the controllers'
+switching, so a secant step from it would aim at a fixed point that no longer exists.
 
 The iteration history belongs to the simulator, which runs the iteration, so the components stay functions of their
 inputs and their saved state. Every rule here is generic: it knows nothing about the component or the quantity, and
@@ -55,12 +55,6 @@ class SecantAcceleration:
     #: residual over ``1 - theta``, so at 0.9 it is at most ten times the residual; closer to 1 an estimate from two
     #: noisy passes would turn a residual of 0.01 K into a jump of 10 K, and the plain iterate is used instead.
     MAXIMAL_CONTRACTION_FACTOR: ClassVar[float] = 0.9
-
-    #: A new value that differs from the published one by at most this keeps the published value, in the output's
-    #: unit: far below the simulator's tolerance of 1e-4, above the float noise of a converged iteration (about
-    #: 1e-13 for a temperature of 70 °C). A component that switches on the sign of a balance would otherwise turn an
-    #: iteration that alternates between two neighbouring floats into a cycle of its own.
-    DEADBAND: ClassVar[float] = 1e-9
 
 
 def _finite(name: str, value: float) -> float:
@@ -137,23 +131,6 @@ def accelerated_iterate(*, published_values: Sequence[float], computed_values: S
     return _finite("The secant extrapolation", published_last - residual / slope)
 
 
-def held_value(*, candidate_value: float, published_value: float) -> float:
-    """Return the published value when the candidate lies within the deadband of it, the candidate otherwise.
-
-    For example, a candidate of 55.0000000003 against a published 55.0 keeps 55.0; a candidate of 55.001 replaces it.
-
-    Args:
-        candidate_value: The value the acceleration proposes.
-        published_value: The value the output stood at in this pass.
-
-    Returns:
-        The value the output takes.
-    """
-    if abs(candidate_value - published_value) <= SecantAcceleration.DEADBAND:
-        return published_value
-    return candidate_value
-
-
 @dataclass
 class StepAcceleration:
 
@@ -161,8 +138,8 @@ class StepAcceleration:
 
     The simulator creates one per time step: before a component runs it records the published values of the
     component's accelerated outputs (:meth:`published_values_of`), and after it runs it replaces what the component
-    computed by the next accelerated, held value (:meth:`accelerate`), or, once it forces convergence, by the held
-    value only (:meth:`hold`). The history is reset with every step because a new object is made.
+    computed by the next accelerated value (:meth:`accelerate`), until it forces convergence. The history is reset
+    with every step because a new object is made.
     """
 
     #: For each accelerated output, by its index in the step values: the published values, oldest first.
@@ -188,21 +165,4 @@ class StepAcceleration:
             computed_history = self.computed_by_index.setdefault(index, [])
             published_history.append(published_value)
             computed_history.append(stsv.values[index])
-            candidate_value = accelerated_iterate(published_values=published_history, computed_values=computed_history)
-            stsv.values[index] = held_value(candidate_value=candidate_value, published_value=published_value)
-
-    @staticmethod
-    def hold(indices: Sequence[int], stsv: cp.SingleTimeStepValues, published: Sequence[float]) -> None:
-        """Keep the published value of every accelerated output at these indices whose new value is within the deadband.
-
-        The simulator calls this instead of :meth:`accelerate` once it forces convergence. It then holds the
-        controllers' decisions, so the history before, which spans their switching, no longer describes the map that
-        is left to iterate, and a secant step from it would aim at a fixed point that no longer exists.
-
-        Args:
-            indices: The indices of one component's accelerated outputs in the step values.
-            stsv: The step values the component has just written.
-            published: The values those outputs stood at before the component ran, in the order of ``indices``.
-        """
-        for index, published_value in zip(indices, published):
-            stsv.values[index] = held_value(candidate_value=stsv.values[index], published_value=published_value)
+            stsv.values[index] = accelerated_iterate(published_values=published_history, computed_values=computed_history)

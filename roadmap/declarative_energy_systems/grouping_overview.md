@@ -101,14 +101,14 @@ The `What it varies` column is the probe's `module_config` overlay, one `field =
 
 ## `household_electric_heating_building_sizer`
 
-Recorded from `system_setups/household_electric_heating_building_sizer.py`, described in the grouped file as "Household electric heating system setup with building sizing." 7 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Four of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
+Recorded from `system_setups/household_electric_heating_building_sizer.py`, described in the grouped file as "Household electric heating system setup with building sizing." 8 components are shared by every configuration, and one variant group, `electricity_management`, chooses between `ems_with_battery` and `metered_directly`. Four of the shared components are overrides, which means the grouped file states the baseline's value for them and a consumer sets that value to something else.
 
 ### Shape
 
 ```mermaid
 flowchart TD
     setup["household_electric_heating_building_sizer"]
-    fixed["fixed in every configuration (3)<br/>UTSPConnector<br/>Weather<br/>DHWStorage"]
+    fixed["fixed in every configuration (4)<br/>UTSPConnector<br/>Weather<br/>HeatingCurveController<br/>DHWStorage"]
     knobs["knobs, stated at the baseline value (4)<br/>Building<br/>PVSystem<br/>ElectricHeatingController<br/>ElectricHeating"]
     group1["variant group: electricity_management"]
     optA["ems_with_battery (selected)<br/>ElectricityMeter<br/>Battery<br/>L2EMSElectricityController"]
@@ -124,7 +124,7 @@ flowchart TD
     class optA selected;
 ```
 
-`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — seven components, of which the four knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
+`ElectricityMeter` appears under both options because it is assigned to the group rather than to one option: it is present in every configuration, and each option writes it out in full with its own wiring. The first two boxes together are the grouped file's shared `components:` section — eight components, of which the four knobs are the ones whose committed value a consumer replaces — and each option box is that option's own `components:` block, so every component of the setup is on this picture exactly where the grouped file puts it.
 
 ### Assignments
 

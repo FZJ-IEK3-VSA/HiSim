@@ -1,6 +1,6 @@
 # Flat-plate solar thermal collectors with their differential-thermostat pump controller, charging a DHW cylinder
 # through its solar coil, the `solar_dhw` circuit. Control is hardcoded here (D21): the Controller starts the solar pump
-# on the collector temperature against the cylinder's mean temperature. The energy manager ranks the pump's electricity
+# on the collector's heat at the cylinder's start-of-step temperature. The energy manager ranks the pump's electricity
 # from its own declaration (SOLAR_THERMAL_SYSTEM, weight 4, dispatch {}) and has no modifier for it (rank-only, dry run
 # G18), so the assembly offers no `ems_modifier`.
 #
@@ -33,12 +33,12 @@ components:
       - {$port: weather}                                    # outside temperature, irradiance, sun position
       - Controller                                          # ControlSignal; PartLoadRatio, the fraction of the step
                                                             # the pump runs
-      - {$port: solar_coil}                                 # TemperatureCollectorInletDegC, the cylinder's return leg
+      - {$port: solar_coil}                                 # the cylinder's return leg: its step mean and its start-of-step temperature
   Controller:
     class: hisim.components.solar_thermal_system.SolarThermalSystemController
     preset: standard
     inputs:
-      - Collector                                           # MassFlow, the flow its heat at the step mean needs;
+      - Collector                                           # the flow its heat at the start-of-step inlet needs;
                                                             # PartLoadRatioRun, the fraction of the step its pump ran
       - {$port: cylinder_temperature}                       # the start-of-step temperature, for the full-storage stop;
                                                             # the end-of-step temperature, for the part-load ratio

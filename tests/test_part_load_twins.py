@@ -12,7 +12,7 @@ Every test here simulates a whole energy system, so it runs in the ``extendedbas
 """
 
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Tuple
+from typing import ClassVar, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -38,33 +38,17 @@ class PartLoadTwins:
     #: The passes the simulator runs before it forces convergence; a step that needed more had a forced pass.
     UNFORCED_PASSES: int = 12
 
-    #: The twins, each with its controller's part-load ratio output and target output.
+    #: The twins, each with its controller's part-load ratio output and target output. In the gas twin the boiler
+    #: is evaluated between its controller and the tank, so the controller pairs the ratio the boiler ran in this
+    #: pass with the tank's end temperature of the pass before, and most of its partial steps are forced: in the
+    #: window one of its eleven partial steps converges (measured 2026-10-11), ending 0.04 K above the target, and
+    #: the test checks that one.
     TWINS: ClassVar[Dict[str, Tuple[str, str]]] = {
         "household_gas_building_sizer": (
             f"ModulatingBoilerController - {GenericBoilerController.PartLoadRatioDhw} [",
             f"ModulatingBoilerController - {GenericBoilerController.TargetTemperatureDhwInCelsius} [",
         ),
     }
-
-    #: The twins whose device is evaluated between its controller and the tank (device, controller, tank): the
-    #: controller pairs the ratio its device ran in this pass with the tank's end temperature of the pass before, and
-    #: the plain iteration of the part-load rule does not settle, so no partial step converges.
-    DEVICE_BETWEEN_CONTROLLER_AND_TANK: ClassVar[Tuple[str, ...]] = ("household_gas_building_sizer",)
-
-    @classmethod
-    def partial_charge_cases(cls) -> List[Any]:
-        """Return the twins as test cases, those of :attr:`DEVICE_BETWEEN_CONTROLLER_AND_TANK` as strict expected failures."""
-        return [
-            pytest.param(
-                twin,
-                marks=pytest.mark.xfail(
-                    strict=True, reason="the device runs between its controller and the tank, so no partial step converges"
-                ),
-            )
-            if twin in cls.DEVICE_BETWEEN_CONTROLLER_AND_TANK
-            else twin
-            for twin in sorted(cls.TWINS)
-        ]
 
     @classmethod
     def run(cls, twin: str, work: Path, **parameters: int) -> Tuple[pd.DataFrame, np.ndarray]:
@@ -115,7 +99,7 @@ class PartLoadTwins:
 
 
 @pytest.mark.extendedbase2
-@pytest.mark.parametrize("twin", PartLoadTwins.partial_charge_cases())
+@pytest.mark.parametrize("twin", sorted(PartLoadTwins.TWINS))
 def test_a_partial_charge_ends_the_tank_at_its_target(twin: str, tmp_path: Path) -> None:
     """Above the threshold some hot-water steps run part load, and each that converged ends the tank in the band.
 

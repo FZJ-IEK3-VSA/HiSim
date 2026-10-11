@@ -1,7 +1,7 @@
 """Part load of the solar pump: the controller commands the ratio, the collector runs it, nothing ranks it.
 
-* ``SolarThermalSystemController`` publishes the part-load ratio and its target, the 60 °C warm-water aim above which
-  it stops the pump: 0 while the pump stands, exactly 1 at and below the threshold, and above it the ratio
+* ``SolarThermalSystemController`` publishes the part-load ratio and its target, the 80 °C maximum storage temperature
+  above which it stops the pump: 0 while the pump stands, exactly 1 at and below the threshold, and above it the ratio
   :class:`hisim.part_load.PartLoadRule` gives for the ratio the pump ran and the storage's start and end temperatures.
   It keeps no part-load memory, and a forced pass publishes the ratio the pump ran.
 * ``SolarThermalSystem`` books the commanded fraction: the averaged flow at the full-load outlet, the heat it carries
@@ -48,22 +48,35 @@ def test_at_and_below_the_threshold_a_running_pump_gets_exactly_one(seconds_per_
 
 
 @pytest.mark.base
-def test_above_the_threshold_the_controller_applies_the_rule_towards_its_warm_water_aim() -> None:
-    """At 900 s the ratio lies on the line from the start temperature through the ratio run, in every pass."""
-    values = SolarControllerRig.values(start_c=55.0, end_c=62.0)
-    expected = (PartLoadRule.aim_temperature_in_celsius(60.0) - 55.0) / (62.0 - 55.0)
+def test_above_the_threshold_the_controller_applies_the_rule_towards_its_maximum_storage_temperature() -> None:
+    """At 900 s the ratio lies on the line from the start temperature through the ratio run to the 80 °C maximum.
+
+    A controller that still aimed at the backups' 60 °C warm-water aim would publish 0 for a storage that starts at
+    75 °C and stop the sun's charge there.
+    """
+    values = SolarControllerRig.values(start_c=75.0, end_c=82.0)
+    expected = (PartLoadRule.aim_temperature_in_celsius(80.0) - 75.0) / (82.0 - 75.0)
     assert ControllerPasses.ratios(900, values, 3) == pytest.approx([expected] * 3, rel=1e-12)
     controller, stsv, fakes = SolarControllerRig.build(900)
     target = AllInputsRig.step(controller, stsv, fakes, values, timestep=ControllerPasses.TIMESTEP)[
         SolarThermalSystemController.TargetTemperatureInCelsius
     ]
-    assert target == SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS == 60.0
+    assert target == SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS == 80.0
+
+
+@pytest.mark.base
+def test_a_storage_above_the_backups_aim_but_below_the_maximum_keeps_the_sunny_pump_running_the_whole_step() -> None:
+    """A storage that starts at 61 °C, above the backups' 60 °C aim, gets the whole step of a sunny collector.
+
+    A controller that stopped at the backups' aim would publish 0 here and leave the heat on the roof.
+    """
+    assert ControllerPasses.ratios(900, SolarControllerRig.values(start_c=61.0, end_c=66.0), 2) == [1.0, 1.0]
 
 
 @pytest.mark.base
 def test_a_full_storage_stops_the_pump_and_its_ratio_is_zero() -> None:
-    """A storage that started above 60 °C stops the pump; the ratio published is 0."""
-    assert ControllerPasses.ratios(900, SolarControllerRig.values(start_c=61.0, end_c=61.0), 2) == [0.0, 0.0]
+    """A storage that started above the 80 °C maximum stops the pump; the ratio published is 0."""
+    assert ControllerPasses.ratios(900, SolarControllerRig.values(start_c=81.0, end_c=81.0), 2) == [0.0, 0.0]
 
 
 @pytest.mark.base

@@ -576,15 +576,22 @@ class CollectorRig:
     """A flat-plate collector on a hot-water tank at noon, one step on fake inputs."""
 
     @staticmethod
-    def charge(seconds_per_timestep: int, ratio: float, control_signal: float = 1.0) -> Dict[str, float]:
+    def charge(
+        seconds_per_timestep: int,
+        ratio: float,
+        control_signal: float = 1.0,
+        inlet_at_start_of_step_c: float = 45.0,
+    ) -> Dict[str, float]:
         """Return every output of one step at a 45 °C tank mean, 800 W/m² global and 100 W/m² diffuse irradiance.
 
-        The sun stands 30° from the zenith due south (no weather file, no cache).
+        The sun stands 30° from the zenith due south (no weather file, no cache). The tank started the step at
+        ``inlet_at_start_of_step_c``, by default its step mean.
 
         Args:
             seconds_per_timestep: The step length, s.
             ratio: The part-load ratio the controller commands.
             control_signal: The controller's pump signal, 1 for running.
+            inlet_at_start_of_step_c: The tank's start-of-step temperature, the collector inlet's, °C.
 
         Returns:
             The collector's outputs by field name.
@@ -609,6 +616,7 @@ class CollectorRig:
                 system.DiffuseHorizontalIrradianceWM2: 100.0,
                 system.TemperatureOutsideDegC: 20.0,
                 system.TemperatureCollectorInletDegC: 45.0,
+                system.TemperatureCollectorInletAtStartOfStepInCelsius: inlet_at_start_of_step_c,
                 system.PartLoadRatio: ratio,
             },
         )
@@ -651,6 +659,6 @@ class SolarControllerRig:
         return {
             controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
             controller_class.StorageTemperatureAtEndOfStepInCelsius: end_c,
-            controller_class.MassFlow: 0.03,
+            controller_class.RequiredWaterMassFlowAtStartOfStepInKgPerSecond: 0.03,
             controller_class.PartLoadRatioRun: ratio_run,
         }

@@ -102,7 +102,8 @@ class PumpSteps:
     def values(mass_flow_in_kg_per_second: float, ratio_run: float = 1.0) -> Dict[str, float]:
         """Return the controller's inputs for a tank at 45 °C and the given collector flow and ratio run."""
         values = SolarControllerRig.values(start_c=45.0, end_c=50.0, ratio_run=ratio_run)
-        values[SolarThermalSystemController.MassFlow] = mass_flow_in_kg_per_second
+        flow_input = SolarThermalSystemController.RequiredWaterMassFlowAtStartOfStepInKgPerSecond
+        values[flow_input] = mass_flow_in_kg_per_second
         return values
 
     @staticmethod
@@ -146,6 +147,54 @@ def test_the_pump_state_of_the_previous_step_chooses_the_flow_and_no_pass_rememb
 
 
 @pytest.mark.base
+def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts_three_kelvin_below_the_aim() -> None:
+    """The full-storage stop holds across steps until the storage starts a step 3 K below the aim, then it releases.
+
+    A controller without the band would restart the pump as soon as the storage cools below 60 °C and switch it every
+    second step; one that kept the stop in a pass instead of the saved state would hold or release it within a step.
+    """
+    controller, stsv, fakes = SolarControllerRig.build(900)
+    sunny = PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S
+
+    def signal(start_c: float) -> float:
+        """Run one pass of a sunny step whose storage started at ``start_c`` and return the pump signal."""
+        values = PumpSteps.values(sunny)
+        values[SolarThermalSystemController.StorageTemperatureAtStartOfStepInCelsius] = start_c
+        return PumpSteps.signal(controller, stsv, fakes, values)
+
+    controller.i_save_state()  # the first step starts with the pump standing and the stop released
+    assert signal(59.5) == 1  # a storage below the aim with no stop: the pump switches on
+    controller.i_save_state()
+    assert signal(60.025) == 0  # the part-load rule ended the storage just above the aim: the stop sets
+    controller.i_save_state()
+    assert signal(59.5) == 0  # the storage cooled below the aim, but not 3 K below it: the stop holds
+    controller.i_save_state()
+    assert signal(57.5) == 0
+    controller.i_save_state()
+    assert signal(57.0) == 1  # exactly 3 K below the aim: the stop releases and the sunny collector starts the pump
+    controller.i_save_state()
+    assert signal(58.5) == 1  # inside the band, the released stop stays released
+
+
+@pytest.mark.base
+def test_the_collector_publishes_the_flow_its_heat_at_the_start_of_step_inlet_needs_whatever_the_pump_does() -> None:
+    """The flow the controller switches on comes from the start-of-step inlet, not from the step mean or the pump.
+
+    A collector that published its step-mean flow here would let the pump's own heat switch the pump off in the step
+    it switches on; one whose answer depended on the pump signal would switch on its own output.
+    """
+    at_the_mean = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=45.0)
+    flow_name = SolarThermalSystem.RequiredWaterMassFlowAtStartOfStepInKgPerSecond
+    assert at_the_mean[flow_name] == at_the_mean[SolarThermalSystem.RequiredWaterMassFlowOutput] > 0.0
+    cooler_start = CollectorRig.charge(900, ratio=1.0, inlet_at_start_of_step_c=40.0)
+    assert cooler_start[flow_name] > at_the_mean[flow_name]
+    mean_flow_name = SolarThermalSystem.RequiredWaterMassFlowOutput
+    assert cooler_start[mean_flow_name] == at_the_mean[mean_flow_name]
+    standing = CollectorRig.charge(900, ratio=0.0, control_signal=0.0, inlet_at_start_of_step_c=40.0)
+    assert standing[flow_name] == cooler_start[flow_name]
+
+
+@pytest.mark.base
 @pytest.mark.parametrize("pump_ran_in_previous_step", [False, True])
 def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in_previous_step: bool) -> None:
     """Passes with other inputs before a pass change nothing it publishes: the generic iteration-safety check.
@@ -162,6 +211,9 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
         controller.i_save_state()
     for flow in (PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, PumpSteps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
         PumpSteps.signal(iterated, iterated_stsv, iterated_fakes, PumpSteps.values(flow))
+    full_storage = PumpSteps.values(PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)
+    full_storage[SolarThermalSystemController.StorageTemperatureAtStartOfStepInCelsius] = 61.0
+    PumpSteps.signal(iterated, iterated_stsv, iterated_fakes, full_storage)
     final = PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
     expected = PumpSteps.signal(fresh, fresh_stsv, fresh_fakes, final)
     assert PumpSteps.signal(iterated, iterated_stsv, iterated_fakes, final) == expected

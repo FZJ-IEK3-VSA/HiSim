@@ -37,6 +37,12 @@ components:
       location: AACHEN
     inputs:
       - Weather
+  HeatingCurveController:
+    class: hisim.components.heating_curve.HeatingCurveController
+    preset: direct_room_heating
+    inputs:
+      - L2EMSElectricityController
+      - Weather
   ElectricHeatingController:
     class: hisim.components.generic_electric_heating.ElectricHeatingController
     preset: standard
@@ -44,7 +50,7 @@ components:
       with_domestic_hot_water_preparation: true
       parallel_space_heating_and_dhw_option: true
     inputs:
-      - Weather
+      - HeatingCurveController
       - DHWStorage
   ElectricHeating:
     class: hisim.components.generic_electric_heating.ElectricHeating

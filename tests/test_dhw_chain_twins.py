@@ -330,7 +330,7 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     classnames = {owner.split("|")[1] for owner in circuits.values()}
     summary = record_histogram(name, passes, forced)
     if MoreAdvancedHeatPumpHPLib.get_classname() not in classnames:
-        assert summary["steps_at_force_convergence"] <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), summary
+        assert sum(forced) <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), summary
 
 
 @pytest.mark.extendedbase2

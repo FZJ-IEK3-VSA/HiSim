@@ -361,7 +361,8 @@ class CollectorRig:
     def charge(seconds_per_timestep: int, ratio: float, control_signal: float = 1.0) -> Dict[str, float]:
         """Return every output of one step at a 45 °C tank mean, 800 W/m² global and 100 W/m² diffuse irradiance.
 
-        The sun stands 30° from the zenith due south (no weather file, no cache).
+        The sun stands 30° from the zenith due south (no weather file, no cache); the tank started the step at its
+        step mean.
 
         Args:
             seconds_per_timestep: The step length, s.
@@ -391,6 +392,7 @@ class CollectorRig:
                 system.DiffuseHorizontalIrradianceWM2: 100.0,
                 system.TemperatureOutsideDegC: 20.0,
                 system.TemperatureCollectorInletDegC: 45.0,
+                system.TemperatureCollectorInletAtStartOfStepInCelsius: 45.0,
                 system.PartLoadRatio: ratio,
             },
         )
@@ -433,6 +435,6 @@ class SolarControllerRig:
         return {
             controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
             controller_class.StorageTemperatureAtEndOfStepInCelsius: end_c,
-            controller_class.MassFlow: 0.03,
+            controller_class.RequiredWaterMassFlowAtStartOfStepInKgPerSecond: 0.03,
             controller_class.PartLoadRatioRun: ratio_run,
         }

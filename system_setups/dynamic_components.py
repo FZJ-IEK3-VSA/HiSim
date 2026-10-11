@@ -183,6 +183,20 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=4,
     )
+    # The energy manager computes each battery's share of a surplus from the charging limits it publishes.
+    for my_advanced_battery in (my_advanced_battery_1, my_advanced_battery_2):
+        for limit_output, limit_tag in (
+            (my_advanced_battery.MaximumChargingPowerInWatt, lt.InandOutputType.MAXIMUM_CHARGING_POWER),
+            (my_advanced_battery.MinimumChargingPowerInWatt, lt.InandOutputType.MINIMUM_CHARGING_POWER),
+        ):
+            my_cl2.add_component_input_and_connect(
+                source_object_name=my_advanced_battery.component_name,
+                source_component_output=limit_output,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.BATTERY, limit_tag],
+                source_weight=999,
+            )
 
     electricity_from_fuel_cell_target_1 = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,

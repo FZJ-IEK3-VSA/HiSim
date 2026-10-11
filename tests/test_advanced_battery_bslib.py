@@ -1,5 +1,7 @@
 """Test for the advanced battery lib."""
 
+from typing import List, Tuple
+
 import pytest
 from hisim import component as cp
 from hisim.components import advanced_battery_bslib
@@ -254,3 +256,116 @@ def test_a_battery_cannot_be_sized_without_an_array_beside_it() -> None:
     """
     with pytest.raises(ConfigSizingError, match="pv_peak_power_in_watt"):
         advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(SizingContext())
+
+
+class TestTheChargingLimits:
+    """The battery publishes, from its state at the step's start, the largest and smallest power it charges with."""
+
+    #: A generic bslib battery of 11.1 kWh with an inverter of 11.1 kW.
+    PARAMETERS = advanced_battery_bslib.BslibChargingParameters(
+        capacity_in_watt_hour=11100.0,
+        rated_charging_power_in_watt=11100.0,
+        minimum_charging_power_in_watt=202.353,
+        recharge_threshold_state_of_charge=0.98,
+    )
+
+    #: State of charge, whether the recharge hysteresis blocks, step length in s, and the maximum in W.
+    MAXIMA = [
+        (0.0, False, 60, 11100.0),
+        (0.5, False, 60, 11100.0),
+        (0.999, False, 60, 666.0),
+        (0.999, False, 900, 44.4),
+        (1.0, False, 60, 0.0),
+        (1.0000001, False, 60, 0.0),
+        (0.99, True, 60, 0.0),
+        (0.98, True, 60, 0.0),
+        (0.97, True, 60, 11100.0),
+        (0.97, False, 3600, 333.0),
+    ]
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("state_of_charge", "blocked", "seconds_per_timestep", "expected_in_watt"), MAXIMA)
+    def test_every_maximum_of_the_table(self, state_of_charge: float, blocked: bool, seconds_per_timestep: int, expected_in_watt: float) -> None:
+        """Catches a maximum beyond the rated power, beyond what fills the battery in the step, or one while it is full."""
+        maximum_in_watt = advanced_battery_bslib.Battery.maximum_charging_power_in_watt(
+            self.PARAMETERS, state_of_charge=state_of_charge, recharging_is_blocked=blocked, seconds_per_timestep=seconds_per_timestep
+        )
+        assert maximum_in_watt == pytest.approx(expected_in_watt)
+
+    @pytest.mark.base
+    def test_a_step_length_that_is_not_positive_is_refused(self) -> None:
+        """Catches a zero step length turning into an infinite filling power."""
+        with pytest.raises(ValueError, match="positive"):
+            advanced_battery_bslib.Battery.maximum_charging_power_in_watt(
+                self.PARAMETERS, state_of_charge=0.5, recharging_is_blocked=False, seconds_per_timestep=0
+            )
+
+    @pytest.mark.base
+    def test_the_adapter_reads_the_bslib_battery(self) -> None:
+        """Catches an adapter that reads the wrong bslib attributes: SG1 scales its minimum with the inverter power."""
+        battery = battery_with_set_point_input()[0]
+        assert battery.charging_parameters.capacity_in_watt_hour == 10000.0
+        assert battery.charging_parameters.rated_charging_power_in_watt == 5000.0
+        assert battery.charging_parameters.minimum_charging_power_in_watt == pytest.approx(18.23 * 5)
+        assert battery.charging_parameters.recharge_threshold_state_of_charge == 0.98
+
+    @pytest.mark.base
+    def test_a_battery_offered_its_maximum_takes_it(self) -> None:
+        """Catches a published maximum the battery does not take: the energy manager's share would then be wrong."""
+        battery, set_point, stsv = battery_with_set_point_input()
+        for state_of_charge in (0.1, 0.9995):
+            battery.state = advanced_battery_bslib.BatteryState(state_of_charge=state_of_charge)
+            battery.i_save_state()
+            battery.i_restore_state()
+            battery.i_simulate(0, stsv, False)
+            maximum_in_watt = stsv.values[battery.maximum_charging_power_channel.global_index]
+            stsv.values[set_point.global_index] = maximum_in_watt + 1000.0
+            battery.i_restore_state()
+            battery.i_simulate(0, stsv, False)
+            assert stsv.values[battery.ac_battery_power_channel.global_index] == pytest.approx(maximum_in_watt)
+
+    @pytest.mark.base
+    def test_the_battery_is_safe_to_iterate(self) -> None:
+        """Catches limits that depend on an earlier pass of the step or on the set point of the pass.
+
+        The iteration-safety test: save, run passes with other set points, restore and run with set point X; every
+        output must equal that of a fresh save followed by one pass with X. The state of charge stays away from full,
+        where bslib's own recharge hysteresis changes from pass to pass.
+        """
+
+        def outputs_after(earlier_set_points_in_watt: List[float]) -> List[float]:
+            battery, set_point, stsv = battery_with_set_point_input()
+            battery.state = advanced_battery_bslib.BatteryState(state_of_charge=0.5)
+            battery.i_save_state()
+            for set_point_in_watt in earlier_set_points_in_watt:
+                stsv.values[set_point.global_index] = set_point_in_watt
+                battery.i_restore_state()
+                battery.i_simulate(0, stsv, False)
+            stsv.values[set_point.global_index] = 1200.0
+            battery.i_restore_state()
+            battery.i_simulate(0, stsv, False)
+            return list(stsv.values)
+
+        assert outputs_after([4000.0, -3000.0, 50.0]) == outputs_after([])
+
+
+def battery_with_set_point_input() -> Tuple[advanced_battery_bslib.Battery, cp.ComponentOutput, cp.SingleTimeStepValues]:
+    """Build a generic 10 kWh, 5 kW battery at 60 s steps whose set point a stand-in output feeds.
+
+    Returns:
+        The battery, the set-point output and the step values.
+    """
+    parameters = SimulationParameters.one_day_only(2021, 60)
+    config = advanced_battery_bslib.BatteryConfig(
+        component_id=ComponentID(name="Battery"),
+        custom_pv_inverter_power_generic_in_watt=5000.0,
+        custom_battery_capacity_generic_in_kilowatt_hour=10.0,
+    )
+    battery = advanced_battery_bslib.Battery(config=config, my_simulation_parameters=parameters)
+    set_point = cp.ComponentOutput(
+        "SetPoint", "LoadingPowerInput", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=ComponentID("SetPoint")
+    )
+    battery.loading_power_input_channel.source_output = set_point
+    fft.add_global_index_of_components([battery, set_point])
+    stsv = cp.SingleTimeStepValues(fft.get_number_of_outputs([battery, set_point]))
+    return battery, set_point, stsv

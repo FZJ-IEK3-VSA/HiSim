@@ -6,7 +6,8 @@ Investigate total consumption, total grid consumption and grid injection.
 
 import os
 import json
-from typing import Optional, Tuple
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, cast
 import pytest
 import numpy as np
 import pandas as pd
@@ -873,7 +874,7 @@ def test_a_device_that_publishes_no_dhw_power_grows_no_dhw_target() -> None:
 
 class TestSurplusHysteresis:
 
-    """The energy manager raises the set temperatures on a surplus, with a hysteresis band around zero surplus."""
+    """The energy manager raises the set temperatures on a surplus, with a hysteresis band around zero."""
 
     BAND_IN_WATT = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.SURPLUS_HYSTERESIS_BAND_IN_WATT
 
@@ -901,7 +902,8 @@ class TestSurplusHysteresis:
         Outside the band the sign decides at once; inside it, edges included, the previous step's decision holds.
         """
         decision = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.raises_set_temperatures(
-            surplus_after_battery_in_watt=surplus_in_watt, raised_in_previous_step=raised_in_previous_step
+            surplus_after_battery_in_watt=surplus_in_watt,
+            raised_in_previous_step=raised_in_previous_step,
         )
         assert decision is expected
 
@@ -912,6 +914,63 @@ class TestSurplusHysteresis:
         with pytest.raises(ValueError, match="finite"):
             controller_l2_energy_management_system.L2GenericEnergyManagementSystem.raises_set_temperatures(
                 surplus_after_battery_in_watt=surplus_in_watt, raised_in_previous_step=False
+            )
+
+    #: The battery's share: the surplus offered, its realized power, its maximum and minimum charging powers, the share,
+    #: all in W.
+    SHARES = [
+        (1000.0, 0.0, 5000.0, 200.0, 1000.0),
+        (1000.0, -3000.0, 5000.0, 200.0, 1000.0),
+        (8000.0, 2000.0, 5000.0, 200.0, 5000.0),
+        (5000.0, 0.0, 5000.0, 200.0, 5000.0),
+        (150.0, 150.0, 5000.0, 200.0, 0.0),
+        (200.0, 0.0, 5000.0, 200.0, 0.0),
+        (200.5, 0.0, 5000.0, 200.0, 200.5),
+        (1000.0, 1000.0, 150.0, 200.0, 0.0),
+        (1000.0, 0.0, 0.0, 200.0, 0.0),
+        (0.0, 0.0, 5000.0, 200.0, 0.0),
+        (-300.0, -300.0, 5000.0, 200.0, -300.0),
+        (-8000.0, -5000.0, 5000.0, 0.0, -5000.0),
+    ]
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(("surplus_in_watt", "realized_in_watt", "maximum_in_watt", "minimum_in_watt", "expected_in_watt"), SHARES)
+    def test_every_battery_share_of_the_table(
+        self, surplus_in_watt: float, realized_in_watt: float, maximum_in_watt: float, minimum_in_watt: float, expected_in_watt: float
+    ) -> None:
+        """Catches a charging share beyond the battery's limits, below its minimum, or taken from its stale answer.
+
+        From a surplus the limits decide whatever the battery answered before; in a deficit its realized power counts.
+        """
+        share_in_watt = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_share_in_watt(
+            surplus_in_watt=surplus_in_watt,
+            realized_battery_power_in_watt=realized_in_watt,
+            maximum_charging_power_in_watt=maximum_in_watt,
+            minimum_charging_power_in_watt=minimum_in_watt,
+        )
+        assert share_in_watt == expected_in_watt
+
+    @pytest.mark.base
+    @pytest.mark.parametrize(
+        ("surplus_in_watt", "realized_in_watt", "maximum_in_watt", "minimum_in_watt"),
+        [
+            (float("nan"), 0.0, 5000.0, 200.0),
+            (100.0, float("nan"), 5000.0, 200.0),
+            (100.0, 0.0, float("inf"), 200.0),
+            (100.0, 0.0, -1.0, 200.0),
+            (100.0, 0.0, 5000.0, -1.0),
+        ],
+    )
+    def test_an_invalid_battery_limit_is_refused(
+        self, surplus_in_watt: float, realized_in_watt: float, maximum_in_watt: float, minimum_in_watt: float
+    ) -> None:
+        """Catches a NaN or negative limit turning into a share that silently decides the raise."""
+        with pytest.raises(ValueError):
+            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_share_in_watt(
+                surplus_in_watt=surplus_in_watt,
+                realized_battery_power_in_watt=realized_in_watt,
+                maximum_charging_power_in_watt=maximum_in_watt,
+                minimum_charging_power_in_watt=minimum_in_watt,
             )
 
     @staticmethod
@@ -927,6 +986,39 @@ class TestSurplusHysteresis:
 
         Returns:
             The manager, the PV system's electricity output in W, and the step values.
+        """
+        manager, outputs = TestSurplusHysteresis.manager_with_pv_and_heat_pump_outputs()
+        return manager, outputs.pv, TestSurplusHysteresis.indexed_step_values(manager, outputs)
+
+    @dataclass
+    class ParticipantOutputs:
+        """The outputs of the participants a test manager reads, each a port of a stand-in component."""
+
+        pv: cp.ComponentOutput
+        heat_pump: cp.ComponentOutput
+        battery: Optional[cp.ComponentOutput] = None
+        battery_maximum_charging_power: Optional[cp.ComponentOutput] = None
+        battery_minimum_charging_power: Optional[cp.ComponentOutput] = None
+
+        def all(self) -> List[cp.ComponentOutput]:
+            """Return every participant output that exists, in a fixed order."""
+            candidates = [
+                self.pv,
+                self.heat_pump,
+                self.battery,
+                self.battery_maximum_charging_power,
+                self.battery_minimum_charging_power,
+            ]
+            return [output for output in candidates if output is not None]
+
+    @staticmethod
+    def manager_with_pv_and_heat_pump_outputs() -> Tuple[
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem, "TestSurplusHysteresis.ParticipantOutputs"
+    ]:
+        """Build an energy manager fed by a PV system and a hot-water heat pump steered at weight 3.
+
+        Returns:
+            The manager and the participants' outputs.
         """
         manager = _energy_manager()
         pv_output = cp.ComponentOutput(
@@ -955,12 +1047,92 @@ class TestSurplusHysteresis:
             source_weight=3,
             output_description="Target electricity for the hot-water heat pump.",
         )
-        outputs = [pv_output, heat_pump_output, *manager.outputs]
-        for index, output in enumerate(outputs):
+        return manager, TestSurplusHysteresis.ParticipantOutputs(pv=pv_output, heat_pump=heat_pump_output)
+
+    @staticmethod
+    def wire_battery(
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        outputs: "TestSurplusHysteresis.ParticipantOutputs",
+        with_limits: bool = True,
+    ) -> None:
+        """Add a battery steered at weight 6 and, unless told otherwise, its two charging limits.
+
+        Args:
+            manager: The manager to wire the battery to.
+            outputs: The participants' outputs; the battery's are added to it.
+            with_limits: Whether the battery's charging limits are wired.
+        """
+        battery_name = "Battery"
+        outputs.battery = cp.ComponentOutput(
+            battery_name,
+            "AcBatteryPowerUsed",
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            output_description="the battery's realized power",
+            component_id=ComponentID(name=battery_name),
+        )
+        manager.add_component_input_and_connect(
+            source_object_name=battery_name,
+            source_component_output="AcBatteryPowerUsed",
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+            source_weight=6,
+        )
+        manager.inputs[-1].source_output = outputs.battery
+        manager.add_component_output(
+            source_output_name="LoadingPowerInputForBattery_",
+            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_weight=6,
+            output_description="Target electricity for the battery.",
+        )
+
+        if not with_limits:
+            return
+        for field_name, limit_tag in (
+            ("MaximumChargingPowerInWatt", lt.InandOutputType.MAXIMUM_CHARGING_POWER),
+            ("MinimumChargingPowerInWatt", lt.InandOutputType.MINIMUM_CHARGING_POWER),
+        ):
+            limit_output = cp.ComponentOutput(
+                battery_name,
+                field_name,
+                lt.LoadTypes.ELECTRICITY,
+                lt.Units.WATT,
+                output_description="a charging limit of the battery",
+                component_id=ComponentID(name=battery_name),
+            )
+            manager.add_component_input_and_connect(
+                source_object_name=battery_name,
+                source_component_output=field_name,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.BATTERY, limit_tag],
+                source_weight=999,
+            )
+            manager.inputs[-1].source_output = limit_output
+            if limit_tag == lt.InandOutputType.MAXIMUM_CHARGING_POWER:
+                outputs.battery_maximum_charging_power = limit_output
+            else:
+                outputs.battery_minimum_charging_power = limit_output
+
+    @staticmethod
+    def indexed_step_values(
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        outputs: "TestSurplusHysteresis.ParticipantOutputs",
+    ) -> cp.SingleTimeStepValues:
+        """Give every output its index, as the simulator would, and return step values with the heat pump at 1000 W.
+
+        Returns:
+            The step values.
+        """
+        all_outputs = [*outputs.all(), *manager.outputs]
+        for index, output in enumerate(all_outputs):
             output.global_index = index
-        stsv = cp.SingleTimeStepValues(len(outputs))
-        stsv.set_output_value(heat_pump_output, 1000.0)
-        return manager, pv_output, stsv
+        stsv = cp.SingleTimeStepValues(len(all_outputs))
+        stsv.set_output_value(outputs.heat_pump, 1000.0)
+        return stsv
 
     @staticmethod
     def hot_water_raise_in_kelvin(
@@ -995,3 +1167,130 @@ class TestSurplusHysteresis:
         manager.i_save_state()
         assert self.hot_water_raise_in_kelvin(manager, pv_output, stsv, -5e-12) == offset_in_kelvin
         assert self.hot_water_raise_in_kelvin(manager, pv_output, stsv, -200.0) == 0.0
+
+    def manager_with_battery(
+        self, maximum_charging_power_in_watt: float, minimum_charging_power_in_watt: float
+    ) -> Tuple[
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        "TestSurplusHysteresis.ParticipantOutputs",
+        cp.SingleTimeStepValues,
+    ]:
+        """Build a manager with PV, a hot-water heat pump drawing 1000 W and a battery with these charging limits.
+
+        Returns:
+            The manager, the participants' outputs and the step values.
+        """
+        manager, outputs = self.manager_with_pv_and_heat_pump_outputs()
+        self.wire_battery(manager, outputs)
+        stsv = self.indexed_step_values(manager, outputs)
+        stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_maximum_charging_power), maximum_charging_power_in_watt)
+        stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery_minimum_charging_power), minimum_charging_power_in_watt)
+        return manager, outputs, stsv
+
+    @staticmethod
+    def one_pass(
+        manager: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        outputs: "TestSurplusHysteresis.ParticipantOutputs",
+        stsv: cp.SingleTimeStepValues,
+        *,
+        pv_production_in_watt: float,
+        realized_battery_power_in_watt: float,
+    ) -> Tuple[float, float]:
+        """Run one pass from the saved state with this PV production and the battery's answer to an earlier offer.
+
+        Returns:
+            The hot-water set-temperature raise in K and the published grid balance in W.
+        """
+        stsv.set_output_value(outputs.pv, pv_production_in_watt)
+        stsv.set_output_value(cast(cp.ComponentOutput, outputs.battery), realized_battery_power_in_watt)
+        manager.i_restore_state()
+        manager.i_simulate(0, stsv, False)
+        return (
+            stsv.values[manager.domestic_hot_water_storage_temperature_modifier.global_index],
+            stsv.values[manager.total_electricity_to_or_from_grid.global_index],
+        )
+
+    @pytest.mark.base
+    def test_the_battery_share_comes_from_its_limits_and_not_from_its_answer(self) -> None:
+        """Catches a decision taken on the battery's answer to an earlier pass's offer, which makes the passes cycle.
+
+        With 3000 W of PV beside 1000 W of heat pump, a battery that can take 1500 W leaves 500 W of surplus, and the
+        set temperatures are raised whatever the battery answered before. The published grid balance still books the
+        battery's realized power.
+        """
+        manager, outputs, stsv = self.manager_with_battery(1500.0, 200.0)
+        offset_in_kelvin = manager.domestic_hot_water_storage_temperature_offset_value
+        manager.i_save_state()
+        for realized_battery_power_in_watt in (2000.0, 0.0, -3000.0, 1500.0):
+            raise_in_kelvin, grid_balance_in_watt = self.one_pass(
+                manager, outputs, stsv, pv_production_in_watt=3000.0, realized_battery_power_in_watt=realized_battery_power_in_watt
+            )
+            assert raise_in_kelvin == offset_in_kelvin
+            assert grid_balance_in_watt == pytest.approx(2000.0 - realized_battery_power_in_watt)
+
+    @pytest.mark.base
+    def test_a_battery_that_takes_the_whole_surplus_keeps_the_previous_decision(self) -> None:
+        """Catches a battery charging below its maximum read as a surplus or a deficit: what it takes leaves zero."""
+        manager, outputs, stsv = self.manager_with_battery(5000.0, 200.0)
+        manager.i_save_state()
+        raise_in_kelvin, _ = self.one_pass(manager, outputs, stsv, pv_production_in_watt=3000.0, realized_battery_power_in_watt=0.0)
+        assert raise_in_kelvin == 0.0
+
+    @pytest.mark.base
+    def test_a_surplus_below_the_batterys_minimum_raises(self) -> None:
+        """Catches a surplus the battery does not take, because it lies below its minimum, kept from the raise."""
+        manager, outputs, stsv = self.manager_with_battery(5000.0, 200.0)
+        manager.i_save_state()
+        raise_in_kelvin, _ = self.one_pass(manager, outputs, stsv, pv_production_in_watt=1059.0, realized_battery_power_in_watt=0.0)
+        assert raise_in_kelvin == manager.domestic_hot_water_storage_temperature_offset_value
+
+    @pytest.mark.base
+    def test_a_battery_that_covers_a_deficit_counts_with_its_realized_power(self) -> None:
+        """Catches the deficit side of the decision changed by the limits: a discharging battery still counts there.
+
+        The raised heat pump draws 1000 W beside 800 W of PV, and the battery discharges the missing 200 W. The balance
+        is zero, inside the band, and the raise is kept, as before the battery published its limits.
+        """
+        manager, outputs, stsv = self.manager_with_battery(5000.0, 200.0)
+        manager.state = controller_l2_energy_management_system.EMSState(set_temperatures_are_raised=True)
+        manager.i_save_state()
+        raise_in_kelvin, grid_balance_in_watt = self.one_pass(
+            manager, outputs, stsv, pv_production_in_watt=800.0, realized_battery_power_in_watt=-200.0
+        )
+        assert grid_balance_in_watt == pytest.approx(0.0)
+        assert raise_in_kelvin == manager.domestic_hot_water_storage_temperature_offset_value
+
+    @pytest.mark.base
+    def test_a_battery_without_its_limits_is_refused(self) -> None:
+        """Catches a battery whose limits nobody wired, which would leave its share unknown and the decision wrong."""
+        manager, outputs = self.manager_with_pv_and_heat_pump_outputs()
+        self.wire_battery(manager, outputs, with_limits=False)
+        stsv = self.indexed_step_values(manager, outputs)
+        manager.i_save_state()
+        with pytest.raises(ValueError, match="MaximumChargingPowerInWatt"):
+            manager.i_simulate(0, stsv, False)
+
+    @pytest.mark.base
+    def test_the_manager_is_safe_to_iterate(self) -> None:
+        """Catches state written in ``i_simulate`` or not restored: any passes before must not change the next one.
+
+        The iteration-safety test: save, run passes with other inputs, restore and run with input X; the outputs must
+        equal those of a fresh save followed by one pass with X.
+        """
+
+        def outputs_after(earlier_passes: List[Tuple[float, float]]) -> List[float]:
+            manager, outputs, stsv = self.manager_with_battery(1500.0, 200.0)
+            manager.i_simulate(0, stsv, False)
+            manager.i_save_state()
+            for pv_production_in_watt, realized_battery_power_in_watt in earlier_passes:
+                self.one_pass(
+                    manager,
+                    outputs,
+                    stsv,
+                    pv_production_in_watt=pv_production_in_watt,
+                    realized_battery_power_in_watt=realized_battery_power_in_watt,
+                )
+            self.one_pass(manager, outputs, stsv, pv_production_in_watt=1100.0, realized_battery_power_in_watt=50.0)
+            return list(stsv.values)
+
+        assert outputs_after([(9000.0, 1500.0), (0.0, -800.0), (2600.0, 0.0)]) == outputs_after([])

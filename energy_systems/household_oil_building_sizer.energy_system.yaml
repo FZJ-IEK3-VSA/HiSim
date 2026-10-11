@@ -114,6 +114,16 @@ components:
         weight: 6
         dispatch:
           target_input: LoadingPowerInput
+      - from: Battery.MaximumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MAXIMUM_CHARGING_POWER
+        weight: 999
+      - from: Battery.MinimumChargingPowerInWatt
+        component_type: BATTERY
+        tags:
+          - MINIMUM_CHARGING_POWER
+        weight: 999
       - from: PVSystem.ElectricityOutput
         component_type: PV
         tags:

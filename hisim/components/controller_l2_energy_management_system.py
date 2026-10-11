@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass, field
 
 from types import MappingProxyType
-from typing import Any, ClassVar, List, Mapping, Tuple, Optional, cast
+from typing import Any, ClassVar, Dict, List, Mapping, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -100,6 +100,33 @@ class EMSState:
 
     #: Whether the set temperatures are raised, in the step this state ends.
     set_temperatures_are_raised: bool = False
+
+
+@dataclass(frozen=True)
+class BatteryChargingLimitInputs:
+    """The two inputs that carry one battery's charging limits for the current step to the energy manager.
+
+    The manager pairs them with the battery's own input by the name of the component they come from.
+    """
+
+    #: The largest power the battery can take in the step, in W.
+    maximum_charging_power_in_watt: ComponentInput
+    #: The smallest power the battery charges with, in W.
+    minimum_charging_power_in_watt: ComponentInput
+
+
+@dataclass(frozen=True)
+class SurplusAfterParticipants:
+    """What is left of the electricity balance after every ranked participant has taken its share, in W.
+
+    Positive means electricity goes to the grid. The two values differ only in how they count a battery from a surplus.
+    """
+
+    #: The balance with every participant's realized power, the battery's included; the manager publishes it.
+    grid_balance_in_watt: float
+    #: The balance with each battery counted by what its charging limits for the step allow it to take from a surplus,
+    #: and by its realized power in a deficit. The manager decides the set-temperature raise on it.
+    surplus_after_battery_in_watt: float
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
@@ -195,6 +222,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     #: controller treats specially because it can also give electricity back.
     STORAGE_CHANNEL = "storage"
 
+    #: Stable key of the channel carrying the largest power a battery can take in the current step.
+    STORAGE_MAXIMUM_CHARGING_POWER_CHANNEL = "storage_maximum_charging_power"
+
+    #: Stable key of the channel carrying the smallest power a battery charges with.
+    STORAGE_MINIMUM_CHARGING_POWER_CHANNEL = "storage_minimum_charging_power"
+
     #: The flows this energy management system understands. Until this declaration the accepted
     #: tags existed only implicitly, inside the hard-coded tag queries of the ranking code, which
     #: meant a participant whose tags matched no query wired cleanly and was then never read.
@@ -248,6 +281,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             dispatch=DispatchRule.REQUIRED,
             dispatch_tags=frozenset({lt.InandOutputType.ELECTRICITY_TARGET}),
         ),
+        DynamicConnectionChannel(
+            key=STORAGE_MAXIMUM_CHARGING_POWER_CHANNEL,
+            tags=frozenset({lt.ComponentType.BATTERY, lt.InandOutputType.MAXIMUM_CHARGING_POWER}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=STORAGE_MINIMUM_CHARGING_POWER_CHANNEL,
+            tags=frozenset({lt.ComponentType.BATTERY, lt.InandOutputType.MINIMUM_CHARGING_POWER}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
     )
 
     @utils.measure_execution_time
@@ -275,6 +322,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         self.state = EMSState()
         self.previous_state = EMSState()
+        #: Each battery's charging-limit inputs, by the name of the battery component; paired at the first step.
+        self.battery_charging_limit_inputs: Dict[str, BatteryChargingLimitInputs] = {}
 
         self.component_types_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
@@ -576,6 +625,22 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_weight=self.DEFAULT_WEIGHTS[lt.ComponentType.BATTERY],
             )
         )
+        # The battery's charging limits are measured only; the controller pairs them with the battery by its name.
+        for field_name, limit_tag in (
+            (Battery.MaximumChargingPowerInWatt, lt.InandOutputType.MAXIMUM_CHARGING_POWER),
+            (Battery.MinimumChargingPowerInWatt, lt.InandOutputType.MINIMUM_CHARGING_POWER),
+        ):
+            dynamic_connections.append(
+                dynamic_component.DynamicComponentConnection(
+                    source_component_class=Battery,
+                    source_class_name=advanced_battery_class_name,
+                    source_component_field_name=field_name,
+                    source_load_type=lt.LoadTypes.ELECTRICITY,
+                    source_unit=lt.Units.WATT,
+                    source_tags=[lt.ComponentType.BATTERY, limit_tag],
+                    source_weight=DynamicConnectionChannel.MONITORED_ONLY_WEIGHT,
+                )
+            )
 
         return dynamic_connections
 
@@ -800,6 +865,101 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             return False
         return raised_in_previous_step
 
+    @staticmethod
+    def battery_share_in_watt(
+        *,
+        surplus_in_watt: float,
+        realized_battery_power_in_watt: float,
+        maximum_charging_power_in_watt: float,
+        minimum_charging_power_in_watt: float,
+    ) -> float:
+        """Return the power a battery counts with in the raise decision, from the surplus offered to it, in W.
+
+        From a surplus the battery takes what its charging limits for the step allow: the surplus up to its maximum
+        charging power, and nothing when that share is at or below its minimum charging power. In a deficit (a surplus
+        of zero or less) it counts with its realized power, which is negative while it discharges. For example, with
+        limits of 5,000 W and 200 W, a surplus of 1,000 W gives 1,000 W, 8,000 W give 5,000 W and 150 W give 0 W; a
+        deficit of 300 W with the battery discharging 300 W gives -300 W.
+
+        Why: the charging share follows from the limits the battery publishes from its state at the step's start, not
+        from its answer to an earlier pass's offer, so a stale answer no longer reads as a surplus or a deficit.
+
+        Args:
+            surplus_in_watt: The surplus offered to the battery, in W; positive means electricity left over.
+            realized_battery_power_in_watt: The battery's realized AC power, in W; positive while it charges.
+            maximum_charging_power_in_watt: The largest power the battery can take in the step, in W.
+            minimum_charging_power_in_watt: The smallest power the battery charges with, in W.
+
+        Returns:
+            The power the battery counts with, in W; positive while it takes electricity.
+
+        Raises:
+            ValueError: If a value is not finite, or a charging limit is negative.
+        """
+        for name, value in (
+            ("surplus", surplus_in_watt),
+            ("realized battery power", realized_battery_power_in_watt),
+            ("maximum charging power", maximum_charging_power_in_watt),
+            ("minimum charging power", minimum_charging_power_in_watt),
+        ):
+            if not math.isfinite(value):
+                raise ValueError(f"The {name} must be a finite power in W, got {value!r}.")
+        if maximum_charging_power_in_watt < 0 or minimum_charging_power_in_watt < 0:
+            raise ValueError(
+                "A battery's charging limits must not be negative, got a maximum of "
+                f"{maximum_charging_power_in_watt} W and a minimum of {minimum_charging_power_in_watt} W."
+            )
+        if surplus_in_watt <= 0:
+            return realized_battery_power_in_watt
+        share_in_watt = min(surplus_in_watt, maximum_charging_power_in_watt)
+        return share_in_watt if share_in_watt > minimum_charging_power_in_watt else 0.0
+
+    def pair_battery_charging_limit_inputs(
+        self, inputs_sorted: List[ComponentInput], component_types_sorted: List[lt.ComponentType]
+    ) -> Dict[str, BatteryChargingLimitInputs]:
+        """Return each ranked battery's charging-limit inputs, by the name of the battery component.
+
+        Every battery the manager ranks publishes its maximum and minimum charging power for the step, and the
+        manager reads them on two channels. An input is paired with a battery when it comes from the same component.
+
+        Args:
+            inputs_sorted: The participants' inputs, ranked.
+            component_types_sorted: The participants' component types, in the order of ``inputs_sorted``.
+
+        Returns:
+            The limit inputs of every ranked battery, by the battery's component name.
+
+        Raises:
+            ValueError: If a ranked battery's maximum or minimum charging power is not wired to the manager, or wired
+                twice.
+        """
+        limit_inputs_by_channel = {
+            key: self.get_channel_inputs(key)
+            for key in (self.STORAGE_MAXIMUM_CHARGING_POWER_CHANNEL, self.STORAGE_MINIMUM_CHARGING_POWER_CHANNEL)
+        }
+        paired: Dict[str, BatteryChargingLimitInputs] = {}
+        for participant_input, component_type in zip(inputs_sorted, component_types_sorted):
+            if component_type != lt.ComponentType.BATTERY:
+                continue
+            battery_name = participant_input.src_object_name
+            found = {
+                key: [item for item in inputs if item.src_object_name == battery_name]
+                for key, inputs in limit_inputs_by_channel.items()
+            }
+            missing = [key for key, items in found.items() if len(items) != 1]
+            if missing or battery_name is None:
+                raise ValueError(
+                    f"{self.component_name}: the battery '{battery_name}' needs exactly one input on each of the channels "
+                    f"{missing}, got {[len(found[key]) for key in missing]}. Wire its "
+                    "MaximumChargingPowerInWatt and MinimumChargingPowerInWatt to the energy manager: the manager "
+                    "computes the battery's share of a surplus from them."
+                )
+            paired[battery_name] = BatteryChargingLimitInputs(
+                maximum_charging_power_in_watt=found[self.STORAGE_MAXIMUM_CHARGING_POWER_CHANNEL][0],
+                minimum_charging_power_in_watt=found[self.STORAGE_MINIMUM_CHARGING_POWER_CHANNEL][0],
+            )
+        return paired
+
     def modify_set_temperatures_for_components_in_case_of_surplus_electricity(
         self,
         set_temperatures_are_raised: bool,
@@ -858,8 +1018,26 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         inputs_sorted: List[ComponentInput],
         component_types_sorted: List[lt.ComponentType],
         outputs_sorted: List[ComponentOutput],
-    ) -> float:
-        """Evaluates available surplus electricity component by component, iteratively, and sends updated signals back."""
+    ) -> SurplusAfterParticipants:
+        """Hand the surplus to the participants by rank, send each its signal and return what is left.
+
+        Every participant takes its share in the order of its weight (:meth:`control_electricity_component_iterative`).
+        Beside the grid balance, which books every participant's realized power, the surplus the raise is decided on
+        counts each battery by the share its charging limits allow (:meth:`battery_share_in_watt`).
+
+        Args:
+            available_surplus_electricity_in_watt: The production minus the uncontrolled consumption, in W.
+            stsv: The step values the signals are written to.
+            inputs_sorted: The participants' inputs, ranked.
+            component_types_sorted: The participants' component types, in the order of ``inputs_sorted``.
+            outputs_sorted: The participants' signal outputs, in the order of ``inputs_sorted``.
+
+        Returns:
+            The grid balance and the surplus after the battery.
+
+        Raises:
+            ValueError: If there are fewer outputs or component types than inputs.
+        """
         if len(outputs_sorted) < len(inputs_sorted) or len(component_types_sorted) < len(inputs_sorted):
             raise ValueError(
                 "Lengths of inputs, component types, and outputs must match."
@@ -870,10 +1048,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 f"Outputs: {[output.full_name for output in outputs_sorted]} \n"
             )
 
+        surplus_after_battery_in_watt = available_surplus_electricity_in_watt
         for index, single_input_sorted in enumerate(inputs_sorted):
             single_component_type_sorted = component_types_sorted[index]
             single_output_sorted = outputs_sorted[index]
 
+            surplus_before_participant_in_watt = available_surplus_electricity_in_watt
             available_surplus_electricity_in_watt = self.control_electricity_component_iterative(
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
@@ -881,8 +1061,23 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 current_input=single_input_sorted,
                 current_output=single_output_sorted,
             )
+            if single_component_type_sorted == lt.ComponentType.BATTERY:
+                limit_inputs = self.battery_charging_limit_inputs[cast(str, single_input_sorted.src_object_name)]
+                surplus_after_battery_in_watt -= self.battery_share_in_watt(
+                    surplus_in_watt=surplus_after_battery_in_watt,
+                    realized_battery_power_in_watt=stsv.get_input_value(component_input=single_input_sorted),
+                    maximum_charging_power_in_watt=stsv.get_input_value(limit_inputs.maximum_charging_power_in_watt),
+                    minimum_charging_power_in_watt=stsv.get_input_value(limit_inputs.minimum_charging_power_in_watt),
+                )
+            else:
+                surplus_after_battery_in_watt += (
+                    available_surplus_electricity_in_watt - surplus_before_participant_in_watt
+                )
 
-        return available_surplus_electricity_in_watt
+        return SurplusAfterParticipants(
+            grid_balance_in_watt=available_surplus_electricity_in_watt,
+            surplus_after_battery_in_watt=surplus_after_battery_in_watt,
+        )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of surplus controller."""
@@ -895,6 +1090,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.consumption_uncontrolled_inputs,
                 self.consumption_ems_controlled_inputs,
             ) = self.sort_source_weights_and_components()
+            self.battery_charging_limit_inputs = self.pair_battery_charging_limit_inputs(
+                self.inputs_sorted, self.component_types_sorted
+            )
 
         district_electricity_unused = stsv.get_input_value(component_input=self.electricity_to_building_from_district)
 
@@ -916,15 +1114,16 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         # Consumption of Electricity negative sign
         available_surplus_electricity_in_watt = production_in_watt - consumption_uncontrolled_in_watt
         if self.strategy == "optimize_own_consumption":
-            available_surplus_electricity_in_watt = self.distribute_available_surplus_electricity_iterative(
+            surplus_after_participants = self.distribute_available_surplus_electricity_iterative(
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
             )
+            available_surplus_electricity_in_watt = surplus_after_participants.grid_balance_in_watt
             set_temperatures_are_raised = self.raises_set_temperatures(
-                surplus_after_battery_in_watt=available_surplus_electricity_in_watt,
+                surplus_after_battery_in_watt=surplus_after_participants.surplus_after_battery_in_watt,
                 raised_in_previous_step=self.previous_state.set_temperatures_are_raised,
             )
             self.state = EMSState(set_temperatures_are_raised=set_temperatures_are_raised)

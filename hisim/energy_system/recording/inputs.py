@@ -142,11 +142,13 @@ class InputItemWriter:
             EnergySystemRecordingError: ``EF-R11`` when several control outputs are candidates for
                 one feed and the weight does not single one of them out.
         """
+        # A feed at the measured-only weight carries no dispatch, even from a participant that reads one through
+        # another of its feeds (a battery's charging limits beside its steered power).
+        if weight == self.MEASURED_ONLY_WEIGHT:
+            return None
         read = [entry for entry in aggregator.dispatches if entry.consumer == participant]
         if read:
             return self._narrowed(read, weight, aggregator, participant)
-        if weight == self.MEASURED_ONLY_WEIGHT:
-            return None
         producer = self.by_name.get(participant)
         participant_class = producer.class_name if producer is not None else None
         unread = [

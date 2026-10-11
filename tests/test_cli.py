@@ -66,11 +66,8 @@ class Fixtures:
         "hisim.components.generic_boiler.GenericBoilerControllerConfig"
     )
 
-    #: The controller that borrows the heat distribution controller's heating-threshold law, the
-    #: case that used to describe as a lambda of a class of another name (F-22).
-    ELECTRIC_HEATING_CONTROLLER_CONFIG: ClassVar[str] = (
-        "hisim.components.generic_electric_heating.ElectricHeatingControllerConfig"
-    )
+    #: The heating curve, whose heating-threshold law is a lambda over two building facts (F-22).
+    HEATING_CURVE_CONFIG: ClassVar[str] = "hisim.components.heating_curve.HeatingCurveControllerConfig"
 
 
 @pytest.mark.base
@@ -192,12 +189,10 @@ def test_describe_prints_no_sets_line_for_a_preset_that_changes_nothing(capsys) 
 def test_describe_prints_what_a_lambda_law_computes_rather_than_its_class(capsys) -> None:
     """A law written as a lambda describes its arithmetic, not ``<Class>.<lambda>`` (F-22).
 
-    Failure mode caught: the electric heating controller, which borrows the heat distribution
-    controller's heating-threshold law on purpose so that the two cannot disagree, describing
-    that field as ``law: HeatDistributionControllerConfig.<lambda>`` — a class of another name,
-    which reads as a description gone wrong rather than as deliberate sharing.
+    Failure mode caught: the heating curve's heating-threshold law, a lambda over two building facts, describing
+    that field as ``law: HeatingCurveControllerConfig.<lambda>``, which reads as a description gone wrong.
     """
-    code = main(["energy-system", "describe", Fixtures.ELECTRIC_HEATING_CONTROLLER_CONFIG])
+    code = main(["energy-system", "describe", Fixtures.HEATING_CURVE_CONFIG])
     printed = capsys.readouterr().out
 
     assert code == ExitCodes.OK
@@ -206,9 +201,7 @@ def test_describe_prints_what_a_lambda_law_computes_rather_than_its_class(capsys
         "law: heating_threshold_for(Size.HEATING_LOAD_IN_WATT / "
         "Size.CONDITIONED_FLOOR_AREA_IN_M2)"
     ) in sizable
-    assert "law: Size.HEATING_LOAD_IN_WATT / Size.CONDITIONED_FLOOR_AREA_IN_M2" in sizable
     assert "<lambda>" not in printed
-    assert "HeatDistributionControllerConfig" not in printed
 
 
 @pytest.mark.base

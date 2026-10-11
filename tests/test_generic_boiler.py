@@ -106,25 +106,6 @@ def given_default_testee(
     return testee
 
 
-@pytest.mark.base
-@pytest.mark.parametrize(
-    ["daily_avg_outside_temperature_in_celsius", "expected"],
-    [(10.0, True), (5.0, True), (10.1, False), (9.9, True), (15.0, False)],
-)
-def test_a_generator_without_heating_curve_heats_on_a_day_exactly_at_its_threshold(
-    daily_avg_outside_temperature_in_celsius: float, expected: bool
-) -> None:
-    """Catches a day exactly at the threshold of a 10 °C generator without heating curve falling out of the heating season."""
-    from hisim.components.dual_circuit_system import DiverterValve
-
-    assert (
-        DiverterValve.is_heating_season(
-            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius, heating_threshold_in_celsius=10.0
-        )
-        is expected
-    )
-
-
 class FuelConstants:
     """What the boiler's two fuel constants are checked against, and with what.
 

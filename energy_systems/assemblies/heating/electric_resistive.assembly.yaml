@@ -4,8 +4,10 @@
 # used): the Heater reads the Building's theoretical heating demand and the Building reads the Heater's space-heating
 # heat, both through their classes' default connections, so the space-heating side is a need of this assembly (the
 # Building as its partner) and a need of the site's Building (this Heater as its partner), not a circuit. Control is
-# hardcoded here (D21): the Controller switches space heating on the daily mean outside temperature and the cylinder
-# on its temperature; it reads no energy manager, so the assembly offers no `ems_modifier`.
+# hardcoded here (D21): the Controller switches space heating on the heating season the site's HeatingCurveController
+# publishes (the one owner of the heating threshold; a house without a water circuit builds it with the preset
+# direct_room_heating) and the cylinder on its temperature; it reads no energy manager, so the assembly offers no
+# `ems_modifier`.
 #
 # The members expand as one block in the order their lines stand here, the twin's ElectricHeatingController,
 # ElectricHeating. The sizing facts the members read from the site (heating load, conditioned floor area) bind their one
@@ -35,7 +37,7 @@ components:
       with_domestic_hot_water_preparation: true             # it charges the cylinder of the dhw circuit
       parallel_space_heating_and_dhw_option: true           # space heating and hot water in the same step, as the twin
     inputs:
-      - {$port: weather}                                    # DailyAverageOutsideTemperature
+      - {$port: heating_curve}                              # HeatingSeason
       - {$port: dhw_temperature}                            # WaterTemperatureInputFromWarmWaterStorage
   Heater:
     class: hisim.components.generic_electric_heating.ElectricHeating
@@ -50,7 +52,7 @@ components:
 
 interface:
   needs:
-    weather:          {into: [Controller], partner: Weather}
+    heating_curve:    {into: [Controller], partner: HeatingCurveController}       # a set-point need (G1): the heating season
     dhw_temperature:  {into: [Controller], partner: SimpleDHWStorage}
                       # the controller's DHW measured variable, the cylinder temperature: a need, not a circuit end
     building:         {into: [Heater], partner: Building}

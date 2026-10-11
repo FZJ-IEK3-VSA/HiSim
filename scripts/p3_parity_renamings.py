@@ -126,6 +126,24 @@ class DeclaredPortRenamings:
             # derived names stay distinct when one participant class appears twice.
             "Input_Battery1_AcBatteryPowerUsed_3": "AcBatteryPowerUsedFromBattery1",
             "Input_Battery2_AcBatteryPowerUsed_4": "AcBatteryPowerUsedFromBattery2",
+            # The battery's two charging limits, measured only. The battery's default connections
+            # list them right after its realised charge, so each sizer grows them at the two
+            # indices that follow its 'Input_Battery_AcBatteryPowerUsed_<n>' above: n + 1 and
+            # n + 2 for n from four to seven.
+            "Input_Battery_MaximumChargingPowerInWatt_5": "MaximumChargingPowerInWattFromBattery",
+            "Input_Battery_MaximumChargingPowerInWatt_6": "MaximumChargingPowerInWattFromBattery",
+            "Input_Battery_MaximumChargingPowerInWatt_7": "MaximumChargingPowerInWattFromBattery",
+            "Input_Battery_MaximumChargingPowerInWatt_8": "MaximumChargingPowerInWattFromBattery",
+            "Input_Battery_MinimumChargingPowerInWatt_6": "MinimumChargingPowerInWattFromBattery",
+            "Input_Battery_MinimumChargingPowerInWatt_7": "MinimumChargingPowerInWattFromBattery",
+            "Input_Battery_MinimumChargingPowerInWatt_8": "MinimumChargingPowerInWattFromBattery",
+            "Input_Battery_MinimumChargingPowerInWatt_9": "MinimumChargingPowerInWattFromBattery",
+            # The same limits of the dynamic-components example's two batteries, which that setup
+            # wires after both CHPs.
+            "Input_Battery1_MaximumChargingPowerInWatt_7": "MaximumChargingPowerInWattFromBattery1",
+            "Input_Battery1_MinimumChargingPowerInWatt_8": "MinimumChargingPowerInWattFromBattery1",
+            "Input_Battery2_MaximumChargingPowerInWatt_9": "MaximumChargingPowerInWattFromBattery2",
+            "Input_Battery2_MinimumChargingPowerInWatt_10": "MinimumChargingPowerInWattFromBattery2",
             # The two CHPs of the same example.
             "Input_CHP1_ElectricityOutput_5": "ElectricityOutputFromCHP1",
             "Input_CHP2_ElectricityOutput_6": "ElectricityOutputFromCHP2",

@@ -1,6 +1,7 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
+import dataclasses
 from typing import ClassVar, List, Tuple, Optional
 from dataclasses import dataclass
 from bslib import bslib as bsl
@@ -126,6 +127,65 @@ class BatteryConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
+@dataclass(frozen=True)
+class BslibChargingParameters:
+    """The parameters of a bslib battery that bound how much it can charge in one step.
+
+    Adapter for the bslib library: bslib publishes no accessor for its capacity, its rated and minimum charging
+    powers or its recharge threshold, so :meth:`of_battery` reads them from the private attributes of its
+    ``ACBatMod``, in this one place. For example, the generic system ``SG1`` with 11.1 kWh and an 11.1 kW inverter
+    gives a capacity of 11,100 Wh, a rated charging power of 11,100 W, a minimum charging power of 202.4 W and a
+    recharge threshold of 0.98.
+
+    The bounds describe bslib's generic systems exactly: these have no peripheral consumption, no stationary
+    deviation of the charging power and no standby consumption. A system with any of them takes a few watts more or
+    less than :meth:`Battery.maximum_charging_power_in_watt` says.
+    """
+
+    #: The usable capacity, in Wh.
+    capacity_in_watt_hour: float
+    #: The rated AC charging power of the converter, in W.
+    rated_charging_power_in_watt: float
+    #: The smallest AC power the converter charges with, in W; bslib charges nothing at or below it.
+    minimum_charging_power_in_watt: float
+    #: The state of charge, dimensionless between 0 and 1, the battery must fall below before it charges again once
+    #: it has been full (bslib's recharge hysteresis).
+    recharge_threshold_state_of_charge: float
+
+    @classmethod
+    def of_battery(cls, battery: bsl.ACBatMod) -> "BslibChargingParameters":
+        """Return the charging parameters of a bslib battery, read from its private attributes.
+
+        Args:
+            battery: The bslib battery model.
+
+        Returns:
+            Its charging parameters.
+        """
+        # bslib keeps these only as private attributes.
+        return cls(
+            capacity_in_watt_hour=float(battery._E_BAT),  # pylint: disable=protected-access  # bslib has no accessor
+            rated_charging_power_in_watt=float(battery._P_AC2BAT_IN),  # pylint: disable=protected-access  # bslib has no accessor
+            minimum_charging_power_in_watt=float(battery._P_AC2BAT_MIN),  # pylint: disable=protected-access  # bslib has no accessor
+            recharge_threshold_state_of_charge=float(battery._SOC_THRESHOLD),  # pylint: disable=protected-access  # bslib has no accessor
+        )
+
+    @staticmethod
+    def recharging_is_blocked(battery: bsl.ACBatMod) -> bool:
+        """Return whether a bslib battery waits, after its last simulated step, to fall below its recharge threshold.
+
+        bslib sets this flag once the battery is full and clears it when the state of charge falls below the
+        recharge threshold; while it is set, the battery does not charge.
+
+        Args:
+            battery: The bslib battery model, after a call of its ``simulate``.
+
+        Returns:
+            Whether the recharge hysteresis blocks charging.
+        """
+        return bool(battery._threshold)  # pylint: disable=protected-access  # bslib has no accessor
+
+
 class Battery(Component):
     """Battery class.
 
@@ -140,6 +200,9 @@ class Battery(Component):
     # Lifecycle cost engine declaration (cost_spec.md §9.2).
     cost_relevance = CostRelevance.PRICED
 
+    #: The seconds in an hour, which convert between energy in Wh and power over a step in s.
+    SECONDS_PER_HOUR: ClassVar[float] = 3600.0
+
     # Inputs
     LoadingPowerInput = "LoadingPowerInput"  # W
 
@@ -149,6 +212,8 @@ class Battery(Component):
     StateOfCharge = "StateOfCharge"  # [0..1]
     ChargingPower = "ChargingPower"
     DischargingPower = "DischargingPower"
+    MaximumChargingPowerInWatt = "MaximumChargingPowerInWatt"
+    MinimumChargingPowerInWatt = "MinimumChargingPowerInWatt"
 
     def __init__(
         self,
@@ -194,6 +259,7 @@ class Battery(Component):
             p_inv_custom=self.custom_pv_inverter_power_generic_in_watt,
             e_bat_custom=self.custom_battery_capacity_generic_in_kilowatt_hour,
         )
+        self.charging_parameters = BslibChargingParameters.of_battery(self.ac_coupled_battery_object)
 
         # Define component inputs
         self.loading_power_input_channel: ComponentInput = self.add_input(
@@ -245,6 +311,25 @@ class Battery(Component):
             unit=Units.WATT,
             output_description=f"here a description for {self.DischargingPower} will follow.",
         )
+        self.maximum_charging_power_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.MaximumChargingPowerInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The largest AC power the battery can take in this step, from its state at the step's start, in W; "
+                "zero or positive. Zero while it is full or waits to fall below its recharge threshold."
+            ),
+        )
+        self.minimum_charging_power_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.MinimumChargingPowerInWatt,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=(
+                "The smallest AC power the battery charges with, in W; positive. An offer at or below it is not taken."
+            ),
+        )
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -266,6 +351,18 @@ class Battery(Component):
         """Simulates the component."""
         # Parameters
         time_increment_in_seconds = self.my_simulation_parameters.seconds_per_timestep
+
+        # The limits come from the state at the step's start, so they do not depend on this pass's set point.
+        stsv.set_output_value(
+            self.maximum_charging_power_channel,
+            self.maximum_charging_power_in_watt(
+                self.charging_parameters,
+                state_of_charge=self.state.state_of_charge,
+                recharging_is_blocked=self.state.recharging_is_blocked,
+                seconds_per_timestep=time_increment_in_seconds,
+            ),
+        )
+        stsv.set_output_value(self.minimum_charging_power_channel, self.charging_parameters.minimum_charging_power_in_watt)
 
         # Load input values
         set_point_for_ac_battery_power_in_watt = stsv.get_input_value(self.loading_power_input_channel)
@@ -307,7 +404,45 @@ class Battery(Component):
         stsv.set_output_value(self.discharging_power_channel, discharging_power_in_watt)
 
         # write values to state
-        self.state.state_of_charge = state_of_charge
+        self.state = BatteryState(
+            state_of_charge=state_of_charge,
+            recharging_is_blocked=BslibChargingParameters.recharging_is_blocked(self.ac_coupled_battery_object),
+        )
+
+    @staticmethod
+    def maximum_charging_power_in_watt(
+        parameters: BslibChargingParameters, *, state_of_charge: float, recharging_is_blocked: bool, seconds_per_timestep: int
+    ) -> float:
+        """Return the largest AC power a bslib battery takes in one step, from its state at the step's start, in W.
+
+        The battery charges only while its state of charge lies below 1, or below the recharge threshold while the
+        recharge hysteresis blocks it. It then takes at most its rated charging power and at most the power that
+        fills its remaining capacity within the step. For example, 11,100 Wh at a state of charge of 0.999 leave
+        11.1 Wh, which fill within a 60 s step at 666 W; at 0.5 the rated 11,100 W bound it.
+
+        The bound does not include the minimum charging power: an offer at or below that minimum is not taken even
+        when the bound is larger (:attr:`BslibChargingParameters.minimum_charging_power_in_watt`).
+
+        Args:
+            parameters: The battery's capacity, rated and minimum charging powers and recharge threshold.
+            state_of_charge: The state of charge at the step's start, dimensionless between 0 and 1.
+            recharging_is_blocked: Whether the recharge hysteresis blocks charging at the step's start.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The largest AC power the battery takes in this step, in W; zero or positive.
+
+        Raises:
+            ValueError: If the step length is not positive.
+        """
+        if seconds_per_timestep <= 0:
+            raise ValueError(f"The step length must be positive, got {seconds_per_timestep} s.")
+        charging_limit_state_of_charge = parameters.recharge_threshold_state_of_charge if recharging_is_blocked else 1.0
+        if state_of_charge >= charging_limit_state_of_charge:
+            return 0.0
+        remaining_capacity_in_watt_hour = parameters.capacity_in_watt_hour * (1.0 - state_of_charge)
+        filling_power_in_watt = remaining_capacity_in_watt_hour * Battery.SECONDS_PER_HOUR / seconds_per_timestep
+        return max(0.0, min(parameters.rated_charging_power_in_watt, filling_power_in_watt))
 
     def write_to_report(self) -> List[str]:
         """Write to report."""
@@ -462,13 +597,19 @@ class Battery(Component):
         return []
 
 
-@dataclass
+@dataclass(frozen=True)
 class BatteryState:
-    """Battery state class."""
+    """The battery's state from one step to the next: its state of charge and its recharge hysteresis.
 
-    #: state of charge of the battery
+    ``i_simulate`` starts from the saved state and writes the state the step ends with; ``i_save_state`` makes the
+    converged pass's state the next step's start.
+    """
+
+    #: state of charge of the battery, dimensionless between 0 and 1
     state_of_charge: float = 0
+    #: Whether bslib's recharge hysteresis blocks charging: set once the battery was full, cleared below the threshold.
+    recharging_is_blocked: bool = False
 
-    def clone(self):
-        """Creates a copy of the Battery State."""
-        return BatteryState(state_of_charge=self.state_of_charge)
+    def clone(self) -> "BatteryState":
+        """Return a copy of the battery state."""
+        return dataclasses.replace(self)

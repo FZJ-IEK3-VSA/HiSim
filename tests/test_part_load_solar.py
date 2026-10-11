@@ -1,7 +1,7 @@
 """Part load of the solar pump: the controller commands the ratio, the collector runs it, nothing ranks it.
 
-* ``SolarThermalSystemController`` publishes the part-load ratio and its target, the 60 °C warm-water aim above which
-  it stops the pump: 0 while the pump stands, exactly 1 at and below the threshold, and above it the ratio
+* ``SolarThermalSystemController`` publishes the part-load ratio and its target, the 80 °C maximum storage temperature
+  above which it stops the pump: 0 while the pump stands, exactly 1 at and below the threshold, and above it the ratio
   :class:`hisim.part_load.PartLoadRule` gives for the ratio the pump ran and the storage's start and end temperatures.
   It keeps no part-load memory, and a forced pass publishes the ratio the pump ran.
 * ``SolarThermalSystem`` books the commanded fraction: the averaged flow at the full-load outlet, the heat it carries
@@ -49,22 +49,35 @@ def test_at_and_below_the_threshold_a_running_pump_gets_exactly_one(seconds_per_
 
 
 @pytest.mark.base
-def test_above_the_threshold_the_controller_applies_the_rule_towards_its_warm_water_aim() -> None:
-    """At 900 s the ratio lies on the line from the start temperature through the ratio run, in every pass."""
-    values = SolarControllerRig.values(start_c=55.0, end_c=62.0)
-    expected = (PartLoadRule.aim_temperature_in_celsius(60.0) - 55.0) / (62.0 - 55.0)
+def test_above_the_threshold_the_controller_applies_the_rule_towards_its_maximum_storage_temperature() -> None:
+    """At 900 s the ratio lies on the line from the start temperature through the ratio run to the 80 °C maximum.
+
+    A controller that still aimed at the backups' 60 °C warm-water aim would publish 0 for a storage that starts at
+    75 °C and stop the sun's charge there.
+    """
+    values = SolarControllerRig.values(start_c=75.0, end_c=82.0)
+    expected = (PartLoadRule.aim_temperature_in_celsius(80.0) - 75.0) / (82.0 - 75.0)
     assert ControllerPasses.ratios(900, values, 3) == pytest.approx([expected] * 3, rel=1e-12)
     controller, stsv, fakes = SolarControllerRig.build(900)
     target = AllInputsRig.step(controller, stsv, fakes, values, timestep=ControllerPasses.TIMESTEP)[
         SolarThermalSystemController.TargetTemperatureInCelsius
     ]
-    assert target == SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS == 60.0
+    assert target == SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS == 80.0
+
+
+@pytest.mark.base
+def test_a_storage_above_the_backups_aim_but_below_the_maximum_keeps_the_sunny_pump_running_the_whole_step() -> None:
+    """A storage that starts at 61 °C, above the backups' 60 °C aim, gets the whole step of a sunny collector.
+
+    A controller that stopped at the backups' aim would publish 0 here and leave the heat on the roof.
+    """
+    assert ControllerPasses.ratios(900, SolarControllerRig.values(start_c=61.0, end_c=66.0), 2) == [1.0, 1.0]
 
 
 @pytest.mark.base
 def test_a_full_storage_stops_the_pump_and_its_ratio_is_zero() -> None:
-    """A storage that started above 60 °C stops the pump; the ratio published is 0."""
-    assert ControllerPasses.ratios(900, SolarControllerRig.values(start_c=61.0, end_c=61.0), 2) == [0.0, 0.0]
+    """A storage that started above the 80 °C maximum stops the pump; the ratio published is 0."""
+    assert ControllerPasses.ratios(900, SolarControllerRig.values(start_c=81.0, end_c=81.0), 2) == [0.0, 0.0]
 
 
 @pytest.mark.base
@@ -147,10 +160,10 @@ def test_the_pump_state_of_the_previous_step_chooses_the_flow_and_no_pass_rememb
 
 
 @pytest.mark.base
-def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts_three_kelvin_below_the_aim() -> None:
-    """The full-storage stop holds across steps until the storage starts a step 3 K below the aim, then it releases.
+def test_a_pump_the_full_storage_stopped_runs_again_only_three_kelvin_below_the_maximum() -> None:
+    """The full-storage stop holds across steps until the storage starts a step 3 K below the maximum, at 77 °C.
 
-    A controller without the band would restart the pump as soon as the storage cools below 60 °C and switch it every
+    A controller without the band would restart the pump as soon as the storage cools below 80 °C and switch it every
     second step; one that kept the stop in a pass instead of the saved state would hold or release it within a step.
     """
     controller, stsv, fakes = SolarControllerRig.build(900)
@@ -163,17 +176,19 @@ def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts
         return PumpSteps.signal(controller, stsv, fakes, values)
 
     controller.i_save_state()  # the first step starts with the pump standing and the stop released
-    assert signal(59.5) == 1  # a storage below the aim with no stop: the pump switches on
+    assert signal(60.5) == 1  # above the backups' 60 °C aim, below the maximum, no stop: the pump switches on
     controller.i_save_state()
-    assert signal(60.025) == 0  # the part-load rule ended the storage just above the aim: the stop sets
+    assert signal(79.5) == 1  # just below the maximum: the pump keeps running
     controller.i_save_state()
-    assert signal(59.5) == 0  # the storage cooled below the aim, but not 3 K below it: the stop holds
+    assert signal(80.025) == 0  # the part-load rule ended the storage just above the maximum: the stop sets
     controller.i_save_state()
-    assert signal(57.5) == 0
+    assert signal(79.5) == 0  # the storage cooled below the maximum, but not 3 K below it: the stop holds
     controller.i_save_state()
-    assert signal(57.0) == 1  # exactly 3 K below the aim: the stop releases and the sunny collector starts the pump
+    assert signal(77.5) == 0
     controller.i_save_state()
-    assert signal(58.5) == 1  # inside the band, the released stop stays released
+    assert signal(77.0) == 1  # exactly 3 K below the maximum: the stop releases and the sunny collector starts the pump
+    controller.i_save_state()
+    assert signal(78.5) == 1  # inside the band, the released stop stays released
 
 
 @pytest.mark.base
@@ -212,7 +227,7 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
     for flow in (PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, PumpSteps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
         PumpSteps.signal(iterated, iterated_stsv, iterated_fakes, PumpSteps.values(flow))
     full_storage = PumpSteps.values(PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)
-    full_storage[SolarThermalSystemController.StorageTemperatureAtStartOfStepInCelsius] = 61.0
+    full_storage[SolarThermalSystemController.StorageTemperatureAtStartOfStepInCelsius] = 81.0
     PumpSteps.signal(iterated, iterated_stsv, iterated_fakes, full_storage)
     final = PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
     expected = PumpSteps.signal(fresh, fresh_stsv, fresh_fakes, final)

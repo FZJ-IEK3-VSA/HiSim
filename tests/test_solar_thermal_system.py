@@ -10,6 +10,7 @@ from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate, flat_p
 from hisim import hydronics
 from hisim import sim_repository, component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
+from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLibControllerDHWConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.config import AUTO, ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
@@ -574,27 +575,29 @@ class PumpTransitions:
 class FullStorageStopTransitions:
     """The full-storage stop's transitions: the saved stop, the storage's start-of-step temperature, the stop."""
 
-    #: The warm-water aim above which the stop sets, °C.
-    AIM_IN_CELSIUS = solar_thermal_system.SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS
+    #: The maximum storage temperature above which the stop sets, °C.
+    MAXIMUM_IN_CELSIUS = solar_thermal_system.SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS
 
-    #: The temperature at and below which a holding stop releases, °C: 3 K below the aim.
+    #: The temperature at and below which a holding stop releases, °C: 3 K below the maximum.
     RESTART_IN_CELSIUS = (
-        AIM_IN_CELSIUS - solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN
+        MAXIMUM_IN_CELSIUS
+        - solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN
     )
 
     #: Each row: whether the stop held in the previous step, the storage's start-of-step temperature in °C, whether
     #: the stop holds, and what the row checks.
     TABLE = [
-        (False, 44.0, False, "a storage well below the aim sets no stop"),
-        (False, AIM_IN_CELSIUS, False, "exactly at the aim the stop does not set (it sets strictly above)"),
-        (False, AIM_IN_CELSIUS + 0.025, True, "a storage the part-load rule ended just above the aim sets the stop"),
-        (False, 58.5, False, "inside the restart band a released stop stays released"),
-        (True, 61.0, True, "a holding stop holds above the aim"),
-        (True, AIM_IN_CELSIUS, True, "a holding stop holds at the aim"),
-        (True, 58.5, True, "a holding stop holds inside the restart band"),
+        (False, 44.0, False, "a storage well below the maximum sets no stop"),
+        (False, 60.5, False, "a storage above the backups' 60 °C warm-water aim sets no stop"),
+        (False, MAXIMUM_IN_CELSIUS, False, "exactly at the maximum the stop does not set (it sets strictly above)"),
+        (False, MAXIMUM_IN_CELSIUS + 0.025, True, "a storage the part-load rule ended above the maximum sets the stop"),
+        (False, 78.5, False, "inside the restart band a released stop stays released"),
+        (True, 81.0, True, "a holding stop holds above the maximum"),
+        (True, MAXIMUM_IN_CELSIUS, True, "a holding stop holds at the maximum"),
+        (True, 78.5, True, "a holding stop holds inside the restart band"),
         (True, RESTART_IN_CELSIUS + 1e-6, True, "a holding stop holds just above the restart temperature"),
-        (True, RESTART_IN_CELSIUS, False, "a holding stop releases exactly 3 K below the aim"),
-        (True, 45.0, False, "a holding stop releases well below the aim"),
+        (True, RESTART_IN_CELSIUS, False, "a holding stop releases exactly 3 K below the maximum, at 77 °C"),
+        (True, 59.0, False, "a holding stop releases well below the maximum"),
     ]
 
 
@@ -611,15 +614,30 @@ def test_the_switch_off_flow_lies_clearly_below_the_switch_on_flow() -> None:
 
 
 @pytest.mark.base
-def test_the_full_storage_stop_restarts_three_to_five_kelvin_below_the_aim() -> None:
+def test_the_full_storage_stop_restarts_three_to_five_kelvin_below_the_maximum() -> None:
     """Catches a full-storage restart band outside what solar controllers use.
 
-    Without a band the part-load rule, which ends a charging step just above the aim, and the next step's standby
+    Without a band the part-load rule, which ends a charging step just above the maximum, and the next step's standby
     loss switch the pump every second step; a band wider than 5 K leaves solar heat on the roof that real controllers
     take.
     """
-    band_in_kelvin = solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN
+    band_in_kelvin = solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN
     assert 3.0 <= band_in_kelvin <= 5.0
+
+
+@pytest.mark.base
+def test_the_solar_maximum_lies_above_the_warm_water_aim_of_the_backups() -> None:
+    """Catches a solar maximum storage temperature at or below the 60 °C the backup generators charge the tank to.
+
+    With the solar maximum at the backups' warm-water aim, the full-storage stop holds the pump on sunny days while
+    the tank waits between 57 and 60 °C, and the boiler or heat pump supplies heat the sun could have delivered. The
+    maximum stays within the 60 to 80 °C real solar controllers are set to.
+    """
+    maximum_in_celsius = solar_thermal_system.SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS
+    backup_config = MoreAdvancedHeatPumpHPLibControllerDHWConfig.preset_standard("HeatPumpControllerDHW")
+    backup_aim_in_celsius = backup_config.t_max_dhw_storage_in_celsius
+    assert backup_aim_in_celsius == 60.0
+    assert backup_aim_in_celsius < maximum_in_celsius <= 80.0
 
 
 @pytest.mark.base
@@ -660,13 +678,14 @@ def test_the_pump_switches_on_at_the_on_flow_off_below_the_off_flow_and_stands_w
     [row[:3] for row in FullStorageStopTransitions.TABLE],
     ids=[row[3] for row in FullStorageStopTransitions.TABLE],
 )
-def test_the_full_storage_stop_sets_above_the_aim_and_releases_three_kelvin_below_it(
+def test_the_full_storage_stop_sets_above_the_maximum_and_releases_three_kelvin_below_it(
     stop_held_in_previous_step: bool, storage_temperature_at_start_in_celsius: float, expected: bool
 ) -> None:
-    """Every transition of the full-storage stop, with the edges at the aim and at the restart temperature.
+    """Every transition of the full-storage stop, with the edges at the maximum and at the restart temperature.
 
-    A stop without its band would release as soon as the storage cools below the aim and switch the pump every second
-    step; a stop that set at the aim itself would never let the part-load rule bring the storage to its aim.
+    A stop without its band would release as soon as the storage cools below the maximum and switch the pump every
+    second step; a stop that set at the maximum itself would never let the part-load rule bring the storage to its
+    maximum; a stop that set at the backups' 60 °C aim would leave the sun's heat above 60 °C on the roof.
     """
     assert (
         solar_thermal_system.SolarThermalSystemController.full_storage_stop_holds(

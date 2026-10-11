@@ -73,7 +73,7 @@ tests:
     - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power
     - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}                 # at most the pump's electricity
     - {output: Controller.TargetTemperatureInCelsius, unit: CELSIUS, min: 40, max: 80}
-      # the cylinder temperature above which the Controller stops the pump, its 60 °C warm-water aim
+      # the cylinder temperature above which the Controller stops the pump, its 80 °C maximum storage temperature
     - {output: Controller.PartLoadRatio, unit: FRACTION, min: 0, max: 1}
       # the fraction of the step the pump runs: 1 at and below the part-load threshold
     - {output: Collector.PartLoadRatioRun, unit: FRACTION, min: 0, max: 1}

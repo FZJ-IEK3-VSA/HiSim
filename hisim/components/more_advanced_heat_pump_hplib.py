@@ -343,7 +343,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             my_display_config=my_display_config,
         )
         # caching for HPLib simulation
-        self.calculation_cache: Dict = {}
+        self.calculation_cache: Dict[str, HplibResult] = {}
 
         self.model = config.model
 
@@ -1980,6 +1980,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
         interpolated (:meth:`HplibResult.interpolated`). For example, a return of 47.04 °C takes 60 % of hplib's
         results at 47.0 °C and 40 % of those at 47.1 °C; its outlet is 52.04 °C.
 
+        Between two grid points on either side of hplib's switch to its heating rod alone
+        (:meth:`HplibResult.straddle_the_heating_rod_switch`), hplib is evaluated at the return itself instead. The
+        interpolation would turn the jump of the thermal power there (about 2.5 kW) into a ramp of about 25 kW/K,
+        and the hot-water tank's step mean answers a watt more with some 3.5e-5 K at 60 s: together a loop that
+        contracts by only about 0.9 per pass and needs more than the simulator's 100 passes. With hplib's own
+        jump, a higher return gives more heat and the tank a higher return, so the iteration settles on one side of
+        the switch within a few passes.
+
         Args:
             source_temperature_in_celsius: The source temperature, in °C, rounded to the grid.
             return_temperature_in_celsius: The return temperature, in °C, interpolated.
@@ -2009,7 +2017,16 @@ class MoreAdvancedHeatPumpHPLib(Component):
         lower = at_grid_point(lower_index)
         if share_of_upper <= self.GRID_POINT_SHARE_TOLERANCE:
             return lower
-        return HplibResult.interpolated(lower=lower, upper=at_grid_point(lower_index + 1), share_of_upper=share_of_upper)
+        upper = at_grid_point(lower_index + 1)
+        if HplibResult.straddle_the_heating_rod_switch(lower=lower, upper=upper):
+            return self.hplib_result_computed(
+                source_on_grid_in_celsius=round(source_temperature_in_celsius, self.HPLIB_GRID_DECIMALS),
+                return_temperature_in_celsius=return_temperature_in_celsius,
+                ambient_on_grid_in_celsius=round(ambient_temperature_in_celsius, self.HPLIB_GRID_DECIMALS),
+                mode=mode,
+                minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
+            )
+        return HplibResult.interpolated(lower=lower, upper=upper, share_of_upper=share_of_upper)
 
     def cached_hplib_result_at_grid_point(
         self,
@@ -2052,22 +2069,48 @@ class MoreAdvancedHeatPumpHPLib(Component):
         my_json_key = my_data_class.get_key()
         my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
 
-        if my_hash_key in self.calculation_cache:
-            results = self.calculation_cache[my_hash_key]
-        else:
-            results = self.heatpump.simulate(
-                t_in_primary=source_on_grid_in_celsius,
-                t_in_secondary=return_on_grid_in_celsius,
-                t_amb=ambient_on_grid_in_celsius,
+        if my_hash_key not in self.calculation_cache:
+            self.calculation_cache[my_hash_key] = self.hplib_result_computed(
+                source_on_grid_in_celsius=source_on_grid_in_celsius,
+                return_temperature_in_celsius=return_on_grid_in_celsius,
+                ambient_on_grid_in_celsius=ambient_on_grid_in_celsius,
                 mode=mode,
-                p_th_min=minimal_thermal_power_in_watt,
+                minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
             )
-            # the stated SCOP's calibration, applied once before the result is cached
-            results = self.scop_calibration.apply(self.heatpump, results, mode)
+        return self.calculation_cache[my_hash_key]
 
-            self.calculation_cache[my_hash_key] = results
+    def hplib_result_computed(
+        self,
+        *,
+        source_on_grid_in_celsius: float,
+        return_temperature_in_celsius: float,
+        ambient_on_grid_in_celsius: float,
+        mode: int,
+        minimal_thermal_power_in_watt: float,
+    ) -> "HplibResult":
+        """Return hplib's result at one operating point, computed by hplib with the stated SCOP's calibration applied.
 
-        return HplibResult.from_hplib(results)
+        The calibration (:class:`ScopCalibration`) is applied to hplib's own answer, so the result is the calibrated
+        machine's.
+
+        Args:
+            source_on_grid_in_celsius: The source temperature, in °C, on hplib's 0.1 K grid.
+            return_temperature_in_celsius: The return temperature, in °C.
+            ambient_on_grid_in_celsius: The ambient temperature, in °C, on hplib's 0.1 K grid.
+            mode: hplib's mode, 1 heating, 2 cooling.
+            minimal_thermal_power_in_watt: The minimal thermal power hplib modulates down to, in W.
+
+        Returns:
+            hplib's result at the operating point.
+        """
+        results = self.heatpump.simulate(
+            t_in_primary=source_on_grid_in_celsius,
+            t_in_secondary=return_temperature_in_celsius,
+            t_amb=ambient_on_grid_in_celsius,
+            mode=mode,
+            p_th_min=minimal_thermal_power_in_watt,
+        )
+        return HplibResult.from_hplib(self.scop_calibration.apply(self.heatpump, results, mode))
 
     def get_component_kpi_entries(
         self,

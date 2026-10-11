@@ -159,7 +159,7 @@ def test_one_device_each_gives_the_class_defaults_and_a_second_battery_follows_t
         ("battery-garage-Battery", defaults[lt.ComponentType.BATTERY]),
         ("battery-cellar-Battery", defaults[lt.ComponentType.BATTERY] + 1),
     ]
-    assert [feed.dispatch for feed in feeds(model, "control-EMS")][-2:] == [
+    assert [feed.dispatch for feed in feeds(model, "control-EMS") if feed.output == "AcBatteryPowerUsed"] == [
         DispatchSpec(target_input="LoadingPowerInput"),
         DispatchSpec(target_input="LoadingPowerInput"),
     ]
@@ -294,6 +294,8 @@ def test_a_declared_output_the_built_source_does_not_have_is_no_candidate(tmp_pa
         ("pv-pv_system-PVSystem", "ElectricityOutput"),
         ("heating-HeatPump", "ElectricalInputPowerSH"),
         ("battery-battery-Battery", "AcBatteryPowerUsed"),
+        ("battery-battery-Battery", "MaximumChargingPowerInWatt"),
+        ("battery-battery-Battery", "MinimumChargingPowerInWatt"),
     ]
 
 
@@ -503,6 +505,8 @@ def test_the_heat_pump_house_runs_a_day_with_the_balance_closed_and_its_record_r
         ("heating-HeatPump.ElectricalInputPowerSH", weights[lt.ComponentType.HEAT_PUMP_BUILDING]),
         ("heating-HeatPump.ElectricalInputPowerDHW", weights[lt.ComponentType.HEAT_PUMP_DHW]),
         ("battery-battery-Battery.AcBatteryPowerUsed", weights[lt.ComponentType.BATTERY]),
+        ("battery-battery-Battery.MaximumChargingPowerInWatt", MEASURED),
+        ("battery-battery-Battery.MinimumChargingPowerInWatt", MEASURED),
     ]
     battery = written[4]
     assert (battery["component_type"], battery["tags"], battery["dispatch"]["target_input"]) == (

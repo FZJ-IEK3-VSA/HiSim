@@ -179,6 +179,8 @@ jobs:
 
   # The static half of the write guard (hisim/write_guard.py is the runtime half): no new direct
   # file write in hisim/ outside the sanctioned writer modules listed in .semgrep/file_writes.yml.
+  # The same job runs every rule in .semgrep/, also .semgrep/no_print.yml: no print() in hisim/ outside
+  # hisim/log.py. (The job keeps its name, which branch protection may refer to.)
   # Deliberately not in the prebuilt test image: semgrep needs nothing HiSim installs, and a plain
   # runner with setup-python avoids depending on the image's interpreter for its wheels.
   semgrep:

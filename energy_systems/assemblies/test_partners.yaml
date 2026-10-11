@@ -45,13 +45,16 @@ partners:
       inputs: [Weather, UTSPConnector]
   HeatingCurveController:
     # The heating curve: the supply temperature set point and the heating season every space-heating L1 controller
-    # reads. The emitter type it is drawn for is the heat distribution controller's fact; that partner stands in every
-    # system the curve does, since the heat distribution beside a heating assembly requires it.
+    # reads. Its emitter type is pinned to the floor heating the heat distribution controller's partner states, so the
+    # curve also stands beside an assembly without a water circuit (the electric heater), which has no heat
+    # distribution controller to state it.
     serves: [{partner: HeatingCurveController}]
     requires: [Weather, Building]
     component:
       class: hisim.components.heating_curve.HeatingCurveController
       preset: building_derived
+      config:
+        heat_distribution_system_type: FLOORHEATING
       inputs: [Weather]
   HeatDistributionController:
     serves: [{partner: HeatDistributionController}, {fact: heat_distribution_system_type}]

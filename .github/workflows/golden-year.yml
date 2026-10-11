@@ -70,9 +70,9 @@
 # measured, the heat pump with solar thermal, at 5.2 GiB), so a 16 GB runner holds two at
 # once (golden_check.py --jobs 2, a child process per pair). Every setup of golden_config.json
 # runs the full year (owner decision 2026-10-11: the first week of January never runs a solar
-# collector's pump, so only a year exercises the solar systems); the one that cannot finish a
-# year yet keeps a week-only 'horizons' entry until its bead is fixed. That is 21 Python pairs
-# plus the composed files of the eight generator setups, 29 runs of about 87 runner-minutes in
+# collector's pump, so only a year exercises the solar systems); a setup that cannot finish a
+# year would keep a week-only 'horizons' entry until its bead is fixed. That is 22 Python pairs
+# plus the composed files of the eight generator setups, 30 runs of about 98 runner-minutes in
 # all (64 when only those eight ran the year, in four shards). Five shards keep the slowest
 # shard near the old one, about 15 to 16 minutes of simulation (the heat pump with solar
 # thermal alone takes about 10); four would add about five minutes of wall time for the same

@@ -203,6 +203,25 @@ class HeatingCurveControllerConfig(ConfigBase):
         """
         return cls(component_id=ComponentID(name=name))
 
+    @preset
+    @classmethod
+    def preset_direct_room_heating(cls, name: str) -> "HeatingCurveControllerConfig":
+        """The heating curve of a house heated directly in its rooms, without a water circuit, such as by electric heaters.
+
+        Such a house has no heat-distribution controller to state the emitter type, so the preset pins it to
+        ``RADIATOR``: an electric room heater hands its heat to the room air the way a radiator does, and it is the
+        emitter of the curve's table that a reader expects for heating that is not a floor heating. Nothing reads the
+        supply temperature in such a house; its controllers read only the heating season, which the emitter type does
+        not change. The threshold, the design day and the room temperature still come from the building and the place.
+
+        Args:
+            name: The instance name, which becomes the configuration's component identity.
+
+        Returns:
+            The configuration, with the emitter type pinned and every other field still ``AUTO``.
+        """
+        return cls(component_id=ComponentID(name=name), heat_distribution_system_type=HeatDistributionSystemType.RADIATOR)
+
 
 class HeatingCurveController(StatelessComponent, L2ControllerComponent):
     """L2 controller of space heating: the supply temperature set point of the heating curve, and the heating season.

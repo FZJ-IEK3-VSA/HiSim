@@ -489,6 +489,29 @@ class HplibResult:
             eer=float(results["EER"]),
         )
 
+    #: The coefficient of performance at and below which hplib runs its heating rod alone, dimensionless: hplib then
+    #: books its reference thermal power as both heat and electricity.
+    HEATING_ROD_ALONE_MAXIMAL_COP: ClassVar[float] = 1.0
+
+    @staticmethod
+    def straddle_the_heating_rod_switch(*, lower: "HplibResult", upper: "HplibResult") -> bool:
+        """Return whether hplib runs its heating rod alone at exactly one of two neighbouring operating points.
+
+        hplib switches from its compressor to its heating rod alone where its fitted coefficient of performance falls
+        to 1, and its thermal power jumps there: for example from 5.0 kW (compressor at a COP of 1.01) to the 7.55 kW
+        of the rod. A linear interpolation between a grid point on either side of that switch turns the jump into a
+        ramp of about 25 kW/K over 0.1 K.
+
+        Args:
+            lower: hplib's result at the lower grid point.
+            upper: hplib's result at the upper grid point.
+
+        Returns:
+            Whether one result is the heating rod's and the other is not.
+        """
+        limit = HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP
+        return (lower.cop <= limit) != (upper.cop <= limit)
+
     @staticmethod
     def interpolated(*, lower: "HplibResult", upper: "HplibResult", share_of_upper: float) -> "HplibResult":
         """Return the linear interpolation between hplib's results at two neighbouring return temperatures.

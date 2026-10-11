@@ -1146,9 +1146,9 @@ class SolarThermalSystemControllerConfig(ConfigBase):
     """Configuration of the solar thermal system's controller: when the solar pump runs.
 
     The controller switches the pump on when the collector has heat enough for its switch-on flow, keeps it running
-    down to a lower switch-off flow, stops it once the vessel has passed its 60 °C aim and restarts it only 3 K below
-    that aim. These rules are the controller's own, so the configuration holds only the controller's identity. The
-    named default is :meth:`preset_standard`::
+    down to a lower switch-off flow, stops it once the vessel has passed its 80 °C maximum storage temperature and
+    restarts it only 3 K below that maximum. These rules are the controller's own, so the configuration holds only the
+    controller's identity. The named default is :meth:`preset_standard`::
 
         SolarThermalSystemControllerConfig.preset_standard("SolarThermalSystemController")
     """
@@ -1190,9 +1190,10 @@ class SolarThermalSystemController(L1ControllerComponent):
     the pump on and off as before, and commands the part-load ratio ``PartLoadRatio`` with it. At and below the
     part-load threshold the ratio is 1 whenever the pump runs. Above it the ratio follows
     :class:`hisim.part_load.PartLoadRule` from the ratio the collector reports its pump ran (``PartLoadRatioRun``) and
-    the storage's start and end temperatures, so that the storage ends the step at its warm-water aim, the temperature
-    above which it stops the pump (``TargetTemperatureInCelsius``, 60 °C). Nothing ranks it against a backup charging
-    the same storage: each controller aims at its own target.
+    the storage's start and end temperatures, so that the storage ends the step at its maximum storage temperature, the
+    temperature above which it stops the pump (``TargetTemperatureInCelsius``, 80 °C). Nothing ranks it against a
+    backup charging the same storage: each controller aims at its own target, and the backups' 60 °C warm-water aim
+    lies below the solar maximum, so the sun may heat the storage above the temperature the backups stop at.
 
     The on/off decision is taken on what the controller's sensors read at the start of the step, as a real controller
     decides on the temperatures it measures at that moment: the flow the collector heat at the storage's start-of-step
@@ -1206,9 +1207,9 @@ class SolarThermalSystemController(L1ControllerComponent):
     * the flow: a pump that stood in the previous step switches on at :attr:`SWITCH_ON_MASS_FLOW_IN_KG_PER_S`, a pump
       that ran keeps running down to the lower :attr:`SWITCH_OFF_MASS_FLOW_IN_KG_PER_S`, as a differential solar
       controller switches on at a collector-to-tank difference of about 7 K and off at about 3 K;
-    * the full storage: the pump stops once the storage starts a step above its warm-water aim, 60 °C, and stays
-      stopped until the storage starts a step at least :attr:`FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN` (3 K) below
-      the aim.
+    * the full storage: the pump stops once the storage starts a step above its maximum storage temperature,
+      :attr:`MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS` (80 °C), and stays stopped until the storage starts a step at
+      least :attr:`FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN` (3 K) below the maximum.
 
     Whether the pump ran and whether the full-storage stop holds are the controller's saved state
     (:class:`SolarThermalSystemControllerState`): set from the step's last pass in :meth:`i_save_state`, restored
@@ -1232,7 +1233,7 @@ class SolarThermalSystemController(L1ControllerComponent):
     ControlSignalToSolarThermalSystem: ClassVar[str] = "ControlSignalToSolarThermalSystem"
     #: The fraction of the step the pump runs.
     PartLoadRatio: ClassVar[str] = "PartLoadRatio"
-    #: The storage temperature above which the controller stops the pump, its warm-water aim.
+    #: The storage temperature above which the controller stops the pump, its maximum storage temperature.
     TargetTemperatureInCelsius: ClassVar[str] = "TargetTemperatureInCelsius"
 
     #: The pump flow at the storage's start-of-step temperature from which a pump that stood in the previous step
@@ -1250,15 +1251,21 @@ class SolarThermalSystemController(L1ControllerComponent):
     #: storage from one step to the next would switch off and on again every few steps.
     SWITCH_OFF_MASS_FLOW_IN_KG_PER_S: ClassVar[float] = 0.0025
 
-    #: The storage temperature above which the pump stops, in °C: warm water should leave the tank at 60 °C
-    #: (https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser).
-    WARM_WATER_AIM_IN_CELSIUS: ClassVar[float] = 60.0
+    #: The maximum storage temperature: the storage temperature above which the pump stops, in °C. It is the solar
+    #: controller's own limit, above the 60 °C warm-water aim the backup generators (boiler, heat pump, district
+    #: heating, electric heater) charge to. Solar controllers let the sun heat the tank past the backup's set point
+    #: up to a maximum storage temperature that installers set between about 60 and 80 °C; a thermostatic mixing
+    #: valve at the tap keeps the water drawn at the tap temperature, so a hotter tank does not scald and delivers
+    #: the same heat to the tap. With a maximum equal to the backup's aim the tank waits just below 60 °C on sunny
+    #: days and the backup supplies what the sun could have. The owner chose 80 °C, the upper end, on 2026-10-11: the
+    #: larger standby loss of the hotter tank is accepted.
+    MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 80.0
 
-    #: How far below the warm-water aim the storage must start a step before a pump the full storage stopped runs
-    #: again, in K. Solar controllers restart the pump a few kelvin below their maximum storage temperature, typically
-    #: 3 to 5 K; 3 K is the lower end. Without it the part-load rule, which ends a charging step just above the aim,
-    #: and the standby loss of the next step switch the pump every second step.
-    FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN: ClassVar[float] = 3.0
+    #: How far below the maximum storage temperature the storage must start a step before a pump the full storage
+    #: stopped runs again, in K. Solar controllers restart the pump a few kelvin below their maximum storage
+    #: temperature, typically 3 to 5 K; 3 K is the lower end. Without it the part-load rule, which ends a charging step
+    #: just above the maximum, and the standby loss of the next step switch the pump every second step.
+    FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN: ClassVar[float] = 3.0
 
     def __init__(
         self,
@@ -1433,7 +1440,7 @@ class SolarThermalSystemController(L1ControllerComponent):
                 stsv,
                 device_runs=pump_runs,
                 start_temperature_in_celsius=storage_temperature_at_start_in_celsius,
-                target_temperature_in_celsius=self.WARM_WATER_AIM_IN_CELSIUS,
+                target_temperature_in_celsius=self.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS,
             )
 
     @staticmethod
@@ -1442,12 +1449,12 @@ class SolarThermalSystemController(L1ControllerComponent):
     ) -> bool:
         """Return whether the full-storage stop holds the solar pump in this step, from the storage and the last step.
 
-        The full-storage stop is the controller's maximum storage temperature: it sets once the storage starts a step
-        above the warm-water aim, :attr:`WARM_WATER_AIM_IN_CELSIUS` (60 °C), and releases only once the storage starts
-        a step at least :attr:`FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN` (3 K) below the aim. Between the two edges
-        it keeps the state of the previous step. It reads the start-of-step temperature, which no pass of the step
-        moves. For example, a storage that started at 58.5 °C is held if the stop held in the previous step and free
-        otherwise; one that started at 57 °C is free; one that started at 60.02 °C is held.
+        The full-storage stop enforces the controller's maximum storage temperature: it sets once the storage starts a
+        step above :attr:`MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS` (80 °C), and releases only once the storage starts a
+        step at least :attr:`FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN` (3 K) below the maximum. Between the two
+        edges it keeps the state of the previous step. It reads the start-of-step temperature, which no pass of the
+        step moves. For example, a storage that started at 78.5 °C is held if the stop held in the previous step and
+        free otherwise; one that started at 77 °C is free; one that started at 80.02 °C is held.
 
         Args:
             storage_temperature_at_start_in_celsius: The storage's start-of-step temperature, in °C.
@@ -1456,11 +1463,11 @@ class SolarThermalSystemController(L1ControllerComponent):
         Returns:
             True while the full-storage stop holds the pump.
         """
-        aim_in_celsius = SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS
-        if storage_temperature_at_start_in_celsius > aim_in_celsius:
+        maximum_in_celsius = SolarThermalSystemController.MAXIMUM_STORAGE_TEMPERATURE_IN_CELSIUS
+        if storage_temperature_at_start_in_celsius > maximum_in_celsius:
             return True
         restart_temperature_in_celsius = (
-            aim_in_celsius - SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN
+            maximum_in_celsius - SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_MAXIMUM_IN_KELVIN
         )
         return stop_held_in_previous_step and storage_temperature_at_start_in_celsius > restart_temperature_in_celsius
 
@@ -1546,12 +1553,13 @@ class SolarThermalSystemControllerState:
 
     The controller keeps two of them: the state of the step being iterated, as the latest pass decided it, and the
     saved state, the one the previous step ended with. The saved state chooses the edges of both hysteresis bands: the
-    switch-on or switch-off flow, and whether the storage must fall 3 K below the aim before the pump runs again.
+    switch-on or switch-off flow, and whether the storage must fall 3 K below the maximum storage temperature before
+    the pump runs again.
     """
 
     #: Whether the pump runs.
     pump_runs: bool
 
-    #: Whether the full-storage stop holds the pump: set once the storage started a step above the warm-water aim,
-    #: released once it started a step at least 3 K below it.
+    #: Whether the full-storage stop holds the pump: set once the storage started a step above the maximum storage
+    #: temperature, released once it started a step at least 3 K below it.
     full_storage_stop_holds: bool

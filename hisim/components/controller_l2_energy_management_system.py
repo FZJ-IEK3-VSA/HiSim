@@ -91,10 +91,10 @@ class EMSState:
     """The energy manager's state from one time step to the next: whether it raised the set temperatures.
 
     The energy manager raises the set temperatures of the building, the space-heating storage and the hot-water
-    storage while electricity is left over after the battery. Close to zero surplus it keeps the decision of the
-    step before (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`), so that decision is the one
-    value the manager carries from step to step. ``i_simulate`` reads it from the saved state and writes the
-    decision of the current pass as the end-of-step state; ``i_save_state`` makes the converged pass's decision
+    storage while PV electricity is left over after the battery has charged. Close to zero surplus it keeps the
+    decision of the step before (:meth:`L2GenericEnergyManagementSystem.raises_set_temperatures`), so that decision
+    is the one value the manager carries from step to step. ``i_simulate`` reads it from the saved state and writes
+    the decision of the current pass as the end-of-step state; ``i_save_state`` makes the converged pass's decision
     the next step's start.
     """
 
@@ -124,8 +124,8 @@ class SurplusAfterParticipants:
 
     #: The balance with every participant's realized power, the battery's included; the manager publishes it.
     grid_balance_in_watt: float
-    #: The balance with each battery counted by what its charging limits for the step allow it to take from a surplus,
-    #: and by its realized power in a deficit. The manager decides the set-temperature raise on it.
+    #: The balance with each battery counted only as a sink: it takes from a surplus what its charging limits for the
+    #: step allow, and it covers no deficit. The manager decides the set-temperature raise on it.
     surplus_after_battery_in_watt: float
 
 
@@ -832,24 +832,33 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     @staticmethod
     def raises_set_temperatures(*, surplus_after_battery_in_watt: float, raised_in_previous_step: bool) -> bool:
-        """Return whether the energy manager raises the set temperatures, from the surplus and its previous decision.
+        """Return whether the energy manager raises the set temperatures, from the PV surplus and its previous decision.
 
-        The surplus after the battery is the electricity left over once every participant, the battery last, has
-        taken its share; positive means electricity would go to the grid. The decision has a hysteresis band of
-        ``SURPLUS_HYSTERESIS_BAND_IN_WATT`` around zero: above the band the set temperatures are raised, below it
-        they are not, and within it, edges included, the decision of the previous step is kept. For example, with
-        the band of 0.01 W, a surplus of 5e-12 W keeps the previous decision, a surplus of 0.5 W raises, and a
-        surplus of -0.5 W does not.
+        The surplus after the battery is the electricity left over once every participant has taken its share, a
+        battery counted only as a sink: it takes from a surplus what its charging limits for the step allow,
+        and it covers no deficit (:meth:`battery_charging_share_in_watt`). Positive means PV electricity would go to the
+        grid. So only PV electricity keeps a raise: when keeping it needs the battery to discharge, the surplus is
+        negative and the raise ends.
 
-        Why: when the battery balances the house exactly, the surplus is zero up to float noise, and a decision on
-        its sign alone would switch the raise on and off between the passes of one step.
+        The transitions, from the decision of the previous step:
+
+        * surplus above ``SURPLUS_HYSTERESIS_BAND_IN_WATT``: raise;
+        * surplus below minus the band: do not raise;
+        * surplus within the band, edges included: keep the previous decision.
+
+        For example, with the band of 0.01 W, a surplus of 5e-12 W keeps the previous decision, a surplus of 0.5 W
+        raises, and a surplus of -0.5 W does not.
+
+        Why: a battery that takes the whole surplus leaves zero up to float noise, and a decision on the sign alone
+        would switch the raise on and off between the passes of one step.
 
         Args:
-            surplus_after_battery_in_watt: The surplus left after the battery, in W.
+            surplus_after_battery_in_watt: The surplus left after every participant, the battery counted only as a
+                sink, in W.
             raised_in_previous_step: Whether the set temperatures were raised in the previous step.
 
         Returns:
-            Whether the set temperatures are raised in this step.
+            Whether the set temperatures are raised in this pass.
 
         Raises:
             ValueError: If the surplus is NaN or infinite.
@@ -866,39 +875,32 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return raised_in_previous_step
 
     @staticmethod
-    def battery_share_in_watt(
-        *,
-        surplus_in_watt: float,
-        realized_battery_power_in_watt: float,
-        maximum_charging_power_in_watt: float,
-        minimum_charging_power_in_watt: float,
+    def battery_charging_share_in_watt(
+        *, surplus_in_watt: float, maximum_charging_power_in_watt: float, minimum_charging_power_in_watt: float
     ) -> float:
-        """Return the power a battery counts with in the raise decision, from the surplus offered to it, in W.
+        """Return the power a battery takes from the surplus offered to it, from its charging limits for the step, in W.
 
-        From a surplus the battery takes what its charging limits for the step allow: the surplus up to its maximum
-        charging power, and nothing when that share is at or below its minimum charging power. In a deficit (a surplus
-        of zero or less) it counts with its realized power, which is negative while it discharges. For example, with
-        limits of 5,000 W and 200 W, a surplus of 1,000 W gives 1,000 W, 8,000 W give 5,000 W and 150 W give 0 W; a
-        deficit of 300 W with the battery discharging 300 W gives -300 W.
+        The battery takes the surplus up to its maximum charging power, and nothing when that share is at or below its
+        minimum charging power. A deficit (a surplus of zero or less) gives no share: the battery counts only as a
+        sink. For example, with limits of 5,000 W and 200 W, a surplus of 1,000 W gives 1,000 W, 8,000 W give
+        5,000 W, 150 W give 0 W, and -300 W give 0 W.
 
-        Why: the charging share follows from the limits the battery publishes from its state at the step's start, not
-        from its answer to an earlier pass's offer, so a stale answer no longer reads as a surplus or a deficit.
+        Why: the share follows from the limits the battery publishes from its state at the step's start, not from
+        its answer to an earlier pass's offer, so the decision of a pass does not depend on the pass before.
 
         Args:
             surplus_in_watt: The surplus offered to the battery, in W; positive means electricity left over.
-            realized_battery_power_in_watt: The battery's realized AC power, in W; positive while it charges.
             maximum_charging_power_in_watt: The largest power the battery can take in the step, in W.
             minimum_charging_power_in_watt: The smallest power the battery charges with, in W.
 
         Returns:
-            The power the battery counts with, in W; positive while it takes electricity.
+            The power the battery takes, in W; zero or positive.
 
         Raises:
             ValueError: If a value is not finite, or a charging limit is negative.
         """
         for name, value in (
             ("surplus", surplus_in_watt),
-            ("realized battery power", realized_battery_power_in_watt),
             ("maximum charging power", maximum_charging_power_in_watt),
             ("minimum charging power", minimum_charging_power_in_watt),
         ):
@@ -910,7 +912,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 f"{maximum_charging_power_in_watt} W and a minimum of {minimum_charging_power_in_watt} W."
             )
         if surplus_in_watt <= 0:
-            return realized_battery_power_in_watt
+            return 0.0
         share_in_watt = min(surplus_in_watt, maximum_charging_power_in_watt)
         return share_in_watt if share_in_watt > minimum_charging_power_in_watt else 0.0
 
@@ -1023,7 +1025,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         Every participant takes its share in the order of its weight (:meth:`control_electricity_component_iterative`).
         Beside the grid balance, which books every participant's realized power, the surplus the raise is decided on
-        counts each battery by the share its charging limits allow (:meth:`battery_share_in_watt`).
+        counts each battery by the share its charging limits allow (:meth:`battery_charging_share_in_watt`).
 
         Args:
             available_surplus_electricity_in_watt: The production minus the uncontrolled consumption, in W.
@@ -1063,9 +1065,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             )
             if single_component_type_sorted == lt.ComponentType.BATTERY:
                 limit_inputs = self.battery_charging_limit_inputs[cast(str, single_input_sorted.src_object_name)]
-                surplus_after_battery_in_watt -= self.battery_share_in_watt(
+                surplus_after_battery_in_watt -= self.battery_charging_share_in_watt(
                     surplus_in_watt=surplus_after_battery_in_watt,
-                    realized_battery_power_in_watt=stsv.get_input_value(component_input=single_input_sorted),
                     maximum_charging_power_in_watt=stsv.get_input_value(limit_inputs.maximum_charging_power_in_watt),
                     minimum_charging_power_in_watt=stsv.get_input_value(limit_inputs.minimum_charging_power_in_watt),
                 )

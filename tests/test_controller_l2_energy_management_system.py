@@ -874,7 +874,7 @@ def test_a_device_that_publishes_no_dhw_power_grows_no_dhw_target() -> None:
 
 class TestSurplusHysteresis:
 
-    """The energy manager raises the set temperatures on a surplus, with a hysteresis band around zero."""
+    """The energy manager raises the set temperatures on a PV surplus, with a hysteresis band around zero."""
 
     BAND_IN_WATT = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.SURPLUS_HYSTERESIS_BAND_IN_WATT
 
@@ -916,35 +916,32 @@ class TestSurplusHysteresis:
                 surplus_after_battery_in_watt=surplus_in_watt, raised_in_previous_step=False
             )
 
-    #: The battery's share: the surplus offered, its realized power, its maximum and minimum charging powers, the share,
-    #: all in W.
+    #: The battery's share: the surplus offered, the maximum and minimum charging powers in W, and the share in W.
     SHARES = [
-        (1000.0, 0.0, 5000.0, 200.0, 1000.0),
-        (1000.0, -3000.0, 5000.0, 200.0, 1000.0),
-        (8000.0, 2000.0, 5000.0, 200.0, 5000.0),
-        (5000.0, 0.0, 5000.0, 200.0, 5000.0),
-        (150.0, 150.0, 5000.0, 200.0, 0.0),
-        (200.0, 0.0, 5000.0, 200.0, 0.0),
-        (200.5, 0.0, 5000.0, 200.0, 200.5),
-        (1000.0, 1000.0, 150.0, 200.0, 0.0),
-        (1000.0, 0.0, 0.0, 200.0, 0.0),
-        (0.0, 0.0, 5000.0, 200.0, 0.0),
-        (-300.0, -300.0, 5000.0, 200.0, -300.0),
-        (-8000.0, -5000.0, 5000.0, 0.0, -5000.0),
+        (1000.0, 5000.0, 200.0, 1000.0),
+        (8000.0, 5000.0, 200.0, 5000.0),
+        (5000.0, 5000.0, 200.0, 5000.0),
+        (150.0, 5000.0, 200.0, 0.0),
+        (200.0, 5000.0, 200.0, 0.0),
+        (200.5, 5000.0, 200.0, 200.5),
+        (1000.0, 150.0, 200.0, 0.0),
+        (1000.0, 0.0, 200.0, 0.0),
+        (0.0, 5000.0, 200.0, 0.0),
+        (-300.0, 5000.0, 200.0, 0.0),
+        (-8000.0, 5000.0, 0.0, 0.0),
     ]
 
     @pytest.mark.base
-    @pytest.mark.parametrize(("surplus_in_watt", "realized_in_watt", "maximum_in_watt", "minimum_in_watt", "expected_in_watt"), SHARES)
+    @pytest.mark.parametrize(("surplus_in_watt", "maximum_in_watt", "minimum_in_watt", "expected_in_watt"), SHARES)
     def test_every_battery_share_of_the_table(
-        self, surplus_in_watt: float, realized_in_watt: float, maximum_in_watt: float, minimum_in_watt: float, expected_in_watt: float
+        self, surplus_in_watt: float, maximum_in_watt: float, minimum_in_watt: float, expected_in_watt: float
     ) -> None:
-        """Catches a charging share beyond the battery's limits, below its minimum, or taken from its stale answer.
+        """Catches a share beyond the battery's limits, a share below its minimum, or a battery that covers a deficit.
 
-        From a surplus the limits decide whatever the battery answered before; in a deficit its realized power counts.
+        A battery counts only as a sink: whatever it could discharge, it covers no deficit in the decision.
         """
-        share_in_watt = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_share_in_watt(
+        share_in_watt = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_charging_share_in_watt(
             surplus_in_watt=surplus_in_watt,
-            realized_battery_power_in_watt=realized_in_watt,
             maximum_charging_power_in_watt=maximum_in_watt,
             minimum_charging_power_in_watt=minimum_in_watt,
         )
@@ -952,23 +949,14 @@ class TestSurplusHysteresis:
 
     @pytest.mark.base
     @pytest.mark.parametrize(
-        ("surplus_in_watt", "realized_in_watt", "maximum_in_watt", "minimum_in_watt"),
-        [
-            (float("nan"), 0.0, 5000.0, 200.0),
-            (100.0, float("nan"), 5000.0, 200.0),
-            (100.0, 0.0, float("inf"), 200.0),
-            (100.0, 0.0, -1.0, 200.0),
-            (100.0, 0.0, 5000.0, -1.0),
-        ],
+        ("surplus_in_watt", "maximum_in_watt", "minimum_in_watt"),
+        [(float("nan"), 5000.0, 200.0), (100.0, float("inf"), 200.0), (100.0, -1.0, 200.0), (100.0, 5000.0, -1.0)],
     )
-    def test_an_invalid_battery_limit_is_refused(
-        self, surplus_in_watt: float, realized_in_watt: float, maximum_in_watt: float, minimum_in_watt: float
-    ) -> None:
+    def test_an_invalid_battery_limit_is_refused(self, surplus_in_watt: float, maximum_in_watt: float, minimum_in_watt: float) -> None:
         """Catches a NaN or negative limit turning into a share that silently decides the raise."""
         with pytest.raises(ValueError):
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_share_in_watt(
+            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.battery_charging_share_in_watt(
                 surplus_in_watt=surplus_in_watt,
-                realized_battery_power_in_watt=realized_in_watt,
                 maximum_charging_power_in_watt=maximum_in_watt,
                 minimum_charging_power_in_watt=minimum_in_watt,
             )
@@ -1245,11 +1233,12 @@ class TestSurplusHysteresis:
         assert raise_in_kelvin == manager.domestic_hot_water_storage_temperature_offset_value
 
     @pytest.mark.base
-    def test_a_battery_that_covers_a_deficit_counts_with_its_realized_power(self) -> None:
-        """Catches the deficit side of the decision changed by the limits: a discharging battery still counts there.
+    def test_a_raise_that_needs_the_battery_to_discharge_ends(self) -> None:
+        """Catches a raise kept alive by the battery: only PV electricity keeps it.
 
-        The raised heat pump draws 1000 W beside 800 W of PV, and the battery discharges the missing 200 W. The balance
-        is zero, inside the band, and the raise is kept, as before the battery published its limits.
+        The raised heat pump draws 1000 W beside 800 W of PV, and the battery discharges the missing 200 W. The
+        realized balance is zero, inside the band, which kept the raise before; counting the battery only as a sink
+        leaves a deficit of 200 W, and the raise ends.
         """
         manager, outputs, stsv = self.manager_with_battery(5000.0, 200.0)
         manager.state = controller_l2_energy_management_system.EMSState(set_temperatures_are_raised=True)
@@ -1258,7 +1247,7 @@ class TestSurplusHysteresis:
             manager, outputs, stsv, pv_production_in_watt=800.0, realized_battery_power_in_watt=-200.0
         )
         assert grid_balance_in_watt == pytest.approx(0.0)
-        assert raise_in_kelvin == manager.domestic_hot_water_storage_temperature_offset_value
+        assert raise_in_kelvin == 0.0
 
     @pytest.mark.base
     def test_a_battery_without_its_limits_is_refused(self) -> None:

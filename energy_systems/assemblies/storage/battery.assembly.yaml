@@ -43,6 +43,10 @@ tests:
     - {output: Battery.DcBatteryPowerUsed, unit: WATT, min: -20000, max: 20000}
     - {output: Battery.ChargingPower, unit: WATT, min: 0, max: 20000}
     - {output: Battery.DischargingPower, unit: WATT, min: -20000, max: 0}
+    - {output: Battery.MaximumChargingPowerInWatt, unit: WATT, min: 0, max: 20000}
+      # the largest power it can take in the step: zero when full, at most the box's 15 kW inverter
+    - {output: Battery.MinimumChargingPowerInWatt, unit: WATT, min: 0, max: 1000}
+      # bslib's minimum charging power, 18.23 W per kW of inverter: 273 W at the box's 15 kW
   monotone:
     - {parameter: capacity_in_kwh, kpi: Battery charging energy, direction: increasing}
       # a larger battery absorbs at least as much surplus in a day; a derived KPI (no member, spec §9.4)

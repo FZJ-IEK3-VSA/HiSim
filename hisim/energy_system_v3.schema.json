@@ -3450,16 +3450,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "component_id": {},
-                  "set_heating_threshold_outside_temperature_in_celsius": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
-                  },
                   "with_domestic_hot_water_preparation": {
                     "type": "boolean"
                   },
@@ -3468,26 +3458,13 @@
                   },
                   "parallel_space_heating_and_dhw_option": {
                     "type": "boolean"
-                  },
-                  "specific_heating_load_of_building_in_watt_per_m2": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "const": "AUTO"
-                      }
-                    ]
                   }
                 }
               },
               "sizing_sources": {
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
-                  "enum": [
-                    "conditioned_floor_area_in_m2",
-                    "heating_load_in_watt"
-                  ]
+                  "enum": []
                 }
               }
             }
@@ -4315,7 +4292,8 @@
             "properties": {
               "preset": {
                 "enum": [
-                  "building_derived"
+                  "building_derived",
+                  "direct_room_heating"
                 ]
               },
               "constructor": false,

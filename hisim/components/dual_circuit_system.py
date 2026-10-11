@@ -52,10 +52,9 @@ class DiverterValve:
         space-heating circuit or the hot-water tank, or both at once if ``parallel_space_heating_and_dhw_option`` is
         set. Without the parallel option a hot-water charge has priority over space heating. Whether the tank needs a
         charge is :meth:`hot_water_charge_needed`; space heating is needed in the heating season while the water is
-        below its set temperature plus the hysteresis. The heating season comes from the heating curve, or, for a
-        generator without one, from :meth:`is_heating_season`. For example, with the parallel option, a tank at 44 °C
-        (60 °C set, 15 K hysteresis) on a winter day gives the parallel mode, and the parallel charge goes on up to
-        60 °C.
+        below its set temperature plus the hysteresis. The heating season comes from the heating curve. For example,
+        with the parallel option, a tank at 44 °C (60 °C set, 15 K hysteresis) on a winter day gives the parallel mode,
+        and the parallel charge goes on up to 60 °C.
 
         Args:
             with_domestic_hot_water_preparation: Whether the generator has a hot-water tank at all.
@@ -154,25 +153,6 @@ class DiverterValve:
         if storage_temperature_in_celsius < set_temperature_in_celsius - hysteresis_in_kelvin:
             return True
         return controller_mode in DiverterValve.CHARGING_MODES and storage_temperature_in_celsius < set_temperature_in_celsius
-
-    @staticmethod
-    def is_heating_season(
-        *, daily_average_outside_temperature_in_celsius: float, heating_threshold_in_celsius: float
-    ) -> bool:
-        """Return whether space heating runs on a day, for a generator without a heating curve, from the day's mean.
-
-        The electric heater heats the rooms directly and has no heating curve, so its controller decides the heating
-        season itself: a day whose mean outside temperature is at or below the threshold is in the heating season.
-        For example, with a 16 °C threshold a day at 16 °C is in it and a day at 16.5 °C is not.
-
-        Args:
-            daily_average_outside_temperature_in_celsius: The day's mean outside temperature, in °C.
-            heating_threshold_in_celsius: The heating threshold, in °C.
-
-        Returns:
-            Whether the day is in the heating season.
-        """
-        return daily_average_outside_temperature_in_celsius <= heating_threshold_in_celsius
 
 
 class DualCircuitHotWater:

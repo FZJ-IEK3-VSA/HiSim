@@ -14,6 +14,7 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
+from hisim.components import heating_curve
 from hisim.components import generic_pv_system
 from hisim.config import SizingContext, concrete
 from hisim.components import building
@@ -296,16 +297,26 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
-    # Build electric heating controller
-    my_electric_heating_controller_sh_config = (
-        generic_electric_heating.ElectricHeatingControllerConfig.preset_standard(
-            "ElectricHeatingController"
-        ).resolve(
-            SizingContext(
-                heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-            )
+    # Build the heating curve: it owns the heating threshold, and the electric heating controller reads the heating
+    # season from it. The house has no water circuit, so the curve's emitter type is pinned by its preset.
+    my_heating_curve_config = heating_curve.HeatingCurveControllerConfig.preset_direct_room_heating(
+        "HeatingCurveController"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         )
+    )
+    my_heating_curve = heating_curve.HeatingCurveController(
+        my_simulation_parameters=my_simulation_parameters, config=my_heating_curve_config
+    )
+    my_sim.add_component(my_heating_curve, connect_automatically=True)
+
+    # Build electric heating controller
+    my_electric_heating_controller_sh_config = generic_electric_heating.ElectricHeatingControllerConfig.preset_standard(
+        "ElectricHeatingController"
     )
     # This house heats its water electrically as well, and serves both circuits at once.
     my_electric_heating_controller_sh_config.with_domestic_hot_water_preparation = True

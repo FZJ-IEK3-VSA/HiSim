@@ -537,7 +537,7 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
 
 
 class PumpTransitions:
-    """The solar pump's on/off transitions: the saved pump state, the collector's flow, the storage, the decision."""
+    """The solar pump's on/off transitions: the saved pump state, the collector's flow, the full-storage stop."""
 
     #: The switch-on flow, kg/s.
     ON_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_ON_MASS_FLOW_IN_KG_PER_S
@@ -545,23 +545,49 @@ class PumpTransitions:
     #: The switch-off flow, kg/s.
     OFF_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_OFF_MASS_FLOW_IN_KG_PER_S
 
-    #: Each row: whether the pump ran in the previous step, the required flow in kg/s, the storage's start temperature
-    #: in °C, whether the pump runs, and what the row checks.
+    #: Each row: whether the pump ran in the previous step, the flow the collector heat at the storage's start-of-step
+    #: temperature needs in kg/s, whether the full-storage stop holds, whether the pump runs, and what the row checks.
     TABLE = [
-        (False, 0.01, 44.0, True, "a standing pump with heat enough and a tank to fill switches on"),
-        (False, ON_IN_KG_PER_S, 44.0, True, "a standing pump switches on at exactly the switch-on flow"),
-        (False, 0.004, 44.0, False, "a standing pump stays off between the two flows"),
-        (False, OFF_IN_KG_PER_S, 44.0, False, "a standing pump stays off at the switch-off flow"),
-        (False, 0.0, 44.0, False, "a standing pump stays off without collector heat"),
-        (False, 0.01, 61.0, False, "a standing pump stays off for a full tank"),
-        (False, 0.01, 60.0, True, "exactly at the 60 °C aim a standing pump switches on (the stop is strictly above)"),
-        (True, 0.01, 44.0, True, "a running pump with heat enough keeps running"),
-        (True, 0.004, 44.0, True, "a running pump keeps running between the two flows"),
-        (True, OFF_IN_KG_PER_S, 44.0, True, "a running pump keeps running at exactly the switch-off flow"),
-        (True, 0.002, 44.0, False, "a running pump switches off below the switch-off flow"),
-        (True, 0.0, 44.0, False, "a running pump switches off without collector heat"),
-        (True, 0.01, 61.0, False, "a running pump switches off for a full tank"),
-        (True, 0.004, 61.0, False, "a full tank stops a running pump inside the band too"),
+        (False, 0.01, False, True, "a standing pump with heat enough and a storage to fill switches on"),
+        (False, ON_IN_KG_PER_S, False, True, "a standing pump switches on at exactly the switch-on flow"),
+        (False, 0.004, False, False, "a standing pump stays off between the two flows"),
+        (False, OFF_IN_KG_PER_S, False, False, "a standing pump stays off at the switch-off flow"),
+        (False, 0.0, False, False, "a standing pump stays off without collector heat"),
+        (False, 0.01, True, False, "a standing pump stays off while the full-storage stop holds"),
+        (True, 0.01, False, True, "a running pump with heat enough keeps running"),
+        (True, 0.004, False, True, "a running pump keeps running between the two flows"),
+        (True, OFF_IN_KG_PER_S, False, True, "a running pump keeps running at exactly the switch-off flow"),
+        (True, 0.002, False, False, "a running pump switches off below the switch-off flow"),
+        (True, 0.0, False, False, "a running pump switches off without collector heat"),
+        (True, 0.01, True, False, "the full-storage stop stops a running pump"),
+        (True, 0.004, True, False, "the full-storage stop stops a running pump inside the flow band too"),
+    ]
+
+
+class FullStorageStopTransitions:
+    """The full-storage stop's transitions: the saved stop, the storage's start-of-step temperature, the stop."""
+
+    #: The warm-water aim above which the stop sets, °C.
+    AIM_IN_CELSIUS = solar_thermal_system.SolarThermalSystemController.WARM_WATER_AIM_IN_CELSIUS
+
+    #: The temperature at and below which a holding stop releases, °C: 3 K below the aim.
+    RESTART_IN_CELSIUS = (
+        AIM_IN_CELSIUS - solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN
+    )
+
+    #: Each row: whether the stop held in the previous step, the storage's start-of-step temperature in °C, whether
+    #: the stop holds, and what the row checks.
+    TABLE = [
+        (False, 44.0, False, "a storage well below the aim sets no stop"),
+        (False, AIM_IN_CELSIUS, False, "exactly at the aim the stop does not set (it sets strictly above)"),
+        (False, AIM_IN_CELSIUS + 0.025, True, "a storage the part-load rule ended just above the aim sets the stop"),
+        (False, 58.5, False, "inside the restart band a released stop stays released"),
+        (True, 61.0, True, "a holding stop holds above the aim"),
+        (True, AIM_IN_CELSIUS, True, "a holding stop holds at the aim"),
+        (True, 58.5, True, "a holding stop holds inside the restart band"),
+        (True, RESTART_IN_CELSIUS + 1e-6, True, "a holding stop holds just above the restart temperature"),
+        (True, RESTART_IN_CELSIUS, False, "a holding stop releases exactly 3 K below the aim"),
+        (True, 45.0, False, "a holding stop releases well below the aim"),
     ]
 
 
@@ -569,40 +595,76 @@ class PumpTransitions:
 def test_the_switch_off_flow_lies_clearly_below_the_switch_on_flow() -> None:
     """Catches a hysteresis band of the wrong width between the pump's switch-on and switch-off flows.
 
-    A band of zero gives back the step with no consistent on/off state. A switch-off flow outside 3/7 to 1/2 of the
-    switch-on flow leaves the 7 K / 3 K band of a differential solar controller.
+    A band of zero lets a pump whose heat warms the storage from one step to the next switch off and on every few
+    steps. A switch-off flow outside 3/7 to 1/2 of the switch-on flow leaves the 7 K / 3 K band of a differential
+    solar controller.
     """
     ratio = PumpTransitions.OFF_IN_KG_PER_S / PumpTransitions.ON_IN_KG_PER_S
     assert 3 / 7 <= ratio <= 1 / 2
 
 
 @pytest.mark.base
+def test_the_full_storage_stop_restarts_three_to_five_kelvin_below_the_aim() -> None:
+    """Catches a full-storage restart band outside what solar controllers use.
+
+    Without a band the part-load rule, which ends a charging step just above the aim, and the next step's standby
+    loss switch the pump every second step; a band wider than 5 K leaves solar heat on the roof that real controllers
+    take.
+    """
+    band_in_kelvin = solar_thermal_system.SolarThermalSystemController.FULL_STORAGE_RESTART_BELOW_AIM_IN_KELVIN
+    assert 3.0 <= band_in_kelvin <= 5.0
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(
     (
         "pump_ran_in_previous_step",
-        "required_mass_flow_in_kg_per_second",
-        "storage_temperature_at_start_in_celsius",
+        "required_mass_flow_at_start_of_step_in_kg_per_second",
+        "full_storage_stop_holds",
         "expected",
     ),
     [row[:4] for row in PumpTransitions.TABLE],
     ids=[row[4] for row in PumpTransitions.TABLE],
 )
-def test_the_pump_switches_on_at_the_on_flow_off_below_the_off_flow_and_stops_on_a_full_tank(
+def test_the_pump_switches_on_at_the_on_flow_off_below_the_off_flow_and_stands_while_the_storage_is_full(
     pump_ran_in_previous_step: bool,
-    required_mass_flow_in_kg_per_second: float,
-    storage_temperature_at_start_in_celsius: float,
+    required_mass_flow_at_start_of_step_in_kg_per_second: float,
+    full_storage_stop_holds: bool,
     expected: bool,
 ) -> None:
-    """Every transition of the pump's hysteresis, with the edges of both flows and of the 60 °C aim.
+    """Every transition of the pump's flow hysteresis, with the edges of both flows and the full-storage stop.
 
-    A pump without the band would switch on and off in one step whose own heat moves the flow across the threshold; a
-    band with the wrong edges would run the pump on too little heat or keep it standing on enough.
+    A pump without the band would switch on and off every few steps; a band with the wrong edges would run the pump on
+    too little heat or keep it standing on enough; a pump that ignored the stop would heat a full storage further.
     """
     assert (
         solar_thermal_system.SolarThermalSystemController.pump_runs(
-            required_mass_flow_in_kg_per_second=required_mass_flow_in_kg_per_second,
-            storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+            required_mass_flow_at_start_of_step_in_kg_per_second=required_mass_flow_at_start_of_step_in_kg_per_second,
+            full_storage_stop_holds=full_storage_stop_holds,
             pump_ran_in_previous_step=pump_ran_in_previous_step,
+        )
+        is expected
+    )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("stop_held_in_previous_step", "storage_temperature_at_start_in_celsius", "expected"),
+    [row[:3] for row in FullStorageStopTransitions.TABLE],
+    ids=[row[3] for row in FullStorageStopTransitions.TABLE],
+)
+def test_the_full_storage_stop_sets_above_the_aim_and_releases_three_kelvin_below_it(
+    stop_held_in_previous_step: bool, storage_temperature_at_start_in_celsius: float, expected: bool
+) -> None:
+    """Every transition of the full-storage stop, with the edges at the aim and at the restart temperature.
+
+    A stop without its band would release as soon as the storage cools below the aim and switch the pump every second
+    step; a stop that set at the aim itself would never let the part-load rule bring the storage to its aim.
+    """
+    assert (
+        solar_thermal_system.SolarThermalSystemController.full_storage_stop_holds(
+            storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+            stop_held_in_previous_step=stop_held_in_previous_step,
         )
         is expected
     )
@@ -701,7 +763,7 @@ class SolarControllerSteps:
         controller_class = solar_thermal_system.SolarThermalSystemController
         return {
             controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
-            controller_class.MassFlow: mass_flow_in_kg_per_second,
+            controller_class.RequiredWaterMassFlowAtStartOfStepInKgPerSecond: mass_flow_in_kg_per_second,
         }
 
     @classmethod
@@ -763,6 +825,7 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
         controller.i_save_state()
     for flow in (steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
         steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(flow))
+    steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=61.0))
     final = steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
     expected = steps.signal(fresh, fresh_stsv, fresh_fakes, final)
     assert steps.signal(iterated, iterated_stsv, iterated_fakes, final) == expected
@@ -771,11 +834,22 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
 
 @pytest.mark.base
 @pytest.mark.parametrize("pump_ran_in_previous_step", [False, True])
-def test_under_force_convergence_the_pump_keeps_the_state_of_the_previous_step(pump_ran_in_previous_step: bool) -> None:
-    """A forced pass keeps the pump as the previous step left it, whatever the flow, and the next step starts from it.
+@pytest.mark.parametrize(
+    "flow_in_kg_per_second",
+    [
+        SolarControllerSteps.BELOW_THE_OFF_FLOW_IN_KG_PER_S,
+        SolarControllerSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S,
+        SolarControllerSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S,
+    ],
+)
+def test_a_forced_pass_decides_as_every_other_pass_of_the_step(
+    pump_ran_in_previous_step: bool, flow_in_kg_per_second: float
+) -> None:
+    """Under ``force_convergence`` the controller publishes the signal an unforced pass with the same inputs publishes.
 
-    A forced pass that decided on the flow again would keep switching a pump at the edge of its switch-on flow until
-    the simulator gives up; one that kept an earlier pass's decision would remember a pass.
+    Every input is a start-of-step quantity no pass moves, so the decision cannot change between passes and a forced
+    pass needs no rule of its own. A forced pass that held some other state would run the pump against its own
+    decision.
     """
     steps = SolarControllerSteps
     controller, stsv, fakes = steps.build(900)
@@ -783,8 +857,92 @@ def test_under_force_convergence_the_pump_keeps_the_state_of_the_previous_step(p
     if pump_ran_in_previous_step:
         steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S))
         controller.i_save_state()
-    expected_signal = 1 if pump_ran_in_previous_step else 0
-    flow = steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S if pump_ran_in_previous_step else steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S
-    assert steps.signal(controller, stsv, fakes, steps.values(flow), force_convergence=True) == expected_signal
+    values = steps.values(flow_in_kg_per_second)
+    unforced = steps.signal(controller, stsv, fakes, values)
+    assert steps.signal(controller, stsv, fakes, values, force_convergence=True) == unforced
+
+
+@pytest.mark.base
+def test_a_pump_the_full_storage_stopped_runs_again_only_once_the_storage_starts_three_kelvin_below_the_aim() -> None:
+    """The full-storage stop holds across steps until the storage starts a step 3 K below the aim, then it releases.
+
+    A controller without the band would restart the pump as soon as the storage cools below 60 °C and switch it every
+    second step; one that kept the stop in a pass instead of the saved state would hold or release it within a step.
+    """
+    steps = SolarControllerSteps
+    controller, stsv, fakes = steps.build(900)
+
+    def signal(start_c: float) -> float:
+        """Run one pass of a sunny step whose storage started at ``start_c`` and return the pump signal."""
+        return steps.signal(controller, stsv, fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=start_c))
+
+    controller.i_save_state()  # the first step starts with the pump standing and the stop released
+    assert signal(59.5) == 1  # a storage below the aim with no stop: the pump switches on
     controller.i_save_state()
-    assert steps.signal(controller, stsv, fakes, steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == expected_signal
+    assert signal(60.025) == 0  # the storage started just above the aim: the stop sets
+    controller.i_save_state()
+    assert signal(59.5) == 0  # the storage cooled below the aim, but not 3 K below it: the stop holds
+    controller.i_save_state()
+    assert signal(57.5) == 0
+    controller.i_save_state()
+    assert signal(57.0) == 1  # exactly 3 K below the aim: the stop releases and the sunny collector starts the pump
+    controller.i_save_state()
+    assert signal(58.5) == 1  # inside the band, the released stop stays released
+
+
+class CollectorStep:
+    """A flat-plate collector on a hot-water tank at noon, one step with every input on a fake output."""
+
+    @staticmethod
+    def outputs(control_signal: float, inlet_at_start_of_step_c: float) -> Dict[str, float]:
+        """Return every output of one 900 s step at a 45 °C tank mean, 800 W/m² global and 100 W/m² diffuse.
+
+        The sun stands 30° from the zenith due south (no weather file, no cache). The tank started the step at
+        ``inlet_at_start_of_step_c``.
+
+        Args:
+            control_signal: The controller's pump signal, 1 for running.
+            inlet_at_start_of_step_c: The tank's start-of-step temperature, the collector inlet's, °C.
+
+        Returns:
+            The collector's outputs by field name.
+        """
+        config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(
+            SizingContext(number_of_apartments=1)
+        )
+        collector = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=Parameters.one_day(900))
+        collector.apparent_zenith = np.array([30.0])
+        collector.solar_azimuth = np.array([180.0])
+        stsv, fakes = Rig.wire(collector, [(entry, LoadTypes.ANY, Units.ANY) for entry in collector.inputs])
+        system = solar_thermal_system.SolarThermalSystem
+        values = {
+            system.ControlSignal: control_signal,
+            system.GlobalHorizontalIrradianceWM2: 800.0,
+            system.DiffuseHorizontalIrradianceWM2: 100.0,
+            system.TemperatureOutsideDegC: 20.0,
+            system.TemperatureCollectorInletDegC: 45.0,
+            system.TemperatureCollectorInletAtStartOfStepInCelsius: inlet_at_start_of_step_c,
+        }
+        for entry, fake in zip(collector.inputs, fakes):
+            stsv.set_output_value(fake, values.get(entry.field_name, 0.0))
+        collector.i_simulate(0, stsv, False)
+        return {output.field_name: Rig.output(stsv, output) for output in collector.outputs}
+
+
+@pytest.mark.base
+def test_the_collector_publishes_the_flow_its_heat_at_the_start_of_step_inlet_needs_whatever_the_pump_does() -> None:
+    """The flow the controller switches on comes from the start-of-step inlet, not from the step mean or the pump.
+
+    A collector that published its step-mean flow here would let the pump's own heat switch the pump off in the step
+    it switches on; one whose answer depended on the pump signal would switch on its own output.
+    """
+    system = solar_thermal_system.SolarThermalSystem
+    flow_name = system.RequiredWaterMassFlowAtStartOfStepInKgPerSecond
+    mean_flow_name = system.RequiredWaterMassFlowOutput
+    at_the_mean = CollectorStep.outputs(control_signal=1.0, inlet_at_start_of_step_c=45.0)
+    assert at_the_mean[flow_name] == at_the_mean[mean_flow_name] > 0.0
+    cooler_start = CollectorStep.outputs(control_signal=1.0, inlet_at_start_of_step_c=40.0)
+    assert cooler_start[flow_name] > at_the_mean[flow_name]
+    assert cooler_start[mean_flow_name] == at_the_mean[mean_flow_name]
+    standing = CollectorStep.outputs(control_signal=0.0, inlet_at_start_of_step_c=40.0)
+    assert standing[flow_name] == cooler_start[flow_name]

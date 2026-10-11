@@ -543,29 +543,73 @@ def test_the_collector_pumps_its_heat_over_twice_the_inlet_to_mean_difference_an
     assert output(my_sts.required_water_mass_flow_kg_s_output_channel) == flow_kg_s
 
 
+class PumpTransitions:
+    """The solar pump's on/off transitions: the saved pump state, the collector's flow, the storage, the decision."""
+
+    #: The switch-on flow, kg/s.
+    ON_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_ON_MASS_FLOW_IN_KG_PER_S
+
+    #: The switch-off flow, kg/s.
+    OFF_IN_KG_PER_S = solar_thermal_system.SolarThermalSystemController.SWITCH_OFF_MASS_FLOW_IN_KG_PER_S
+
+    #: Each row: whether the pump ran in the previous step, the required flow in kg/s, the storage's start temperature
+    #: in °C, whether the pump runs, and what the row checks.
+    TABLE = [
+        (False, 0.01, 44.0, True, "a standing pump with heat enough and a tank to fill switches on"),
+        (False, ON_IN_KG_PER_S, 44.0, True, "a standing pump switches on at exactly the switch-on flow"),
+        (False, 0.004, 44.0, False, "a standing pump stays off between the two flows"),
+        (False, OFF_IN_KG_PER_S, 44.0, False, "a standing pump stays off at the switch-off flow"),
+        (False, 0.0, 44.0, False, "a standing pump stays off without collector heat"),
+        (False, 0.01, 61.0, False, "a standing pump stays off for a full tank"),
+        (False, 0.01, 60.0, True, "exactly at the 60 °C aim a standing pump switches on (the stop is strictly above)"),
+        (True, 0.01, 44.0, True, "a running pump with heat enough keeps running"),
+        (True, 0.004, 44.0, True, "a running pump keeps running between the two flows"),
+        (True, OFF_IN_KG_PER_S, 44.0, True, "a running pump keeps running at exactly the switch-off flow"),
+        (True, 0.002, 44.0, False, "a running pump switches off below the switch-off flow"),
+        (True, 0.0, 44.0, False, "a running pump switches off without collector heat"),
+        (True, 0.01, 61.0, False, "a running pump switches off for a full tank"),
+        (True, 0.004, 61.0, False, "a full tank stops a running pump inside the band too"),
+    ]
+
+
+@pytest.mark.base
+def test_the_switch_off_flow_lies_clearly_below_the_switch_on_flow() -> None:
+    """Catches a hysteresis band of the wrong width between the pump's switch-on and switch-off flows.
+
+    A band of zero gives back the step with no consistent on/off state. A switch-off flow outside 3/7 to 1/2 of the
+    switch-on flow leaves the 7 K / 3 K band of a differential solar controller.
+    """
+    ratio = PumpTransitions.OFF_IN_KG_PER_S / PumpTransitions.ON_IN_KG_PER_S
+    assert 3 / 7 <= ratio <= 1 / 2
+
+
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ("required_mass_flow_in_kg_per_second", "storage_temperature_at_start_in_celsius", "expected"),
-    [
-        (0.01, 44.0, True),  # heat enough, a tank to fill: runs
-        (0.01, 61.0, False),  # a full tank: stops
-        (0.01, 60.0, True),  # exactly at the 60 °C aim: still runs (the stop is strictly above)
-        (0.004, 44.0, False),  # below the minimum flow: stops
-        (0.005, 44.0, True),  # exactly the minimum flow: runs
-        (0.0, 44.0, False),  # no collector heat: stops
-    ],
+    (
+        "pump_ran_in_previous_step",
+        "required_mass_flow_in_kg_per_second",
+        "storage_temperature_at_start_in_celsius",
+        "expected",
+    ),
+    [row[:4] for row in PumpTransitions.TABLE],
+    ids=[row[4] for row in PumpTransitions.TABLE],
 )
-def test_the_pump_runs_on_its_minimum_flow_and_stops_on_a_full_tank_at_the_steps_start(
-    required_mass_flow_in_kg_per_second: float, storage_temperature_at_start_in_celsius: float, expected: bool
+def test_the_pump_switches_on_at_the_on_flow_off_below_the_off_flow_and_stops_on_a_full_tank(
+    pump_ran_in_previous_step: bool,
+    required_mass_flow_in_kg_per_second: float,
+    storage_temperature_at_start_in_celsius: float,
+    expected: bool,
 ) -> None:
-    """A pump that ran below its minimum flow or into a full tank would book pump electricity for no useful heat.
+    """Every transition of the pump's hysteresis, with the edges of both flows and of the 60 °C aim.
 
-    The edges are the 0.005 kg/s minimum flow (inclusive) and the 60 °C aim (the stop is strictly above it).
+    A pump without the band would switch on and off in one step whose own heat moves the flow across the threshold; a
+    band with the wrong edges would run the pump on too little heat or keep it standing on enough.
     """
     assert (
         solar_thermal_system.SolarThermalSystemController.pump_runs(
             required_mass_flow_in_kg_per_second=required_mass_flow_in_kg_per_second,
             storage_temperature_at_start_in_celsius=storage_temperature_at_start_in_celsius,
+            pump_ran_in_previous_step=pump_ran_in_previous_step,
         )
         is expected
     )

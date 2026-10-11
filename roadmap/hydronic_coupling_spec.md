@@ -358,7 +358,11 @@ step mean across 60 °C, and
 such a step ended at `force_convergence` (owner decision, 2026-10-09: the stop stays on `T0` because on `T̄` it has
 no fixed point; the gas-and-solar twin's year has 21507 forced steps at 60 s with the stop on `T̄`, 13 with it on
 `T0`, and 1110 against 11 at 900 s). The controller's minimum pump flow is halved to
-0.005 kg/s, the same collector heat as before (owner, 2026-10-09).
+0.005 kg/s, the same collector heat as before (owner, 2026-10-09). Since 2026-10-11 the pump switches with a
+hysteresis, as a differential solar controller does (on at about 7 K, off at about 3 K): a pump that stood in the
+previous step switches on at 0.005 kg/s, a pump that ran switches off below 0.0025 kg/s, and whether it ran is the
+controller's saved state (owner, 2026-10-11; hisim-fxix.19). Without it the pump's own heat lifted the step mean and
+moved the flow back across the threshold, so a step at the edge had no consistent on/off state.
 
 ### 5.4 District heating substation
 

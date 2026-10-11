@@ -11,7 +11,7 @@ How a collector and a backup on one storage settle together is tested on the rul
 (``tests/test_part_load_rule.py``).
 """
 
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pytest
 
@@ -84,6 +84,108 @@ def test_under_force_convergence_the_solar_controller_publishes_the_ratio_run() 
         force_convergence=True,
     )
     assert forced[SolarThermalSystemController.PartLoadRatio] == 0.42
+
+
+class PumpSteps:
+    """Drive the solar controller through passes and steps as the simulator does, and read its on/off signal."""
+
+    #: A flow between the switch-off and the switch-on flow, kg/s.
+    BETWEEN_THE_FLOWS_IN_KG_PER_S: float = 0.004
+
+    #: A flow above the switch-on flow, kg/s.
+    ABOVE_THE_ON_FLOW_IN_KG_PER_S: float = 0.006
+
+    #: A flow below the switch-off flow, kg/s.
+    BELOW_THE_OFF_FLOW_IN_KG_PER_S: float = 0.002
+
+    @staticmethod
+    def values(mass_flow_in_kg_per_second: float, ratio_run: float = 1.0) -> Dict[str, float]:
+        """Return the controller's inputs for a tank at 45 °C and the given collector flow and ratio run."""
+        values = SolarControllerRig.values(start_c=45.0, end_c=50.0, ratio_run=ratio_run)
+        values[SolarThermalSystemController.MassFlow] = mass_flow_in_kg_per_second
+        return values
+
+    @staticmethod
+    def signal(
+        controller: Any, stsv: Any, fakes: Dict[str, Any], values: Dict[str, float], force_convergence: bool = False
+    ) -> float:
+        """Run one pass from the saved state, as the simulator does, and return the on/off signal it publishes."""
+        controller.i_restore_state()
+        outputs = AllInputsRig.step(
+            controller, stsv, fakes, values, timestep=ControllerPasses.TIMESTEP, force_convergence=force_convergence
+        )
+        return outputs[SolarThermalSystemController.ControlSignalToSolarThermalSystem]
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("seconds_per_timestep", [60, 900])
+def test_the_pump_state_of_the_previous_step_chooses_the_flow_and_no_pass_remembers_another(
+    seconds_per_timestep: int,
+) -> None:
+    """Within a step the decision reads only the pass's inputs and the saved state; the state moves only between steps.
+
+    A controller that kept a pass's decision would hold a pump on in the next pass of the same step, which is the pass
+    memory that makes a converged step depend on the passes before it; one that saved nothing between steps would have
+    no hysteresis at all.
+    """
+    controller, stsv, fakes = SolarControllerRig.build(seconds_per_timestep)
+    controller.i_save_state()  # the first step starts with the pump standing
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)) == 1
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 0
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S)) == 1
+
+    controller.i_save_state()  # the step ended with the pump running
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 1
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.BELOW_THE_OFF_FLOW_IN_KG_PER_S)) == 0
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 1
+
+    controller.i_save_state()  # the step ended with the pump running again
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.BELOW_THE_OFF_FLOW_IN_KG_PER_S)) == 0
+    controller.i_save_state()  # the step ended with the pump standing
+    assert PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)) == 0
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("pump_ran_in_previous_step", [False, True])
+def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in_previous_step: bool) -> None:
+    """Passes with other inputs before a pass change nothing it publishes: the generic iteration-safety check.
+
+    A controller whose restore restored nothing, or that wrote its state in a pass, would publish a different signal
+    after the other passes than in a fresh step.
+    """
+    fresh, fresh_stsv, fresh_fakes = SolarControllerRig.build(900)
+    iterated, iterated_stsv, iterated_fakes = SolarControllerRig.build(900)
+    for controller, stsv, fakes in ((fresh, fresh_stsv, fresh_fakes), (iterated, iterated_stsv, iterated_fakes)):
+        controller.i_save_state()
+        flow = PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S if pump_ran_in_previous_step else 0.0
+        PumpSteps.signal(controller, stsv, fakes, PumpSteps.values(flow))
+        controller.i_save_state()
+    for flow in (PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, PumpSteps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
+        PumpSteps.signal(iterated, iterated_stsv, iterated_fakes, PumpSteps.values(flow))
+    final = PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
+    expected = PumpSteps.signal(fresh, fresh_stsv, fresh_fakes, final)
+    assert PumpSteps.signal(iterated, iterated_stsv, iterated_fakes, final) == expected
+    assert expected == (1 if pump_ran_in_previous_step else 0)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(("ratio_run", "expected_signal"), [(0.42, 1), (1.0, 1), (0.0, 0)])
+def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
+    ratio_run: float, expected_signal: int
+) -> None:
+    """A forced pass keeps the pump as it ran, whatever the flow, and the next step starts from that state.
+
+    A forced pass that decided on the flow again would keep switching a pump at the edge of its switch-on flow until
+    the simulator gives up; one that kept an earlier pass's decision would remember a pass.
+    """
+    controller, stsv, fakes = SolarControllerRig.build(900)
+    controller.i_save_state()
+    flow = PumpSteps.BELOW_THE_OFF_FLOW_IN_KG_PER_S if expected_signal else PumpSteps.ABOVE_THE_ON_FLOW_IN_KG_PER_S
+    forced_values = PumpSteps.values(flow, ratio_run=ratio_run)
+    assert PumpSteps.signal(controller, stsv, fakes, forced_values, force_convergence=True) == expected_signal
+    controller.i_save_state()
+    next_values = PumpSteps.values(PumpSteps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
+    assert PumpSteps.signal(controller, stsv, fakes, next_values) == expected_signal
 
 
 @pytest.mark.base

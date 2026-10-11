@@ -13,12 +13,14 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   collector books equals the heat the tank received from that circuit, up to what the simulator's convergence
   tolerance leaves open (the tank's step mean is converged to about 1e-4 K, so the two ends may differ by ``m c``
   times that), and every circuit charges on some step;
-* the iterations per step: no step of a file without a heat pump reaches the simulator's
-  ``force_convergence`` (more than eleven passes). The heat-pump files are recorded, not asserted: their forced
-  steps come from the energy manager, which switches its set-temperature raise on the sign of a surplus that
-  includes the heat pump's own draw, so a float's flip turns it on and off within a step, and from controllers
-  that decide once for a whole step, which a converged iteration cannot always reconcile with the plant's
-  state. Every file's histogram is written to ``results/iteration_histogram/``.
+* the iterations per step: in a file without a heat pump at most ``MAXIMAL_FORCED_STEP_SHARE`` of the steps reach
+  the simulator's ``force_convergence``. These are boiler charges that start kilowatts away from their final value
+  and need a pass or two more than the simulator allows to reach its absolute tolerance; they are forced within
+  about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). The heat-pump files are recorded, not
+  asserted: their forced steps come from the energy manager, which switches its set-temperature raise on the sign of
+  a surplus that includes the heat pump's own draw, so a float's flip turns it on and off within a step, and from
+  controllers that decide once for a whole step, which a converged iteration cannot always reconcile with the
+  plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
 
 Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
 grouped twins, which RenoVisor translates from, and the composed files. Only the check that every file with a tank is
@@ -109,6 +111,11 @@ class DhwTwins:
     #: The tank converges its step mean to about the simulator's tolerance, 1e-4 K; the two ends of a circuit may
     #: differ by the circuit's ``m c`` times this.
     CIRCUIT_TEMPERATURE_TOLERANCE_IN_KELVIN: float = 1e-3
+
+    #: The largest share of a file's steps, dimensionless, that may reach ``force_convergence`` in a file without a
+    #: heat pump. The gas twins force about 0.15 % of their steps over a year at 900 s and 2 of 1,920 steps (0.1 %)
+    #: in the solar window (hisim-4g9.50); a loop that stops converging forces far more.
+    MAXIMAL_FORCED_STEP_SHARE: float = 0.005
 
     @classmethod
     def derived_files(cls) -> List[str]:
@@ -323,7 +330,7 @@ def check_file(name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
     classnames = {owner.split("|")[1] for owner in circuits.values()}
     summary = record_histogram(name, passes, forced)
     if MoreAdvancedHeatPumpHPLib.get_classname() not in classnames:
-        assert summary["steps_at_force_convergence"] == 0, summary
+        assert sum(forced) <= DhwTwins.MAXIMAL_FORCED_STEP_SHARE * len(passes), summary
 
 
 @pytest.mark.extendedbase2

@@ -24,7 +24,7 @@ that carry certificate values. This work adds a standalone calculator, `epc/`, t
 exactly as HiSim computed with it, written out in full beside the run's realized record, computes the
 certificate heating demand of that building by the national method, and writes a structured report,
 for one run or for thousands. The calculator imports nothing from HiSim and knows nothing of how
-HiSim built its building; one small tool of its own writes HiSim's building out. Austria is the pilot;
+HiSim built its building; HiSim writes its building out in full beside the record. Austria is the pilot;
 the four other countries are further engines on the same shell.
 
 ## 2. Keywords and tags
@@ -53,7 +53,7 @@ they exchange:
 The building description and the result dictionary are the two vocabularies every engine shares;
 everything national lives inside one engine package and its data folder. The calculator never
 re-derives, averages or looks up anything about the building: what HiSim used is what the certificate
-is computed from (D25). Austria is specified to the clause and proven against ÖNORM B 8110-6-2;
+is computed from (D24). Austria is specified to the clause and proven against ÖNORM B 8110-6-2;
 Ireland is profiled from the DEAP manual at hand; Germany, Spain and the Netherlands are profiled
 from what is known and filled in when their norms are procured (Q1). Tests split into functionality
 tests that run everywhere and validation against the norms' own examples that runs where licensed
@@ -80,10 +80,12 @@ data exist. HiSim itself is not changed by this work.
   substitutes when the archetype states none. HiSim records per element what it uses and where it
   came from (`element_values`). It has no gross floor area and no gross volume; its ventilation uses
   the conditioned floor area times a room height.
-- No output of HiSim writes that building out; the RenoVisor translator reads `element_values`
-  internally. The record carries no country. The site (climate region, elevation) is being added to
+- HiSim writes that building out: every run of an energy-system file writes `building.expanded.yaml`
+  beside the record, before the first time step, read off `BuildingInformation` attribute by
+  attribute (`hisim/energy_system/building_record.py`, issue #949; format in `input_contract.md`).
+  Runs recorded before that carry no such file. The record carries no country. The site (climate region, elevation) is being added to
   HiSim's weather configuration by the requester, outside this work, so this work assumes it in the
-  realized record (D24); runs recorded before that change carry no site and are re-simulated.
+  realized record (D23); runs recorded before that change carry no site and are re-simulated.
 - Package boundaries: `tests/test_renovisor_import_lint.py` forbids imports of `hisim.renovisor`
   from below it; the maintainers plan enforced packages with versioned, schema-checked files at
   every seam and name the EPC as the package separate from the start.
@@ -127,7 +129,7 @@ B 8110-5 Eq. (4) with the month's days reproduces the HGT 22/14 of three real ce
 | | |
 |---|---|
 | **Current** | No certificate value exists for a HiSim run; the building the run computed with is not written anywhere. |
-| **Required** | From a run's record, expanded by the calculator's tool, the calculator writes per building the certificate heating demand by the national method for exactly the building HiSim computed with, with terms, inputs, assumptions and provenance, as JSON; in batch one table and one summary. HiSim's outputs are unchanged. |
+| **Required** | From the building record HiSim writes beside a run's realized record, the calculator writes per building the certificate heating demand by the national method for exactly the building HiSim computed with, with terms, inputs, assumptions and provenance, as JSON; in batch one table and one summary. HiSim's outputs are unchanged. |
 | **Assumptions** | see §9. |
 
 ## 5. Goals and non-goals
@@ -139,9 +141,9 @@ B 8110-5 Eq. (4) with the month's days reproduces the HGT 22/14 of three real ce
   country. `[decided 2026-10-09, D11, D13]`
 - G2 The calculator takes HiSim's building exactly as HiSim used it; it never re-derives, averages or
   looks anything up about the building, and it contains no knowledge of the archetype database
-  HiSim builds from. `[decided 2026-10-11, D25]`
-- G3 The calculator imports nothing from HiSim; the one tool that imports HiSim is the expansion
-  script, outside the calculator. `[decided 2026-10-10, D15]`
+  HiSim builds from. `[decided 2026-10-11, D24]`
+- G3 The calculator imports nothing from HiSim; it reads the building record HiSim writes beside
+  every run. `[decided 2026-10-12, D30]`
 - G4 Austria first, exactly by the norms; Ireland, Germany, Spain and the Netherlands as further
   engines on the same shell, added without touching the others. `[decided 2026-10-09, D12]`
 - G5 One result dictionary for every country: a small common core, free national keys, every
@@ -155,16 +157,16 @@ B 8110-5 Eq. (4) with the month's days reproduces the HGT 22/14 of three real ce
 
 - Headline indicators beyond the heating demand (final or primary energy, CO₂, classes), and the
   Austrian hot-water loss chain. `[given]`
-- Any change to HiSim; the maintainers may later adopt the expanded record as HiSim's own output. `[decided 2026-10-10, D15]`
+- Any change to HiSim in the calculator's pull requests; HiSim's building record (issue #949) and the
+  site fields (D23) are separate changes to HiSim. `[decided 2026-10-12, D30]`
 - Resolving the site from a municipality or cadastral code. `[given]`
-- A human-readable certificate document; a package of its own with `pyproject.toml` and a workflow of its own. `[decided 2026-10-10, D16, D18]`
+- A human-readable certificate document; a package of its own with `pyproject.toml` and a workflow of its own. `[decided 2026-10-10, D15, D17]`
 - The 2025-10 Austrian edition package. `[decided 2026-10-07, D5]`
 
 ## 6. Use cases, examples and mockups
 
-**UC1 — Expand and compute one Austrian run.** `python -m epc.tools.expand <results dir>` writes
-`building.expanded.yaml` beside the record; `python -m epc run <results dir> --country AT --out
-<dir>` writes `<dir>/<run path>/Building.epc.json` (Mockup A).
+**UC1 — Compute one Austrian run.** The run has written `building.expanded.yaml` beside its record;
+`python -m epc run <results dir> --country AT --out <dir>` writes `<dir>/<run path>/Building.epc.json` (Mockup A).
 
 **UC2 — Batch over the ai4c results tree.** `python -m epc batch <results root> --country AT --out
 <dir>`: one JSON per run and building, `epc_table.csv`, `epc_summary.md`; a refused run is listed and
@@ -185,8 +187,9 @@ values. (`--country IE` reads no site field: DEAP is location-independent.)
 **UC6 — Missing norm tables.** No tables under `epc/data/at/`: refused naming the folder and the
 data contract.
 
-**UC7 — Record not expanded.** A results directory without `building.expanded.yaml`: refused
-naming the expansion tool; the calculator never computes from the realized record's configuration.
+**UC7 — Run without building record.** A results directory without `building.expanded.yaml` (a run
+recorded before HiSim wrote it): refused naming the file and the re-simulation; the calculator never
+computes from the realized record's configuration.
 
 **UC8 — Building HiSim could not describe for a certificate.** The expanded record states 0 dwelling
 units (HiSim's estimate for a small scaled archetype), or a window area with no direction that has
@@ -223,14 +226,14 @@ refused naming the value and, for the dwelling units, HiSim's `number_of_apartme
   "assumptions": [{"key": "gross_floor_area", "value": "BGF = conditioned floor area / 0.8", "source": "B 8110-6-1 Sec. 4"},
                   {"key": "gross_volume", "value": "V = BGF x 3.00 m", "source": "B 8110-6-1 10.3.2; the record states no volume"},
                   {"key": "thermal_bridges", "value": "default of B 8110-6-1 5.3.2 c), Eq. (11a)", "source": "method default, no catalogue"}],
-  "provenance": {"record_schema": "building-expanded/1", "producer": "epc.tools.expand 0.1, HiSim 1.2.4",
+  "provenance": {"record_schema": "building-expanded/1", "producer": "HiSim 1.2.4",
                  "hisim_building_code": "AT.N.SFH.04.Gen.ReEx.001.001", "configured_fields": ["facade_u_value_in_watt_per_m2_per_kelvin"],
                  "tables": {"reference_climate_b8110_5_2024_annex_a.csv": "sha256:…"}}
 }
 ```
 
 **Mockup B — the site inside the expanded record** (passed through from HiSim's weather
-configuration by the expansion tool; a Spanish climate zone takes the same place; an Irish record
+configuration by HiSim's building record writer; a Spanish climate zone takes the same place; an Irish record
 has an empty block):
 
 ```yaml
@@ -257,7 +260,6 @@ runs found: 1 204 · computed: 1 198 · refused: 6
 **Mockup D — command line**
 
 ```
-python -m epc.tools.expand <results dir | results root>   # imports HiSim; writes building.expanded.yaml beside each record
 python -m epc run   <results dir> --country <CC> --out DIR
 python -m epc batch <results root> --country <CC> --out DIR
 python -m epc countries                                   # the engines and their editions
@@ -278,18 +280,17 @@ maintainers' boundary plan.
 
 Functional unless marked. Austrian clause references are to the 2024-03 editions (D5).
 
-**R1 — A standalone calculator inside the repository.** `[decided 2026-10-09, D11; 2026-10-10, D16]`
+**R1 — A standalone calculator inside the repository.** `[decided 2026-10-09, D11; 2026-10-10, D15]`
 R1.1 It lives in `epc/` at the repository root and runs as `python -m epc` from there; no packaging
 and no workflow of its own; through `pytest.ini` its `base` tests run in HiSim's existing base job (C3). R1.2 No module of the calculator imports `hisim`; a committed static
-check enforces it, with `epc/tools/` and the tool's own test as the only exemptions. R1.3 Its tests
+check enforces it, without exemption. R1.3 Its tests
 live under `epc/tests/`, apart from HiSim's, with the repository's markers. R1.4 It may use
 third-party libraries the repository already depends on.
 
-**R2 — Inputs.** `[decided 2026-10-10, D15, D17, D20; 2026-10-11, D24]`
-R2.1 The building comes from the expanded record `building.expanded.yaml` that the calculator's
-own tool `epc/tools/expand.py` writes beside a run's realized record by importing HiSim once; its
-content is defined in `input_contract.md`; a results directory without it, or with another major
-version, is refused naming the tool (UC7). R2.2 The site (climate region and elevation; Spain's climate
+**R2 — Inputs.** `[decided 2026-10-10, D16, D19; 2026-10-11, D23; 2026-10-12, D30]`
+R2.1 The building comes from the expanded record `building.expanded.yaml` that HiSim writes beside a
+run's realized record; its content is defined in `input_contract.md`; a results directory without
+it, or with another major version, is refused naming the file (UC7). R2.2 The site (climate region and elevation; Spain's climate
 zone joins the block when its engine is specified) is a block of the expanded record, passed through from HiSim's weather
 configuration; an engine reads the fields its method needs and refuses a missing or unknown value
 naming the field and the admissible values (UC5); an engine without site fields ignores the block.
@@ -315,25 +316,25 @@ because the building description does not state it (a reference area derived by 
 volume, a thermal-bridging default, a ventilation default, a living-area fraction) is one entry of
 `assumptions` with its source.
 
-**R5 — The Austrian engine follows the norms exactly, applied to HiSim's building.** `[decided 2026-10-07, D2; 2026-10-11, D25]`
+**R5 — The Austrian engine follows the norms exactly, applied to HiSim's building.** `[decided 2026-10-07, D2; 2026-10-11, D24]`
 
 | | Quantity | Rule |
 |---|---|---|
 | R5.1 | Reference climate | B 8110-5 Annex A as printed. |
-| R5.2 | Site climate | B 8110-5 Eq. (1) with Annex B; Eq. (2) with Annex D; Eq. (3) with Annex E; grid values exactly; an azimuth or tilt off the grid is refused in stage 1 (P11). |
+| R5.2 | Site climate | B 8110-5 Eq. (1) with Annex B; Eq. (2) with Annex D; Eq. (3) with Annex E; grid values exactly; an azimuth or tilt off the grid is refused in stage 1 (P10). |
 | R5.3 | Reference area and volume | BGF = conditioned floor area / 0.8 (Section 4, BF = 0.8 · BGF); V from the record when it states a gross volume, else V = BGF × 3.00 m (10.3.2); both listed as assumptions. V enters the balance through the thermal capacity C = f_BW · V (Eq. (50)), hence τ and η, and the indicators ℓ_c (Eq. (1)) and LEK_T (Eq. (63b)). |
 | R5.4 | Usage profile | B 8110-5 Section 8 by dwelling units (≤ 2, 3–9, ≥ 10): θ_i,h, n_L,hyg, q_i,h (Tab. 7, 9). |
-| R5.5 | Transmission conductance | B 8110-6-1 Eq. (10a) over HiSim's elements, each with its area, its U-value and the factor f of Tab. 3–5 for its situation (R6.2), the row per situation being the engine's norm default (D30), listed as an assumption; a conditioned neighbour is outside the envelope (Section 4, p. 8) and enters neither L_T nor A; a cellar ceiling is "insulated" below the U-value threshold of Tab. 4 footnote a; thermal bridges by the default Eq. (11a) with its lower bound. |
+| R5.5 | Transmission conductance | B 8110-6-1 Eq. (10a) over HiSim's elements, each with its area, its U-value and the factor f of Tab. 3–5 for its situation (R6.2), the row per situation being the engine's norm default (D29), listed as an assumption; a conditioned neighbour is outside the envelope (Section 4, p. 8) and enters neither L_T nor A; a cellar ceiling is "insulated" below the U-value threshold of Tab. 4 footnote a; thermal bridges by the default Eq. (11a) with its lower bound. |
 | R5.6 | Ventilation conductance | Eq. (13) V_V = 0.8·BGF·2.6, Eq. (14), Eq. (15a/b) natural ventilation. |
 | R5.7 | Losses | Section 7; Q_l = Q_T + Q_V. |
 | R5.8 | Internal gains | Eq. (37) Q_i = q_i,h · BGF · 0.8 · t / 1000. |
-| R5.9 | Solar gains | Eq. (43), (44) with A_g = 0.7·A_W, F_g = 0.9 × 0.98; F_S,h = 0.65 for ≤ 2 units **or a terraced house**, 0.50 for 3–10, 0.40 above (8.3.1.2.2); g from the building; window areas per direction as HiSim states them. |
+| R5.9 | Solar gains | Eq. (43), (44) with A_g = 0.7·A_W, F_g = 0.9 × 0.98; F_S,h = 0.65 for ≤ 2 units **or a terraced house**, 0.50 for 3–10, 0.40 above (8.3.1.2.2), by dwelling units alone when the building type is `null` (an assumption); g from the building; window areas per direction as HiSim states them. |
 | R5.10 | Thermal mass, utilisation | Eq. (50) C = f_BW · V with f_BW per Bauweise as stated after the equation, by HiSim's five classes mapped very light + light → leicht, medium → mittel, heavy + very heavy → schwer (D3); Eq. (49); Eq. (57a/b)–(59), a = 1 + τ/16. |
 | R5.11 | Heating period, reference climate | H 5050-1 Eq. (9a)–(9m); γ ≤ 0 refused, not patched. |
 | R5.12 | Heating period, site climate | B 8110-6-1 Eq. (53) with d_Heiz = f_H · MT_j from H 5056-1 Eq. (49)–(52), negative γ_H replaced by the next positive month; Q_TW,beh = 0 in stage 1, stated as a `note`. |
 | R5.13 | Annual values | Eq. (51), (64) per BGF, (63a), (1), heating days, HGT 22/14 per B 8110-5 Eq. (4) with the month's days. |
 
-**R6 — The building is HiSim's, taken as it is.** `[decided 2026-10-07, D9; 2026-10-11, D25, D26]`
+**R6 — The building is HiSim's, taken as it is.** `[decided 2026-10-07, D9; 2026-10-11, D24, D25]`
 R6.1 The calculator takes every element as HiSim used it: one area, one U-value, one adjustment
 factor per element class; the window areas per direction, the glazing values, the conditioned floor
 area, the dwelling units, the door, all as written in the expanded record. It never averages,
@@ -352,7 +353,7 @@ R6.6 HiSim's origin strings, the configured overrides and HiSim's building code 
 field, regardless of how often it occurs; statistics of the archetype database are no criterion in
 this specification or in its review.
 
-**R7 — Output.** `[decided 2026-10-10, D18; 2026-10-11, D29]`
+**R7 — Output.** `[decided 2026-10-10, D17; 2026-10-11, D28]`
 R7.1 Per run and building one `<run path>/<building>.epc.json` of the shape of Mockup A, the run
 path relative to the results root mirrored under the output directory. R7.2 In batch mode `epc_table.csv` (one
 row per run and building; columns `run, building, country, engine, edition`, then every indicator
@@ -391,31 +392,30 @@ shell, the dictionaries and the reports are unchanged by adding one.
 Each engine states its norm edition in `run.edition` and in its data headers; a later edition is a
 second engine, not a switch.
 
-**R12 — Batch behaviour.** `[decided 2026-10-10, D19]`
+**R12 — Batch behaviour.** `[decided 2026-10-10, D18]`
 R12.1 `run` fails hard on the first error. R12.2 `batch` records a refused run in the summary and
 continues; the exit code is non-zero when any run was refused. R12.3 The batch walks the results root
 deterministically.
 
-**R13 — HiSim is untouched by the calculator's pull requests.** `[decided 2026-10-10, D15; 2026-10-11, D24]`
+**R13 — HiSim is untouched by the calculator's pull requests.** `[decided 2026-10-11, D23; 2026-10-12, D30]`
 No file under `hisim/`, `tests/`, `system_setups/` or `energy_systems/` changes in them; outside `epc/`
-and `roadmap/epc/` only `pytest.ini` (test path, marker) and `.gitignore` (local data) change. The site
-fields (D24) are the requester's separate change to HiSim.
+and `roadmap/epc/` only `pytest.ini` (test path, marker) and `.gitignore` (local data) change. HiSim's
+building record (issue #949) and the site fields (D23) are the requester's separate changes to HiSim.
 
 ## 9. Constraints, invariants and assumptions
 
 **Known constraints**
 
-- C1 The expansion tool imports HiSim and runs only where HiSim is installed; it refuses a record
-  written by another HiSim version than the installed one. An unchanged version string does not
-  prove an unchanged building derivation (Q2).
+- C1 Only runs of energy-system files made with a HiSim that writes the building record (issue #949)
+  have the input; earlier runs are re-simulated, as they are for the site (C6).
 - C2 The Austrian norms and their tables are licensed (D7); the validation runs where they exist.
 - C3 `pytest.ini` needs `epc/tests` in `testpaths` and the marker `epc_norm_data`.
 - C4 Code and comments in English; line length 120; `flake8`, `mypy`, `pylint` clean.
 - C5 HiSim's building has one element per class with one adjustment factor; whatever HiSim merged
   into an element (a party wall into the wall, two floors of different situations into the floor) is
-  one element for the certificate, with HiSim's area, U-value and factor (D25).
+  one element for the certificate, with HiSim's area, U-value and factor (D24).
 - C6 Runs recorded before the site reached HiSim's weather configuration carry no site and are
-  re-simulated; the first expanded real run is the end-to-end validation (design V-4).
+  re-simulated; the first real run with building record and site is the end-to-end validation (design V-4).
 - C7 The prototype `oenorm_hwb_calculator/` is inspiration only and is deleted after the Austrian
   validation passes (D4).
 
@@ -448,12 +448,12 @@ fields (D24) are the requester's separate change to HiSim.
 | AC2 | The SFH and MFH examples of B 8110-6-2:2024 are reproduced monthly and annually within half of the last printed digit; runs where the tables exist, skips elsewhere; the output is attached to the PR. | R5, R9.2, I1–I4 |
 | AC3 | `--country DE` is refused with the message of R3; nothing is written. | R3 |
 | AC4 | An expanded record whose site block lacks a field the engine needs, or names an unknown value, is refused naming the field and the admissible values; `--country IE` runs with an empty site block. | R2.2 |
-| AC5 | A results directory without `building.expanded.yaml`, or with another major version, is refused naming the tool. | R2.1 |
-| AC6 | The static check finds no import of `hisim` outside `epc/tools/` and the tool's test, none of the prototype, and the string `TABULA` in no `.py` module under `epc/` except `tools/` (fixture records and results carry HiSim's origin strings verbatim, R6.6); no committed test holds a licensed value (review). | R1.2, R6.1, R8.5, R8.7 |
+| AC5 | A results directory without `building.expanded.yaml`, or with another major version, is refused naming the file. | R2.1 |
+| AC6 | The static check finds no import of `hisim` and none of the prototype anywhere under `epc/`, and the string `TABULA` in no `.py` module under `epc/` (fixture records and results carry HiSim's origin strings verbatim, R6.6); no committed test holds a licensed value (review). | R1.2, R6.1, R8.5, R8.7 |
 | AC7 | An expanded record read back equals the record's values exactly; a factor other than 1, 0.5, 0, a window area without a direction, and 0 dwelling units are refused by name. | R6, I5 |
 | AC8 | A dummy engine for country "ZZ" registers, computes and reports without a change to the Austrian engine. | R3, R10, I7 |
 | AC9 | A batch with one refused run writes the other JSONs, the table and a summary naming the refusal; exit code non-zero; a non-empty output directory is refused. | R7, R12 |
-| AC10 | The expansion tool refuses a record of another HiSim version and writes, for three archetypes, exactly the attributes a freshly built `BuildingInformation` holds. | C1, contract |
+| AC10 | The fixture records under `epc/tests/fixtures/` are files written by HiSim's building record writer, unedited; each is read without refusal, and one of another major version is refused. | R2.1, contract |
 | AC11 | A loader pointed at an empty folder refuses per R8.6; a synthetic incomplete table is refused naming the dimension. | R8.6 |
 | AC12 | `pytest epc/tests -m base` is green without local data; HiSim's own tests are unchanged and green; no file under `hisim/` differs. | R9.1, R13 |
 
@@ -470,19 +470,6 @@ Austria, profile Ireland next from the manual at hand, and procure each further 
 is scheduled. *Recommendation.* (b); each country's profile in §4.2 becomes an appendix of this
 document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of the Irish profile.
 
-**Q2 — Who writes the expanded building.** · blocks C1, T-13 and R-2 of the design; nothing of the engines
-*Context.* The tool rebuilds `BuildingInformation` with the installed HiSim and checks the record's
-HiSim version against it (D15). HiSim's version string does not change with every commit (1.2.4 since
-2026-05-20), so an unchanged string does not prove an unchanged building derivation, and a committed
-fixture record with a fixed version makes T-13 fail at every version step or pass falsely between
-two. *Options.* (a) HiSim writes the block itself at run time, from the object in memory (P8 now): no
-tool, no version check, no import exemption, no manual step; one HiSim pull request with the writer
-and its test, through the maintainers' review. (b) Keep the tool: T-13 builds its record at test time
-instead of reading a committed one, and C1 says only that the record is expanded with the installed
-HiSim. *Recommendation.* (a), to be agreed with the maintainers, whose own view is that the realized
-record should carry the full envelope; (b) until then. *Blocks.* The fixture of T-13 and the wording
-of C1; nothing of the engines or the dictionaries.
-
 ### 11.2 Deferred items (parking lot)
 
 | # | Item | Origin |
@@ -490,15 +477,14 @@ of C1; nothing of the engines or the dictionaries.
 | P1 | Further Austrian values: WWWB, HEB, HTEB, EEB, PEB, CO₂, fGEE, KB | D1 |
 | P2 | Site lookup from municipality or cadastral code (Austria), climate zone from municipality (Spain) | D10 |
 | P3 | The 2025-10 Austrian edition package as a second engine | D5 |
-| P4 | Manual tests against real certificates (Muggauberg, Ludersdorf, Kalsdorf) after merge; they confirm A1 and need P11 | D6 |
+| P4 | Manual tests against real certificates (Muggauberg, Ludersdorf, Kalsdorf) after merge; they confirm A1 and need P10 | D6 |
 | P5 | The Austrian hot-water loss chain (H 5056-1 Ch. 6, H 5056-2 as oracle), reading the run's hot-water components from the record | D1 |
 | P6 | Headline indicators and classes per country, which need the heating system from the record | D14 |
-| P7 | A package of its own and a path-filtered CI job, later a repository of its own, once the record seam is stable | D16 |
-| P8 | HiSim writes the expanded block itself (the maintainers adopt `input_contract.md`); the expansion tool retires; whether this comes first is Q2 | D15 |
-| P9 | Mechanical ventilation with heat recovery (B 8110-6-1 6.2.3), MFH variants 2.2/2.3 of B 8110-6-2 | R9.2 |
-| P10 | Release of licensed norm-derived data, if the publisher permits | D7 |
-| P11 | Linear interpolation of the Austrian radiation tables for off-grid azimuths and tilts (B 8110-6-1 9.1), needed by the real certificates of P4 | R5.2 |
-| P12 | A gross volume written by HiSim into the record, replacing the norm's standard assumption of R5.3 | D27 |
+| P7 | A package of its own and a path-filtered CI job, later a repository of its own, once the record seam is stable | D15 |
+| P8 | Mechanical ventilation with heat recovery (B 8110-6-1 6.2.3), MFH variants 2.2/2.3 of B 8110-6-2 | R9.2 |
+| P9 | Release of licensed norm-derived data, if the publisher permits | D7 |
+| P10 | Linear interpolation of the Austrian radiation tables for off-grid azimuths and tilts (B 8110-6-1 9.1), needed by the real certificates of P4 | R5.2 |
+| P11 | A gross volume written by HiSim into the record, replacing the norm's standard assumption of R5.3 | D26 |
 
 ### 11.3 Decision register
 
@@ -518,31 +504,31 @@ of C1; nothing of the engines or the dictionaries.
 | D12 | 2026-10-09 | Countries: Austria the pilot; Ireland, Germany, Spain, the Netherlands as further engines on one shell. |
 | D13 | 2026-10-09 | Three steps: inputs, engine, report; the shell is those steps and the two dictionaries they exchange. |
 | D14 | 2026-10-10 | Target of stage 1 is the heating demand by the national method under reference and, where the method has it, site climate; the result is a dictionary with a common core, free national keys and an assumptions list. |
-| D15 | 2026-10-10 | The calculator's own tool `epc/tools/expand.py` imports HiSim once and writes the fully expanded building record; the calculator reads only that file. The maintainers may adopt the format later (P8). |
-| D16 | 2026-10-10 | No `pyproject.toml` and no workflow of its own; the tests are separated under `epc/tests/` and, through `pytest.ini`, the `base` ones run in HiSim's existing base job. |
-| D17 | 2026-10-10 | The country is an explicit ISO argument. |
-| D18 | 2026-10-10 | Output: JSON per run and building, CSV and summary per batch; no certificate document. |
-| D19 | 2026-10-10 | `run` fails hard; `batch` records refusals and continues. |
-| D20 | 2026-10-10 | One certificate per `Building` of the record. |
-| D21 | 2026-10-10 | Pull request #902 (the postprocessing-option design) is closed; this document set replaces it. |
-| D22 | 2026-10-10 | Interpolation of the Austrian radiation tables is deferred (P11); stage 1 refuses off-grid angles, which no HiSim building and no validation example has. |
-| D23 | 2026-10-10 | The common core is `heating_demand_reference_climate` and `indicator_reference_area`; `heating_demand_site_climate` exists exactly when the method has a site climate. |
-| D24 | 2026-10-11 | The site (climate region, elevation; later a climate zone) is added to HiSim's weather configuration by the requester, outside this work, and travels through the expansion tool into the expanded record; the calculator has no site input of its own. A building at several sites is several realized records. |
-| D25 | 2026-10-11 | The calculator computes the certificate of exactly the building HiSim computed with: one area, one U-value, one adjustment factor per element class, as HiSim used them; nothing is split, re-averaged or re-derived. It knows nothing of the archetype database HiSim builds from, and the certificate's deviation from a real certificate is a finding of the manual tests, not something the calculator corrects. |
-| D26 | 2026-10-11 | An element's situation follows from HiSim's adjustment factor and the element class: 1 outside air, 0 conditioned neighbour, 0.5 an unconditioned space (attic for a roof, cellar for a floor, buffer space for a wall). |
-| D27 | 2026-10-11 | The gross floor area is BF / 0.8 by the norm's own convention; the gross volume comes from the expanded record when it states one, else from the norm's standard storey height of 3.00 m; both are listed as assumptions. |
-| D28 | 2026-10-11 | A building with window area but no direction that has an area (an archetype without orientations) is refused; the calculator does not invent an orientation. |
-| D29 | 2026-10-11 | A batch writes into an empty output directory; it never merges into or cleans up existing output. |
-| D30 | 2026-10-12 | A factor 0.5 is mapped by each engine to one row of its norm per element class, as the engine's default and an assumption of the result; Austria: floor → ceiling to an unconditioned cellar (Tab. 4, insulated below the footnote-a threshold), roof → ceiling to an unconditioned closed attic, wall → wall to another buffer space. How often a case occurs in HiSim's buildings is no criterion (R6.7). |
+| D15 | 2026-10-10 | No `pyproject.toml` and no workflow of its own; the tests are separated under `epc/tests/` and, through `pytest.ini`, the `base` ones run in HiSim's existing base job. |
+| D16 | 2026-10-10 | The country is an explicit ISO argument. |
+| D17 | 2026-10-10 | Output: JSON per run and building, CSV and summary per batch; no certificate document. |
+| D18 | 2026-10-10 | `run` fails hard; `batch` records refusals and continues. |
+| D19 | 2026-10-10 | One certificate per `Building` of the record. |
+| D20 | 2026-10-10 | Pull request #902 (the postprocessing-option design) is closed; this document set replaces it. |
+| D21 | 2026-10-10 | Interpolation of the Austrian radiation tables is deferred (P10); stage 1 refuses off-grid angles, which no HiSim building and no validation example has. |
+| D22 | 2026-10-10 | The common core is `heating_demand_reference_climate` and `indicator_reference_area`; `heating_demand_site_climate` exists exactly when the method has a site climate. |
+| D23 | 2026-10-11 | The site (climate region, elevation; later a climate zone) is added to HiSim's weather configuration by the requester, outside this work, and travels through HiSim's building record into the expanded record; the calculator has no site input of its own. A building at several sites is several realized records. |
+| D24 | 2026-10-11 | The calculator computes the certificate of exactly the building HiSim computed with: one area, one U-value, one adjustment factor per element class, as HiSim used them; nothing is split, re-averaged or re-derived. It knows nothing of the archetype database HiSim builds from, and the certificate's deviation from a real certificate is a finding of the manual tests, not something the calculator corrects. |
+| D25 | 2026-10-11 | An element's situation follows from HiSim's adjustment factor and the element class: 1 outside air, 0 conditioned neighbour, 0.5 an unconditioned space (attic for a roof, cellar for a floor, buffer space for a wall). |
+| D26 | 2026-10-11 | The gross floor area is BF / 0.8 by the norm's own convention; the gross volume comes from the expanded record when it states one, else from the norm's standard storey height of 3.00 m; both are listed as assumptions. |
+| D27 | 2026-10-11 | A building with window area but no direction that has an area (an archetype without orientations) is refused; the calculator does not invent an orientation. |
+| D28 | 2026-10-11 | A batch writes into an empty output directory; it never merges into or cleans up existing output. |
+| D29 | 2026-10-12 | A factor 0.5 is mapped by each engine to one row of its norm per element class, as the engine's default and an assumption of the result; Austria: floor → ceiling to an unconditioned cellar (Tab. 4, insulated below the footnote-a threshold), roof → ceiling to an unconditioned closed attic, wall → wall to another buffer space. How often a case occurs in HiSim's buildings is no criterion (R6.7). |
+| D30 | 2026-10-12 | HiSim writes `building.expanded.yaml` beside every run's realized record, read off `BuildingInformation` (issue #949, `hisim/energy_system/building_record.py`); the calculator reads only that file and imports nothing of HiSim. A building type HiSim's code does not state is `null`; the engine then decides by its own rule and records it as an assumption. |
 
 ## 12. Glossary
 
 - **Realized record** — `realized.energy_system.yaml`, written by every HiSim run; the configuration, not the computed building.
-- **Expanded record** — `building.expanded.yaml`, written by `epc/tools/expand.py` beside the realized record: the building as HiSim computed with it, per `input_contract.md`.
+- **Expanded record** — `building.expanded.yaml`, written by HiSim beside the realized record: the building as HiSim computed with it, per `input_contract.md`.
 - **Building description** — the calculator's country-neutral dictionary of one building (design §5).
-- **Situation** — what an element borders on, from HiSim's adjustment factor and the element class (D26); each engine maps it to its correction (f, R_u, F_x).
+- **Situation** — what an element borders on, from HiSim's adjustment factor and the element class (D25); each engine maps it to its correction (f, R_u, F_x).
 - **Engine** — one country's method: data, defaults, computation, indicators.
-- **Common core** — the indicator keys every engine fills (D23).
+- **Common core** — the indicator keys every engine fills (D22).
 - **Assumptions** — the result's list of values an engine took from its norm's defaults because the building description does not state them.
 - **BGF / BF / TFA / A_N** — Austrian gross floor area (external) / Austrian Bezugsfläche 0.8·BGF / Irish total floor area (internal) / German Gebäudenutzfläche.
 - **Functionality test / validation** — committed, runs everywhere / local, against a norm's examples (D8).

@@ -11,7 +11,7 @@ import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import (
-    Component,
+    PhysicsComponent,
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
@@ -186,7 +186,7 @@ class BslibChargingParameters:
         return bool(battery._threshold)  # pylint: disable=protected-access  # bslib has no accessor
 
 
-class Battery(Component):
+class Battery(PhysicsComponent):
     """Battery class.
 
     Simulate state of charge and realized power of a ac coupled battery

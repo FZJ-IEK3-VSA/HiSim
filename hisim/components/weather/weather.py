@@ -31,7 +31,13 @@ from hisim.components.weather.calculation import (
 )
 from hisim.components.weather.config import WeatherConfig
 from hisim.config import DisplayConfig
-from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
+from hisim.component import (
+    DataSourceComponent,
+    ComponentOutput,
+    SingleTimeStepValues,
+    OpexCostDataClass,
+    CapexCostDataClass,
+)
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
 
@@ -64,7 +70,7 @@ class WeatherYearNotImplementedError(NotImplementedError):
     """
 
 
-class Weather(Component):
+class Weather(DataSourceComponent):
     """Provide thermal and solar conditions of local weather."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

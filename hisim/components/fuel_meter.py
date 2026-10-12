@@ -111,7 +111,7 @@ class FuelMeterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class FuelMeter(DynamicComponent):
+class FuelMeter(DynamicComponent, cp.MeterComponent):
     """Fuel meter class."""
 
     cost_relevance = CostRelevance.METER

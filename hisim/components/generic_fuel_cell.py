@@ -78,7 +78,7 @@ class FuelCellConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class FuelCell(cp.Component):
+class FuelCell(cp.PhysicsComponent):
     """PEM fuel cell component that converts hydrogen into electricity.
 
     The fuel cell consumes hydrogen and oxygen to generate electrical power,

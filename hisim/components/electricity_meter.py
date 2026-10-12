@@ -69,7 +69,7 @@ class ElectricityMeterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class ElectricityMeter(DynamicComponent):
+class ElectricityMeter(DynamicComponent, cp.MeterComponent):
     """Electricity meter class.
 
     It calculates the electricity production and consumption dynamically for all components.

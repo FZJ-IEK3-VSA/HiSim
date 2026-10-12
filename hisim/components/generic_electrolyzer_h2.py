@@ -258,7 +258,7 @@ class ElectrolyzerConfig(ConfigBase):
         )
 
 
-class Electrolyzer(cp.Component):
+class Electrolyzer(cp.PhysicsComponent):
     """The Electrolszer class receives load and state inputs and calculates different outputs.
 
     Parameters

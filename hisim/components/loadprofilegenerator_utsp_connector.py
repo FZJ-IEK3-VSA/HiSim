@@ -337,7 +337,7 @@ class UtspLpgConnectorConfig(ConfigBase):
         )
 
 
-class UtspLpgConnector(cp.Component):
+class UtspLpgConnector(cp.DataSourceComponent):
     """Component that provides data from the LoadProfileGenerator.
 
     This component provides the heating generated, the electricity and water consumed

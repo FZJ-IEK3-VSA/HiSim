@@ -4,7 +4,7 @@ from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import L1ControllerComponent, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -60,7 +60,7 @@ class FuelCellControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class FuelCellController(Component):
+class FuelCellController(L1ControllerComponent):
     """Fuel Cell Controller class."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

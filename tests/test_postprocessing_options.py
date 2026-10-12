@@ -34,7 +34,7 @@ from tests.postprocessing_option_test_framework import PostProcessingOptionTestF
 pytestmark: pytest.MarkDecorator = pytest.mark.postprocessingoptions
 
 
-class _ConvergingFeedbackComponent(cp.StatelessComponent):
+class _ConvergingFeedbackComponent(cp.StatelessComponent, cp.PhysicsComponent):
     """Minimal component that reads one input and writes a converging output.
 
     ``output = 0.5 * input + offset`` — two cross-connected instances (A reads
@@ -44,7 +44,8 @@ class _ConvergingFeedbackComponent(cp.StatelessComponent):
     which is the only way to exercise the
     :attr:`PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING` code path:
     ``Simulator.process_one_timestep`` appends per-iteration value differences
-    to ``Detailed_Iteration_Log.txt`` only when ``iterative_tries > 2``.
+    to ``Detailed_Iteration_Log.txt`` only when ``iterative_tries > 2``. It is physics, a device that answers its
+    input, so the simulator accepts it and evaluates the pair in the order they were added.
     """
 
     FeedbackOutput: str = "FeedbackOutput"

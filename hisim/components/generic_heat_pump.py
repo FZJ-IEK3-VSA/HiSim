@@ -222,7 +222,7 @@ class GenericHeatPumpState:
         )
 
 
-class GenericHeatPump(cp.Component):
+class GenericHeatPump(cp.PhysicsComponent):
     """Heat pump class.
 
     It does support a refrigeration cycle.
@@ -695,7 +695,7 @@ class GenericHeatPump(cp.Component):
         return []
 
 
-class GenericHeatPumpController(cp.Component):
+class GenericHeatPumpController(cp.L1ControllerComponent):
     """Heat Pump Controller.
 
     It takes data from other

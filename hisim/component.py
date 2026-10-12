@@ -15,7 +15,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
 import json
 import pandas as pd
 
@@ -233,7 +233,14 @@ class ComponentNameMismatchError(ValueError):
 
 
 class Component:
-    """Base class for all components."""
+    """Base class for all components.
+
+    A concrete component does not derive from this class alone: it inherits one of the five kind base classes
+    below (:class:`DataSourceComponent`, :class:`L2ControllerComponent`, :class:`L1ControllerComponent`,
+    :class:`PhysicsComponent`, :class:`MeterComponent`), which states its role and so its place in a pass
+    (:class:`ComponentKinds`). For example, ``class Battery(PhysicsComponent)``. The simulator refuses a component
+    whose class has no kind when it is added.
+    """
 
     # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
     # components must return facts from `get_cost_facts()` or have an adapter table entry,
@@ -790,6 +797,134 @@ class StatelessComponent(Component):
 
     def i_prepare_simulation(self) -> None:
         """No-op: a stateless component performs no pre-simulation setup by default."""
+
+
+class DataSourceComponent(Component):
+    """The kind base class of a data source: a component that reads nothing from other components.
+
+    A data source provides data the simulation does not change, such as the weather, an occupancy profile from the
+    LoadProfileGenerator or a CSV time series. Its outputs for a time step are the same in every pass of that step.
+    For example, ``class Weather(DataSourceComponent)``. The simulator evaluates the data sources first in every
+    pass, so every other component reads this step's values
+    (:attr:`hisim.simulator.Simulator.EVALUATION_ORDER_OF_KINDS`).
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class L2ControllerComponent(Component):
+    """The kind base class of an L2 controller: a component that coordinates devices through their L1 controllers.
+
+    An L2 controller, such as the energy management system, reads anything except meters and sends incentive
+    signals (priorities, prices, set-point shifts) to L1 controllers, never a command to a device. For example,
+    ``class L2GenericEnergyManagementSystem(DynamicComponent, L2ControllerComponent)``. The simulator evaluates the
+    L2 controllers after the data sources and before the L1 controllers, so a signal reaches the L1 controllers in
+    the same pass.
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class L1ControllerComponent(Component):
+    """The kind base class of an L1 controller: a component that commands exactly one device.
+
+    An L1 controller decides on/off, mode, set point and run fraction of its one device (a physics component), from
+    data sources, the sensor values of physics, the signals of L2 controllers and its own committed state, that is
+    the state it saved at the start of the step. For example, ``class GenericBoilerController(L1ControllerComponent)``.
+    The name differs from :class:`hisim.components.controller_l1_generic_ev_charge.L1Controller`, the electric car's
+    charge controller, which is one such class. The simulator evaluates the L1 controllers after the L2 controllers
+    and before the physics, so a command reaches its device in the same pass.
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class PhysicsComponent(Component):
+    """The kind base class of physics: a component that simulates a device and decides nothing.
+
+    A physics component, such as a heat pump, a storage tank, a building or a battery, reads data sources, the port
+    quantities of the physics it is connected to and the commands of its L1 controller, and enforces only its own
+    physical and safety limits. For example, ``class GenericBoiler(PhysicsComponent)``. The simulator evaluates the
+    physics after the controllers; within the physics, every device an L1 controller commands goes before the other
+    physics that controller reads (:class:`hisim.evaluation_order.PhysicsOrder`).
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class MeterComponent(Component):
+    """The kind base class of a meter: a component that reads port quantities for the reports, and nothing reads it.
+
+    A meter, such as the electricity, gas, heat or fuel meter, sums the port quantities of physics for the KPIs and
+    the post-processing and never acts on what it reads. For example,
+    ``class ElectricityMeter(DynamicComponent, MeterComponent)``. The simulator evaluates the meters last in every
+    pass, after everything they read; since nothing in the simulation reads a meter, no other component waits for it.
+
+    The class adds no attribute and no method: inheriting it is the declaration of the kind, which
+    :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
+    """
+
+
+class ComponentKindNotDeclaredError(TypeError):
+    """A component class inherits no kind base class, or more than one, so the simulator cannot place it in a pass.
+
+    For example, a class derived from :class:`Component` or :class:`StatelessComponent` alone has no kind. Raised by
+    :meth:`ComponentKinds.of`, which the simulator calls when a component is added, so the error comes while the
+    system is built rather than at the first time step.
+    """
+
+
+class ComponentKinds:
+    """The five kind base classes, and the lookup that finds the one a component class inherits.
+
+    A component's *kind* is its role in a simulation: data source, L2 controller, L1 controller, physics or meter
+    (``system_docs/component_design_principles.md`` §A). A class states it by inheriting exactly one kind base
+    class, for example ``class Battery(PhysicsComponent)``, or, combined with a base that adds behaviour,
+    ``class Transformer(StatelessComponent, PhysicsComponent)``. Bases such as :class:`StatelessComponent`,
+    ``DynamicComponent`` and test doubles may have no kind; only a class added to a simulator needs one, so the
+    kind is looked up there and not checked when a class is defined.
+    """
+
+    #: The kind base classes. Their order here is not the evaluation order; that is
+    #: :attr:`hisim.simulator.Simulator.EVALUATION_ORDER_OF_KINDS`.
+    BASES: ClassVar[Tuple[Type[Component], ...]] = (
+        DataSourceComponent,
+        L2ControllerComponent,
+        L1ControllerComponent,
+        PhysicsComponent,
+        MeterComponent,
+    )
+
+    @classmethod
+    def of(cls, component_class: Type[Component]) -> Type[Component]:
+        """Return the kind base class a component class inherits.
+
+        For example, ``ComponentKinds.of(Weather)`` returns :class:`DataSourceComponent`, and
+        ``ComponentKinds.of(ElectricityMeter)`` returns :class:`MeterComponent`, found through ``DynamicComponent``
+        in its bases. A kind base class is its own kind.
+
+        Args:
+            component_class: The component class to look up.
+
+        Returns:
+            The one class of :attr:`BASES` in the method resolution order of ``component_class``.
+
+        Raises:
+            ComponentKindNotDeclaredError: If ``component_class`` inherits no kind base class, or more than one.
+        """
+        kinds = [base for base in component_class.__mro__ if base in cls.BASES]
+        if len(kinds) != 1:
+            found = "none" if not kinds else ", ".join(kind.__name__ for kind in kinds)
+            raise ComponentKindNotDeclaredError(
+                f"The component class {component_class.__module__}.{component_class.__name__} must inherit exactly "
+                f"one kind base class of {[kind.__name__ for kind in cls.BASES]} from hisim.component; it inherits "
+                f"{found}."
+            )
+        return kinds[0]
 
 
 @dataclass

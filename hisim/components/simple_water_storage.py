@@ -310,7 +310,7 @@ class SimpleWaterStorageState:
         )
 
 
-class SimpleWaterStorage(cp.Component):
+class SimpleWaterStorage(cp.PhysicsComponent):
     """SimpleWaterStorage class with generic functions."""
 
     cost_relevance = CostRelevance.PRICED

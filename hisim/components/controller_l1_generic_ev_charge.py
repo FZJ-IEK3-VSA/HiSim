@@ -164,7 +164,7 @@ class L1ControllerState:
         return L1ControllerState(power_in_watt=self.power_in_watt)
 
 
-class L1Controller(cp.Component):
+class L1Controller(cp.L1ControllerComponent):
     """Simulates EV charging and battery losses due to driving. Control according to constant SOC threshold and optional surplus control.
 
     Components to connect to:

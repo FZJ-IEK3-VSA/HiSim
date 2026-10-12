@@ -133,7 +133,7 @@ class HeatDistributionSystemState:
         )
 
 
-class HeatDistribution(cp.Component):
+class HeatDistribution(cp.PhysicsComponent):
     """Heat Distribution System.
 
     It simulates the heat exchange between heat generator and building.
@@ -966,7 +966,7 @@ class HeatDistributionControllerConfig(ConfigBase):
         return set_heating_threshold_outside_temperature_in_celsius
 
 
-class HeatDistributionController(cp.Component):
+class HeatDistributionController(cp.L1ControllerComponent):
     """Heat Distribution Controller.
 
     It takes data from the building, weather and water storage and sends signal to the heat distribution for

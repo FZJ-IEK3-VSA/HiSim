@@ -295,7 +295,7 @@ class L1CHPControllerState:
         self.on_off = 0
 
 
-class L1CHPController(cp.Component):
+class L1CHPController(cp.L1ControllerComponent):
     """L1 combined heat and power (CHP) or Fuel Cell Controller.
 
     Is activated when both Electricity and Heat are demanded. Decides if heat is transferred to

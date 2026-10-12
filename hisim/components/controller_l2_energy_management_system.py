@@ -129,7 +129,7 @@ class SurplusAfterParticipants:
     surplus_after_battery_in_watt: float
 
 
-class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
+class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2ControllerComponent):
     """Surplus electricity controller - time step based.
 
     Iteratively goes through connected inputs by hierachy of

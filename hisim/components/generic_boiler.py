@@ -25,7 +25,8 @@ from hisim.components.configuration import (
     PhysicsConfig,
 )
 from hisim.component import (
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
@@ -475,7 +476,7 @@ class BoilerCircuitChannels:
     fuel_energy: ComponentOutput
 
 
-class GenericBoiler(Component):
+class GenericBoiler(PhysicsComponent):
     """GenericBoiler class.
 
     Get Control Signal and calculate on base of it Massflow and Temperature of Massflow.
@@ -1400,7 +1401,7 @@ class GenericBoilerControllerState:
         self.deactivation_time_step = timestep
 
 
-class GenericBoilerController(Component):
+class GenericBoilerController(L1ControllerComponent):
     """Generic Boiler Controller.
 
     It takes data from other

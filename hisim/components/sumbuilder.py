@@ -7,7 +7,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import Component
+from hisim.component import PhysicsComponent
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
@@ -55,7 +55,7 @@ class SumBuilderConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class CalculateOperation(cp.Component):
+class CalculateOperation(cp.PhysicsComponent):
     """Arbitrary mathematical operations."""
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -163,7 +163,7 @@ class CalculateOperation(cp.Component):
         stsv.set_output_value(self.output1, total_in_config_unit)
 
 
-class SumBuilderForTwoInputs(Component):
+class SumBuilderForTwoInputs(PhysicsComponent):
     """Sums two component inputs into a single output.
 
     Reads two inputs of the same load type and unit, adds them at each
@@ -255,7 +255,7 @@ class SumBuilderForTwoInputs(Component):
         return lines
 
 
-class SumBuilderForThreeInputs(Component):
+class SumBuilderForThreeInputs(PhysicsComponent):
     """Sum builder for three inputs."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

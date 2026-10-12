@@ -161,7 +161,9 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   900 s (§11). Both are #922, which since 2026-10-12 sits below this stack: a component class inherits its kind base
   class (`PhysicsComponent`, `L1ControllerComponent`, … in `hisim/component.py`), and `hisim/evaluation_order.py`
   orders the physics. With it, every partial step of the gas twin in the window of `tests/test_part_load_twins.py`
-  converges (15 of 15, measured 2026-10-12 on this branch).
+  converges (15 of 15), and over the full year 2021 718 of 759 partial steps converge at 900 s and 614 of 643 at
+  3600 s, each ending 0.000 to 0.050 K above the target (measured 2026-10-12 on this branch; §11 of the stack's last
+  part).
 - **Two devices**: §7.
 
 ## 5. Devices
@@ -271,7 +273,7 @@ Epic hisim-fxix.
 
 | Bead | Content | PR |
 |---|---|---|
-| hisim-naze (P1) | threshold, rule, the boiler | #915 |
+| hisim-naze (P1, closed) | threshold, rule, the boiler | #915 |
 | hisim-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below the stack |
 | hisim-fxix.12 (P1) | the heat pump's hot-water side | #916 |
 | hisim-fxix.11 (P1) | the collector | #917 |

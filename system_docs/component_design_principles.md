@@ -6,7 +6,11 @@ them, and a component that breaks one gets a bead. Agreed with the owner on 2026
 
 ## A. Component kinds
 
-Every component is exactly one of four kinds; controllers come in two levels.
+Every component is exactly one of four kinds; controllers come in two levels. A component class states its kind
+by inheriting the one matching base class from `hisim/component.py`: `DataSourceComponent`, `PhysicsComponent`,
+`L1ControllerComponent`, `L2ControllerComponent` or `MeterComponent` (for example
+`class ElectricityMeter(DynamicComponent, MeterComponent)`). The class is the declaration; the simulator refuses a
+component whose class inherits none or more than one.
 
 | Kind | Examples | Reads | Sends | Decides |
 |---|---|---|---|---|
@@ -27,6 +31,11 @@ Every component is exactly one of four kinds; controllers come in two levels.
   controller may hold stricter times of its own.
 - Nothing in the simulation reads a meter. A controller that needs a balance, such as the energy manager's grid
   balance, sums the physics ports itself; the meter sums them independently for the bill.
+- The simulator evaluates a pass kind by kind: data sources, L2 controllers, L1 controllers, physics, meters
+  (`Simulator.EVALUATION_ORDER_OF_KINDS`). Within one kind the components keep the order they were added in, except
+  that every device an L1 controller commands goes before the other physics that controller reads
+  (`hisim/evaluation_order.py`). A command thus reaches its device in the same pass, and the device's answer
+  reaches the controller in the next pass together with the answer of the store it charges.
 
 ## B. Principles
 

@@ -741,10 +741,10 @@
                   "minimum_idle_time_s": {
                     "type": "number"
                   },
-                  "offset": {
+                  "hysteresis_in_kelvin": {
                     "type": "number"
                   },
-                  "temperature_difference_full_power_deg_c": {
+                  "ramp_time_to_full_power_at_one_kelvin_s": {
                     "type": "number"
                   }
                 }

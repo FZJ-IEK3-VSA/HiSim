@@ -993,7 +993,16 @@ class AirConditionerController(cp.Component):
       been off for the minimum idle time. A heating unit stops once the air is above the
       heating set point plus the hysteresis (21 °C), a cooling unit once it is below the
       cooling set point minus the hysteresis (23 °C), and neither stops before the minimum
-      runtime.
+      runtime. It also stops only from its lowest power, :attr:`MINIMUM_POWER_FRACTION`:
+      while the air is back inside the band but the power is still higher, the power keeps
+      ramping down instead (a soft stop). Stopping from high power would drop the air by the
+      unit's whole same-step effect, up to 4 K, and the minimum idle time would then hold it
+      there. The soft stop always ends: back inside the band the deviation from the held set
+      point is at least the hysteresis, so each step lowers the power by at least
+      ``hysteresis * dt / t_ramp`` (1/30 at 60 s with the preset), and from full power the
+      minimum is reached within ``0.9 * t_ramp`` (27 minutes) of the air staying there. If
+      the air falls back below the hysteresis edge first, the unit is simply regulating
+      again. A hysteresis of zero would take that bound away and is refused.
     * **Power, ramped by the distance from the set point it holds.** While running, the
       power fraction changes each step by ``(T_set - T) * dt / t_ramp`` when heating and by
       ``(T - T_set) * dt / t_ramp`` when cooling, with ``T`` the sampled indoor air
@@ -1006,14 +1015,18 @@ class AirConditionerController(cp.Component):
 
     Why the power ramps instead of following the deviation directly: the building's indoor air
     node answers the unit's power within the same time step (about 0.6 K per kW in the
-    air-conditioned house, some 3.5 K at full power). A power proportional to the deviation
-    that is steep enough to hold the set point within half a kelvin would overshoot that
-    answer every step and oscillate; one flat enough to be stable leaves the air kelvins below
-    the set point. The ramp settles in about ``t_ramp / (3.5 K)``, some nine minutes with the
-    preset. For the same reason a step longer than :attr:`LONGEST_RAMPED_STEP_S` (15 minutes)
-    ramps only as far as a 15-minute step would: with the preset, a full hour's ramp in one
-    step would overshoot that same-step answer sevenfold and the unit would swing between off
-    and full power from one hour to the next.
+    air-conditioned house, some 4.7 K at full power for a unit sized to 0.8 of its heating
+    load). A power proportional to the deviation that is steep enough to hold the set point
+    within half a kelvin would overshoot that answer every step and oscillate; one flat enough
+    to be stable leaves the air kelvins below the set point. The ramp settles in about
+    ``t_ramp / (4.7 K)``, some six minutes with the preset.
+
+    For the same reason a step longer than :attr:`LONGEST_RAMPED_STEP_S` (7.5 minutes) ramps
+    only as far as a 7.5-minute step would. One step's ramp, times that same-step answer, must
+    stay below 2 K per kelvin of deviation, or every step overshoots further than the last:
+    4.7 K × 450 s / 1800 s = 1.2 is stable, while the 900 s cap the controller first had gave
+    2.35, and the air-conditioned house at 15-minute steps chattered (2,814 heating starts a
+    year).
 
     The output ``ModulatingPowerSignal`` is the power fraction with a sign: positive for
     heating, negative for cooling, 0 when off.
@@ -1031,8 +1044,8 @@ class AirConditionerController(cp.Component):
     MINIMUM_POWER_FRACTION: ClassVar[float] = 0.1
     #: Longest step length, in seconds, whose full length the power ramp follows. A longer
     #: step changes the power only as much as a step of this length would, which keeps the
-    #: loop stable at hourly resolution (see the class docstring).
-    LONGEST_RAMPED_STEP_S: ClassVar[float] = 900.0
+    #: loop stable at 15-minute and hourly steps (see the class docstring for the 2 K bound).
+    LONGEST_RAMPED_STEP_S: ClassVar[float] = 450.0
 
     @utils.measure_execution_time
     def __init__(
@@ -1051,7 +1064,17 @@ class AirConditionerController(cp.Component):
                 minimum times into whole time steps and scales the power ramp.
             config: The controller's configuration.
             my_display_config: How the controller shows in reports.
+
+        Raises:
+            ValueError: If the hysteresis is not positive; the soft stop needs it to end (see the
+                class docstring).
         """
+        if config.hysteresis_in_kelvin <= 0.0:
+            raise ValueError(
+                f"The air conditioner's controller needs a positive hysteresis, got {config.hysteresis_in_kelvin} K: "
+                "a running unit ramps down to its minimum power before it stops, and only a positive "
+                "hysteresis bounds how long that takes."
+            )
 
         self.config = config
         self.my_simulation_parameters = my_simulation_parameters
@@ -1263,7 +1286,8 @@ class AirConditionerController(cp.Component):
                 if heating
                 else indoor_air_temperature_deg_c < cooling_set_temperature_deg_c - hysteresis_in_kelvin
             )
-            if may_stop and back_inside_band:
+            at_minimum_power = committed_state.power_fraction <= self.MINIMUM_POWER_FRACTION
+            if may_stop and back_inside_band and at_minimum_power:
                 decided_state.mode = AirConditionerControllerMode.OFF
                 decided_state.deactivation_time_step = timestep
                 decided_state.power_fraction = 0.0

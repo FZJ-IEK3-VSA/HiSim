@@ -265,14 +265,145 @@ Amendments to the hydronic spec, to be written into `hydronic_coupling_spec.md` 
 
 ## 11. Measured results
 
-Full year 2021, the shipped predefined occupancy profile, measured on 2026-10-10 on the stack's last part (#918),
-against the 60 s run of the same head, on the old stack: before the simulator's kind order (#922, §4.3) moved under
-it, so the components ran in the order the files add them. Since 2026-10-12 every pass runs in the kind order, which
-for the twins below is R′'s order (K below). The 60 s runs of the gas and the gas + solar twin equal #914 bit for bit in
-every common column, with the same passes. "Forced" counts the steps the simulator flags at `force_convergence`
-(twelve passes or more). R is the memoryless rule of §4 in the twins' component order; R′ the same code with every
-part-load controller moved before its device in the file (§4.3); I the pass-counting search this rule replaced
-(measured on the stack before #909's review fixes, so on a different 60 s base).
+### 11.1 On the kind order (2026-10-12)
+
+Full year 2021, the shipped predefined occupancy profile, every twin at 60 s, 900 s and 3600 s, measured on
+2026-10-12 with the simulator's kind order (#922) below the stack; each figure is against the 60 s run of the same
+head. Tables 1 and 2 are this branch (#918), table 3 is each part of the stack on its own branch. The 60 s year does
+not change through the stack: it is bit-identical, in every common column and with the same passes, from #922 to #915
+(gas, gas + solar, pellets), #915 to #916 (gas, electric, heat pump), #915 to #917 (gas + solar), #916 to #917 (gas,
+district heating) and #917 to #918 (gas, gas + solar, district heating, heat pump + solar), and #916 to #918 (electric,
+heat pump). "Flagged" counts the steps the simulator returns with `force_convergence` set; it sets it after the
+eleventh pass, so a step that converges on its twelfth pass is flagged without having run a forced pass. "Forced"
+counts the steps with at least one forced pass (13 passes or more). A partial step is one whose controller's ratio lies
+strictly between 0 and 1; it converged when it is not flagged.
+
+**Table 1**, against 60 s. "Space heating" is the heat the generator books for space heating (the district-heating
+substation: the space-heating heat it draws); "delivered" is the heat the distribution system gives the building.
+
+| twin | step | hot-water heat | hot-water fuel or electricity | space heating | delivered | collector | unmet hot water (60 s) |
+|---|---|---|---|---|---|---|---|
+| gas | 900 s | -0.00 % | -0.00 % | +5.69 % | -0.17 % | – | 0.0 kWh (0.0 kWh) |
+| gas | 3600 s | -0.01 % | -0.01 % | +21.32 % | -0.66 % | – | 0.0 kWh (0.0 kWh) |
+| heat pump | 900 s | -0.15 % | +0.96 % | +19.61 % | -0.55 % | – | 4.4 kWh (3.8 kWh) |
+| heat pump | 3600 s | -0.34 % | +8.89 % | +43.92 % | -0.94 % | – | 8.0 kWh (3.8 kWh) |
+| electric | 900 s | -0.07 % | -0.07 % | -0.03 % | – | – | 9.0 kWh (7.4 kWh) |
+| electric | 3600 s | -0.26 % | -0.26 % | -0.05 % | – | – | 9.7 kWh (7.4 kWh) |
+| gas + solar | 900 s | +0.28 % | +0.28 % | +5.59 % | -0.17 % | -1.75 % | 0.0 kWh (0.0 kWh) |
+| gas + solar | 3600 s | +0.14 % | +0.14 % | +21.13 % | -0.67 % | -1.00 % | 0.0 kWh (0.0 kWh) |
+| heat pump + solar | 900 s | -0.38 % | +1.22 % | +17.17 % | -0.60 % | +1.57 % | 16.9 kWh (17.0 kWh) |
+| heat pump + solar | 3600 s | -0.35 % | +13.64 % | +35.30 % | -1.58 % | +0.76 % | 22.0 kWh (17.0 kWh) |
+| district heating | 900 s | -0.12 % | -0.12 % | -0.41 % | -0.09 % | – | 8.2 kWh (7.2 kWh) |
+| district heating | 3600 s | +0.09 % | +0.09 % | -0.43 % | -0.24 % | – | 6.4 kWh (7.2 kWh) |
+
+The 60 s references: hot-water fuel or electricity 3463.3 kWh (gas), 1067.8 kWh (heat pump), 3090.8 kWh (electric),
+3002.3 kWh (gas + solar, with 418.8 kWh of collector heat), 693.6 kWh (heat pump + solar, with 595.8 kWh), and
+3090.9 kWh of hot-water heat for district heating. The oil, pellet, wood-chip and hydrogen boiler twins (#915) give the
+gas twin's hot-water figures and step counts exactly.
+
+**Table 2**, the iteration. Wall time with two runs sharing six cores, at times beside two runs of another agent.
+
+| twin | step | mean passes | flagged / forced | partial steps converged | end above the target, mean / max | wall time |
+|---|---|---|---|---|---|---|
+| gas | 60 s | 3.18 | 0 / 0 | – | – | 153 s |
+| gas | 900 s | 3.29 | 94 / 59 | boiler 718 of 759 | 0.032 / 0.050 K | 16 s |
+| gas | 3600 s | 3.67 | 47 / 45 | boiler 614 of 643 | 0.037 / 0.050 K | 9 s |
+| heat pump | 60 s | 3.88 | 5191 / 5191 | – | – | 258 s |
+| heat pump | 900 s | 4.63 | 1784 / 1759 | heat pump 586 of 872 | 0.032 / 0.050 K | 25 s |
+| heat pump | 3600 s | 5.84 | 887 / 831 | heat pump 83 of 581 | 0.026 / 0.050 K | 11 s |
+| electric | 60 s | 4.09 | 0 / 0 | – | – | 115 s |
+| electric | 900 s | 5.29 | 73 / 73 | heater 409 of 482 | 0.018 / 0.049 K | 13 s |
+| electric | 3600 s | 6.95 | 72 / 70 | heater 403 of 474 | 0.028 / 0.050 K | 7 s |
+| gas + solar | 60 s | 3.23 | 14 / 14 | – | – | 215 s |
+| gas + solar | 900 s | 3.61 | 165 / 128 | boiler 617 of 671, collector 1446 of 1458 | 0.032 / 0.050 K, 0.012 / 0.050 K | 19 s |
+| gas + solar | 3600 s | 4.14 | 223 / 208 | boiler 548 of 583, collector 168 of 284 | 0.037 / 0.050 K, 0.024 / 0.050 K | 8 s |
+| heat pump + solar | 60 s | 3.74 | 216 / 216 | – | – | 373 s |
+| heat pump + solar | 900 s | 4.58 | 1310 / 1292 | heat pump 305 of 313, collector 1158 of 1200 | 0.035 / 0.050 K, 0.012 / 0.050 K | 34 s |
+| heat pump + solar | 3600 s | 6.20 | 719 / 696 | heat pump 43 of 299, collector 185 of 309 | 0.033 / 0.050 K, 0.023 / 0.044 K | 14 s |
+| district heating | 60 s | 3.13 | 0 / 0 | – | – | 104 s |
+| district heating | 900 s | 5.42 | 0 / 0 | – | – | 15 s |
+| district heating | 3600 s | 7.03 | 23 / 23 | – | – | 7 s |
+
+**Table 3**, each part on its own branch, 900 s / 3600 s against the 60 s run of the same head. #922 is the kind order
+without part load; #915 adds the boiler's part load, so for the heat-pump, electric and district-heating twins it equals
+#922; #916 the heat pump's and the electric heater's; #917 the collector's; #918 the quasi-steady loop.
+
+| twin: quantity | #922 | #915 | #916 | #917 | #918 |
+|---|---|---|---|---|---|
+| gas: hot-water gas | +0.17 % / +0.63 % | -0.00 % / -0.01 % | the same | the same | the same |
+| gas: flagged steps | 38 / 0 | 94 / 47 | the same | the same | the same |
+| heat pump: hot-water electricity | – | +0.59 % / +9.36 % | +0.96 % / +8.89 % | – | the same as #916 |
+| heat pump: flagged steps | – | 1601 / 618 | 1784 / 887 | – | the same as #916 |
+| electric: hot-water electricity | – | -0.14 % / +0.04 % | -0.07 % / -0.26 % | – | the same as #916 |
+| electric: flagged steps | – | 0 / 0 | 73 / 72 | – | the same as #916 |
+| gas + solar: hot-water gas | +1.17 % / +4.35 % | -0.18 % / -0.66 % | the same as #915 | +0.28 % / +0.14 % | the same as #917 |
+| gas + solar: collector | -6.19 % / -24.01 % | +1.28 % / +4.31 % | the same as #915 | -1.75 % / -1.00 % | the same as #917 |
+| gas + solar: flagged steps | 46 / 9 | 123 / 56 | the same as #915 | 165 / 223 | the same as #917 |
+| heat pump + solar: hot-water electricity | – | +1.42 % / +13.67 % | +0.92 % / +12.99 % | +1.22 % / +13.64 % | the same as #917 |
+| heat pump + solar: collector | – | +2.85 % / +0.85 % | +5.00 % / +1.29 % | +1.57 % / +0.76 % | the same as #917 |
+| heat pump + solar: flagged steps | – | 1225 / 385 | 1234 / 573 | 1310 / 719 | the same as #917 |
+| district heating: heat drawn | – | – | -0.03 % / +0.03 % | – | -0.35 % / -0.31 % |
+| district heating: delivered | – | – | -0.08 % / -0.21 % | – | -0.09 % / -0.24 % |
+| district heating: passes, flagged steps | – | – | 3.16 / 3.24, 0 / 0 | – | 5.42 / 7.03, 0 / 23 |
+
+The heat pump + solar columns of #915 and #916 are against the 60 s run of #917, which those branches were not run at.
+
+Findings:
+
+1. **Boiler hot water** (#915). The rule takes the gas twin's hot-water heat and gas from +0.17 % / +0.63 % (whole-step
+   charges) to -0.002 % / -0.012 %, and every boiler fuel gives the same hot-water figures. The price is iteration:
+   the flagged steps rise from 38 to 94 at 900 s and from 0 to 47 at 3600 s, the mean passes from 3.22 to 3.29 and from
+   3.32 to 3.67. Of the 94 flagged steps at 900 s 41 are partial steps and 53 whole-step charges.
+2. **Converged partial steps land in the band.** On this branch every converged partial step of every twin ends 0.000
+   to 0.050 K above its controller's target, 0.012 to 0.037 K on average. (On #915, where the collector still runs
+   whole steps, 4 of the gas + solar twin's converged partial boiler steps end above the band, the worst 5.3 K: the
+   collector lifts the tank past the boiler's band while the boiler's ratio decays towards 0, §7.)
+3. **Heat pump** (#916). Whole-step charges on the same base already give +0.59 % / +9.36 % hot-water electricity; with
+   the rule it is +0.96 % / +8.89 %, and the flagged steps rise from 1601 / 618 to 1784 / 887. The rule moves the year
+   by less than 0.5 percentage points either way. The 3600 s excess is the COP above 63 °C under the energy manager's
+   raise decided once per hour (hisim-3y10, open point 2), which the ratio does not reach. 1383 of the 1784 flagged
+   steps at 900 s run the whole step: the energy manager's loop at the heat pump's own draw (hisim-4g9.28), not the
+   rule. At 60 s the twin has 5191 flagged steps itself.
+4. **Electric heater** (#916). Whole-step charges give -0.14 % / +0.04 % with no flagged step; the rule gives -0.07 % /
+   -0.26 % with 73 / 72, all partial last steps of a charge whose draw takes more than the rise the step still needs
+   (§4.3, hisim-fxix.17). On this base the rule brings the electric heater no accuracy.
+5. **Collector and backup** (#917). Without any part load the gas + solar collector yields -6.19 % / -24.01 %; the
+   boiler's rule alone takes it to +1.28 % / +4.31 %, and the collector's own rule to -1.75 % / -1.00 %, with the
+   boiler's hot-water gas at +0.28 % / +0.14 %. The flagged steps rise from 123 / 56 to 165 / 223; at 3600 s 116 of the
+   collector's 284 partial steps are flagged. In the heat pump + solar twin the collector's rule takes the collector
+   from +5.00 % / +1.29 % to +1.57 % / +0.76 %, and the heat pump's hot-water electricity stays at +1.22 % / +13.64 %.
+6. **The buffer-less loop** (#918). On this base the district-heating twin's dynamic, one-step-lagged loop (#916, #917)
+   already meets hisim-hhj2's criterion: heat drawn -0.03 % / +0.03 %, delivered -0.08 % / -0.21 %, no flagged step,
+   3.16 / 3.24 passes. The quasi-steady loop also meets it, with heat drawn -0.35 % / -0.31 %, delivered -0.09 % /
+   -0.24 %, 5.42 / 7.03 passes and 23 flagged steps at 3600 s. The many iterations it was built against at 900 s
+   (hisim-hhj2: 16 to 24 per step) no longer occur.
+7. **Space heating is not part of this stack.** The generators' space-heating heat is +5.7 % / +21.3 % (gas), +19.6 % /
+   +43.9 % (heat pump) and -3.3 % / -9.7 % (pellets) against 60 s, while the heat delivered to the building stays
+   within 0.2 % / 0.7 % (gas) and 0.6 % / 0.9 % (heat pump): the space-heating buffer does not close its balance at
+   coarse steps (stage D, hisim-fxix.5; its part load is hisim-ign9). The same holds on #922 without part load (gas
+   +5.34 % / +19.65 %). In the pellet and wood-chip twins the buffer does not close it at 60 s either: their boilers
+   book 51.7 MWh of space-heating heat a year for 11.0 MWh delivered, on #922 too.
+8. **Wall time**: a year at 900 s takes 13 to 34 s, at 3600 s 7 to 14 s, at 60 s 104 to 373 s (table 2).
+
+Against each part's "done when":
+
+- #915, hisim-naze (the gas twin's hot-water heat and gas within 1 % at 900 s and 3600 s, 60 s unchanged, forced
+  steps and run time reported): met; closed.
+- #916, hisim-fxix.12 (the heat pump's hot-water electricity within 1 % at 900 s and 3600 s): met at 900 s (+0.96 %),
+  not at 3600 s (+8.89 %); open.
+- #917, hisim-fxix.11 (collector yield and the backup's fuel or electricity within 1 % at 900 s and 3600 s, no step
+  at `force_convergence`): not met: the gas + solar collector is -1.75 % at 900 s, the heat pump + solar hot-water
+  electricity +1.22 % / +13.64 %, and both twins have flagged steps; open.
+- #918, hisim-hhj2 (district heating within 1 % on delivered heat and the bill, no forced step at 900 s, 60 s
+  unchanged): met, and met without the quasi-steady loop too (finding 6); open for the owner's review.
+
+### 11.2 On the old stack (2026-10-10)
+
+Measured on 2026-10-10, full year 2021, before the kind order moved under the stack, so the components ran in the
+order the files add them; the 60 s base differs from 11.1 (#914, before the energy manager's and the simulator's later
+changes). R is the memoryless rule in the twins' order, R′ the same code with every part-load controller moved before
+its device in the file, I the pass-counting search this rule replaced (on the stack before #909's review fixes, a
+different 60 s base again). "Forced" counts flagged steps.
 
 | twin | step | hot-water fuel or electricity R / R′ / I | collector R / R′ / I | passes R / R′ / I | forced R / R′ / I |
 |---|---|---|---|---|---|
@@ -280,62 +411,14 @@ part-load controller moved before its device in the file (§4.3); I the pass-cou
 | gas | 3600 s | +0.18 % / -0.01 % / -0.06 % | – | 4.85 / 3.89 / 4.66 | 679 / 50 / 71 |
 | heat pump | 900 s | -1.17 % / – / -1.21 % | – | 5.66 / – / 6.00 | 4504 / – / 4556 |
 | heat pump | 3600 s | +13.00 % / – / +6.01 % | – | 7.24 / – / 8.04 | 2082 / – / 2438 |
-| electric | 900 s | +0.12 % / – / +0.01 % | – | 6.37 / – / 6.66 | 742 / – / 532 |
-| electric | 3600 s | +0.74 % / – / -0.07 % | – | 8.46 / – / 8.43 | 1015 / – / 562 |
 | gas + solar | 900 s | +2.14 % / +0.27 % / +0.21 % | -11.87 % / -1.74 % / -1.41 % | 4.40 / 3.74 / 4.57 | 1193 / 121 / 73 |
 | gas + solar | 3600 s | +1.74 % / -0.08 % / +0.97 % | -9.62 % / +0.43 % / -6.76 % | 5.23 / 4.34 / 5.12 | 839 / 212 / 191 |
-| heat pump + solar | 900 s | +1.83 % / +1.73 % / +1.61 % | +1.18 % / +0.08 % / +0.34 % | 4.64 / 4.63 / 5.26 | 2254 / 1876 / 2122 |
-| heat pump + solar | 3600 s | +12.92 % / +13.67 % / +13.79 % | +2.76 % / -0.64 % / -2.70 % | 5.75 / 5.63 / 6.31 | 1064 / 953 / 1191 |
 
-The heat-pump and electric-heating twins already list each controller before its device, so R′ equals R there.
-District heating has no part load; its loop (§8) gives the same results as before (hot-water heat +0.35 % / +0.99 %,
-no forced step at 900 s, 23 at 3600 s).
-
-**The kind order (K), 2026-10-10**, measured on the old stack with #922 on top (rebased onto the energy manager's
-hysteresis, hisim-4g9.31), against the 60 s run of the same head; P is #918 on the same base in the twins' order:
-
-| twin | step | hot-water fuel or electricity P / K | collector P / K | passes P / K | steps with a forced pass P / K | partial steps converged P / K |
-|---|---|---|---|---|---|---|
-| gas | 900 s | +0.27 % / -0.00 % | – | 4.26 / 3.29 | 1013 / 44 | 5 of 739 / 718 of 759 |
-| gas | 3600 s | +0.18 % / -0.01 % | – | 4.85 / 3.75 | 679 / 47 | 0 of 572 / 614 of 643 |
-| heat pump | 900 s | -0.45 % / +2.84 % | – | 6.00 / 7.13 | 5020 / 7805 | 213 of 2159 / 238 of 5364 |
-| heat pump | 3600 s | +14.14 % / +16.81 % | – | 7.49 / 7.75 | 2231 / 2364 | 65 of 894 / 72 of 1141 |
-| electric | 900 s | +0.12 % / +0.12 % | – | 6.37 / 5.84 | 730 / 730 | 10002 of 10266 / the same |
-| gas + solar | 900 s | +2.14 % / +0.27 % | -11.87 % / -1.70 % | 4.40 / 3.61 | 1193 / 113 | collector 0 of 140 / 1451 of 1460 |
-| gas + solar | 3600 s | +1.74 % / -0.09 % | -9.62 % / +0.47 % | 5.23 / 4.21 | 839 / 206 | collector 0 of 159 / 175 of 271 |
-| heat pump + solar | 900 s | +1.62 % / +1.88 % | +0.76 % / +0.03 % | 4.60 / 4.49 | 1491 / 988 | collector 1 of 148 / 1158 of 1189 |
-| heat pump + solar | 3600 s | +12.82 % / +14.14 % | +2.37 % / -1.19 % | 5.77 / 5.58 | 1086 / 981 | collector 0 of 119 / 193 of 291 |
-
-The boiler and collector twins settle as R′ did. The heat-pump twin needs more forced steps in the kind order (at 60 s
-53324 instead of 31946): its forced steps are the energy manager's loop at the heat pump's own draw (hisim-4g9.28),
-in which the raise, the building's demand and the heat pump's power switch from pass to pass (the same outputs still
-move on the eleventh pass in both orders), and in the kind order that loop reaches forced convergence more often.
-Its 60 s hot-water electricity moves from 1158.3 to 1119.6 kWh with it.
-
-Findings:
-
-1. **The evaluation order decides.** In the boiler and solar twins the device is evaluated before its controller and
-   the tank after both, so the controller pairs a ratio with the tank's answer to the one before (§4.3). There the
-   rule's plain iteration settles on almost no partial step: 5 of 739 partial boiler steps of the gas twin converge
-   at 900 s, none at 3600 s; the others end at `force_convergence` on average 0.5 to 0.7 K from the target. With the
-   controller first (R′) 718 of 759 converge, and the gas twin needs fewer passes than with the search (3.42 against
-   4.20 at 900 s). Decided: the simulator's kind order (#922, below the stack since 2026-10-12; hisim-fxix.16
-   closed), measured as K above.
-2. **A draw larger than the rise the step still needs** makes the iteration alternate (§4.3). The electric heater,
-   whose controller is evaluated first, tops the tank up beside space heating at 45 °C in a third of its winter steps;
-   with the draws of those steps 730 of its 900 s steps need a forced pass (the search: 212), and its hot-water
-   electricity rises from +0.01 % to +0.12 % at 900 s and from -0.07 % to +0.74 % at 3600 s.
-3. **Converged partial steps land in the band**: in every twin and run the tank ends 0.01 to 0.04 K above the target
-   on average, and every converged partial step but one ends at most 0.05 K above it (the one, a heat-pump step of the
-   heat pump + solar twin at 3600 s in R′, ended 0.53 K off).
-4. **Heat pump**: the energy manager's raise still switches the target from one pass to the next; 206 of 1129 partial
-   steps converge at 900 s (the search: 192 of 1292) and 51 of 596 at 3600 s, where the hot-water electricity ends at
-   +13.0 % (the search: +6.0 %).
-5. **Collector and backup** (with the controllers first, R′): the collector yields -1.7 % / +0.4 % against 60 s and the
-   boiler's hot-water gas is +0.27 % / -0.08 %; in the heat pump + solar twin the heat pump's lower target lets the
-   collector take the step, its ratio decaying towards 0 as §7 describes.
-6. **Wall time**: the year at 900 s takes 17 s for the gas twin (21 s with the controller first, measured with six
-   runs sharing six cores), 33 s for the heat pump; at 60 s 178 s and 336 s.
+What it decided: in the twins' order the boiler and the collector ran before their controllers, and the rule settled
+on almost no partial step (5 of 739 partial boiler steps of the gas twin at 900 s); with the controller first it
+settled on 718 of 759 and needed fewer passes than the search (3.42 against 4.20). That led to the kind order and the
+physics order (§4.3, #922, hisim-fxix.16, closed). The electric heater's figures of that day (a 45 °C target beside
+space heating) and a first measurement of the kind order on the old stack are superseded by 11.1.
 
 ## 12. Beads
 

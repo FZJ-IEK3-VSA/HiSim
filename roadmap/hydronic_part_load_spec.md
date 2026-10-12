@@ -341,6 +341,10 @@ stores its controller reads, and their results are bit for bit those of K. In Kâ
 identical results. Without the pump's hysteresis Kâ€² forces 165 steps of the gas + solar year at 900 s (1292 in K);
 the 172 that remain are slow boiler heat-ups, alternations where the draw takes more than the rise the step still
 needs (hisim-fxix.17), and about 55 steps in which the collector pump switched on with no fixed point (hisim-fxix.21).
+That last group is gone since the solar pump decides on the tank's start-of-step temperature with two hysteresis
+bands (#941, hisim-fxix.21 closed): on the old stack's top (#942 with #922 on top), year 2021 at 900 s, the gas +
+solar twin goes from 172 to 95 forced steps and from 55 to 1 step whose pump signal flips between passes, the heat
+pump + solar twin from 1294 to 1259 forced steps and from 51 to 8 flips.
 
 Findings:
 

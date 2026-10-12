@@ -1,6 +1,7 @@
 """Air Conditioner Component."""
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, ClassVar, Dict, List, Optional
 from dataclasses_json import dataclass_json
 
@@ -841,16 +842,17 @@ class AirConditioner(cp.Component):
 @dataclass_json
 @dataclass
 class AirConditionerControllerConfig(ConfigBase):
-    """Configuration of the air conditioner's controller: a comfort band with minimum run times.
+    """Configuration of the air conditioner's controller: two set points, a hysteresis band and run times.
 
-    The controller watches the building's indoor air temperature and puts the unit into
-    heating below :attr:`heating_set_temperature_deg_c`, into cooling above
-    :attr:`cooling_set_temperature_deg_c`, and off in the band between them. Two things
-    soften that switch: ``offset`` widens the band the unit stays in once it has started, so
-    it does not stop the moment the setpoint is reached, and the two minimum times keep it
-    running, or keep it off, for a while whatever the air says. Within the running band the
-    power is modulated quadratically, reaching full power
-    ``temperature_difference_full_power_deg_c`` kelvin past the setpoint that started it.
+    The controller holds the indoor air at :attr:`heating_set_temperature_deg_c` while it heats
+    and at :attr:`cooling_set_temperature_deg_c` while it cools. The unit switches on when the
+    air leaves the comfort band between the two set points, and switches off only once the air
+    is :attr:`hysteresis_in_kelvin` back inside it: heating stops above 20 + 1 = 21 °C, cooling
+    below 24 - 1 = 23 °C. While it runs, the controller ramps the unit's power by the distance
+    from the set point it holds, so the air settles on that set point instead of drooping
+    below it; :attr:`ramp_time_to_full_power_at_one_kelvin_s` says how fast. The two minimum
+    times keep the unit running, or keep it off, for a while whatever the air says, so it
+    does not chatter on and off.
 
     The named default is :meth:`preset_standard`::
 
@@ -864,34 +866,39 @@ class AirConditionerControllerConfig(ConfigBase):
     MAIN_CLASS = "hisim.components.air_conditioner.AirConditionerController"
 
     component_id: ComponentID
-    #: Indoor air temperature below which the unit heats, in °C.
+    #: Indoor air temperature the unit holds while heating, in °C. Below it an idle unit
+    #: starts heating.
     heating_set_temperature_deg_c: float = 20.0
-    #: Indoor air temperature above which the unit cools, in °C.
+    #: Indoor air temperature the unit holds while cooling, in °C. Above it an idle unit
+    #: starts cooling.
     cooling_set_temperature_deg_c: float = 24.0
     #: Shortest time the unit stays in heating or cooling once it has started, in seconds.
     #: Rounded down to whole time steps, so a value below one time step imposes nothing.
     minimum_runtime_s: float = 1800.0
     #: Shortest time the unit stays off once it has stopped, in seconds, rounded down the
     #: same way. Together with the runtime it is what stops the unit chattering on and off
-    #: around the setpoint.
+    #: around the set point.
     minimum_idle_time_s: float = 900.0
-    #: Width of the hysteresis band, in kelvin: how far past the setpoint that started it the
-    #: unit keeps running. Heating continues up to ``heating_set_temperature_deg_c + offset``
-    #: and cooling down to ``cooling_set_temperature_deg_c - offset``.
-    offset: float = 5.0
-    #: Temperature difference from the far edge of that band at which the unit runs at full
-    #: power, in kelvin. Below it the modulation is the square of the ratio, so the unit
-    #: throttles back sharply as the air approaches the setpoint.
-    temperature_difference_full_power_deg_c: float = 3.0
+    #: Width of the hysteresis band, in kelvin: how far back inside the comfort band the air
+    #: must be before a running unit stops. Heating stops above
+    #: ``heating_set_temperature_deg_c + hysteresis_in_kelvin`` and cooling below
+    #: ``cooling_set_temperature_deg_c - hysteresis_in_kelvin``.
+    hysteresis_in_kelvin: float = 1.0
+    #: How fast the unit's power follows the air, in seconds: the time the controller takes
+    #: to ramp the power from zero to full while the air stays one kelvin on the wrong side of
+    #: the set point it holds. Two kelvin ramp twice as fast; on the right side the power
+    #: ramps down the same way.
+    ramp_time_to_full_power_at_one_kelvin_s: float = 1800.0
 
     @preset
     @classmethod
     def preset_standard(cls, name: str) -> "AirConditionerControllerConfig":
-        """The one comfort band the fleet runs: heating below 20 °C, cooling above 24 °C.
+        """The one comfort band the fleet runs: hold 20 °C while heating, 24 °C while cooling.
 
-        The field defaults are that band, with five kelvin of hysteresis either side, full
-        power three kelvin from the edge, and the unit held for half an hour once it starts
-        and a quarter of an hour once it stops.
+        The field defaults are that band, with one kelvin of hysteresis (heating stops above
+        21 °C, cooling below 23 °C), half an hour from zero to full power per kelvin of
+        deviation, and the unit held for half an hour once it starts and a quarter of an hour
+        once it stops.
 
         Args:
             name: Instance name of the controller in the simulation.
@@ -902,56 +909,128 @@ class AirConditionerControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
+class AirConditionerControllerMode(str, Enum):
+    """What the controller asks of the air conditioner: heat, cool or stay off.
+
+    A ``str`` enum so that the values read as the plain words in logs and compare equal to
+    them.
+    """
+
+    HEATING = "heating"
+    COOLING = "cooling"
+    OFF = "off"
+
+
 class AirConditionerControllerState:
-    """Class representing the internal state of the air conditioner controller."""
+    """What the controller remembers from one time step to the next.
+
+    The controller commits this state at the end of every time step (``i_save_state``) and
+    every pass of the next step starts again from that committed copy (``i_restore_state``),
+    so nothing a pass changes here can leak into the next pass of the same step.
+
+    Attributes:
+        mode: Whether the unit heats, cools or is off.
+        activation_time_step: The time step the unit last started heating or cooling.
+        deactivation_time_step: The time step the unit last stopped.
+        power_fraction: Share of the unit's capacity it runs at, from 0 to 1; 0 when off.
+        indoor_air_temperature_deg_c: The indoor air temperature the controller read at the
+            end of the step, in °C, or ``None`` before the first step. The next step decides
+            on it.
+    """
 
     def __init__(
         self,
-        mode: str,
+        mode: AirConditionerControllerMode,
         activation_time_step: int,
         deactivation_time_step: int,
-        power_modulation_percentage: float,
+        power_fraction: float,
+        indoor_air_temperature_deg_c: Optional[float] = None,
     ) -> None:
-        """Constructor."""
+        """Builds the state from its five values.
 
-        self.mode = mode  # can be "heating", "cooling", or "off"
+        Args:
+            mode: Whether the unit heats, cools or is off.
+            activation_time_step: The time step the unit last started.
+            deactivation_time_step: The time step the unit last stopped.
+            power_fraction: Share of the unit's capacity it runs at, from 0 to 1.
+            indoor_air_temperature_deg_c: The indoor air temperature last read, in °C, or
+                ``None`` if none has been read yet.
+        """
+        self.mode = mode
         self.activation_time_step = activation_time_step
         self.deactivation_time_step = deactivation_time_step
-        self.power_modulation_percentage = (
-            power_modulation_percentage  # current power modulation level (0.1 - 1.0)
-        )
+        self.power_fraction = power_fraction
+        self.indoor_air_temperature_deg_c = indoor_air_temperature_deg_c
 
     def clone(self) -> "AirConditionerControllerState":
-        """Returns a deep copy of the current state."""
+        """Returns an independent copy of this state.
+
+        Returns:
+            A new state with the same five values.
+        """
         return AirConditionerControllerState(
             self.mode,
             self.activation_time_step,
             self.deactivation_time_step,
-            self.power_modulation_percentage,
+            self.power_fraction,
+            self.indoor_air_temperature_deg_c,
         )
-
-    def i_prepare_simulation(self) -> None:
-        """Prepare the simulation step (no logic required here)."""
-        pass
-
-    def activate_heating(self, timestep: int) -> None:
-        """Switches mode to heating and stores activation time."""
-        self.mode = "heating"
-        self.activation_time_step = timestep
-
-    def activate_cooling(self, timestep: int) -> None:
-        """Switches mode to cooling and stores activation time."""
-        self.mode = "cooling"
-        self.activation_time_step = timestep
-
-    def deactivate(self, timestep: int) -> None:
-        """Turns off the system and stores deactivation time."""
-        self.mode = "off"
-        self.deactivation_time_step = timestep
 
 
 class AirConditionerController(cp.Component):
-    """Controller component for modulating air conditioner behavior based on temperature."""
+    """Controller that holds the indoor air at a heating or a cooling set point with an air conditioner.
+
+    Like a digital room thermostat, the controller samples the indoor air temperature once per
+    time step and holds its signal for the next step: every step it decides on the temperature
+    the building reported at the end of the previous step, together with what it committed
+    then. Each pass of a step therefore sends the same signal, the controller needs no extra
+    convergence passes, and the result does not depend on how the step's iteration starts.
+
+    It decides in two parts:
+
+    * **Mode, with hysteresis and minimum times.** An idle unit starts heating below the
+      heating set point (20 °C) or cooling above the cooling set point (24 °C), once it has
+      been off for the minimum idle time. A heating unit stops once the air is above the
+      heating set point plus the hysteresis (21 °C), a cooling unit once it is below the
+      cooling set point minus the hysteresis (23 °C), and neither stops before the minimum
+      runtime. It also stops only from its lowest power, :attr:`MINIMUM_POWER_FRACTION`:
+      while the air is back inside the band but the power is still higher, the power keeps
+      ramping down instead (a soft stop). Stopping from high power would drop the air by the
+      unit's whole same-step effect, up to 4 K, and the minimum idle time would then hold it
+      there. The soft stop always ends: back inside the band the deviation from the held set
+      point is at least the hysteresis, so each step lowers the power by at least
+      ``hysteresis * dt / t_ramp`` (1/30 at 60 s with the preset), and from full power the
+      minimum is reached within ``0.9 * t_ramp`` (27 minutes) of the air staying there. If
+      the air falls back below the hysteresis edge first, the unit is simply regulating
+      again. A hysteresis of zero would take that bound away and is refused.
+    * **Power, ramped by the distance from the set point it holds.** While running, the
+      power fraction changes each step by ``(T_set - T) * dt / t_ramp`` when heating and by
+      ``(T - T_set) * dt / t_ramp`` when cooling, with ``T`` the sampled indoor air
+      temperature, ``dt`` the step length and ``t_ramp``
+      :attr:`AirConditionerControllerConfig.ramp_time_to_full_power_at_one_kelvin_s`, and
+      stays between :attr:`MINIMUM_POWER_FRACTION` and 1. Below the set point the power
+      rises, above it the power falls, so the air settles on the set point whatever the
+      load, rather than at a load-dependent distance below it as with a power proportional
+      to the deviation.
+
+    Why the power ramps instead of following the deviation directly: the building's indoor air
+    node answers the unit's power within the same time step (about 0.6 K per kW in the
+    air-conditioned house, some 4.7 K at full power for a unit sized to 0.8 of its heating
+    load). A power proportional to the deviation that is steep enough to hold the set point
+    within half a kelvin would overshoot that answer every step and oscillate; one flat enough
+    to be stable leaves the air kelvins below the set point. The ramp settles in about
+    ``t_ramp / (4.7 K)``, some six minutes with the preset.
+
+    For the same reason a step longer than :attr:`LONGEST_RAMPED_STEP_S` (7.5 minutes) ramps
+    only as far as a 7.5-minute step would. One step's ramp, times that same-step answer, must
+    stay below 2 K per kelvin of deviation, or every step overshoots further than the last:
+    4.7 K × 450 s / 1800 s = 1.2 is stable, while the 900 s cap the controller first had gave
+    2.35, and the air-conditioned house at 15-minute steps chattered (2,814 heating starts a
+    year).
+
+    The output ``ModulatingPowerSignal`` is the power fraction with a sign: positive for
+    heating, negative for cooling, 0 when off.
+    """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -960,6 +1039,14 @@ class AirConditionerController(cp.Component):
     OperatingState: ClassVar[str] = "OperatingState"
     ModulatingPowerSignal: ClassVar[str] = "ModulatingPowerSignal"
 
+    #: Lowest share of its capacity the unit runs at while heating or cooling. Inverter units
+    #: cannot modulate down to zero; below this the unit cycles on and off instead.
+    MINIMUM_POWER_FRACTION: ClassVar[float] = 0.1
+    #: Longest step length, in seconds, whose full length the power ramp follows. A longer
+    #: step changes the power only as much as a step of this length would, which keeps the
+    #: loop stable at 15-minute and hourly steps (see the class docstring for the 2 K bound).
+    LONGEST_RAMPED_STEP_S: ClassVar[float] = 450.0
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -967,7 +1054,27 @@ class AirConditionerController(cp.Component):
         config: AirConditionerControllerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ):
-        """Initializes the air conditioner controller component."""
+        """Builds the controller, converts its minimum times to time steps and starts it off.
+
+        The unit starts off and free to start at once; the first step only samples the air,
+        so the earliest start is the second step.
+
+        Args:
+            my_simulation_parameters: The simulation's parameters; their step length turns the
+                minimum times into whole time steps and scales the power ramp.
+            config: The controller's configuration.
+            my_display_config: How the controller shows in reports.
+
+        Raises:
+            ValueError: If the hysteresis is not positive; the soft stop needs it to end (see the
+                class docstring).
+        """
+        if config.hysteresis_in_kelvin <= 0.0:
+            raise ValueError(
+                f"The air conditioner's controller needs a positive hysteresis, got {config.hysteresis_in_kelvin} K: "
+                "a running unit ramps down to its minimum power before it stops, and only a positive "
+                "hysteresis bounds how long that takes."
+            )
 
         self.config = config
         self.my_simulation_parameters = my_simulation_parameters
@@ -980,16 +1087,24 @@ class AirConditionerController(cp.Component):
             config.minimum_idle_time_s
             / my_simulation_parameters.seconds_per_timestep
         )
+        #: Change of the power fraction per time step and kelvin of deviation.
+        self.power_fraction_change_per_kelvin_and_timestep = (
+            min(my_simulation_parameters.seconds_per_timestep, self.LONGEST_RAMPED_STEP_S)
+            / config.ramp_time_to_full_power_at_one_kelvin_s
+        )
 
         component_name = self.get_component_name()
         super().__init__(
             component_name, my_simulation_parameters, config, my_display_config
         )
 
-        # State initialization
-        self.state = AirConditionerControllerState("off", 0, 0, 0.0)
+        self.state = AirConditionerControllerState(
+            AirConditionerControllerMode.OFF,
+            activation_time_step=0,
+            deactivation_time_step=-self.minimum_resting_time_in_timesteps,
+            power_fraction=0.0,
+        )
         self.previous_state = self.state.clone()
-        self.last_committed_state = self.state.clone()
 
         self.add_connections()
 
@@ -1033,11 +1148,11 @@ class AirConditionerController(cp.Component):
         pass
 
     def i_save_state(self) -> None:
-        """Saves the state."""
+        """Commits the state the last pass of the previous step left, for every pass of this step."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
-        """Restores the state."""
+        """Starts the pass from the committed state, discarding whatever an earlier pass of this step wrote."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(
@@ -1086,150 +1201,108 @@ class AirConditionerController(cp.Component):
         stsv: cp.SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
-        """Main simulation step."""
-        if force_convergence:
-            self.state = self.last_committed_state.clone()
-            mode = self.state.mode
-        else:
-            indoor_air_temperature_deg_c = stsv.get_input_value(
-                self.indoor_air_temperature_channel
-            )
-            mode = self.determine_operating_mode(
-                indoor_air_temperature_deg_c, timestep
-            )
-            power_modulation_percentage = self.modulate_power(
-                indoor_air_temperature_deg_c, mode
-            )
+        """Sends this step's signal, decided on the committed state, and samples the air for the next step.
 
-            self.state.mode = mode
-            self.state.power_modulation_percentage = power_modulation_percentage
-            self.last_committed_state = self.state.clone()
+        The decision reads only :attr:`previous_state`, the state committed at the end of the
+        previous step, so every pass of a step sends the same signal; forced convergence
+        changes nothing. The indoor air temperature this pass reads is stored in the working
+        state, and the last pass's value is what the next step decides on.
 
-        # Encode state as signed power level (heating = +%, cooling = -%, off = 0)
-        if mode == "heating":
-            signed_modulating_signal = self.state.power_modulation_percentage
-        elif mode == "cooling":
-            signed_modulating_signal = -self.state.power_modulation_percentage
-        elif mode == "off":
-            signed_modulating_signal = 0.0
-        else:
-            raise ValueError(f"Unhandled mode case: {mode}")
-
+        Args:
+            timestep: Index of the time step being simulated.
+            stsv: The step's values; the indoor air temperature is read from it and the
+                signal written to it.
+            force_convergence: Unused; the signal is the same in every pass anyway.
+        """
+        decided_state = self.decide(self.previous_state, timestep)
+        decided_state.indoor_air_temperature_deg_c = stsv.get_input_value(
+            self.indoor_air_temperature_channel
+        )
+        self.state = decided_state
         stsv.set_output_value(
-            self.operation_modulating_signal_channel, signed_modulating_signal
+            self.operation_modulating_signal_channel,
+            self.get_signed_power_fraction(decided_state),
         )
 
-    def _check_minimum_operation_and_idle_time(self, timestep: int) -> Optional[str]:
-        # Enforce minimum operation time
-        if self.state.mode in {"heating", "cooling"}:
-            if (
-                self.state.activation_time_step
-                + self.minimum_runtime_in_timesteps
-                > timestep
-            ):
-                return self.state.mode
+    @staticmethod
+    def get_signed_power_fraction(state: AirConditionerControllerState) -> float:
+        """Encodes a state as the signal the air conditioner reads.
 
-        # Enforce minimum idle time
-        if self.state.mode == "off":
-            if (
-                self.state.deactivation_time_step
-                + self.minimum_resting_time_in_timesteps
-                > timestep
-            ):
-                return "off"
+        Args:
+            state: The state to encode.
 
-        return None
-
-    def determine_operating_mode(
-        self, current_temperature_deg_c: float, timestep: int
-    ) -> str:  # pylint: disable=too-many-return-statements
-        """Controller takes action to maintain defined comfort range."""
-        operating_time_compliant_state = self._check_minimum_operation_and_idle_time(timestep)
-        if operating_time_compliant_state is not None:
-            return operating_time_compliant_state
-
-        heating_setpoint = self.config.heating_set_temperature_deg_c
-        cooling_setpoint = self.config.cooling_set_temperature_deg_c
-        offset = self.config.offset
-
-        # Stay in heating if within heating deadband
-        if (
-            self.state.mode == "heating"
-            or self.last_committed_state.mode == "heating"
-        ) and current_temperature_deg_c < heating_setpoint + offset:
-            if self.state.mode != "heating":
-                self.state.activate_heating(timestep)
-            return "heating"
-
-        # Stay in cooling if within cooling deadband
-        if (
-            self.state.mode == "cooling"
-            or self.last_committed_state.mode == "cooling"
-        ) and current_temperature_deg_c > cooling_setpoint - offset:
-            if self.state.mode != "cooling":
-                self.state.activate_cooling(timestep)
-            return "cooling"
-
-        # Switch to cooling if temperature exceeds upper cooling threshold (and previously not heating)
-        if current_temperature_deg_c > cooling_setpoint and (
-            self.state.mode != "heating"
-            and self.last_committed_state.mode != "heating"
-        ):
-            if self.state.mode != "cooling":
-                self.state.activate_cooling(timestep)
-            return "cooling"
-
-        # Switch to heating if temperature drops below lower heating threshold (and previously not cooling)
-        if current_temperature_deg_c < heating_setpoint and (
-            self.state.mode != "cooling"
-            and self.last_committed_state.mode != "cooling"
-        ):
-            if self.state.mode != "heating":
-                self.state.activate_heating(timestep)
-            return "heating"
-
-        if self.state.mode != "off":
-            self.state.deactivate(timestep)
-        return "off"
-
-    def modulate_power(
-        self, current_temperature_deg_c: float, operating_mode: str
-    ) -> float:
-        """Power modulation.
-
-        Modulates power non-linearly (quadratic) based on the temperature difference.
-        Power drops off more aggressively as the temperature nears the setpoint.
+        Returns:
+            The power fraction, positive when heating, negative when cooling, 0 when off.
         """
-        if operating_mode == "off":
-            return 0.0
+        if state.mode == AirConditionerControllerMode.HEATING:
+            return state.power_fraction
+        if state.mode == AirConditionerControllerMode.COOLING:
+            return -state.power_fraction
+        return 0.0
 
-        if operating_mode == "heating":
-            temperature_difference = max(
-                (
-                    self.config.heating_set_temperature_deg_c
-                    + self.config.offset
-                )
-                - current_temperature_deg_c,
-                0,
-            )
-        elif operating_mode == "cooling":
-            temperature_difference = max(
-                current_temperature_deg_c
-                - (
-                    self.config.cooling_set_temperature_deg_c
-                    - self.config.offset
-                ),
-                0,
-            )
+    def decide(
+        self, committed_state: AirConditionerControllerState, timestep: int
+    ) -> AirConditionerControllerState:
+        """Decides mode and power for this step from the state committed at the end of the previous one.
+
+        A pure function of its arguments: it reads the sampled indoor air temperature in
+        ``committed_state`` and returns a new state, leaving ``committed_state`` unchanged.
+        Before the first sample (the first step) the unit stays as it is. For the rules, see
+        the class docstring.
+
+        Args:
+            committed_state: The state committed at the end of the previous step.
+            timestep: Index of the time step being decided.
+
+        Returns:
+            The state for this step; its sampled temperature is still the committed one, for
+            the caller to overwrite with this step's reading.
+        """
+        decided_state = committed_state.clone()
+        indoor_air_temperature_deg_c = committed_state.indoor_air_temperature_deg_c
+        if indoor_air_temperature_deg_c is None:
+            return decided_state
+
+        heating_set_temperature_deg_c = self.config.heating_set_temperature_deg_c
+        cooling_set_temperature_deg_c = self.config.cooling_set_temperature_deg_c
+        hysteresis_in_kelvin = self.config.hysteresis_in_kelvin
+
+        if committed_state.mode == AirConditionerControllerMode.OFF:
+            if timestep - committed_state.deactivation_time_step < self.minimum_resting_time_in_timesteps:
+                return decided_state
+            if indoor_air_temperature_deg_c < heating_set_temperature_deg_c:
+                decided_state.mode = AirConditionerControllerMode.HEATING
+            elif indoor_air_temperature_deg_c > cooling_set_temperature_deg_c:
+                decided_state.mode = AirConditionerControllerMode.COOLING
+            else:
+                return decided_state
+            decided_state.activation_time_step = timestep
+            decided_state.power_fraction = 0.0
         else:
-            raise ValueError(f"Unknown operating mode: {operating_mode}")
+            may_stop = timestep - committed_state.activation_time_step >= self.minimum_runtime_in_timesteps
+            heating = committed_state.mode == AirConditionerControllerMode.HEATING
+            back_inside_band = (
+                indoor_air_temperature_deg_c > heating_set_temperature_deg_c + hysteresis_in_kelvin
+                if heating
+                else indoor_air_temperature_deg_c < cooling_set_temperature_deg_c - hysteresis_in_kelvin
+            )
+            at_minimum_power = committed_state.power_fraction <= self.MINIMUM_POWER_FRACTION
+            if may_stop and back_inside_band and at_minimum_power:
+                decided_state.mode = AirConditionerControllerMode.OFF
+                decided_state.deactivation_time_step = timestep
+                decided_state.power_fraction = 0.0
+                return decided_state
 
-        # Apply quadratic scaling
-        capped_ratio = min(
-            temperature_difference
-            / self.config.temperature_difference_full_power_deg_c,
+        if decided_state.mode == AirConditionerControllerMode.HEATING:
+            deviation_in_kelvin = heating_set_temperature_deg_c - indoor_air_temperature_deg_c
+        else:
+            deviation_in_kelvin = indoor_air_temperature_deg_c - cooling_set_temperature_deg_c
+        decided_state.power_fraction = min(
+            max(
+                decided_state.power_fraction
+                + deviation_in_kelvin * self.power_fraction_change_per_kelvin_and_timestep,
+                self.MINIMUM_POWER_FRACTION,
+            ),
             1.0,
         )
-        power_modulation_percentage = float(max(1 - (1 - capped_ratio) ** 2, 0.1))
-
-        return power_modulation_percentage
+        return decided_state

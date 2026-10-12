@@ -111,10 +111,13 @@ class AirConditionerConfig(ConfigBase):
     #: figure as for a heat pump.
     CO2_EMISSIONS_IN_KG_CO2_EQ: ClassVar[float] = 165.84
 
-    #: Share of the selected unit's heating capacity that :meth:`for_building_load` sizes it
-    #: to. 0.6 was determined heuristically based on manually experimenting with different
-    #: scaling factors.
-    CAPACITY_SHARE_FOR_BUILDING_LOAD: ClassVar[float] = 0.6
+    #: Share of the building's design heating load that :meth:`for_building_load` sizes the
+    #: unit's heating capacity to, at the building's heating reference temperature. Chosen by
+    #: measurement on the air-conditioned house (Seville, full year at 60 s): at 0.8 the unit
+    #: runs at full power for 4 h a year in heating and 22 h in cooling, and the selected unit
+    #: stays within its catalogue rating (scale factor 0.95); 0.6 leaves 121 h and 197 h at full
+    #: power, while 1.0 and 1.2 gain little comfort and run the unit beyond its rating.
+    CAPACITY_SHARE_FOR_BUILDING_LOAD: ClassVar[float] = 0.8
 
     component_id: ComponentID
     #: Manufacturer as the smart-devices database spells it, the first half of the catalogue key.
@@ -240,7 +243,8 @@ class AirConditionerConfig(ConfigBase):
     @constructor(
         note=(
             "selects the device whose heating capacity at the reference temperature is closest "
-            "to the load, then scales it by 0.6 × capacity / load"
+            "to the load, then scales it so that its heating capacity there is "
+            "CAPACITY_SHARE_FOR_BUILDING_LOAD × load"
         )
     )
     @classmethod
@@ -250,14 +254,25 @@ class AirConditionerConfig(ConfigBase):
         heating_load_in_watt: float,
         heating_reference_temperature_in_celsius: float,
     ) -> "AirConditionerConfig":
-        """Picks the catalogue unit that fits a building's heating load and sizes it down to it.
+        """Picks the catalogue unit that fits a building's heating load and scales it to a share of that load.
 
-        Every catalogue row is measured at three outdoor temperatures; the one closest to
-        ``heating_reference_temperature_in_celsius`` gives the row's heating capacity at the
-        building's design condition. The unit whose capacity is nearest the building's heating
-        load wins, and its ``scale_factor`` becomes
-        :attr:`CAPACITY_SHARE_FOR_BUILDING_LOAD` × capacity / load, so the unit is run below its
-        rating instead of at it. Ties go to the unit the database lists first.
+        Two steps:
+
+        1. **Selection.** Every catalogue row is measured at three outdoor temperatures; the
+           one closest to ``heating_reference_temperature_in_celsius`` gives the row's heating
+           capacity at the building's design condition. The unit whose capacity is nearest the
+           building's heating load wins; ties go to the unit the database lists first.
+        2. **Scaling.** ``scale_factor`` becomes
+           :attr:`CAPACITY_SHARE_FOR_BUILDING_LOAD` × load / capacity, where the capacity is
+           the straight-line fit through the row's three heating measurements at the reference
+           temperature -- the same fit the component interpolates with. The unit the
+           simulation runs therefore delivers exactly that share of the design load at the
+           reference temperature, and a building with a larger load gets a proportionally
+           larger unit. (Until 2026-10 the factor was the inverse, share × capacity / load,
+           which gave a larger load a smaller unit; bead hisim-h84t.)
+
+        The investment costs, maintenance and CO2 figure are those of the selected catalogue
+        unit and do not change with ``scale_factor``.
 
         This is a constructor rather than a sizing law because one lookup answers twelve fields
         at once: the selected row's reference values and costs are written into the
@@ -286,13 +301,42 @@ class AirConditionerConfig(ConfigBase):
             for candidate in air_conditioners
         ]
         selected = min(range(len(air_conditioners)), key=lambda index: abs(capacities[index] - heating_load_in_watt))
+        rated_heating_capacity_in_watt = cls._fitted_heating_capacity_in_watt(
+            air_conditioners[selected]["Outdoor temperature range - heating"],
+            air_conditioners[selected]["Heating capacity W"],
+            heating_reference_temperature_in_celsius,
+        )
 
         return cls.for_device(
             name,
             manufacturer=air_conditioners[selected]["Manufacturer"],
             model_name=air_conditioners[selected]["Model"],
-            scale_factor=capacities[selected] * cls.CAPACITY_SHARE_FOR_BUILDING_LOAD / heating_load_in_watt,
+            scale_factor=cls.CAPACITY_SHARE_FOR_BUILDING_LOAD * heating_load_in_watt / rated_heating_capacity_in_watt,
         )
+
+    @staticmethod
+    def _fitted_heating_capacity_in_watt(
+        temperature_range_in_celsius: List[float],
+        heating_capacity_in_watt: List[float],
+        outdoor_temperature_in_celsius: float,
+    ) -> float:
+        """Returns a catalogue unit's heating capacity at an outdoor temperature, as the component computes it.
+
+        The component (:meth:`AirConditioner.build`) fits a straight line through the row's
+        three heating measurements and reads the capacity off it; this does the same, so the
+        sizing and the simulation agree on what the unit delivers at a given outdoor
+        temperature before ``scale_factor`` is applied.
+
+        Args:
+            temperature_range_in_celsius: The outdoor temperatures the row was measured at, in °C.
+            heating_capacity_in_watt: The heating capacities, in W, in the same order.
+            outdoor_temperature_in_celsius: The outdoor temperature to evaluate, in °C.
+
+        Returns:
+            The fitted heating capacity at that temperature, in W, at a scale factor of 1.
+        """
+        line_coefficients = np.polyfit(temperature_range_in_celsius, heating_capacity_in_watt, 1)
+        return float(np.polyval(line_coefficients, outdoor_temperature_in_celsius))
 
     @staticmethod
     def _heating_capacity_at_temperature(

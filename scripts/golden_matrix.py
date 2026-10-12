@@ -83,11 +83,10 @@ DEFAULT_PAIR_SECONDS = 120
 def setup_runs_factory(setup: dict, factory: str) -> bool:
     """Whether a config setup entry participates in parameter sets built by ``factory``.
 
-    A setup without a ``horizons`` key runs everything, which keeps the original eight
-    golden setups exactly as they were. A setup with one runs only the horizons it
-    names; the golden week gate grew to cover the recordable fleet this way while the
-    expensive full-year matrix stayed with the eight. The rule itself lives in
-    :class:`HorizonVocabulary`, shared with the runner.
+    A setup without a ``horizons`` key runs everything; every setup of the shipped config is
+    one (owner decision 2026-10-11: every energy system has a full-year golden). A setup with
+    one runs only the horizons it names. The rule itself lives in :class:`HorizonVocabulary`,
+    shared with the runner.
     """
     return bool(HorizonVocabulary.runs_factory(setup.get("horizons"), factory))
 

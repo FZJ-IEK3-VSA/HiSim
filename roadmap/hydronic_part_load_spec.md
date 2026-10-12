@@ -3,8 +3,9 @@
 Status: design agreed with the owner on 2026-10-09, revised on 2026-10-10 twice (§2): first to a ratio the L1
 controller iterates against the store's end temperature, then to a memoryless rule the simulator's plain iteration
 solves. Built as a stack of four draft PRs (#915 to #918, §10). Builds on the hydronic coupling
-(`roadmap/hydronic_coupling_spec.md`, stages A to C) and the simulator warm start (hisim-4g9.23, #914). This document
-describes what the stack builds; the measured results are in §11.
+(`roadmap/hydronic_coupling_spec.md`, stages A to C), the simulator warm start (hisim-4g9.23, #914) and the
+simulator's kind order (#922, below this stack since 2026-10-12, §4.3). This document describes what the stack builds;
+the measured results are in §11.
 
 ## 1. Problem
 
@@ -83,8 +84,10 @@ The cost is a small, documented jump in results at the threshold itself, a step 
 - **Target**: the store temperature at which the controller ends the charge; the controller publishes it.
 - **Target band**: `[target, target + 0.05 K]`, the end temperatures the controller accepts
   (`PartLoadRule.TARGET_BAND_IN_KELVIN`); the **aim** is its middle, target + 0.025 K.
-- **Pass**: one evaluation of every component in the order they were added; the simulator repeats passes until no
-  output moves by more than 1e-4, and forces convergence on the passes after the twelfth.
+- **Pass**: one evaluation of every component, kind by kind (data sources, L2 controllers, L1 controllers, physics,
+  meters) and within one kind in the order they were added, except that every device an L1 controller commands goes
+  before the other physics the controller reads (§4.3); the simulator repeats passes until no output moves by more
+  than 1e-4, and forces convergence on the passes after the twelfth.
 - **Threshold**: `SimulationParameters.part_load_above_seconds`, default 600 s. Above it, PLR may be below 1.
 
 ## 4. The mechanism (`hisim/part_load.py`)
@@ -143,10 +146,22 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   controller → store, which the boiler and the collector have in their recorded twins, the device has already run
   the controller's newer ratio when the controller reads the store's answer to the older one. The iteration then
   follows `x_k = x_{k−1} − x_{k−2} + c` in `x = ln r`, whose roots lie on the unit circle: the ratio circles its fixed
-  point with a period of six passes and settles only by chance. Measured on the gas twin, full year at 900 s: 1013
-  forced steps in the twin's order, 46 with the controller moved before the boiler (§11). This is an open decision
-  (hisim-fxix.16): the order of the files (which moves 60 s results by about 1e-12) or a port that tells the controller
-  which flow the store's reading answers.
+  point with a period of six passes and settles only by chance. Measured on the gas twin, full year at 900 s, on the
+  stack before the kind order moved under it: 1013 forced steps in the twin's order, 46 with the controller moved
+  before the boiler (§11). Owner decision (2026-10-10, hisim-fxix.16, closed): the simulator evaluates every L1
+  controller before the physics, whatever the order of the file. Controller first is necessary, not sufficient: the
+  condition is the cyclic order controller → device → store. `household_gas_solar_thermal` adds its hot-water tank
+  before the boiler and the collector, so with the kind order alone a pass ran controller → tank → device, and on the
+  old stack the year at 900 s still had 1292 forced steps (54 in 1–21 January). Owner decision (2026-10-11): within
+  the physics, every device an L1 controller commands is evaluated before every other physics component the
+  controller reads, a stable topological sort that uses only the kinds and the wiring, so the controller always reads
+  the store's answer to the ratio its device reports; constraints that form a cycle (two controllers each reading the
+  other's device) are reported in a warning, and the components involved keep the order they were added in. On the
+  old stack this took gas + solar from 54 to 3 forced steps in the window and from 1292 to 165 over the year at
+  900 s (§11). Both are #922, which since 2026-10-12 sits below this stack: a component class inherits its kind base
+  class (`PhysicsComponent`, `L1ControllerComponent`, … in `hisim/component.py`), and `hisim/evaluation_order.py`
+  orders the physics. With it, every partial step of the gas twin in the window of `tests/test_part_load_twins.py`
+  converges (15 of 15, measured 2026-10-12 on this branch).
 - **Two devices**: §7.
 
 ## 5. Devices
@@ -257,7 +272,7 @@ Epic hisim-fxix.
 | Bead | Content | PR |
 |---|---|---|
 | hisim-naze (P1) | threshold, rule, the boiler | #915 |
-| hisim-fxix.16 (P1) | the evaluation order that keeps the rule from settling in the boiler and collector twins | owner decision |
+| hisim-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below the stack |
 | hisim-fxix.12 (P1) | the heat pump's hot-water side | #916 |
 | hisim-fxix.11 (P1) | the collector | #917 |
 | hisim-hhj2 (P1) | the quasi-steady buffer-less distribution loop | #918 |

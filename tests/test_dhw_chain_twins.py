@@ -17,13 +17,14 @@ for a file with a solar collector (whose pump first runs on 20 January), and thr
   the simulator's ``force_convergence`` (more than eleven passes). These are boiler charges that start kilowatts away
   from their final value and need a pass or two more than the simulator allows to reach its absolute tolerance; they
   are forced within about 1e-3 W of their fixed point (hisim-4g9.50, accepted by the owner). A step in which a
-  controller runs its device at part load is exempt: the plain iteration of the part-load rule does not settle where
-  the device is evaluated between its controller and the tank, or where the draw takes more than the rise the step
-  still needs, so a file whose forced steps are all part-load steps is an expected failure. The heat-pump files are
-  recorded, not asserted: their forced steps come from the energy manager, which switches its set-temperature raise
-  on the sign of a surplus that includes the heat pump's own draw, so a float's flip turns it on and off within a
-  step, and from controllers that decide once for a whole step, which a converged iteration cannot always reconcile
-  with the plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
+  controller runs its device at part load is exempt: the plain iteration of the part-load rule can need more passes
+  than the simulator allows on a slow boiler heat-up, and does not settle where the draw takes more than the rise
+  the step still needs, so a file whose forced steps are all part-load steps is an expected failure. The simulator's
+  kind order already evaluates every controller before its device and the device before the tank. The heat-pump
+  files are recorded, not asserted: their forced steps come from the energy manager, which switches its
+  set-temperature raise on the sign of a surplus that includes the heat pump's own draw, so a float's flip turns it
+  on and off within a step, and from controllers that decide once for a whole step, which a converged iteration
+  cannot always reconcile with the plant's state. Every file's histogram is written to ``results/iteration_histogram/``.
 
 Every run test simulates a whole energy system and so runs in the ``extendedbase2`` shard: the recorded twins, their
 grouped twins, which RenoVisor translates from, and the composed files. Only the check that every file with a tank is

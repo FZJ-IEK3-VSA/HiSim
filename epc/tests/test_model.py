@@ -84,6 +84,7 @@ def test_admissible_values_are_accepted(changes: dict) -> None:
             "elements.roof.u_value_in_watt_per_m2_per_kelvin",
         ),
         ({"windows": ()}, "windows"),
+        ({"windows": (_window(), _window())}, "windows"),
         ({"windows": (_window(area_in_m2=0.0),)}, "windows.south.area_in_m2"),
         ({"windows": (_window(g_value=0.0),)}, "windows.south.g_value"),
         ({"windows": (_window(g_value=1.01),)}, "windows.south.g_value"),

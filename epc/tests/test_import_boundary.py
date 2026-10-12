@@ -34,6 +34,9 @@ THIRD_PARTY = ("yaml",)
 #: The archetype database's name, assembled so that this module does not contain it.
 ARCHETYPE_DATABASE = "".join(("TAB", "ULA"))
 
+#: The shell's own modules under ``engines/``; every other name there is an engine package.
+SHELL_ENGINE_MODULES = ("base", "registry")
+
 #: Unit of the package → the other units it may import (design §3.5); ``engines.<cc>`` is any engine.
 #: An engine (``engines.<cc>``) imports the model and its own files only.
 ALLOWED: Dict[str, Set[str]] = {
@@ -76,7 +79,7 @@ def _unit(module: str) -> str:
     parts = module.split(".")[1:]
     if not parts:
         return "epc"
-    if parts[0] == "engines" and len(parts) > 2:
+    if parts[0] == "engines" and len(parts) > 1 and parts[1] not in SHELL_ENGINE_MODULES:
         return f"engines.{parts[1]}"
     return parts[0]
 
@@ -143,6 +146,9 @@ def test_the_checker_resolves_relative_imports_and_refuses_what_it_should() -> N
     assert _refused("epc.engines.at.method", "epc.inputs.record")
     assert not _refused("epc.engines.at.method", "epc.model.result")
     assert not _refused("epc.engines.registry", "epc.engines.at.method")
+    assert _unit("epc.engines.at") == _unit("epc.engines.at.method") == "engines.at"
+    assert _unit("epc.engines.registry") == "engines"
+    assert not _refused("epc.engines.at.data_tables", "epc.engines.at")
     assert not _refused("epc.batch", "epc.reports.table")
     assert not _refused("epc.inputs.record", "yaml")
 

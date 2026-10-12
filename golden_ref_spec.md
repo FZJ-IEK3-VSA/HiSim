@@ -175,9 +175,19 @@ tests/
 ## 7. Determinism & tolerance policy → hisim-b3b.6
 
 - Same-machine is byte-exact (proven); drift only appears cross-platform (last-ULP).
-- **Compare with `rel_tol = 1e-9`, `abs_tol = 0.0`** (confirmed, §14.2) — absorbs
-  sub-ULP platform noise, catches real changes. (Replaces the unjustified `1e-6`
-  placeholder.)
+- **Compare with `rel_tol = 1e-9`, `abs_tol = 1e-12`** (confirmed, §14.2; the floor added
+  2026-10-12, hisim-b3b.6) — absorbs sub-ULP platform noise, catches real changes. (Replaces
+  the unjustified `1e-6` placeholder.) Values are equal when their difference is at most the
+  larger of the two, `math.isclose`; both live in `hisim/postprocessing/kpi_computation/tolerances.py`.
+- **Why the absolute floor.** A relative tolerance has nothing to be relative to when a KPI is
+  physically zero, and such a KPI is accumulated rounding noise whose last bits depend on the
+  environment and the cache state, not on the code. The electric-heating house's one-week
+  temperature deviation below 20 °C is about 1.4e-9 K·h: the bless wrote 1.39823909e-09, the
+  check computed 1.39823904e-09, a relative difference of 4e-8 that failed `abs_tol = 0`. The
+  floor of 1e-12, in each KPI's own unit, lies far above that noise (6e-17) and far below any
+  value a KPI states physically. The bless keeps a golden value that is within the floor.
+- **The report prints the deciding number**: `rel diff` is the plain ratio (`4e-08`), not a
+  percentage that rounds it to `0.000%`.
 - **Eliminate cross-platform drift at the source**: goldens are **only** generated
   **in the CI container** via `golden-update.yml` (CI-only blessing, §14.4), so
   reference env == check env. `golden_update.py` refuses to be the source of a

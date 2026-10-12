@@ -108,10 +108,12 @@ def test_mode_switches_at_the_set_points_and_stops_one_kelvin_inside_the_band(
     indoor_air_temperature_deg_c: float,
     expected_mode: Mode,
 ) -> None:
-    """An idle unit starts outside the 20-24 °C band, and a running one stops 1 K back inside it."""
+    """An idle unit starts outside the 20-24 °C band, and a running one at minimum power stops 1 K back inside it."""
     testee = given_default_testee()
 
-    decided = testee.decide(committed(committed_mode, indoor_air_temperature_deg_c), 100)
+    decided = testee.decide(
+        committed(committed_mode, indoor_air_temperature_deg_c, AirConditionerController.MINIMUM_POWER_FRACTION), 100
+    )
 
     assert decided.mode == expected_mode
 
@@ -141,7 +143,10 @@ def test_minimum_runtime_and_idle_time_hold_the_mode(
     """The unit keeps running for the minimum runtime and stays off for the minimum idle time."""
     testee = given_default_testee({"minimum_runtime_s": 60 * 15, "minimum_idle_time_s": 60 * 10})
 
-    decided = testee.decide(committed(committed_mode, indoor_air_temperature_deg_c), timestep)
+    decided = testee.decide(
+        committed(committed_mode, indoor_air_temperature_deg_c, AirConditionerController.MINIMUM_POWER_FRACTION),
+        timestep,
+    )
 
     assert decided.mode == expected_mode
 
@@ -180,6 +185,79 @@ def test_power_ramps_by_the_distance_from_the_set_point_it_holds(
     )
 
     assert decided.power_fraction == pytest.approx(expected_power_fraction)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ["committed_mode", "indoor_air_temperature_deg_c", "expected_power_fraction"],
+    [
+        # Back inside the band at 70 % power: no stop, the power ramps down by the deviation instead.
+        (Mode.HEATING, 21.5, 0.7 - 1.5 / 30.0),
+        (Mode.HEATING, 30.0, 0.7 - 10.0 / 30.0),
+        (Mode.COOLING, 22.5, 0.7 - 1.5 / 30.0),
+        (Mode.COOLING, 10.0, 0.7 - 14.0 / 30.0),
+    ],
+)
+def test_a_unit_back_inside_the_band_ramps_down_before_it_stops(
+    committed_mode: Mode, indoor_air_temperature_deg_c: float, expected_power_fraction: float
+) -> None:
+    """Soft stop: above the minimum power the unit keeps running and ramps its power down."""
+    testee = given_default_testee()
+
+    decided = testee.decide(committed(committed_mode, indoor_air_temperature_deg_c, 0.7), 100)
+
+    assert decided.mode == committed_mode
+    assert decided.power_fraction == pytest.approx(expected_power_fraction)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ["committed_mode", "indoor_air_temperature_deg_c"], [(Mode.HEATING, 21.001), (Mode.COOLING, 22.999)]
+)
+def test_the_soft_stop_ends_within_the_bound(committed_mode: Mode, indoor_air_temperature_deg_c: float) -> None:
+    """From full power, with the air held just past the hysteresis edge, the unit stops within 0.9 × t_ramp.
+
+    Each step lowers the power by at least hysteresis × dt / t_ramp = 1/30, so 27 steps bring
+    1.0 down to the minimum of 0.1 and the 28th stops the unit; the power never rises on the way.
+    """
+    testee = given_default_testee()
+    state = committed(committed_mode, indoor_air_temperature_deg_c, 1.0)
+    powers: List[float] = []
+    for timestep in range(100, 200):
+        state = testee.decide(state, timestep)
+        if state.mode == Mode.OFF:
+            break
+        powers.append(state.power_fraction)
+
+    assert state.mode == Mode.OFF
+    assert len(powers) <= 27
+    assert powers == sorted(powers, reverse=True)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ["seconds_per_timestep", "expected_change_per_kelvin_and_timestep"],
+    [(60, 60.0 / 1800.0), (450, 450.0 / 1800.0), (900, 450.0 / 1800.0), (3600, 450.0 / 1800.0)],
+)
+def test_the_ramp_per_step_is_capped_at_450_seconds(
+    seconds_per_timestep: int, expected_change_per_kelvin_and_timestep: float
+) -> None:
+    """Steps longer than 450 s ramp only as far as a 450 s step, which keeps 15-minute and hourly runs stable."""
+    simulation_parameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
+    config = AirConditionerControllerConfig.preset_standard("AirConditionerController")
+
+    testee = AirConditionerController(simulation_parameters, config, DisplayConfig())
+
+    assert testee.power_fraction_change_per_kelvin_and_timestep == pytest.approx(
+        expected_change_per_kelvin_and_timestep
+    )
+
+
+@pytest.mark.base
+def test_a_hysteresis_of_zero_is_refused() -> None:
+    """Without a positive hysteresis the soft stop has no bound, so the controller refuses to be built."""
+    with pytest.raises(ValueError, match="positive hysteresis"):
+        given_default_testee({"hysteresis_in_kelvin": 0.0})
 
 
 @pytest.mark.base
@@ -266,7 +344,8 @@ def test_every_pass_of_a_step_sends_the_same_signal_and_the_last_pass_is_what_th
     Step 0 samples 18 °C and step 1 starts heating on it. In step 2 the passes read wildly
     different temperatures and all send the same signal, ramped once more on the 18 °C that
     step 1 committed. Step 3 then decides on what the last pass of step 2 read (25 °C, so the
-    heating unit stops), not on any earlier pass.
+    power ramps down by 5/30 to the minimum), not on any earlier pass (5 °C would have raised
+    it).
     """
     testee, stsv = given_wired_testee()
     testee.i_save_state()
@@ -282,7 +361,7 @@ def test_every_pass_of_a_step_sends_the_same_signal_and_the_last_pass_is_what_th
     assert started == pytest.approx(AirConditionerController.MINIMUM_POWER_FRACTION)
     assert signals == [signals[0]] * len(signals)
     assert signals[0] == pytest.approx(started + 2.0 / 30.0)
-    assert next_step == 0.0
+    assert next_step == pytest.approx(AirConditionerController.MINIMUM_POWER_FRACTION)
 
 
 class SmallBuilding:

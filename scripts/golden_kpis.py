@@ -319,10 +319,11 @@ def _format_numeric_change(name: str, key: str, ref_v: float, got_v: float, rel_
     """Explain a numeric KPI divergence, including the magnitude and the tolerance exceeded."""
     abs_diff = abs(got_v - ref_v)
     rel_diff = abs_diff / abs(ref_v) if ref_v != 0 else math.inf
-    rel_pct = "inf%" if math.isinf(rel_diff) else f"{rel_diff:.3%}"
+    # The plain ratio the tolerance is checked against: a percentage with three decimals rounded a
+    # failing 4e-8 to "0.000%" (hisim-b3b.6).
     return (
         f"{name}: KPI '{key}' changed: ref={ref_v!r} got={got_v!r} "
-        f"(abs diff={abs_diff:.6g}, rel diff={rel_pct}; "
+        f"(abs diff={abs_diff:.6g}, rel diff={rel_diff:.3g}; "
         f"tolerance rel={rel_tol:g} abs={abs_tol:g})"
     )
 

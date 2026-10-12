@@ -245,7 +245,7 @@ def test_compare_outside_tolerance_reports_change() -> None:
     msg = str(found[0])
     assert msg.startswith("x: KPI 'BUI1.General.a' changed: ref=1.0 got=2.0")
     assert "abs diff=1" in msg
-    assert "rel diff=100.000%" in msg
+    assert "rel diff=1;" in msg
     assert "tolerance rel=1e-09" in msg
 
 
@@ -309,8 +309,31 @@ def test_compare_zero_values_equal() -> None:
 
 
 def test_compare_uses_module_tolerance_defaults() -> None:
-    """The default tolerance is the tight 1e-9 policy value."""
+    """The default tolerance is the tight 1e-9 relative policy value with a 1e-12 absolute floor."""
     assert REL_TOL == 1e-9
-    assert ABS_TOL == 0.0
+    assert ABS_TOL == 1e-12
     # A difference just above rel_tol is flagged.
     assert compare("x", general({"a": 1.0 + 1e-6}), general({"a": 1.0}))
+
+
+def test_compare_a_physically_zero_kpi_differing_in_its_last_bits_is_equal() -> None:
+    """The absolute floor absorbs the rounding noise a physically zero KPI is made of (hisim-b3b.6).
+
+    The values are the electric-heating house's one-week temperature deviation below 20 °C, as
+    the bless wrote it and as the check computed it: 6e-17 apart, a relative difference of 4e-8.
+    """
+    assert not compare("x", general({"a": 1.398239035665938e-09}), general({"a": 1.3982390948778326e-09}))
+
+
+def test_compare_a_near_zero_kpi_moving_above_the_floor_is_a_change() -> None:
+    """The floor is no blanket: a near-zero KPI that moves by more than 1e-12 is still reported."""
+    found = compare("x", general({"a": 2e-9}), general({"a": 1e-9}))
+    assert [deviation.kind for deviation in found] == [VALUE]
+    assert "rel diff=1;" in str(found[0])
+    assert "abs=1e-12" in str(found[0])
+
+
+def test_compare_reports_the_relative_difference_unrounded() -> None:
+    """The report prints the ratio the verdict was taken on, not a percentage rounded to zero."""
+    found = compare("x", general({"a": 1.0 + 4e-8}), general({"a": 1.0}))
+    assert "rel diff=4e-08;" in str(found[0])

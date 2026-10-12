@@ -45,7 +45,8 @@ and stored here, in `<setup_id>__<param_id>.json` (keys sorted, two-space indent
   the instruction to re-bless through the `golden-update` workflow with `force_rewrite`, which
   writes the fresh leaves without reading the old file.
 
-Values are compared numerically with a tight tolerance (`rel_tol = 1e-9`, `abs_tol = 0`);
+Values are compared numerically with a tight tolerance (`rel_tol = 1e-9`, `abs_tol = 1e-12`, so a
+physically zero KPI's rounding noise compares equal);
 non-numeric values exactly. **Unit rule:** the unit is compared exactly, and a changed unit is a
 failure of its own kind — listed as `[unit]` in `report.txt`, under `unit_changes` in
 `report.json`, and counted separately in the summary — whatever the value did. The address

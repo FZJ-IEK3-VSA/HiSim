@@ -240,14 +240,19 @@ def test_a_string_kpi_is_kept_when_equal_and_moves_when_it_differs(tmp_path: Pat
     assert json.loads(path.read_text()) == general({"code": "DE.N.SFH.06"}, unit="-")
 
 
-def test_a_near_zero_kpi_moves_because_the_gate_allows_no_absolute_slack(tmp_path: Path) -> None:
-    """``ABS_TOL`` is 0.0, so 0.0 -> 1e-15 is a move the gate would fail on."""
+def test_a_near_zero_kpi_is_kept_within_the_absolute_floor_and_moves_beyond_it(tmp_path: Path) -> None:
+    """``ABS_TOL`` is 1e-12: 0.0 -> 1e-15 is rounding noise the gate accepts, so the bless keeps 0.0.
+
+    A move of 1e-9 is beyond the floor, so the gate would fail on it and the bless writes it.
+    """
     golden_dir = tmp_path / "golden_references"
     path = _write_existing_golden(golden_dir, general({"x": 0.0}))
 
     assert _bless(tmp_path, golden_dir, general({"x": 1e-15})) == 0
+    assert json.loads(path.read_text()) == general({"x": 0.0})
 
-    assert json.loads(path.read_text()) == general({"x": 1e-15})
+    assert _bless(tmp_path, golden_dir, general({"x": 1e-9})) == 0
+    assert json.loads(path.read_text()) == general({"x": 1e-9})
 
 
 # --------------------------------------------------------------------------- #

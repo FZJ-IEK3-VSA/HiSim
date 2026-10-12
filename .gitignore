@@ -224,3 +224,7 @@ results/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# EPC calculator: the licensed Austrian norm tables stay local (roadmap/epc/requirements.md D7), and local results
+epc/data/at/
+epc/results/

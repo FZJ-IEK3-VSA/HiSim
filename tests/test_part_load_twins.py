@@ -38,11 +38,10 @@ class PartLoadTwins:
     #: The passes the simulator runs before it forces convergence; a step that needed more had a forced pass.
     UNFORCED_PASSES: int = 12
 
-    #: The twins, each with its controller's part-load ratio output and target output. In the gas twin the boiler
-    #: is evaluated between its controller and the tank, so the controller pairs the ratio the boiler ran in this
-    #: pass with the tank's end temperature of the pass before, and most of its partial steps are forced: in the
-    #: window one of its eleven partial steps converges (measured 2026-10-11), ending 0.04 K above the target, and
-    #: the test checks that one.
+    #: The twins, each with its controller's part-load ratio output and target output. The simulator evaluates each
+    #: controller before its boiler and the boiler before the tank (the kind order of #922), so in the window every
+    #: partial step of the gas twin converges (15 of 15, measured 2026-10-12), ending 0.02 to 0.05 K above the
+    #: target.
     TWINS: ClassVar[Dict[str, Tuple[str, str]]] = {
         "household_gas_building_sizer": (
             f"ModulatingBoilerController - {GenericBoilerController.PartLoadRatioDhw} [",

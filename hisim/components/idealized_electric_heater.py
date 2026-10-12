@@ -63,7 +63,7 @@ class IdealizedHeaterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class IdealizedElectricHeater(cp.Component):
+class IdealizedElectricHeater(cp.PhysicsComponent):
     """Idealized Electric Heater System."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

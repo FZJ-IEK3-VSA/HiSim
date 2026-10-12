@@ -7,7 +7,7 @@ import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import L2ControllerComponent, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -102,7 +102,7 @@ class XTPControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class XTPController(Component):
+class XTPController(L2ControllerComponent):
     """XtP  Controller."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

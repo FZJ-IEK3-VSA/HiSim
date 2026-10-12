@@ -152,7 +152,7 @@ class ChargingStationConfig(ConfigBase):
         )
 
 
-class L1Controller(cp.Component):
+class L1Controller(cp.L1ControllerComponent):
     """Commands an electric car's battery: its charging at the station and its discharging while the car drives.
 
     The controller decides every pass from its inputs alone and keeps no state from one step to the next:

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import PhysicsComponent, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -98,7 +98,7 @@ class SimpleStorageConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class SimpleStorage(Component):
+class SimpleStorage(PhysicsComponent):
     """A class to simulate the Simple Storage."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

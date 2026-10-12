@@ -11,7 +11,8 @@ import pandas as pd
 import pvlib
 from hisim.component import (
     CapexCostDataClass,
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
@@ -287,7 +288,7 @@ class SolarThermalSystemConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class SolarThermalSystem(Component):
+class SolarThermalSystem(PhysicsComponent):
     """Solar thermal system.
 
     This class represents a solar thermal system that can be used
@@ -1083,7 +1084,7 @@ class SolarThermalSystemControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class SolarThermalSystemController(Component):
+class SolarThermalSystemController(L1ControllerComponent):
     """Solar Controller.
 
     It takes data from other components and sends signal to the

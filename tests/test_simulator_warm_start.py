@@ -20,7 +20,7 @@ import pytest
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import ComponentInput, ComponentOutput, PhysicsComponent, SingleTimeStepValues
 from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
@@ -46,11 +46,12 @@ class WarmStartStubConfig(ConfigBase):
     constant_source: bool = False
 
 
-class WarmStartSource(Component):
+class WarmStartSource(PhysicsComponent):
     """Publishes one value per time step: ``100 + timestep``, or a constant 100.
 
     It has no inputs and no state, so its output on a step is the same on every pass. Added after
-    the reader, it is computed after the reader on every pass.
+    the reader, it is computed after the reader on every pass: both are physics, and the simulator keeps the order
+    added within one kind.
     """
 
     MODELS_NO_DEVICE: ClassVar[bool] = True
@@ -98,7 +99,7 @@ class WarmStartSource(Component):
         stsv.set_output_value(self.value_output, value)
 
 
-class WarmStartReader(Component):
+class WarmStartReader(PhysicsComponent):
     """Reads the source's value on every pass and records it with its time step and pass number.
 
     It publishes twice the value it reads, so that its own output changes with its input and the

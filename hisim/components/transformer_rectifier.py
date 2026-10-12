@@ -12,6 +12,7 @@ import pandas as pd
 
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.component import (
+    PhysicsComponent,
     CapexCostDataClass,
     ComponentInput,
     ComponentOutput,
@@ -115,7 +116,7 @@ class TransformerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class Transformer(StatelessComponent):
+class Transformer(StatelessComponent, PhysicsComponent):
     """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.

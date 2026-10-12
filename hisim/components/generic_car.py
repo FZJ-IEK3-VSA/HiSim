@@ -167,7 +167,7 @@ def most_frequent(input_list: List) -> Any:
     return most_frequent_value
 
 
-class Car(cp.Component):
+class Car(cp.PhysicsComponent):
     """Simulates car with constant consumption. Car usage (driven kilometers and state) orginate from LPG.
 
     The car is built from its configuration alone, like every other HiSim component. The driving

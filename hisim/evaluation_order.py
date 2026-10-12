@@ -1,0 +1,149 @@
+"""The order of the physics components within a pass: each L1 controller's device before the other physics it reads.
+
+The simulator evaluates a pass kind by kind (data sources, L2 controllers, L1 controllers, physics, meters). Within the
+physics kind the order matters too. An L1 controller that decides from what its device reports and from the answer of
+a store it reads, such as a hot-water tank's end-of-step temperature, pairs two values of the same run only if, in
+every pass, the device is evaluated before the store. :class:`PhysicsOrder` orders the physics kind so, from the kinds
+and the wiring alone. A kind is a kind base class of :mod:`hisim.component`, such as
+:class:`~hisim.component.PhysicsComponent`.
+"""
+
+from dataclasses import dataclass
+from typing import AbstractSet, Dict, FrozenSet, List, Sequence, Set, Tuple, Type
+
+from hisim.component import Component, L1ControllerComponent, PhysicsComponent
+
+
+@dataclass(frozen=True)
+class EvaluationOrder:
+    """The order a pass evaluates the components in, and the physics components whose constraints form a cycle.
+
+    A position is a component's index in the order the components were added. For example, a boiler added at
+    position 1 and a tank added at position 0, with the boiler's controller at position 2, give the positions
+    (2, 1, 0): the controller, the boiler, the tank.
+    """
+
+    #: The positions of all components, in the order a pass evaluates them.
+    positions: Tuple[int, ...]
+
+    #: Each group of physics positions whose ordering constraints require one another first, in the order added. The
+    #: components of a group keep the order they were added in.
+    cycles: Tuple[Tuple[int, ...], ...]
+
+
+class PhysicsOrder:
+    """The rule that orders the physics kind within a pass: every device an L1 controller commands goes first.
+
+    Terms: an L1 controller *commands* a physics component when one of the controller's outputs feeds one of that
+    component's inputs; that component is one of its *devices*. The controller *reads* a physics component when one of
+    that component's outputs feeds one of the controller's inputs.
+
+    The rule: for every L1 controller, each of its devices is evaluated before every physics component the controller
+    reads that is not one of its own devices. Everything else keeps the order the components were added in (a stable
+    topological sort). For example, a hot-water tank added before the boiler and the collector that charge it is
+    evaluated after both, because the boiler's and the collector's controllers read the tank.
+
+    Why: a controller that pairs what its device reports with the store's answer reads the store's answer of the same
+    pass only if the device runs first. With the store evaluated before the device the store's answer is one pass
+    older than the device's report, and an iteration that pairs them can circle its fixed point instead of settling.
+    The rule uses only the kinds and the wiring, so no component depends on how another is modelled.
+    """
+
+    @staticmethod
+    def predecessors(
+        kinds: Sequence[Type[Component]], sources: Sequence[AbstractSet[int]]
+    ) -> Dict[int, FrozenSet[int]]:
+        """Return, for every physics position, the physics positions the rule requires to be evaluated before it.
+
+        For example, a tank at 0 read by a controller at 2 that commands a boiler at 1 gives ``{0: {1}, 1: {}}``.
+
+        Args:
+            kinds: The kind base class of every component (:meth:`hisim.component.ComponentKinds.of`), in the order
+                the components were added.
+            sources: For every component, the positions of the components whose outputs feed its inputs.
+
+        Returns:
+            For every physics position, the devices that must come before it.
+
+        Raises:
+            ValueError: If ``kinds`` and ``sources`` differ in length.
+        """
+        if len(kinds) != len(sources):
+            raise ValueError(f"Every component needs its sources: {len(kinds)} kinds, but {len(sources)} source sets.")
+        physics = [position for position, kind in enumerate(kinds) if kind is PhysicsComponent]
+        before: Dict[int, Set[int]] = {position: set() for position in physics}
+        for controller, kind in enumerate(kinds):
+            if kind is not L1ControllerComponent:
+                continue
+            devices = {position for position in physics if controller in sources[position]}
+            read = {position for position in sources[controller] if position in before} - devices
+            for store in read:
+                before[store] |= devices
+        return {position: frozenset(devices) for position, devices in before.items()}
+
+    @staticmethod
+    def cycles(predecessors: Dict[int, FrozenSet[int]]) -> Tuple[Tuple[int, ...], ...]:
+        """Return the groups of positions whose constraints require one another first, each in the order added.
+
+        A group is a set of two or more positions each of which must, through the constraints, come before every
+        other (a strongly connected component of the constraint graph). For example, ``{0: {1}, 1: {0}, 2: {0}}``
+        gives ``((0, 1),)``.
+
+        Args:
+            predecessors: For every position, the positions that must come before it.
+
+        Returns:
+            The groups, ordered by their first position.
+        """
+        reachable: Dict[int, Set[int]] = {}
+        for start in predecessors:
+            seen: Set[int] = set()
+            stack = list(predecessors[start])
+            while stack:
+                position = stack.pop()
+                if position not in seen:
+                    seen.add(position)
+                    stack.extend(predecessors[position])
+            reachable[start] = seen
+        groups = {
+            tuple(sorted({start} | {other for other in reachable[start] if start in reachable[other]}))
+            for start in predecessors
+            if start in reachable[start]
+        }
+        return tuple(sorted(groups))
+
+    @staticmethod
+    def ordered(kinds: Sequence[Type[Component]], sources: Sequence[AbstractSet[int]]) -> EvaluationOrder:
+        """Return the physics positions in the order the rule gives, and the groups that form a cycle.
+
+        Among the components that may be evaluated next, the one added first goes first, so without constraints the
+        order is the order added. The components of a cycle keep the order they were added in and are evaluated one
+        after another, at the place of the first of them that may go; the constraints between them are dropped. For
+        example, a tank at 0, an L1 controller at 1 that reads the tank and commands a boiler at 2 give the physics
+        positions (2, 0).
+
+        Args:
+            kinds: The kind base class of every component, in the order the components were added.
+            sources: For every component, the positions of the components whose outputs feed its inputs.
+
+        Returns:
+            The physics positions only, in evaluation order, and the cycles among them.
+        """
+        predecessors = PhysicsOrder.predecessors(kinds, sources)
+        cycles = PhysicsOrder.cycles(predecessors)
+        block_of: Dict[int, Tuple[int, ...]] = {position: (position,) for position in predecessors}
+        for group in cycles:
+            for position in group:
+                block_of[position] = group
+        blocks = sorted(set(block_of.values()))
+        waiting_for = {
+            block: {block_of[before] for position in block for before in predecessors[position]} - {block}
+            for block in blocks
+        }
+        order: List[int] = []
+        placed: Set[Tuple[int, ...]] = set()
+        while len(placed) < len(blocks):
+            block = min(block for block in blocks if block not in placed and waiting_for[block] <= placed)
+            placed.add(block)
+            order.extend(block)
+        return EvaluationOrder(positions=tuple(order), cycles=cycles)

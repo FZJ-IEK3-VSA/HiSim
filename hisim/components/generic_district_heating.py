@@ -20,7 +20,8 @@ from hisim import hydronics
 from hisim.energy_port import EnergyPort
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, ComponentType
 from hisim.component import (
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
@@ -207,7 +208,7 @@ class SpaceHeatingCircuit:
         )
 
 
-class DistrictHeating(Component):
+class DistrictHeating(PhysicsComponent):
     """District heating component.
 
     This component delivers heat from a district heating network to a
@@ -1006,7 +1007,7 @@ class DistrictHeatingControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class DistrictHeatingController(Component):
+class DistrictHeatingController(L1ControllerComponent):
     """District Heating Controller."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

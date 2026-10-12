@@ -31,8 +31,14 @@ Steps to build a component, in the order they appear below:
    boiler contributing its power band — that goes into ``SIZING_CONTRIBUTIONS``. Shown as
    a comment block below, since the template models no real fact; ``weather.py`` holds a
    real one.
-5. Write the component class: declare inputs and outputs, implement the lifecycle methods
-   the ``Simulator`` calls, in the order they appear below:
+5. Write the component class. It inherits the base class of its kind
+   (``system_docs/component_design_principles.md`` §A), not ``Component``:
+   ``DataSourceComponent``, ``L2ControllerComponent``, ``L1ControllerComponent``,
+   ``PhysicsComponent`` or ``MeterComponent`` from ``hisim.component``. The template is a
+   device, so it is ``PhysicsComponent``. The kind fixes where the simulator evaluates the
+   component in a pass, and the simulator refuses a class without one. Declare inputs and
+   outputs, implement the lifecycle methods the ``Simulator`` calls, in the order they appear
+   below:
 
    * ``i_prepare_simulation``: called once, before the first timestep. The base class
      raises rather than doing nothing, so a component that has nothing to prepare still
@@ -60,7 +66,7 @@ from typing import ClassVar, Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import PhysicsComponent, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, concrete, preset, sized_field
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
@@ -190,12 +196,13 @@ class ComponentNameConfig(ConfigBase):
 # ``Size`` term.
 
 
-class ComponentName(Component):
+class ComponentName(PhysicsComponent):
     """Example template component showing how to build a new HiSim component.
 
     This class is a simplified template demonstrating the steps required to
     create a new component module (config, inputs/outputs, state, simulate).
-    It has no functional purpose in HiSim beyond serving as a reference.
+    It has no functional purpose in HiSim beyond serving as a reference. It stands
+    for a device, so it inherits :class:`~hisim.component.PhysicsComponent`.
 
     Attributes:
         InputFromOtherComponent: Name of the input field read from another component.

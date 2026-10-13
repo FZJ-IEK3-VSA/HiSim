@@ -687,7 +687,8 @@ class MainSubjects:
 
     The tables travel to the staged command as plain rules
     (:class:`~hisim.economics.staged_record.MainSubjectRule`, :meth:`rules`) in every stage's
-    economics stage record, which applies them with the same code :meth:`resolve` does.
+    economics stage record, and the staged command resolves each quote with
+    :meth:`~hisim.economics.staged_record.MainSubjectRule.resolve`.
     """
 
     #: Measures whose main subject is the subject named by the measure id.
@@ -733,31 +734,6 @@ class MainSubjects:
             if rule is not None:
                 rules[measure_id] = rule
         return rules
-
-    @classmethod
-    def resolve(
-        cls, measure_id: str, stage: int, subjects: Mapping[str, Optional[ComponentType]]
-    ) -> Tuple[str, Tuple[str, ...]]:
-        """The main subject of one quoted measure in one stage, and the measure's other subjects.
-
-        Args:
-            measure_id: The quoted measure.
-            stage: The stage it is quoted for, for the message.
-            subjects: Every subject the translator stamped with the measure, among those the stage
-                has -> its asset class, or None for a subject the stage holds no cost facts for
-                (a measure-only subject).
-
-        Returns:
-            ``(main subject, the measure's other subjects in the stage, sorted)``.
-
-        Raises:
-            MainSubjectError: If the measure is in neither set of the table, or the stage's
-                subjects do not single out exactly one main subject.
-        """
-        rule = cls.rule_of(measure_id)
-        if rule is None:
-            raise MainSubjectRule.undeclared(measure_id, stage)
-        return rule.resolve(measure_id, stage, subjects)
 
 
 class EconomicsStageRecords:

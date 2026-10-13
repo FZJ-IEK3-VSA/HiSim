@@ -474,10 +474,7 @@ class ElectricHeating(PhysicsComponent):
         if force_convergence:
             return
         heating_mode = HeatingMode(stsv.get_input_value(self.heating_mode_channel))
-        if heating_mode in (
-            HeatingMode.DOMESTIC_HOT_WATER,
-            HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL,
-        ):
+        if heating_mode in DiverterValve.CHARGING_MODES:
             hot_water = self.hot_water_circuit_of_step(stsv, timestep)
         elif heating_mode in (HeatingMode.SPACE_HEATING, HeatingMode.OFF):
             hot_water = hydronics.CircuitStep.idle(
@@ -1025,6 +1022,12 @@ class ElectricHeatingController(L1ControllerComponent):
         # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
         self.warm_water_temperature_aim_in_celsius: float = 60.0
+        DiverterValve.require_valid_hysteresis(
+            hysteresis_in_kelvin=self.config.hysteresis_water_temperature_offset,
+            set_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
+            field_name="hysteresis_water_temperature_offset",
+            controller_description="The electric heater's controller",
+        )
         # the supply temperature a hot-water charge aims at: the warm-water aim plus the hysteresis
         self.hot_water_supply_temperature_set_in_celsius: float = (
             self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset

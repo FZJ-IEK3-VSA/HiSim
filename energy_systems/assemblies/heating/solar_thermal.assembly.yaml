@@ -75,9 +75,12 @@ tests:
     - {output: Collector.WaterTemperatureOutput, unit: CELSIUS, min: -30, max: 200}       # winter night to stagnation
     - {output: Collector.CollectorSensorTemperatureAtStartOfStepInCelsius, unit: CELSIUS, min: -30, max: 250}
       # the stagnation temperature of a standing pump: winter night air to about 205 °C at 1200 W/m² in 40 °C air
-    - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}      # a solar pump is 10-100 W
+    - {output: Collector.ElectricityConsumptionOutput, unit: WATT, min: 0, max: 200}
+      # the pump draws 10 W (new) or 35 W (old) while it runs; 200 W is margin
     - {output: Collector.SolarPowerOnCollector, unit: WATT, min: 0, max: 25000}           # 20 m² x 1200 W/m² = 24 kW, with margin
-    - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}           # at most the incident power
+    - {output: Collector.CollectorHeatLoss, unit: WATT, min: -5000, max: 25000}
+      # the incident power minus the heat delivered: at most the incident power; negative when the collector fluid
+      # is colder than its surroundings and gains heat from them
     - {output: Collector.SolarPumpHeatLoss, unit: WATT, min: 0, max: 200}                 # at most the pump's electricity
     - {output: Controller.TargetTemperatureInCelsius, unit: CELSIUS, min: 40, max: 80}
       # the cylinder temperature above which the Controller stops the pump, its 80 °C maximum storage temperature

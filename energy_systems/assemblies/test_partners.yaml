@@ -29,9 +29,9 @@ partners:
       config:
         data_acquisition_mode: USE_LOCAL_LPG
   Building:
-    # The house whose facts the members' sizing laws read. It is heated by nothing: a building reading the heat
+    # The house whose facts the members' sizing laws read. It reads no heat distribution: a building reading the heat
     # distribution would need the heat distribution beside every assembly, and a test partner reads only what it
-    # requires.
+    # requires. A direct heater (heating/electric_resistive) is wired to it.
     serves: [{partner: Building}, {fact: heating_load_in_watt}, {fact: number_of_apartments}, {fact: roof_area_in_m2},
              {fact: set_heating_temperature_in_celsius}]
     requires: [Weather, UTSPConnector]

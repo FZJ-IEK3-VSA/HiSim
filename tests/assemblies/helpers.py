@@ -115,7 +115,7 @@ class Real:
         """The site a heating assembly binds to in an expansion: weather, residents, heat distribution, its controller, the curve.
 
         Example: ``Real.heating_site() + imports("gas: {assembly: supply/gas_connection}", ...)``. The
-        distribution is the other end of every heating assembly's ``space_heating`` circuit. The site has
+        distribution is the other end of every space-heating assembly's ``space_heating`` circuit. The site has
         no building, so it expands but does not build; a build of a heating assembly reads a composed file.
 
         Args:

@@ -84,7 +84,7 @@ def setup_runs_factory(setup: dict, factory: str) -> bool:
     """Whether a config setup entry participates in parameter sets built by ``factory``.
 
     A setup without a ``horizons`` key runs everything; every setup of the shipped config is
-    one (owner decision 2026-10-11: every energy system has a full-year golden). A setup with
+    one (owner decision 2026-10-11: every system setup has a full-year golden). A setup with
     one runs only the horizons it names. The rule itself lives in :class:`HorizonVocabulary`,
     shared with the runner.
     """

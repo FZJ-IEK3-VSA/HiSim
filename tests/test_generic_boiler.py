@@ -56,7 +56,6 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     )
     testee.controller_mode = operating_mode
     testee.warm_water_temperature_aim_in_celsius = 60
-    testee.config.hysteresis_water_temperature_offset = 5
 
     is_heating_season = True
     heating_flow_temperature = 55
@@ -97,7 +96,7 @@ def given_default_testee(
         "with_domestic_hot_water_preparation",
         config.with_domestic_hot_water_preparation,
     )
-    config.hysteresis_water_temperature_offset = 0
+    config.hysteresis_water_temperature_offset = 5
     testee = GenericBoilerController(
         simulationparameters,
         config,

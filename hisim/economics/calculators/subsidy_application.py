@@ -1,8 +1,8 @@
 """Turn subsidy awards into SUBSIDY cash flows on the timeline.
 
 Eligibility, amounts and cumulation live in the subsidy package. This module builds the `MeasureForSubsidy` the solver
-needs, passes it the perspective's subsidy-mode filter (§5.5) so the solver only optimizes over admitted schemes, and
-lays each award out by payout kind (§5.3): ``UPFRONT_GRANT`` at year 0, ``TAX_CREDIT_SCHEDULE`` once per scheduled year
+needs, passes it the perspective's subsidy-mode filter so the solver only optimizes over admitted schemes, and
+lays each award out by payout kind: ``UPFRONT_GRANT`` at year 0, ``TAX_CREDIT_SCHEDULE`` once per scheduled year
 within the horizon, ``OPERATIONAL`` per kWh sold for the award's duration. Without a catalog nothing is booked.
 """
 
@@ -46,7 +46,7 @@ class SubsidyApplicationResult:
 def nominal_support_from_entries(entries: Iterable[CashFlowEntry]) -> UncertainValue:
     """Return the nominal support carried by the SUBSIDY entries of a timeline, as a positive band.
 
-    The unit is nominal euros received, undiscounted and summed across years: what §559 BGB deducts, so the §6.4
+    The unit is nominal euros received, undiscounted and summed across years: what §559 BGB deducts, so the
     modernization-levy basis uses this figure. SUBSIDY entries are negative and revenue-mirrored (their optimistic slot
     is the band maximum); the result is mirrored back, so `minimum` reads "least support". Deriving it from the entries
     makes it complete whichever calculator emitted them.
@@ -69,7 +69,7 @@ def build_subsidy_flows(
     price_basis_year: int,
     cost_factor: float = 1.0,
 ) -> SubsidyApplicationResult:
-    """Return the SUBSIDY flows of one measure (§5).
+    """Return the SUBSIDY flows of one measure.
 
     It builds the measure record the solver needs (costs by category, INSTALL or REPLACE, VAT rate, annualized energy
     sold), runs the cumulation solver over the schemes the perspective admits and lays each award out by payout kind.
@@ -77,10 +77,10 @@ def build_subsidy_flows(
     Scheme validity is tested against `price_basis_year`, the economic "today", not the simulated weather year.
 
     Args:
-        costing: The measure's resolved costing (§3.5, §4.1): cost blocks, facts for the eligibility conditions, VAT
+        costing: The measure's resolved costing: cost blocks, facts for the eligibility conditions, VAT
             rate and whether an asset is being replaced.
         subsidy_catalog: The country catalog, or None, in which case nothing is booked.
-        subsidy_context: The applicant and building answers the conditions read (§5.7).
+        subsidy_context: The applicant and building answers the conditions read.
         subsidy_mode: The perspective's mode (NONE, FULL, ONLY, EXCLUDE); its `admits` predicate filters schemes before
             the solver optimizes.
         billing: All carriers' billing determinants; only `energy_sold_in_kwh` is read, for OPERATIONAL payouts, scaled

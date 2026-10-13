@@ -1,4 +1,4 @@
-"""Facts that components and meters declare for the cost engine (cost_spec.md §3.3, §3.4, §9.2).
+"""Facts that components and meters declare for the cost engine.
 
 Components declare what they are (asset class, size, technical attributes) and meters declare what crossed the system
 boundary; prices, lifetimes and emission factors come from the data files. `bridge.py` collects these facts after a
@@ -23,7 +23,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 
 class CostRelevance(str, enum.Enum):
-    """A component class's mandatory declaration of its cost role (§9.2).
+    """A component class's mandatory declaration of its cost role.
 
     Every `Component` subclass declares it as a `ClassVar`, so a forgotten `get_cost_facts` cannot silently drop a
     component from the cost results: an `UNDECLARED` component, or a `PRICED` one whose facts do not build, aborts a
@@ -41,7 +41,7 @@ class CostRelevance(str, enum.Enum):
 class UndeclaredCostRelevanceError(ValueError):
     """Raised before the run when a component class in a lifecycle-cost run declares no `cost_relevance`.
 
-    Raised by `simulator.check_cost_declarations` (§9.2), so a year-long simulation refuses in its first second instead
+    Raised by `simulator.check_cost_declarations`, so a year-long simulation refuses in its first second instead
     of failing in postprocessing. It carries the offending classes. It is a `ValueError` because
     `Simulator.run_all_timesteps` documents that as its refusal type. The bridge does not raise it; an undeclared
     component reaching the bridge becomes an `UnresolvedSubject`.
@@ -62,7 +62,7 @@ class UndeclaredCostRelevanceError(ValueError):
 class UnpriceableComponentError(ValueError):
     """Raised before the run when a component declares `PRICED` but no code can describe it.
 
-    Raised by `simulator.check_cost_declarations` (§9.2) next to `UndeclaredCostRelevanceError`. The fix differs: the
+    Raised by `simulator.check_cost_declarations` next to `UndeclaredCostRelevanceError`. The fix differs: the
     component needs a `get_cost_facts` hook or an adapter entry, and usually a ``devices_<COUNTRY>.json`` row. It
     carries the offending classes and is a `ValueError` for the same reason as its sibling.
     """
@@ -102,7 +102,7 @@ def describe_undeclared_class(component_class: type) -> str:
 def describe_unpriceable_class(component_class: type) -> str:
     """Return one sentence naming a PRICED class with no facts source, its module, and what its author must write.
 
-    Shared by the pre-run check and the adapter so both report the defect the same way (§9.1).
+    Shared by the pre-run check and the adapter so both report the defect the same way.
 
     Args:
         component_class: The `Component` subclass declaring PRICED with no facts source.
@@ -122,7 +122,7 @@ def describe_unpriceable_class(component_class: type) -> str:
 def missing_meter_column_error(component_name: str, field_name: str, role: str) -> CostDataError:
     """Return the error for a meter output that the meter's class declares but the run does not contain.
 
-    A meter is the only place a carrier is billed from (§3.4), so a missing column must not be skipped: the bill would
+    A meter is the only place a carrier is billed from, so a missing column must not be skipped: the bill would
     silently lack a flow. The error makes the meter an unresolved subject and the evaluation refuses to price the rest.
     It lives here so both the bridge (reading via a `MeterSpec`) and a meter implementing `get_energy_flow_facts` raise
     the same error; a component may not import the bridge.
@@ -146,7 +146,7 @@ def missing_meter_column_error(component_name: str, field_name: str, role: str) 
 def _coerce_uncertain(
     value: Optional[Union[float, int, UncertainValue]],
 ) -> Optional[UncertainValue]:
-    """Turn a plain number into an exact band (§3.9); None stays None.
+    """Turn a plain number into an exact band; None stays None.
 
     Lets a component author write ``investment_cost_override_in_euro=4200``. None means "no override", which differs
     from an override of zero.
@@ -164,10 +164,10 @@ class ComponentCostFacts:
     per-field overrides where it knows better than the database. Each override replaces one field only.
     `purchase_cost_override_in_euro` prices only the year-0 purchase as a whole (e.g. a reader's quote covering device,
     installation, planning and removal); later purchases are priced from the database. `override_source` is required
-    when any override is set (strict mode, §9.3) and is recorded in the provenance ledger. `technical_attributes` holds
-    values subsidy conditions read (§5.4), such as an SCOP or a U-value, and must be JSON-serializable.
+    when any override is set (strict mode) and is recorded in the provenance ledger. `technical_attributes` holds
+    values subsidy conditions read, such as an SCOP or a U-value, and must be JSON-serializable.
 
-    Envelope measures (insulation, windows, doors, ventilation, §3.2b) use the same type, sized in m², wrapped in
+    Envelope measures (insulation, windows, doors, ventilation) use the same type, sized in m², wrapped in
     `evaluator.SubjectCostFacts` and injected into `EvaluationInputs` directly.
     """
 
@@ -236,7 +236,7 @@ class ComponentCostFacts:
     )
 
     def __post_init__(self) -> None:
-        """Validate the facts locally and turn plain-number overrides into exact bands (§9.3).
+        """Validate the facts locally and turn plain-number overrides into exact bands.
 
         Runs when the component is registered, long before the timestep loop. Whether the database has an entry for the
         asset class is checked later by the pre-run resolution check. A size of exactly zero is allowed and means "not
@@ -328,7 +328,7 @@ class QuotedPurchase:
     Args:
         subject: The cost subject it is booked under (the measure id).
         amount_in_euro: The stated amount as a band; exact for a quote.
-        source: Where the amount comes from, recorded in the provenance ledger (§3.10).
+        source: Where the amount comes from, recorded in the provenance ledger.
     """
 
     subject: str
@@ -345,11 +345,11 @@ class QuotedPurchase:
 
 @dataclass
 class EnergyFlowFacts:
-    """Energy a meter measured at a carrier boundary over the simulated period (§3.4).
+    """Energy a meter measured at a carrier boundary over the simulated period.
 
     Meter components (`ElectricityMeter`, `GasMeter`, `FuelMeter`, `HeatingMeter`, the EMS as district meter) report
     it. Only metered energy is billed, so an internal flow between components can never be counted twice. Quantities
-    are exact floats, since the simulation measures them (§3.9). `simulated_cost_in_euro` and
+    are exact floats, since the simulation measures them. `simulated_cost_in_euro` and
     `simulated_revenue_in_euro` hold the integral of load × price for dynamic tariffs and are used instead of energy ×
     average price when set. Totals cover the simulated period; the evaluator annualizes a shorter period with a
     warning.
@@ -375,11 +375,11 @@ class EnergyFlowFacts:
 
 @dataclass
 class BillingDeterminants:
-    """Billing basis for flat, time-of-use, dynamic and capacity tariffs (§8.4).
+    """Billing basis for flat, time-of-use, dynamic and capacity tariffs.
 
-    Besides annual kWh it holds what only the simulation can supply: energy per time-of-use band, the integral of load
-    × spot price, peaks per billing period and per year, and the unweighted mean spot price. The mean spot price lets
-    §8.5 separate the volume effect from the flexibility value, which escalate differently. `EvaluationInputs` carries
+    Besides annual kWh it holds what only the simulation can supply: energy per time-of-use band, the integral of load ×
+    spot price, peaks per billing period and per year, and the unweighted mean spot price. The mean spot price lets the
+    bill separate the volume effect from the flexibility value, which escalate differently. `EvaluationInputs` carries
     only determinants, so all billing goes through `tariffs.apply_tariff`; `from_energy_flow` converts a plain
     `EnergyFlowFacts`.
     """
@@ -439,7 +439,7 @@ class InstallationYearOrigin(str, enum.Enum):
 
 @dataclass
 class ExistingAsset:
-    """An asset already installed in the building before any measure (brownfield register, §4.1).
+    """An asset already installed in the building before any measure (brownfield register).
 
     The simulation models the result of the retrofit, not its starting point, so this is supplied from outside. From
     `installation_year` the engine derives age and remaining life: a kept asset costs no investment but is replaced at
@@ -512,7 +512,7 @@ class ExistingAsset:
     def age_in_years(self, reference_year: int) -> int:
         """Return the age at the reference (simulation) year, floored at 0.
 
-        Feeds the remaining-life calculation and the anyway-cost test of §4.1. An asset installed after the reference
+        Feeds the remaining-life calculation and the anyway-cost test. An asset installed after the reference
         year counts as new rather than getting a negative age.
         """
         return max(0, reference_year - self.installation_year)
@@ -520,7 +520,7 @@ class ExistingAsset:
 
 @dataclass
 class ExistingAssetRegister:
-    """The building's existing system, for BROWNFIELD and STATUS_QUO contexts (§4.1).
+    """The building's existing system, for BROWNFIELD and STATUS_QUO contexts.
 
     A list of `ExistingAsset` entries. Its presence is a switch: `perspectives.select_applicable` picks the brownfield
     perspectives when a register is attached and the greenfield ones when not. It comes from a

@@ -1,4 +1,4 @@
-"""Inline-SVG primitives and the per-result charts of the HTML report (cost_spec.md §7.2).
+"""Inline-SVG primitives and the per-result charts of the HTML report.
 
 Holds escaping, the `_svg_open`/`_rect`/`_text` primitives, tables, `<details>` blocks and the charts built from them,
 plus the shared builders of the visualization set (column Sankey, xy lines, Gantt strip, treemap, NPV bridge, tornado,
@@ -173,7 +173,7 @@ def _details(summary: str, content: str, open_by_default: bool = False) -> str:
 
 
 def _category_table(result: LifecycleCostResult) -> str:
-    """Return the NPV table by display group and by raw cost category (§3.7).
+    """Return the NPV table by display group and by raw cost category.
 
     A display group is one of the eight coloured groups the charts use; each is printed bold with its total and the raw
     `CostCategory` members under it. Groups and categories that are zero in every band slot (minimum, best estimate,
@@ -194,7 +194,7 @@ def _category_table(result: LifecycleCostResult) -> str:
 
 
 def _loan_svg(result: LifecycleCostResult) -> str:
-    """Return the loan amortization chart: principal and interest per year (§4.4).
+    """Return the loan amortization chart: principal and interest per year.
 
     Bars stack principal from the baseline with interest on top, so a bar's height is the year's debt service; an
     annuity loan shows a constant total with interest falling. X-ticks are thinned to every `horizon // 10` years, and
@@ -359,7 +359,7 @@ def _whisker_svg(rows: List[Tuple[str, UncertainValue]], unit: str) -> str:
     """Return a dot-and-whisker chart of labelled banded figures on one axis.
 
     A dot at the best estimate and a bar from minimum to maximum, used for perspectives, payers and per-carrier bills.
-    The whiskers are the §3.9 envelope of the low and high worlds, not a statistical interval. The axis always includes
+    The whiskers are the envelope of the low and high worlds, not a statistical interval. The axis always includes
     zero, the band is printed beside each whisker, and a vertical rule marks zero when a row is negative.
     """
     width, row_h, left = 860, 30, 220
@@ -403,7 +403,7 @@ def _whisker_svg(rows: List[Tuple[str, UncertainValue]], unit: str) -> str:
 
 
 def _stacked_subject_svg(result: LifecycleCostResult) -> str:
-    """Return the per-subject diverging stacked bars by display group (§7.4).
+    """Return the per-subject diverging stacked bars by display group.
 
     A subject is one costed item on the timeline, e.g. a heat pump. Costs stack right of the zero line and credits
     (residual value, subsidies, feed-in, anyway credit) left, never netted; a whisker and dot mark the net NPV band on

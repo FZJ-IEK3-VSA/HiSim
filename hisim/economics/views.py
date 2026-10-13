@@ -73,7 +73,7 @@ class ViewCategories:
     #: agree on what a bill is.
     BILL_CATEGORIES = CategoryRules.BILL_CATEGORIES
 
-    #: The year-0 build-up steps, in the order the investment waterfall shows them (§4.1).
+    #: The year-0 build-up steps, in the order the investment waterfall shows them.
     YEAR_ZERO_CATEGORIES = (
         CostCategory.INVESTMENT,
         CostCategory.PLANNING,
@@ -203,7 +203,7 @@ def nominal_annual_matrix_by_category(
 
 @dataclass(frozen=True)
 class LoanAmortization:
-    """Interest, principal and outstanding balance of the loan per year 0..T (index = year), nominal (§4.4).
+    """Interest, principal and outstanding balance of the loan per year 0..T (index = year), nominal.
 
     All lists span the full horizon, zero-padded, so they index by year. The disbursement is a year-0
     `LOAN_DISBURSEMENT` flow shown in the investment waterfall; it is carried in `disbursement_in_euro` because the
@@ -241,7 +241,7 @@ class LoanAmortization:
 def loan_amortization_series(
     result: LifecycleCostResult, slot: Slot = Slot.BEST_ESTIMATE
 ) -> LoanAmortization:
-    """Return the loan's interest/principal split per year (§4.4).
+    """Return the loan's interest/principal split per year.
 
     Reads the `LOAN_INTEREST` and `LOAN_PRINCIPAL` entries of the scoped timeline instead of re-running the schedule in
     `financing.py`, so the chart shows the debt service the NPV was computed from. The outstanding balance is built
@@ -274,7 +274,7 @@ def loan_amortization_series(
 
 
 def cumulative_operational_co2_in_kg(result: LifecycleCostResult) -> List[float]:
-    """Return the running total of operational CO2 in kg over the horizon (index = year), undiscounted (§3.8).
+    """Return the running total of operational CO2 in kg over the horizon (index = year), undiscounted.
 
     A cumulative sum of `LifecycleCo2Result.operational_co2_by_year_in_kg`. Emissions are masses and are never
     discounted. The last element is the lifecycle operational total.
@@ -318,7 +318,7 @@ class TimelineDetailYear:
 
 
 def timeline_detail_rows(result: LifecycleCostResult) -> List[TimelineDetailYear]:
-    """Return the §3.6 timeline as a verification table of (year, subject, category) rows with subtotals.
+    """Return the timeline as a verification table of (year, subject, category) rows with subtotals.
 
     Uses the scoped timeline. Duplicate cells are added up; cells that are zero in every slot within
     `ViewTolerances.DETAIL_ROW_EPSILON` are dropped as float noise. Rows within a year are ordered by their nominal
@@ -375,7 +375,7 @@ def timeline_detail_rows(result: LifecycleCostResult) -> List[TimelineDetailYear
 def payer_category_npv_pivot(
     result: LifecycleCostResult,
 ) -> Dict[Actor, Dict[CostCategory, UncertainValue]]:
-    """Return who pays which cost block, in present value (§6.5).
+    """Return who pays which cost block, in present value.
 
     Taken on the full timeline, because the zero-sum check needs every payer, and without the unallocated SYSTEM payer.
     Presentation folds the inner map onto display groups.
@@ -394,7 +394,7 @@ def payer_category_npv_pivot(
 
 
 def equivalent_annual_cost_of(npv: UncertainValue, result: LifecycleCostResult) -> UncertainValue:
-    """Annuitize one NPV over the observation period, giving its equivalent annual cost (EAC, §3.4).
+    """Annuitize one NPV over the observation period, giving its equivalent annual cost (EAC).
 
     The EAC is the constant euro-per-year payment with the same present value over the horizon. The annuity factor
     comes from `result.parameters`, so every annuitized figure in a report uses the same rate and horizon as the
@@ -406,7 +406,7 @@ def equivalent_annual_cost_of(npv: UncertainValue, result: LifecycleCostResult) 
 def equivalent_annual_cost_by_category(
     result: LifecycleCostResult,
 ) -> Dict[CostCategory, UncertainValue]:
-    """Return the equivalent annual cost per category of the whole perspective (§3.4).
+    """Return the equivalent annual cost per category of the whole perspective.
 
     `npv_by_category` in euro per year; the categories still sum to the headline EAC.
     """
@@ -462,7 +462,7 @@ class CarrierYearOneBill:
 
 
 def carrier_year_one_bills(result: LifecycleCostResult) -> Dict[str, CarrierYearOneBill]:
-    """Return the year-1 bill per carrier with its implied effective price (§8).
+    """Return the year-1 bill per carrier with its implied effective price.
 
     The carrier's revenue subject (`carriers.bill_subjects`, the feed-in one for electricity) is included in the
     carrier's category map, but not in `total_excluding_feed_in_in_euro`, the price numerator, nor in the band: a
@@ -569,7 +569,7 @@ class SubsidyShare:
 
 
 def subsidy_share_of_gross(result: LifecycleCostResult) -> Dict[str, SubsidyShare]:
-    """Return each subject's funded share of its year-0 gross investment, in nominal euros (§5.4).
+    """Return each subject's funded share of its year-0 gross investment, in nominal euros.
 
     Nominal support can exceed the year-0 gross (support paid over several years, or attached to later investment), so
     the reported support is `min(subsidy, gross)`. This is the only place that clamp is applied; the unclamped figure
@@ -601,7 +601,7 @@ def investment_net_of_subsidies(result: LifecycleCostResult) -> Dict[str, Uncert
 
 
 def payer_npv_total(result: LifecycleCostResult) -> UncertainValue:
-    """Return the sum of all payer NPVs, the system total the §6.5 zero-sum check reconciles against.
+    """Return the sum of all payer NPVs, the system total the zero-sum check reconciles against.
 
     Includes the unallocated SYSTEM payer. Report section 6b prints it above the payer bars, which must add up to it,
     because an allocation ruleset moves money between actors without creating or destroying any.
@@ -639,7 +639,7 @@ def scheme_display_names(result: LifecycleCostResult) -> Dict[str, str]:
 
 
 def award_total_amount(award: SubsidyAward) -> UncertainValue:
-    """Return the total nominal amount an award is worth (§5.4).
+    """Return the total nominal amount an award is worth.
 
     The upfront amount plus the sum of any scheduled instalments, so a tax credit paid over N years is worth its
     instalments. `describe_award` is what renderers call; this is its euro half, for the KPI export and the chart data.
@@ -655,7 +655,7 @@ def award_total_amount(award: SubsidyAward) -> UncertainValue:
 
 @dataclass
 class AwardPresentation:
-    """One applied award reduced to what a reader needs to know about it (§5.4).
+    """One applied award reduced to what a reader needs to know about it.
 
     The single source for the markdown decision list, the HTML decision cards and the awards table, so the three agree.
     `total_in_euro` is None exactly when the award carries no euro amount (loan terms, a per-kWh operational rate, a
@@ -682,7 +682,7 @@ class AwardPresentation:
 
 
 def describe_award(award: SubsidyAward) -> AwardPresentation:
-    """Return what an applied award is worth and how it is paid out, by payout kind (§5.2, §5.4).
+    """Return what an applied award is worth and how it is paid out, by payout kind.
 
     An upfront grant is worth its year-0 amount and needs no note; a tax credit is worth its instalments and says over
     how many years; loan terms, operational support and a VAT reduction have no euro amount and are described by their
@@ -800,7 +800,7 @@ def total_subsidies_received(result: LifecycleCostResult) -> Optional[UncertainV
     """Return the nominal support on the SUBSIDY entries of the scoped timeline, or None if there are none.
 
     Computed with `nominal_support_from_entries`, the same basis as the levy, so it includes support without a catalog
-    award, operational support and scheduled instalments (§8). For a SYSTEM-scope perspective this is every SUBSIDY
+    award, operational support and scheduled instalments. For a SYSTEM-scope perspective this is every SUBSIDY
     entry of the run; for an actor scope, the support that actor receives. None lets callers omit the KPI instead of
     publishing a zero. The per-subject counterpart is `ComponentCostBreakdown.subsidies_nominal_in_euro`; the per-award
     one is `award_total_amount`.
@@ -989,7 +989,7 @@ class ActorFlowMatrix:
     """Who pays whom over the whole horizon, as ribbons plus node columns.
 
     Nominal lifetime sums of the full allocated timeline in the best-estimate slot, so both legs of every transfer are
-    visible (§6.5). `total_band` carries the grand total as a band for the title. `actor_flow_matrix` checks before
+    visible. `total_band` carries the grand total as a band for the title. `actor_flow_matrix` checks before
     returning that each actor's `net_by_actor()` equals the nominal sum of its timeline entries inside the horizon and
     that transfer ribbons net to zero.
     """
@@ -1067,7 +1067,7 @@ class StoryPerspectives:
 def has_macroeconomic_accounting(result: LifecycleCostResult) -> bool:
     """Return whether this perspective uses macroeconomic accounting, judged by what it books rather than by its id.
 
-    Macroeconomic accounting (§4.5) books CO2 at its damage cost; no financial perspective books a `CO2_DAMAGE` flow.
+    Macroeconomic accounting books CO2 at its damage cost; no financial perspective books a `CO2_DAMAGE` flow.
     The full timeline is read, not `npv_by_category`: a macroeconomic perspective scoped to a landlord books the damage
     flow but its scoped pivot shows none of it.
     """
@@ -1211,7 +1211,7 @@ class StatementPartitions:
     energy bill shows as a smaller cost line.
     """
 
-    #: Categories that move money between parties without consuming resources (§4.5). Society's
+    #: Categories that move money between parties without consuming resources. Society's
     #: second side; the macroeconomic accounting removes every one of them at source, which is
     #: why they reach the statement summing to zero. The wider, macroeconomic sense of
     #: "transfer": `FlowCounterparties.TRANSFER_CATEGORIES` is the Sankey's narrow one, the
@@ -1536,7 +1536,7 @@ def _transfer_statement_lines(
 
     The society statement's second side. A transfer's two halves are booked on different payers, so the scoped view
     would show a cost, not a transfer. Lines are emitted per transfer category and payer, in payer order. On a
-    macroeconomic result the list is empty, because that accounting removes transfers at source (§4.5).
+    macroeconomic result the list is empty, because that accounting removes transfers at source.
 
     Args:
         result: The perspective whose full timeline is read.
@@ -2104,7 +2104,7 @@ class EventStripRow:
     """One component's lifetime lane: its purchases, replacements and residual value.
 
     The row checks its own shape so any builder produces a lane that draws correctly: a residual requires at least one
-    investment or replacement event (§4.1); events are sorted by year; there is one span per event, starting at its
+    investment or replacement event; events are sorted by year; there is one span per event, starting at its
     year and running to the next event or, for the last one, the horizon.
 
     Raises:
@@ -3751,7 +3751,7 @@ def economic_assumptions(results: Sequence[LifecycleCostResult]) -> List[Assumpt
     """Return every economic assumption this run was priced under, with value and source.
 
     Covers the interest rate, horizon and price basis year; the annuity factor they imply (marked as computed); every
-    escalation rate that applied, with the step of the §3.2 fallback chain that produced it; the working price,
+    escalation rate that applied, with the step of the fallback chain that produced it; the working price,
     standing charge and feed-in rate of every billed carrier; the building quantities per-unit figures divide by; and
     the CO2 damage cost when a perspective of the run priced one. Parameters come from `result.parameters`, resolved
     values from `result.assumptions`; a result without that record contributes no resolved rows.
@@ -4110,7 +4110,7 @@ class ScenarioSetView(Protocol):
 
 
 class ScenarioCubeView(ScenarioSetView, Protocol):
-    """Everything the report's scenario section reads off an evaluated cube (§4.6)."""
+    """Everything the report's scenario section reads off an evaluated cube."""
 
     @property
     def results(self) -> Mapping[str, Mapping[str, LifecycleCostResult]]:
@@ -4462,7 +4462,7 @@ def _scenario_assumptions_for(
 ) -> List[ScenarioAssumption]:
     """Return the line or lines one override states.
 
-    A band (a data overlay in the §3.1 `min`/`best_estimate`/`max` syntax) is one line. A whole dict on a dict-typed
+    A band (a data overlay in the `min`/`best_estimate`/`max` syntax) is one line. A whole dict on a dict-typed
     field is the merge form `scenarios.apply_parameter_overrides` applies key by key, so it gives one line per key,
     each against that key's central value. Anything else is a scalar and one line.
     """
@@ -4519,7 +4519,7 @@ def _one_assumption(
 
 
 def _value_band(value: Mapping[str, Any]) -> Optional[Tuple[float, float, float]]:
-    """Return `(min, best_estimate, max)` when this dict is the §3.1 band syntax, else None.
+    """Return `(min, best_estimate, max)` when this dict is the band syntax, else None.
 
     Those three keys are what `UncertainValue.from_json` reads, and no dict-typed `EconomicParameters` field uses them,
     so they separate a band from the merge form.
@@ -4720,8 +4720,8 @@ def _inert_axis_cause(field_name: str, billed: Tuple[str, ...], co2_priced: bool
 def _co2_axis_cause(billed: Tuple[str, ...], co2_priced: bool) -> str:
     """Return why a CO2-price axis has no effect: no carbon-price flow is booked, beside which bills.
 
-    States only the observation. The engine books `ENERGY_CO2_PRICE` only for carriers with `co2_price_exposure > 0`
-    (§3.5), but a stored result has no price entry to confirm that, so the note does not name it.
+    States only the observation. The engine books `ENERGY_CO2_PRICE` only for carriers with `co2_price_exposure > 0`,
+    but a stored result has no price entry to confirm that, so the note does not name it.
     """
     if co2_priced or not billed:
         return ""

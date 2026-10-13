@@ -2,7 +2,7 @@
 
 The document is built from a `StagedResult` alone and validated against the shipped `economics_result.schema.json`
 before it is written. Every amount is a band `{"min", "best", "max"}` (the engine's LOW, BEST_ESTIMATE and HIGH slots);
-cost is positive and money arriving is negative (cost_spec.md §3.6). Years are relative (`0..T`), with `calendar_year`
+cost is positive and money arriving is negative. Years are relative (`0..T`), with `calendar_year`
 on every row, `null` when the plan names no start year. Subjects, asset classes, measures, schemes and perspectives are
 written as ids; the frontend labels them.
 
@@ -246,10 +246,9 @@ class StagedDocument:
         {CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REMOVAL}
     )
 
-    #: Which revision of the engine's own specification produced the numbers, echoed into
-    #: ``engine.economics_version`` so a stored document names the rules behind it. Source:
-    #: ``roadmap/cost-spec-v2.md``, the specification this package implements; it is a document
-    #: name and not an estimate of anything.
+    #: Which revision of the engine's cost rules produced the numbers, echoed into
+    #: ``engine.economics_version`` so a stored document names the rules behind it. The value is
+    #: the name of that revision, not an estimate of anything.
     ECONOMICS_VERSION: ClassVar[str] = "cost-spec-v2"
 
     #: The note an undetermined subsidy row carries when the country has no catalogue at all.

@@ -1,8 +1,8 @@
-"""Tariff contracts and the pure billing engine (cost_spec.md §8).
+"""Tariff contracts and the pure billing engine.
 
 One :class:`TariffContract` per energy carrier is the single price source for both the in-simulation price provider
 (``hisim/components/tariff_provider.py``) and the billing engine, so a controller never optimizes against a different
-price than the one billed (§8.1). The module bills one year of one carrier (:func:`apply_tariff`); escalation over the
+price than the one billed. The module bills one year of one carrier (:func:`apply_tariff`); escalation over the
 horizon lives in ``calculators/energy.py``.
 
 Contracts loaded from ``cost_database/tariffs/*.json`` must cite ids from ``sources.json``. Contracts built in memory
@@ -31,7 +31,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 
 class SupplyKind(str, enum.Enum):
-    """How the energy part of the price varies over time (§8.2).
+    """How the energy part of the price varies over time.
 
     FLAT needs annual kWh only, TIME_OF_USE needs kWh per time-of-use band, and DYNAMIC needs the integral of load
     times the spot price series at native resolution. The kind selects the price rule
@@ -44,10 +44,10 @@ class SupplyKind(str, enum.Enum):
 
 
 class CapacityChargeKind(str, enum.Enum):
-    """Which power peaks a capacity (demand) charge bills (§8.2).
+    """Which power peaks a capacity (demand) charge bills.
 
     The single annual maximum, one peak per month, or only peaks inside declared high-load windows. A peak is always
-    the mean power over the billing interval, never an instantaneous value (§8.4).
+    the mean power over the billing interval, never an instantaneous value.
     """
 
     NONE = "NONE"
@@ -57,11 +57,11 @@ class CapacityChargeKind(str, enum.Enum):
 
 
 class FeedInKind(str, enum.Enum):
-    """How exported energy is paid for (§8.2).
+    """How exported energy is paid for.
 
     A fixed statutory tariff stays nominally constant for its contract duration; spot-referenced direct marketing
     follows the market. ``calculators/energy.py`` holds the year-1 revenue nominally fixed for ``duration_in_years``
-    and escalates it only afterwards (§8.5).
+    and escalates it only afterwards.
     """
 
     NONE = "NONE"
@@ -70,7 +70,7 @@ class FeedInKind(str, enum.Enum):
 
 
 class ControllabilityKind(str, enum.Enum):
-    """How a grid operator pays for the right to curtail a dimmable device, as under §14a EnWG (§8.2).
+    """How a grid operator pays for the right to curtail a dimmable device, as under §14a EnWG.
 
     Not at all, as a fixed annual credit against the standing charge, or as a percentage off the grid fee. The kind
     selects which amount field of :class:`ControllabilityDiscount` is read.
@@ -98,7 +98,7 @@ class TimeOfUseBand:
 
 @dataclass
 class TariffSupply:
-    """Supply side of a contract: what one purchased kWh costs (§8.2).
+    """Supply side of a contract: what one purchased kWh costs.
 
     The time-varying energy part (flat price, bands, or spot series times a factor) is kept apart from three per-kWh
     components that do not vary with time: supplier markup, grid fee, and taxes and levies. The split lets a §14a
@@ -120,7 +120,7 @@ class TariffSupply:
 
 @dataclass
 class CapacityCharge:
-    """Capacity charge terms: a price per kW applied to the measured peaks (§8.4).
+    """Capacity charge terms: a price per kW applied to the measured peaks.
 
     Peaks are mean power over the billing interval, never instantaneous; a 15-minute mean is very different from a
     one-minute spike. The interval must be a whole multiple of the simulation timestep, checked before the run by
@@ -174,13 +174,13 @@ class ControllabilityDiscount:
 
 @dataclass
 class TariffContract:
-    """One tariff contract for one energy carrier, referenced by id (§8.2).
+    """One tariff contract for one energy carrier, referenced by id.
 
     Holds the supply price structure, standing charge, capacity charge, feed-in terms and any controllability discount;
     both the simulation and the billing engine read the same object. Contracts come from
     ``cost_database/tariffs/<id>.json`` (the file name is the id), from in-memory construction in tests and examples,
     or, for a carrier without a contract, from ``calculators/energy.default_contract``, which builds a flat contract
-    from the §3.5 price entries and sets ``is_default_contract``.
+    from the price entries and sets ``is_default_contract``.
     """
 
     #: Default location of shipped tariff contracts.
@@ -188,7 +188,7 @@ class TariffContract:
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cost_database", "tariffs"
     )
 
-    #: Infix reserved for the ids of contracts synthesized from the §3.5 price entries. A catalog
+    #: Infix reserved for the ids of contracts synthesized from the price entries. A catalog
     #: file must not use it, or its contract would be mistaken for a synthesized one.
     DEFAULT_ID_INFIX: ClassVar[str] = "_DEFAULT_"
 
@@ -207,7 +207,7 @@ class TariffContract:
 
     @classmethod
     def default_contract_id(cls, country: str, carrier: EnergyCarrier, year: int) -> str:
-        """Return the id of a contract synthesized from the §3.5 price entries.
+        """Return the id of a contract synthesized from the price entries.
 
         `calculators/energy.contract_from_price_entry` mints it and `serialization.contracts_from_json` recognizes it
         in an archived file, so the format lives in one place.
@@ -242,7 +242,7 @@ class TariffContract:
 
     @classmethod
     def from_json(cls, raw: dict, registry: Optional[SourceRegistry] = None) -> "TariffContract":
-        """Parse a tariff contract from its JSON form (§8.2 schema).
+        """Parse a tariff contract from its JSON form (the tariff catalog schema).
 
         Used by the file loader, by ``serialization.py`` and by the data-file checks. Monetary fields may be an exact
         number or a min/best_estimate/max band. Only ``supply``, ``carrier`` and ``source_ids`` are required; an absent
@@ -331,7 +331,7 @@ class TariffContract:
         )
 
     def marginal_purchase_price_components(self) -> UncertainValue:
-        """Return the per-kWh components charged regardless of time: markup + grid fee + taxes, in EUR/kWh (§8.4).
+        """Return the per-kWh components charged regardless of time: markup + grid fee + taxes, in EUR/kWh.
 
         A ``GRID_FEE_SHARE`` controllability discount is already applied to the grid-fee part. Keeping these apart lets
         an uncertain component shift a whole bill by ``E × Δcomponent`` without re-integrating the spot series. Both
@@ -344,7 +344,7 @@ class TariffContract:
 
 
 def contract_to_json(contract: TariffContract) -> dict:
-    """Serialize a contract in the §8.2 catalog schema, the exact inverse of `TariffContract.from_json`.
+    """Serialize a contract in the catalog schema, the exact inverse of `TariffContract.from_json`.
 
     Embeds contracts in ``economic_inputs.json`` so a stored result can be re-priced without a catalog lookup.
     The output is a valid ``cost_database/tariffs/*.json`` file.
@@ -496,7 +496,7 @@ def synthetic_reference_spot_series(mean_price: float = 0.08, amplitude: float =
 
 
 def validate_billing_interval(seconds_per_timestep: int, contract: TariffContract) -> None:
-    """Check that `seconds_per_timestep` divides the contract's billing interval (§8.4).
+    """Check that `seconds_per_timestep` divides the contract's billing interval.
 
     A pre-run check called by the simulation-side price provider; a mismatch fails before the run starts.
     """
@@ -517,15 +517,15 @@ def validate_billing_interval(seconds_per_timestep: int, contract: TariffContrac
 
 @dataclass
 class Year1Bill:
-    """One carrier's bill for one year, by category, as bands (§8.4); the output of :func:`apply_tariff`.
+    """One carrier's bill for one year, by category, as bands; the output of :func:`apply_tariff`.
 
     Categories are working (energy) cost, standing charge, capacity charge and feed-in revenue, kept apart because each
     escalates at its own rate. An absent category means the contract has no such component, not zero. Costs are
     positive; feed-in revenue is negative (mirrored with ``as_revenue``).
 
-    The three scalar fields are the §8.5 decomposition on the best-estimate slot. Only ``flexibility_value_in_euro`` is
-    used downstream: ``calculators/energy.py`` escalates it with the spot spread rate and subtracts it as a positive
-    saving.
+    The three scalar fields are the volume and flexibility decomposition on the best-estimate slot. Only
+    ``flexibility_value_in_euro`` is used downstream: ``calculators/energy.py`` escalates it with the spot spread rate
+    and subtracts it as a positive saving.
     """
 
     by_category: Dict[CostCategory, UncertainValue] = field(default_factory=dict)
@@ -545,7 +545,7 @@ class Year1Bill:
 def time_of_use_band_for(
     supply: TariffSupply, weekday: Optional[int] = None, hour: Optional[int] = None
 ) -> Optional[TimeOfUseBand]:
-    """Return the time-of-use band that prices one moment (§8.4).
+    """Return the time-of-use band that prices one moment.
 
     The first declared match wins. When nothing matches, or the moment is unknown, the first band applies;
     :func:`apply_tariff` uses the same rule for energy the meter assigned to no band, so the controller's price and the
@@ -566,7 +566,7 @@ def energy_price_in_euro_per_kwh(
     hour: Optional[int] = None,
     spot_price_in_euro_per_kwh: Optional[float] = None,
 ) -> UncertainValue:
-    """Return the energy-only price of one kWh at one moment, before the additive components (§8.4).
+    """Return the energy-only price of one kWh at one moment, before the additive components.
 
     FLAT reads the working price, TIME_OF_USE the band covering the moment, DYNAMIC the given spot price times the
     contract's `spot_factor`. Only this part varies with time, which is what the flexibility decomposition needs.
@@ -579,7 +579,7 @@ def energy_price_in_euro_per_kwh(
         spot_price_in_euro_per_kwh: The spot price of this moment, required for DYNAMIC supply.
 
     Returns:
-        EUR/kWh as a band. DYNAMIC returns an exact value: the spot series is simulation input and stays exact (§3.9),
+        EUR/kWh as a band. DYNAMIC returns an exact value: the spot series is simulation input and stays exact,
             so a dynamic contract's uncertainty is all in its additive components.
 
     Raises:
@@ -605,7 +605,7 @@ def marginal_purchase_price_in_euro_per_kwh(
     hour: Optional[int] = None,
     spot_price_in_euro_per_kwh: Optional[float] = None,
 ) -> UncertainValue:
-    """Return what one more kWh costs at one moment: energy price plus the additive components (§8.4).
+    """Return what one more kWh costs at one moment: energy price plus the additive components.
 
     The price provider publishes this per timestep and :func:`apply_tariff` bills with the same rule, so a control
     decision and its bill cannot drift apart.
@@ -616,7 +616,7 @@ def marginal_purchase_price_in_euro_per_kwh(
 
 
 def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) -> Year1Bill:
-    """Bill one year of one carrier under a contract (§8.4).
+    """Bill one year of one carrier under a contract.
 
     This pure function (no database, ledger or state) is the only place where measured consumption becomes money, so it
     also re-prices stored results and bills hypothetical contracts (:func:`tariff_counterfactual`). A flat contract
@@ -639,7 +639,7 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
     Returns:
         The year-1 bill: ``ENERGY_WORKING`` (positive), ``ENERGY_STANDING`` (less a FIXED_ANNUAL controllability
             credit), ``ENERGY_CAPACITY_CHARGE`` (only if the contract has one), ``FEED_IN_REVENUE`` (negative, only if
-            something was sold), plus the §8.5 decomposition.
+            something was sold), plus the volume and flexibility decomposition.
 
     Raises:
         CostDataError: For a TIME_OF_USE contract without bands or whose determinants name an unknown band, or a
@@ -757,7 +757,7 @@ def apply_tariff(determinants: BillingDeterminants, contract: TariffContract) ->
 def tariff_counterfactual(
     determinants: BillingDeterminants, active: TariffContract, flat: TariffContract
 ) -> Dict[str, UncertainValue]:
-    """Bill the same load profile under a flat contract to show what the tariff choice earned (§8.5).
+    """Bill the same load profile under a flat contract to show what the tariff choice earned.
 
     Load profile, control and all physics are held fixed, so no second simulation is needed; the result reads as "the
     tariff difference on this fixed behavior", not as the savings a household would realize with a price-reactive

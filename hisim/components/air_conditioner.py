@@ -1,5 +1,6 @@
 """Air Conditioner Component."""
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar, Dict, List, Optional
@@ -1067,13 +1068,31 @@ class AirConditionerController(cp.L1ControllerComponent):
 
         Raises:
             ValueError: If the hysteresis is not positive; the soft stop needs it to end (see the
-                class docstring).
+                class docstring). If the ramp time is not a finite number of seconds above 0; the
+                power changes by the step length over it, so 0 divides by zero and a negative time
+                lowers the power of a unit whose room is too cold. If the heating set point is not
+                below the cooling set point; an idle unit would then heat a room that is warm enough.
         """
         if config.hysteresis_in_kelvin <= 0.0:
             raise ValueError(
                 f"The air conditioner's controller needs a positive hysteresis, got {config.hysteresis_in_kelvin} K: "
                 "a running unit ramps down to its minimum power before it stops, and only a positive "
                 "hysteresis bounds how long that takes."
+            )
+        ramp_time_s = config.ramp_time_to_full_power_at_one_kelvin_s
+        if not math.isfinite(ramp_time_s) or ramp_time_s <= 0.0:
+            raise ValueError(
+                "The air conditioner's controller needs a finite ramp_time_to_full_power_at_one_kelvin_s above "
+                f"0 s, got {ramp_time_s!r} s: the power changes each step by the step length over this time, so 0 "
+                "divides by zero and a negative time lowers the power while the room is on the wrong side of the "
+                "set point."
+            )
+        if config.heating_set_temperature_deg_c >= config.cooling_set_temperature_deg_c:
+            raise ValueError(
+                "The air conditioner's controller needs heating_set_temperature_deg_c below "
+                f"cooling_set_temperature_deg_c, got {config.heating_set_temperature_deg_c} °C and "
+                f"{config.cooling_set_temperature_deg_c} °C: the comfort band lies between the two, and with the "
+                "heating set point on top an idle unit heats a room that is already above the cooling set point."
             )
 
         self.config = config

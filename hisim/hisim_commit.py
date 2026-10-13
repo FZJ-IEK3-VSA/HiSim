@@ -67,6 +67,11 @@ class HiSimCommit:
     #: short and is truncated only when it carries a full hash.
     SHORT_LENGTH: ClassVar[int] = 7
 
+    #: Seconds after which the git lookup is abandoned and answers ``None``. Provenance must never
+    #: stall a calculation, so a git that hangs (a network file system, a lock) counts as no git.
+    #: ``RunMetadata`` (``hisim.energy_system.metadata``) uses the same limit for its own lookup.
+    GIT_TIMEOUT_SECONDS: ClassVar[int] = 10
+
     @classmethod
     def of(cls) -> Optional[str]:
         """Return the short commit of this HiSim, or ``None`` when nothing states one.
@@ -125,16 +130,18 @@ class HiSimCommit:
         moved to another commit underneath a running process would make a fresh answer *less*
         true of that process, not more; and where there is no git (an image, an installed package)
         the ``None`` does not change either. Keyed on the root, so a caller that points
-        :attr:`ROOT` somewhere else is asked afresh. :meth:`forget` clears it.
+        :attr:`ROOT` somewhere else is asked afresh. :meth:`forget` clears it. A git that runs
+        longer than :attr:`GIT_TIMEOUT_SECONDS` answers ``None``, like a missing one.
         """
         try:
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603 B607 - fixed argv, no shell, short timeout
                 ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=HiSimCommit.GIT_TIMEOUT_SECONDS,
             )
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, subprocess.SubprocessError):
             return None
         return completed.stdout.strip() or None
 

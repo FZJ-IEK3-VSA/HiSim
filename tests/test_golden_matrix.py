@@ -108,21 +108,28 @@ CANNOT_RUN_A_FULL_YEAR: dict[str, str] = {
 
 
 def test_every_shipped_setup_has_a_weighted_full_year_golden() -> None:
-    """Every setup of the shipped config runs the full year and records its full-year weight.
+    """Every setup of the shipped config runs the full year, with a full-year weight at least its week's.
 
-    Catches a setup slipping back to the week alone (owner decision 2026-10-11: every energy system
+    Catches a setup slipping back to the week alone (owner decision 2026-10-11: every system setup
     has a full-year golden, because the first week of January never runs a solar collector's pump),
-    and a full-year pair weighing the 120 s default, which would pack several real one-to-twelve
-    minute runs onto one lane of a shard. The only setups excused are those of
-    :data:`CANNOT_RUN_A_FULL_YEAR`, and only while they are restricted to the week.
+    a full-year pair weighing the 120 s default, which would pack several real one-to-twelve
+    minute runs onto one lane of a shard, and a full-year weight below the week's, which no
+    measurement gives. The only setups excused are those of :data:`CANNOT_RUN_A_FULL_YEAR`, and
+    only while they are restricted to the week; they need no full-year weight.
     """
     config = json.loads(REAL_CONFIG.read_text())
+    year_runners = [s for s in config["setups"] if s["id"] not in CANNOT_RUN_A_FULL_YEAR]
 
     year_setups = {pair["setup"] for pair in build_matrix(config, horizon="year")["include"]}
-    unweighted = [s["id"] for s in config["setups"] if "full_year_60s" not in s.get("seconds", {})]
+    unweighted = [s["id"] for s in year_runners if "full_year_60s" not in s.get("seconds", {})]
+    lighter_than_their_week = [
+        s["id"] for s in year_runners
+        if s.get("seconds", {}).get("full_year_60s", 0) < s.get("seconds", {}).get("one_week_60s", 0)
+    ]
 
-    assert year_setups == {s["id"] for s in config["setups"]} - set(CANNOT_RUN_A_FULL_YEAR)
+    assert year_setups == {s["id"] for s in year_runners}
     assert not unweighted, f"setups without a full_year_60s weight: {unweighted}"
+    assert not lighter_than_their_week, f"full-year weight below the week's: {lighter_than_their_week}"
 
 
 def test_every_system_setup_is_in_the_golden_config() -> None:
@@ -131,6 +138,9 @@ def test_every_system_setup_is_in_the_golden_config() -> None:
     Catches a new energy system joining ``system_setups/`` without a golden: the gate would never
     notice a change to it. Drivers that call another setup's ``setup_function`` (the
     ``economic_example/`` scripts) define none of their own and are not energy systems of their own.
+    The config names Python setups only, so an energy system file without one
+    (``energy_systems/gas_boiler_household.energy_system.yaml``) has no golden pair and is not
+    checked here.
     """
     config = json.loads(REAL_CONFIG.read_text())
     configured = {Path(s["path"]).as_posix() for s in config["setups"]}
@@ -309,13 +319,15 @@ def test_zero_shards_is_refused() -> None:
 def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
     """The workflows' own calls: 22 week pairs in four shards, 22 full-year pairs in five or four.
 
-    golden-year cuts the year into five shards with the composed files counted, the bless
-    (golden-update.yml) into four without them. Catches a shard holding no pair, which would
-    start a runner for nothing.
+    golden-check cuts the week into four shards with the YAML twins and the composed files
+    counted (``--with-yaml --with-composed``), golden-year the year into five shards with the
+    composed files counted, the bless (golden-update.yml) into four without them. Catches a shard
+    holding no pair, which would start a runner for nothing.
     """
     config = json.loads(REAL_CONFIG.read_text())
-    week = build_shards(config, 4, horizon="week")["include"]
-    year = build_shards(config, 5, horizon="year", composed=composed_setups(config, REPO_ROOT))["include"]
+    composed = composed_setups(config, REPO_ROOT)
+    week = build_shards(config, 4, horizon="week", with_yaml=True, composed=composed)["include"]
+    year = build_shards(config, 5, horizon="year", composed=composed)["include"]
     bless_year = build_shards(config, 4, horizon="year")["include"]
     assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
     assert len(year) == 5 and sum(cell["count"] for cell in year) == 22

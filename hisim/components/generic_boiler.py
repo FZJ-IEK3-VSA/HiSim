@@ -1381,15 +1381,38 @@ class GenericBoilerControllerConfig(ConfigBase):
     set_temperature_difference_for_full_power: float = 5.0
     #: Shortest burn once an on/off controller switched the burner on. The controller counts it in
     #: whole timesteps, rounded down: 1500 s at 900 s per timestep is one timestep, and a value
-    #: shorter than one timestep has no effect (the controller warns at construction).
+    #: shorter than one timestep has no effect (the controller warns at construction). 0 means no
+    #: minimum and does not warn; a negative value is refused.
     minimum_runtime_in_seconds: float = field(default=1800, metadata={"unit": lt.Units.SECONDS})
     #: Shortest pause once an on/off controller switched the burner off, in whole timesteps rounded
-    #: down as :attr:`minimum_runtime_in_seconds` is.
+    #: down as :attr:`minimum_runtime_in_seconds` is. 0 means no minimum and does not warn; a
+    #: negative value is refused.
     minimum_resting_time_in_seconds: float = field(default=1800, metadata={"unit": lt.Units.SECONDS})
     with_domestic_hot_water_preparation: bool = False
     #: If used as secondary heat generator for DHW in hybrid mode.
     secondary_mode: Optional[bool] = False
     hysteresis_water_temperature_offset: float = 10.0
+
+    def __post_init__(self) -> None:
+        """Refuse a minimum runtime or resting time that is negative or not finite, naming the field and the value.
+
+        The controller turns both times into whole timesteps by rounding down, so a negative time would become 0 or
+        a negative count, which means no minimum without a word. For example, the ``on_off`` preset's 0 s (no
+        minimum) and a pellet boiler's 1800 s are accepted, -900 s is refused.
+
+        Raises:
+            ValueError: If ``minimum_runtime_in_seconds`` or ``minimum_resting_time_in_seconds`` is not a finite
+                number of at least 0 s.
+        """
+        for field_name, seconds in (
+            ("minimum_runtime_in_seconds", self.minimum_runtime_in_seconds),
+            ("minimum_resting_time_in_seconds", self.minimum_resting_time_in_seconds),
+        ):
+            if not math.isfinite(seconds) or seconds < 0.0:
+                raise ValueError(
+                    f"The boiler's controller needs {field_name} to be a finite time of at least 0 s, got {seconds!r} s: "
+                    "0 means no minimum, and a negative time would silently mean no minimum as well."
+                )
 
     @preset
     @classmethod

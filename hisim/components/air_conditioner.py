@@ -997,17 +997,22 @@ class AirConditionerController(cp.L1ControllerComponent):
       runtime. It also stops only from its lowest power, :attr:`MINIMUM_POWER_FRACTION`:
       while the air is back inside the band but the power is still higher, the power keeps
       ramping down instead (a soft stop). Stopping from high power would drop the air by the
-      unit's whole same-step effect, up to 4 K, and the minimum idle time would then hold it
-      there. The soft stop always ends: back inside the band the deviation from the held set
-      point is at least the hysteresis, so each step lowers the power by at least
-      ``hysteresis * dt / t_ramp`` (1/30 at 60 s with the preset), and from full power the
-      minimum is reached within ``0.9 * t_ramp`` (27 minutes) of the air staying there. If
-      the air falls back below the hysteresis edge first, the unit is simply regulating
-      again. A hysteresis of zero would take that bound away and is refused.
+      unit's whole same-step effect, about 4.7 K at full power (see below), and the minimum
+      idle time would then hold it there. The soft stop always ends: back inside the band the
+      deviation from the held set point is at least the hysteresis, so each step lowers the
+      power by at least ``hysteresis * min(dt, 450 s) / t_ramp`` (1/30 at 60 s with the
+      preset's 1 K and 1800 s). From full power down to the minimum is a fall of 0.9, so with
+      steps of at most 450 s the minimum is reached within ``0.9 * t_ramp * 1 K / hysteresis`` of
+      the air staying there: 27 minutes with the preset, 4.5 hours with a hysteresis of
+      0.1 K. A longer step ramps only as far as a 450 s step, which stretches that time by
+      ``dt / 450 s`` (54 minutes with the preset at 900 s steps). If the air falls back below
+      the hysteresis edge first, the unit is simply regulating again. A hysteresis of zero
+      would take that bound away and is refused.
     * **Power, ramped by the distance from the set point it holds.** While running, the
-      power fraction changes each step by ``(T_set - T) * dt / t_ramp`` when heating and by
-      ``(T - T_set) * dt / t_ramp`` when cooling, with ``T`` the sampled indoor air
-      temperature, ``dt`` the step length and ``t_ramp``
+      power fraction changes each step by ``(T_set - T) * min(dt, 450 s) / t_ramp`` when
+      heating and by ``(T - T_set) * min(dt, 450 s) / t_ramp`` when cooling, with ``T`` the
+      sampled indoor air temperature, ``dt`` the step length, 450 s the value of
+      :attr:`LONGEST_RAMPED_STEP_S` (see below) and ``t_ramp``
       :attr:`AirConditionerControllerConfig.ramp_time_to_full_power_at_one_kelvin_s`, and
       stays between :attr:`MINIMUM_POWER_FRACTION` and 1. Below the set point the power
       rises, above it the power falls, so the air settles on the set point whatever the
@@ -1264,10 +1269,14 @@ class AirConditionerController(cp.L1ControllerComponent):
     ) -> AirConditionerControllerState:
         """Decides mode and power for this step from the state committed at the end of the previous one.
 
-        A pure function of its arguments: it reads the sampled indoor air temperature in
-        ``committed_state`` and returns a new state, leaving ``committed_state`` unchanged.
-        Before the first sample (the first step) the unit stays as it is. For the rules, see
-        the class docstring.
+        A function of its arguments and the controller's fixed configuration: besides
+        ``committed_state`` and ``timestep`` it reads only the set points and the hysteresis
+        of :attr:`config`, the minimum runtime and idle time in steps and the power change per
+        kelvin and step, all fixed when the controller is built. It reads the sampled indoor
+        air temperature in ``committed_state`` and returns a new state, changing neither
+        ``committed_state`` nor the controller, so the same arguments always give the same
+        state. Before the first sample (the first step) the unit stays as it is. For the
+        rules, see the class docstring.
 
         Args:
             committed_state: The state committed at the end of the previous step.

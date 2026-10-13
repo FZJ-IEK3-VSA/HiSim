@@ -22,6 +22,7 @@ from epc.engines.at import defaults
 from epc.engines.at.data_tables import AustrianTables
 from epc.engines.at.usage import Usage
 from epc.model.building import BuildingDescription
+from epc.model.errors import EpcError, EpcErrorKind
 from epc.model.result import Assumption
 
 #: B 8110-6-1:2024-03 5.3.2 c), Eq. (11a): the factor, the U-value offset in W/(m² · K) and the share of the
@@ -103,6 +104,9 @@ def envelope(
 
     Returns:
         Transmission, thermal bridges, ventilation, envelope area, U_m and ℓ_c.
+
+    Raises:
+        EpcError: ``E-18`` for a building whose envelope has no area.
     """
     contributions: List[ElementConductance] = []
     assumptions: List[Assumption] = []
@@ -118,6 +122,10 @@ def envelope(
         conductance = factor * element.area_in_m2 * element.u_value_in_watt_per_m2_per_kelvin
         contributions.append(ElementConductance(element.name, row, factor, conductance))
         envelope_area += element.area_in_m2
+    if envelope_area <= 0:
+        raise EpcError(EpcErrorKind.VALUE_NOT_ADMISSIBLE, name=building.name, field="elements",
+                       value="no area against outside air or an unconditioned space",
+                       rule="a thermal envelope with an area")
     element_conductance = sum(contribution.conductance_in_w_per_k for contribution in contributions)
     bridges = thermal_bridge_conductance(element_conductance, envelope_area)
     transmission = element_conductance + bridges

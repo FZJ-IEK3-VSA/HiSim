@@ -56,7 +56,9 @@ MESSAGES: Dict[EpcErrorKind, str] = {
     ),
     EpcErrorKind.NO_BUILDING: "The record '{path}' holds no building; the EPC is computed per building.",
     EpcErrorKind.SCHEMA_VERSION: "'{path}' is {found}; this calculator reads building-expanded/1 (input_contract.md).",
-    EpcErrorKind.MISSING_FIELD: "Building '{name}': the expanded record lacks '{field}' (contract §2.3).",
+    EpcErrorKind.MISSING_FIELD: (
+        "Building '{name}': the expanded record states no valid value for '{field}' (contract §2.3)."
+    ),
     EpcErrorKind.UNKNOWN_ADJUSTMENT_FACTOR: (
         "Building '{name}', element '{element}': HiSim's adjustment factor {b} has no situation; the calculator "
         "knows 1, 0.5 and 0 (design.md §7.2)."

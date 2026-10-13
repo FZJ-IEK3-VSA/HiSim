@@ -15,9 +15,10 @@ assumption says so.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
-from epc.model.building import BuildingDescription, Element, Situation
+from epc.model.building import BuildingDescription, Element, Situation, Window
+from epc.model.errors import EpcError, EpcErrorKind
 from epc.model.result import Assumption
 
 #: B 8110-6-1:2024-03 Section 4, p. 8: for residential buildings the reference area BF is 0.8 · BGF.
@@ -28,7 +29,8 @@ REFERENCE_AREA_SHARE = 0.8
 #: substitute for the gross volume of a residential building (Section 4); this is the engine's choice.
 GROSS_STOREY_HEIGHT_IN_M = 3.0
 
-#: B 8110-6-1:2024-03 8.3, Eq. (40), simplified approach b): the glass share f_g of a window's area.
+#: B 8110-6-1:2024-03 8.3, Eq. (40), simplified approach b): the glass share f_g of a window's area, for a
+#: window whose glass area the description does not state (approach a, ÖNORM EN ISO 10077-1, otherwise).
 GLASS_SHARE = 0.7
 
 #: B 8110-6-1:2024-03 8.3.1.2.2: the shading factor F_S,h for one or two dwelling units and terraced houses,
@@ -52,6 +54,24 @@ _ROWS: Dict[Situation, Tuple[Optional[str], Optional[str]]] = {
         "its walls and floor (Tab. 4 footnote a), which the building description does not state",
     ),
     Situation.UNCONDITIONED_SPACE: ("WALL_TO_BUFFER_SPACE", "wall to another buffer space (Tab. 4)"),
+    Situation.UNCONDITIONED_GARAGE: ("CEILING_TO_CLOSED_GARAGE", None),
+    Situation.GROUND: (
+        "FLOOR_ON_GROUND_SHALLOW",
+        "floor on the ground, shallow (Tab. 5); the description states no depth",
+    ),
+}
+
+#: The situations a description written by hand states for a floor only.
+_FLOOR_ONLY = (Situation.UNCONDITIONED_GARAGE, Situation.GROUND)
+
+#: B 8110-6-1:2024-03 9.1.2, after Eq. (50): f_BW in Wh/(m³ · K) of the light, the medium and the heavy
+#: construction, and HiSim's five heat capacity classes mapped to them (D3).
+CONSTRUCTIONS: Dict[str, Tuple[str, float]] = {
+    "very light": ("leicht", 10.0),
+    "light": ("leicht", 10.0),
+    "medium": ("mittelschwer", 20.0),
+    "heavy": ("schwer", 30.0),
+    "very heavy": ("schwer", 30.0),
 }
 
 
@@ -129,14 +149,28 @@ def ventilation() -> Assumption:
     )
 
 
-def glass_share() -> Defaulted:
-    """The glass share f_g of a window: the description states the window areas, not their glass areas."""
+def glass_share(windows: Sequence[Window]) -> Defaulted:
+    """The glass share f_g of the windows whose glass area the description does not state.
+
+    A stated glass area is the glass area of approach a) of B 8110-6-1:2024-03 8.3 and needs no
+    assumption; every other window takes approach b), Eq. (40), and the assumption says so.
+
+    Args:
+        windows: The window surfaces of the description.
+
+    Returns:
+        f_g, with an assumption when at least one window has no stated glass area.
+    """
+    defaulted = [window.name for window in windows if window.glass_area_in_m2 is None]
+    if not defaulted:
+        return Defaulted(GLASS_SHARE, None)
+    which = "every window" if len(defaulted) == len(windows) else ", ".join(defaulted)
     return Defaulted(
         GLASS_SHARE,
         Assumption(
             "glass_share",
-            "A_g = 0.7 A_W",
-            "B 8110-6-1:2024-03 8.3, Eq. (40), simplified approach b); the record states no glass areas",
+            f"A_g = 0.7 A_W for {which}",
+            "B 8110-6-1:2024-03 8.3, Eq. (40), simplified approach b); the description states no glass area there",
         ),
     )
 
@@ -178,8 +212,9 @@ def correction_factor_row(element: Element) -> Tuple[Optional[str], Optional[Ass
     """The row of B 8110-6-1 Tab. 3–5 whose temperature-correction factor an element takes (D29).
 
     Outside air is the Tab. 3 row; an unconditioned space is a Tab. 4 row by element class, which is the
-    engine's default and an assumption; a conditioned neighbour takes no row, as it lies outside the
-    thermal envelope.
+    engine's default and an assumption; a closed garage, stated by a hand-written description for a
+    floor, is its own Tab. 4 row; a floor on the ground, stated the same way, takes the shallow row of
+    Tab. 5 as an assumption; a conditioned neighbour takes no row, as it lies outside the thermal envelope.
 
     Args:
         element: One element of the description.
@@ -188,11 +223,45 @@ def correction_factor_row(element: Element) -> Tuple[Optional[str], Optional[Ass
         The row key of the data contract, or ``None`` for a conditioned neighbour, and the assumption
         when the row is a default.
     """
+    if element.situation in _FLOOR_ONLY and element.name != "floor":
+        raise ValueError(f"Element '{element.name}': {element.situation.value} is stated for a floor only.")
     row, taken_as = _ROWS[element.situation]
     if taken_as is None:
         return row, None
     return row, Assumption(
         f"correction_factor_{element.name}",
         f"{element.name} with HiSim's adjustment factor {element.adjustment_factor_used_by_hisim} taken as {taken_as}",
-        "B 8110-6-1:2024-03 Tab. 4; the row per situation is the engine's default (D29)",
+        "B 8110-6-1:2024-03 Tab. 4, 5; the row per situation is the engine's default (D29)",
+    )
+
+
+def construction(building: BuildingDescription) -> Defaulted:
+    """The f_BW of B 8110-6-1:2024-03 Eq. (50) for HiSim's heat capacity class (D3), always an assumption.
+
+    Args:
+        building: The description.
+
+    Returns:
+        f_BW in Wh/(m³ · K) with its assumption.
+
+    Raises:
+        EpcError: ``E-18`` for a heat capacity class HiSim does not have.
+    """
+    if building.heat_capacity_class not in CONSTRUCTIONS:
+        raise EpcError(
+            EpcErrorKind.VALUE_NOT_ADMISSIBLE,
+            name=building.name,
+            field="heat_capacity_class",
+            value=building.heat_capacity_class,
+            rule=f"one of {', '.join(CONSTRUCTIONS)}",
+        )
+    name, value = CONSTRUCTIONS[building.heat_capacity_class]
+    return Defaulted(
+        value,
+        Assumption(
+            "construction",
+            f"{name} construction, f_BW = {value} Wh/(m3 K), from HiSim's heat capacity class "
+            f"'{building.heat_capacity_class}'",
+            "B 8110-6-1:2024-03 9.1.2, Eq. (50); HiSim's five classes mapped to the norm's three (D3)",
+        ),
     )

@@ -97,5 +97,25 @@ Every engine fills the common core:
 | `indicator_reference_area` | the national reference area the indicators are given per |
 | `heating_demand_site_climate` | the same under the site climate; present exactly when the engine's `climate_basis` is `reference+site` |
 
-Every further key is an engine's own and is listed here, per engine, with that engine. No engine is
-implemented yet.
+Every further key is an engine's own and is listed here, per engine, with that engine.
+
+### Austria (`AT`, OENORM B 8110-6-1 with B 8110-5, H 5050-1, H 5056-1, 2024-03)
+
+Climate basis `reference+site`; the site block must state `climate_region` and `elevation_in_m`.
+
+| Key | Unit | Meaning |
+|---|---|---|
+| `heating_demand_reference_climate` | kWh/(m2 a) | HWB_RK, per BGF |
+| `heating_demand_site_climate` | kWh/(m2 a) | HWB_SK, per BGF; stage 1 without recoverable hot-water losses |
+| `indicator_reference_area` | m2 | BGF = conditioned floor area / 0.8 |
+| `heating_degree_days_22_14_site_climate` | Kd | HGT 22/14 of the site, B 8110-5 Eq. (4) with the days of each month |
+| `mean_u_value`, `characteristic_length`, `lek_t` | W/(m2 K), m, 1 | U_m, ℓ_c, LEK_T |
+| `heating_days_reference_climate`, `heating_days_site_climate` | d | days of the heating period |
+
+Annual terms: the conductances, envelope area, gross volume, thermal capacity, time constant, the
+utilisation parameter, internal gains, and per climate the transmission and ventilation losses, the
+solar gains and the heating demand. Monthly series per climate: heating demand, losses, gains, heating
+share and outdoor temperature. Assumptions: gross floor area, gross volume (when the record states
+none), construction from HiSim's heat capacity class, glass share (for windows without a stated glass
+area), shading factor, thermal bridges,
+ventilation, and the Tab. 4 row of every element against an unconditioned space.

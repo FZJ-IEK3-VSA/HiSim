@@ -3,18 +3,19 @@
 The country is an explicit argument (D16) and selects the engine here, before any file is opened: a
 country without an engine is refused naming the implemented ones (``E-01``, R3). Adding a country
 registers one engine class under its code and touches no other engine, the shell, the dictionaries
-or the reports (R10). No engine is registered yet; tests register their own.
+or the reports (R10). Austria is registered (the pilot); tests register their own dummies.
 """
 
 from __future__ import annotations
 
 from typing import Dict, Type
 
+from epc.engines.at.method import AustrianEngine
 from epc.engines.base import EpcEngine
 from epc.model.errors import EpcError, EpcErrorKind
 
 #: Engine class by ISO 3166-1 alpha-2 code.
-ENGINES_BY_COUNTRY: Dict[str, Type[EpcEngine]] = {}
+ENGINES_BY_COUNTRY: Dict[str, Type[EpcEngine]] = {AustrianEngine.country: AustrianEngine}
 
 
 def register(engine: Type[EpcEngine]) -> None:

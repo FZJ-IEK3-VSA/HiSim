@@ -60,8 +60,9 @@ def test_a_valid_description_is_accepted_and_immutable() -> None:
         {"elements": (_element("door", area_in_m2=0.0, u_value_in_watt_per_m2_per_kelvin=0.0),)},
         {"elements": (_element("window", area_in_m2=0.0),), "windows": ()},
         {"windows": (_window(g_value=1.0),)},
+        {"windows": (_window(glass_area_in_m2=4.0),)},
     ],
-    ids=["building type", "gross volume", "door without area", "no windows at all", "g of 1"],
+    ids=["building type", "gross volume", "door without area", "no windows at all", "g of 1", "all glass"],
 )
 def test_admissible_values_are_accepted(changes: dict) -> None:
     """A stated building type, a volume, an element of area 0 and a g-value of 1 are values a building can have."""
@@ -88,6 +89,8 @@ def test_admissible_values_are_accepted(changes: dict) -> None:
         ({"windows": (_window(area_in_m2=0.0),)}, "windows.south.area_in_m2"),
         ({"windows": (_window(g_value=0.0),)}, "windows.south.g_value"),
         ({"windows": (_window(g_value=1.01),)}, "windows.south.g_value"),
+        ({"windows": (_window(glass_area_in_m2=0.0),)}, "windows.south.glass_area_in_m2"),
+        ({"windows": (_window(glass_area_in_m2=4.5),)}, "windows.south.glass_area_in_m2"),
     ],
 )
 def test_inadmissible_values_are_refused(changes: dict, field: str) -> None:

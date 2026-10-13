@@ -70,7 +70,7 @@ def synthetic_tables() -> Dict[str, List[str]]:
     transposition += [f"{band},{above},{up_to},{month},{_number(22.5 * az)},{15 * tilt},{_number(f_t(az, tilt))}"
                       for band, above, up_to in E_BANDS for month in MONTHS for az in range(9) for tilt in range(7)]
     usage = ["class,theta_i_h_c,n_l_hyg_per_h,q_i_h_w_per_m2,wwwb_wh_per_m2_d",
-             "1-1,11.1,0.11,1.1,1.0", "2-5,12.2,0.22,2.2,2.0", "6+,13.3,0.33,3.3,3.0"]
+             "1-1,31.1,0.11,1.1,1.0", "2-5,32.2,0.22,2.2,2.0", "6+,33.3,0.33,3.3,3.0"]
     factors = ["boundary,f_h,f_c,table,row_text"]
     factors += [f"{key},{_number(f_h(key))},0.456,4,synthetic row" for key in CORRECTION_FACTOR_ROWS]
     return {

@@ -13,6 +13,7 @@ The building is written by hand with placeholder values; the tables come from
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -148,7 +149,20 @@ def test_the_shading_factor_follows_8_3_1_2_2(units: int, building_type: str | N
 
 
 def test_the_glass_share_is_the_simplified_approach_of_eq_40() -> None:
-    """A_g = 0.7 A_W, recorded as an assumption (I-4)."""
-    result = defaults.glass_share()
+    """A_g = 0.7 A_W for windows without a stated glass area, recorded as an assumption (I-4)."""
+    result = defaults.glass_share(WINDOWS)
     assert result.value == 0.7
     assert result.assumption is not None and "Eq. (40)" in result.assumption.source
+    assert "every window" in result.assumption.value
+
+
+def test_a_stated_glass_area_is_approach_a_without_assumption() -> None:
+    """8.3 a): a stated glass area replaces 0.7 A_W in Eq. (44); only the other windows are assumed."""
+    stated = (dataclasses.replace(WINDOWS[0], glass_area_in_m2=9.5), WINDOWS[1])
+    areas = gains.collector_areas(stated, 0.7, 0.65)
+    assert areas["south"] == 9.5 * 0.65 * stated[0].g_value * (0.9 * 0.98)
+    assert areas["north"] == 0.7 * stated[1].area_in_m2 * 0.65 * stated[1].g_value * (0.9 * 0.98)
+    partly = defaults.glass_share(stated)
+    assert partly.assumption is not None and partly.assumption.value.endswith("for north")
+    every = tuple(dataclasses.replace(window, glass_area_in_m2=window.area_in_m2 / 2) for window in WINDOWS)
+    assert defaults.glass_share(every).assumption is None

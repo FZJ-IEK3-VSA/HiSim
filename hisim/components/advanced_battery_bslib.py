@@ -2,6 +2,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import dataclasses
+import math
 from typing import ClassVar, List, Tuple, Optional
 from dataclasses import dataclass
 from bslib import bslib as bsl
@@ -149,33 +150,71 @@ class BslibChargingParameters:
     #: The smallest AC power the converter charges with, in W; bslib charges nothing at or below it.
     minimum_charging_power_in_watt: float
     #: The state of charge, dimensionless between 0 and 1, the battery must fall below before it charges again once
-    #: it has been full (bslib's recharge hysteresis).
+    #: bslib's recharge hysteresis has been set, which happens only when the state of charge passes 1 (see
+    #: :meth:`recharging_is_blocked`).
     recharge_threshold_state_of_charge: float
 
+    def __post_init__(self) -> None:
+        """Refuse a parameter that is not a finite number of at least 0, naming the field and the value.
+
+        bslib describes some systems only partly: the DC-coupled systems ``S3`` and ``S4`` give NaN rated and minimum
+        charging powers, and ``INV1`` also a NaN capacity. A NaN bound would reach the energy manager as the battery's
+        published charging power and fail there in the first step; refusing it here fails the battery's construction
+        instead, with the field that is wrong. For example, SG1 with 10 kWh and 5 kW (10,000 Wh, 5,000 W, 91.15 W,
+        0.98) is accepted; a NaN minimum charging power or a capacity of -1 Wh is refused.
+
+        Raises:
+            ValueError: If any field is not finite or is below 0.
+        """
+        for field_name, value in (
+            ("capacity_in_watt_hour", self.capacity_in_watt_hour),
+            ("rated_charging_power_in_watt", self.rated_charging_power_in_watt),
+            ("minimum_charging_power_in_watt", self.minimum_charging_power_in_watt),
+            ("recharge_threshold_state_of_charge", self.recharge_threshold_state_of_charge),
+        ):
+            if not math.isfinite(value) or value < 0.0:
+                raise ValueError(
+                    f"The bslib battery's {field_name} must be a finite number of at least 0, got {value!r}: the "
+                    "battery's charging limits are computed from it."
+                )
+
     @classmethod
-    def of_battery(cls, battery: bsl.ACBatMod) -> "BslibChargingParameters":
+    def of_battery(cls, battery: bsl.ACBatMod, *, system_id: str) -> "BslibChargingParameters":
         """Return the charging parameters of a bslib battery, read from its private attributes.
 
         Args:
             battery: The bslib battery model.
+            system_id: The bslib system the model was built for, e.g. ``"SG1"``; it names the system in a refusal.
 
         Returns:
             Its charging parameters.
+
+        Raises:
+            ValueError: If bslib gives a parameter that is not a finite number of at least 0 for this system, as it
+                does for the DC-coupled systems ``S3``, ``S4`` and ``INV1``.
         """
         # bslib keeps these only as private attributes.
-        return cls(
-            capacity_in_watt_hour=float(battery._E_BAT),  # pylint: disable=protected-access  # bslib has no accessor
-            rated_charging_power_in_watt=float(battery._P_AC2BAT_IN),  # pylint: disable=protected-access  # bslib has no accessor
-            minimum_charging_power_in_watt=float(battery._P_AC2BAT_MIN),  # pylint: disable=protected-access  # bslib has no accessor
-            recharge_threshold_state_of_charge=float(battery._SOC_THRESHOLD),  # pylint: disable=protected-access  # bslib has no accessor
-        )
+        try:
+            return cls(
+                capacity_in_watt_hour=float(battery._E_BAT),  # pylint: disable=protected-access  # bslib has no accessor
+                rated_charging_power_in_watt=float(battery._P_AC2BAT_IN),  # pylint: disable=protected-access  # bslib has no accessor
+                minimum_charging_power_in_watt=float(battery._P_AC2BAT_MIN),  # pylint: disable=protected-access  # bslib has no accessor
+                recharge_threshold_state_of_charge=float(battery._SOC_THRESHOLD),  # pylint: disable=protected-access  # bslib has no accessor
+            )
+        except ValueError as error:
+            raise ValueError(
+                f"The bslib system {system_id!r} cannot be simulated as an AC-coupled battery: {error}"
+            ) from error
 
     @staticmethod
     def recharging_is_blocked(battery: bsl.ACBatMod) -> bool:
         """Return whether a bslib battery waits, after its last simulated step, to fall below its recharge threshold.
 
-        bslib sets this flag once the battery is full and clears it when the state of charge falls below the
-        recharge threshold; while it is set, the battery does not charge.
+        bslib sets this flag only when a step ends with a state of charge above 1, and clears it when the state of
+        charge falls below the recharge threshold; while it is set, the battery does not charge. The battery never
+        passes 1: bslib caps the AC power at what fills the battery (``avoid_overcharging``), and the minimum charging
+        power stops it at about 0.99985 (SG1, 60 s steps). So for SG1 and S2 the flag stays False, and the battery
+        reads it only as a defensive half of the adapter, in case a bslib system or version sets it.
 
         Args:
             battery: The bslib battery model, after a call of its ``simulate``.
@@ -259,7 +298,9 @@ class Battery(PhysicsComponent):
             p_inv_custom=self.custom_pv_inverter_power_generic_in_watt,
             e_bat_custom=self.custom_battery_capacity_generic_in_kilowatt_hour,
         )
-        self.charging_parameters = BslibChargingParameters.of_battery(self.ac_coupled_battery_object)
+        self.charging_parameters = BslibChargingParameters.of_battery(
+            self.ac_coupled_battery_object, system_id=self.system_id
+        )
 
         # Define component inputs
         self.loading_power_input_channel: ComponentInput = self.add_input(
@@ -607,7 +648,8 @@ class BatteryState:
 
     #: state of charge of the battery, dimensionless between 0 and 1
     state_of_charge: float = 0
-    #: Whether bslib's recharge hysteresis blocks charging: set once the battery was full, cleared below the threshold.
+    #: Whether bslib's recharge hysteresis blocks charging: set only when a step ended above a state of charge of 1,
+    #: cleared below the threshold (see :meth:`BslibChargingParameters.recharging_is_blocked`).
     recharging_is_blocked: bool = False
 
     def clone(self) -> "BatteryState":

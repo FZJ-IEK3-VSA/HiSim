@@ -135,7 +135,7 @@ table), `stages[]`, `reference`, `plan` (the `Evaluation` shape: `totals`, `by_g
 `provenance`. Bands are `{min, best, max}` from `UncertainValue`; costs positive, credits negative,
 years relative with `calendar_year` given per row. Write `economics_result.schema.json` beside the
 code (JSON Schema 2020-12) and validate every written document against it. `hisim_commit` comes
-from `hisim.renovisor.report.HiSimCommit` **extended** to read a baked `hisim/COMMIT` file or the
+from `hisim.hisim_commit.HiSimCommit` **extended** to read a baked `hisim/COMMIT` file or the
 `HISIM_COMMIT` environment variable before falling back to git (todo H6); document that the
 Dockerfile writes the file.
 

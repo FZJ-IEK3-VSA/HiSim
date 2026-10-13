@@ -332,7 +332,12 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         config: MoreAdvancedHeatPumpHPLibConfig,
         my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ):
-        """Loads the parameters of the specified heat pump."""
+        """Loads the parameters of the specified heat pump.
+
+        Raises:
+            ValueError: If the nominal secondary mass flow is negative or not finite, or if it is unset or 0 in a
+                setup whose water pump runs at that fixed flow (hot-water storage in series or no storage).
+        """
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -378,6 +383,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         # )
 
         self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s
+
+        # A negative nominal flow would only fail at the first fixed-flow step (NegativeMassFlowError), so it is
+        # refused here, where the field that is wrong can still be named.
+        if self.m_dot_ref is not None and not (math.isfinite(self.m_dot_ref) and self.m_dot_ref >= 0.0):
+            raise ValueError(
+                "The heat pump's massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow of at least "
+                f"0 kg/s, got {self.m_dot_ref!r} kg/s: the water pump circulates this flow through the secondary side."
+            )
 
         if self.position_hot_water_storage_in_system in [
             PositionHotWaterStorageInSystemSetup.SERIES,

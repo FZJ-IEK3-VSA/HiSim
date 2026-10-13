@@ -3,12 +3,12 @@
 Every run checks the declared balances and fails when one does not close, so a run that finishes is one whose
 generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. Every check but the fuel-carrier
 table's (``base``) runs a whole household, so those run in the ``extendedbase2`` shard: a winter day at 3600 s of
-the gas and the heat-pump household for the ports, the first three weeks of January of the solar-thermal one, in
-which its pump runs, the second January week at 900 s of each recorded generator household, and the same week of
-the gas household for the boiler's combustion loss. Each generator declares what it takes (fuel,
-electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water) and what it
-loses; the Sankey links it to its meter, its storages and the environment. The storages and the heat distribution
-system are undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).
+the gas, heat-pump, district-heating and electric-heating households for the ports, the first three weeks of January
+of the solar-thermal one, in which its pump runs, the second January week at 900 s of each recorded generator
+household, and the same week of the gas household for the boiler's combustion loss. Each generator declares what it
+takes (fuel, electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water)
+and what it loses; the Sankey links it to its meter, its storages and the environment. The storages and the heat
+distribution system are undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).
 """
 
 import json
@@ -157,6 +157,25 @@ FAST_PORTS: Dict[str, Tuple[str, Dict[str, Tuple[str, str]]]] = {
             "ThermalPowerDeliveredForSpaceHeating": ("out", "space_heating_heat"),
             "ThermalPowerDrawnForCooling": ("in", "cooling"),
             "ThermalOutputPowerDHW": ("out", "domestic_hot_water_heat"),
+        },
+    ),
+    # The district heat comes in on the two metered energy outputs, not on DistrictHeatDrawn, their unread sum.
+    "household_district_heating_building_sizer": (
+        "DistrictHeating",
+        {
+            "ThermalOutputShEnergy": ("in", "district_heat"),
+            "ThermalOutputDhwEnergy": ("in", "district_heat"),
+            "ThermalOutputShPower": ("out", "space_heating_heat"),
+            "ThermalOutputDhwPower": ("out", "domestic_hot_water_heat"),
+        },
+    ),
+    "household_electric_heating_building_sizer": (
+        "ElectricHeating",
+        {
+            "ElectricOutputShPower": ("in", "electricity"),
+            "ElectricOutputDhwPower": ("in", "electricity"),
+            "ThermalOutputShPower": ("out", "space_heating_heat"),
+            "ThermalOutputDhwPower": ("out", "domestic_hot_water_heat"),
         },
     ),
 }

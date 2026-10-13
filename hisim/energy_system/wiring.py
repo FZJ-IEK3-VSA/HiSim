@@ -196,8 +196,8 @@ class WiringPlanner:
         Args:
             model: The energy system, after group expansion and validation.
             components: The ``(name, component)`` pairs in file order.
-            selection: Selects observers' feeds among the constructed components; ``None`` for a
-                file without observers.
+            selection: Selects observers' feeds among the constructed components and lands the metered
+                consuming outputs; ``None`` for a file with no observer, controllable or landed meter feed.
         """
         self.model = model
         self.selection = selection
@@ -440,7 +440,7 @@ def wire_energy_system(
             each checked for its carrier and its meter's feeds; the ones the selection lands at a
             meter it has checked itself, so the caller leaves them out.
         selection: Selects observers' feeds among the constructed components (an expansion of
-            imports' selection plan); ``None`` for a file without observers.
+            imports' selection plan); ``None`` for a file with no observer, controllable or landed meter feed.
 
     Returns:
         The wired system and the warnings a run should print: one line per component that feeds

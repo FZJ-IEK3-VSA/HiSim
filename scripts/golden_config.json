@@ -19,8 +19,8 @@
     {"id": "basic_household_only_heating",                  "path": "system_setups/basic_household_only_heating.py", "seconds": {"one_week_60s": 17, "full_year_60s": 88}},
     {"id": "household_gas_solar_thermal",                   "path": "system_setups/household_gas_solar_thermal.py", "seconds": {"one_week_60s": 191, "full_year_60s": 197}},
     {"id": "simple_air_conditioner_household_building_sizer", "path": "system_setups/simple_air_conditioner_household_building_sizer.py", "seconds": {"one_week_60s": 14, "full_year_60s": 18}},
-    {"id": "simple_system_setup_one",                       "path": "system_setups/simple_system_setup_one.py", "seconds": {"one_week_60s": 6, "full_year_60s": 3}},
-    {"id": "simple_system_setup_two",                       "path": "system_setups/simple_system_setup_two.py", "seconds": {"one_week_60s": 6, "full_year_60s": 4}},
+    {"id": "simple_system_setup_one",                       "path": "system_setups/simple_system_setup_one.py", "seconds": {"one_week_60s": 5, "full_year_60s": 8}},
+    {"id": "simple_system_setup_two",                       "path": "system_setups/simple_system_setup_two.py", "seconds": {"one_week_60s": 6, "full_year_60s": 9}},
     {"id": "dynamic_components",                            "path": "system_setups/dynamic_components.py", "seconds": {"one_week_60s": 12, "full_year_60s": 117}},
     {"id": "electrolyzer_with_renewables",                  "path": "system_setups/electrolyzer_with_renewables.py", "seconds": {"one_week_60s": 19, "full_year_60s": 364}}
   ],

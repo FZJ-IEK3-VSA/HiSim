@@ -58,7 +58,7 @@ class SetupConfig:
     path: str
     #: The horizons this setup participates in (``"day"``/``"week"``/``"year"``), or
     #: ``None`` for all of them. Every shipped setup runs both the week and the full year
-    #: (owner decision 2026-10-11: every energy system has a full-year golden), so the
+    #: (owner decision 2026-10-11: every system setup has a full-year golden), so the
     #: shipped config sets this nowhere; it stays for a setup that may join one horizon only.
     horizons: Optional[list[str]] = None
     #: The recorded wall time of each of its pairs on a GitHub runner, in seconds, by parameter-set

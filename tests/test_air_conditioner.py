@@ -152,6 +152,34 @@ def test_minimum_runtime_and_idle_time_hold_the_mode(
 
 
 @pytest.mark.base
+def test_minimum_runtime_and_idle_time_count_from_the_step_the_unit_started_and_stopped() -> None:
+    """Catches a start or a stop that does not record its step, so the minimum times count from an older one.
+
+    With a 15-step minimum runtime and a 10-step minimum idle time, the unit starts heating at
+    step 50 on 19 °C. On 30 °C it ramps to its minimum power at once but runs until step 65,
+    15 steps after its start, not 15 steps after step 0. On 0 °C it then stays off until step
+    75, 10 steps after its stop.
+    """
+    testee = given_default_testee({"minimum_runtime_s": 60 * 15, "minimum_idle_time_s": 60 * 10})
+    state = testee.decide(committed(Mode.OFF, 19.0), 50)
+    assert state.mode == Mode.HEATING
+
+    modes_on_hot_air: List[Mode] = []
+    for timestep in range(51, 66):
+        state.indoor_air_temperature_deg_c = 30.0
+        state = testee.decide(state, timestep)
+        modes_on_hot_air.append(state.mode)
+    modes_on_cold_air: List[Mode] = []
+    for timestep in range(66, 76):
+        state.indoor_air_temperature_deg_c = 0.0
+        state = testee.decide(state, timestep)
+        modes_on_cold_air.append(state.mode)
+
+    assert modes_on_hot_air == [Mode.HEATING] * 14 + [Mode.OFF]
+    assert modes_on_cold_air == [Mode.OFF] * 9 + [Mode.HEATING]
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(
     ["committed_mode", "indoor_air_temperature_deg_c", "committed_power_fraction", "expected_power_fraction"],
     [

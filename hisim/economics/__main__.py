@@ -1,4 +1,4 @@
-"""Command line of the lifecycle cost engine (cost_spec.md §3.10, §4.6).
+"""Command line of the lifecycle cost engine.
 
 Usage::
 
@@ -10,7 +10,7 @@ Usage::
 
 The evaluator is a pure function of `economic_inputs.json`, so a result directory can be re-priced (`evaluate`), traced
 (`explain`) or reported on (`report`) without the simulation. `staged` prices a multi-year renovation plan out of
-finished jobs (`staged_cli.StagedCli`, to which `main` dispatches); `validate` runs the §9.6 data-file checks.
+finished jobs (`staged_cli.StagedCli`, to which `main` dispatches); `validate` runs the data-file checks.
 `evaluate`, `explain` and `report` share one setup (`_build_context`); without `--parameters` they use the parameters
 stored in the run's `lifecycle_costs.json`, never the engine defaults, and `--subsidy-catalog` overrides the catalog
 path the parameters name.
@@ -103,7 +103,7 @@ class AuditLayerProbe:
 
 @dataclass(frozen=True)
 class EvaluationContext:
-    """Everything one re-pricing invocation of `evaluate`, `explain` or `report` needs, assembled once (§4.6).
+    """Everything one re-pricing invocation of `evaluate`, `explain` or `report` needs, assembled once.
 
     One record built by `_build_context`, so the three commands price under the same assumptions and catalog.
 
@@ -164,7 +164,7 @@ def _load_parameters(args: argparse.Namespace, results_dir: Optional[str] = None
 
 
 def _build_context(results_dir: str, args: argparse.Namespace) -> EvaluationContext:
-    """Assemble the `EvaluationContext` behind `evaluate`, `explain` and `report` (§4.6).
+    """Assemble the `EvaluationContext` behind `evaluate`, `explain` and `report`.
 
     Reads the stored inputs, resolves the assumptions, database and catalog, binds an evaluator, runs the resolution
     check against that same database and catalog, and selects the applicable perspectives. `--subsidy-catalog` wins
@@ -200,7 +200,7 @@ def _build_context(results_dir: str, args: argparse.Namespace) -> EvaluationCont
 
 
 def _evaluate_perspectives(context: EvaluationContext) -> EvaluationMatrix:
-    """Evaluate every applicable perspective of the context into one matrix (§7.1).
+    """Evaluate every applicable perspective of the context into one matrix.
 
     Shared by `evaluate` and `report`, so both produce the same matrix for the same inputs.
 
@@ -217,7 +217,7 @@ def _evaluate_perspectives(context: EvaluationContext) -> EvaluationMatrix:
 
 
 def _write_scenario_cube(context: EvaluationContext, scenarios_path: str, results_dir: str) -> ScenarioCube:
-    """Evaluate the §4.6 scenario cube and write `scenario_cube.csv`/`.json`.
+    """Evaluate the scenario cube and write `scenario_cube.csv`/`.json`.
 
     Shared by `evaluate --scenarios` and `report --scenarios`. A cube is always freshly evaluated.
 
@@ -240,7 +240,7 @@ def _write_scenario_cube(context: EvaluationContext, scenarios_path: str, result
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
-    """Run `evaluate`: re-price a stored result directory, or evaluate a scenario cube over it (§4.6).
+    """Run `evaluate`: re-price a stored result directory, or evaluate a scenario cube over it.
 
     Without `--scenarios`, evaluates the applicable perspectives and overwrites the directory's `lifecycle_costs.json`,
     `component_costs.*`, `cash_flow_timeline.csv`, `cost_provenance.json`, `cost_audit.csv`/`.json` and the ledger
@@ -283,7 +283,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
 
 
 def _cmd_explain(args: argparse.Namespace) -> int:
-    """Run `explain`: trace one result value back to the data entries and sources behind it (§3.10).
+    """Run `explain`: trace one result value back to the data entries and sources behind it.
 
     Takes `--value "<perspective>/<field-path>"`, re-evaluates that perspective (the provenance ledger is built during
     evaluation) and prints which parameters entered the value and where each came from: database entry, config
@@ -400,7 +400,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     Renders stored results and re-prices only via `_load_or_evaluate`. `--compare <reference_dir>` loads a second
     directory the same way, picks a shared perspective (`brownfield_net`, then `greenfield_net`) and adds the variant
     comparison (delta waterfall, discounted payback band, warm-rent change) and the payback PNG. `--scenarios`
-    evaluates a §4.6 cube for the scenario section and writes `scenario_cube.csv`/`.json`.
+    evaluates a scenario cube for the scenario section and writes `scenario_cube.csv`/`.json`.
 
     Returns:
         0 on success; 2 with a message on stderr when the directory yields no results or the two compared directories
@@ -468,7 +468,7 @@ def _print_plot_skips(plots: "PlotsWritten") -> None:
 
 
 def _cmd_validate(_args: argparse.Namespace) -> int:
-    """Run `validate`: the §9.6 data-file checks over the shipped `hisim/cost_database/` and `hisim/subsidy_catalog/`.
+    """Run `validate`: the data-file checks over the shipped `hisim/cost_database/` and `hisim/subsidy_catalog/`.
 
     Prints every warning, every error and a count line. The same checks run in CI; run this after editing a price, a
     source or a subsidy scheme. An error means the shipped data is inconsistent (e.g. an unsourced datapoint, a

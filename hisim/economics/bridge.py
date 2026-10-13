@@ -1,4 +1,4 @@
-"""Postprocessing bridge: runs the lifecycle cost engine after a simulation (cost_spec.md §10).
+"""Postprocessing bridge: runs the lifecycle cost engine after a simulation.
 
 The only place where `hisim.economics` meets the rest of HiSim. Opt-in via
 `PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS`, it walks a finished simulation's components, outputs and results
@@ -63,8 +63,8 @@ if TYPE_CHECKING:  # The renderer is imported lazily; only its record type is ne
 
 
 #: The length of a reference year, used to turn a run's start/end dates into
-#: `EvaluationInputs.simulated_period_fraction`, the factor that annualizes a partial-year run
-#: (§8.5). A flat 365-day year: a leap day is far below the uncertainty of any price.
+#: `EvaluationInputs.simulated_period_fraction`, the factor that annualizes a partial-year run.
+#: A flat 365-day year: a leap day is far below the uncertainty of any price.
 SECONDS_PER_YEAR = 365 * 24 * 3600
 
 
@@ -76,7 +76,7 @@ class CostlessPart:
     renewed when the device it belongs to is.
 
     Attributes:
-        reason: Why the subject costs nothing, recorded as its overrides' source (§3.10).
+        reason: Why the subject costs nothing, recorded as its overrides' source.
         lifetime_of_asset_class: The class whose service life the subject is renewed on, or None to keep its own.
     """
 
@@ -122,20 +122,20 @@ class EconomicContext:
 
     - `existing_assets`: an `ExistingAssetRegister` of the pre-measure system. Its presence switches the perspective
       bundle from greenfield to brownfield and status quo (`perspectives.select_applicable`) and enables kept assets,
-      residual values, removal costs and the anyway credit (§4.1).
-    - `subsidy_context`: the applicant and building answers the §5.3 eligibility conditions read; unanswered fields
-      stay undetermined (§5.7).
+      residual values, removal costs and the anyway credit.
+    - `subsidy_context`: the applicant and building answers the eligibility conditions read; unanswered fields
+      stay undetermined.
     - `extra_cost_facts`: `SubjectCostFacts` for subjects that are not simulation components, such as envelope measures
       sized in m².
     - `technical_attributes_by_subject`: per-subject values merged into the extracted facts for subsidy conditions
       (SCOP, refrigerant, achieved U-value).
     - `costless_subjects`: components that are part of another's purchase (`CostlessPart`).
     - `living_area_in_m2`, `heated_floor_area_in_m2`, `current_cold_rent_in_euro_per_m2_month`,
-      `building_specific_emissions_in_kg_per_m2_a`: what the §6.3 CO2 split and the §6.4 modernization levy need to
+      `building_specific_emissions_in_kg_per_m2_a`: what the CO2 split and the modernization levy need to
       divide costs between landlord and tenant.
     - `annual_heat_demand_in_kwh`: overrides the measured useful heat as the denominator of the cost per unit of heat;
       must be positive.
-    - `scenario_set`: triggers the §4.6 scenario cube evaluation and the report's scenario section.
+    - `scenario_set`: triggers the scenario cube evaluation and the report's scenario section.
 
     Without a context, only the greenfield perspectives are evaluated: every device is a new purchase, no subsidy is
     booked without a catalog, and the cost of heat divides by the measured useful heat (or is omitted when none is
@@ -528,7 +528,7 @@ def _power_series(
 def _peaks_from_power_series(
     series: pd.Series, seconds_per_timestep: int, billing_interval_minutes: int = 15
 ) -> tuple:
-    """Return the monthly and annual peaks in kW of the billing-interval mean power (§8.4).
+    """Return the monthly and annual peaks in kW of the billing-interval mean power.
 
     Capacity charges are billed on the highest mean power over a metering interval (15 minutes in Germany), so the
     series is averaged into intervals before taking maxima per month (MONTHLY_PEAK) and over the whole series
@@ -575,7 +575,7 @@ def _peaks_from_power_series(
 def _capacity_billing_intervals(wrapped_components: List[Any]) -> Dict[EnergyCarrier, int]:
     """Return the metering interval of each carrier's capacity charge, read from the run's tariff providers.
 
-    The interval belongs to the contract (§8.4). A `TariffProvider` holds the `TariffContract` the billing engine bills
+    The interval belongs to the contract. A `TariffProvider` holds the `TariffContract` the billing engine bills
     with, read duck-typed (`contract.capacity_charge.billing_interval_in_minutes`) so the bridge imports no component
     class.
 
@@ -604,7 +604,7 @@ def _billing_determinants(
     simulation_parameters: Any,
     billing_intervals: Optional[Dict[EnergyCarrier, int]] = None,
 ) -> Optional[BillingDeterminants]:
-    """Return one component's carrier flows: its own §3.4 hook first, the adapter's `MeterSpec` second.
+    """Return one component's carrier flows: its own hook first, the adapter's `MeterSpec` second.
 
     A meter that declares its own flows (`get_energy_flow_facts`) is believed; the class-name table is used only for
     meters without the hook. `EnergyFlowFacts` carries no capacity peaks, so peaks come from the `MeterSpec`'s
@@ -721,9 +721,9 @@ def build_evaluation_inputs(
     the boundary (`_billing_determinants`). A meter with capex answers several. No prices are decided here.
 
     These become an `UnresolvedSubject`, which later aborts the evaluation: energy-balance flows that cannot be placed;
-    an `UNDECLARED` component (§9.2); a recognized component whose facts cannot be built; a meter whose declared column
+    an `UNDECLARED` component; a recognized component whose facts cannot be built; a meter whose declared column
     is missing; a not-installed component whose meter reported energy (`_non_zero_energy_flows`); a useful-heat source
-    whose column is missing, unconvertible or wrong-signed. A run with no metered flows at all only warns (§3.4). The
+    whose column is missing, unconvertible or wrong-signed. A run with no metered flows at all only warns. The
     simulated period becomes `simulated_period_fraction`; runs longer than a year are clamped to one year with a
     warning. Finally the setup's `EconomicContext`, if any, is merged in.
 
@@ -1030,7 +1030,7 @@ def compute_lifecycle_costs(
     Steps: resolve the economic parameters, load the cost database, extract `EvaluationInputs`, write
     `economic_inputs.json`, load the subsidy catalog if configured, run the resolution check, select the applicable
     perspectives, evaluate them into one `EvaluationMatrix` and write the exports. It runs before the legacy
-    COMPUTE_CAPEX block, because `get_cost_capex` mutates component configs (§10.0 rule 4); the parity report is a
+    COMPUTE_CAPEX block, because `get_cost_capex` mutates component configs; the parity report is a
     separate pass (`write_parity_from_stored_inputs`).
 
     Files: `economic_inputs.json` (before any pricing), `lifecycle_costs.json`, `component_costs.json`/`.csv`,
@@ -1211,7 +1211,7 @@ def _write_skipped_plots_note(skips: List["SkippedPlot"], result_directory: str)
 
 
 def write_parity_from_stored_inputs(simulation_parameters: Any) -> None:
-    """Write the §9.7 parity report (`cost_parity_report.csv`) after the legacy cost path has written its CSVs.
+    """Write the parity report (`cost_parity_report.csv`) after the legacy cost path has written its CSVs.
 
     A separate step because the engine must read its facts before legacy `get_cost_capex` mutates configs, while the
     comparison needs the legacy CSVs. The facts are read back from `economic_inputs.json`, which proves they predate

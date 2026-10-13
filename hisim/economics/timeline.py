@@ -1,4 +1,4 @@
-"""The canonical cash-flow timeline: dated, categorized, payer-tagged cash flows of one variant (cost_spec.md §3.6).
+"""The canonical cash-flow timeline: dated, categorized, payer-tagged cash flows of one variant.
 
 Every perspective, actor view and KPI is a filter, allocation or discounting of this one list of `CashFlowEntry`
 objects, so `sum(component NPVs) == perspective NPV` and `landlord + tenant == system` hold by construction.
@@ -18,7 +18,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 
 class CostCategory(str, enum.Enum):
-    """Categories of timeline entries (§3.6).
+    """Categories of timeline entries.
 
     Every cash flow carries exactly one category, and downstream rules key off it: which flows a perspective drops,
     which are revenue-type, which sign they must carry, which a subsidy may count as eligible cost, and which display
@@ -54,14 +54,14 @@ class CostCategory(str, enum.Enum):
 # `hisim/economics/calculators/categories.py`. They live here because `CostCategory` does.
 
 class CategoryRules:
-    """Category sets that say what each `CostCategory` means (§3.9, §4.2, §5.5).
+    """Category sets that say what each `CostCategory` means.
 
     Answers four questions once, as data: is a category revenue-type for band assembly, must its entries be negative,
     is it an investment flow, is it subsidy support. The engine-side sets in `calculators/categories.py` complement
     these; they live here because `CostCategory` does.
     """
 
-    #: Categories whose parameters are revenue-type for band assembly (§3.9): the optimistic world takes their
+    #: Categories whose parameters are revenue-type for band assembly: the optimistic world takes their
     #: band maximum, so the band is mirrored with `as_revenue()`. Not the same as "the entry is negative"; see
     #: `NEGATIVE_SIGN_CATEGORIES` and `expected_sign`.
     REVENUE_CATEGORIES = frozenset(
@@ -73,14 +73,15 @@ class CategoryRules:
         }
     )
 
-    #: Categories whose entries are negative-signed, money arriving rather than leaving (§3.9).
+    #: Categories whose entries are negative-signed, money arriving rather than leaving.
     #: `REVENUE_CATEGORIES` plus LOAN_DISBURSEMENT, whose band is not mirrored (it is a share of the year-0
     #: investment band). MODERNIZATION_LEVY is absent because its sign depends on the payer; see `expected_sign`.
     NEGATIVE_SIGN_CATEGORIES = frozenset(REVENUE_CATEGORIES | {CostCategory.LOAN_DISBURSEMENT})
 
-    #: Categories dropped when a perspective excludes investment (OPERATING_ONLY, §4.2): everything caused by
+    #: Categories dropped when a perspective excludes investment (OPERATING_ONLY): everything caused by
     #: investment, including the subsidies and loan flows paying for it and the residual value and anyway credit
-    #: netted against it. §4.2 adds a replacement reserve instead. `calculators/categories.py` has two narrower sets.
+    #: netted against it. The operating-only perspective adds a replacement reserve instead.
+    #: `calculators/categories.py` has two narrower sets.
     INVESTMENT_CATEGORIES = frozenset(
         {
             CostCategory.INVESTMENT,
@@ -96,11 +97,11 @@ class CategoryRules:
         }
     )
 
-    #: The support flows that a perspective with `subsidy_mode = NONE` and MACROECONOMIC accounting report none of
-    #: (§5.5, §4.5). The evaluator never generates them for such a perspective; this set names the category.
+    #: The support flows that a perspective with `subsidy_mode = NONE` and MACROECONOMIC accounting report none of.
+    #: The evaluator never generates them for such a perspective; this set names the category.
     SUBSIDY_FLOW_CATEGORIES = frozenset({CostCategory.SUBSIDY})
 
-    #: The four charge categories `apply_tariff` produces for one energy carrier's bill (§8). Feed-in revenue is
+    #: The four charge categories `apply_tariff` produces for one energy carrier's bill. Feed-in revenue is
     #: not one of them: it is what exports earn, not part of what a bought kWh costs. A tuple because consumers
     #: render it in this order; `plausibility.PlausibilityCategories` and `views.ViewCategories` alias it.
     BILL_CATEGORIES = (
@@ -115,7 +116,7 @@ def discount_factor(interest_rate: float, year: int) -> float:
     """Return 1 / (1 + i)^year, the discount factor every present value in the package uses.
 
     `CashFlowTimeline.npv`, `npv_by` and `EconomicParameters.discount_factor` all delegate here. `year` is an offset
-    from year 0 under the end-of-year convention of §4.1, not a calendar year, so year 0 yields 1.0. Negative rates are
+    from year 0 under the end-of-year convention, not a calendar year, so year 0 yields 1.0. Negative rates are
     allowed; `EconomicParameters` rejects i <= -1.
 
     Args:
@@ -129,11 +130,11 @@ def discount_factor(interest_rate: float, year: int) -> float:
 
 
 class Actor(str, enum.Enum):
-    """Who pays a cash flow (§6.1).
+    """Who pays a cash flow.
 
     An allocation ruleset (`actors.py`) re-tags or splits entries onto these payers, and a perspective then filters
     with `scoped_to`. Since allocation only re-tags and splits, landlord + tenant (+ owner) NPV equals the SYSTEM NPV
-    in every slot (§6.5). SYSTEM is both the tag every calculator emits before allocation and the total view, so
+    in every slot. SYSTEM is both the tag every calculator emits before allocation and the total view, so
     `scoped_to(SYSTEM)` returns all entries.
     """
 
@@ -144,7 +145,7 @@ class Actor(str, enum.Enum):
 
 
 class SubjectKind(str, enum.Enum):
-    """What a timeline subject refers to (§3.7).
+    """What a timeline subject refers to.
 
     A subject is the free-form string naming who an entry belongs to: a simulation component or cost subject, or an
     `EnergyCarrier`. The per-subject breakdowns use this to look up an asset class for components and none for
@@ -157,12 +158,12 @@ class SubjectKind(str, enum.Enum):
 
 @dataclass(frozen=True)
 class CashFlowEntry:
-    """One dated, categorized, payer-tagged cash flow (§3.6).
+    """One dated, categorized, payer-tagged cash flow.
 
-    `amount_in_euro` is a band (an `UncertainValue` with minimum, best estimate and maximum slots, one per world of
-    §3.9) in nominal euros of the entry's year: escalated, not discounted. Cost is positive, revenue and subsidy
+    `amount_in_euro` is a band (an `UncertainValue` with minimum, best estimate and maximum slots, one per evaluation
+    world) in nominal euros of the entry's year: escalated, not discounted. Cost is positive, revenue and subsidy
     negative. `year` is used for discounting, `category` for perspective filters, `subject` and `subject_kind` for
-    per-component pivots, `payer` for the actor split, and `provenance_ids` for `explain` (§3.10). The dataclass is
+    per-component pivots, `payer` for the actor split, and `provenance_ids` for `explain`. The dataclass is
     frozen; `with_payer` and `scaled` return copies.
     """
 
@@ -176,14 +177,14 @@ class CashFlowEntry:
     provenance_ids: Tuple[int, ...] = ()
 
     def with_payer(self, payer: Actor) -> "CashFlowEntry":
-        """Return a copy assigned to another payer (§6).
+        """Return a copy assigned to another payer.
 
         All other fields are kept, so re-tagging cannot change any total.
         """
         return replace(self, payer=payer)
 
     def scaled(self, factor: float) -> "CashFlowEntry":
-        """Return a copy with the amount scaled by a non-negative share (§6).
+        """Return a copy with the amount scaled by a non-negative share.
 
         Splits a shared cost between landlord and tenant into entries whose shares sum to one. Scaling is
         slot-wise and rejects negative factors (see `UncertainValue.scale`), so a split never flips a sign.
@@ -202,13 +203,13 @@ class SignExpectation:
 
 
 def expected_sign(entry: CashFlowEntry) -> str:
-    """Return the sign the §3.9 convention requires of this entry in every slot.
+    """Return the sign this entry must have in every slot under the sign convention.
 
     Cost is positive, money arriving is negative. Three cases:
 
     * `NEGATIVE_SIGN_CATEGORIES` must be non-positive (revenues, credits, loan disbursement);
     * MODERNIZATION_LEVY depends on the payer: the tenant pays the rent increase (non-negative), the landlord receives
-      it (non-positive); an unallocated levy (payer SYSTEM) counts as the paying leg (§6.4);
+      it (non-positive); an unallocated levy (payer SYSTEM) counts as the paying leg;
     * everything else must be non-negative.
 
     This is a different question from `CategoryRules.REVENUE_CATEGORIES`, which says whose parameter bands are
@@ -225,7 +226,7 @@ def expected_sign(entry: CashFlowEntry) -> str:
 
 @dataclass(frozen=True)
 class SignViolation:
-    """One entry whose sign disagrees with the §3.9 convention.
+    """One entry whose sign disagrees with the sign convention.
 
     Carries the offending entry, so the message shows its category, subject and amount; a violation usually means a
     calculator forgot `as_revenue()` or booked a credit under a cost category.
@@ -245,7 +246,7 @@ class SignViolation:
 
 
 def sign_violation(entry: CashFlowEntry) -> Optional[SignViolation]:
-    """Check one entry against the §3.9 sign convention and return the violation, or None when it complies.
+    """Check one entry against the sign convention and return the violation, or None when it complies.
 
     All three slots must comply; a band straddling zero is a violation.
     """
@@ -271,7 +272,7 @@ class CashFlowTimeline:
     """
 
     entries: List[CashFlowEntry] = field(default_factory=list)
-    #: Whether `add`/`extend` enforce the §3.9 sign convention. Engine timelines leave this on.
+    #: Whether `add`/`extend` enforce the sign convention. Engine timelines leave this on.
     validate: bool = True
 
     def add(self, entry: CashFlowEntry) -> None:
@@ -280,7 +281,7 @@ class CashFlowTimeline:
         Insertion order is kept and is the order exports and audits walk the timeline in.
 
         Raises:
-            ValueError: If validation is on and the entry violates the §3.9 sign convention.
+            ValueError: If validation is on and the entry violates the sign convention.
         """
         if self.validate:
             violation = sign_violation(entry)
@@ -289,12 +290,12 @@ class CashFlowTimeline:
         self.entries.append(entry)
 
     def sign_violations(self) -> List["SignViolation"]:
-        """Return every entry whose sign disagrees with the §3.9 convention, without raising."""
+        """Return every entry whose sign disagrees with the sign convention, without raising."""
         violations = [sign_violation(entry) for entry in self.entries]
         return [violation for violation in violations if violation is not None]
 
     def validate_signs(self) -> None:
-        """Check the §3.9 sign convention over all entries at once.
+        """Check the sign convention over all entries at once.
 
         Needed only for timelines built with `entries=` in the constructor or with `validate=False`, since `add` and
         `extend` already check each entry. The rules are those of `expected_sign`.
@@ -331,7 +332,7 @@ class CashFlowTimeline:
         return self.filtered(lambda entry: entry.category not in categories)
 
     def scoped_to(self, payer: "Actor") -> "CashFlowTimeline":
-        """Return the entries a perspective scoped to `payer` reports on; SYSTEM means all entries (§6).
+        """Return the entries a perspective scoped to `payer` reports on; SYSTEM means all entries.
 
         This is the one definition of perspective scoping; the aggregation calculator,
         `LifecycleCostResult.scoped_timeline` and `explain` all use it.
@@ -365,7 +366,7 @@ class CashFlowTimeline:
     ) -> Dict[Any, UncertainValue]:
         """Return the slot-wise NPV pivoted by an arbitrary key, such as category, subject or payer.
 
-        Every "NPV by ..." figure uses this, so the buckets always sum to `npv(interest_rate)` per slot (§7.4).
+        Every "NPV by ..." figure uses this, so the buckets always sum to `npv(interest_rate)` per slot.
 
         Args:
             interest_rate: Nominal discount rate, as for `npv`.
@@ -410,7 +411,7 @@ class CashFlowTimeline:
         return cost_buckets, credit_buckets
 
     def nominal_annual_series(self, horizon_years: int) -> List[UncertainValue]:
-        """Return the undiscounted euros per year 0..T (index = year), the liquidity view (§4.3).
+        """Return the undiscounted euros per year 0..T (index = year), the liquidity view.
 
         The year-1 monthly figure is derived from it as annual / 12. Entries outside 0..T are ignored.
 

@@ -1,9 +1,9 @@
-"""Typed result objects of the lifecycle cost engine (cost_spec.md §3.7, §3.8, §7).
+"""Typed result objects of the lifecycle cost engine.
 
 `LifecycleCostResult` is what `EconomicEvaluator.evaluate` returns and what every exporter, view, report and CLI
 command reads; CSV and JSON are export formats, never an internal API. The module also holds the comparison arithmetic
 between two results (`compare`, `cumulative_discounted_savings`), because presentation never computes. Every money
-field is a LOW/BEST_ESTIMATE/HIGH band (`UncertainValue`, §3.9) whose bounds are envelopes, not quantiles. Signs: cost
+field is a LOW/BEST_ESTIMATE/HIGH band (`UncertainValue`) whose bounds are envelopes, not quantiles. Signs: cost
 positive, revenue and support negative; display figures that show support as positive say so in their names.
 """
 
@@ -38,7 +38,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 @dataclass
 class ComponentCostBreakdown:
-    """Costs of one timeline subject, pivoted from the canonical timeline (§3.7, §7.4).
+    """Costs of one timeline subject, pivoted from the canonical timeline.
 
     A subject is what a cash-flow entry is booked under: a component, an energy carrier, or a synthetic subject such as
     `financing`, `replacement reserve` or `co2 damage`. Because it is a pivot, the breakdowns sum exactly to the
@@ -57,7 +57,7 @@ class ComponentCostBreakdown:
     # Undiscounted display figures for "what does X cost to buy" views:
     investment_gross_in_euro: UncertainValue
     #: Support received for this subject, **nominal** euros summed across years, positive band.
-    #: The same unit the §6.4 levy basis deducts.
+    #: The same unit the levy basis deducts.
     subsidies_nominal_in_euro: UncertainValue
     #: The same support **discounted** to present value, positive band — the exact mirror of
     #: `npv_by_category[SUBSIDY]`, which is negative-signed.
@@ -66,7 +66,7 @@ class ComponentCostBreakdown:
     lifecycle_co2_in_kg: float
 
     def to_json(self) -> dict:
-        """Serialize for component_costs.json (§7.4); every band keeps its min/best_estimate/max triplet."""
+        """Serialize for component_costs.json; every band keeps its min/best_estimate/max triplet."""
         return {
             "subject": self.subject,
             "subject_kind": self.subject_kind.value,
@@ -147,7 +147,7 @@ class EmbodiedCo2Basis:
 
 @dataclass
 class LifecycleCo2Result:
-    """Lifecycle CO2 masses of one evaluation, undiscounted and in kilograms (§3.8).
+    """Lifecycle CO2 masses of one evaluation, undiscounted and in kilograms.
 
     Runs alongside the money in one build: `calculators/investment.py` adds the embodied mass at installation and every
     replacement, `calculators/energy.py` the operational mass per carrier, and `calculators/co2.py` adds them up.
@@ -192,7 +192,7 @@ class LifecycleCo2Result:
 class AnnualEnergyQuantities:
     """One carrier's annualized energy volumes, as the engine priced them.
 
-    Simulated quantities scaled to a full year (§3.6 rule 5, `calculators/annualization.py`), so per-unit figures
+    Simulated quantities scaled to a full year (`calculators/annualization.py`), so per-unit figures
     derived from them (EUR/kWh, EUR/m²a) are per year. Carried on the result so views and plausibility checks need not
     read `EvaluationInputs`.
     """
@@ -335,7 +335,7 @@ class ModernizationLevySummary:
 
 
 class RateOrigin(str, enum.Enum):
-    """The step of the §3.2 escalation fallback chain that produced a rate.
+    """The step of the escalation fallback chain that produced a rate.
 
     The chain is: an explicit `EconomicParameters` entry, then the country's defaults table, then the general rate. The
     values are the serialized words, and a stored file with any other word is refused at load time.
@@ -348,10 +348,10 @@ class RateOrigin(str, enum.Enum):
 
 @dataclass(frozen=True)
 class ResolvedRate:
-    """One escalation rate as the run resolved it, with the step of the fallback chain that won (§3.2).
+    """One escalation rate as the run resolved it, with the step of the fallback chain that won.
 
     The assumptions table must cite a source for every value, so the step travels with the number. `source_ids` are the
-    §3.10 registry ids of the defaults file when that step won, and empty for a configured or general rate, which the
+    registry ids of the defaults file when that step won, and empty for a configured or general rate, which the
     report shows as "configuration".
     """
 
@@ -368,7 +368,7 @@ class ResolvedRate:
         """Inverse of `to_json`.
 
         Raises:
-            ValueError: If `origin` is not a step of the §3.2 chain.
+            ValueError: If `origin` is not a step of the escalation fallback chain.
         """
         origin = raw.get("origin", RateOrigin.CONFIGURATION.value)
         try:
@@ -539,10 +539,10 @@ class EconomicAssumptions:
 
 @dataclass(frozen=True)
 class ReferenceAreas:
-    """The building areas per-area KPIs divide by (§6.3); both optional, both in m².
+    """The building areas per-area KPIs divide by; both optional, both in m².
 
     Heated floor area is the physics reference of the building model; living area is the legal reference of German rent
-    and levy rules (§6.4). When both are absent, per-area figures are not reported.
+    and levy rules. When both are absent, per-area figures are not reported.
     """
 
     heated_floor_area_in_m2: Optional[float] = None
@@ -563,7 +563,7 @@ class ReferenceAreas:
 class AnywayBasisKinds:
     """Names for the basis of an anyway credit, one per way a credit arises.
 
-    An anyway credit is the cost a measure avoids because the building would have paid it anyway (§4.1): `share x basis
+    An anyway credit is the cost a measure avoids because the building would have paid it anyway: `share x basis
     = credit`. For a like-for-like replacement the basis is the escalated cost of replacing the old asset with its own
     kind. For a coupled measure (`energy_related_cost_share < 1`) it is the non-energy share of the new measure's gross
     cost, such as the scaffolding and render a facade job needs even without insulation. The kind travels with the
@@ -598,15 +598,15 @@ class HeatCostNaming:
 
 @dataclass
 class LifecycleCostResult:
-    """The evaluation of one variant under one perspective (§3.7).
+    """The evaluation of one variant under one perspective.
 
-    A perspective is one accounting frame, such as the tenant's view with subsidies (§7.1). Every euro figure is a
-    LOW/BEST_ESTIMATE/HIGH band (§3.9). Besides the KPIs the result carries what they are made of: the full `timeline`,
+    A perspective is one accounting frame, such as the tenant's view with subsidies. Every euro figure is a
+    LOW/BEST_ESTIMATE/HIGH band. Besides the KPIs the result carries what they are made of: the full `timeline`,
     the provenance `ledger` and `source_resolver`, the subsidy `decisions`, the CO2 masses, and the physical context
     (energy quantities, reference areas, simulated period fraction, simulation year), so presentation never reads
     `EvaluationInputs`. Every KPI is a filter, pivot or discounting of `timeline`, which is what `explain()` relies on.
     `sunk_cost_written_off_in_euro` is reported but excluded from NPV, since a sunk cost must not distort a
-    forward-looking comparison (§4.1). `timeline` holds the full allocated timeline so the zero-sum check of §6.5 stays
+    forward-looking comparison. `timeline` holds the full allocated timeline so the zero-sum check stays
     possible; the perspective's figures use `scoped_timeline()`, filtered to `scope_payer`.
     """
 
@@ -642,7 +642,7 @@ class LifecycleCostResult:
     annual_energy_quantities_by_carrier: Dict[str, AnnualEnergyQuantities] = field(default_factory=dict)
     #: Building reference areas for per-area figures.
     reference_areas: ReferenceAreas = field(default_factory=ReferenceAreas)
-    #: Share of a year the simulation covered; the divisor behind the quantities above (§3.6).
+    #: Share of a year the simulation covered; the divisor behind the quantities above.
     simulated_period_fraction: float = 1.0
     #: The year the simulation this result prices was run for — the report header's "Simulation
     #: year" and the fallback price basis of the degenerate-band note. Carried here so
@@ -651,14 +651,14 @@ class LifecycleCostResult:
     #: Per-subject **annualized** energy attribution: subject -> energy-balance role
     #: (`EnergyFlowRole.value`) -> kWh per year as a positive magnitude. The name says
     #: `annual_` because the field of the same shape on `EvaluationInputs` holds the *simulated
-    #: period*, which differs by the §3.6 annualization divisor.
+    #: period*, which differs by the annualization divisor.
     #: Optional: it is filled from the component output columns
     #: `adapter.DeviceEnergySpecs` names and stays empty everywhere else, including for results
     #: serialized before it existed. Only the household energy balance reads it, and that chart
     #: skips itself rather than drawing a partial picture when the map carries fewer than two
     #: device flows — no KPI, export or invariant depends on it.
     annual_energy_attribution_by_subject_in_kwh: Dict[str, Dict[str, float]] = field(default_factory=dict)
-    #: Per-carrier §8.5 flexibility value of the year-1 bill *before* the clamp the projection
+    #: Per-carrier flexibility value of the year-1 bill *before* the clamp the projection
     #: applies (key = `EnergyCarrier.value`). Diagnostics, not a published figure: a negative
     #: entry means the load was timed worse than a flat profile and is what the plausibility
     #: panel's flexibility check reads.
@@ -692,7 +692,7 @@ class LifecycleCostResult:
     #: The dated replacement schedule behind the timeline: ``(subject, year, nominal escalated
     #: amount)`` per scheduled re-purchase, in the order the subjects were priced. It is the same
     #: schedule the REPLACEMENT entries carry — and the only record of it under OPERATING_ONLY,
-    #: where those entries are suppressed in favour of the levelized reserve (§4.2). Carried so
+    #: where those entries are suppressed in favour of the levelized reserve. Carried so
     #: that :class:`hisim.economics.staged.StagedEvaluator` can re-date a stage's replacements to
     #: the year that stage starts in and rebuild the plan's reserve from the re-dated flows. Not
     #: serialized: it is derivable from the priced inputs and is read in-process only, so it is
@@ -737,7 +737,7 @@ class LifecycleCostResult:
     # ------------------------------------------------------------------ provenance (§3.10)
 
     def explain(self, value_path: str) -> ProvenanceReport:
-        """Explain where a result value comes from: its timeline entries and their parameters (§3.10).
+        """Explain where a result value comes from: its timeline entries and their parameters.
 
         Accepted paths: ``total_npv_in_euro``, ``equivalent_annual_cost_in_euro``, ``npv_by_category[CATEGORY]``,
         ``npv_by_component[subject]``, ``npv_by_payer[actor]`` (and ``monthly_cost_year1_in_euro``, which has the NPV's
@@ -902,7 +902,7 @@ class LifecycleCostResult:
 
 @dataclass
 class EvaluationMatrix:
-    """All perspective results of one variant: {perspective -> LifecycleCostResult} (§3.1).
+    """All perspective results of one variant: {perspective -> LifecycleCostResult}.
 
     `EconomicEvaluator.evaluate_matrix` fills one entry per applicable perspective; `exports.py` writes it and the
     reports render it. Rows compare accounting frames of the same building; comparing two buildings is `compare()`.
@@ -917,7 +917,7 @@ class EvaluationMatrix:
 
 @dataclass
 class VariantComparison:
-    """The difference between two variants under one perspective (§3.7), such as a building before and after retrofit.
+    """The difference between two variants under one perspective, such as a building before and after retrofit.
 
     Produced by `compare()` and read by the report's comparison section (delta waterfall, payback curve, warm-rent
     change). Deltas are variant minus reference, per slot, so a negative NPV delta means the variant is cheaper.
@@ -968,7 +968,7 @@ class VariantComparison:
 
 
 def _subject_alignment_key(result: LifecycleCostResult, subject: str) -> str:
-    """Return the key that aligns a subject across two variants: its asset class and its name (§3.7).
+    """Return the key that aligns a subject across two variants: its asset class and its name.
 
     Keying on both keeps a heat pump from being aligned with a boiler that shares a component name. Subjects present in
     only one variant still get a row, compared against zero in `compare`.
@@ -1094,15 +1094,15 @@ def compare(
     reference_id: str = "reference",
     variant_id: str = "variant",
 ) -> VariantComparison:
-    """Compare two variants: NPV and annuity deltas, discounted payback and warm-rent change (§3.7, §6.5).
+    """Compare two variants: NPV and annuity deltas, discounted payback and warm-rent change.
 
     All deltas are per slot: both variants are evaluated within the same LOW, BEST_ESTIMATE or HIGH world, so shared
     uncertainty (the same gas price band, the same devices) cancels and the delta band shows only what the variants do
     not share. Differencing averages would discard the band, and differencing intervals would add two widths. The slots
     are three coherent scenarios, not an outer envelope of the difference; a mixed world (gas expensive while the heat
-    pump is cheap) belongs to the scenario axes (§4.6). Payback is the zero crossing of each slot's own savings curve,
+    pump is cheap) belongs to the scenario axes. Payback is the zero crossing of each slot's own savings curve,
     with the range taken by value (:meth:`PaybackEnvelope.of`). Warm-rent neutrality is evaluated per slot; neutrality
-    in HIGH is the robust statement (§6.5).
+    in HIGH is the robust statement.
 
     Args:
         reference: The base variant's result.
@@ -1113,7 +1113,7 @@ def compare(
 
     Returns:
         A `VariantComparison`. The warm-rent fields stay None unless both results carry a TENANT payer NPV, i.e. the
-            perspective is a rented one (§6.5).
+            perspective is a rented one.
     """
     # Imported here because the aggregation calculator imports this module for its record types.
     from hisim.economics.calculators.aggregation import (  # pylint: disable=import-outside-toplevel

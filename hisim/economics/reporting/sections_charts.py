@@ -636,7 +636,7 @@ def _society_statement_section_html(result: LifecycleCostResult, context: _Chapt
     """Return the macroeconomic statement: real resource costs against transfers that cancel.
 
     Resource categories keep their values, transfers appear with both halves and a zero-sum line, and CO2 enters at its
-    damage cost. On the shipped macroeconomic perspective the transfers are already removed (§4.5), so the transfer
+    damage cost. On the shipped macroeconomic perspective the transfers are already removed, so the transfer
     rows are zeros, and the caption says so. Only drawn for a SYSTEM-scoped perspective; `views.story_perspectives`
     keeps other scopes out of this chapter, since the view refuses them.
 

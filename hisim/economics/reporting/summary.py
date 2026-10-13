@@ -1,4 +1,4 @@
-"""The markdown cost summary and the plausibility-panel rendering (cost_spec.md §7.2, §7.4).
+"""The markdown cost summary and the plausibility-panel rendering.
 
 `build_cost_summary_markdown` and `write_cost_summary` produce `cost_summary.md`; `render_plausibility_findings` turns
 plausibility findings into the display rows shared by the markdown, the HTML report and the bridge's log warnings.
@@ -49,7 +49,7 @@ def _fmt(value: float) -> str:
 def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:
     """Render a band as `best_estimate [min | max] unit`.
 
-    A band is an `UncertainValue` whose bracketed pair is the §3.9 envelope of the cheap and expensive worlds, not a
+    A band is an `UncertainValue` whose bracketed pair is the envelope of the cheap and expensive worlds, not a
     confidence interval. An exact band collapses to a single figure, and None renders as `-`. `unit` is appended
     verbatim (EUR, EUR/a, EUR/mo, EUR/kWh).
     """
@@ -295,7 +295,7 @@ def all_bands_degenerate(matrix: EvaluationMatrix) -> bool:
 
     Only `total_npv_in_euro` is examined; any band in the cost data propagates into it, so the answer means "the
     reports have no whiskers to draw". It holds when the price basis year resolves to the 1:1-migrated legacy data,
-    which is exact on purpose (§10.1); banded data ships for 2026 and 2035.
+    which is exact on purpose; banded data ships for 2026 and 2035.
     """
     return all(result.total_npv_in_euro.is_exact() for result in matrix.results.values())
 
@@ -350,7 +350,7 @@ def build_cost_summary_markdown(
     plausibility: PlausibilityReport,
     comparison: Optional[VariantComparison] = None,
 ) -> str:
-    """Build `cost_summary.md`, the compact, diffable text report for checking data changes (§9.5).
+    """Build `cost_summary.md`, the compact, diffable text report for checking data changes.
 
     Golden scenarios keep a committed copy, so a data change shows up as line-level deltas in the KPIs it moved. It
     holds the run parameters, the plausibility panel, one row per perspective, the cost structure, per-subject figures,

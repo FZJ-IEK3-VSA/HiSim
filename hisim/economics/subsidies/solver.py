@@ -1,4 +1,4 @@
-"""Award computation and the cumulation solver (cost_spec.md §5.4-§5.5).
+"""Award computation and the cumulation solver.
 
 Cumulation is combining several subsidy schemes for one measure under their stacking rules. This module computes each
 scheme's eligible cost and award, applies the caps per band slot (minimum, best estimate, maximum), and picks the
@@ -49,7 +49,7 @@ from hisim.economics.subsidies.context import SubsidyDataError
 
 
 class CumulationLimits:
-    """Size limit of the cumulation solver's subset enumeration (§5.4).
+    """Size limit of the cumulation solver's subset enumeration.
 
     The solver enumerates every subset of the schemes that apply to one measure, so its cost is 2^n. A catalog that
     exceeds the limit is treated as a data defect (:func:`_check_cumulation_size`) rather than truncated, since
@@ -57,7 +57,7 @@ class CumulationLimits:
     """
 
     #: Upper bound on the number of schemes handed to a subset enumeration in the cumulation
-    #: solver (§5.4). The solver is exponential in that number, so a catalog that made many
+    #: solver. The solver is exponential in that number, so a catalog that made many
     #: schemes apply to one measure would hang instead of returning a wrong answer. Real
     #: catalogs stay far below the limit (the shipped DE catalog holds nine schemes in total).
     MAX_CUMULATION_SCHEMES = 16
@@ -66,7 +66,7 @@ class CumulationLimits:
 def _eligible_cost_basis(
     scheme: SubsidyScheme, measure: MeasureForSubsidy, context: SubsidyContext
 ) -> Tuple[UncertainValue, Dict[str, bool]]:
-    """Return the eligible cost of a scheme for a measure per slot, with per-slot cap-binding flags (§3.9, §5.4).
+    """Return the eligible cost of a scheme for a measure per slot, with per-slot cap-binding flags.
 
     The eligible cost is the part of the measure's year-0 gross cost a scheme pays on. The steps run in this order: sum
     the counted categories, strip VAT if the scheme's basis is NET, prorate to the residential share for a
@@ -120,7 +120,7 @@ CapRatios = Tuple[float, float, float]
 
 
 def _overall_cap_ratios(total_upfront: UncertainValue, cap: UncertainValue) -> CapRatios:
-    """Return how much of the upfront support survives the overall state-aid cap, per slot (§5.4).
+    """Return how much of the upfront support survives the overall state-aid cap, per slot.
 
     Each slot is a coherent world: in the LOW world both the support and the cap (a share of that world's gross cost)
     are smaller, so the ratio differs per slot. Using one ratio for all slots would let LOW or HIGH support exceed that
@@ -140,7 +140,7 @@ def _overall_cap_ratios(total_upfront: UncertainValue, cap: UncertainValue) -> C
 
 
 def _scaled_to_cap(amount: UncertainValue, ratios: CapRatios) -> UncertainValue:
-    """Apply the per-slot cap ratios to one award while keeping its band ordered (§3.9).
+    """Apply the per-slot cap ratios to one award while keeping its band ordered.
 
     The ratios need not be monotone across slots: the cap grows with the gross cost, while a statutory lump sum does
     not grow at all. A plain slot-wise product could then order the band the wrong way round. The award is therefore
@@ -189,7 +189,7 @@ def _combination_awards(
     context: SubsidyContext,
     overall_cap_share: Optional[float],
 ) -> List[SubsidyAward]:
-    """Value one admissible combination of schemes in all three slots (§5.4).
+    """Value one admissible combination of schemes in all three slots.
 
     Called once per enumerated subset by the solver, without side effects on its inputs. Three stages, in order:
 
@@ -568,7 +568,7 @@ def solve_cumulation(
     discount: Callable[[int], float],
     admits: Optional[Callable[[str], bool]] = None,
 ) -> SubsidyDecision:
-    """Pick the best admissible combination of ELIGIBLE schemes for one measure and report everything (§5.4).
+    """Pick the best admissible combination of ELIGIBLE schemes for one measure and report everything.
 
     The objective is :func:`_support_value` on the best-estimate slot; the chosen combination is then valued in all
     three slots. All 2^n subsets of the eligible schemes are enumerated in bitmask order (including the empty one, "no
@@ -576,9 +576,9 @@ def solve_cumulation(
     exclusions make the objective non-additive. A candidate replaces the incumbent only if it is better by more than
     1e-9 euro, so ties go to the first in catalog order and the result is reproducible.
 
-    `admits` restricts the candidates before the optimization (§5.5), so ONLY and EXCLUDE perspectives get the best
+    `admits` restricts the candidates before the optimization, so ONLY and EXCLUDE perspectives get the best
     combination among the admitted schemes. UNDETERMINED schemes are excluded but reported with the extra support they
-    could unlock (§5.7). The best combinations in the LOW and HIGH slots are named where they differ from the chosen
+    could unlock. The best combinations in the LOW and HIGH slots are named where they differ from the chosen
     one; LOW reads the band's maximum and HIGH its minimum, because support is booked as revenue (`as_revenue`) and the
     optimistic world gets the most.
 

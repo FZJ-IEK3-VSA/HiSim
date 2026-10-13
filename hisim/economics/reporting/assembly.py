@@ -1,4 +1,4 @@
-"""Assembly of the HTML lifecycle report (cost_spec.md §7.2).
+"""Assembly of the HTML lifecycle report.
 
 Holds the remaining sections (perspectives, actors, scenarios, KPIs, components, checks, variant comparison), the
 chapter builders and the entry points `build_lifecycle_report_html` and `write_lifecycle_report`. The report is told as
@@ -105,8 +105,8 @@ def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext
     operating-only below brownfield, the macroeconomic row differing from the financial one only by transfers and CO2
     damage. A violation points at the engine or the perspective bundle. The table gives NPV, equivalent annual cost,
     monthly cost in year 1 and system cost per unit of heat per perspective, as bands. A sunk-cost column marked
-    "(info)" appears only when some perspective wrote off residual book value, since §4.1 keeps it out of the decision
-    KPIs.
+    "(info)" appears only when some perspective wrote off residual book value, since sunk cost is kept out of the
+    decision KPIs.
 
     Args:
         matrix: Every evaluated perspective; one whisker row and one table row each.
@@ -151,10 +151,10 @@ def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext
 
 
 def _actor_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Render who pays what: payer NPVs per allocated perspective (§6.5).
+    """Render who pays what: payer NPVs per allocated perspective.
 
     Each allocated perspective gets payer whiskers and a payer x cost-group table under a header printing
-    `views.payer_npv_total`, the sum the payer bars must add up to (the zero-sum check of §6.5). The table shows which
+    `views.payer_npv_total`, the sum the payer bars must add up to (the zero-sum check). The table shows which
     cost groups landed with whom, so an operating cost booked to the wrong party shows up as a group in the wrong row.
     The unallocated SYSTEM payer is left out of the rows, and perspectives with fewer than two real payers are skipped.
 
@@ -324,11 +324,11 @@ def _scenario_section_html(
     matrix: EvaluationMatrix,
     context: _ChapterContext,
 ) -> str:
-    """Render the scenarios section: a tornado of the headline KPI and the full scenario table (§4.6).
+    """Render the scenarios section: a tornado of the headline KPI and the full scenario table.
 
     The tornado ranks scenarios by how far they move the headline KPI; the table gives NPV, equivalent annual cost and
     swing per scenario; the robustness summary gives min, max and spread per perspective. Scenario axes and uncertainty
-    bands are independent mechanisms (§4.6): a scenario varies rates deliberately, the band varies cost data within
+    bands are independent mechanisms: a scenario varies rates deliberately, the band varies cost data within
     each scenario, and the report never combines them. Every row names the assumption it changed and both values, and a
     row whose swing is exactly zero carries a footnote saying why the axis was inert; both come from `views`. The cube
     is typed as `views.ScenarioCubeView`, because presentation may not import the module that builds one.
@@ -398,7 +398,7 @@ def _scenario_section_html(
 
 
 def _kpi_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Render the KPIs section: the published lifecycle KPI set (§7.3) as a table with bands.
+    """Render the KPIs section: the published lifecycle KPI set as a table with bands.
 
     Shows what downstream consumers see, so it is the output contract rather than a step in the derivation. The entries
     come from `exports.build_lifecycle_kpi_entries`, the function that writes `lifecycle_kpis.json`, so table and file
@@ -529,7 +529,7 @@ def _inferred_demand_note(derivation: views.LevelizedHeatCostDerivation) -> str:
 
 
 def _components_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str:
-    """Render the component breakdown: per-subject stacked NPV bars per perspective (§7.4).
+    """Render the component breakdown: per-subject stacked NPV bars per perspective.
 
     Each subject's cost blocks go right of zero and its credits (residual value, subsidies, feed-in, anyway credit)
     left, with a marker at the net NPV band, so `net = costs - credits` is visible; credits are not netted, so an
@@ -617,7 +617,7 @@ def _comparison_section_html(comparison: VariantComparison, context: _ChapterCon
     The waterfall attributes the total NPV delta to the subjects that caused it; its net bar is
     `comparison.npv_delta_in_euro`, read from the result rather than summed. Below it the discounted payback is given
     as text per slot (`None` meaning never within the horizon), as the cumulative discounted savings curve, and, when
-    the comparison carries a tenancy, as the warm-rent change per month with its per-slot neutrality verdict (§6).
+    the comparison carries a tenancy, as the warm-rent change per month with its per-slot neutrality verdict.
     Subjects with a delta below half a cent are left out of the waterfall but listed in the table. The NPV bridge, a
     separate section, splits the same delta by cost group.
 

@@ -1,7 +1,7 @@
 """Lay the loan flows of a perspective's financing plan onto the timeline.
 
 The loan mathematics is in `financing.loan_flows`. This module computes what is financed (the year-0 investment net of
-upfront grants), applies a soft-loan scheme's terms to the plan (§5.3), and emits a LOAN_DISBURSEMENT offsetting the
+upfront grants), applies a soft-loan scheme's terms to the plan, and emits a LOAN_DISBURSEMENT offsetting the
 year-0 outflow, the optional repayment grant, and the interest and principal schedule truncated at the horizon.
 
 Known discrepancy: the subsidy solver values a repayment grant on the gross measure cost, while this module applies
@@ -22,7 +22,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 
 class FinancingConstants:
-    """Labels of the financing flows (§4.4).
+    """Labels of the financing flows.
 
     A loan finances the investment as a whole, so its flows are booked under one synthetic subject. The name appears in
     `cash_flow_timeline.csv`, the per-subject breakdowns and the report's amortization chart.
@@ -34,7 +34,7 @@ class FinancingConstants:
 
 @dataclass(frozen=True)
 class Year0NetInvestment:
-    """The year-0 investment net of upfront support: what a loan share is taken of (§4.4).
+    """The year-0 investment net of upfront support: what a loan share is taken of.
 
     A cost-positive euro band in year-0 money, undiscounted. Only upfront subsidies are netted, because only they
     reduce what the borrower has to raise on the day. Produced by :func:`compute_year0_net_investment` and consumed by
@@ -78,7 +78,7 @@ class Year0NetInvestment:
 
 
 def compute_year0_net_investment(timeline: CashFlowTimeline) -> Year0NetInvestment:
-    """Sum the year-0 investment categories net of upfront subsidies (§4.4).
+    """Sum the year-0 investment categories net of upfront subsidies.
 
     SUBSIDY entries are negative, so including them makes the figure net (see `calculators/categories.py`). The sum
     runs in entry order. Reading it off the timeline makes the principal match what the timeline charges at year 0,
@@ -100,7 +100,7 @@ def compute_year0_net_investment(timeline: CashFlowTimeline) -> Year0NetInvestme
 
 
 def resolve_loan_plan(plan: FinancingPlan, decisions: List[SubsidyDecision]) -> FinancingPlan:
-    """Apply a soft-loan scheme's LOAN_TERMS award to the financing plan (§5.3).
+    """Apply a soft-loan scheme's LOAN_TERMS award to the financing plan.
 
     A soft loan (KfW-style) is a subsidy whose benefit is better terms: a lower rate, a longer term, and possibly a
     repayment grant (Tilgungszuschuss) that writes off a share of the principal. Only an award whose scheme is the
@@ -146,12 +146,12 @@ def build_financing_flows(
     year0_net: Year0NetInvestment,
     horizon: int,
 ) -> List[CashFlowEntry]:
-    """Return the loan flows that replace a share of the year-0 outflow (§4.4).
+    """Return the loan flows that replace a share of the year-0 outflow.
 
     Nothing is emitted when nothing is left to finance. A slot in which upfront grants exceed the investment finances
     nothing (:attr:`Year0NetInvestment.financed_basis`). The schedule stops at the horizon, so debt from a longer term
     is left outstanding. Financing barely changes the NPV but reshapes the nominal annual series, which answers "can I
-    afford this" (§4.3).
+    afford this".
 
     Args:
         loan_plan: The plan after :func:`resolve_loan_plan`.

@@ -759,7 +759,7 @@ class SolarControllerSteps:
 
     @staticmethod
     def values(mass_flow_in_kg_per_second: float, start_c: float = 45.0) -> Dict[str, float]:
-        """Return the controller's inputs for a tank that started the step at ``start_c`` and the given collector flow."""
+        """Return the controller's inputs for a tank that started the step at ``start_c`` and a collector flow."""
         controller_class = solar_thermal_system.SolarThermalSystemController
         return {
             controller_class.StorageTemperatureAtStartOfStepInCelsius: start_c,
@@ -768,7 +768,12 @@ class SolarControllerSteps:
 
     @classmethod
     def signal(
-        cls, controller: Any, stsv: Any, fakes: Dict[str, Any], values: Dict[str, float], force_convergence: bool = False
+        cls,
+        controller: Any,
+        stsv: Any,
+        fakes: Dict[str, Any],
+        values: Dict[str, float],
+        force_convergence: bool = False,
     ) -> float:
         """Run one pass from the saved state, as the simulator does, and return the on/off signal it publishes."""
         controller.i_restore_state()
@@ -825,7 +830,8 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
         controller.i_save_state()
     for flow in (steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
         steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(flow))
-    steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=61.0))
+    full_storage = steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=61.0)
+    steps.signal(iterated, iterated_stsv, iterated_fakes, full_storage)
     final = steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
     expected = steps.signal(fresh, fresh_stsv, fresh_fakes, final)
     assert steps.signal(iterated, iterated_stsv, iterated_fakes, final) == expected
@@ -910,7 +916,9 @@ class CollectorStep:
         config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(
             SizingContext(number_of_apartments=1)
         )
-        collector = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=Parameters.one_day(900))
+        collector = solar_thermal_system.SolarThermalSystem(
+            config=config, my_simulation_parameters=Parameters.one_day(900)
+        )
         collector.apparent_zenith = np.array([30.0])
         collector.solar_azimuth = np.array([180.0])
         stsv, fakes = Rig.wire(collector, [(entry, LoadTypes.ANY, Units.ANY) for entry in collector.inputs])

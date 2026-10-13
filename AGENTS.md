@@ -12,10 +12,12 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 - Every name that holds a physical quantity carries its unit: Python variables, attributes, function parameters,
   config fields, constants, component input and output names, KPI helpers and test helpers alike. Spell it as the
   suffix the code already uses most, `_in_<unit>`: `thermal_power_in_watt`, `temperature_in_celsius`,
-  `energy_in_kilowatt_hour`, `mass_flow_in_kg_per_second`, `heat_flow_in_watt_per_kelvin`. A name such as
-  `heat_flow_per_kelvin` is not enough: it names the quantity, not its unit. A module with its own established
-  short suffixes (`hisim/hydronics.py`: `_w`, `_c`, `_j`, `_kg_per_s`, `_w_per_k`) keeps them. A dimensionless
-  quantity says so in its name (`part_load_ratio`, `share_of_roof`).
+  `energy_in_kwh`, `mass_flow_in_kg_per_second`, `heat_flow_in_watt_per_kelvin`. New names spell energy
+  `_in_kwh`; existing `_in_kilowatt_hour` names are not renamed for that alone. A name such as
+  `heat_flow_per_kelvin` is not enough: it names the quantity, not its unit. A module that already uses short
+  suffixes (`_w`, `_c`) consistently keeps them, for example `hisim/hydronics.py`, whose module docstring lists
+  its suffixes; short suffixes are not introduced elsewhere. A dimensionless quantity says so in its name
+  (`part_load_ratio`, `share_of_roof`).
   Exception: a KPI's name (`KpiEntry.name`, e.g. "Unmet DHW heat demand") is a display label shown next to its
   mandatory `unit` field, and does not repeat the unit. KPI names are addresses for RenoVisor, the webtool and
   the golden references, so they are not renamed for this rule.

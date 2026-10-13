@@ -1,4 +1,4 @@
-"""Context resolution: what a cost subject is priced with and whether it is bought (cost_spec.md §2.3).
+"""Context resolution: what a cost subject is priced with and whether it is bought.
 
 A cost subject is one costed item on the timeline (a component instance or a measure). Per subject this module picks
 each cost building block from a component override or the database entry, records its provenance, and decides the

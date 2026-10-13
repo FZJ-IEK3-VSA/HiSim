@@ -1,4 +1,4 @@
-"""Derived views on a lifecycle cost result (cost_spec.md §2.4).
+"""Derived views on a lifecycle cost result.
 
 A view reshapes one evaluated `LifecycleCostResult` into the form one report figure needs: a per-year series, a
 per-carrier bill, a payer x category pivot, a per-subject waterfall. Views are pure functions returning plain data,
@@ -122,7 +122,7 @@ def fold_categories(
     """Fold a category -> amount map onto groups, summing slot-wise.
 
     Example: `fold_categories(result.npv_by_category, PresentationStyle.CATEGORY_TO_GROUP)`. Grouping is a display
-    concept, but the sums are computed here (§2.4).
+    concept, but the sums are computed here.
 
     Args:
         values: Category -> amount in euro, as floats or `UncertainValue`s; folding keeps them nominal or discounted as

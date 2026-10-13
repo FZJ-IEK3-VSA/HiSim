@@ -1,10 +1,11 @@
 """The heat generators state their energy flows and close their balance (hisim-9uoo.4).
 
 Every run checks the declared balances and fails when one does not close, so a run that finishes is one whose
-generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. Every check runs a whole household,
-so all of them run in the ``extendedbase2`` shard: a winter day at 3600 s of the gas and the heat-pump household
-for the ports, the first three weeks of January of the solar-thermal one, in which its pump runs, and the second
-January week at 900 s of each recorded generator household. Each generator declares what it takes (fuel,
+generators close; ``EXPORT_ENERGY_BALANCE`` writes the report the tests read. Every check but the fuel-carrier
+table's (``base``) runs a whole household, so those run in the ``extendedbase2`` shard: a winter day at 3600 s of
+the gas and the heat-pump household for the ports, the first three weeks of January of the solar-thermal one, in
+which its pump runs, the second January week at 900 s of each recorded generator household, and the same week of
+the gas household for the boiler's combustion loss. Each generator declares what it takes (fuel,
 electricity, district heat, ambient heat, solar), the heat it gives per use (space heating, hot water) and what it
 loses; the Sankey links it to its meter, its storages and the environment. The storages and the heat distribution
 system are undeclared until they declare their ports with the hydronic coupling (hisim-fxix.6).

@@ -1,7 +1,14 @@
 """T-5: the monthly balance of the Austrian engine, each rule against a hand computation with chosen values.
 
-No value of a licensed table appears here (R8.5): conductances, temperatures, gains and ratios are
-placeholders; the constants are the prose constants of the norm (a_0 = 1, τ_0 = 16, f_BW).
+DISCLAIMER - SYNTHETIC TEST DATA. Every table value in this module is invented to test the code,
+and any building in it is a placeholder or a HiSim test record: no value comes from an OENORM
+table, and no number computed here is the heating demand of any real building. Never use them for
+a study or a real calculation. The standards themselves (OENORM B 8110-5, B 8110-6-1, B 8110-6-2,
+H 5050-1, H 5056-1, edition 2024-03) can be purchased from Austrian Standards International:
+https://www.austrian-standards.at
+
+Conductances, temperatures, gains and ratios are placeholders; no value of a licensed table appears
+here (R8.5).
 """
 
 from __future__ import annotations
@@ -17,7 +24,7 @@ from epc.engines.at.envelope import Envelope
 from epc.engines.at.usage import MONTH_DURATION_IN_H
 from epc.model.building import Element, Situation
 from epc.model.errors import EpcError
-from epc.tests.test_at_terms import _building
+from epc.tests.at.synthetic.test_at_terms import _building
 
 pytestmark = pytest.mark.base
 

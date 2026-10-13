@@ -1,7 +1,14 @@
 """T-5, T-7, T-9 for the Austrian engine: the whole computation on synthetic tables, its refusals, the command line.
 
-The tables are synthetic (:mod:`epc.tests.at_tables`) and the building is a fixture written by HiSim with a
-site added in memory; no value of a licensed table appears here (R8.5).
+DISCLAIMER - SYNTHETIC TEST DATA. Every table value in this module is invented to test the code,
+and any building in it is a placeholder or a HiSim test record: no value comes from an OENORM
+table, and no number computed here is the heating demand of any real building. Never use them for
+a study or a real calculation. The standards themselves (OENORM B 8110-5, B 8110-6-1, B 8110-6-2,
+H 5050-1, H 5056-1, edition 2024-03) can be purchased from Austrian Standards International:
+https://www.austrian-standards.at
+
+The tables come from :mod:`epc.tests.at.synthetic.at_tables` and the building is a fixture written by
+HiSim with a site added in memory; no value of a licensed table appears here (R8.5).
 """
 
 from __future__ import annotations
@@ -14,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from epc.__main__ import main
 from epc.engines import registry
 from epc.engines.at import indicators
 from epc.engines.at.method import AustrianEngine
@@ -21,8 +29,8 @@ from epc.model.building import BuildingDescription, Site
 from epc.model.errors import EpcError
 from epc.model.result import COMMON_CORE, SITE_CLIMATE_KEY, RunInfo
 from epc.tests import support
-from epc.tests.at_tables import synthetic_tables, write
-from epc.tests.test_at_terms import _building
+from epc.tests.at.synthetic.at_tables import synthetic_tables, write
+from epc.tests.at.synthetic.test_at_terms import _building
 
 pytestmark = pytest.mark.base
 
@@ -102,6 +110,26 @@ def test_the_heating_degree_days_follow_eq_4_with_the_days() -> None:
     days = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
     expected = sum((20.5 - t) * d for t, d in zip(temperatures, days) if t <= 14.0)
     assert indicators.heating_degree_days(20.5, temperatures) == expected
+
+
+@pytest.mark.parametrize(
+    "complete, status", [(True, "ready"), (False, "tables not usable (E-11): see epc/data/README.md")]
+)
+def test_countries_states_whether_the_austrian_tables_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], complete: bool, status: str
+) -> None:
+    """D42: ``ready`` on a complete table set, E-11 on an empty folder, whatever tables lie locally."""
+    folder = write(tmp_path, synthetic_tables()) if complete else tmp_path
+
+    class _Engine(AustrianEngine):
+        """The Austrian engine reading this test's folder."""
+
+        def __init__(self) -> None:
+            super().__init__(data_folder=folder)
+
+    monkeypatch.setitem(registry.ENGINES_BY_COUNTRY, "AT", _Engine)
+    assert main(["countries"]) == 0
+    assert capsys.readouterr().out == f"AT\t{AustrianEngine.edition}\t{AustrianEngine.climate_basis}\t{status}\n"
 
 
 def test_the_command_line_lists_austria_and_refuses_a_record_without_site() -> None:

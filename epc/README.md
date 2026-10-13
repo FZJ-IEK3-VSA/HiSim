@@ -103,6 +103,13 @@ Every further key is an engine's own and is listed here, per engine, with that e
 
 Climate basis `reference+site`; the site block must state `climate_region` and `elevation_in_m`.
 
+> **The Austrian norms are licensed.** The engine computes only with the tables transcribed from them
+> under `epc/data/at/` (`epc/data/README.md`); without them it refuses with `E-11`, and `countries`
+> says so. The standards (OENORM B 8110-5, B 8110-6-1, B 8110-6-2, H 5050-1, H 5056-1, edition
+> 2024-03) can be purchased from Austrian Standards International: <https://www.austrian-standards.at>.
+> The tests in `epc/tests/at/synthetic/` run on invented values: **never use them, or anything
+> computed from them, for a study or a real calculation.**
+
 | Key | Unit | Meaning |
 |---|---|---|
 | `heating_demand_reference_climate` | kWh/(m2 a) | HWB_RK, per BGF |

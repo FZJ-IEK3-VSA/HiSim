@@ -1,4 +1,4 @@
-"""The replacement reserve of the operating-only view (cost_spec.md §2.3, §4.2).
+"""The replacement reserve of the operating-only view.
 
 Under the OPERATING_ONLY installation context a perspective (one named way of looking at the costs) sees no capital
 expenditure. So that equipment wear is still charged, the replacements are levelized into a sinking fund: their present

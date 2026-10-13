@@ -1,4 +1,4 @@
-"""Lay the loan flows of a perspective's financing plan onto the timeline (cost_spec.md §2.3, §4.4).
+"""Lay the loan flows of a perspective's financing plan onto the timeline.
 
 The loan mathematics is in `financing.loan_flows`. This module computes what is financed (the year-0 investment net of
 upfront grants), applies a soft-loan scheme's terms to the plan (§5.3), and emits a LOAN_DISBURSEMENT offsetting the

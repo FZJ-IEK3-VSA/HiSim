@@ -71,8 +71,9 @@ jobs:
             marker: "extendedbase2"
             # test_hisim_main_python.py peaks at 11.3 GB: a second process beside it would risk the 16 GB
             # limit, so the shard runs serially (it also holds the heat-pump booking runs of
-            # test_heat_pump_flow_booking.py, the hot-water chain runs of test_dhw_chain_twins.py and the two
-            # heat-pump twins of test_dhw_chain_time_resolution.py).
+            # test_heat_pump_flow_booking.py, the hot-water chain runs of test_dhw_chain_twins.py, the two
+            # heat-pump twins of test_dhw_chain_time_resolution.py and the household runs of
+            # test_energy_balance_generators.py).
             workers: 0
           - name: postprocessingoptions
             marker: "postprocessingoptions"

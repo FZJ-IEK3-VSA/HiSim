@@ -1,6 +1,14 @@
 """T-6: the Austrian loader reads a complete table set and refuses a missing, incomplete or malformed one.
 
-Every table here is synthetic (:mod:`epc.tests.at_tables`): no value of any norm (R8.5).
+DISCLAIMER - SYNTHETIC TEST DATA. Every table value in this module is invented to test the code,
+and any building in it is a placeholder or a HiSim test record: no value comes from an OENORM
+table, and no number computed here is the heating demand of any real building. Never use them for
+a study or a real calculation. The standards themselves (OENORM B 8110-5, B 8110-6-1, B 8110-6-2,
+H 5050-1, H 5056-1, edition 2024-03) can be purchased from Austrian Standards International:
+https://www.austrian-standards.at
+
+Every table here comes from :mod:`epc.tests.at.synthetic.at_tables`; no value of a licensed table
+appears here (R8.5).
 """
 
 from __future__ import annotations
@@ -25,7 +33,7 @@ from epc.engines.at.data_tables import (
 )
 from epc.model.errors import EpcError
 from epc.tests import support
-from epc.tests.at_tables import B_BANDS, E_BANDS, MONTHS, f_t, synthetic_tables, write
+from epc.tests.at.synthetic.at_tables import B_BANDS, E_BANDS, MONTHS, f_t, synthetic_tables, write
 
 pytestmark = pytest.mark.base
 
@@ -172,9 +180,9 @@ def test_a_malformed_cell_or_row_is_refused_naming_file_and_line(
 
 
 def test_the_line_of_a_malformed_cell_is_the_line_in_the_file(tmp_path: Path) -> None:
-    """The first data row of a file without comment lines is line 2."""
+    """Comment lines count: after the one-line synthetic header and the column row, the first data row is line 3."""
     error = _refusal(write(tmp_path, _replace(synthetic_tables(), RADIATION_COEFFICIENTS_FILE, "W,1,1e-06", "W,1,x")))
-    assert error.message == f"{RADIATION_COEFFICIENTS_FILE}, line 2: a2 must be a finite number, found 'x'."
+    assert error.message == f"{RADIATION_COEFFICIENTS_FILE}, line 3: a2 must be a finite number, found 'x'."
 
 
 GAPS = [

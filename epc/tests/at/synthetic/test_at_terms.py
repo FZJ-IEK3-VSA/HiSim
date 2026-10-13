@@ -1,7 +1,14 @@
 """T-5: the terms of the Austrian engine, each against a hand computation with hand-chosen values.
 
-No value of a licensed table appears here (R8.5): the tables are synthetic (:mod:`epc.tests.at_tables`),
-and the constants the expectations use are the prose constants the norm prints in its clauses.
+DISCLAIMER - SYNTHETIC TEST DATA. Every table value in this module is invented to test the code,
+and any building in it is a placeholder or a HiSim test record: no value comes from an OENORM
+table, and no number computed here is the heating demand of any real building. Never use them for
+a study or a real calculation. The standards themselves (OENORM B 8110-5, B 8110-6-1, B 8110-6-2,
+H 5050-1, H 5056-1, edition 2024-03) can be purchased from Austrian Standards International:
+https://www.austrian-standards.at
+
+The tables come from :mod:`epc.tests.at.synthetic.at_tables`; no value of a licensed table appears
+here (R8.5).
 """
 
 from __future__ import annotations
@@ -18,7 +25,7 @@ from epc.inputs import record
 from epc.model.building import BuildingDescription, Element, Situation, Window
 from epc.model.errors import EpcError
 from epc.tests import support
-from epc.tests.at_tables import f_t, synthetic_tables, write
+from epc.tests.at.synthetic.at_tables import f_t, synthetic_tables, write
 
 pytestmark = pytest.mark.base
 

@@ -1,5 +1,12 @@
 """Synthetic Austrian tables for the tests: the contract's shape with hand-chosen values, no norm value (R8.5).
 
+DISCLAIMER - SYNTHETIC TEST DATA. Every table value in this module is invented to test the code,
+and any building in it is a placeholder or a HiSim test record: no value comes from an OENORM
+table, and no number computed here is the heating demand of any real building. Never use them for
+a study or a real calculation. The standards themselves (OENORM B 8110-5, B 8110-6-1, B 8110-6-2,
+H 5050-1, H 5056-1, edition 2024-03) can be purchased from Austrian Standards International:
+https://www.austrian-standards.at
+
 The numbers, the elevation bands, the dwelling-unit classes and the factors are chosen by hand so that a
 test can compute its expectation; only the files, columns, grids and row counts are the contract's.
 """
@@ -19,6 +26,9 @@ from epc.engines.at.data_tables import (
     TRANSPOSITION_FACTORS_FILE,
     USAGE_PROFILES_FILE,
 )
+
+#: The first line of every file :func:`write` writes.
+SYNTHETIC_HEADER = "# SYNTHETIC TEST DATA - invented, not from any OENORM table"
 
 MONTHS = range(1, 13)
 B_BANDS = ("<=100", "100<h<=200", ">200")
@@ -44,7 +54,7 @@ def f_h(row: str) -> float:
 
 def synthetic_tables() -> Dict[str, List[str]]:
     """Complete tables in the contract's shape, as lines per file, with hand-chosen values."""
-    reference = ["# synthetic", "month,tilt_deg,azimuth_deg,value_kwh_per_m2,theta_e_c"]
+    reference = ["month,tilt_deg,azimuth_deg,value_kwh_per_m2,theta_e_c"]
     for month in MONTHS:
         reference.append(f"{month},0,,{_number(10 * month)},{_number(month - 0.5)}")
         for tilt in (15, 30, 45, 60, 75, 90):
@@ -74,7 +84,7 @@ def synthetic_tables() -> Dict[str, List[str]]:
 
 
 def write(folder: Path, tables: Dict[str, List[str]]) -> Path:
-    """Writes the tables into ``folder`` and returns it."""
+    """Writes the tables into ``folder``, each headed by :data:`SYNTHETIC_HEADER`, and returns it."""
     for file, lines in tables.items():
-        (folder / file).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        (folder / file).write_text("\n".join([SYNTHETIC_HEADER, *lines]) + "\n", encoding="utf-8")
     return folder

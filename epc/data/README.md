@@ -43,7 +43,9 @@ A result lists the digests of the tables it was computed with under `provenance.
 
 ## Austria (`at/`)
 
-Licensed (Austrian Standards); local and git-ignored (`.gitignore`: `epc/data/at/`). Edition package
+Licensed (Austrian Standards); local and git-ignored (`.gitignore`: `epc/data/at/`). The norms can be
+purchased from Austrian Standards International (https://www.austrian-standards.at); the engine reads
+their tables in the form this section states. Edition package
 2024-03 (D5): OENORM B 8110-5:2024-03, B 8110-6-1:2024-03, B 8110-6-2:2024-03. The loader is
 `epc/engines/at/data_tables.py` with `climate_tables.py`; its columns and row counts are the single
 source of this section (I-6). Months are `1` (January) … `12` (December). Climate regions are the
@@ -58,7 +60,7 @@ norm prints them: no rounding, no unit conversion, no interpolation, no value th
 | `transposition_factors_b8110_5_2024_annex_e.csv` | B 8110-5 Annex E, Tab. E.1–E.7: transposition factors F_T of Eq. (3) | 5 292 |
 | `usage_profiles_b8110_5_2024_tab7_tab9.csv` | B 8110-5 Tab. 7 and 9, the residential rows | 3 |
 | `temperature_correction_factors_b8110_6_1_2024_tab3_5.csv` | B 8110-6-1 Tab. 3–5, one row per key below | 14 |
-| `validation_examples_b8110_6_2_2024.csv` | B 8110-6-2 Sections 4 and 5: inputs and expected values of the worked examples, read by the local validation only | – |
+| `validation_examples_b8110_6_2_2024.csv` | B 8110-6-2 Sections 4 and 5: inputs and expected values of the worked examples, read only by the local tests in `epc/tests/at/reference_cases/` (D41) | – |
 | `SOURCES.md` | per file: norm, edition, tables, pages, transcription, cross-checks, SHA-256 | – |
 
 ### `reference_climate_b8110_5_2024_annex_a.csv`

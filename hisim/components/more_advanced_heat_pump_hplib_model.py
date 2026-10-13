@@ -159,7 +159,7 @@ class StandardizedSeasonalCop:
         for outdoor, hours in cls.BINS:
             demand = design_load * cls.part_load(outdoor)
             output, cop = run(outdoor, cls.flow_temperature(application, outdoor))
-            by_heat_pump = min(demand, output) if cop > 1 else 0.0
+            by_heat_pump = min(demand, output) if cop > HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP else 0.0
             heat += hours * demand
             electricity += hours * ((by_heat_pump / cop if by_heat_pump else 0.0) + demand - by_heat_pump)
         return heat / electricity
@@ -414,7 +414,7 @@ class ScopCalibration:
         if not self.factors or mode != 1:
             return results
         cop = float(results["COP"])
-        if cop <= 1:
+        if cop <= HplibResult.HEATING_ROD_ALONE_MAXIMAL_COP:
             return results
         factor = self.factor(float(results["T_out"]))
         p_th = float(results["P_th"])
@@ -498,9 +498,9 @@ class HplibResult:
         """Return whether hplib runs its heating rod alone at exactly one of two neighbouring operating points.
 
         hplib switches from its compressor to its heating rod alone where its fitted coefficient of performance falls
-        to 1, and its thermal power jumps there: for example from 5.0 kW (compressor at a COP of 1.01) to the 7.55 kW
-        of the rod. A linear interpolation between a grid point on either side of that switch turns the jump into a
-        ramp of about 25 kW/K over 0.1 K.
+        to 1, and its thermal power jumps there: for example, for one machine, from 5.0 kW (compressor at a COP of
+        1.01) to the 7.55 kW of the rod. A linear interpolation between a grid point on either side of that switch
+        turns that jump into a ramp of about 25 kW/K over 0.1 K.
 
         Args:
             lower: hplib's result at the lower grid point.

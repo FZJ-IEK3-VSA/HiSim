@@ -13,12 +13,15 @@ Both files of a gate then run for one day, and every result column and KPI is eq
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import ClassVar, Dict, List, Tuple
 
 import pytest
+import yaml
 
-from hisim.energy_system.assemblies.twins import COMPOSED_TWINS
+from hisim.components.simple_water_storage import SimpleDHWStorage, SimpleHotWaterStorage
+from hisim.energy_system.assemblies.twins import COMPOSED_TWINS, ComposedTwin
 from tests.assemblies.twin_gate import (
+    ENERGY_SYSTEMS,
     Run,
     TwinGate,
     check_columns,
@@ -29,6 +32,53 @@ from tests.assemblies.twin_gate import (
 )
 
 
+class BufferSwap:
+    """Finds the neutral swap of a household twin: its DHW cylinder and its space-heating buffer, by their classes.
+
+    The twin evaluates the cylinder before the buffer, the composed file the buffer before the cylinder; the two read
+    nothing from each other, so the pair is a neutral swap. A twin without a buffer (district heating, direct electric
+    heating) has none. The members are found by the class each twin component names, not by their names, so a twin
+    calling its buffer differently still gets its swap. Example: the oil twin has ``DHWStorage``
+    (``SimpleDHWStorage``) and ``SimpleHotWaterStorage`` (``SimpleHotWaterStorage``), which gives
+    ``(("DHWStorage", "SimpleHotWaterStorage"),)``.
+    """
+
+    #: The DHW cylinder's class, which every household twin has.
+    CYLINDER_CLASS: ClassVar[type] = SimpleDHWStorage
+    #: The space-heating buffer's class, which only a generator with a buffer has.
+    BUFFER_CLASS: ClassVar[type] = SimpleHotWaterStorage
+
+    @staticmethod
+    def class_path(component_class: type) -> str:
+        """The dotted path a twin writes under ``class`` for a component class."""
+        return f"{component_class.__module__}.{component_class.__qualname__}"
+
+    @classmethod
+    def of(cls, entry: ComposedTwin) -> Tuple[Tuple[str, str], ...]:
+        """The neutral swaps of one twin: ``((cylinder, buffer),)`` when it has a buffer, else none.
+
+        Args:
+            entry: The twin's row of the table.
+
+        Returns:
+            The swaps, as pairs of twin names.
+
+        Raises:
+            AssertionError: When the twin has a buffer but not exactly one cylinder, or more than one buffer, for
+                which the one swap is not determined.
+        """
+        components = yaml.safe_load((ENERGY_SYSTEMS / entry.twin).read_text(encoding="utf-8"))["components"]
+        names_by_class: Dict[str, List[str]] = {}
+        for name, component in components.items():
+            names_by_class.setdefault(component["class"], []).append(name)
+        buffers = names_by_class.get(cls.class_path(cls.BUFFER_CLASS), [])
+        if not buffers:
+            return ()
+        cylinders = names_by_class.get(cls.class_path(cls.CYLINDER_CLASS), [])
+        assert len(buffers) == 1 and len(cylinders) == 1, (entry.twin, buffers, cylinders)
+        return ((cylinders[0], buffers[0]),)
+
+
 def gate(stem: str) -> TwinGate:
     """The gate of the composed twin ``stem`` of :data:`~hisim.energy_system.assemblies.twins.COMPOSED_TWINS`.
 
@@ -36,7 +86,7 @@ def gate(stem: str) -> TwinGate:
     table's rename map, with G7 (the battery's one-element list) and the cylinder and the buffer as its one neutral
     swap; ``gate("household_district_heating_building_sizer")`` has G7 and no swap. Every composed file is the same
     household site around another generator, so G7 is common to all of them. The swap exists only where the generator
-    has a buffer, which the rename map shows: a member the twin calls ``SimpleHotWaterStorage``.
+    has a buffer, a twin component of the buffer's class (:class:`BufferSwap`).
 
     Args:
         stem: The Python setup's stem, a key of the table.
@@ -45,10 +95,9 @@ def gate(stem: str) -> TwinGate:
         The gate.
     """
     entry = COMPOSED_TWINS[stem]
-    has_buffer = "SimpleHotWaterStorage" in entry.rename.values()
     return TwinGate(
         entry,
-        neutral_swaps=(("DHWStorage", "SimpleHotWaterStorage"),) if has_buffer else (),
+        neutral_swaps=BufferSwap.of(entry),
         g7_component="Battery",
         g7_line={"pv_peak_power_in_watt": ["PVSystem.pv_peak_power_in_watt"]},
     )

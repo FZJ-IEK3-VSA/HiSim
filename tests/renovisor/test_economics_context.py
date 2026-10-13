@@ -1676,10 +1676,14 @@ class TestAnUnpricedEnvelopeRowSaysWhy:
 
         The envelope measure carries no cost block, so the translator flags its subject unpriced
         and notes why; the stage prices the translator's own subject facts beside the synthetic
-        boiler, so the row's subject is the one the translator named.
+        boiler, so the row's subject is the one the translator named. The same report's
+        ``economics_stage.measures`` is checked too: it must list the measures the translation acted
+        on, in catalogue order, or the staged document's stage timeline is labelled wrongly. This is
+        the base-tier check of that list for a real translation.
         """
         # pylint: disable=import-outside-toplevel
         from hisim.economics.parameters import EconomicParameters
+        from hisim.renovisor.request import CatalogueTable
         from hisim.economics.staged_cli import StagedCli
         from hisim.economics.staged import StagedEvaluator
         from hisim.economics.staged_document import StagedDocument
@@ -1717,6 +1721,19 @@ class TestAnUnpricedEnvelopeRowSaysWhy:
         )
         mapping = StagedCli.read_mapping([str(stage_directory)])
         assert "external_insulation" in mapping.unpriced
+        order = list(CatalogueTable.ids())
+        assert StagedCli.read_stage_measures(str(stage_directory), 1, "the mockup stage") == tuple(
+            sorted(
+                [
+                    "heating_system",
+                    "heating_installation",
+                    "external_insulation",
+                    "photovoltaic_system",
+                    "hot_water_tank_and_pipe_insulation",
+                ],
+                key=order.index,
+            )
+        )
 
         baseline = baseline_stage()
         stage = dataclasses.replace(

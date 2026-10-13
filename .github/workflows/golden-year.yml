@@ -72,11 +72,17 @@
 # runs the full year (owner decision 2026-10-11: the first week of January never runs a solar
 # collector's pump, so only a year exercises the solar systems); a setup that cannot finish a
 # year would keep a week-only 'horizons' entry until its bead is fixed. That is 22 Python pairs
-# plus the composed files of the eight generator setups, 30 runs of about 98 runner-minutes in
-# all (64 when only those eight ran the year, in four shards). Five shards keep the slowest
-# shard near the old one, about 15 to 16 minutes of simulation (the heat pump with solar
-# thermal alone takes about 10); four would add about five minutes of wall time for the same
-# runner-minutes. The weights the shards are balanced by are "seconds" in golden_config.json.
+# plus the composed files of the eight generator setups, 30 runs of about 155 minutes of
+# simulation in all by the config's weights (the run of 2026-10-13 measured 159). Five shards
+# give each about 16 minutes of simulation by the weights (the heaviest pair, the heat pump with
+# car, takes about 12 alone); the shard jobs took 16 to 20 minutes on 2026-10-13. The weights the
+# shards are balanced by are "seconds" in golden_config.json.
+#
+# TIMEOUTS. A hung simulation must not hold a runner until GitHub's six-hour default. Each pair's
+# child process is killed after three times its recorded seconds (at least ten minutes) and fails
+# that pair by name (scripts/runner.py, ChildRuns.timeout_in_seconds); the heaviest pair's limit
+# is about 35 minutes. The job's own limit, 60 minutes, is three times the slowest shard job
+# measured and leaves the per-pair limit room to fire first and report.
 #
 # THE ASSEMBLY NIGHTLY TIER rides along (assemblies_spec.md §9.4, D24, lean v1 §13.1): the job
 # `assemblies-nightly` runs `pytest -m nightly tests/assemblies/test_library_contracts.py`, the
@@ -240,6 +246,8 @@ jobs:
     needs: gate
     if: needs.gate.outputs.proceed == 'true'
     runs-on: ubuntu-latest
+    # See TIMEOUTS above: three times the slowest shard job measured (about 20 minutes).
+    timeout-minutes: 60
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
       credentials:

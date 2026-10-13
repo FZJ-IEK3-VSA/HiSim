@@ -1616,15 +1616,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         )
         if self.heatpump.delta_t == 0:
             self.heatpump.delta_t = self.VANISHING_LIFT_IN_KELVIN
-        heat_drawn_in_watt = -(
-            mass_flow_in_kg_per_second
-            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            * self.heatpump.delta_t
-        )
-        outlet_in_celsius = return_in_celsius + (
-            heat_drawn_in_watt
-            / (mass_flow_in_kg_per_second * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
-        )
+        outlet_in_celsius = return_in_celsius - self.heatpump.delta_t
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=mass_flow_in_kg_per_second, t_supply_c=outlet_in_celsius, t_return_c=return_in_celsius
         )

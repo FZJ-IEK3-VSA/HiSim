@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Controller of EV battery with configuration and state."""
+"""Charge controller of an electric car's battery, with its configuration."""
 
 from typing import ClassVar, List, Optional
 from dataclasses import dataclass, field
@@ -152,20 +152,25 @@ class ChargingStationConfig(ConfigBase):
         )
 
 
-class L1ControllerState:
-    """Data class, which saves the state of the controller."""
-
-    def __init__(self, power_in_watt: float) -> None:
-        """Initializes power for battery charge/discharge in state."""
-        self.power_in_watt = power_in_watt
-
-    def clone(self) -> "L1ControllerState":
-        """Copy state efficiently."""
-        return L1ControllerState(power_in_watt=self.power_in_watt)
-
-
 class L1Controller(cp.Component):
-    """Simulates EV charging and battery losses due to driving. Control according to constant SOC threshold and optional surplus control.
+    """Commands an electric car's battery: its charging at the station and its discharging while the car drives.
+
+    The controller decides every pass from its inputs alone and keeps no state from one step to the next:
+
+    * the car drives: the battery gives the car's consumption;
+    * the car is parked away from its charging station: nothing;
+    * the car is parked at its station: the surplus the energy manager offers the car, up to the station power,
+      when that offer is above :attr:`ChargingStationConfig.lower_threshold_charging_power_in_watt`; otherwise
+      full station power while the battery's state of charge at the start of the step is below
+      :attr:`ChargingStationConfig.battery_set_soc`, and nothing above it.
+
+    For example, a car at its 11 kW station starting the step at 0.396 with a set point of 0.4 charges at 11 kW
+    whatever the step ends with, and a car at 0.6 offered 3,000 W of surplus charges at 3,000 W.
+
+    Why both inputs are taken as they are: the start-of-step state of charge does not move while the step
+    iterates, and the offer is the surplus before the car takes its share, so the car's own charging changes
+    neither. A decision on the end-of-step state of charge, or on the surplus left after the car, would feed the
+    car's charging back into its own decision and alternate between the passes of a step.
 
     Components to connect to:
     (1) Car (generic_car)
@@ -178,7 +183,7 @@ class L1Controller(cp.Component):
     # Inputs
     ElectricityNeededByCar = "ElectricityNeededByCar"
     CarLocation = "CarLocation"
-    StateOfCharge = "StateOfCharge"
+    StateOfChargeAtStartOfStep = "StateOfChargeAtStartOfStep"
     ElectricityTargetFromEMS = "ElectricityTargetFromEMS"
     AcBatteryChargingPower = "AcBatteryChargingPower"
 
@@ -187,9 +192,6 @@ class L1Controller(cp.Component):
     BatteryChargingPowerToEMS = "BatteryChargingPowerToEMS"
 
     # Instance attributes declared for static type analysis
-    state: L1ControllerState
-    previous_state: L1ControllerState
-    processed_state: L1ControllerState
     location: str
     charging_location: Optional[int]
     power_delivered_at_charging_station_in_watt: float
@@ -210,9 +212,6 @@ class L1Controller(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.state = L1ControllerState(power_in_watt=0)
-        self.previous_state = self.state.clone()
-        self.processed_state = self.state.clone()
         self.charging_location = None
         self.build(config=config)
 
@@ -231,9 +230,9 @@ class L1Controller(cp.Component):
             lt.Units.ANY,
             mandatory=True,
         )
-        self.state_of_charge_channel: cp.ComponentInput = self.add_input(
+        self.state_of_charge_at_start_of_step_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.StateOfCharge,
+            self.StateOfChargeAtStartOfStep,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             mandatory=True,
@@ -298,9 +297,11 @@ class L1Controller(cp.Component):
         battery_classname = advanced_ev_battery_bslib.CarBattery.get_classname()
         connections.append(
             cp.ComponentConnection(
-                L1Controller.StateOfCharge,
+                L1Controller.StateOfChargeAtStartOfStep,
                 battery_classname,
-                advanced_ev_battery_bslib.CarBattery.StateOfCharge,
+                # the state of charge the step starts with: the controller decides on a value the step's
+                # iteration does not move
+                advanced_ev_battery_bslib.CarBattery.StateOfChargeAtStartOfStep,
             )
         )
         connections.append(
@@ -313,12 +314,10 @@ class L1Controller(cp.Component):
         return connections
 
     def i_save_state(self) -> None:
-        """Saves actual state."""
-        self.previous_state = self.state.clone()
+        """Save nothing: the controller decides every pass from its inputs and keeps no state."""
 
     def i_restore_state(self) -> None:
-        """Restores previous state."""
-        self.state = self.previous_state.clone()
+        """Restore nothing: the controller decides every pass from its inputs and keeps no state."""
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Checks statements."""
@@ -360,8 +359,9 @@ class L1Controller(cp.Component):
         preserved for backward compatibility, though the precedence is now explicit in the code.
 
         Args:
-            soc: Current state of charge of the battery (0-1)
-            electricity_target_in_watt: Surplus energy from EMS in watts
+            soc: The battery's state of charge at the start of the step, between 0 and 1.
+            electricity_target_in_watt: The surplus the energy manager offers the car, in W: what is left before
+                the car takes its share, negative when there is none.
 
         Returns:
             Power to charge the car battery in watts (positive value)
@@ -400,8 +400,9 @@ class L1Controller(cp.Component):
         Args:
             car_consumption_in_watt: Current power consumption of the car in watts (positive when consuming)
             car_location: Current location of the car (1=Home, 2=Work, etc.)
-            soc: Current state of charge of the battery (0-1)
-            electricity_target_in_watt: Surplus energy from EMS in watts
+            soc: The battery's state of charge at the start of the step, between 0 and 1.
+            electricity_target_in_watt: The surplus the energy manager offers the car, in W, before the car takes
+                its share; negative when there is none.
 
         Returns:
             Power to/from the car battery in watts. Positive = charging, Negative = discharging
@@ -427,25 +428,36 @@ class L1Controller(cp.Component):
         )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Returns battery charge and discharge (energy consumption of car) of battery at each timestep."""
-        if force_convergence:
-            self.state = self.processed_state.clone()
+        """Command the car battery's power for this pass, and report the battery's charging power to the energy manager.
+
+        The command follows from the inputs alone (:meth:`control_power_in_watt`): the car's consumption and
+        location, the battery's state of charge at the start of the step and the surplus the energy manager offers
+        the car. For example, a parked car at its station starting the step at 0.396, below a set point of 0.4,
+        is commanded the station's 11,000 W in every pass of the step.
+
+        Under ``force_convergence`` the controller decides as in any other pass. Why: it keeps no state, so there
+        is no earlier decision to hold, and its decision on the inputs of the forced pass is the one consistent
+        with them.
+
+        Args:
+            timestep: The index of the current step.
+            stsv: The step values the inputs are read from and the outputs written to.
+            force_convergence: Whether the simulator forces the step to converge; it does not change the decision.
+        """
+        car_location = int(stsv.get_input_value(self.car_location_channel))
+        car_consumption_in_watt = stsv.get_input_value(self.car_consumption_channel)
+        state_of_charge_at_start_of_step = stsv.get_input_value(self.state_of_charge_at_start_of_step_channel)
+        if self.electricity_target_from_ems_channel.source_output is not None:
+            surplus_offered_in_watt = stsv.get_input_value(self.electricity_target_from_ems_channel)
         else:
-            car_location = int(stsv.get_input_value(self.car_location_channel))
-            car_consumption_in_watt = stsv.get_input_value(self.car_consumption_channel)
-            soc = stsv.get_input_value(self.state_of_charge_channel)
-            if self.electricity_target_from_ems_channel.source_output is not None:
-                electricity_target_from_ems_in_watt = stsv.get_input_value(self.electricity_target_from_ems_channel)
-            else:
-                electricity_target_from_ems_in_watt = 0
-            self.state.power_in_watt = self.control_power_in_watt(
-                car_consumption_in_watt,
-                car_location=car_location,
-                soc=soc,
-                electricity_target_in_watt=electricity_target_from_ems_in_watt,
-            )
-            self.processed_state = self.state.clone()
-        stsv.set_output_value(self.electricity_to_or_from_car_battery_channel, self.state.power_in_watt)
+            surplus_offered_in_watt = 0
+        power_in_watt = self.control_power_in_watt(
+            car_consumption_in_watt,
+            car_location=car_location,
+            soc=state_of_charge_at_start_of_step,
+            electricity_target_in_watt=surplus_offered_in_watt,
+        )
+        stsv.set_output_value(self.electricity_to_or_from_car_battery_channel, power_in_watt)
 
         # get current charging power from car battery
         ac_battery_power_in_watt = stsv.get_input_value(self.ac_battery_power_channel)

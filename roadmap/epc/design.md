@@ -36,7 +36,7 @@ package with its norm tables and norm defaults as data; it fills the result with
 its own keys. The Austrian engine is the pilot, a direct transcription of the 2024-03 ÖNORM package
 validated against B 8110-6-2; the Irish engine is profiled from the DEAP manual so that the shell is
 shaped by two concrete methods; Germany, Spain and the Netherlands are slots of the same shape. New is
-the folder `epc/` with everything in it; changed in HiSim are two lines of `pytest.ini` and one of
+the folder `epc/` with everything in it and its workflow `.github/workflows/epc.yml` (D40); changed in HiSim are two lines of `pytest.ini` and one of
 `.gitignore`. The non-obvious places are the three-line situation rule (§3.3), the two quantities
 HiSim does not know and the norm supplies by its own conventions (gross floor area, gross volume,
 §3.4), and the assumptions list that makes every engine default visible in the result.
@@ -45,7 +45,7 @@ HiSim does not know and the norm supplies by its own conventions (gross floor ar
 
 | Req / AC | Design element (§ ref) | Code location (planned) | Test (§9) | Status |
 |---|---|---|---|---|
-| R1.1 | §5.1 layout, `python -m epc` | `epc/__main__.py` | T-9 | planned |
+| R1.1 | §5.1 layout, `python -m epc`; the `epc` workflow (D40) | `epc/__main__.py`, `.github/workflows/epc.yml` | T-9, T-12 | planned |
 | R1.2 | §3.5 import boundary | `epc/tests/test_import_boundary.py` | T-10 | planned |
 | R1.3 | §5.1 `epc/tests/`, `pytest.ini` | `pytest.ini` | T-12 | planned |
 | R2.1 | §3.3 reading; §8 E-02…E-05 | `epc/inputs/record.py` | T-3 | planned |
@@ -219,7 +219,7 @@ never imported or referenced (R8.7).
 | 4.7 | Engine shape | `compute(building)` as the only requirement; the Austrian stage layout as the pattern | nine mandatory stage files: a corset for DEAP, NTA and the others; one shared balance library: the norms differ in detail, a shared core would blur exactness. |
 | 4.8 | Result shape | dictionary with common core, free keys, assumptions | fixed dataclass per country: reporting would know every country. |
 | 4.9 | Site | a block of the expanded record, from HiSim's weather configuration (D23) | a site file of the calculator's own: a second input to keep in step with every run; a building at several sites is several records anyway. |
-| 4.10 | Package form | folder with tests under `epc/tests/` | own `pyproject.toml` and workflow now: deferred (D15, P7). |
+| 4.10 | Package form | folder with tests under `epc/tests/`, run by a path-filtered workflow of its own (D40) | own `pyproject.toml` now: deferred (D15, P7); the tests in HiSim's base job: that job runs pytest from `tests/` and collects none of them. |
 | 4.11 | Off-grid azimuth or tilt (Austria) | refuse in stage 1 (D21) | interpolate now: dead code for every HiSim building and every validation example; comes with P4 (P10). |
 | 4.12 | Batch output | an empty output directory per batch (D28) | managing which files belong to which run and removing stale ones: bookkeeping for no gain. |
 | 4.13 | Validation of the record | the reader's field checks (E-05…E-08) plus the description's value checks | a JSON Schema file beside them: the field list a third time, for no further guarantee. |
@@ -263,7 +263,7 @@ epc/
 ```
 
 HiSim: `pytest.ini` gains `epc/tests` in `testpaths` and the marker `epc_norm_data`; `.gitignore`
-gains `epc/data/at/` and `epc/results/`. Nothing else outside `epc/` and `roadmap/epc/` changes.
+gains `epc/data/at/` and `epc/results/`; `.github/workflows/epc.yml` is added (D40). Nothing else outside `epc/` and `roadmap/epc/` changes.
 
 ### 5.2 The input dictionary (`epc/model/building.py`) `[proposed]`
 
@@ -492,7 +492,7 @@ when the data are absent; output attached to the PR, R9.3).
 | T-9 | R2.2, R2.3, R12, AC1 (shape), AC3, AC4, AC9, I-11 | integration | `python -m epc` in a subprocess over a fixture results tree with the dummy engine; country DE; run and batch; refusal paths; non-empty output directory; exit codes | a wrong exit code, a batch that stops |
 | T-10 | R1.2, R6.1, R8.7, AC6 | static | ast over `epc/**/*.py`: imports only of the standard library, PyYAML and the package, in the directions of §3.5; the string `TABULA` in those modules | an import of `hisim` or the prototype; archetype knowledge in the calculator |
 | T-11 | R13, AC12 | review | `git diff --stat origin/main -- hisim tests system_setups energy_systems` empty on every PR | a HiSim file changed |
-| T-12 | R1.3, C3 | contract | `pytest --collect-only epc/tests`; marker registered | tests not collected |
+| T-12 | R1.1, R1.3, C3 | contract | `pytest --collect-only epc/tests`; marker registered; the `epc` workflow runs `pytest epc/tests -m base` (D40) | tests not collected |
 | V-1 | AC2, R9.2 | golden against the norm, local | B 8110-6-2 SFH, variant 1 cases 1 and 2, variant 2 case 2 (D37), as a hand-written description from the local examples file | any value off by more than half of the last printed digit |
 | V-2 | AC2, R9.2 | golden, local | B 8110-6-2 MFH, variants 1 and 2.1, cases 1 and 2, five dwelling units (D37) | as V-1 |
 | V-3 | R5.13, Q-D2 | evidence, local | HGT 22/14 of three real certificates (4169, 3762, 3731 Kd) | the formula drifting |
@@ -514,7 +514,7 @@ The fixtures of PR-B are written by HiSim's writer.
 | PR | Content | Tests | Review subject |
 |---|---|---|---|
 | PR-A | `roadmap/epc/requirements.md`, `input_contract.md`, `design.md` | — | the plan: three steps, folders, dictionaries |
-| PR-B | the shell: `model/`, `inputs/`, `engines/{base,registry}`, `reports/`, `batch.py`, `__main__.py`, fixtures, `data/README.md`, `pytest.ini`, `.gitignore`, `epc/README.md` | T-1 … T-4, T-7 … T-12 | the shell |
+| PR-B | the shell: `model/`, `inputs/`, `engines/{base,registry}`, `reports/`, `batch.py`, `__main__.py`, fixtures, `data/README.md`, `pytest.ini`, `.gitignore`, `.github/workflows/epc.yml`, `epc/README.md` | T-1 … T-4, T-7 … T-12 | the shell |
 | PR-C | `engines/at/` data tables, defaults, climate, usage, envelope, gains | T-5 (climate, envelope, gains), T-6; V-5 (local) | the Austrian terms, each with its citation |
 | PR-D | `engines/at/` balance, indicators, method; `countries` lists AT | T-5 (balance), T-9 with AT; **V-1, V-2, V-3, V-4** (local, output attached) | the balance and the norm reproduction, the gate |
 | later | one PR per further engine, each after its norm is read (Q1): data contract, defaults, computation, its validation | its T-5 and V-* equivalents | one country at a time |

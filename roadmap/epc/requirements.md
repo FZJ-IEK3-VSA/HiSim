@@ -89,7 +89,7 @@ data exist. HiSim itself is not changed by this work.
 - Package boundaries: `tests/test_renovisor_import_lint.py` forbids imports of `hisim.renovisor`
   from below it; the maintainers plan enforced packages with versioned, schema-checked files at
   every seam and name the EPC as the package separate from the start.
-- Tests: `pytest.ini` has `testpaths = tests` and `--strict-markers`; CI runs `pytest -m base`.
+- Tests: `pytest.ini` has `testpaths = tests` and `--strict-markers`; CI (`tests.yml`) runs `pytest -m base` from `tests/`, where pytest does not read `testpaths`.
 
 ### 4.2 The national methods
 
@@ -160,7 +160,7 @@ B 8110-5 Eq. (4) with the month's days reproduces the HGT 22/14 of three real ce
 - Any change to HiSim in the calculator's pull requests; HiSim's building record (issue #949) and the
   site fields (D23) are separate changes to HiSim. `[decided 2026-10-12, D30]`
 - Resolving the site from a municipality or cadastral code. `[given]`
-- A human-readable certificate document; a package of its own with `pyproject.toml` and a workflow of its own. `[decided 2026-10-10, D15, D17]`
+- A human-readable certificate document; a package of its own with `pyproject.toml`. `[decided 2026-10-10, D15, D17; 2026-10-13, D40]`
 - The 2025-10 Austrian edition package. `[decided 2026-10-07, D5]`
 
 ## 6. Use cases, examples and mockups
@@ -280,9 +280,9 @@ maintainers' boundary plan.
 
 Functional unless marked. Austrian clause references are to the 2024-03 editions (D5).
 
-**R1 — A standalone calculator inside the repository.** `[decided 2026-10-09, D11; 2026-10-10, D15]`
+**R1 — A standalone calculator inside the repository.** `[decided 2026-10-09, D11; 2026-10-10, D15; 2026-10-13, D40]`
 R1.1 It lives in `epc/` at the repository root and runs as `python -m epc` from there; no packaging
-and no workflow of its own; through `pytest.ini` its `base` tests run in HiSim's existing base job (C3). R1.2 No module of the calculator imports `hisim`; a committed static
+(D15); its `base` tests run in a workflow of their own, `.github/workflows/epc.yml`, on changes to `epc/` (D40). R1.2 No module of the calculator imports `hisim`; a committed static
 check enforces it, without exemption. R1.3 Its tests
 live under `epc/tests/`, apart from HiSim's, with the repository's markers. R1.4 It may use
 third-party libraries the repository already depends on.
@@ -397,9 +397,9 @@ R12.1 `run` fails hard on the first error. R12.2 `batch` records a refused run i
 continues; the exit code is non-zero when any run was refused. R12.3 The batch walks the results root
 deterministically.
 
-**R13 — HiSim is untouched by the calculator's pull requests.** `[decided 2026-10-11, D23; 2026-10-12, D30]`
+**R13 — HiSim is untouched by the calculator's pull requests.** `[decided 2026-10-11, D23; 2026-10-12, D30; 2026-10-13, D40]`
 No file under `hisim/`, `tests/`, `system_setups/` or `energy_systems/` changes in them; outside `epc/`
-and `roadmap/epc/` only `pytest.ini` (test path, marker) and `.gitignore` (local data) change. HiSim's
+and `roadmap/epc/` only `pytest.ini` (test path, marker) and `.gitignore` (local data) change, and `.github/workflows/epc.yml` is added (D40). HiSim's
 building record (issue #949) and the site fields (D23) are the requester's separate changes to HiSim.
 
 ## 9. Constraints, invariants and assumptions
@@ -480,7 +480,7 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | P4 | Manual tests against real certificates (Muggauberg, Ludersdorf, Kalsdorf) after merge; they confirm A1 and need P10 | D6 |
 | P5 | The Austrian hot-water loss chain (H 5056-1 Ch. 6, H 5056-2 as oracle), reading the run's hot-water components from the record | D1 |
 | P6 | Headline indicators and classes per country, which need the heating system from the record | D14 |
-| P7 | A package of its own and a path-filtered CI job, later a repository of its own, once the record seam is stable | D15 |
+| P7 | A package of its own, later a repository of its own, once the record seam is stable (the path-filtered CI job: D40) | D15 |
 | P8 | Mechanical ventilation with heat recovery (B 8110-6-1 6.2.3), SFH variant 2 case 1 and MFH variants 2.2/2.3 of B 8110-6-2 | R9.2 |
 | P9 | Release of licensed norm-derived data, if the publisher permits | D7 |
 | P10 | Linear interpolation of the Austrian radiation tables for off-grid azimuths and tilts (B 8110-6-1 9.1), needed by the real certificates of P4 | R5.2 |
@@ -504,7 +504,7 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | D12 | 2026-10-09 | Countries: Austria the pilot; Ireland, Germany, Spain, the Netherlands as further engines on one shell. |
 | D13 | 2026-10-09 | Three steps: inputs, engine, report; the shell is those steps and the two dictionaries they exchange. |
 | D14 | 2026-10-10 | Target of stage 1 is the heating demand by the national method under reference and, where the method has it, site climate; the result is a dictionary with a common core, free national keys and an assumptions list. |
-| D15 | 2026-10-10 | No `pyproject.toml` and no workflow of its own; the tests are separated under `epc/tests/` and, through `pytest.ini`, the `base` ones run in HiSim's existing base job. |
+| D15 | 2026-10-10 | No `pyproject.toml` and no workflow of its own; the tests are separated under `epc/tests/` and, through `pytest.ini`, the `base` ones run in HiSim's existing base job. The workflow part is superseded by D40. |
 | D16 | 2026-10-10 | The country is an explicit ISO argument. |
 | D17 | 2026-10-10 | Output: JSON per run and building, CSV and summary per batch; no certificate document. |
 | D18 | 2026-10-10 | `run` fails hard; `batch` records refusals and continues. |
@@ -529,6 +529,7 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | D37 | 2026-10-12 | Stage-1 validation covers cases 1 and 2 of SFH variant 1 and MFH variants 1 and 2.1 and case 2 of SFH variant 2; SFH variant 2 case 1 needs heat recovery (P8), cases 3 and 4 the hot-water losses (P5). The MFH example states no dwelling units; it reproduces with F_S,h of three to ten units, so the test states five. |
 | D38 | 2026-10-13 | A window surface may state its glass area (B 8110-6-1 8.3 a)); otherwise A_g = 0.7 · A_W (8.3 b)), an assumption. HiSim's frame factor is not used; it equals the lump value in every archetype row, until HiSim makes it building-specific. |
 | D39 | 2026-10-12 | `run` writes `<out>/<results directory name>/<building>.epc.json` and nothing on a refusal; `--out` defaults to `epc/results/`; E-16 applies to `batch`. A horizontal window surface has azimuth 0. |
+| D40 | 2026-10-13 | HiSim's `tests.yml` runs pytest from `tests/`, where `testpaths` is not read, so its base job runs none of the calculator's tests. The calculator gets a workflow of its own, `.github/workflows/epc.yml`: on changes to `epc/`, `pytest.ini` or the workflow, for pull requests to any branch (the stacked PRs of design §10 included), it runs `pytest epc/tests -m base` with only pytest and PyYAML installed. HiSim's workflows skipping changes confined to `epc/` (`paths-ignore`) is a separate change to HiSim, outside this work. |
 
 ## 12. Glossary
 

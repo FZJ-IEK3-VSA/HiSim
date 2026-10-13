@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import ClassVar, Dict, Iterator, Tuple
+from typing import ClassVar, Dict, Iterator, List, Tuple
 
 import pandas as pd
 import pytest
 import yaml
 
+from hisim import log
 from hisim.cli import main
 from hisim.cli_exit import ExitCodes
 from hisim.energy_system.assemblies.binding import Owner, PortBinder
@@ -286,8 +287,15 @@ def gas_feed(source: str, output: str) -> AggregatorFeed:
 
 
 @pytest.mark.assemblies
-def test_a_fuel_need_lands_as_the_meters_declared_feed_written_explicitly(tmp_path: Path) -> None:
-    """Catches a burner whose gas no meter observes, or a meter fed the consumer's bare name (D30)."""
+def test_a_fuel_need_lands_as_the_meters_declared_feed_written_explicitly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches a burner whose gas no meter observes, or a meter fed the consumer's bare name (D30).
+
+    The boiler's need names both of its gas inputs, so the build warns about no unmetered output.
+    """
+    warnings: List[str] = []
+    monkeypatch.setattr(log, "warning", warnings.append)
     model, record = gas_heating()
 
     assert model.components["gas-GasMeter"].inputs == ()
@@ -308,15 +316,21 @@ def test_a_fuel_need_lands_as_the_meters_declared_feed_written_explicitly(tmp_pa
         gas_feed("heating-Boiler", "EnergyDemandSh"),
         gas_feed("heating-Boiler", "EnergyDemandDhw"),
     )
+    assert not [line for line in warnings if "undercounts" in line]
 
 
 @pytest.mark.assemblies
-def test_two_named_outputs_land_as_two_feeds_and_an_unnamed_one_is_not_metered(tmp_path: Path) -> None:
+def test_two_named_outputs_land_as_two_feeds_and_an_unnamed_one_is_not_metered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Catches a meter that meters every output its class declares instead of the ones the carrier need names.
 
-    Inline mocks: the meter's class declares a feed for an output the burner's need leaves out, which no
-    real burner has.
+    The output left out is legal (D30) but counted by no meter, so the build warns once, naming the burner
+    and the output. Inline mocks: the meter's class declares a feed for an output the burner's need leaves
+    out, which no real burner has.
     """
+    warnings: List[str] = []
+    monkeypatch.setattr(log, "warning", warnings.append)
     library = Gas.mock_library(tmp_path)
     library.add(
         "test/combi",
@@ -337,6 +351,10 @@ def test_two_named_outputs_land_as_two_feeds_and_an_unnamed_one_is_not_metered(t
         gas_feed("combi-Burner", "FuelSh"),
         gas_feed("combi-Burner", "FuelDhw"),
     )
+    unmetered = [line for line in warnings if "undercounts" in line]
+    assert len(unmetered) == 1
+    assert "'combi-Burner' names FuelSh, FuelDhw but not FuelPilot" in unmetered[0]
+    assert "'gas-Meter'" in unmetered[0]
 
 
 @pytest.mark.assemblies

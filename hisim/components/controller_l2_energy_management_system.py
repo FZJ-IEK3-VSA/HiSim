@@ -765,6 +765,27 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         and sends updated signal back.
         This function controls how surplus electricity is distributed and how much of each components'
         electricity need is covered onsite or from grid.
+
+        The signal a participant gets depends on what it does with it. A battery and an electric car decide
+        their power from the signal, so they get the surplus offered to them, before their own share is
+        subtracted. Every other consumer gets what is left after its own consumption, negative for the part it
+        takes from the grid; that signal only books the consumer's grid share. For example, with 3,000 W of
+        surplus left and a car charging at 2,000 W, the car is offered 3,000 W, and a heat pump drawing 2,000 W
+        is sent 1,000 W.
+
+        Why the car gets the offer: its charge controller charges with the signal. Sent the surplus left after
+        its own charging, it would answer every pass with that remainder, the next pass would send it the
+        surplus minus that remainder, and its charging would alternate between the passes of a step.
+
+        Args:
+            available_surplus_electricity_in_watt: The surplus left before this participant, in W.
+            stsv: The step values the participant's consumption is read from and its signal written to.
+            current_component_type: The participant's component type.
+            current_input: The input measuring the participant's consumption.
+            current_output: The participant's signal output.
+
+        Returns:
+            The surplus left after this participant, in W.
         """
         # get electricity demand from input component and substract from (or add to) available surplus electricity
         electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
@@ -778,12 +799,18 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
 
+        # an electric car charges with the surplus it is offered, so it gets the offer, as the battery does
+        elif current_component_type == lt.ComponentType.CAR_BATTERY:
+            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            available_surplus_electricity_in_watt = (
+                available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+            )
+
         # these are electricity CONSUMERS
         elif current_component_type in [
             lt.ComponentType.RESIDENTS,
             lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
-            lt.ComponentType.CAR_BATTERY,
             lt.ComponentType.HEAT_PUMP_DHW,
             lt.ComponentType.HEAT_PUMP,
             lt.ComponentType.HEAT_PUMP_BUILDING,
@@ -1199,25 +1226,23 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             return None
         return None
 
-    def dispatch_target_kpi_source(self, field_name: str) -> KpiSource:
-        """The source of the participant one of this controller's dispatch outputs steers.
+    def dispatch_measuring_input(self, field_name: str) -> ComponentInput:
+        """Return the input that measures the participant one of this controller's dispatch outputs steers.
 
-        The grid-share KPIs are reported on behalf of the participant, so they carry its
-        :class:`KpiSource` and not the manager's. The participant is found the way the dispatch
-        pairs it (:meth:`sort_source_weights_and_components`): the dispatch output and the input
-        that measures the participant share one source weight and one component type. That input
-        is connected to the participant's own output, which carries the participant's identity
-        and display configuration, so the source is built exactly as the participant builds it.
+        The participant is found the way the dispatch pairs it (:meth:`sort_source_weights_and_components`): the
+        dispatch output and the input that measures the participant share one source weight and one component type.
+        For example, the dispatch output ``DispatchToL1EVChargeControl_1_ElectricityTargetFromEMS`` pairs with the
+        input fed by ``L1EVChargeControl_1.BatteryChargingPowerToEMS``, the car's realized charging power.
 
         Args:
             field_name: The dispatch output's field name.
 
         Returns:
-            The participant's source.
+            The measuring input, connected to the participant's own output.
 
         Raises:
-            ValueError: If the output is no dispatch output of this controller, if not exactly one
-                input pairs with it, or if that input is not connected to a component's output.
+            ValueError: If the output is no dispatch output of this controller, if not exactly one input pairs with
+                it, or if that input is not connected to a component's output.
         """
         dispatch_entries = [
             entry for entry in self.my_component_outputs if entry.source_output_field_name == field_name
@@ -1253,7 +1278,63 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 f"(source '{measuring_input.src_object_name}.{measuring_input.src_field_name}'), so "
                 "the participant's identity is unknown."
             )
-        return KpiSource.for_component(participant_output.component_id, participant_output.display_config)
+        return measuring_input
+
+    def dispatch_target_kpi_source(self, field_name: str) -> KpiSource:
+        """The source of the participant one of this controller's dispatch outputs steers.
+
+        The grid-share KPIs are reported on behalf of the participant, so they carry its
+        :class:`KpiSource` and not the manager's. The participant is the one its measuring input
+        (:meth:`dispatch_measuring_input`) is connected to; that input's source output carries the
+        participant's identity and display configuration, so the source is built exactly as the
+        participant builds it.
+
+        Args:
+            field_name: The dispatch output's field name.
+
+        Returns:
+            The participant's source.
+
+        Raises:
+            ValueError: As :meth:`dispatch_measuring_input`.
+        """
+        participant_output = cast(ComponentOutput, self.dispatch_measuring_input(field_name).source_output)
+        return KpiSource.for_component(
+            participant_output.component_id, cast(DisplayConfig, participant_output.display_config)
+        )
+
+    @staticmethod
+    def offered_participant_grid_draw_in_watt(
+        surplus_offered_in_watt: pd.Series, realized_draw_in_watt: pd.Series
+    ) -> pd.Series:
+        """Return what a participant that is offered the surplus takes from the grid, per step, in W.
+
+        A participant offered the surplus (the electric car) covers its draw from the offer as far as the offer
+        reaches, and takes the rest from the grid. A negative offer is a deficit and covers nothing. For example,
+        an offer of 3,000 W and a draw of 11,000 W give 8,000 W from the grid; an offer of 5,000 W and a draw of
+        4,000 W give 0 W; an offer of -2,000 W and a draw of 11,000 W give 11,000 W.
+
+        Why: the car's dispatch signal is the surplus offered to it, not what is left after it, so its negative part
+        is no longer its grid share, as it is for the other consumers.
+
+        Args:
+            surplus_offered_in_watt: The surplus offered to the participant in every step, in W.
+            realized_draw_in_watt: The participant's realized draw in every step, in W, zero or positive.
+
+        Returns:
+            The participant's draw from the grid in every step, in W, zero or positive.
+
+        Raises:
+            ValueError: If the two series differ in length.
+        """
+        if len(surplus_offered_in_watt) != len(realized_draw_in_watt):
+            raise ValueError(
+                f"The offer ({len(surplus_offered_in_watt)} steps) and the realized draw "
+                f"({len(realized_draw_in_watt)} steps) must cover the same steps."
+            )
+        offer_in_watt = surplus_offered_in_watt.to_numpy(dtype=float).clip(min=0.0)
+        draw_in_watt = realized_draw_in_watt.to_numpy(dtype=float)
+        return pd.Series((draw_in_watt - offer_in_watt).clip(min=0.0), index=surplus_offered_in_watt.index)
 
     def get_component_kpi_entries(
         self,
@@ -1290,10 +1371,24 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 continue
             kpi_name = kpi_by_dispatch_target[dispatch_target]
 
-            # A negative dispatch is what the participant had to take from the grid.
-            electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                postprocessing_results.iloc[:, index] < 0.0
-            ]
+            if dispatch_target == lt.ComponentType.CAR_BATTERY:
+                # The car is offered the surplus; it takes from the grid what its draw exceeds the offer by.
+                draw_output = cast(ComponentOutput, self.dispatch_measuring_input(output.field_name).source_output)
+                draw_index = next(
+                    position
+                    for position, candidate in enumerate(all_outputs)
+                    if candidate.component_name == draw_output.component_name
+                    and candidate.field_name == draw_output.field_name
+                )
+                electricity_from_grid_in_watt_series = self.offered_participant_grid_draw_in_watt(
+                    surplus_offered_in_watt=postprocessing_results.iloc[:, index],
+                    realized_draw_in_watt=postprocessing_results.iloc[:, draw_index],
+                )
+            else:
+                # A negative dispatch is what the participant had to take from the grid.
+                electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                    postprocessing_results.iloc[:, index] < 0.0
+                ]
             electricity_from_grid_in_kilowatt_hour = abs(
                 KpiHelperClass.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=electricity_from_grid_in_watt_series,

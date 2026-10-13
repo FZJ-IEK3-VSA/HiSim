@@ -1283,3 +1283,100 @@ class TestSurplusHysteresis:
             return list(stsv.values)
 
         assert outputs_after([(9000.0, 1500.0), (0.0, -800.0), (2600.0, 0.0)]) == outputs_after([])
+
+
+@pytest.mark.base
+def test_the_car_is_offered_the_surplus_before_its_own_charging() -> None:
+    """Catches the manager sending the car the surplus left after the car's own charging.
+
+    The car's charge controller charges with the signal it gets. Sent the remainder after its own charging, it
+    answered every pass with that remainder and the next pass sent it the surplus minus it, so its charging
+    alternated between the passes of a step. The car is offered what is left before it, as the house battery is,
+    and what it takes is subtracted for the participants after it. A heat pump keeps the booking signal: what is
+    left after its own draw.
+    """
+    manager = _energy_manager()
+    car_draw = cp.ComponentOutput(
+        "Car", "Draw", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=ComponentID(name="Car")
+    )
+    car_signal = cp.ComponentOutput(
+        "Manager", "CarSignal", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=ComponentID(name="Manager")
+    )
+    heat_pump_signal = cp.ComponentOutput(
+        "Manager", "HeatPumpSignal", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=ComponentID(name="Manager")
+    )
+    car_input = cp.ComponentInput("Manager", "CarDraw", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+    car_input.source_output = car_draw
+    for position, output in enumerate([car_draw, car_signal, heat_pump_signal]):
+        output.global_index = position
+    stsv = cp.SingleTimeStepValues(3)
+    stsv.values[car_draw.global_index] = 2000.0
+
+    left_after_car_in_watt = manager.control_electricity_component_iterative(
+        available_surplus_electricity_in_watt=3000.0,
+        stsv=stsv,
+        current_component_type=lt.ComponentType.CAR_BATTERY,
+        current_input=car_input,
+        current_output=car_signal,
+    )
+    left_after_heat_pump_in_watt = manager.control_electricity_component_iterative(
+        available_surplus_electricity_in_watt=3000.0,
+        stsv=stsv,
+        current_component_type=lt.ComponentType.HEAT_PUMP_BUILDING,
+        current_input=car_input,
+        current_output=heat_pump_signal,
+    )
+
+    assert stsv.values[car_signal.global_index] == 3000.0
+    assert left_after_car_in_watt == 1000.0
+    assert stsv.values[heat_pump_signal.global_index] == 1000.0
+    assert left_after_heat_pump_in_watt == 1000.0
+
+
+@pytest.mark.base
+def test_the_car_takes_from_the_grid_what_its_draw_exceeds_the_offer_by() -> None:
+    """Catches the car's grid KPI booked from the offer's sign, as for the consumers that get a remainder.
+
+    Offered 3,000 W and drawing 11,000 W the car takes 8,000 W from the grid; offered 5,000 W and drawing 4,000 W
+    it takes nothing; offered a deficit of -2,000 W and drawing 11,000 W it takes all 11,000 W.
+    """
+    grid_draw_in_watt = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem.offered_participant_grid_draw_in_watt(
+            surplus_offered_in_watt=pd.Series([3000.0, 5000.0, -2000.0, 0.0]),
+            realized_draw_in_watt=pd.Series([11000.0, 4000.0, 11000.0, 0.0]),
+        )
+    )
+
+    assert grid_draw_in_watt.tolist() == [8000.0, 0.0, 11000.0, 0.0]
+    with pytest.raises(ValueError, match="same steps"):
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem.offered_participant_grid_draw_in_watt(
+            surplus_offered_in_watt=pd.Series([1.0]), realized_draw_in_watt=pd.Series([1.0, 2.0])
+        )
+
+
+@pytest.mark.base
+def test_the_car_grid_kpi_reads_the_draw_beside_the_offer() -> None:
+    """Catches the car's grid KPI computed from the offer alone.
+
+    Over two 15-minute steps the car is offered 3,000 W and -1,000 W and draws 11,000 W in both: 8,000 W and
+    11,000 W from the grid, 4.75 kWh. The negative part of the offer alone would book 0.25 kWh.
+    """
+    manager = _energy_manager()
+    dispatch_output = manager.add_component_output(
+        source_output_name="DispatchToL1EVChargeControl_1_",
+        source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=5,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Surplus offered to the car. ",
+    )
+    car_output = _wire_measured_participant(manager, "L1EVChargeControl_1", lt.ComponentType.CAR_BATTERY, 5)
+    results = pd.DataFrame({dispatch_output.field_name: [3000.0, -1000.0], car_output.field_name: [11000.0, 11000.0]})
+
+    kpi_entries = manager.component_kpi_entries(
+        all_outputs=[dispatch_output, car_output], postprocessing_results=results
+    )
+
+    car_entries = [entry for entry in kpi_entries if entry.name == "Electric car electricity consumption from grid"]
+    assert len(car_entries) == 1
+    assert car_entries[0].value == pytest.approx(4.75)

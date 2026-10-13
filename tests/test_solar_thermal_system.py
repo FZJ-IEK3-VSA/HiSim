@@ -780,7 +780,12 @@ class SolarControllerSteps:
 
     @classmethod
     def signal(
-        cls, controller: Any, stsv: Any, fakes: Dict[str, Any], values: Dict[str, float], force_convergence: bool = False
+        cls,
+        controller: Any,
+        stsv: Any,
+        fakes: Dict[str, Any],
+        values: Dict[str, float],
+        force_convergence: bool = False,
     ) -> float:
         """Run one pass from the saved state, as the simulator does, and return the on/off signal it publishes."""
         controller.i_restore_state()
@@ -837,7 +842,8 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
         controller.i_save_state()
     for flow in (steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, 0.0, steps.BELOW_THE_OFF_FLOW_IN_KG_PER_S):
         steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(flow))
-    steps.signal(iterated, iterated_stsv, iterated_fakes, steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=61.0))
+    full_storage = steps.values(steps.ABOVE_THE_ON_FLOW_IN_KG_PER_S, start_c=61.0)
+    steps.signal(iterated, iterated_stsv, iterated_fakes, full_storage)
     final = steps.values(steps.BETWEEN_THE_FLOWS_IN_KG_PER_S)
     expected = steps.signal(fresh, fresh_stsv, fresh_fakes, final)
     assert steps.signal(iterated, iterated_stsv, iterated_fakes, final) == expected
@@ -849,7 +855,7 @@ def test_a_pass_after_other_passes_equals_the_first_pass_of_the_step(pump_ran_in
 def test_under_force_convergence_the_pump_stays_as_the_collector_reports_it_ran(
     ratio_run: float, expected_signal: int
 ) -> None:
-    """A forced pass keeps the pump as the collector reports it ran, whatever the flow, and the next step starts from it.
+    """A forced pass keeps the pump as the collector reports it ran, whatever the flow; the next step starts from it.
 
     The pump's signal and the part-load ratio the controller holds under ``force_convergence`` (the ratio run) then
     describe the same run. A forced pass that decided on the flow again could switch on a pump whose held ratio is 0;
@@ -913,7 +919,9 @@ class CollectorStep:
         config = solar_thermal_system.SolarThermalSystemConfig.preset_flat_plate("SolarThermalSystem").resolve(
             SizingContext(number_of_apartments=1)
         )
-        collector = solar_thermal_system.SolarThermalSystem(config=config, my_simulation_parameters=Parameters.one_day(900))
+        collector = solar_thermal_system.SolarThermalSystem(
+            config=config, my_simulation_parameters=Parameters.one_day(900)
+        )
         collector.apparent_zenith = np.array([30.0])
         collector.solar_azimuth = np.array([180.0])
         stsv, fakes = Rig.wire(collector, [(entry, LoadTypes.ANY, Units.ANY) for entry in collector.inputs])

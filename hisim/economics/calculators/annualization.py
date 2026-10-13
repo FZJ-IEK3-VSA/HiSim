@@ -2,10 +2,10 @@
 
 Everything the engine projects over the horizon is a per-year figure, so simulated quantities are extrapolated linearly
 by the simulated period fraction (simulated seconds divided by the seconds of a full year, in (0, 1]). Example: 120 kWh
-over a quarter year becomes 480 kWh/a. Runs once per carrier at the front of `calculators/energy.py` and once per
-subsidized measure in `calculators/subsidy_application.py`. The two call sites guard the division differently, selected
-by the ``guard_zero`` flag: the subsidy site clamps the fraction to a tiny floor, the energy site rejects non-positive
-fractions up front.
+over a quarter year becomes 480 kWh/a. The energy bills of `calculators/energy.py` annualize without a guard, after
+`check_simulated_period_fraction` has rejected a non-positive fraction; the subsidy figures of
+`calculators/subsidy_application.py`, the KPI figures of `calculators/aggregation.py` and the sold energy of
+`staged.py` pass ``guard_zero=True``, which clamps the fraction to a tiny floor first.
 """
 
 from __future__ import annotations

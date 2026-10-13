@@ -163,7 +163,8 @@ class StatedPrices:
 def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffContract:
     """Build the default flat contract from a §3.5 energy price entry.
 
-    A carrier without an explicit contract is billed flat at the database price. This lives in the engine rather than
+    A carrier without an explicit contract is billed flat at the database price, or at the plan's stated terms when
+    `with_stated_terms` puts them in place on the contract built here. This lives in the engine rather than
     in `tariffs.py`, which holds only contract data, parsing and billing.
     """
     return TariffContract(

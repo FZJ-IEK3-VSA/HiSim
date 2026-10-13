@@ -177,17 +177,19 @@ tests/
 - Same-machine is byte-exact (proven); drift only appears cross-platform (last-ULP).
 - **Compare with `rel_tol = 1e-9`, `abs_tol = 1e-12`** (confirmed, §14.2; the floor added
   2026-10-12, hisim-b3b.6) — absorbs sub-ULP platform noise, catches real changes. (Replaces
-  the unjustified `1e-6` placeholder.) Values are equal when their difference is at most the
-  larger of the two, `math.isclose`; both live in `hisim/postprocessing/kpi_computation/tolerances.py`.
+  the unjustified `1e-6` placeholder.) Values are equal when `math.isclose` holds, that is when
+  `|got - ref| <= max(rel_tol * max(|got|, |ref|), abs_tol)`; both live in
+  `hisim/postprocessing/kpi_computation/tolerances.py`.
 - **Why the absolute floor.** A relative tolerance has nothing to be relative to when a KPI is
   physically zero, and such a KPI is accumulated rounding noise whose last bits depend on the
   environment and the cache state, not on the code. The electric-heating house's one-week
-  temperature deviation below 20 °C is about 1.4e-9 K·h: the bless wrote 1.39823909e-09, the
-  check computed 1.39823904e-09, a relative difference of 4e-8 that failed `abs_tol = 0`. The
-  floor of 1e-12, in each KPI's own unit, lies far above that noise (6e-17) and far below any
+  temperature deviation below 20 °C is about 1.4e-9 K·h: the bless wrote 1.3982390948778326e-09,
+  the check computed 1.398239035665938e-09, 6e-17 apart, a relative difference of 4e-8 that failed
+  `abs_tol = 0`. The floor of 1e-12, in each KPI's own unit, lies far above that noise and far below any
   value a KPI states physically. The bless keeps a golden value that is within the floor.
 - **The report prints the deciding number**: `rel diff` is the plain ratio (`4e-08`), not a
-  percentage that rounds it to `0.000%`.
+  percentage that rounds it to `0.000%`. Like `math.isclose`, it divides by `max(|got|, |ref|)`,
+  and the report prints the allowed difference and whether the relative or the absolute tolerance set it.
 - **Eliminate cross-platform drift at the source**: goldens are **only** generated
   **in the CI container** via `golden-update.yml` (CI-only blessing, §14.4), so
   reference env == check env. `golden_update.py` refuses to be the source of a
@@ -396,7 +398,7 @@ bless. Adding a setup later is the same loop: append to the list, validate, bles
 1. **Setup list** — ✅ RESOLVED: the 11 `building_sizer` setups, now in
    `golden_config.json`. Still need `golden_validate.py` to confirm they run
    offline (several reference UTSP and may need `USE_PREDEFINED_PROFILE`).
-2. **Tolerance** — ✅ RESOLVED: `rel_tol = 1e-9`, `abs_tol = 0.0`.
+2. **Tolerance** — ✅ RESOLVED: `rel_tol = 1e-9`, `abs_tol = 1e-12` (the floor added 2026-10-12, hisim-b3b.6; §7).
 3. **Parallel unit & triggers** — ✅ RESOLVED: per-pair (22 jobs);
    `golden_check`/`golden_update`/`golden_matrix` take `--setup` + `--param`.
    **Two tiers** (§8): week pairs on every PR + push; full-year pairs on **PRs to

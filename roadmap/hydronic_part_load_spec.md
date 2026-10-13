@@ -319,6 +319,8 @@ Epic hisim-fxix.
 | hisim-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below #915 |
 | hisim-fxix.12 (P1) | the heat pump's hot-water side | #916, parked |
 | hisim-fxix.11 (P1) | the collector | #917, parked |
+| hisim-fxix.19 (P2, closed) | the solar pump's hysteresis | #941 |
+| hisim-fxix.21 (P3, closed) | the solar pump's switch-on step without a fixed point: decided on the tank's start-of-step temperature | #941 |
 | hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
 | hisim-bq3h (P2) | solar priority as a control strategy | – |
 | hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5) | – |

@@ -215,10 +215,11 @@ def test_a_unit_back_inside_the_band_ramps_down_before_it_stops(
     ["committed_mode", "indoor_air_temperature_deg_c"], [(Mode.HEATING, 21.001), (Mode.COOLING, 22.999)]
 )
 def test_the_soft_stop_ends_within_the_bound(committed_mode: Mode, indoor_air_temperature_deg_c: float) -> None:
-    """From full power, with the air held just past the hysteresis edge, the unit stops within 0.9 × t_ramp.
+    """From full power, with the air held just past the hysteresis edge, the unit stops within the soft-stop bound.
 
-    Each step lowers the power by at least hysteresis × dt / t_ramp = 1/30, so 27 steps bring
-    1.0 down to the minimum of 0.1 and the 28th stops the unit; the power never rises on the way.
+    Each step lowers the power by at least hysteresis × min(dt, 450 s) / t_ramp = 1/30, so 27 steps bring
+    1.0 down to the minimum of 0.1 and the 28th stops the unit, within 0.9 × t_ramp × 1 K / hysteresis = 27 minutes;
+    the power never rises on the way.
     """
     testee = given_default_testee()
     state = committed(committed_mode, indoor_air_temperature_deg_c, 1.0)
@@ -317,7 +318,7 @@ def test_a_heating_set_point_at_or_above_the_cooling_set_point_is_refused(
 
 @pytest.mark.base
 def test_decide_leaves_the_committed_state_untouched_and_waits_for_a_first_sample() -> None:
-    """``decide`` is pure, and before the first sample the unit stays as it is."""
+    """``decide`` leaves the state it is given unchanged, and before the first sample the unit stays as it is."""
     testee = given_default_testee()
     committed_state = committed(Mode.OFF, 10.0)
 

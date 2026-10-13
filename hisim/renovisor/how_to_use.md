@@ -213,7 +213,9 @@ finished jobs: exit 2 with a `problems.json` for a plan the caller can fix — s
 backwards, a stage directory that carries `economic_inputs.json` but no `mapping_report.json`, a
 report without its `economics_stage` record or with a record of another schema version, stages
 whose records state different measure tables, any parameter key it does not accept — and exit 3
-for an engine failure they cannot. There is no exit 2 without the file.
+for an engine failure they cannot. Every exit 2 writes the file but one: an `--out` that is a bare
+file name, such as `--out economics_result.json`, names no directory to write it to, so the command
+refuses it with exit 2 and a message on standard error only.
 
 A stage directory is a finished job's `economic_inputs.json` (in the directory or its `results/`)
 and its `mapping_report.json` (in the directory or its parent) — the two files a backend's worker

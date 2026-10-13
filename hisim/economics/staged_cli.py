@@ -15,6 +15,7 @@ cost subjects they created. `StagedCli` reads them, prices the plan with `staged
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -113,10 +114,15 @@ class StagedCli:
     #: How a ``--stage`` argument is spelled, for the help text and for the error messages.
     ARGUMENT_FORM: ClassVar[str] = "<directory>:<from_year>:<label>[:<job_id>]"
 
-    #: The separator between a stage argument's fields. A label containing one is not supported;
-    #: the fourth field absorbs nothing, so ``a:0:my:label`` reads ``my`` as the label and
-    #: ``label`` as the job id.
+    #: The separator between a stage argument's fields. A label cannot contain one: the fourth field
+    #: is the job id, so ``a:0:my:label`` reads ``my`` as the label and ``label`` as the job id.
+    #: `JOB_ID_PATTERN` refuses the usual case, a colon followed by a space (``a:0:Stage 1: walls``).
     SEPARATOR: ClassVar[str] = ":"
+
+    #: What a job id may be: letters, digits, ``.``, ``_`` and ``-``, as in a UUID or ``job-7``.
+    #: A fourth field with anything else, such as a space, is the tail of a label with a colon in
+    #: it, and the argument is refused instead of filing that tail as the job id.
+    JOB_ID_PATTERN: ClassVar["re.Pattern[str]"] = re.compile(r"[A-Za-z0-9._-]+")
 
     #: How many fields a stage argument has at least, and at most.
     MINIMUM_FIELDS: ClassVar[int] = 3
@@ -190,7 +196,8 @@ class StagedCli:
             `(directory, from_year, label, job_id)`; job id is None when the argument has three fields.
 
         Raises:
-            StagedEvaluationError: If the argument has the wrong number of fields or its year is not an integer (exit
+            StagedEvaluationError: If the argument has the wrong number of fields, its year is not an integer, or its
+                fourth field is not a job id (`JOB_ID_PATTERN`), which is what a label with a colon in it gives (exit
                 2).
         """
         fields = argument.split(cls.SEPARATOR)
@@ -209,6 +216,12 @@ class StagedCli:
                 "field is the horizon year it starts in, counted from 0."
             ) from None
         job_id = fields[3] if len(fields) == cls.MAXIMUM_FIELDS else None
+        if job_id is not None and cls.JOB_ID_PATTERN.fullmatch(job_id) is None:
+            raise StagedEvaluationError(
+                f"--stage #{index} {argument!r}: the fourth field {job_id!r} is not a job id, which "
+                "has letters, digits, '.', '_' and '-' only. A label cannot contain a colon, since "
+                f"the colon separates the fields of {cls.ARGUMENT_FORM}; write the label without it."
+            )
         return directory, from_year, label, job_id
 
     @classmethod
@@ -906,7 +919,10 @@ class StagedCli:
             action="append",
             required=True,
             metavar=cls.ARGUMENT_FORM,
-            help="one stage of the plan; repeat once per stage, in ascending year order",
+            help=(
+                "one stage of the plan; repeat once per stage, in ascending year order. The label "
+                "cannot contain a colon, and the job id has letters, digits, '.', '_' and '-' only"
+            ),
         )
         staged_parser.add_argument(
             "--parameters",

@@ -277,6 +277,16 @@ class TestTheStageArgument:
         with pytest.raises(StagedEvaluationError, match="is not a year"):
             StagedCli.parse_stage("jobs/base:soon:baseline", 0)
 
+    @pytest.mark.parametrize("argument", ["jobs/pkg:1:Stage 1: walls", "jobs/pkg:1:walls:", "jobs/pkg:1:a:b c"])
+    def test_a_fourth_field_that_is_no_job_id_is_refused(self, argument):
+        """A label with a colon in it must not be split silently into a shorter label and a job id.
+
+        If this fails, ``Stage 1: walls`` is filed as the label ``Stage 1`` with the job id `` walls``, and the
+        document traces the stage to a job that does not exist.
+        """
+        with pytest.raises(StagedEvaluationError, match="is not a job id"):
+            StagedCli.parse_stage(argument, 1)
+
 
 class TestTheHappyPath:
     """Exit 0, a validated document, and the two things the mapping report contributes to it."""

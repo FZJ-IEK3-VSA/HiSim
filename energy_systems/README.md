@@ -344,8 +344,9 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
   its carrier (an `lt.EnergyBalanceCarrier` value), `provides: {connection: {carrier: natural_gas,
   meter: Meter}}`. For a fuel each named consuming output lands at the meter's `{$port: connection}`
   placeholder as the feed the meter's class declares for it, written explicitly (`from`, tags, weight)
-  by the wiring, which reads the constructed meter's declarations; a named output without a declared
-  feed is refused (`EF-7N`), an unnamed one is not metered (D30), and each consuming output's energy
+  by the wiring, which reads the constructed meter's declarations; a named output without exactly one
+  declared feed is refused (`EF-7N`), an unnamed one is not metered (D30; the wiring warns when it takes the
+  carrier in), and each consuming output's energy
   port must carry the carrier (`EF-7M`). Electricity has no link and no meter on the provision: the need only requires the one grid
   connection. Two providers of one carrier, a need without one and a fuel provider nobody consumes from
   are refused;
@@ -386,7 +387,7 @@ Beyond needs, four kinds of port cross an assembly's boundary (`assemblies_spec.
 | `EF-7A` … `EF-7F` | no partner, several and no verb, `none:` on a required port, an absent `bind:` partner, an undecided optional port, a verb on an inactive port |
 | `EF-7G`, `EF-7H`, `EF-7J` | a verb on a port no verb binds, a bound output not read, a port that does not fit its members |
 | `EF-7K`, `EF-7L` | a circuit end of another circuit; a carrier without exactly one provider, or an idle fuel provider |
-| `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a named consuming output its meter declares no feed for |
+| `EF-7M`, `EF-7N` | (wiring) a consuming output of another carrier; a named consuming output its meter declares no feed or more than one feed for |
 | `EF-7S`, `EF-7T`, `EF-7U`, `EF-7V` | (wiring) an observer that cannot select or a selector matching nothing; a flow counted twice; a controllable output not actuated by exactly its one controller; a derived weight reaching another kind's base weight |
 | `EF-4E`, `EF-4G` | (sizing) a sources line of the wrong cardinality; an empty or repeating many list, one fact read once and many-fold |
 

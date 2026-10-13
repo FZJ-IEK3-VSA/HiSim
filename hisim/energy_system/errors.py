@@ -68,10 +68,10 @@ class EnergySystemErrorId(enum.Enum):
     whose components do not stand in the sequence its import record states. Those are raised by the
     expansion of imports, from the files alone. The wiring raises the rest, on the constructed
     components: ``EF-7M`` for a consuming output whose energy port carries another carrier, ``EF-7N``
-    for a consuming output named that its meter's class declares no feed for (D30), ``EF-7S`` for an observer's
-    selection, ``EF-7T`` for a flow counted twice, ``EF-7U`` for an actuation and ``EF-7V`` for a
-    derived weight that reaches another kind's base weight. The letters ``I``
-    and ``O`` are skipped, as they read like a one and a zero.
+    for a consuming output named that its meter's class declares no feed or more than one feed for
+    (D30), ``EF-7S`` for an observer's selection, ``EF-7T`` for a flow counted twice, ``EF-7U`` for an
+    actuation and ``EF-7V`` for a derived weight that reaches another kind's base weight. The letters
+    ``I`` and ``O`` are skipped, as they read like a one and a zero.
 
     The ``EF-Rx`` band is the odd one out and is described on
     :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored

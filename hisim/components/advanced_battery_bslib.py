@@ -193,13 +193,19 @@ class BslibChargingParameters:
             ValueError: If bslib gives a parameter that is not a finite number of at least 0 for this system, as it
                 does for the DC-coupled systems ``S3``, ``S4`` and ``INV1``.
         """
-        # bslib keeps these only as private attributes.
+        # bslib keeps these only as private attributes and has no accessor for them.
+        # pylint: disable=protected-access
+        capacity_in_watt_hour = float(battery._E_BAT)
+        rated_charging_power_in_watt = float(battery._P_AC2BAT_IN)
+        minimum_charging_power_in_watt = float(battery._P_AC2BAT_MIN)
+        recharge_threshold_state_of_charge = float(battery._SOC_THRESHOLD)
+        # pylint: enable=protected-access
         try:
             return cls(
-                capacity_in_watt_hour=float(battery._E_BAT),  # pylint: disable=protected-access  # bslib has no accessor
-                rated_charging_power_in_watt=float(battery._P_AC2BAT_IN),  # pylint: disable=protected-access  # bslib has no accessor
-                minimum_charging_power_in_watt=float(battery._P_AC2BAT_MIN),  # pylint: disable=protected-access  # bslib has no accessor
-                recharge_threshold_state_of_charge=float(battery._SOC_THRESHOLD),  # pylint: disable=protected-access  # bslib has no accessor
+                capacity_in_watt_hour=capacity_in_watt_hour,
+                rated_charging_power_in_watt=rated_charging_power_in_watt,
+                minimum_charging_power_in_watt=minimum_charging_power_in_watt,
+                recharge_threshold_state_of_charge=recharge_threshold_state_of_charge,
             )
         except ValueError as error:
             raise ValueError(

@@ -47,7 +47,7 @@ class DiverterValve:
         set_temperatures: SetTemperatureConfig,
         parallel_space_heating_and_dhw_option: bool = False,
     ) -> HeatingMode:
-        """Return the mode a dual-circuit generator's diverter valve sets for this step, from its two water temperatures.
+        """Return the mode a dual-circuit generator's diverter valve sets for this step, from two water temperatures.
 
         The two temperatures are the space-heating water temperature (a buffer's, the distribution water's, or 0 for
         the electric heater, which has neither) and the hot-water tank's.

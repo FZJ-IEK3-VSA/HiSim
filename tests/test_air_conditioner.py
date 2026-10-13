@@ -26,8 +26,9 @@ from hisim.config import ComponentID, DisplayConfig
 
 def given_default_testee(
     config_overwrite: Optional[Dict[str, Any]] = None,
+    seconds_per_timestep: int = 60,
 ) -> AirConditionerController:
-    """Builds a controller from the standard preset at 60 s steps, with optional field overrides.
+    """Builds a controller from the standard preset, by default at 60 s steps, with optional field overrides.
 
     The preset holds 20 °C while heating and 24 °C while cooling, with a 1 K hysteresis band
     and 1800 s from zero to full power per kelvin of deviation. The minimum run and idle times
@@ -36,13 +37,14 @@ def given_default_testee(
 
     Args:
         config_overwrite: Configuration fields to set after the preset, by name.
+        seconds_per_timestep: The step length, in s; it turns the minimum times into steps and sets the ramp per step.
 
     Returns:
         The controller.
     """
     overwrite: Dict[str, Any] = {"minimum_runtime_s": 0, "minimum_idle_time_s": 0}
     overwrite.update(config_overwrite or {})
-    simulation_parameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    simulation_parameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
     config = AirConditionerControllerConfig.preset_standard("AirConditionerController")
     for field_name, value in overwrite.items():
         setattr(config, field_name, value)
@@ -355,6 +357,7 @@ def test_signal_is_the_power_fraction_signed_by_mode(mode: Mode, power_fraction:
 
 def given_wired_testee(
     config_overwrite: Optional[Dict[str, Any]] = None,
+    seconds_per_timestep: int = 60,
 ) -> Tuple[AirConditionerController, component.SingleTimeStepValues]:
     """Builds a controller whose input reads slot 0 of a two-slot step-values array.
 
@@ -362,11 +365,12 @@ def given_wired_testee(
 
     Args:
         config_overwrite: Configuration fields to set after the preset, by name.
+        seconds_per_timestep: The step length, in s.
 
     Returns:
         The controller and the step values it reads from and writes to.
     """
-    testee = given_default_testee(config_overwrite)
+    testee = given_default_testee(config_overwrite, seconds_per_timestep)
     indoor_air_temperature_output = component.ComponentOutput(
         "FakeBuilding",
         "TemperatureIndoorAir",
@@ -446,14 +450,20 @@ class SmallBuilding:
     LOSS_IN_WATT_PER_KELVIN = 300.0
     HEAT_CAPACITY_IN_JOULE_PER_KELVIN = 2.0e7
     UNIT_CAPACITY_IN_WATT = 6000.0
+    #: The indoor air's same-step rise at full power in the air-conditioned house, in K, for a unit sized to 0.8 of
+    #: its heating load; the controller's 450 s ramp cap is chosen for this answer.
+    AIR_CONDITIONED_HOUSE_FULL_POWER_AIR_RISE_IN_KELVIN = 4.7
 
-    def __init__(self, mass_temperature_deg_c: float) -> None:
-        """Starts the model at a mass temperature.
+    def __init__(self, mass_temperature_deg_c: float, unit_capacity_in_watt: float = UNIT_CAPACITY_IN_WATT) -> None:
+        """Starts the model at a mass temperature, with a unit of the given capacity.
 
         Args:
             mass_temperature_deg_c: The initial mass temperature, in °C.
+            unit_capacity_in_watt: The power the unit delivers at a signal of 1, in W. With the default of 6,000 W
+                the air rises 3.6 K at full power in the same step.
         """
         self.mass_temperature_deg_c = mass_temperature_deg_c
+        self.unit_capacity_in_watt = unit_capacity_in_watt
 
     def step(self, signal: float, outside_temperature_deg_c: float, step_length_s: float) -> float:
         """Advances the model by one step under the controller's signal.
@@ -466,7 +476,7 @@ class SmallBuilding:
         Returns:
             The indoor air temperature at the end of the step, in °C.
         """
-        power_in_watt = signal * self.UNIT_CAPACITY_IN_WATT
+        power_in_watt = signal * self.unit_capacity_in_watt
         loss_in_watt = self.LOSS_IN_WATT_PER_KELVIN * (self.mass_temperature_deg_c - outside_temperature_deg_c)
         self.mass_temperature_deg_c += (
             (power_in_watt - loss_in_watt) * step_length_s / self.HEAT_CAPACITY_IN_JOULE_PER_KELVIN
@@ -506,3 +516,57 @@ def test_closed_loop_holds_the_set_point(
     assert signal != 0.0
     assert max(last_six_hours) == pytest.approx(held_temperature_deg_c, abs=0.05)
     assert min(last_six_hours) == pytest.approx(held_temperature_deg_c, abs=0.05)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("seconds_per_timestep", [900, 3600])
+@pytest.mark.parametrize(
+    ["outside_temperature_deg_c", "start_temperature_deg_c", "held_temperature_deg_c"],
+    [(5.0, 21.0, 20.0), (12.0, 19.0, 20.0), (32.0, 23.0, 24.0), (38.0, 26.0, 24.0)],
+)
+def test_closed_loop_holds_the_set_point_at_15_minute_and_hourly_steps(
+    seconds_per_timestep: int,
+    outside_temperature_deg_c: float,
+    start_temperature_deg_c: float,
+    held_temperature_deg_c: float,
+) -> None:
+    """At 900 s and 3600 s steps the air settles within 0.05 K of the set point, with a steady signal and one start.
+
+    Catches a ramp per step too steep for long steps. The building's air rises 4.7 K at full
+    power in the same step, as in the air-conditioned house. With the ramp capped at 450 s,
+    one step's ramp times that answer is 4.7 K x 450 s / 1800 s = 1.2 per kelvin, below the
+    limit of 2, and the loop settles. With a cap of 900 s it would be 2.35: the signal then
+    swings between the minimum and most of full power and the air by more than a kelvin. The
+    steady signals range from about a quarter to a half of full power, heating and cooling; the last
+    of four simulated days is checked. The preset's minimum times apply (at hourly steps they
+    are shorter than a step and act as none).
+    """
+    testee, stsv = given_wired_testee(
+        {"minimum_runtime_s": 1800.0, "minimum_idle_time_s": 900.0}, seconds_per_timestep
+    )
+    unit_capacity_in_watt = (
+        SmallBuilding.AIR_CONDITIONED_HOUSE_FULL_POWER_AIR_RISE_IN_KELVIN / SmallBuilding.AIR_RISE_IN_KELVIN_PER_WATT
+    )
+    building = SmallBuilding(start_temperature_deg_c, unit_capacity_in_watt)
+    steps_per_day = 86400 // seconds_per_timestep
+    indoor_air_temperature_deg_c = start_temperature_deg_c
+    temperatures_deg_c: List[float] = []
+    signals: List[float] = []
+    for timestep in range(4 * steps_per_day):
+        testee.i_save_state()
+        first_pass_signal = run_one_pass(testee, stsv, timestep, indoor_air_temperature_deg_c)
+        indoor_air_temperature_deg_c = building.step(
+            first_pass_signal, outside_temperature_deg_c, float(seconds_per_timestep)
+        )
+        signal = run_one_pass(testee, stsv, timestep, indoor_air_temperature_deg_c)
+        assert signal == first_pass_signal
+        temperatures_deg_c.append(indoor_air_temperature_deg_c)
+        signals.append(signal)
+
+    starts = sum(1 for previous, current in zip([0.0] + signals, signals) if previous == 0.0 and current != 0.0)
+    last_day_temperatures_deg_c = temperatures_deg_c[-steps_per_day:]
+    last_day_signals = signals[-steps_per_day:]
+    assert starts == 1
+    assert max(last_day_temperatures_deg_c) == pytest.approx(held_temperature_deg_c, abs=0.05)
+    assert min(last_day_temperatures_deg_c) == pytest.approx(held_temperature_deg_c, abs=0.05)
+    assert max(last_day_signals) - min(last_day_signals) < 0.01

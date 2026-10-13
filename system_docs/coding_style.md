@@ -90,8 +90,11 @@ violations are fixed bead by bead, never in one big rewrite.
    diff coverage (hisim-o6a.16).
 9. **No magic numbers.** Every literal with a physical or technical meaning is a named class constant with its
    unit and its source (§4): not `0.992`, `60.0` or `0.01` in the middle of a formula.
-10. **Composition over inheritance.** A class hierarchy is flat: `Component`, then the concrete class. No mixins
-    that carry state. Shared behaviour sits in a helper that is passed in or called, not in a base class.
+10. **Composition over inheritance.** A class hierarchy is flat: one kind base class (`DataSourceComponent`,
+    `L2ControllerComponent`, `L1ControllerComponent`, `PhysicsComponent` or `MeterComponent`, which carry no state
+    and no behaviour), then the concrete class; `DynamicComponent` or `StatelessComponent` may stand beside the kind
+    base. No mixins that carry state. Shared behaviour sits in a helper that is passed in or called, not in a base
+    class.
 11. **Duplicates are searched for.** A regular job compares the first docstring sentences of all functions (§1)
     and files the candidates for merging as beads (hisim-o6a.17).
 

@@ -161,9 +161,9 @@ not under `hisim/components/`, because `hisim/energy_port.py`, imported by the b
 storages stop carrying their own mixing, booking and loss code. Stage A (PR #890) fixed the constants and the open
 parameters (owner, 2026-10-04): water `c = 4180 J/(kg K)`, pinned equal to `PhysicsConfig`'s; water density
 `992 kg/m³`, the value at 40 °C both storages use today, so stages C and D replace arithmetic without moving a number
-(`PhysicsConfig`'s 1000 is aligned in stage C as one deliberate change); the §6 accelerator uses a secant step after
-six of the node's own iterates when the estimated contraction lies in [0, 1) (capped at 0.9 since 2026-10-10, §6),
-under-relaxation by 0.5 on a residual sign change, and the plain iterate otherwise.
+(`PhysicsConfig`'s 1000 is aligned in stage C as one deliberate change); the §6 accelerator, removed on 2026-10-11
+(§6), used a secant step after six of the node's own iterates when the estimated contraction lay in [0, 1) (capped at
+0.9 from 2026-10-10), under-relaxation by 0.5 on a residual sign change, and the plain iterate otherwise.
 
 ### 4.2 Properties
 
@@ -200,8 +200,9 @@ The DHW tank publishes the step mean it computes from its inputs and its saved s
 2026-10-10). Until then it published its start temperature `T0` on the first pass of every step and accelerated
 later passes from its own iteration history (§6); both are iteration memory inside the component, which component
 design principle 5 rules out ("`i_simulate` is a function of the inputs and the saved state"). The first pass now
-starts from the previous step's converged values (the simulator's warm start, hisim-4g9.23) and the acceleration
-lives in the simulator (§6).
+starts from the previous step's converged values (the simulator's warm start, hisim-4g9.23). The acceleration
+moved into the simulator on 2026-10-10 and was removed on 2026-10-11 (§6): the tank's step mean is now iterated
+like every other output.
 
 ### 4.4 The space-heating buffer
 
@@ -291,9 +292,10 @@ output, the boiler its `T̄` output; on main both read the same start temperatur
 
 Consequence: a firing boiler holds its lift, so every firing boiler step is the power-limited case of §7: the node
 cannot see the boiler's within-step reaction, and the iteration needs about 11 tries at 900 s, just past the
-simulator's `force_convergence` limit of 10. The node acceleration of §6 and the iteration histogram test cover
-the boiler setups explicitly. The **electric DHW heater** stays the same way: it keeps its `P_max ΔT/100`
-regulation (`generic_electric_heating.py:542-560`) and fixed lift, publishing `T_sup = T_ret + ΔT`.
+simulator's `force_convergence` limit of 10. The iteration histogram test covers the boiler setups explicitly; since
+the acceleration was removed (§6), the boiler charges forced at 900 s are accepted (hisim-4g9.50). The **electric
+DHW heater** stays the same way: it keeps its `P_max ΔT/100` regulation (`generic_electric_heating.py:542-560`) and
+fixed lift, publishing `T_sup = T_ret + ΔT`.
 
 The boiler's maximum supply temperature is `GenericBoilerConfig.maximal_flow_temperature_in_celsius`, 80 °C: the usual
 upper flow-temperature setting of domestic gas, oil and solid-fuel boilers, whose safety high-limit cut-outs act
@@ -433,8 +435,9 @@ it (forced steps of the heat-pump twin's year at 60 s: 112312 with the switch-on
 ## 6. Convergence with pure ports
 
 The simulator iterates every component in order until no output changes by more than 1e-4
-(`hisim/component.py:189-195`, `hisim/simulator.py:393-422`); after 10 tries it sets `force_convergence`, which
-freezes controllers, and after 100 it aborts (`simulator.py:415-419`). D7: the iteration is not changed; since the
+(`SingleTimeStepValues.is_close_enough_to_previous` in `hisim/component.py`, the loop of
+`Simulator.process_one_timestep` in `hisim/simulator.py`); after 10 tries it sets `force_convergence`, which
+freezes controllers, and after 100 it aborts (the same loop). D7: the iteration is not changed; since the
 D7 amendment (owner, 2026-10-09) every step starts from the values the previous step converged to, and only step 0
 from zeros. Since 2026-10-12 (owner) a pass evaluates the components kind by kind (data sources, L2 controllers, L1
 controllers, physics, meters; each class inherits its kind base class from `hisim/component.py`), in the order they
@@ -461,11 +464,18 @@ is absolute and applies to watt outputs too; a derived power at `m c ≈ 700 W/K
 ~1.5e-7 K, which adds `ln(1e-3)/ln θ` iterations. A per-output tolerance is considered only if the histogram
 shows the watt outputs dominate.
 
-**Acceleration removed (owner, 2026-10-11).** The simulator no longer accelerates any output: it replaced a
+**Acceleration removed (owner, 2026-10-11, #927).** The simulator no longer accelerates any output: it replaced a
 component's output in the middle of the iteration, so the other components reacted to values no component had
 computed. `hisim/fixed_point_acceleration.py`, the `is_accelerated` flag and the simulator's use of it are gone; the
-hot-water tank publishes its step mean as it computes it. The slow tank-generator loops the acceleration covered are
-fixed at their cause in the components. The paragraph below records the design that was removed.
+hot-water tank publishes its step mean as it computes it. #927 changed no component, so the slow loops the
+acceleration had shortened now run the plain iteration. A boiler charge at 900 s needs 12 to 13 passes and is forced
+within about 1e-3 W of its end; the owner accepted that (hisim-4g9.50, closed). The air-conditioned house's slow loop
+is open (hisim-4g9.49), and so is the energy manager's raise cycle in the heat-pump twins (hisim-4g9.53). A rule that
+forces a step when the iteration stops making progress, instead of after a fixed ten passes, is hisim-4g9.55. What
+changed the iteration since: every step starts from the previous step's converged values (the warm start, #914,
+hisim-4g9.23), and a pass evaluates the components kind by kind (#922, above). The boiler's part-load rule (#915)
+and its measured forced steps are in `roadmap/hydronic_part_load_spec.md` §11. The two paragraphs below and their
+table record the design that was removed and what it measured.
 
 **Acceleration in the simulator (owner, 2026-10-10).** A component declares an output whose value is the image of
 a fixed-point map, a node's `T̄`, with `add_output(..., is_accelerated=True)`; the hot-water tank declares its two
@@ -514,8 +524,10 @@ heat-pump twins' forced steps at 900 s rise by 6 % (heat pump, 7909 → 8396) an
 heat-pump-and-solar year at 3600 s no longer aborts either way.
 
 **Iteration histogram test.** The recorded twins run at 60, 900 and 3600 s and the iterations per step
-(`simulator.py:426` returns the count) are asserted: at 900 s no step reaches `force_convergence` (more than 10
-tries). The boiler twins (gas, oil, pellets, wood chips, hydrogen, gas + solar thermal), the heat-pump twins (for
+(`Simulator.process_one_timestep` returns the count and the forced flag) are asserted: at 900 s at most
+`MAXIMAL_FORCED_STEP_SHARE` (0.5 %) of the steps of a file without a heat pump reach `force_convergence` (more than
+10 tries; the accepted boiler charges, hisim-4g9.50), and the heat-pump files are recorded, not asserted
+(hisim-4g9.53). The boiler twins (gas, oil, pellets, wood chips, hydrogen, gas + solar thermal), the heat-pump twins (for
 the energy manager's on/off loop; the rounding staircase is interpolated since stage C) and the district-heating twin (no buffer) are listed explicitly. The histogram and each
 twin's mean are a CI artifact, so drifts are seen.
 
@@ -539,7 +551,8 @@ pump at 0.16 kg/s with `P_th = 9000 (1 − 0.015x − 0.0004x²)`, `x` the retur
 The earlier draft measured a power-limited boiler at 4 / 11 / 41 iterations at 60 / 900 / 3600 s, and district
 heating feeding the HDS without a buffer at 24 iterations and 0.5 K off at 900 s: past the simulator's freeze
 after 10 tries, inside its abort at 100. With D1 the boiler figure applies to every firing boiler step; hence
-the acceleration and escalation of §6. Circuit laws (hisim-4g9.22) remove bias and iterations at a richer port.
+the escalation of §6 (and the acceleration of §6, removed on 2026-10-11). Circuit laws (hisim-4g9.22) remove bias
+and iterations at a richer port.
 
 ## 8. Composability test cases
 
@@ -620,7 +633,7 @@ Staged PRs straight into main (D8). Every stage that changes RenoVisor results (
 renovisorissues before it merges, naming the KPIs that move and by how much. Each stage's scope and "done when":
 
 - **A. Node and port library.** Scope: `hydronics.py` (`MixedNode.step`, water `c`, `HydronicPort` arithmetic,
-  acceleration) with unit tests, used by nothing. Done when: closure and no-overshoot property tests pass and no
+  acceleration, removed again on 2026-10-11, §6) with unit tests, used by nothing. Done when: closure and no-overshoot property tests pass and no
   golden changes.
 - **B. Heat-pump consistency.** Scope: `P_th = m c (T_out − T_in)`, `P_el = P_th/COP` in both modes, rounding
   kept. Done when: the flow heat equals the booked `P_th` on every step of the heat-pump twins, hisim-4g9.21 is
@@ -658,8 +671,8 @@ SH circuit is not. If main must never hold that mixed state, C and D go in one P
 **D1 — Boiler control: keep the power `control_signal` and fixed lift.** `T_sup = T_ret + ΔT` with
 `P_th` from `control_signal` and `modulate_power`, `m = P_th/(c ΔT)`; no flow thermostat. Consequence: every
 firing boiler step is the power-limited pure-port case of §7 (≈11 iterations at 900 s, just past the 10-try
-`force_convergence` limit), so the node acceleration and the iteration histogram test cover the boiler setups
-explicitly (§6, §9.5 D). #864's setpoint feed-forward and inverse fuel law are dropped.
+`force_convergence` limit), so the node acceleration (removed on 2026-10-11; the forced charges are accepted,
+hisim-4g9.50) and the iteration histogram test cover the boiler setups explicitly (§6, §9.5 D). #864's setpoint feed-forward and inverse fuel law are dropped.
 
 *Amendment (owner, 2026-10-09).* Every fixed-lift generator (boiler, electric heater's DHW side, heat pump's DHW
 side) has a maximum supply temperature and throttles to it when `T_ret + ΔT` would exceed it (§5); on a throttled
@@ -679,8 +692,8 @@ hot-water outlet throttled at 75 °C left the storage's step mean without a fixe
 applied in stage C (§5.2).
 
 **D3 — Generator → HDS without a buffer: the HDS pipe water is the node** (§4.6). Fixes hisim-9uoo.12 and keeps
-the RenoVisor district-heating path as it is. Consequence: ≈24 iterations at 900 s before acceleration; the
-first candidate for hisim-4g9.22 if the histogram fails.
+the RenoVisor district-heating path as it is. Consequence: ≈24 iterations at 900 s (the acceleration once planned
+for it was removed on 2026-10-11, §6); the first candidate for hisim-4g9.22 if the histogram fails.
 
 **D4 — Feed-forward and DHW priority: drop both.** No temperature forecast for on/off controllers, no
 `DhwChargeYield`; controllers stay as on main, deciding on start-of-step values. Consequence: hisim-6ehm stays
@@ -703,8 +716,9 @@ energy-balance check (#870) rather than hidden (§4.5).
 **D6 — Dual circuits: one circuit per step,** SH or DHW as `DiverterValve` decides on `T0`. Consequence: a DHW
 charge takes whole steps; within a step every flow is constant, as §4.1 assumes.
 
-**D7 — Simulator: no change.** Node-side acceleration and the iteration histogram test only; the convergence
-burden sits in the nodes. A per-output tolerance only if the histogram shows the watt outputs dominate (§6).
+**D7 — Simulator: no change.** (As first decided; the amendments below change it: the simulator warm-starts every
+step and, since 2026-10-11, accelerates nothing.) Node-side acceleration and the iteration histogram test only; the
+convergence burden sits in the nodes. A per-output tolerance only if the histogram shows the watt outputs dominate (§6).
 *Amendment (owner, 2026-10-10):* the iteration memory moves out of the nodes. The simulator accelerates the outputs
 a component declares accelerated (§6) and starts every step from the previous step's converged values (the warm
 start, hisim-4g9.23); both are generic and know nothing about a component.

@@ -1,8 +1,8 @@
-"""Energy carriers priced at the system boundary, and the vocabularies of measured flows (cost_spec.md §3.2).
+"""Energy carriers priced at the system boundary, and the vocabularies of measured flows.
 
 Simulation I/O uses ``loadtypes.LoadTypes`` for what flows anywhere inside the system; an `EnergyCarrier` names what is
 bought or sold across the system boundary and therefore has a price entry, an emission factor and a tariff. Billing
-only at carrier boundaries is what rules out double counting (§3.1). The module is a leaf: it holds only vocabulary.
+only at carrier boundaries is what rules out double counting. The module is a leaf: it holds only vocabulary.
 """
 
 from __future__ import annotations

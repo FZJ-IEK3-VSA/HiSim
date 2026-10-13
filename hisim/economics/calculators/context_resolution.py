@@ -2,7 +2,7 @@
 
 A cost subject is one costed item on the timeline (a component instance or a measure). Per subject this module picks
 each cost building block from a component override or the database entry, records its provenance, and decides the
-installation context (cost_spec.md §4.1): a new investment, a kept existing asset, or a replacement of one, with the
+installation context: a new investment, a kept existing asset, or a replacement of one, with the
 replaced asset's sunk cost and anyway credit. `evaluator.build_timeline` calls `resolve_device` first and hands the
 resulting `DeviceCosting` to the investment, maintenance and subsidy calculators, which only do arithmetic on it.
 
@@ -29,7 +29,7 @@ from hisim.loadtypes import ComponentType
 
 
 class ContextResolutionConstants:
-    """The fallback service life for a replaced asset the database does not price (§4.1).
+    """The fallback service life for a replaced asset the database does not price.
 
     Used only when the register supplies the price through `ExistingAsset.replacement_cost_override_in_euro`; without
     that override `resolve_replaced_asset` raises instead of inventing a sunk cost.
@@ -122,9 +122,9 @@ class DeviceCosting:
 
     @property
     def gross_investment(self) -> UncertainValue:
-        """I_gross = device + installation + planning (§3.6).
+        """I_gross = device + installation + planning.
 
-        Replacements re-purchase it escalated (§3.6 rule 2), the residual value writes it down straight-line (rule 3),
+        Replacements re-purchase it escalated, the residual value writes it down straight-line (rule 3),
         and maintenance is a rate of it (rule 4). The removal cost of a replaced asset is not part of it; it is a
         one-off charge.
         """
@@ -133,12 +133,12 @@ class DeviceCosting:
 
 @dataclass
 class ReplacedAssetOutcome:
-    """The §4.1 consequences of replacing an existing asset, for one subject.
+    """The consequences of replacing an existing asset, for one subject.
 
     `sunk_cost` is the replaced asset's written-off residual book value; it is reported but kept out of decision KPIs.
     `credit_entry` is the ANYWAY_COST_CREDIT timeline entry, present only when a credit is due; the anyway credit is
     the avoided cost of a replacement that would have been paid anyway. `credit_amount` is that credit as a positive
-    figure, which feeds the modernization-levy basis (§6.4). All stored amounts are cost-positive euro bands; only the
+    figure, which feeds the modernization-levy basis. All stored amounts are cost-positive euro bands; only the
     entry itself is negative.
     """
 
@@ -160,7 +160,7 @@ class ReplacedAssetOutcome:
 
 @dataclass(frozen=True)
 class InstallationVerdict:
-    """Whether one asset class is bought, kept or replacing something, decided before any price (§4.1).
+    """Whether one asset class is bought, kept or replacing something, decided before any price.
 
     A replacement is a new investment naming the register entry it replaces; a kept asset is no investment and names
     the register entry it is; otherwise the subject is a new investment of nothing registered (GREENFIELD, or
@@ -197,7 +197,7 @@ def installation_verdict(
     subject: Optional[str] = None,
     own_register_entry: bool = False,
 ) -> InstallationVerdict:
-    """Decide the §4.1 installation context of one asset class without touching prices or the ledger.
+    """Decide the installation context of one asset class without touching prices or the ledger.
 
     Under BROWNFIELD the replacement check runs first, so new windows replacing old windows count as an investment, not
     as kept. Under STATUS_QUO nothing is a new investment and nothing is replaced; a matching entry is a kept asset
@@ -256,7 +256,7 @@ def installation_verdict(
 
 
 def _age(asset: ExistingAsset, ageing_reference_year: int) -> int:
-    """Return the age a kept or replaced register asset is priced at (§4.1).
+    """Return the age a kept or replaced register asset is priced at.
 
     The caller's stated age (`ExistingAsset.stated_age_in_years`, set by the staged evaluator for a subject an earlier
     stage bought) if there is one, else its floored age at the timeline's year 0 (`ExistingAsset.age_in_years`).
@@ -277,7 +277,7 @@ def resolve_device(
     price_basis_year: int,
     ageing_reference_year: int,
 ) -> DeviceCosting:
-    """Resolve one subject's cost building blocks and its installation context (§3.5, §4.1).
+    """Resolve one subject's cost building blocks and its installation context.
 
     For each building block (investment, installation, planning, maintenance rate, fixed operation cost, service life,
     embodied CO2) a component override wins over the country's device entry for the price basis year, and the winner is
@@ -287,11 +287,11 @@ def resolve_device(
 
     Args:
         subject: Timeline subject name (component instance or measure).
-        facts: What the component declared: asset class, size, count, optional per-field overrides (§3.3). No prices.
-        context: The perspective's installation context (§4.1).
+        facts: What the component declared: asset class, size, count, optional per-field overrides. No prices.
+        context: The perspective's installation context.
         existing_assets: Register of what is already installed; None for a greenfield run.
-        ledger: Provenance ledger; every priced field resolved here is recorded in it (§3.10).
-        database: Loaded cost database (§3.5).
+        ledger: Provenance ledger; every priced field resolved here is recorded in it.
+        database: Loaded cost database.
         parameters: Economic parameters; supply the country and the default `anyway_threshold_years`.
         price_basis_year: The economic "today" the device entries are looked up for, not the weather year.
         ageing_reference_year: Calendar year of the timeline's year 0, at which a kept asset's age is measured; the
@@ -466,7 +466,7 @@ def resolve_replaced_asset(
     ageing_reference_year: int,
     ledger: Optional[ProvenanceLedger] = None,
 ) -> ReplacedAssetOutcome:
-    """Compute the sunk cost and the anyway credit for the asset a measure replaces (§4.1).
+    """Compute the sunk cost and the anyway credit for the asset a measure replaces.
 
     Called only for measures charged at year 0 that replace a registered asset. The sunk cost is the old asset's
     straight-line residual book value, `like_for_like_price * remaining_life / service_life`; it is reported but kept

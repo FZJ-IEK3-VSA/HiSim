@@ -359,7 +359,7 @@ def plot_investment_waterfall(
 def plot_perspective_costs(matrix: EvaluationMatrix, path: str) -> str:
     """Draw the equivalent annual cost per perspective as dots with min/max whiskers.
 
-    The PNG of the perspectives section and the only chart covering the whole matrix. The whiskers are the §3.9
+    The PNG of the perspectives section and the only chart covering the whole matrix. The whiskers are the
     envelope of the low and high worlds, not a confidence interval.
 
     Args:
@@ -454,7 +454,7 @@ def _legend_below_axes_anchor(figure_height_in_inches: float) -> float:
 def plot_component_costs(
     result: LifecycleCostResult, path: str, skips: Optional[List[SkippedPlot]] = None
 ) -> Optional[str]:
-    """Draw per-subject NPV as diverging stacks (§7.4): costs right of 0, credits left, a net marker.
+    """Draw per-subject NPV as diverging stacks: costs right of 0, credits left, a net marker.
 
     Credits (residual value, subsidies, feed-in, anyway credit) are never netted onto the cost side; the black marker
     with whiskers is the net NPV band. Labels start past the stack and whisker (`_component_label_geometry`) and the

@@ -1,4 +1,4 @@
-"""Consistency checks for the shipped cost and subsidy data files (cost_spec.md §9.6).
+"""Consistency checks for the shipped cost and subsidy data files.
 
 Prices and schemes are data, so these checks catch what would be compile errors if the numbers were code: an unsourced
 datapoint, an asset class with no price in a shipped country, a scheme conditioning on a question nobody asks, a tariff
@@ -32,7 +32,7 @@ from hisim.economics.tariffs import TariffContract
 class ValidationConstants:
     """Requirements the shipped data files are validated against.
 
-    `REQUIRED_QUESTION_LANGUAGES` lists the languages every question catalog must cover, so the §5.7 questionnaire is
+    `REQUIRED_QUESTION_LANGUAGES` lists the languages every question catalog must cover, so the questionnaire is
     answerable by the people a subsidy applies to; a new country with another official language extends it.
     """
 
@@ -68,7 +68,7 @@ def validate_cost_database(
     used_carriers: Optional[Set] = None,
     reference_date: Optional[date] = None,
 ) -> ValidationReport:
-    """Check the cost database: it loads, its sources and tariffs are valid, every needed price exists (§9.6).
+    """Check the cost database: it loads, its sources and tariffs are valid, every needed price exists.
 
     Schema checks happen by loading through `CostDatabase`; a load failure is one error and stops the run. Then come
     the tariff contracts (validated before the orphan check, so their sources count as referenced), orphaned and stale
@@ -136,7 +136,7 @@ def validate_tariff_contracts(
 ) -> ValidationReport:
     """Check that every shipped tariff contract parses, matches its file name and cites registry sources.
 
-    Per file: the JSON parses through `TariffContract.from_json` (§8.2 schema, mandatory source ids), the contract id
+    Per file: the JSON parses through `TariffContract.from_json` (catalog schema, mandatory source ids), the contract id
     equals the file name (contracts are looked up by file name), a DYNAMIC contract's `spot_series` exists, and every
     source id resolves against the registry. ``inline:<citation>`` sources are an error in a file; they are allowed
     only for contracts built in memory (see `tariffs.py`).
@@ -197,7 +197,7 @@ def validate_subsidy_catalog(
     The schema is checked by loading. Then: snapshot-date staleness, unique scheme ids, `excludes` that name existing
     schemes, tax-credit instalment shares summing to 1, cumulation groups agreeing on their rate cap, and (given the
     cost database) per-unit schemes using the unit the country's device entries price their asset class in. Question
-    coverage (§5.7): every context field a scheme's conditions read needs a question in every required language, or
+    coverage: every context field a scheme's conditions read needs a question in every required language, or
     eligibility could depend on something the user was never asked; a question no scheme reads is a warning.
 
     Args:

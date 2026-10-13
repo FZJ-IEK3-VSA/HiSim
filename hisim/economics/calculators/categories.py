@@ -1,4 +1,4 @@
-"""The cost-category sets the engine tests membership against, gathered in one place (cost_spec.md §3.6).
+"""The cost-category sets the engine tests membership against, gathered in one place.
 
 A cost category is the kind of a timeline entry (INVESTMENT, SUBSIDY, LOAN_INTEREST, ...). Different questions need
 different sets, so the sets legitimately differ:
@@ -14,13 +14,13 @@ different sets, so the sets legitimately differ:
     LOAN_*                  yes           no                  no
     ANYWAY_COST_CREDIT      yes           no                  no
 
-- `INVESTMENT_CATEGORIES`: what disappears when a perspective excludes investment (OPERATING_ONLY, §4.2).
-- `FINANCING_YEAR0_PRINCIPAL_CATEGORIES`: what the loan principal is a share of (§4.4); includes SUBSIDY because the
+- `INVESTMENT_CATEGORIES`: what disappears when a perspective excludes investment (OPERATING_ONLY).
+- `FINANCING_YEAR0_PRINCIPAL_CATEGORIES`: what the loan principal is a share of; includes SUBSIDY because the
   principal is net of upfront grants.
-- `BREAKDOWN_INVESTMENT_GROSS_CATEGORIES`: what buying a subject cost before support (§7.4).
+- `BREAKDOWN_INVESTMENT_GROSS_CATEGORIES`: what buying a subject cost before support.
 - `NEGATIVE_SIGN_CATEGORIES`: which entries are negative-signed. This differs from `REVENUE_CATEGORIES` (entries whose
-  optimistic band slot is the maximum, §3.9): LOAN_DISBURSEMENT is negative but follows the investment band, and
-  MODERNIZATION_LEVY's sign depends on the payer (§6.4), which `timeline.expected_sign` handles.
+  optimistic band slot is the maximum): LOAN_DISBURSEMENT is negative but follows the investment band, and
+  MODERNIZATION_LEVY's sign depends on the payer, which `timeline.expected_sign` handles.
 
 The `CategoryRules` sets are defined in `timeline.py`, next to `CostCategory`, and re-exported here to avoid an import
 cycle.
@@ -46,7 +46,7 @@ class EngineCategoryRules:
     gross investment figure; the timeline-wide sets are in `timeline.CategoryRules`.
     """
 
-    #: Year-0 categories summed into the net investment the loan principal is a share of (§4.4).
+    #: Year-0 categories summed into the net investment the loan principal is a share of.
     #: SUBSIDY is deliberately in: its entries are negative, so the sum is *net* of upfront grants.
     FINANCING_YEAR0_PRINCIPAL_CATEGORIES: Tuple[CostCategory, ...] = (
         CostCategory.INVESTMENT,
@@ -55,7 +55,7 @@ class EngineCategoryRules:
         CostCategory.SUBSIDY,
     )
 
-    #: Year-0 categories summed into `ComponentCostBreakdown.investment_gross_in_euro` (§7.4).
+    #: Year-0 categories summed into `ComponentCostBreakdown.investment_gross_in_euro`.
     #: SUBSIDY is deliberately out: this is the figure *before* support.
     BREAKDOWN_INVESTMENT_GROSS_CATEGORIES: Tuple[CostCategory, ...] = (
         CostCategory.INVESTMENT,

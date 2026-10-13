@@ -16,7 +16,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 
 class ReserveConstants:
-    """Labels of the replacement-reserve flows (§4.2).
+    """Labels of the replacement-reserve flows.
 
     The reserve covers all subjects at once, so its entries are booked under one synthetic subject name. That name
     appears in `cash_flow_timeline.csv`, the per-subject breakdowns and the report charts.
@@ -30,7 +30,7 @@ def replacement_reserve_amount(
     replacement_flows: List[Tuple[int, UncertainValue]],
     parameters: EconomicParameters,
 ) -> UncertainValue:
-    """Return the level annual sinking-fund payment that a set of replacement flows implies (§4.2).
+    """Return the level annual sinking-fund payment that a set of replacement flows implies.
 
     Example: `replacement_reserve_amount([(10, UncertainValue.exact(20000.0))], parameters)`. The staged evaluator
     calls this on its own, without the entries, because a plan's replacements fall in different years than any single
@@ -55,7 +55,7 @@ def build_replacement_reserve_entries(
     parameters: EconomicParameters,
     horizon: int,
 ) -> List[CashFlowEntry]:
-    """Return the annual sinking-fund entries that cover the suppressed replacements (§4.2).
+    """Return the annual sinking-fund entries that cover the suppressed replacements.
 
     The amount is `a * sum_t(F_t / (1+i)^t)` with `a` the VDI 2067-1 annuity factor over the horizon: every replacement
     is discounted to today and the sum annuitized. The payment is level and nominal, not escalated, because it is

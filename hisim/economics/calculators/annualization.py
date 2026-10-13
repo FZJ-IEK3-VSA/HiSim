@@ -1,4 +1,4 @@
-"""Scale quantities from a partially simulated year up to a full year (cost_spec.md §3.6 rule 5).
+"""Scale quantities from a partially simulated year up to a full year.
 
 Everything the engine projects over the horizon is a per-year figure, so simulated quantities are extrapolated linearly
 by the simulated period fraction (simulated seconds divided by the seconds of a full year, in (0, 1]). Example: 120 kWh
@@ -17,7 +17,7 @@ from hisim.economics.facts import BillingDeterminants
 
 
 class AnnualizationConstants:
-    """Numeric bounds of the annualization rules (§3.6 rule 5).
+    """Numeric bounds of the annualization rules.
 
     `ZERO_GUARD` is a floor on the divisor used by the subsidy call site, not a meaningful fraction.
     """
@@ -41,7 +41,7 @@ def annualization_divisor(fraction: float, guard_zero: bool = False) -> float:
 
 
 def annualize(value: float, fraction: float, guard_zero: bool = False) -> float:
-    """Scale a simulated-period quantity up to a full year by linear extrapolation (§3.6 rule 5).
+    """Scale a simulated-period quantity up to a full year by linear extrapolation.
 
     Use it on extensive quantities only (energy volumes, integrated cost or revenue), never on prices, peaks or rates.
     :func:`check_simulated_period_fraction` warns about the extrapolation.
@@ -70,7 +70,7 @@ def annualize_optional(value: Optional[float], fraction: float, guard_zero: bool
 
 
 def check_simulated_period_fraction(fraction: float) -> None:
-    """Reject a non-positive simulated period fraction and warn when a partial year is extrapolated (§3.6).
+    """Reject a non-positive simulated period fraction and warn when a partial year is extrapolated.
 
     Called once by `calculators/energy.build_energy_flows` before any bill is annualized.
 
@@ -95,8 +95,8 @@ def annualize_billing_determinants(
     """Return a copy of the billing determinants with every extensive quantity scaled to a full year.
 
     Billing determinants are the measured quantities a tariff is applied to (kWh bought and sold, peaks, spot prices).
-    Energy volumes and integrated cost or revenue are scaled; prices, peaks and mean spot prices stay as measured (§3.6
-    rule 5, §8). Everything downstream assumes annual quantities. A copy is returned because the same input is
+    Energy volumes and integrated cost or revenue are scaled; prices, peaks and mean spot prices stay as measured.
+    Everything downstream assumes annual quantities. A copy is returned because the same input is
     evaluated once per perspective.
 
     Args:

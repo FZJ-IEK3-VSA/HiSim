@@ -1,9 +1,9 @@
-"""Cost audit table and legacy-parity harness (cost_spec.md §9.5, §9.7).
+"""Cost audit table and legacy-parity harness.
 
 `cost_audit.csv` audits the inputs: one row per declared cost subject with asset class, size, resolved unit price and
 band, lifetime, price origin and sources, gross investment and subsidies with binding caps; it catches mis-sized
 components and unit mix-ups. `cost_parity_report.csv` compares the legacy `get_cost_capex` results, read only from
-their CSVs, against the new engine per component; it is the evidence for the cutover decision (§10). This is
+their CSVs, against the new engine per component; it is the evidence for the cutover decision. This is
 verification code on the engine side: it may import the database and evaluator, never the report modules.
 """
 
@@ -28,21 +28,21 @@ from hisim.loadtypes import Units
 
 
 class AuditFileNames:
-    """Names of the audit files written next to the results: the input audit (§9.5) and the parity report (§9.7)."""
+    """Names of the audit files written next to the results: the input audit and the parity report."""
 
     COST_AUDIT_FILE_NAME = "cost_audit.csv"
     PARITY_REPORT_FILE_NAME = "cost_parity_report.csv"
 
 
 class AuditThresholds:
-    """Size bounds above which the audit flags a declaration as a likely wiring mistake (§9.5).
+    """Size bounds above which the audit flags a declaration as a likely wiring mistake.
 
     A flag is only a note in the audit row, never an error or a changed number. Bounds are per size unit and set where
     a residential declaration stops being believable: a thousand kW, kWh or m² is an apartment block, a hundred
     thousand litres a tank farm, ten thousand unitless devices a typo.
     """
 
-    #: Size above which a declaration is almost certainly a wiring mistake, per size unit (§9.5).
+    #: Size above which a declaration is almost certainly a wiring mistake, per size unit.
     #: Keyed by the units `ComponentCostFacts.SUPPORTED_SIZE_UNITS` allows.
     IMPLAUSIBLE_SIZE_BY_UNIT: Dict[Units, float] = {
         Units.KILOWATT: 1e3,
@@ -71,7 +71,7 @@ def build_input_audit(
     parameters: EconomicParameters,
     result: Optional[LifecycleCostResult] = None,
 ) -> InputAuditReport:
-    """Resolve every declared fact against the cost database once, into the typed input audit (§9.5).
+    """Resolve every declared fact against the cost database once, into the typed input audit.
 
     Per subject it determines which unit price applied and where it came from: a per-field config override (which wins
     whether or not a database entry exists), a database entry with its `valid_from_year` key and source ids, or
@@ -89,7 +89,7 @@ def build_input_audit(
             audit has origins, prices and flags but no amounts.
 
     Returns:
-        An `InputAuditReport` with the price basis year, one row per declared subject and the §3.10 source registry
+        An `InputAuditReport` with the price basis year, one row per declared subject and the source registry
             entries the evaluation cited.
     """
     year = effective_price_basis_year(parameters, database, inputs.simulation_year)
@@ -167,7 +167,7 @@ def build_input_audit(
 def _referenced_sources(
     database: CostDatabase, result: Optional[LifecycleCostResult]
 ) -> List[ResolvedSource]:
-    """Return the §3.10 source entries this evaluation cited, resolved and sorted by id.
+    """Return the source entries this evaluation cited, resolved and sorted by id.
 
     Combines the cost database's referenced ids (`SourceRegistry.referenced_ids`) and the subsidy catalog's, found
     through the result's ledger and `source_resolver`.
@@ -189,7 +189,7 @@ def _referenced_sources(
 def _csv_origin(row: ResolvedInputRow) -> str:
     """Return the CSV's wording for a row's `origin_kind`.
 
-    The wording is kept stable because `cost_audit.csv` is diffed on golden scenarios (§9.5). UNRESOLVED says so
+    The wording is kept stable because `cost_audit.csv` is diffed on golden scenarios. UNRESOLVED says so
     instead of claiming a database price.
     """
     if row.origin_kind == OriginKind.ORIGIN_OVERRIDE:
@@ -200,7 +200,7 @@ def _csv_origin(row: ResolvedInputRow) -> str:
 
 
 def write_cost_audit(audit: InputAuditReport, result_directory: str) -> str:
-    """Write `cost_audit.csv`: one semicolon-separated row per declared subject (§9.5).
+    """Write `cost_audit.csv`: one semicolon-separated row per declared subject.
 
     Each row carries the declaration, the price origin and sources, unit price and gross investment as
     min/best_estimate/max, the lifetime, the applied subsidy schemes and which caps bound in which slot. "Price basis"
@@ -289,7 +289,7 @@ class LegacyCsvStatus(enum.Enum):
 
 
 def _read_legacy_csv(path: str) -> Union[pd.DataFrame, LegacyCsvStatus]:
-    """Read one legacy cost CSV, read-only, or say why there is none (§10.0 rule 4).
+    """Read one legacy cost CSV, read-only, or say why there is none.
 
     Failures are not fatal, since the parity report is diagnostic, but the reason reaches the caller.
 
@@ -314,7 +314,7 @@ def write_parity_report(
     parameters: EconomicParameters,
     result_directory: str,
 ) -> Optional[str]:
-    """Write the shadow-mode parity report: legacy CSV values against the new engine (§9.7).
+    """Write the shadow-mode parity report: legacy CSV values against the new engine.
 
     Reads the legacy `investment_cost_co2_footprint.csv` (read-only) by component name and, per declared subject,
     compares the gross device investment and the investment for the simulated period (investment / lifetime * simulated

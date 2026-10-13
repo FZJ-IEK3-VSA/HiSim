@@ -62,7 +62,7 @@ class PlausibilityCategories:
     section 4 judge the same bill.
     """
 
-    #: The categories that make up an energy carrier's bill (§8), the numerator of the effective
+    #: The categories that make up an energy carrier's bill, the numerator of the effective
     #: price check. The kernel's set itself; `views.ViewCategories` binds the same object.
     BILL_CATEGORIES = CategoryRules.BILL_CATEGORIES
 
@@ -212,7 +212,7 @@ def _npv_of(result: LifecycleCostResult, *categories: CostCategory) -> float:
     """Return the best-estimate NPV of the given categories, or 0.0 when the result has none of them.
 
     Only the best-estimate slot is used; the minimum and maximum slots are deliberate extremes that would trip generous
-    ranges (§3.9).
+    ranges.
     """
     return sum(
         result.npv_by_category[category].best_estimate
@@ -224,7 +224,7 @@ def _npv_of(result: LifecycleCostResult, *categories: CostCategory) -> float:
 def _structural_findings(
     matrix: EvaluationMatrix, config: PlausibilityConfig
 ) -> List[PlausibilityFinding]:
-    """Check the hard invariants on every perspective; any violation is a FAIL (§7.4, §3.9, §5.4).
+    """Check the hard invariants on every perspective; any violation is a FAIL.
 
     The four checks: subject NPVs sum to the perspective total within a relative tolerance; the total NPV band is
     ordered minimum <= best estimate <= maximum (a finding only when violated); the residual value does not exceed what
@@ -329,7 +329,7 @@ def _effective_price_findings(
 
 
 def _flexibility_value_findings(reference: LifecycleCostResult) -> List[PlausibilityFinding]:
-    """Warn for each dynamic-tariff carrier whose consumption timing cost more than a flat profile (§8.5).
+    """Warn for each dynamic-tariff carrier whose consumption timing cost more than a flat profile.
 
     The flexibility value is what consumption timing was worth against a flat profile at the mean spot price. A
     negative value means the load sat on expensive hours, e.g. a controller following the wrong signal. The headline
@@ -422,7 +422,7 @@ def _magnitude_findings(
 
 
 def _extrapolation_findings(simulated_period_fraction: Optional[float]) -> List[PlausibilityFinding]:
-    """Warn when results were extrapolated from less than a simulated year (§8.5).
+    """Warn when results were extrapolated from less than a simulated year.
 
     A shorter run is annualized by dividing by the simulated fraction, so a one-day run multiplies everything by 365;
     the figures look like a full year's but are not. The finding's value is the fraction, and `context` carries the
@@ -494,7 +494,7 @@ def run_plausibility_checks(
         matrix: The evaluated perspectives. The first is the reference for the magnitude checks, and the order is the
             order findings are emitted in.
         config: Thresholds; loaded from `cost_database/plausibility_checks.json` when omitted.
-        simulated_period_fraction: Share of a year the run covered, if known; adds the §8.5 extrapolation warning.
+        simulated_period_fraction: Share of a year the run covered, if known; adds the extrapolation warning.
         heat_without_hot_water_in_kwh: Annual heat the heat-cost figure divides by when it omits hot water
             (`EvaluationInputs.heat_cost_omits_hot_water`); adds a WARN saying so.
 

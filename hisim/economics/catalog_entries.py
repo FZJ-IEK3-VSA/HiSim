@@ -1,4 +1,4 @@
-"""Row types of the cost database: one dataclass per data-file entry (cost_spec.md §3.5).
+"""Row types of the cost database: one dataclass per data-file entry.
 
 Holds `CostDataError`, the dataclasses mirroring one row of `devices_*.json`, `energy_prices_*.json`,
 `co2_price_paths.json` and `escalation_defaults_*.json`, the resolved wrappers carrying a row's provenance ids, and the
@@ -27,7 +27,7 @@ class CostDataError(ValueError):
 
 
 def _require_sources(entry: dict, context: str) -> Tuple[str, ...]:
-    """Return the entry's source ids, refusing an entry without any (§3.10).
+    """Return the entry's source ids, refusing an entry without any.
 
     This checks that an entry names sources; `SourceRegistry.resolve` checks that they exist. Called while parsing each
     row, so an unsourced datapoint fails the load and the `validate` CLI.
@@ -42,7 +42,7 @@ def _require_sources(entry: dict, context: str) -> Tuple[str, ...]:
 
 
 def _band(entry: dict, key: str, context: str, default: Optional[float] = None) -> UncertainValue:
-    """Read an uncertainty band field of a data row; a bare number means an exact value (§3.9).
+    """Read an uncertainty band field of a data row; a bare number means an exact value.
 
     Every monetary field of every row is read through this. Passing `default` makes the field optional (a missing
     removal cost is zero); omitting it makes it mandatory.
@@ -69,7 +69,7 @@ def _band(entry: dict, key: str, context: str, default: Optional[float] = None) 
 
 @dataclass
 class DeviceEntry:
-    """One device cost entry per (component_type, valid_from_year) (§3.5).
+    """One device cost entry per (component_type, valid_from_year).
 
     What one asset class costs in one price vintage: purchase, installation, planning, removal, maintenance and
     operation, service life, embodied CO2 and VAT basis. Components declare only class and size
@@ -140,7 +140,7 @@ class DeviceEntry:
         return DeviceEntry.PER_UNIT_TO_SIZE_UNIT[self.per_unit]
 
     def investment_for_size(self, size: float) -> UncertainValue:
-        """Return the device cost for a given size, with economies of scale (§3.5).
+        """Return the device cost for a given size, with economies of scale.
 
         Without `per_unit` the price is per device and the size is ignored; with a `scaling_exponent` the cost is
         `specific_investment * size ** exponent`; otherwise it is linear in the size. Installation, planning and
@@ -159,7 +159,7 @@ class DeviceEntry:
         return self.specific_investment.scale(size)
 
     def embodied_co2_for_size(self, size: float) -> float:
-        """Return the embodied CO2 in kg for one unit of the given size (§3.8).
+        """Return the embodied CO2 in kg for one unit of the given size.
 
         Linear in size, without a scaling exponent, and exact (emission factors are not banded). Feeds the lifecycle
         CO2 result, charged at installation and each replacement.
@@ -204,7 +204,7 @@ class EnergyContent:
 
 @dataclass
 class EnergyPriceEntry:
-    """One energy price entry per (carrier, year): a two-part tariff with explicit CO2 (§3.5).
+    """One energy price entry per (carrier, year): a two-part tariff with explicit CO2.
 
     Two-part means a working price per quantity and a yearly standing charge (Grundpreis), kept apart because they
     escalate and are allocated differently. `grid_exit_fee_in_euro` is the one-off cost of disconnecting from a
@@ -216,7 +216,7 @@ class EnergyPriceEntry:
     CO2 double counting: when `co2_price_exposure > 0` the working price must exclude the carbon price, because the
     engine adds `emissions * co2_price(country, year)` on top; when the working price already contains it (as the
     migrated pre-2026 entries do) the exposure must be 0. `tax_and_levy_share` is the fraction stripped in the
-    MACROECONOMIC view (§4.5).
+    MACROECONOMIC view.
     """
 
     carrier: EnergyCarrier
@@ -267,7 +267,7 @@ class EnergyPriceEntry:
 
 @dataclass
 class Co2PricePath:
-    """A named CO2-price trajectory for one country, in EUR per ton CO2 (§3.5).
+    """A named CO2-price trajectory for one country, in EUR per ton CO2.
 
     Carbon pricing is expressed as named `low`/`central`/`high` paths selected by
     `EconomicParameters.co2_price_scenario` ("none" disables it), not as a band, so a result says which path it
@@ -303,7 +303,7 @@ class Co2PricePath:
 
 @dataclass
 class EscalationDefaults:
-    """Country default escalation rates, the middle step of the §3.2 fallback chain.
+    """Country default escalation rates, the middle step of the fallback chain.
 
     An explicit `EconomicParameters` value wins, then this country file, then the general rate. `asset_class_rates`
     holds per-class learning curves; it ships empty, so the general investment escalation rate applies to every class.

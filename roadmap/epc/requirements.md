@@ -175,7 +175,7 @@ the batch continues.
 **UC3 — Validation (local data).** The SFH of ÖNORM B 8110-6-2:2024 Section 4 is handed to the
 Austrian engine as a hand-written building description with its elements and their situations; the
 twelve monthly values and the annual HWB of Table 4, cases 1 and 2, come out within half of the last
-printed digit. The test code is committed, its data stay local.
+printed digit. The test code and its data stay local (D41).
 
 **UC4 — Country without an engine.** `--country DE` before the German engine exists: refused naming
 the implemented countries, nothing written.
@@ -262,7 +262,7 @@ runs found: 1 204 · computed: 1 198 · refused: 6
 ```
 python -m epc run   <results dir> --country <CC> --out DIR
 python -m epc batch <results root> --country <CC> --out DIR
-python -m epc countries                                   # the engines and their editions
+python -m epc countries                                   # the engines, their editions, whether their tables load
 ```
 
 ## 7. Why it matters / cost of inaction
@@ -373,10 +373,10 @@ in the register first. R8.5 No committed test contains a value from a licensed n
 run that needs tables and does not find them is refused naming the folder and the contract (UC6).
 R8.7 Nothing in `epc/` imports, links or copies the prototype `oenorm_hwb_calculator/`.
 
-**R9 — Two kinds of tests.** `[decided 2026-10-07, D8]`
-R9.1 Functionality tests, marker `base`, committed, run everywhere: every equation with hand-given
+**R9 — Two kinds of tests.** `[decided 2026-10-07, D8; 2026-10-13, D41]`
+R9.1 Functionality tests, marker `base`, committed, run everywhere, in `epc/tests/` and per country in `epc/tests/<cc>/synthetic/`: every equation with hand-given
 values, the reading of fixture records, the situation rule, the registry, the report formats, the
-command line, the refusals, the import boundary. R9.2 Validation, marker `epc_norm_data`, skipped
+command line, the refusals, the import boundary. R9.2 Validation, marker `epc_norm_data`, local only in `epc/tests/<cc>/reference_cases/` (D41), skipped
 with a reason where the data are absent: for Austria the SFH and MFH of ÖNORM B 8110-6-2:2024
 (cases 1 and 2 of SFH variant 1 and MFH variants 1 and 2.1, case 2 of SFH variant 2; D37), monthly and annual, within half of the last printed digit
 (the tables print two decimals, so 0.005 in the table's unit); larger residuals are defects to be
@@ -445,7 +445,7 @@ building record (issue #949) and the site fields (D23) are the requester's separ
 | ID | Criterion | Verifies |
 |---|---|---|
 | AC1 | An expanded Austrian run with country `AT` yields the JSON of Mockup A with every key of R4.2, the common core, the Austrian indicators and terms, and the assumptions list. | R2, R4, R7.1 |
-| AC2 | The SFH and MFH examples of B 8110-6-2:2024 are reproduced monthly and annually within half of the last printed digit; runs where the tables exist, skips elsewhere; the output is attached to the PR. | R5, R9.2, I1–I4 |
+| AC2 | The SFH and MFH examples of B 8110-6-2:2024 are reproduced monthly and annually within half of the last printed digit; runs locally where the tables exist (D41), skips elsewhere; the output is attached to the PR. | R5, R9.2, I1–I4 |
 | AC3 | `--country DE` is refused with the message of R3; nothing is written. | R3 |
 | AC4 | An expanded record whose site block lacks a field the engine needs, or names an unknown value, is refused naming the field and the admissible values; `--country IE` runs with an empty site block. | R2.2 |
 | AC5 | A results directory without `building.expanded.yaml`, or with another major version, is refused naming the file. | R2.1 |
@@ -530,6 +530,8 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | D38 | 2026-10-13 | A window surface may state its glass area (B 8110-6-1 8.3 a)); otherwise A_g = 0.7 · A_W (8.3 b)), an assumption. HiSim's frame factor is not used; it equals the lump value in every archetype row, until HiSim makes it building-specific. |
 | D39 | 2026-10-12 | `run` writes `<out>/<results directory name>/<building>.epc.json` and nothing on a refusal; `--out` defaults to `epc/results/`; E-16 applies to `batch`. A horizontal window surface has azimuth 0. |
 | D40 | 2026-10-13 | HiSim's `tests.yml` runs pytest from `tests/`, where `testpaths` is not read, so its base job runs none of the calculator's tests. The calculator gets a workflow of its own, `.github/workflows/epc.yml`: on changes to `epc/`, `pytest.ini` or the workflow, for pull requests to any branch (the stacked PRs of design §10 included), it runs `pytest epc/tests -m base` with only pytest and PyYAML installed. HiSim's workflows skipping changes confined to `epc/` (`paths-ignore`) is a separate change to HiSim, outside this work. |
+| D41 | 2026-10-13 | Tests by country. The country-independent ones lie in `epc/tests/`. A country's tests on synthetic data lie in `epc/tests/<cc>/synthetic/`, committed, each module headed by a disclaimer: the values are invented, none comes from a norm table, none may be used for a study or a real calculation, and the norms can be purchased from their publisher (Austria: Austrian Standards International). A country's tests against its real data lie in `epc/tests/<cc>/reference_cases/`, test code included, local and git-ignored; the data they read (Austria: the tables and the B 8110-6-2 examples) stay in `epc/data/<cc>/`. |
+| D42 | 2026-10-13 | `python -m epc countries` states per engine whether its tables load: `ready`, or the error ID and a pointer to `epc/data/README.md`; its exit code stays 0. |
 
 ## 12. Glossary
 

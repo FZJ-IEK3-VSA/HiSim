@@ -65,7 +65,7 @@ HiSim does not know and the norm supplies by its own conventions (gross floor ar
 | R12.1–R12.3 | §3.2 batch; §8 policy | `epc/batch.py` | T-9 | planned |
 | R13 | §10 | — | T-11 | planned |
 | AC1 | §3.2, §5.3, §5.5 | `epc/tests/test_cli.py` | T-9, V-4 | planned |
-| AC2 | §9 | `epc/tests/test_at_validation.py` | V-1, V-2 | planned |
+| AC2 | §9 | `epc/tests/at/reference_cases/test_at_validation.py` (local, D41) | V-1, V-2 | planned |
 | AC3, AC4 | §8 E-01, E-09, E-10 | `epc/tests/test_cli.py` | T-9 | planned |
 | AC5 | §8 E-02, E-04 | `epc/tests/test_reading.py` | T-3 | planned |
 | AC6 | §3.5, §9 | `epc/tests/test_import_boundary.py`, review | T-10 | planned |
@@ -73,7 +73,7 @@ HiSim does not know and the norm supplies by its own conventions (gross floor ar
 | AC8 | §3.2 registry | `epc/tests/test_registry.py` | T-7 | planned |
 | AC9 | §3.2 batch, §5.5, §8 E-16 | `epc/tests/test_cli.py` | T-9 | planned |
 | AC10 | §5.1 fixtures | `epc/tests/fixtures/`, `epc/tests/test_reading.py` | T-3 | planned |
-| AC11 | §8 E-11, E-12 | `epc/tests/test_at_data_tables.py` | T-6 | planned |
+| AC11 | §8 E-11, E-12 | `epc/tests/at/synthetic/test_at_data_tables.py` | T-6 | planned |
 | AC12 | §10 | base suite, `git diff` on `hisim/` | T-11, T-12 | planned |
 | D-R1 `[proposed]` | A negative gain-loss ratio under the Austrian reference climate is refused (H 5050-1 Eq. (9) states no rule); from R5.11. | `epc/engines/at/balance.py` | T-5 | planned |
 
@@ -254,16 +254,18 @@ epc/
     at/                     local, git-ignored: the ÖNORM tables, the B 8110-6-2 examples, SOURCES.md
     ie/                     DEAP tables (free; committed after the licence note, R8.4)
   results/                  default --out for local runs, git-ignored
-  tests/
-    fixtures/               building records written by HiSim, unedited; a hand-written description of the B 8110-6-2 SFH (inputs only; expected values stay local)
+  tests/                    the country-independent tests (D41)
+    fixtures/               building records written by HiSim, unedited
     test_model.py  test_result.py  test_reading.py  test_registry.py
-    test_at_terms.py  test_at_envelope.py  test_at_balance.py  test_at_method.py  test_at_data_tables.py
-    test_reports.py  test_cli.py
-    test_import_boundary.py  test_at_validation.py (V-*)
+    test_reports.py  test_cli.py  test_import_boundary.py
+    at/
+      synthetic/            committed, each module headed by the disclaimer of D41: at_tables.py (synthetic tables),
+                            test_at_terms.py  test_at_envelope.py  test_at_balance.py  test_at_method.py  test_at_data_tables.py
+      reference_cases/      local, git-ignored, test code included (D41): test_at_validation.py (V-*)
 ```
 
 HiSim: `pytest.ini` gains `epc/tests` in `testpaths` and the marker `epc_norm_data`; `.gitignore`
-gains `epc/data/at/` and `epc/results/`; `.github/workflows/epc.yml` is added (D40). Nothing else outside `epc/` and `roadmap/epc/` changes.
+gains `epc/data/at/`, `epc/results/` and `epc/tests/*/reference_cases/` (D41); `.github/workflows/epc.yml` is added (D40). Nothing else outside `epc/` and `roadmap/epc/` changes.
 
 ### 5.2 The input dictionary (`epc/model/building.py`) `[proposed]`
 
@@ -337,7 +339,7 @@ def register(engine: type[EpcEngine]) -> None                         # tests an
 ```
 python -m epc run   <results dir> --country <CC> [--out DIR]       # --out defaults to epc/results/ (D39)
 python -m epc batch <results root> --country <CC> [--out DIR]
-python -m epc countries
+python -m epc countries                                            # per engine: ready, or the error ID of its tables (D42)
 ```
 
 Exit codes: `run` 0 or 2 (`EpcError`, nothing written); `batch` 0, 1 (some run refused, summary
@@ -475,9 +477,10 @@ writes no partial file; a building type its code does not state is `null`, not a
 
 ## 9. Testing strategy
 
-Two kinds, by D8, all under `epc/tests/`: functionality tests (`T-n`, marker `base`, committed, no
-norm value in them) and validation (`V-n`, marker `epc_norm_data`, skipped with the folder name
-when the data are absent; output attached to the PR, R9.3).
+Two kinds, by D8 and D41: functionality tests (`T-n`, marker `base`, committed, no value of a
+licensed table in them) in `epc/tests/` and `epc/tests/<cc>/synthetic/`, and validation (`V-n`, marker
+`epc_norm_data`) in `epc/tests/<cc>/reference_cases/`, local and git-ignored, skipped with the folder name
+when the data are absent; output attached to the PR, R9.3.
 
 | ID | Verifies | Kind | Fixture | Failure looks like |
 |---|---|---|---|---|
@@ -516,7 +519,7 @@ The fixtures of PR-B are written by HiSim's writer.
 | PR-A | `roadmap/epc/requirements.md`, `input_contract.md`, `design.md` | — | the plan: three steps, folders, dictionaries |
 | PR-B | the shell: `model/`, `inputs/`, `engines/{base,registry}`, `reports/`, `batch.py`, `__main__.py`, fixtures, `data/README.md`, `pytest.ini`, `.gitignore`, `.github/workflows/epc.yml`, `epc/README.md` | T-1 … T-4, T-7 … T-12 | the shell |
 | PR-C | `engines/at/` data tables, defaults, climate, usage, envelope, gains | T-5 (climate, envelope, gains), T-6; V-5 (local) | the Austrian terms, each with its citation |
-| PR-D | `engines/at/` balance, indicators, method; `countries` lists AT | T-5 (balance), T-9 with AT; **V-1, V-2, V-3, V-4** (local, output attached) | the balance and the norm reproduction, the gate |
+| PR-D | `engines/at/` balance, indicators, method; `countries` lists AT and whether its tables load (D42) | T-5 (balance), T-9 with AT; **V-1, V-2, V-3, V-4** (local, output attached) | the balance and the norm reproduction, the gate |
 | later | one PR per further engine, each after its norm is read (Q1): data contract, defaults, computation, its validation | its T-5 and V-* equivalents | one country at a time |
 
 ## 11. Risks and unknowns

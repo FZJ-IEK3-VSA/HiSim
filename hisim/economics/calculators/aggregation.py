@@ -1,4 +1,4 @@
-"""Discounting and aggregation: from the finished timeline to the KPIs (cost_spec.md §2.3, §3.4, §3.7, §4.3, §7.4).
+"""Discounting and aggregation: from the finished timeline to the KPIs.
 
 It filters, discounts and pivots the allocated timeline and never creates cash flows: scoping to one actor's flows, NPV
 and EAC (NPV times the annuity factor), pivots by category, component and payer, the nominal liquidity view and year-1

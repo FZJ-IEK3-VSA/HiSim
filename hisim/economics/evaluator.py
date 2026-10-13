@@ -145,7 +145,7 @@ def effective_price_basis_year(
     simulation_year: int,
     plan_start_year: Optional[int] = None,
 ) -> int:
-    """Return the price basis year used for every database lookup (§2.1).
+    """Return the price basis year used for every database lookup.
 
     The price basis year is the year whose prices the cost database is read at. An explicit
     `EconomicParameters.price_basis_year` wins. Otherwise it is `plan_start_year` when given, else the simulation year;

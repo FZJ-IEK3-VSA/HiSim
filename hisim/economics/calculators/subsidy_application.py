@@ -1,4 +1,4 @@
-"""Turn subsidy awards into SUBSIDY cash flows on the timeline (cost_spec.md §2.3, §5).
+"""Turn subsidy awards into SUBSIDY cash flows on the timeline.
 
 Eligibility, amounts and cumulation live in the subsidy package. This module builds the `MeasureForSubsidy` the solver
 needs, passes it the perspective's subsidy-mode filter (§5.5) so the solver only optimizes over admitted schemes, and

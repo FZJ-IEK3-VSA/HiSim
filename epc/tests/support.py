@@ -102,3 +102,13 @@ class SiteEngine(DummyEngine):
         result = super().compute(building)
         result.add_indicator("heating_demand_site_climate", 1.0, "kWh/(m2 a)")
         return result
+
+
+class TablelessEngine(DummyEngine):
+    """An engine of code ZX whose tables are missing, as a licensed country's are without its local data."""
+
+    country: ClassVar[str] = "ZX"
+
+    def load_data(self) -> None:
+        """Refuses as a loader does without its first table file (E-11)."""
+        raise EpcError(EpcErrorKind.TABLE_FILE_MISSING, country=self.country, folder="epc/data/zx", file="table.csv")

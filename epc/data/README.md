@@ -36,7 +36,9 @@ A result lists the digests of the tables it was computed with under `provenance.
 - A norm free of charge is read for its licence first; the decision to commit its tables is
   recorded in the decision register of `roadmap/epc/requirements.md` before any file is committed
   (R8.4).
-- No committed test contains a value from a licensed table (R8.5).
+- No committed test contains a value from a licensed table (R8.5). The tests that read a licensed
+  norm's data lie in `epc/tests/<cc>/reference_cases/`, local and git-ignored, test code included
+  (D41); the data they read stay here.
 
 ## Austria (`at/`)
 

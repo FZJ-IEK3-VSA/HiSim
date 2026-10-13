@@ -35,8 +35,9 @@ python -m epc batch <results root> --country <CC> [--out DIR]
 python -m epc countries
 ```
 
-`--country` is an ISO 3166-1 alpha-2 code; `countries` lists the implemented engines and their
-editions. `--out` defaults to `epc/results/` (git-ignored).
+`--country` is an ISO 3166-1 alpha-2 code; `countries` lists the implemented engines, their
+editions and whether their tables load (`ready`, or the error id of the missing or broken tables).
+`--out` defaults to `epc/results/` (git-ignored).
 
 | Command | Writes | Exit code |
 |---|---|---|
@@ -60,7 +61,9 @@ epc/
   reports/                  step 3: json_report.py, table.py, summary.py
   data/                     norm tables per country; README.md is the data contract
   results/                  default output of local runs, git-ignored
-  tests/                    functionality tests (marker base); fixtures written by HiSim
+  tests/                    country-independent tests (marker base); fixtures written by HiSim
+    <cc>/synthetic/         a country's tests on invented data (marker base), committed
+    <cc>/reference_cases/   a country's tests against its real data (marker epc_norm_data), local only
 ```
 
 An engine is one package `engines/<cc>/` with its data under `data/<cc>/`, registered in
@@ -72,8 +75,17 @@ An engine is one package `engines/<cc>/` with its data under `data/<cc>/`, regis
 pytest epc/tests -m base
 ```
 
-Functionality tests (`base`) run everywhere and hold no norm value. Validation against a norm's own
-worked examples carries the marker `epc_norm_data` and is skipped where the licensed data are absent.
+Three kinds, by folder:
+
+- `epc/tests/`: the country-independent tests (marker `base`): the dictionaries, the reading of
+  HiSim's records, the registry with dummy engines, the reports, the command line, the import
+  boundary. They hold no value of any country.
+- `epc/tests/<cc>/synthetic/`: a country's terms on invented tables and buildings (marker `base`),
+  committed, each module headed by a disclaimer. They hold no value of a licensed table.
+- `epc/tests/<cc>/reference_cases/`: a country's tests against its real, licensed data (marker
+  `epc_norm_data`), local and git-ignored, test code included; they skip where the data are absent.
+
+The `base` tests run in the workflow `.github/workflows/epc.yml` on every change to `epc/`.
 
 ## Result keys
 

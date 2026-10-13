@@ -31,6 +31,7 @@ DRIVER = (
     "from epc.tests import support; "
     "registry.register(support.DummyEngine); "
     "registry.register(support.SiteEngine); "
+    "registry.register(support.TablelessEngine); "
     "runpy.run_module('epc', run_name='__main__', alter_sys=True)"
 )
 
@@ -71,10 +72,11 @@ def test_a_country_without_engine_is_refused_and_nothing_written(tmp_path: Path)
 
 
 def test_countries_lists_the_engines() -> None:
-    """``countries`` exits 0 and names every registered engine with its edition."""
+    """``countries`` exits 0 and names every registered engine with its edition and its table status (D42)."""
     completed = _epc("countries")
     assert completed.returncode == 0
-    assert "ZZ\tdummy edition\tnational" in completed.stdout
+    assert "ZZ\tdummy edition\tnational\tready" in completed.stdout
+    assert "ZX\tdummy edition\tnational\ttables not usable (E-11): see epc/data/README.md" in completed.stdout
     assert _epc("countries", dummy=False).returncode == 0
 
 

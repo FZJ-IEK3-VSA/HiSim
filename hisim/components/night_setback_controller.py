@@ -81,7 +81,7 @@ class NightSetbackConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class NightSetbackController(cp.Component):
+class NightSetbackController(cp.L2ControllerComponent):
     """Generates a configurable night setback temperature modifier.
 
     The component emits a negative temperature offset during the configured

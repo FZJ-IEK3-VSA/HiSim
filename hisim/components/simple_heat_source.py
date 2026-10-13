@@ -252,7 +252,7 @@ class SimpleHeatSourceState:
         return SimpleHeatSourceState(state=self.state)
 
 
-class SimpleHeatSource(cp.Component):
+class SimpleHeatSource(cp.PhysicsComponent):
     """Heat Source implementation."""
 
     cost_relevance = CostRelevance.PRICED

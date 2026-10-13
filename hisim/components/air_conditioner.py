@@ -363,7 +363,7 @@ class AirConditionerConfig(ConfigBase):
         return capacity[closest]
 
 
-class AirConditioner(cp.Component):
+class AirConditioner(cp.PhysicsComponent):
     """Simulates an air conditioner that provides heating and cooling based on a modulating signal."""
 
     cost_relevance = CostRelevance.PRICED
@@ -977,7 +977,7 @@ class AirConditionerControllerState:
         )
 
 
-class AirConditionerController(cp.Component):
+class AirConditionerController(cp.L1ControllerComponent):
     """Controller that holds the indoor air at a heating or a cooling set point with an air conditioner.
 
     Like a digital room thermostat, the controller samples the indoor air temperature once per

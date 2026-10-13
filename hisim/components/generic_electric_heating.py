@@ -14,7 +14,8 @@ from hisim.components import dual_circuit_system
 from hisim.components.dual_circuit_system import DiverterValve, DualCircuitHotWater, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole, LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
@@ -161,7 +162,7 @@ class SpaceHeatingDelivery:
     energy_in_watt_hour: float
 
 
-class ElectricHeating(Component):
+class ElectricHeating(PhysicsComponent):
     """Electric Heating class.
 
     This component refers to direct electric heating like radiators, electric boilers, fan heaters etc.
@@ -930,7 +931,7 @@ class ElectricHeatingControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class ElectricHeatingController(Component):
+class ElectricHeatingController(L1ControllerComponent):
     """Electric Heating Controller."""
 
     cost_relevance = CostRelevance.FREE_OF_COST

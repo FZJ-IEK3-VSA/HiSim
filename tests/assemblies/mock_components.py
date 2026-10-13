@@ -36,7 +36,18 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.component import Component, ComponentConnection, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import (
+    Component,
+    ComponentConnection,
+    ComponentInput,
+    ComponentOutput,
+    DataSourceComponent,
+    L1ControllerComponent,
+    L2ControllerComponent,
+    MeterComponent,
+    PhysicsComponent,
+    SingleTimeStepValues,
+)
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.config import ComponentID, ConfigBase, DisplayConfig, FactContribution, Many, Sizable, Size, Sum
 from hisim.config import concrete, preset, sized_field
@@ -76,7 +87,11 @@ class KpiAggregation(enum.Enum):
 
 
 class MockComponent(Component):
-    """The shared behaviour of every mock: helpers its constructor adds ports and default connections with."""
+    """The shared behaviour of every mock: helpers its constructor adds ports and default connections with.
+
+    It has no kind: each mock inherits the kind base class of the real component it stands in for, for example
+    ``MockBoiler(MockComponent, PhysicsComponent)``, so the simulator places it in a pass as it would the real one.
+    """
 
     cost_relevance = CostRelevance.FREE_OF_COST
 
@@ -191,7 +206,7 @@ class MockWeatherConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockWeather(MockComponent):
+class MockWeather(MockComponent, DataSourceComponent):
     """Outputs the outside temperature.
 
     Stands in for the real ``Weather`` in the mock assemblies.
@@ -227,7 +242,7 @@ class MockOccupancyConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockOccupancy(MockComponent):
+class MockOccupancy(MockComponent, DataSourceComponent):
     """Outputs a hot-water draw and an electricity consumption.
 
     Stands in for the residents' occupancy (``UtspLpgConnector``) in the mock assemblies.
@@ -294,7 +309,7 @@ class MockPVSystemConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockPVSystem(MockComponent):
+class MockPVSystem(MockComponent, PhysicsComponent):
     """Produces electricity from the outside temperature (a toy stand-in for irradiance).
 
     Stands in for the real ``PVSystem`` in the mock assemblies.
@@ -359,7 +374,7 @@ class MockTankConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockTank(MockComponent):
+class MockTank(MockComponent, PhysicsComponent):
     """Mixes the heater's power and the residents' draw into a temperature.
 
     Stands in for a hot-water storage tank in the mock assemblies.
@@ -408,7 +423,7 @@ class MockHeaterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockHeater(MockComponent):
+class MockHeater(MockComponent, PhysicsComponent):
     """Heats when its controller says so.
 
     Stands in for an electric heater in the mock assemblies.
@@ -492,7 +507,7 @@ class MockControllerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name), set_temperature_in_celsius=40.0)
 
 
-class MockController(MockComponent):
+class MockController(MockComponent, L1ControllerComponent):
     """Switches the heater on below the set point, which an energy manager may raise.
 
     Stands in for a heater's thermostat (an L1 controller) in the mock assemblies.
@@ -539,7 +554,7 @@ class MockEmsConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockEms(MockComponent):
+class MockEms(MockComponent, L2ControllerComponent):
     """Outputs a set-point modifier.
 
     Stands in for an energy manager in the mock assemblies.
@@ -575,7 +590,7 @@ class MockBareDeviceConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockBareDevice(MockComponent):
+class MockBareDevice(MockComponent, PhysicsComponent):
     """Takes the outside temperature, but declares no default connections from any class.
 
     Stands in for a component class whose author has not yet added the default connections a port
@@ -614,7 +629,7 @@ class MockLoadReaderConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockLoadReader(MockComponent):
+class MockLoadReader(MockComponent, PhysicsComponent):
     """Reads two sizing facts and computes nothing; stands in for a member whose laws read the site."""
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockLoadReaderConfig) -> None:
@@ -654,7 +669,7 @@ class MockHouseFactsConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockHouseFacts(MockComponent):
+class MockHouseFacts(MockComponent, PhysicsComponent):
     """Contributes two sizing facts and computes nothing."""
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockHouseFactsConfig) -> None:
@@ -690,7 +705,7 @@ class MockApartmentCountConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockApartmentCount(MockComponent):
+class MockApartmentCount(MockComponent, PhysicsComponent):
     """Contributes the number of apartments and computes nothing."""
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: MockApartmentCountConfig) -> None:
@@ -727,7 +742,7 @@ class MockBoilerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockBoiler(MockComponent):
+class MockBoiler(MockComponent, PhysicsComponent):
     """Owns the dhw circuit's mass flow and supply leg, reads its return leg, and burns natural gas.
 
     Every step in two it heats at its power; the gas it burns is that heat over its efficiency and
@@ -795,7 +810,7 @@ class MockCombiBurnerConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockCombiBurner(MockComponent):
+class MockCombiBurner(MockComponent, PhysicsComponent):
     """Burns natural gas on three outputs, for space heating, hot water and a pilot flame.
 
     The gas meter declares a feed for each of the three, so an assembly naming two of them shows
@@ -840,7 +855,7 @@ class MockCylinderConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockCylinder(MockComponent):
+class MockCylinder(MockComponent, PhysicsComponent):
     """Owns the dhw circuit's return leg and reads the boiler's mass flow and supply leg.
 
     Stands in for an indirectly heated hot-water cylinder in the mock assemblies.
@@ -892,7 +907,7 @@ class MockBatteryConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockBattery(MockComponent):
+class MockBattery(MockComponent, PhysicsComponent):
     """Publishes its capacity, and draws the power an energy manager writes into ``LoadingPowerInput``.
 
     The toy has no state: the power it draws (positive) or delivers (negative) is the requested
@@ -956,7 +971,9 @@ class MockAggregator(DynamicComponent):
     """The shared behaviour of the mock observers: outputs and dynamic default connections from the constructor.
 
     Like the real meters and energy manager, a mock observer states what it observes in its
-    constructor — one ``add_dynamic_default_connections`` call per source class — and nowhere else.
+    constructor — one ``add_dynamic_default_connections`` call per source class — and nowhere else. It has no kind:
+    the mock gas meter inherits :class:`~hisim.component.MeterComponent`, the mock energy manager
+    :class:`~hisim.component.L2ControllerComponent`, as the real ones do.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -1070,7 +1087,7 @@ class MockGasMeterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MockGasMeter(MockAggregator):
+class MockGasMeter(MockAggregator, MeterComponent):
     """Sums the gas its consumers burn on one declared channel; stands in for the real ``GasMeter``."""
 
     CONSUMPTION_KPI = "Gas consumption"
@@ -1159,7 +1176,7 @@ class MockEnergyManagerConfig(ConfigBase):
 EMS_WEIGHTS = L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS
 
 
-class MockEnergyManager(MockAggregator):
+class MockEnergyManager(MockAggregator, L2ControllerComponent):
     """An energy manager of the real one's shape: its channels, its weight table, a grid balance and a modifier.
 
     It observes electricity flows, ranks the controllable ones by weight and writes each one's

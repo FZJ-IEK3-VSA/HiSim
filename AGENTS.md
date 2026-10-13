@@ -20,8 +20,10 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
   mandatory `unit` field, and does not repeat the unit. KPI names are addresses for RenoVisor, the webtool and
   the golden references, so they are not renamed for this rule.
 - Every component follows `system_docs/component_design_principles.md`: it is one of the component kinds (data
-  source, physics, L1 controller, L2 controller, meter) and keeps to that kind's role, and other components see it
-  only as a black box through its port quantities. Check a new component and every review against it.
+  source, physics, L1 controller, L2 controller, meter), inherits that kind's base class from `hisim/component.py`
+  (`DataSourceComponent`, `PhysicsComponent`, `L1ControllerComponent`, `L2ControllerComponent`, `MeterComponent`)
+  and keeps to that kind's role, and other components see it only as a black box through its port quantities.
+  Check a new component and every review against it.
 - Code is designed and written as `system_docs/coding_style.md` says: business logic in pure, unit-tested functions;
   Clean Code, SOLID, YAGNI and DRY; the code rules (small units, typed data, explicit state, fail fast, ratchets
   in CI) and design patterns; controllers as testable state machines; class-scoped constants; a purpose sentence

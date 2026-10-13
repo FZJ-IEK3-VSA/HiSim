@@ -25,7 +25,8 @@ from hplib import hplib as hpl
 
 # Import modules from HiSim
 from hisim.component import (
-    Component,
+    L1ControllerComponent,
+    PhysicsComponent,
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
@@ -252,7 +253,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MoreAdvancedHeatPumpHPLib(Component):
+class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     """Simulate the heat pump.
 
     Outputs are heat pump efficiency (cop) as well as electrical (p_el) and
@@ -2611,7 +2612,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
+class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
     """Heat Pump Controller for Space Heating.
 
     It takes data from other
@@ -3178,7 +3179,7 @@ class HeatPumpDhwState(int, Enum):
     ON = 2
 
 
-class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
+class MoreAdvancedHeatPumpHPLibControllerDHW(L1ControllerComponent):
     """Heat Pump Controller for DHW.
 
     It takes data from DHW Storage --> generic hot water storage modular

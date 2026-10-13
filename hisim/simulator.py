@@ -6,12 +6,13 @@ import os
 import datetime
 import enum
 from dataclasses import dataclass
-from typing import Callable, List, Tuple, Optional, Dict, Any, Type, Union
+from typing import AbstractSet, Callable, ClassVar, List, Tuple, Optional, Dict, Any, Sequence, Type, Union
 import time
 import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
+from hisim.evaluation_order import EvaluationOrder, PhysicsOrder
 from hisim import sim_repository
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -161,6 +162,18 @@ class Simulator:
     with convergence checking, and post-processing of results.
     """
 
+    #: The order in which the kinds of components are evaluated within a pass (:meth:`evaluation_positions`): what
+    #: reads nothing first, then the controllers from the coordinating level down, so that a command reaches its
+    #: device in the same pass, then the devices, and the meters, which nothing reads, last. Each kind is a kind base
+    #: class of :mod:`hisim.component` (:class:`hisim.component.ComponentKinds`).
+    EVALUATION_ORDER_OF_KINDS: ClassVar[Tuple[Type[cp.Component], ...]] = (
+        cp.DataSourceComponent,
+        cp.L2ControllerComponent,
+        cp.L1ControllerComponent,
+        cp.PhysicsComponent,
+        cp.MeterComponent,
+    )
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -224,6 +237,8 @@ class Simulator:
         #: (:meth:`add_progress_callback`). Empty unless a caller registers one, and then the loop
         #: behaves and logs exactly as it always did.
         self._progress_callbacks: List[ProgressCallback] = []
+        #: The wrapped components in the order a pass evaluates them (:meth:`evaluation_plan`).
+        self._evaluation_plan: Optional[List[ComponentWrapper]] = None
 
     def add_progress_callback(self, callback: ProgressCallback) -> None:
         """Register a callable that is told how far the time loop has come.
@@ -310,9 +325,13 @@ class Simulator:
         Raises:
             ValueError: If simulation parameters are not initialized or a duplicate
                 component name is added.
+            ComponentKindNotDeclaredError: If the component's class inherits no kind base class, or more than one
+                (:meth:`hisim.component.ComponentKinds.of`).
         """
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
+        # Refused here rather than at the first step, so a class without a kind fails while the system is built.
+        cp.ComponentKinds.of(type(component))
         # ensure result directory exists before any connect_input calls log to it
         if not self._simulation_parameters.result_directory:
             self.prepare_simulation_directory()
@@ -390,6 +409,7 @@ class Simulator:
 
         # Creates List with values
         stsv = previous_stsv.clone()
+        evaluation_plan = self.evaluation_plan()
         # Creates a buffer List with values
         previous_values = previous_stsv.clone()
         iterative_tries = 0
@@ -398,7 +418,7 @@ class Simulator:
         # Starts loop
         while continue_calculation:
             # Loops through components
-            for wrapped_component in self.wrapped_components:
+            for wrapped_component in evaluation_plan:
                 # Executes restore state for each component
                 wrapped_component.restore_state()
                 # Executes i_simulate for component
@@ -428,6 +448,84 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.doublecheck(timestep, stsv)
         return (stsv, iterative_tries, force_convergence)
+
+    @staticmethod
+    def evaluation_positions(
+        kinds: Sequence[Type[cp.Component]], sources: Sequence[AbstractSet[int]]
+    ) -> EvaluationOrder:
+        """Return the positions of components in the order a pass evaluates them, from their kinds and their wiring.
+
+        The components are evaluated kind by kind, in :attr:`EVALUATION_ORDER_OF_KINDS`. Components of one kind keep
+        the order they were added in, except the physics: there every device an L1 controller commands goes before
+        the other physics the controller reads (:class:`hisim.evaluation_order.PhysicsOrder`). For example, the kinds
+        (physics, L1 controller, data source, physics) without wiring give the positions (2, 1, 0, 3): the data source,
+        the controller, then the two devices in their order. If the controller at 1 commands the device at 3 and reads
+        the one at 0, the positions are (2, 1, 3, 0).
+
+        Why: a controller evaluated after its device would pair the device's answer to its previous command with its
+        newer one, and one whose store is evaluated before its device pairs the device's report with the store's
+        answer of the pass before; an iteration that pairs them so can circle its fixed point instead of settling.
+
+        Args:
+            kinds: The kind base class of every component (:meth:`hisim.component.ComponentKinds.of`), in the order
+                the components were added.
+            sources: For every component, the positions of the components whose outputs feed its inputs.
+
+        Returns:
+            The positions into ``kinds`` in evaluation order, and the physics positions whose constraints form a
+            cycle; those keep the order they were added in.
+
+        Raises:
+            ValueError: If a kind is not one of :attr:`EVALUATION_ORDER_OF_KINDS`, or ``kinds`` and ``sources``
+                differ in length.
+        """
+        rank_of_kind = {kind: rank for rank, kind in enumerate(Simulator.EVALUATION_ORDER_OF_KINDS)}
+        unknown = [kind.__name__ for kind in kinds if kind not in rank_of_kind]
+        if unknown:
+            raise ValueError(f"Not kind base classes, so not placeable in a pass: {unknown}.")
+        by_kind = sorted(range(len(kinds)), key=lambda position: rank_of_kind[kinds[position]])
+        physics = PhysicsOrder.ordered(kinds, sources)
+        reordered_physics = iter(physics.positions)
+        positions = tuple(
+            next(reordered_physics) if kinds[position] is cp.PhysicsComponent else position for position in by_kind
+        )
+        return EvaluationOrder(positions=positions, cycles=physics.cycles)
+
+    def evaluation_plan(self) -> List[ComponentWrapper]:
+        """Return the wrapped components in the order a pass evaluates them, and warn about a cycle in that order.
+
+        Computed once, at the first time step, from the kinds and the resolved wiring (:meth:`evaluation_positions`).
+        For example, a setup that adds a hot-water tank, its boiler and the boiler's controller gets the plan
+        controller, boiler, tank. Only the order of evaluation changes: the components, their outputs and the result
+        columns keep the order they were added in. A group of physics components whose constraints form a cycle keeps
+        the order it was added in, and a warning names its components.
+
+        Returns:
+            The wrapped components in evaluation order; the same list on every later call.
+        """
+        if self._evaluation_plan is None:
+            components = [wrapped_component.my_component for wrapped_component in self.wrapped_components]
+            position_of_name = {component.component_name: position for position, component in enumerate(components)}
+            kinds = [cp.ComponentKinds.of(type(component)) for component in components]
+            sources = [
+                frozenset(
+                    position_of_name[component_input.src_object_name]
+                    for component_input in component.inputs
+                    if component_input.src_object_name in position_of_name
+                )
+                for component in components
+            ]
+            order = self.evaluation_positions(kinds, sources)
+            for cycle in order.cycles:
+                names = ", ".join(components[position].component_name for position in cycle)
+                log.warning(
+                    f"The physics components {names} require one another to be evaluated first: each is a device "
+                    "of an L1 controller that reads another of them. They keep the order they were added in, so a "
+                    "controller among them may pair its device's report with a store's answer of the pass before, "
+                    "and its iteration may circle instead of settling."
+                )
+            self._evaluation_plan = [self.wrapped_components[position] for position in order.positions]
+        return self._evaluation_plan
 
     def prepare_simulation_directory(self):
         """Prepares the simulation directory, creating it if necessary.

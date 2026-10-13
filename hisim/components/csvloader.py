@@ -127,7 +127,7 @@ class CSVLoaderConfig(ConfigBase):
         )
 
 
-class CSVLoader(cp.Component):
+class CSVLoader(cp.DataSourceComponent):
     r"""Csvloader class.
 
     Class component loads CSV file containing some

@@ -103,7 +103,7 @@ class GasMeterConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class GasMeter(DynamicComponent):
+class GasMeter(DynamicComponent, cp.MeterComponent):
     """Gas meter class.
 
     It calculates the gas production and consumption dynamically for all components.

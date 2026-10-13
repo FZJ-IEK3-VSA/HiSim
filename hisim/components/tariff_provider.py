@@ -96,7 +96,7 @@ class TariffProviderConfig(ConfigBase):
         )
 
 
-class TariffProvider(cp.Component):
+class TariffProvider(cp.DataSourceComponent):
     """Publishes per-timestep tariff signals from a TariffContract (§8.3).
 
     A pure signal source: it consumes no energy, produces none, and never influences the physics

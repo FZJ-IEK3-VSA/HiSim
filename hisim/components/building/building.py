@@ -107,7 +107,7 @@ class BuildingState:
 
 
 # class Building(dynamic_component.DynamicComponent):
-class Building(cp.Component):
+class Building(cp.PhysicsComponent):
     """Building class.
 
     This class calculates the thermal behaviour of the building based on the RC Simulator (** paper [1]) and the EN ISO 13790 norm (see header).

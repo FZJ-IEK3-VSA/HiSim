@@ -11,7 +11,7 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import (
-    Component,
+    PhysicsComponent,
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
@@ -80,7 +80,7 @@ class CarBatteryConfig(ConfigBase):
         return cls(component_id=ComponentID(name=name))
 
 
-class CarBattery(Component):
+class CarBattery(PhysicsComponent):
     """Car Battery class.
 
     Simulate state of charge and realized power of a ac coupled battery

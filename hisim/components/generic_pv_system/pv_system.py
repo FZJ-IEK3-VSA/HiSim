@@ -75,7 +75,7 @@ https://github.com/NREL/SAM/tree/patch/deploy/libraries
 """
 
 
-class PVSystem(cp.Component):
+class PVSystem(cp.PhysicsComponent):
     """Simulates PV Output based on weather data and peak power.
 
     Parameters

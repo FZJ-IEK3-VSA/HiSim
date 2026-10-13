@@ -78,7 +78,7 @@ UTSP_API_KEY
 ## Architecture
 
 ### Core simulation loop (`hisim/simulator.py`)
-`Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked.
+`Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked. A pass evaluates the components kind by kind (`Simulator.EVALUATION_ORDER_OF_KINDS`: data sources, L2 controllers, L1 controllers, physics, meters), in the order added within a kind, except that every device an L1 controller commands goes before the other physics that controller reads (`hisim/evaluation_order.py`); outputs and result columns keep the order added.
 
 ### Config layer (`hisim/config/`)
 The bottom layer, imported by everything else and importing nothing from the rest of HiSim.
@@ -93,7 +93,7 @@ The rules every component follows -- the component kinds (data source, physics, 
 black boxes that talk only through port quantities, who decides what -- are in
 `system_docs/component_design_principles.md`.
 
-Every device is a `Component` subclass. Each component:
+Every device is a `Component` subclass, through the one kind base class it inherits (`PhysicsComponent`, `L1ControllerComponent`, ...; see "Adding a new component"). Each component:
 - Declares `ComponentInput` and `ComponentOutput` objects in `__init__` via `add_input()` / `add_output()`
 - Implements four lifecycle methods:
   - `i_prepare_simulation()` — called once before the loop
@@ -214,8 +214,12 @@ Tests: `tests/renovisor/test_*.py`, all `base` except `test_run.py` (`system_set
    else. A field the surrounding system decides — a power from the building's heating load, a carrier
    from the generator beside it — is a `sized_field(rule=...)`, left `AUTO` by the preset; a class that
    computes such a value for others declares it in `SIZING_CONTRIBUTIONS`.
-3. Subclass `Component`, declare inputs/outputs in `__init__`, implement the four lifecycle methods. Decide
-   first which kind it is (`system_docs/component_design_principles.md`) and keep to that kind's role.
+3. Decide first which kind it is (`system_docs/component_design_principles.md`) and subclass that kind's base
+   class from `hisim/component.py`, not `Component`: `DataSourceComponent`, `L2ControllerComponent`,
+   `L1ControllerComponent`, `PhysicsComponent` or `MeterComponent` (with `DynamicComponent` or
+   `StatelessComponent`, list both: `class MyMeter(DynamicComponent, MeterComponent)`). The simulator refuses a
+   class without exactly one kind base. Keep to that kind's role, declare inputs/outputs in `__init__`, implement
+   the four lifecycle methods.
 4. Add a test in `tests/test_my_component.py`; use `SimulationParameters.full_year(year=2021, seconds_per_timestep=60)` for a minimal test setup.
 5. `hisim energy-system describe hisim.components.my_component.MyComponent` prints what the class now
    offers — its presets, what each sets, and the law behind every sizable field.

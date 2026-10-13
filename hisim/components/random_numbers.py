@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import Component, SingleTimeStepValues
+from hisim.component import DataSourceComponent, SingleTimeStepValues
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -58,7 +58,7 @@ class RandomNumbersConfig(ConfigBase):
             )
 
 
-class RandomNumbers(Component):
+class RandomNumbers(DataSourceComponent):
     """Component that generates random numbers for simulation.
 
     This component pre-generates a list of random numbers within a specified range

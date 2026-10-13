@@ -2,10 +2,12 @@
 
 Status: design agreed with the owner on 2026-10-09, revised on 2026-10-10 twice (§2): first to a ratio the L1
 controller iterates against the store's end temperature, then to a memoryless rule the simulator's plain iteration
-solves. Built as a stack of four draft PRs (#915 to #918, §10). Builds on the hydronic coupling
-(`roadmap/hydronic_coupling_spec.md`, stages A to C), the simulator warm start (hisim-4g9.23, #914) and the
-simulator's kind order (#922, below this stack since 2026-10-12, §4.3). This document describes what the stack builds;
-the measured results are in §11.
+solves. Built as four draft PRs (#915 to #918, §10); after the year was measured on the kind order, the owner decided
+on 2026-10-12 (§2, decisions 17 to 19) to keep #915, the threshold, the rule and the boiler, to park #916 (the heat
+pump and the electric heater) and #917 (the collector), and to drop #918 (the buffer-less loop). Builds on the
+hydronic coupling (`roadmap/hydronic_coupling_spec.md`, stages A to C), the simulator warm start (hisim-4g9.23, #914)
+and the simulator's kind order (#922, §4.3). This document describes the design of all four parts and marks what is
+built; the measured results are in §11.
 
 ## 1. Problem
 
@@ -53,7 +55,8 @@ Owner, 2026-10-10, replacing the prototype's design of 2026-10-09 (heat-to-targe
    it now also sets the fraction (§4). The target is published by the controller and by nobody else.
 9. **Collector and backup both set their ratio** against their own targets on the same tank. No priority rule is
    added; what happens is measured (§7, §11). The solar priority is a separate control strategy, hisim-bq3h.
-10. **The buffer-less loop's quasi-steady path stays** (§8); it publishes a step-mean return at its port.
+10. **The buffer-less loop's quasi-steady path stays** (§8); it publishes a step-mean return at its port. Withdrawn by
+    decision 19.
 
 Owner, 2026-10-10, replacing the controller's search over the simulator's passes (a bracket with line, parabola and
 Illinois estimates that counted passes and was reset in `i_save_state`), which broke component design principle 5:
@@ -69,6 +72,15 @@ Illinois estimates that counted passes and was reset in `i_save_state`), which b
     stops moving.
 16. **At and below 600 s** the ratio is exactly 1 while the device runs and 0 while it is off; 60 s results stay
     bit-identical to #914.
+
+Owner, 2026-10-12, after the year on the kind order (§11):
+
+17. **The boiler's part load goes ahead** (#915, directly on #922).
+18. **The heat pump's and the electric heater's (#916) and the collector's (#917) part load are parked** as draft
+    branches until the energy manager's raise cycle (hisim-4g9.28) and a fix of the car's controller under #922 are in;
+    then they are measured again.
+19. **The buffer-less loop's quasi-steady path (#918) is dropped**: on the kind order the district-heating twin meets
+    hisim-hhj2's criterion without it (§11).
 
 This is a hybrid by design: one model whose controllers set a run fraction above the threshold, not two models.
 The cost is a small, documented jump in results at the threshold itself, a step length nobody runs.
@@ -158,12 +170,11 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
   the store's answer to the ratio its device reports; constraints that form a cycle (two controllers each reading the
   other's device) are reported in a warning, and the components involved keep the order they were added in. On the
   old stack this took gas + solar from 54 to 3 forced steps in the window and from 1292 to 165 over the year at
-  900 s (§11). Both are #922, which since 2026-10-12 sits below this stack: a component class inherits its kind base
+  900 s. Both are #922, which since 2026-10-12 sits below #915: a component class inherits its kind base
   class (`PhysicsComponent`, `L1ControllerComponent`, … in `hisim/component.py`), and `hisim/evaluation_order.py`
   orders the physics. With it, every partial step of the gas twin in the window of `tests/test_part_load_twins.py`
   converges (15 of 15), and over the full year 2021 718 of 759 partial steps converge at 900 s and 614 of 643 at
-  3600 s, each ending 0.000 to 0.050 K above the target (measured 2026-10-12 on this branch; §11 of the stack's last
-  part).
+  3600 s, each ending 0.000 to 0.050 K above the target (measured 2026-10-12 on this branch, §11).
 - **Two devices**: §7.
 
 ## 5. Devices
@@ -171,9 +182,9 @@ the store needs nothing from it. `tests/test_part_load_rule.py` checks every row
 | Device | Controller (owner of the PLR and the target) | Target | Booking below PLR 1 |
 |---|---|---|---|
 | `GenericBoiler`, hot water, every fuel | `GenericBoilerController` | its warm-water aim, 60 °C (the charge ends at `T0 ≥ 60 °C`) | `PLR m_full` at the full-load supply; heat `m c (T_sup − T_ret)`; fuel `PLR · fuel_full` |
-| `MoreAdvancedHeatPumpHPLib`, hot water | `MoreAdvancedHeatPumpHPLibControllerDHW` | its set temperature (with the energy manager's raise) less the 0.5 K switch-off tolerance | `PLR m_full` at hplib's capped outlet; `P_th = m c (T_out − T̄)`, `P_el = P_th / COP(T̄)`; the brine pump's electricity `PLR · P_pump` |
-| `ElectricHeating`, hot water | `ElectricHeatingController` | where its mode ends the charge: the 60 °C aim alone, the 45 °C switch-on point beside space heating (the diverter valve's parallel mode; pending the owner's question on the diverter valve) | `PLR m_full` at the full-load supply; heat and electricity `m c (T_sup − T_ret)` |
-| `SolarThermalSystem`, pump | `SolarThermalSystemController` | its warm-water aim, 60 °C (the pump stops at `T0 > 60 °C`) | `PLR m_full` at the collector's full-load outlet; heat `m c (T_out − T_in)`; pump electricity `PLR · P_pump` |
+| `MoreAdvancedHeatPumpHPLib`, hot water (parked, #916) | `MoreAdvancedHeatPumpHPLibControllerDHW` | its set temperature (with the energy manager's raise) less the 0.5 K switch-off tolerance | `PLR m_full` at hplib's capped outlet; `P_th = m c (T_out − T̄)`, `P_el = P_th / COP(T̄)`; the brine pump's electricity `PLR · P_pump` |
+| `ElectricHeating`, hot water (parked, #916) | `ElectricHeatingController` | the 60 °C warm-water aim, where the diverter valve ends a charge alone and beside space heating (its parallel mode latches like the hot-water mode) | `PLR m_full` at the full-load supply; heat and electricity `m c (T_sup − T_ret)` |
+| `SolarThermalSystem`, pump (parked, #917) | `SolarThermalSystemController` | its warm-water aim, 60 °C (the pump stops at `T0 > 60 °C`) | `PLR m_full` at the collector's full-load outlet; heat `m c (T_out − T_in)`; pump electricity `PLR · P_pump` |
 
 Each device publishes its ratio run (`PartLoadRatioRunDhw`, the solar pump `PartLoadRatioRun`), and its controller
 reads it. A device whose target is where its controller ends the charge, rather than its supply set temperature
@@ -188,7 +199,7 @@ and its end temperature (`WaterTemperatureAtEndOfStepInCelsius`) to set the rati
 
 The space-heating buffer (`SimpleHotWaterStorage`) follows once it is a node (stage D, hisim-fxix.5, hisim-ign9).
 
-## 7. Two devices on one store
+## 7. Two devices on one store (parked with #917)
 
 The gas + solar and heat pump + solar twins charge one cylinder with a collector and a backup. Both controllers apply
 the rule to the same end temperature, each with its own ratio run and target, and nothing ranks them (decision 9):
@@ -204,37 +215,22 @@ the rule to the same end temperature, each with its own ratio run and target, an
 
 What the split is and how many passes it takes is measured in §11.
 
-## 8. The buffer-less distribution loop (`HeatDistribution` without a buffer)
+## 8. The buffer-less distribution loop (dropped)
 
-Above the turnover criterion (`a = m_design dt / M_pipe > 1`) and the threshold, a loop the distribution system pumps
-itself (`NO_STORAGE_MASS_FLOW_FIX`, district heating) is quasi-steady within the step:
-
-- **Heating on**: the emitters exchange the building's demand with the supply by the emitter law; the return
-  follows as `T_ret = T_sup − Q_dem / (m c)`, bounded by the room temperature (§4.6 of the hydronic spec). The pipe
-  water ends the step at the mean of supply and return, and the return the generator sees is the step mean that closes
-  the loop's balance, `m c (T_sup − T_ret,mean) = Q_delivered + C_pipe (T_pipe,end − T_pipe,0) / dt`. A generator
-  regulating its supply temperature therefore bills the delivered heat plus the pipe water's change of stored heat.
-- **Heating off**: the loop stands. Nothing is exchanged with the building, the pipe water keeps its temperature, and
-  the generator sees its own supply back, so it bills nothing. Physically the standing pipe water would cool towards the
-  room over about 50 minutes (the standstill time constant below the criterion); that heat would reach the room, and
-  the next heating step would buy it back. The quasi-steady loop leaves both out, which keeps every joule accounted for
-  and the delivered heat equal to what the building asked for while heating was on.
-- **Cooling on**: computed on the dynamic, one-step-lagged path at every step length, as below the threshold. A
-  substation that cannot cool passes its return through as its supply, and computed quasi-steady such a step has no
-  fixed point within the step (a June step of the district-heating twin ran into the simulator's 100-pass limit).
-  The step function itself exchanges a cooling demand symmetrically.
-- **Start**: the pipe water starts at the loop's initial supply and return temperature, 21 °C, one class constant.
-
-The pipe's length, the pipe water's mass and its standstill time constant are computed in one place, shared with the
-loop's standstill below the criterion; they are computed only for a loop that runs quasi-steady. The pipe water's
-energy output (`ThermalEnergyIncreaseOfPipeWaterInWattHour`) is stored heat, not delivered heat; no meter or KPI counts
-it. Below the criterion the loop keeps its dynamic, one-step-lagged behaviour, the reference.
+#918 computed a loop the distribution system pumps itself (`NO_STORAGE_MASS_FLOW_FIX`, district heating) quasi-steady
+within the step above its turnover criterion (`a = m_design dt / M_pipe > 1`) and the threshold: the emitters
+exchanged the building's demand, the return followed from the balance, and the pipe water ended the step at the mean
+of supply and return. It was built against 16 to 24 passes per step at 900 s (hisim-hhj2). On the kind order the
+dynamic, one-step-lagged loop needs 3.16 passes at 900 s and 3.24 at 3600 s and agrees better with 60 s than the
+quasi-steady one (§11), so the owner dropped it on 2026-10-12 (decision 19). The loop keeps its dynamic behaviour at
+every step length; the code stays on the branch `part-load-hds`.
 
 ## 9. Thresholds
 
 - **Stores with a node** (cylinder, buffer): `dt > part_load_above_seconds` (default 600 s).
-- **Buffer-less loop**: `a = m_design dt / M_pipe > 1` and `dt > part_load_above_seconds`. For the district-heating
-  twin (121.2 m², 212.7 kg of pipe water, 0.27 kg/s) `a` is 0.076 at 60 s, 1.142 at 900 s and 4.569 at 3600 s.
+- **Buffer-less loop** (dropped, §8): was `a = m_design dt / M_pipe > 1` and `dt > part_load_above_seconds`; for the
+  district-heating twin (121.2 m², 212.7 kg of pipe water, 0.27 kg/s) `a` is 0.076 at 60 s, 1.142 at 900 s and 4.569
+  at 3600 s.
 
 ## 10. What changes and what does not
 
@@ -244,10 +240,10 @@ it. Below the criterion the loop keeps its dynamic, one-step-lagged behaviour, t
 | `SimulationParameters` | `part_load_above_seconds` (default 600) | #915 |
 | `hisim/part_load.py` | the rule, the controller part and the device part | #915 |
 | `GenericBoilerController`, `GenericBoiler` | the PLR of the hot-water charge and its report | #915 |
-| `MoreAdvancedHeatPumpHPLibControllerDHW`, `MoreAdvancedHeatPumpHPLib` | the PLR of the hot-water charge and its report | #916 |
-| `ElectricHeatingController`, `ElectricHeating` | the PLR of the hot-water charge and its report | #916 |
-| `SolarThermalSystemController`, `SolarThermalSystem` | the PLR of the pump and its report | #917 |
-| `HeatDistribution` | the quasi-steady path for the buffer-less loop | #918 |
+| `MoreAdvancedHeatPumpHPLibControllerDHW`, `MoreAdvancedHeatPumpHPLib` | the PLR of the hot-water charge and its report | #916, parked |
+| `ElectricHeatingController`, `ElectricHeating` | the PLR of the hot-water charge and its report | #916, parked |
+| `SolarThermalSystemController`, `SolarThermalSystem` | the PLR of the pump and its report | #917, parked |
+| `HeatDistribution` | none (the quasi-steady path for the buffer-less loop, #918, is dropped) | – |
 | Controllers' on/off and mode decisions | none | – |
 | 60 s results and goldens | none | – |
 
@@ -255,17 +251,63 @@ The same pattern serves the devices that will come (a separate hot-water heat pu
 water, hisim-epc.21; the hybrid heat pump, hisim-epc.20), and the room-temperature devices with the room as their store
 (hisim-w510).
 
-Amendments to the hydronic spec, to be written into `hydronic_coupling_spec.md` when the stack is accepted:
+Amendments to the hydronic spec, to be written into `hydronic_coupling_spec.md` when #915 is accepted:
 
-- **D3**: the buffer-less loop is quasi-steady above its turnover criterion (§8); the circuit laws (hisim-4g9.22) are
-  no longer the planned remedy.
+- **D3** stays as it is: the quasi-steady loop is dropped (§8).
 - **D4**: controllers still decide on `T0`; above the threshold the controller of a device that is on also sets the
   fraction of the step it runs, by a memoryless rule on the store's end temperature and the ratio its device ran.
 - **D6**: one circuit per step stays; above the threshold that circuit may run for a fraction of the step.
 
 ## 11. Measured results
 
-Added with the stack's last part (#918), full year 2021 against 60 s.
+Full year 2021, the shipped predefined occupancy profile, measured on 2026-10-12 with the simulator's kind order
+(#922) below, at 60 s, 900 s and 3600 s; every figure is against the 60 s run of the same head. "Flagged" counts the
+steps the simulator returns with `force_convergence` set; it sets it after the eleventh pass, so a step that converges
+on its twelfth pass is flagged without having run a forced pass. "Forced" counts the steps with at least one forced
+pass (13 passes or more). A partial step is one whose controller's ratio lies strictly between 0 and 1; it converged
+when it is not flagged.
+
+**The boiler (#915).** The 60 s year of the gas, gas + solar and pellet twins is bit-identical to #922 in every common
+column, with the same passes (3.18 for gas). Gas twin, with the rule / on #922 without it (whole-step charges):
+
+| step | hot-water heat and gas | mean passes | flagged | forced | partial steps converged | converged steps end above the target, mean / max | wall time |
+|---|---|---|---|---|---|---|---|
+| 900 s | -0.002 % / +0.17 % | 3.29 / 3.22 | 94 / 38 | 59 / 12 | 718 of 759 | 0.032 / 0.050 K | 16 s / 15 s |
+| 3600 s | -0.012 % / +0.63 % | 3.67 / 3.32 | 47 / 0 | 45 / 0 | 614 of 643 | 0.037 / 0.050 K | 9 s / 8 s |
+
+The oil, pellet, wood-chip and hydrogen twins give exactly these hot-water figures and step counts. Wall times are
+with two runs sharing six cores; the 60 s year takes 124 to 158 s. The rule removes the step-length error of the hot
+water; its price is iteration: 41 of the 94 flagged steps at 900 s are partial steps, 53 whole-step charges. In the
+gas + solar twin, whose collector runs whole steps, the hot-water gas is -0.18 % / -0.66 % and the collector
++1.28 % / +4.31 % at 900 s / 3600 s, with 123 / 56 flagged steps (on #922: +1.17 % / +4.35 %, -6.19 % / -24.01 %,
+46 / 9). Four of its converged partial boiler steps end above the band, the worst 5.3 K: the collector lifts the tank
+past the boiler's band while the boiler's ratio decays towards 0 (§7). Space heating is not part of the rule: the
+boiler books +5.7 % / +21.3 % space-heating heat while the building receives -0.17 % / -0.66 %, on #922 too, because
+the space-heating buffer does not close its balance at coarse steps (stage D, hisim-fxix.5, hisim-ign9).
+
+**Parked (#916, #917; decision 18)**, measured on their branches the same way, 900 s / 3600 s. The heat pump's
+hot-water electricity is +0.96 % / +8.89 % with the rule and +0.59 % / +9.36 % with whole-step charges, with
+1784 / 887 against 1601 / 618 flagged steps; 1383 of the 1784 flagged steps at 900 s run the whole step, the energy
+manager's raise cycle at the heat pump's own draw (hisim-4g9.28), and the 3600 s excess is the COP above 63 °C under
+that raise. The electric heater is -0.07 % / -0.26 % with the rule and 73 / 72 flagged steps (hisim-fxix.17), against
+-0.14 % / +0.04 % and none with whole-step charges. The gas + solar collector is -1.75 % / -1.00 % with its rule and
++1.28 % / +4.31 % with whole-step pump runs, with 165 / 223 against 123 / 56 flagged steps; the heat pump + solar
+twin's hot-water electricity stays at +1.22 % / +13.64 %. On this base the rule does not improve the heat pump and the
+electric heater, and what is left for the heat pump comes from the energy manager's loop, so both wait for it.
+
+**Dropped (#918; decision 19).** District-heating twin, the quasi-steady loop / the dynamic one-step-lagged loop on the
+same base: heat drawn (the bill) -0.35 % / -0.03 % at 900 s and -0.31 % / +0.03 % at 3600 s, heat delivered to the
+building -0.09 % / -0.08 % and -0.24 % / -0.21 %, mean passes 5.42 / 3.16 and 7.03 / 3.24, flagged steps 0 / 0 and
+23 / 0. The dynamic loop meets hisim-hhj2's criterion (delivered heat and bill within 1 %, no forced step at 900 s) on
+its own, and the 16 to 24 passes per step at 900 s the quasi-steady path was built against no longer occur.
+
+**The old stack (2026-10-10)**, before the kind order, for the decision it led to. Gas twin, full year against 60 s of
+the same head (then #914): in the twins' order, where the boiler ran before its controller, the rule settled on 5 of
+739 partial steps at 900 s and flagged 1013 / 679 steps at 900 s / 3600 s, with hot-water gas +0.27 % / +0.18 %; with
+the controller moved first it settled on 718 of 759 and flagged 46 / 50 steps (-0.00 % / -0.01 %), with fewer passes
+than the pass-counting search it replaced (3.42 against 4.20 at 900 s). That led to the kind order and the physics
+order (§4.3, #922, hisim-fxix.16, closed).
+
 
 ## 12. Beads
 
@@ -274,11 +316,11 @@ Epic hisim-fxix.
 | Bead | Content | PR |
 |---|---|---|
 | hisim-naze (P1, closed) | threshold, rule, the boiler | #915 |
-| hisim-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below the stack |
-| hisim-fxix.12 (P1) | the heat pump's hot-water side | #916 |
-| hisim-fxix.11 (P1) | the collector | #917 |
-| hisim-hhj2 (P1) | the quasi-steady buffer-less distribution loop | #918 |
+| hisim-fxix.16 (P1, closed) | the evaluation order that kept the rule from settling in the boiler and collector twins: the kind order and the physics order | #922, below #915 |
+| hisim-fxix.12 (P1) | the heat pump's hot-water side | #916, parked |
+| hisim-fxix.11 (P1) | the collector | #917, parked |
+| hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
 | hisim-bq3h (P2) | solar priority as a control strategy | – |
 | hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5) | – |
-| hisim-3y10 (P2) | the open points of §2.5 | measured in #915 to #918 |
+| hisim-3y10 (P2) | the open points of decision 5 | measured on the old stack (#915 to #918) |
 | hisim-w510 (P4) | room-temperature devices (parent hisim-4g9) | – |

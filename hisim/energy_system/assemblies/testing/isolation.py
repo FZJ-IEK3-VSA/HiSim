@@ -138,7 +138,8 @@ def facts_needed(
         partner_facts: The facts the classes of the partners already in the system contribute.
 
     Returns:
-        Each fact still to be provided, as its alternatives, in the order the members read them.
+        Each fact still to be provided, as its alternatives: sorted per member class, the members in
+        declaration order, each fact once.
     """
     classes = [ClassBinder.config_class_of(name, member.entry) for name, member in members.items()]
     provided = facts_declared_by(classes)

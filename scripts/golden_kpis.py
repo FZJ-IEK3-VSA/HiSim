@@ -316,14 +316,37 @@ def load_golden(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def _format_numeric_change(name: str, key: str, ref_v: float, got_v: float, rel_tol: float, abs_tol: float) -> str:
-    """Explain a numeric KPI divergence, including the magnitude and the tolerance exceeded."""
+    """Explain a numeric KPI divergence: its size, the difference allowed and which tolerance set it.
+
+    The numbers follow ``math.isclose``, which the comparison uses: the relative difference is the
+    absolute difference divided by the larger magnitude, ``max(|got|, |ref|)``, and the allowed
+    difference is ``max(rel_tol * max(|got|, |ref|), abs_tol)``. The message names the tolerance that
+    set the allowed difference, so a reader sees whether the absolute floor decided. Example: ref 1.0,
+    got 2.0 gives ``abs diff=1, rel diff=0.5; allowed diff=2e-09, set by the relative tolerance``.
+
+    Args:
+        name: The pair's name, which starts the message.
+        key: The KPI's flattened key.
+        ref_v: The golden value.
+        got_v: The value of this run.
+        rel_tol: The relative tolerance of the comparison.
+        abs_tol: The absolute tolerance of the comparison, in the KPI's unit.
+
+    Returns:
+        The one-line message of the deviation.
+    """
     abs_diff = abs(got_v - ref_v)
-    rel_diff = abs_diff / abs(ref_v) if ref_v != 0 else math.inf
-    # The plain ratio the tolerance is checked against: a percentage with three decimals rounded a
-    # failing 4e-8 to "0.000%" (hisim-b3b.6).
+    larger_magnitude = max(abs(got_v), abs(ref_v))
+    rel_diff = abs_diff / larger_magnitude if larger_magnitude != 0 else math.inf
+    relative_bound = rel_tol * larger_magnitude
+    allowed_diff = max(relative_bound, abs_tol)
+    deciding_tolerance = "relative" if relative_bound >= abs_tol else "absolute"
+    # The plain ratio, not a percentage: a percentage with three decimals rounded a failing 4e-8 to
+    # "0.000%" (hisim-b3b.6).
     return (
         f"{name}: KPI '{key}' changed: ref={ref_v!r} got={got_v!r} "
         f"(abs diff={abs_diff:.6g}, rel diff={rel_diff:.3g}; "
+        f"allowed diff={allowed_diff:.3g}, set by the {deciding_tolerance} tolerance; "
         f"tolerance rel={rel_tol:g} abs={abs_tol:g})"
     )
 

@@ -378,18 +378,19 @@ step just above the stop's temperature cooled below it by the next step's standb
 the pump switched every second step.
 
 The maximum storage temperature is the solar controller's own, 80 °C (owner, 2026-10-11; hisim-fxix.22), above the
-60 °C warm-water aim the backups charge to. Real solar controllers let
-the sun heat the tank past the backup's set point up to a maximum installers set between about 60 and 80 °C, with a
-thermostatic mixing valve at the tap, which the tank's tap valve already is (`hydronics.mixing_valve_draw`: above the
-40 °C tap temperature the tap draws less tank water for the same heat, so the hot-water demand does not rise with the
-tank). With the maximum at 60 °C, the backups' aim, the restart band let the tank wait between 57 and 60 °C on sunny
-days while the backup supplied the rest. Measured on the part-load stack (with the collector's part load, #917,
-now parked), gas + solar, year 2021 at 900 s, collector heat 390.8 kWh without the band, 314.4 kWh with it; with
-80 °C: collector heat 314.4 → 934.1 kWh (gas + solar) and
-586.3 → 1103.0 kWh (heat pump + solar), the backup's hot-water heat 2814.2 → 2216.8 kWh and 2483.6 → 1991.9 kWh,
-the tank's standby loss 275.2 → 298.2 kWh and 236.0 → 262.9 kWh. A tank above 60 °C keeps the backups
-off, since each decides on `T0` against its own aim (§5.5), and the larger standby loss of the hotter tank is
-accepted (owner: "more losses of solar heat really don't matter").
+60 °C warm-water aim the backups charge to. Real solar controllers let the sun heat the tank past the backup's set
+point up to a maximum installers set between about 60 and 80 °C, with a thermostatic mixing valve at the tap, which the
+tank's tap valve already is (`hydronics.mixing_valve_draw`: above the 40 °C tap temperature the tap draws less tank
+water for the same heat, so the hot-water demand does not rise with the tank). With the maximum at 60 °C, the backups'
+aim, the restart band let the tank wait between 57 and 60 °C on sunny days while the backup supplied the rest
+(measured on the part-load stack, with the collector's part load of #917, now parked: gas + solar, year 2021 at
+900 s, collector heat 390.8 kWh without the band, 314.4 kWh with it). With 80 °C, measured 2026-10-13 on #915 with the
+hysteresis of #941 (year 2021, predefined occupancy, 900 s, #941 → 80 °C): collector heat 352.0 → 973.1 kWh
+(`household_gas_solar_thermal`) and 591.3 → 1102.8 kWh (heat pump + solar), the backup's hot-water heat
+2767.8 → 2170.5 kWh and 2477.6 → 1992.6 kWh, the tank's standby loss 267.4 → 291.2 kWh and 235.9 → 262.8 kWh; at 60 s
+the collector heat is 971.1 and 1099.8 kWh. A tank above 60 °C keeps the backups off, since each decides on `T0`
+against its own aim (§5.5), and the larger standby loss of the hotter tank is accepted (owner: "more losses of solar
+heat really don't matter").
 
 **Since 2026-10-14 the pump is speed-controlled and its controller is a differential controller** (owner, 2026-10-14:
 "build it and fold it into 941"). The flow thresholds above were totals for the whole collector field, so the

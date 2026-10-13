@@ -328,7 +328,7 @@ class TestTheChargingLimits:
 
     @pytest.mark.base
     def test_a_dc_coupled_bslib_system_is_refused_when_the_battery_is_built(self) -> None:
-        """S3 gives NaN charging powers; the battery must refuse it at construction and name the system and the field."""
+        """S3 gives NaN charging powers; the battery refuses it at construction, naming the system and the field."""
         config = advanced_battery_bslib.BatteryConfig(
             component_id=ComponentID(name="Battery"),
             system_id="S3",

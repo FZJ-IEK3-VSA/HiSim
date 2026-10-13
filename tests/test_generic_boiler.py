@@ -349,7 +349,8 @@ def test_a_negative_or_non_finite_minimum_time_is_refused(field_name: str, secon
     """Catches a negative minimum time that rounds to no minimum without a word; the message names field and value."""
     config = GenericBoilerControllerConfig.preset_on_off("OnOffBoilerController")
     with pytest.raises(ValueError, match=rf"needs {field_name} to be a finite time of at least 0 s, got {seconds!r} s"):
-        dataclasses.replace(config, **{field_name: seconds})
+        overrides: Dict[str, Any] = {field_name: seconds}
+        dataclasses.replace(config, **overrides)
 
 
 class BoilerStep:

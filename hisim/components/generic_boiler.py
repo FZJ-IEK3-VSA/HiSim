@@ -1410,8 +1410,8 @@ class GenericBoilerControllerConfig(ConfigBase):
         ):
             if not math.isfinite(seconds) or seconds < 0.0:
                 raise ValueError(
-                    f"The boiler's controller needs {field_name} to be a finite time of at least 0 s, got {seconds!r} s: "
-                    "0 means no minimum, and a negative time would silently mean no minimum as well."
+                    f"The boiler's controller needs {field_name} to be a finite time of at least 0 s, "
+                    f"got {seconds!r} s: 0 means no minimum, and a negative time would silently mean the same."
                 )
 
     @preset

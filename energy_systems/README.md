@@ -480,9 +480,9 @@ of the heat-pump solar setup wait for hydronic stage C, whose ports on the cylin
 (§13 step 5). The table
 `hisim/energy_system/assemblies/twins.py` names every composed file, its twin and the rename of its members to the
 twin's names. `tests/assemblies/test_twin_gates.py`, on `tests/assemblies/twin_gate.py`, runs one gate per row: it
-expands the composed file, renames its members and asserts the twin outside the listed intended differences (G7, the
-battery's one-element `sizing_sources` list, and, where the generator has a buffer, one neutral swap of the
-sequence), and runs both for one day: every result column and KPI equal. The golden gate's `composed` mode runs each
+expands the composed file, renames its members and asserts the twin outside the listed intended differences: G7 (the
+battery's one-element `sizing_sources` list) and, where the generator has a buffer, one neutral swap of the
+sequence. It then runs both for one day: every result column and KPI equal. The golden gate's `composed` mode runs each
 composed file for the week and the full year and compares its KPIs, renamed through the same table, with the Python
 setup's goldens (`golden_references/README.md`).
 

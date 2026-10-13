@@ -154,7 +154,7 @@ def build_co2_damage_entries(
 def finalize_total_co2(co2_result: LifecycleCo2Result) -> None:
     """Set the total lifecycle CO2 mass: embodied plus operational over the whole horizon (§3.8).
 
-    The only place the two masses are added; the euro figures are never mixed in. Called after every subject and
+    The only place in the evaluator where the two masses are added; the euro figures are never mixed in. Called after every subject and
     carrier has contributed.
 
     Args:

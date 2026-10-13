@@ -337,7 +337,7 @@ def get_meter_spec(component: Any) -> Optional[MeterSpec]:
     """Return the meter descriptor of a known meter class, or None for any other component.
 
     Energy is billed only where a meter recorded a flow across the system boundary, so a component's internal
-    consumption can never be billed twice (§3.1). `bridge.py` calls this for every component and reads the named
+    consumption can never be billed twice (§3.1). `bridge.py` calls this for every component it bills and reads the named
     columns into `BillingDeterminants`.
 
     Raises:

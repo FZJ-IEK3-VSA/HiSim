@@ -193,7 +193,7 @@ def aggregate_timeline(
 ) -> TimelineAggregation:
     """Derive the perspective's KPIs from the allocated timeline (§3.7).
 
-    The last step of an evaluation and the only one that discounts. `npv_by_payer` is taken on the full timeline, so
+    The last step of an evaluation and the only evaluation step that discounts the timeline into KPIs. `npv_by_payer` is taken on the full timeline, so
     both sides of the landlord/tenant split are visible; everything else on the timeline scoped with
     `CashFlowTimeline.scoped_to`, the same scoping `explain` uses. The cost per kWh of heat is `NPV * annuity / annual
     heat`, an annual cost per annual kWh.

@@ -361,6 +361,18 @@ class TestTheChargingLimits:
             assert stsv.values[battery.ac_battery_power_channel.global_index] == pytest.approx(maximum_in_watt)
 
     @pytest.mark.base
+    def test_the_battery_publishes_the_minimum_charging_power_it_reads_from_bslib(self) -> None:
+        """Catches a minimum-charging-power output that is never set or carries another value than the adapter's.
+
+        The energy manager takes nothing from a share at or below this output, so a wrong value there changes the
+        manager's distribution of the surplus. SG1 with 5 kW scales its minimum to 18.23 W per kW, 91.15 W.
+        """
+        battery, _, stsv = battery_with_set_point_input()
+        battery.state = advanced_battery_bslib.BatteryState(state_of_charge=0.5)
+        battery.i_simulate(0, stsv, False)
+        assert stsv.values[battery.minimum_charging_power_channel.global_index] == pytest.approx(18.23 * 5)
+
+    @pytest.mark.base
     def test_a_battery_that_could_take_no_more_than_its_minimum_publishes_0_watt_and_takes_nothing(self) -> None:
         """Catches a published maximum below the minimum, a power the battery refuses.
 

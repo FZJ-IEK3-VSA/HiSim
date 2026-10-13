@@ -1037,7 +1037,8 @@ Not in v1 as staged (D26): v1 is built as one branch from `main` (§13.1), and t
    *Oil, pellets, wood chips, hydrogen: done 2026-10-07* — one assembly and one supply per fuel (owner, 2026-10-07):
    `heating/oil_boiler`, `heating/pellet_boiler`, `heating/wood_chip_boiler`, `heating/hydrogen_boiler`, each the
    shape of `heating/gas_condensing_boiler` (the boiler at the fuel's preset, the controller at the twin's preset,
-   `modulating` or `on_off` with the twin's minimum runtime and resting time as parameters, the buffer as the twin's),
+   `modulating` or `on_off`, the buffer as the twin's; the `on_off` ones, pellets and wood chips, take the twin's
+   minimum runtime and resting time as parameters),
    and `supply/oil_tank`, `supply/pellet_store`, `supply/wood_chip_store` (`FuelMeter`) and
    `supply/hydrogen_connection` (`GasMeter`, as in its twin: the `FuelMeter` refuses hydrogen), each providing its
    carrier (`heating_oil`, `pellets`, `wood_chips`, `hydrogen`); the composed files

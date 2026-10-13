@@ -249,7 +249,8 @@ class TestPartnerRegistry:
             The configuration dataclass its component's constructor takes.
 
         Raises:
-            EnergySystemBindingError: When the entry's class does not import to a component.
+            EnergySystemBindingError: When the entry's class does not import to a component, or the
+                component does not annotate its ``config`` parameter with a configuration dataclass.
         """
         entry = ComponentEntry(name=name, class_path=self.partners[name].component["class"])
         return ClassBinder.config_class_of(name, entry)

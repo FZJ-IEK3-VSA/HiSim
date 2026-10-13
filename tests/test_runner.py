@@ -87,6 +87,19 @@ def test_load_config_happy_path(tmp_path: Path) -> None:
     assert ps.nondeterministic is False
 
 
+def test_load_config_reads_the_recorded_seconds_and_refuses_a_malformed_entry(tmp_path: Path) -> None:
+    """The runner reads the weights the matrix reads, for the per-pair timeout, and refuses a typo alike."""
+    data = _minimal_config_dict()
+    data["setups"][0]["seconds"] = {"one_week_60s": 42}
+    setup = load_config(_write_config(tmp_path, data)).setups[0]
+    assert setup.recorded_seconds("one_week_60s") == 42.0
+    assert setup.recorded_seconds("unrecorded") == 120.0  # golden_matrix.DEFAULT_PAIR_SECONDS
+
+    data["setups"][0]["seconds"] = {"one_week_60s": "42"}
+    with pytest.raises(ValueError, match="positive numbers"):
+        load_config(_write_config(tmp_path, data))
+
+
 def test_load_config_missing_file_raises(tmp_path: Path) -> None:
     """A missing config file raises ``FileNotFoundError``."""
     with pytest.raises(FileNotFoundError):
@@ -444,6 +457,36 @@ def test_a_child_that_dies_is_a_run_error_of_its_pair(tmp_path: Path, monkeypatc
         assert result.error is not None
         assert "killed by signal 9" in result.error and "out-of-memory" in result.error
         assert "dying" in result.error
+
+
+def test_a_child_timeout_is_a_multiple_of_its_recorded_seconds_with_a_minimum() -> None:
+    """A full-year pair gets three times its recorded wall time; a short pair gets the minimum."""
+    week = ParameterSetConfig("one_week_60s", "one_week_only", 2021, 60, ["COMPUTE_KPIS"])
+    year = ParameterSetConfig("full_year_60s", "full_year", 2021, 60, ["COMPUTE_KPIS"])
+    setup = SetupConfig("car", "a.py", seconds={"one_week_60s": 124, "full_year_60s": 690})
+
+    assert ChildRuns.timeout_in_seconds(setup, year) == 2070.0
+    assert ChildRuns.timeout_in_seconds(setup, week) == ChildRuns.MINIMAL_TIMEOUT_IN_SECONDS
+
+
+def test_a_child_that_hangs_is_killed_and_fails_its_pair_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child past its timeout is killed and becomes a run error naming its pair, not a hung CI job."""
+    hang = "import time; print('hanging', flush=True); time.sleep(60)"
+    monkeypatch.setattr(ChildRuns, "command", classmethod(lambda cls, payload: [sys.executable, "-c", hang]))
+    monkeypatch.setattr(ChildRuns, "MINIMAL_TIMEOUT_IN_SECONDS", 2.0)
+    monkeypatch.setattr(ChildRuns, "TIMEOUT_TO_RECORDED_SECONDS_RATIO", 0.0)
+    config = filter_config(_sample_config(), pairs=[("s1", "p1"), ("s2", "p1")])
+    results = run_all(config, tmp_path, REPO_ROOT, "check", jobs=2)
+
+    assert [(r.setup_id, r.parameter_set_id) for r in results] == [("s1", "p1"), ("s2", "p1")]
+    for result in results:
+        assert result.error is not None
+        assert "ran longer than its timeout of 2 s" in result.error
+        assert f"recorded for {result.setup_id} / p1 in golden_config.json" in result.error
+        assert "hanging" in result.error
+        assert result.duration_s is not None and result.duration_s < 30
 
 
 def test_run_modes_runs_each_pair_in_every_mode_side_by_side(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

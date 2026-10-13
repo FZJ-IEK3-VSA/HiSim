@@ -1,7 +1,7 @@
 # Input contract: the expanded building record
 
 **Status:** draft (in refinement with the requester)
-**Date:** 2026-10-12
+**Date:** 2026-10-13
 **Version of the record:** `building-expanded/1`
 **Producer:** HiSim, `hisim/energy_system/building_record.py`, called by `write_records()` of every energy-system run (issue #949; requirements D30)
 **Consumer:** `epc/inputs/record.py` (design §3.3)
@@ -83,7 +83,7 @@ or a changed meaning is version 2, announced here first.
 2. A missing file or another major version refuses, naming the file (E-02, E-04).
 3. Unknown fields are ignored; a field of §2.3 that is missing or not finite refuses by name (E-05).
 4. Each element's situation follows from `adjustment_factor` and the element class by design §7.2;
-   a factor other than 1, 0.5 or 0 refuses (E-06).
+   a factor other than 1, 0.5 or 0, and 0.5 on a window or door, refuses (E-06).
 5. A `windows_by_direction` block with every area 0 while the window element has an area refuses
    (E-08); `dwelling_units.value` 0 refuses (E-07).
 6. The origin strings, `configured_fields` and `hisim_building_code` pass into the result's

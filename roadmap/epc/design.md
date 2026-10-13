@@ -1,7 +1,7 @@
 # Implementation specification: the EPC calculator shell and the Austrian pilot
 
 **Status:** draft (in refinement with the requester)
-**Date:** 2026-10-12
+**Date:** 2026-10-13
 **Implements:** `roadmap/epc/requirements.md` (draft of 2026-10-12; Q1 open, blocking nothing of stage 1) and `roadmap/epc/input_contract.md`
 **Author(s):** Nicolai Gölz, drafted with Claude · **Reviewers:** Nicolai Gölz; HiSim maintainers on the PR
 **Branch / PRs:** `897-epc-tool-spec` for the documents; the sequence of §10 as they open
@@ -22,7 +22,7 @@
 6. Three pull requests for the shell and the Austrian pilot, after the documents (§10).
 
 Status tags as in the requirements: `[proposed]`, `[decided YYYY-MM-DD]`; decisions are cited by
-their register ID (requirements §11.3, D1–D30).
+their register ID (requirements §11.3, D1–D39).
 
 ---
 
@@ -141,9 +141,9 @@ none of which computes a building quantity:
   units; the thermal mass class; the site block. A missing or non-finite field refuses (E-05).
 - **Situation** (D25): factor 1 → OUTSIDE_AIR; factor 0 → CONDITIONED_NEIGHBOUR; factor 0.5 →
   UNCONDITIONED_ATTIC for a roof, UNCONDITIONED_CELLAR for a floor, UNCONDITIONED_SPACE for a wall;
-  any other factor refuses (E-06). Windows and doors are OUTSIDE_AIR.
+  any other factor refuses (E-06); 0.5 on a window or door refuses as well (D33).
 - **Windows**: one surface per direction with azimuth from south (S 0°, E −90°, W +90°, N 180°),
-  tilt 90°, horizontal tilt 0°; a direction with area 0 is dropped; the window element keeps its own
+  tilt 90°, horizontal tilt 0° and azimuth 0; a direction with area 0 is dropped; the window element keeps its own
   area for the transmission. A window element with area but no direction with area refuses (E-08).
 - **Dwelling units**: the record's value; 0 refuses naming HiSim's `number_of_apartments` (E-07).
   The building type (detached, terraced, multi-family, apartment block, or `null` where HiSim's
@@ -151,7 +151,8 @@ none of which computes a building quantity:
   own rule and records it as an assumption (Austria: F_S,h by dwelling units alone).
 
 The reader has no notion of where HiSim got any value; a hand-written description for a validation
-example states the same fields and its situations directly.
+example states the same fields and its situations directly, for a floor also UNCONDITIONED_GARAGE or
+GROUND (D36), and for a window its glass area (D38).
 
 ### 3.4 Step 2 in detail: an engine, and the Austrian pilot
 
@@ -163,12 +164,12 @@ engines follow where it fits them and depart from where their norm is shaped dif
 |---|---|---|---|
 | `method.py` | the stages in order, the result assembled; validates the site fields its method reads | AT, 2024-03 package, `reference+site`, reads `climate_region` and `elevation_in_m` | IE, DEAP 4.2.7 (2025-06), `national`, reads no site field |
 | `data_tables.py` | load and cache the CSVs of `epc/data/<cc>/`, completeness checks (I-6), E-11/E-12 | Annex A, B, D, E; Tab. 7/9; Tab. 3–5; the examples | Tab. 1a/1b climate; Tab. 6a–6d windows; Table 8 factors (later) |
-| `defaults.py` | the norm's own defaults for inputs the description does not state, as constants with citations; a use appends an `Assumption` | BGF = BF / 0.8 (Sec. 4); V = BGF × 3.00 m (10.3.2) when the record states none; thermal bridges Eq. (11a); natural ventilation | thermal bridging y = 0.15 (App. K); infiltration by structure type (App. S); no chimneys or fans unless stated; living-area fraction; thermal-mass category (Table 11 / S10); overshading "average" (Table 6d) |
+| `defaults.py` | the norm's own defaults for inputs the description does not state, as constants with citations; a use appends an `Assumption` | BGF = BF / 0.8 (Sec. 4); V = BGF × 3.00 m (Eq. (65), D34) when the record states none; thermal bridges Eq. (11a); natural ventilation; the Tab. 3–5 row per situation (D29, D32); construction (D3); glass share 0.7 unless stated (D38); F_S,h | thermal bridging y = 0.15 (App. K); infiltration by structure type (App. S); no chimneys or fans unless stated; living-area fraction; thermal-mass category (Table 11 / S10); overshading "average" (Table 6d) |
 | `climate.py` | monthly outdoor temperatures and irradiation per surface | reference climate as printed; site climate Eq. (1)–(3); grid lookups (D21) | one national table; six orientation bins; horizontal |
 | `usage.py` | set temperature, internal gains basis, air change basis, heating schedule | B 8110-5 Section 8 by dwelling units; θ_i,h of Tab. 7 | occupancy N(TFA); 21/18 °C, 56 h/week; gains per TFA |
-| `envelope.py` | transmission and ventilation conductances, envelope area, mean U | Σ f·A·U over HiSim's elements with f by situation (Tab. 3–5; cellar by the footnote-a threshold), Eq. (11a), L_V Eq. (13)–(15), U_m, ℓ_c | Σ A·U with U adjusted by R_u for unheated spaces, + y·A_exposed; ventilation from the effective air change rate (Table 2.2) |
-| `gains.py` | internal and solar gains per month | Eq. (37); Eq. (40), (43), (44) with F_S,h by units or terraced house | gains from floor area and water heating; 0.9·A·S·g·FF·Z |
-| `balance.py` | losses, utilisation, heating period, monthly heat demand | C, τ, a, η (Eq. 49, 50, 57–59); f_h per H 5050-1 Eq. (9) (RK), f_H per H 5056-1 7.1 (SK); Eq. (52), (53) | mean internal temperature with intermittency and thermal mass; utilisation factor; October–May |
+| `envelope.py` | transmission and ventilation conductances, envelope area, mean U | Σ f·A·U over HiSim's elements with f by situation (Tab. 3–5, row from `defaults.py`), Eq. (11a), L_V Eq. (13)–(15), U_m, ℓ_c | Σ A·U with U adjusted by R_u for unheated spaces, + y·A_exposed; ventilation from the effective air change rate (Table 2.2) |
+| `gains.py` | internal and solar gains per month | Eq. (37); A_g stated or Eq. (40) (D38), (43), (44) with F_S,h by units or terraced house | gains from floor area and water heating; 0.9·A·S·g·FF·Z |
+| `balance.py` | losses, utilisation, heating period, monthly heat demand | C, τ, a, η (Eq. 49, 50, 57–59); f_h per H 5050-1 Eq. (9) (RK), f_H per H 5056-1 7.1 (SK), no share where θ_e ≥ θ_i,h (D35); Eq. (52), (53) | mean internal temperature with intermittency and thermal mass; utilisation factor; October–May |
 | `indicators.py` | the result keys of this engine | HWB_RK, HWB_SK per BGF; L_T, L_V, U_m, ℓ_c, τ; losses and gains per climate; heating days; HGT 22/14 | space heat use per TFA; heat loss coefficient and HLI; later: delivered and primary energy, BER band |
 
 Two rules hold for every engine:
@@ -180,14 +181,14 @@ Two rules hold for every engine:
   description does not carry; every norm states what an assessor without data must use.
   `defaults.py` holds those norm defaults as constants with citations, nothing else; they apply to
   any building whose record lacks the value. Each use appends an `Assumption` to the result, so a
-  reader sees "V = BGF × 3.00 m, B 8110-6-1 10.3.2" or "y = 0.15 W/(m²K), DEAP Appendix K" next to
+  reader sees "V = BGF × 3.00 m, B 8110-6-1 Eq. (65)" or "y = 0.15 W/(m²K), DEAP Appendix K" next to
   the number it influenced, which is what the comparison with HiSim needs.
 
-**Austrian specifics worth naming.** The two quantities HiSim does not know, BGF and V, come from
-the norm's own conventions (R5.3, D26), both as assumptions; a gross volume in the record takes
+**Austrian specifics worth naming.** The two quantities HiSim does not know come from the norm's
+convention (BGF) and the engine's assumption (V; R5.3, D26, D34), both recorded; a gross volume in the record takes
 precedence (P11). Transmission is Σ over HiSim's elements with the factor of the element's situation;
 a conditioned neighbour (Section 4, p. 8) is in neither L_T nor A; a cellar ceiling takes the
-insulated factor below the U-value threshold of Tab. 4 footnote a. F_S,h = 0.65 for ≤ 2 units or a
+uninsulated row (D32). F_S,h = 0.65 for ≤ 2 units or a
 terraced house, 0.50 for 3–10, 0.40 above; the usage class has 3–9 and ≥ 10 (both as printed). HGT
 22/14 per B 8110-5 Eq. (4) with the month's days (Q-D2). Numerics: IEEE double, no intermediate
 rounding, February 28 days; a known residual source is Annex A's tilt tables, which are not Annex E's
@@ -256,7 +257,8 @@ epc/
   tests/
     fixtures/               building records written by HiSim, unedited; a hand-written description of the B 8110-6-2 SFH (inputs only; expected values stay local)
     test_model.py  test_result.py  test_reading.py  test_registry.py
-    test_at_terms.py  test_at_data_tables.py  test_reports.py  test_cli.py
+    test_at_terms.py  test_at_envelope.py  test_at_balance.py  test_at_method.py  test_at_data_tables.py
+    test_reports.py  test_cli.py
     test_import_boundary.py  test_at_validation.py (V-*)
 ```
 
@@ -268,6 +270,7 @@ gains `epc/data/at/` and `epc/results/`. Nothing else outside `epc/` and `roadma
 ```python
 class Situation(Enum):
     OUTSIDE_AIR; CONDITIONED_NEIGHBOUR; UNCONDITIONED_ATTIC; UNCONDITIONED_CELLAR; UNCONDITIONED_SPACE
+    UNCONDITIONED_GARAGE; GROUND                                    # hand-written descriptions only, floors (D36)
 
 @dataclass(frozen=True)
 class Element:        name: Literal["floor", "wall", "roof", "window", "door"]; area_in_m2: float
@@ -276,6 +279,7 @@ class Element:        name: Literal["floor", "wall", "roof", "window", "door"]; 
 @dataclass(frozen=True)
 class Window:         name: str; azimuth_in_degree: float; tilt_in_degree: float; area_in_m2: float; g_value: float
                       frame_factor: float | None; non_perpendicular_factor: float | None; external_shading_factor: float | None
+                      glass_area_in_m2: float | None = None    # stated by hand (D38); the three factors may be None by hand, the reader requires them
 @dataclass(frozen=True)
 class Site:           climate_region: str | None; elevation_in_m: float | None      # Spain's zone joins with its engine
 @dataclass(frozen=True)
@@ -291,7 +295,7 @@ class BuildingDescription:
     thermal_bridging_surcharge_used_by_hisim: float                 # information only
     site: Site
     provenance: Provenance
-    # __post_init__ refuses non-positive areas and U-values, g outside (0, 1], dwelling_units < 1, a window element with area but no window
+    # __post_init__ refuses with E-18 what D31 lists, and a window element with area but no window
 ```
 
 ### 5.3 The result dictionary (`epc/model/result.py`) `[decided 2026-10-10, D14, D22]`
@@ -331,8 +335,8 @@ def register(engine: type[EpcEngine]) -> None                         # tests an
 ```
 
 ```
-python -m epc run   <results dir> --country <CC> --out DIR
-python -m epc batch <results root> --country <CC> --out DIR
+python -m epc run   <results dir> --country <CC> [--out DIR]       # --out defaults to epc/results/ (D39)
+python -m epc batch <results root> --country <CC> [--out DIR]
 python -m epc countries
 ```
 
@@ -383,7 +387,7 @@ column names are the single source (I-6); the README states the same numbers.
 | `radiation_coefficients_b8110_5_2024_annex_d.csv` | Tab. D.1–D.14 |
 | `transposition_factors_b8110_5_2024_annex_e.csv` | Tab. E.1–E.7 |
 | `usage_profiles_b8110_5_2024_tab7_tab9.csv` | residential rows of Tab. 7 and 9 |
-| `temperature_correction_factors_b8110_6_1_2024_tab3_5.csv` | the rows of Tab. 3–5 the situations of §5.2 map to, with the footnote-a threshold |
+| `temperature_correction_factors_b8110_6_1_2024_tab3_5.csv` | 14 rows of Tab. 3–5, among them those the situations of §5.2 map to (keys in `epc/data/README.md`) |
 | `validation_examples_b8110_6_2_2024.csv` | inputs and expected values of B 8110-6-2 Sections 4 and 5 |
 
 The Irish engine's files are listed in Appendix A.
@@ -404,14 +408,14 @@ file only, not printed in any committed document (R8.2).
 | 0.5 | roof | UNCONDITIONED_ATTIC |
 | 0.5 | floor | UNCONDITIONED_CELLAR |
 | 0.5 | wall | UNCONDITIONED_SPACE |
-| — | window, door | OUTSIDE_AIR |
+| 0.5 | window, door | E-06 (D33) |
 | other | | E-06 |
 
 HiSim's factor 0.5 states a reduced temperature difference, not what lies behind the element; the
 calculator does not know and does not guess. Each engine maps the situation to one row of its norm as
-its default and records that row as an assumption (D29): the Austrian engine in `envelope.py` to
-Tab. 4 — UNCONDITIONED_CELLAR to „Decke zu unkonditioniertem Keller" (the insulated row below the
-footnote-a threshold of the element's U-value, else the uninsulated one), UNCONDITIONED_ATTIC to
+its default and records that row as an assumption (D29): the Austrian engine in `defaults.py` to
+Tab. 4 — UNCONDITIONED_CELLAR to „Decke zu unkonditioniertem, ungedämmtem Keller" (footnote a judges
+the cellar's walls and floor, which the description does not state; D32), UNCONDITIONED_ATTIC to
 „Decke zu unkonditioniertem, geschlossenem Dachraum", UNCONDITIONED_SPACE to „Wand zu sonstigem
 Pufferraum" —, the Irish engine to R_u values of TGD L Appendix A, the German engine to F_x factors.
 Whether a case occurs in HiSim's buildings is no criterion (R6.7).
@@ -447,7 +451,7 @@ error, `batch` records and continues (D18).
 | E-02 | no `building.expanded.yaml` in the results directory | `inputs.record.load` | "No building.expanded.yaml in '{dir}'; the run was recorded before HiSim wrote it and is re-simulated (input_contract.md)." |
 | E-03 | the record has no building | `inputs.record.load` | "The record '{path}' holds no building; the EPC is computed per building." |
 | E-04 | `schema` of another major version | `inputs.record.load` | "'{path}' is {found}; this calculator reads building-expanded/1 (input_contract.md)." |
-| E-05 | a field missing or not finite | `inputs.record.describe` | "Building '{name}': the expanded record lacks '{field}' (contract §2.3)." |
+| E-05 | a field missing or not finite | `inputs.record.describe` | "Building '{name}': the expanded record states no valid value for '{field}' (contract §2.3)." |
 | E-06 | an adjustment factor other than 1, 0.5, 0 | `inputs.record.describe` | "Building '{name}', element '{element}': HiSim's adjustment factor {b} has no situation; the calculator knows 1, 0.5 and 0 (design.md §7.2)." |
 | E-07 | dwelling units 0 | `inputs.record.describe` | "Building '{name}': dwelling units are 0 (HiSim's estimate); state 'number_of_apartments' in the building configuration." |
 | E-08 | window area without any direction that has an area | `inputs.record.describe` | "Building '{name}': {area} m² of windows but no direction with an area; the solar gains need orientations (D27)." |
@@ -460,6 +464,8 @@ error, `batch` records and continues (D18).
 | E-15 | results root holds no expanded record | `batch` | "No building.expanded.yaml found under '{root}'; the runs were recorded before HiSim wrote it." |
 | E-16 | output directory exists and is not empty | `batch` | "Output directory '{dir}' is not empty; give a new or empty one (D28)." |
 | E-17 | an engine returned no common-core key | `EpcResult.to_dict` | "Engine '{cc}' returned no '{key}'; every engine fills {COMMON_CORE}." |
+| E-18 | a value no building can have (D31); an envelope without area | `model.building`, `at.envelope`, `at.defaults` | "Building '{name}': '{field}' = {value} is not admissible ({rule})." |
+| E-19 | a table malformed: header, cell, key or band | `<cc>.data_tables` | "{file}, line {line}: {problem}." |
 
 HiSim's writer refuses a building with a missing or non-finite value before the run starts and
 writes no partial file; a building type its code does not state is `null`, not an error. Not errors: a window direction with area 0
@@ -479,16 +485,16 @@ when the data are absent; output attached to the PR, R9.3).
 | T-2 | R4.2–R4.4, I-7, I-8 | unit | a result built by hand: duplicate key, eleven values, missing core, assumptions, `to_dict` | shape drift |
 | T-3 | R2.1, R2.4, R6, I-5, AC5, AC7, AC10 | unit | expanded fixture records: a detached house with and without overrides, a record with factor 0.5 on the floor, a record with 0 units, one with windows but no direction, one with factor 0.7, no record, version 2, a missing field | a computed value, a refusal missing or misnamed |
 | T-4 | R6.2, D25 | unit | every (factor, element class) pair of §7.2 | a wrong situation |
-| T-5 | R5.1–R5.13, D-R1, I-1, I-2, I-4, I-10 | unit, hand-computed | one element per situation, one window, a toy twelve-month climate as values; Eq. (11a) lower bound; the four f_h cases; the footnote-a threshold; the BGF and V assumptions recorded; E-13, E-14 | a term deviating from its equation |
+| T-5 | R5.1–R5.13, D-R1, I-1, I-2, I-4, I-10 | unit, hand-computed | one element per situation, one window, a toy twelve-month climate as values; Eq. (11a) lower bound; the four f_h cases; the cellar row (D32); the BGF and V assumptions recorded; E-13, E-14 | a term deviating from its equation |
 | T-6 | R8.6, E-11, E-12, AC11 | unit | `AustrianEngine(data_folder=tmp)` over an empty folder and synthetic incomplete CSVs | a silent default |
 | T-7 | R3, R10, AC8, I-7 | unit | a dummy engine "ZZ" with and without the core keys; registered, run, reported | the Austrian engine touched; a result without the core accepted |
 | T-8 | R7, R11 | unit | result → JSON; two results → table; refusals → summary | a column lost, a unit missing |
 | T-9 | R2.2, R2.3, R12, AC1 (shape), AC3, AC4, AC9, I-11 | integration | `python -m epc` in a subprocess over a fixture results tree with the dummy engine; country DE; run and batch; refusal paths; non-empty output directory; exit codes | a wrong exit code, a batch that stops |
-| T-10 | R1.2, R6.1, R8.7, AC6 | static | ast over `epc/**/*.py`; the string `TABULA` in those modules | an import of `hisim` or the prototype; archetype knowledge in the calculator |
+| T-10 | R1.2, R6.1, R8.7, AC6 | static | ast over `epc/**/*.py`: imports only of the standard library, PyYAML and the package, in the directions of §3.5; the string `TABULA` in those modules | an import of `hisim` or the prototype; archetype knowledge in the calculator |
 | T-11 | R13, AC12 | review | `git diff --stat origin/main -- hisim tests system_setups energy_systems` empty on every PR | a HiSim file changed |
 | T-12 | R1.3, C3 | contract | `pytest --collect-only epc/tests`; marker registered | tests not collected |
-| V-1 | AC2, R9.2 | golden against the norm, local | B 8110-6-2 SFH, variants 1 and 2, cases 1 and 2, as a hand-written description from the local examples file | any value off by more than half of the last printed digit |
-| V-2 | AC2, R9.2 | golden, local | B 8110-6-2 MFH, variants 1 and 2.1 | as V-1 |
+| V-1 | AC2, R9.2 | golden against the norm, local | B 8110-6-2 SFH, variant 1 cases 1 and 2, variant 2 case 2 (D37), as a hand-written description from the local examples file | any value off by more than half of the last printed digit |
+| V-2 | AC2, R9.2 | golden, local | B 8110-6-2 MFH, variants 1 and 2.1, cases 1 and 2, five dwelling units (D37) | as V-1 |
 | V-3 | R5.13, Q-D2 | evidence, local | HGT 22/14 of three real certificates (4169, 3762, 3731 Kd) | the formula drifting |
 | V-4 | AC1, R2, C6 | end to end, local | the first ai4c run recorded with building record and site; every key of Mockup A | a record the reader cannot take |
 | V-5 | I-6, R8.1, R11 | contract, local | the real tables: complete, headers cite norm, edition, clause, page | an incomplete table |
@@ -534,7 +540,7 @@ The fixtures of PR-B are written by HiSim's writer.
 - `inputs/record.py`: nothing computed, nothing averaged, nothing looked up; the four rules of
   §3.3 and nothing else; E-04 before any field.
 - `engines/at/envelope.py`: Σ over HiSim's elements with the factor of the situation; conditioned
-  neighbours in neither sum (I-10); the footnote-a threshold; Eq. (11a) with its lower bound.
+  neighbours in neither sum (I-10); the rows from `defaults.py`; Eq. (11a) with its lower bound.
 - `engines/at/defaults.py`: BGF and V by the norm's conventions, each recorded as an assumption; no
   other place derives a building quantity.
 - `engines/at/balance.py`: f_h per H 5050-1 Eq. (9g–9j), f_H per H 5056-1 7.1; the γ boundary means
@@ -589,7 +595,7 @@ space; which one, the element class says: attic for a roof, cellar for a floor, 
 wall; each engine's row for them is its norm default, recorded as an assumption (D29, §7.2).
 
 **Q-D6 — Gross floor area and volume.** `[answered 2026-10-11, D26]` BGF = BF / 0.8 (Section 4);
-V from the record when it states one, else BGF × 3.00 m (10.3.2); both as assumptions, confirmed by
+V from the record when it states one, else BGF × 3.00 m (the storey height of Eq. (65), D34); both as assumptions, confirmed by
 the certificates of P4.
 
 **Q-D7 — Interpolation.** `[answered 2026-10-10, D21]` Deferred to P10; stage 1 refuses off-grid

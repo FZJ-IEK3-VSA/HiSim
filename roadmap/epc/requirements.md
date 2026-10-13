@@ -1,7 +1,7 @@
 # Requirements: the EPC calculator, a standalone tool on HiSim's realized records
 
 **Status:** draft (in refinement with the requester)
-**Date:** 2026-10-12
+**Date:** 2026-10-13
 **Author(s):** Nicolai Gölz, drafted with Claude · **Reviewers:** Nicolai Gölz; HiSim maintainers on the PR
 **Related:** GitHub issue #897 "EPC-calculator"; `roadmap/epc/design.md` (the implementation
 specification: folder structure, the three steps, the dictionaries); `roadmap/epc/input_contract.md`
@@ -118,10 +118,10 @@ fraction, thermal-mass category), for which each norm prescribes its own default
 f_h, τ₀ 15 h); only the 2024-03 package is complete and the ai4c certificates were issued under it
 (D5). B 8110-6-1:2024 Section 4, p. 8: surfaces against conditioned rooms of other buildings are not
 part of the thermal envelope; the same section fixes BF = 0.8 · BGF for residential buildings, and
-10.3.2 normalises to a gross storey height of 3.00 m. B 8110-6-1 8.3.1.2.2, p. 40 f.: F_S,h = 0.65 for
+10.3.2 normalises non-residential buildings to a gross storey height of 3.00 m. B 8110-6-1 8.3.1.2.2, p. 40 f.: F_S,h = 0.65 for
 one and two dwelling units **and for terraced houses**, 0.50 for three to ten units, 0.40 above ten;
 B 8110-5 Tab. 7 uses 3–9 and ≥ 10, so the two classifications place ten units differently, as
-printed. Tab. 4 footnote a: a cellar counts as insulated below a U-value threshold of the ceiling.
+printed. Tab. 4 footnote a: a cellar counts as insulated when its walls and floor lie below a U-value threshold.
 B 8110-5 Eq. (4) with the month's days reproduces the HGT 22/14 of three real certificates exactly.
 
 ### 4.3 Current vs. required behavior
@@ -224,7 +224,7 @@ refused naming the value and, for the dwelling units, HiSim's `number_of_apartme
                "windows": [{"name": "south", "azimuth_in_degree": 0, "tilt_in_degree": 90, "area_in_m2": 3.35, "g_value": 0.65}]},
   "site": {"climate_region": "S/SO", "elevation_in_m": 356},
   "assumptions": [{"key": "gross_floor_area", "value": "BGF = conditioned floor area / 0.8", "source": "B 8110-6-1 Sec. 4"},
-                  {"key": "gross_volume", "value": "V = BGF x 3.00 m", "source": "B 8110-6-1 10.3.2; the record states no volume"},
+                  {"key": "gross_volume", "value": "V = BGF x 3.00 m", "source": "the record states no volume; 3.00 m as in B 8110-6-1 Eq. (65) (D34)"},
                   {"key": "thermal_bridges", "value": "default of B 8110-6-1 5.3.2 c), Eq. (11a)", "source": "method default, no catalogue"}],
   "provenance": {"record_schema": "building-expanded/1", "producer": "HiSim 1.2.4",
                  "hisim_building_code": "AT.N.SFH.04.Gen.ReEx.001.001", "configured_fields": ["facade_u_value_in_watt_per_m2_per_kelvin"],
@@ -322,16 +322,16 @@ volume, a thermal-bridging default, a ventilation default, a living-area fractio
 |---|---|---|
 | R5.1 | Reference climate | B 8110-5 Annex A as printed. |
 | R5.2 | Site climate | B 8110-5 Eq. (1) with Annex B; Eq. (2) with Annex D; Eq. (3) with Annex E; grid values exactly; an azimuth or tilt off the grid is refused in stage 1 (P10). |
-| R5.3 | Reference area and volume | BGF = conditioned floor area / 0.8 (Section 4, BF = 0.8 · BGF); V from the record when it states a gross volume, else V = BGF × 3.00 m (10.3.2); both listed as assumptions. V enters the balance through the thermal capacity C = f_BW · V (Eq. (50)), hence τ and η, and the indicators ℓ_c (Eq. (1)) and LEK_T (Eq. (63b)). |
+| R5.3 | Reference area and volume | BGF = conditioned floor area / 0.8 (Section 4, BF = 0.8 · BGF); V from the record when it states a gross volume, else V = BGF × 3.00 m (the storey height of Eq. (65), the engine's assumption, D34); both listed as assumptions. V enters the balance through the thermal capacity C = f_BW · V (Eq. (50)), hence τ and η, and the indicators ℓ_c (Eq. (1)) and LEK_T (Eq. (63b)). |
 | R5.4 | Usage profile | B 8110-5 Section 8 by dwelling units (≤ 2, 3–9, ≥ 10): θ_i,h, n_L,hyg, q_i,h (Tab. 7, 9). |
-| R5.5 | Transmission conductance | B 8110-6-1 Eq. (10a) over HiSim's elements, each with its area, its U-value and the factor f of Tab. 3–5 for its situation (R6.2), the row per situation being the engine's norm default (D29), listed as an assumption; a conditioned neighbour is outside the envelope (Section 4, p. 8) and enters neither L_T nor A; a cellar ceiling is "insulated" below the U-value threshold of Tab. 4 footnote a; thermal bridges by the default Eq. (11a) with its lower bound. |
+| R5.5 | Transmission conductance | B 8110-6-1 Eq. (10a) over HiSim's elements, each with its area, its U-value and the factor f of Tab. 3–5 for its situation (R6.2), the row per situation being the engine's norm default (D29), listed as an assumption; a conditioned neighbour is outside the envelope (Section 4, p. 8) and enters neither L_T nor A; a cellar ceiling takes the uninsulated row (Tab. 4 footnote a judges the cellar's walls and floor, which the description does not state; D32); thermal bridges by the default Eq. (11a) with its lower bound. |
 | R5.6 | Ventilation conductance | Eq. (13) V_V = 0.8·BGF·2.6, Eq. (14), Eq. (15a/b) natural ventilation. |
 | R5.7 | Losses | Section 7; Q_l = Q_T + Q_V. |
 | R5.8 | Internal gains | Eq. (37) Q_i = q_i,h · BGF · 0.8 · t / 1000. |
-| R5.9 | Solar gains | Eq. (43), (44) with A_g = 0.7·A_W, F_g = 0.9 × 0.98; F_S,h = 0.65 for ≤ 2 units **or a terraced house**, 0.50 for 3–10, 0.40 above (8.3.1.2.2), by dwelling units alone when the building type is `null` (an assumption); g from the building; window areas per direction as HiSim states them. |
+| R5.9 | Solar gains | Eq. (43), (44) with A_g as stated (8.3 a)) or 0.7·A_W (8.3 b), an assumption; D38), F_g = 0.9 × 0.98; F_S,h = 0.65 for ≤ 2 units **or a terraced house**, 0.50 for 3–10, 0.40 above (8.3.1.2.2), by dwelling units alone when the building type is `null` (an assumption); g from the building; window areas per direction as HiSim states them. |
 | R5.10 | Thermal mass, utilisation | Eq. (50) C = f_BW · V with f_BW per Bauweise as stated after the equation, by HiSim's five classes mapped very light + light → leicht, medium → mittel, heavy + very heavy → schwer (D3); Eq. (49); Eq. (57a/b)–(59), a = 1 + τ/16. |
 | R5.11 | Heating period, reference climate | H 5050-1 Eq. (9a)–(9m); γ ≤ 0 refused, not patched. |
-| R5.12 | Heating period, site climate | B 8110-6-1 Eq. (53) with d_Heiz = f_H · MT_j from H 5056-1 Eq. (49)–(52), negative γ_H replaced by the next positive month; Q_TW,beh = 0 in stage 1, stated as a `note`. |
+| R5.12 | Heating period, site climate | B 8110-6-1 Eq. (53) with d_Heiz = f_H · MT_j from H 5056-1 Eq. (49)–(52), negative γ_H replaced by the next positive month; a month with θ_e ≥ θ_i,h has no heating share (D35); Q_TW,beh = 0 in stage 1, stated as a `note`. |
 | R5.13 | Annual values | Eq. (51), (64) per BGF, (63a), (1), heating days, HGT 22/14 per B 8110-5 Eq. (4) with the month's days. |
 
 **R6 — The building is HiSim's, taken as it is.** `[decided 2026-10-07, D9; 2026-10-11, D24, D25]`
@@ -342,9 +342,9 @@ splits, scales, re-derives or looks up anything about the building, and it conta
 the archetype database HiSim builds from. R6.2 An element's situation follows from HiSim's
 adjustment factor and the element class: b = 1 is outside air; b = 0 is a conditioned neighbour;
 b = 0.5 is an unconditioned space, which is the attic for a roof, the cellar for a floor and a
-buffer space for a wall; any other factor refuses the run. R6.3 Dwelling units are the record's
+buffer space for a wall; any other factor, and 0.5 on a window or door, refuses the run (D33). R6.3 Dwelling units are the record's
 value verbatim; 0 is refused naming HiSim's `number_of_apartments` (UC8). R6.4 Doors and windows
-are single surfaces against outside air; the window element's area counts in the transmission, the
+are single surfaces, against outside air at b = 1 (D33); the window element's area counts in the transmission, the
 per-direction areas in the solar gains, each as HiSim states them; a building with window area but no
 direction with an area is refused (UC8). R6.5 A quantity the record lacks refuses the run by name;
 nothing is guessed in the reading step; what an engine assumes is an `assumptions` entry (R4.4).
@@ -378,7 +378,7 @@ R9.1 Functionality tests, marker `base`, committed, run everywhere: every equati
 values, the reading of fixture records, the situation rule, the registry, the report formats, the
 command line, the refusals, the import boundary. R9.2 Validation, marker `epc_norm_data`, skipped
 with a reason where the data are absent: for Austria the SFH and MFH of ÖNORM B 8110-6-2:2024
-(variants 1 and 2 / 2.1, cases 1 and 2), monthly and annual, within half of the last printed digit
+(cases 1 and 2 of SFH variant 1 and MFH variants 1 and 2.1, case 2 of SFH variant 2; D37), monthly and annual, within half of the last printed digit
 (the tables print two decimals, so 0.005 in the table's unit); larger residuals are defects to be
 explained, the tolerance is widened only by the owner's decision. R9.3 The validation output
 accompanies the pull request that lands the balance.
@@ -424,14 +424,14 @@ building record (issue #949) and the site fields (D23) are the requester's separ
 - I1 Q_l,j = Q_T,j + Q_V,j for every month.
 - I2 0 ≤ f_h,j ≤ 1; 0 < η_h,j ≤ 1; Q_h,j ≥ 0; HWB ≥ 0.
 - I3 Reference- and site-climate results share every building quantity; only the climate differs.
-- I4 BF = 0.8 · BGF; A_g = 0.7 · A_W; L_ψ + L_χ ≥ 0.1 · (L_e + L_u + L_g).
+- I4 BF = 0.8 · BGF; A_g = 0.7 · A_W unless stated; L_ψ + L_χ ≥ 0.1 · (L_e + L_u + L_g).
 - I5 The building description read from an expanded record equals the record's values exactly.
 - I6 An element against a conditioned neighbour contributes neither to L_T nor to A.
 - I7 Every result carries the common-core indicators and every assumption the engine made.
 
 **Assumptions (to confirm)**
 
-- A1 The norm's conventions BGF = BF / 0.8 (Section 4) and V = BGF × 3.00 m (10.3.2) stand in for the
+- A1 The norm's convention BGF = BF / 0.8 (Section 4) and the assumption V = BGF × 3.00 m (D34) stand in for the
   gross floor area and the gross volume HiSim does not know; confirmed by the manual tests against
   real certificates (P4), where the certificate's printed BGF and V are compared.
 - A2 Certificate software applies the thermal-bridge default of Eq. (11a).
@@ -481,7 +481,7 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | P5 | The Austrian hot-water loss chain (H 5056-1 Ch. 6, H 5056-2 as oracle), reading the run's hot-water components from the record | D1 |
 | P6 | Headline indicators and classes per country, which need the heating system from the record | D14 |
 | P7 | A package of its own and a path-filtered CI job, later a repository of its own, once the record seam is stable | D15 |
-| P8 | Mechanical ventilation with heat recovery (B 8110-6-1 6.2.3), MFH variants 2.2/2.3 of B 8110-6-2 | R9.2 |
+| P8 | Mechanical ventilation with heat recovery (B 8110-6-1 6.2.3), SFH variant 2 case 1 and MFH variants 2.2/2.3 of B 8110-6-2 | R9.2 |
 | P9 | Release of licensed norm-derived data, if the publisher permits | D7 |
 | P10 | Linear interpolation of the Austrian radiation tables for off-grid azimuths and tilts (B 8110-6-1 9.1), needed by the real certificates of P4 | R5.2 |
 | P11 | A gross volume written by HiSim into the record, replacing the norm's standard assumption of R5.3 | D26 |
@@ -515,11 +515,20 @@ document when its norm is read. *Blocks.* Nothing of stage 1 for Austria or of t
 | D23 | 2026-10-11 | The site (climate region, elevation; later a climate zone) is added to HiSim's weather configuration by the requester, outside this work, and travels through HiSim's building record into the expanded record; the calculator has no site input of its own. A building at several sites is several realized records. |
 | D24 | 2026-10-11 | The calculator computes the certificate of exactly the building HiSim computed with: one area, one U-value, one adjustment factor per element class, as HiSim used them; nothing is split, re-averaged or re-derived. It knows nothing of the archetype database HiSim builds from, and the certificate's deviation from a real certificate is a finding of the manual tests, not something the calculator corrects. |
 | D25 | 2026-10-11 | An element's situation follows from HiSim's adjustment factor and the element class: 1 outside air, 0 conditioned neighbour, 0.5 an unconditioned space (attic for a roof, cellar for a floor, buffer space for a wall). |
-| D26 | 2026-10-11 | The gross floor area is BF / 0.8 by the norm's own convention; the gross volume comes from the expanded record when it states one, else from the norm's standard storey height of 3.00 m; both are listed as assumptions. |
+| D26 | 2026-10-11 | The gross floor area is BF / 0.8 by the norm's own convention; the gross volume comes from the expanded record when it states one, else from a storey height of 3.00 m (D34); both are listed as assumptions. |
 | D27 | 2026-10-11 | A building with window area but no direction that has an area (an archetype without orientations) is refused; the calculator does not invent an orientation. |
 | D28 | 2026-10-11 | A batch writes into an empty output directory; it never merges into or cleans up existing output. |
-| D29 | 2026-10-12 | A factor 0.5 is mapped by each engine to one row of its norm per element class, as the engine's default and an assumption of the result; Austria: floor → ceiling to an unconditioned cellar (Tab. 4, insulated below the footnote-a threshold), roof → ceiling to an unconditioned closed attic, wall → wall to another buffer space. How often a case occurs in HiSim's buildings is no criterion (R6.7). |
+| D29 | 2026-10-12 | A factor 0.5 is mapped by each engine to one row of its norm per element class, as the engine's default and an assumption of the result; Austria: floor → ceiling to an unconditioned cellar (Tab. 4, the uninsulated row, D32), roof → ceiling to an unconditioned closed attic, wall → wall to another buffer space. How often a case occurs in HiSim's buildings is no criterion (R6.7). |
 | D30 | 2026-10-12 | HiSim writes `building.expanded.yaml` beside every run's realized record, read off `BuildingInformation` (issue #949, `hisim/energy_system/building_record.py`); the calculator reads only that file and imports nothing of HiSim. A building type HiSim's code does not state is `null`; the engine then decides by its own rule and records it as an assumption. |
+| D31 | 2026-10-12 | The building description refuses negative areas and U-values, window surfaces without area, a g-value outside (0, 1], a glass area outside (0, A_W], fewer than one dwelling unit and duplicate window names (E-18); an element of area 0 is accepted. A malformed data table is refused with E-19. |
+| D32 | 2026-10-12 | A cellar ceiling takes the uninsulated row of Tab. 4: footnote a judges the cellar's walls and floor, which the description does not state; recorded as an assumption. |
+| D33 | 2026-10-12 | D25 holds for windows and doors too: 1 outside air, 0 conditioned neighbour; 0.5 refuses (E-06). |
+| D34 | 2026-10-12 | V = BGF × 3.00 m is the engine's assumption: the norm states no substitute for a residential gross volume (Section 4); 3.00 m is the storey height with which Eq. (65) normalises non-residential buildings. |
+| D35 | 2026-10-12 | Temperature conditions the norm prints reversed (H 5050-1 6.1, B 8110-6-1 Eq. (29a)) are read physically: a month with θ_e ≥ θ_i,h has no heating share; under the reference climate E-14 stays as a guard (D-R1). No such month occurs for residential buildings at Austrian elevations. |
+| D36 | 2026-10-12 | A hand-written description may state UNCONDITIONED_GARAGE or GROUND for a floor (Tab. 4 garage row; Tab. 5 shallow row, an assumption); the record never yields them. |
+| D37 | 2026-10-12 | Stage-1 validation covers cases 1 and 2 of SFH variant 1 and MFH variants 1 and 2.1 and case 2 of SFH variant 2; SFH variant 2 case 1 needs heat recovery (P8), cases 3 and 4 the hot-water losses (P5). The MFH example states no dwelling units; it reproduces with F_S,h of three to ten units, so the test states five. |
+| D38 | 2026-10-13 | A window surface may state its glass area (B 8110-6-1 8.3 a)); otherwise A_g = 0.7 · A_W (8.3 b)), an assumption. HiSim's frame factor is not used; it equals the lump value in every archetype row, until HiSim makes it building-specific. |
+| D39 | 2026-10-12 | `run` writes `<out>/<results directory name>/<building>.epc.json` and nothing on a refusal; `--out` defaults to `epc/results/`; E-16 applies to `batch`. A horizontal window surface has azimuth 0. |
 
 ## 12. Glossary
 

@@ -124,7 +124,7 @@ def _propagating_cost_errors() -> Tuple[type, ...]:
     """Exception types a lifecycle-cost failure must propagate instead of logging and continuing.
 
     Computing lifecycle costs is opt-in, so a cost model that cannot describe the simulated fleet
-    is a failed run rather than a log line (cost_spec.md §9.2, decision D7). `CostDataError` is
+    is a failed run rather than a log line (roadmap/cost_spec.md §9.2, decision D7). `CostDataError` is
     the typed marker for exactly that class of failure — `UnresolvableSubjectsError`, raised for
     an undeclared or otherwise undescribable component, is one — while everything else coming out
     of the engine is an accident that must still not cost a user their simulation results.
@@ -194,7 +194,7 @@ class PostProcessor:
         self.dirname = dirname
 
     def compute_lifecycle_costs(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Runs the parallel lifecycle cost engine and decides what its failure means (cost_spec.md §10).
+        """Runs the parallel lifecycle cost engine and decides what its failure means (roadmap/cost_spec.md §10).
 
         A `CostDataError` always fails postprocessing. Any other failure is logged and the legacy
         outputs are written as always, unless the run declared that it cannot finish without the
@@ -224,7 +224,7 @@ class PostProcessor:
             # Asking for lifecycle costs is opt-in, so an answer that cannot be produced is a
             # failed run rather than a log line: a CostDataError — and hence the D7
             # UnresolvableSubjectsError raised for an undeclared or otherwise undescribable
-            # component (cost_spec.md §9.2, §8) — propagates and fails postprocessing.
+            # component (roadmap/cost_spec.md §9.2, §8) — propagates and fails postprocessing.
             # Everything else is an accident in the parallel engine and must still not cost a
             # user their simulation results, so it stays a logged error. What that leniency
             # must not do is leave a *partial* cost export set behind for a later reader to
@@ -408,7 +408,7 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
-        # Parallel lifecycle cost engine (cost_spec.md §10): strictly additive, writes only new
+        # Parallel lifecycle cost engine (roadmap/cost_spec.md §10): strictly additive, writes only new
         # files. It runs BEFORE the legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks because the legacy
         # get_cost_capex mutates component configs as a side effect (overwrite_config_values...)
         # and would contaminate the facts the new engine reads (§10.0 rule 4). The parity
@@ -452,7 +452,7 @@ class PostProcessor:
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
 
-        # Shadow-mode parity (cost_spec.md §9.7): compares the legacy CSVs written above
+        # Shadow-mode parity (roadmap/cost_spec.md §9.7): compares the legacy CSVs written above
         # (read-only) against the facts the lifecycle engine captured BEFORE the legacy path
         # ran, so legacy config mutation cannot fake agreement.
         if (

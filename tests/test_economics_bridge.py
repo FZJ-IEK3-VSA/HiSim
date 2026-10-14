@@ -1,4 +1,4 @@
-"""End-to-end test: a real simulation with COMPUTE_LIFECYCLE_COSTS on (cost_spec.md §10).
+"""End-to-end test: a real simulation with COMPUTE_LIFECYCLE_COSTS on (roadmap/cost_spec.md §10).
 
 Modeled on tests/test_electricity_meter.py. Verifies the parallel engine runs in shadow mode
 next to the legacy COMPUTE_OPEX/COMPUTE_CAPEX path and writes only new files.

@@ -150,10 +150,10 @@ class SimulationParameters:
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
-        # Parameters of the parallel lifecycle cost engine (cost_spec.md §3.2). Deliberately a
+        # Parameters of the parallel lifecycle cost engine (roadmap/cost_spec.md §3.2). Deliberately a
         # plain attribute (not a dataclass field) so *.simulation.json round-trips stay
         # byte-identical during the parallel phase; set via set_economic_parameters() or the
-        # RenoVisor request (see cost_module_issues.md #5).
+        # RenoVisor request (see roadmap/cost_module_issues.md #5).
         self.economic_parameters: Optional[Any] = None
         # Optional hisim.economics.bridge.EconomicContext: existing assets, subsidy context,
         # envelope measures, tenancy data and scenario sets a system setup declares for the
@@ -332,7 +332,7 @@ class SimulationParameters:
         self.lifecycle_costs_required = True
 
     def set_economic_parameters(self, economic_parameters: Any) -> None:
-        """Attaches EconomicParameters for the lifecycle cost engine (cost_spec.md §3.2).
+        """Attaches EconomicParameters for the lifecycle cost engine (roadmap/cost_spec.md §3.2).
 
         The economy-wide assumptions of a run — country, price basis year, horizon, discount and
         escalation rates, subsidy catalog path — travel with the simulation parameters because
@@ -350,7 +350,7 @@ class SimulationParameters:
         self.economic_parameters = economic_parameters
 
     def set_economic_context(self, economic_context: Any) -> None:
-        """Attaches an EconomicContext for the lifecycle cost engine (cost_spec.md §4-§6).
+        """Attaches an EconomicContext for the lifecycle cost engine (roadmap/cost_spec.md §4-§6).
 
         The counterpart to the parameters above: not the economy, but *this* decision situation —
         what already stands in the building, who applies for which subsidy, which non-simulated

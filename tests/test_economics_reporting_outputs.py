@@ -1,4 +1,4 @@
-"""Reporting tests: input audit, cross-perspective subsidy cards, PNGs and the CLI (cost_spec.md §7.2, §9.5).
+"""Reporting tests: input audit, cross-perspective subsidy cards, PNGs and the CLI (roadmap/cost_spec.md §7.2, §9.5).
 
 Second of the two reporting test files (split per the PR-3 review's 500-line rule): the
 input-audit section (origins, price-basis column, unresolved rows — review findings 12/13),

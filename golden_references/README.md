@@ -7,7 +7,7 @@ simulation output (e.g. after a numerical refactor) fails CI with the exact KPIs
 that moved.
 
 The scripts that drive this live in [`../scripts/`](../scripts); the full design is
-in [`../golden_ref_spec.md`](../golden_ref_spec.md).
+in [`../roadmap/golden_ref_spec.md`](../roadmap/golden_ref_spec.md).
 
 ## What is compared
 

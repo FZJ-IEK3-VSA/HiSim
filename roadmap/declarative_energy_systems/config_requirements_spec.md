@@ -195,7 +195,7 @@ each needs, verified against the code on 2026-08-25:
   **programmatic way to produce a complete energy-system file from a handful of knobs**
   without hand-listing 15 components and 30 connections. See Q6 for where that layer
   lives.
-- **HPC harness** (`hpc_harnes_spec.md` on `json_v2`): payload = energy system + simulation
+- **HPC harness** (`roadmap/hpc_harness_spec.md` on `json_v2`): payload = energy system + simulation
   parameters as *small JSON over the network*; the worker runs it via
   `run_one.run_single`. The energy system must be **self-contained and small** (no side
   files besides `${inputs}` references, R12), loadable from a string/dict as well as a

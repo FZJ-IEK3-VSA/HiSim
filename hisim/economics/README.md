@@ -7,8 +7,8 @@ per VDI 2067-1 / DIN EN 15459-1) from three kinds of inputs: *facts* declared by
 and *versioned data files* (prices, lifetimes, subsidy schemes). Everything else — discounting,
 replacements, subsidies, actor splits, uncertainty bands — happens in one central engine.
 
-The full specification lives in **`cost_spec.md`** at the repo root; every provisional decision
-and every legacy bug found during implementation is tracked in **`cost_module_issues.md`**.
+The full specification lives in **`roadmap/cost_spec.md`**; every provisional decision
+and every legacy bug found during implementation is tracked in **`roadmap/cost_module_issues.md`**.
 Section references like "§3.9" below point into the spec.
 
 ---
@@ -681,7 +681,7 @@ sweepable, and neither is the retired `legacy_flat_subsidy_share` shim field (§
 **Migrated legacy entries (DE 2018–2024/2050, AT 2025/2040).** Copied 1:1 from the old
 `configuration.py` dicts as degenerate bands (min = best_estimate = max) so the parity harness can prove
 the engine reproduces today's numbers. Known warts are preserved on purpose and tracked in
-`cost_module_issues.md`: VAT status undocumented (`price_basis: "AS_LEGACY"` = "use as-is",
+`roadmap/cost_module_issues.md`: VAT status undocumented (`price_basis: "AS_LEGACY"` = "use as-is",
 issue Q5/#4), CO2 price embedded in the fuel prices (exposure 0), meter "maintenance rates"
 that are really absolute fees (#1), per-kWh emission factors on per-ton fuels (#24), a diesel
 price typo (#3). Fix these in explicit data-review PRs, not silently.

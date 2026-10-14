@@ -15,7 +15,7 @@ Four things go into it, and each answers a question the run cannot:
   presence switches the engine from greenfield accounting (everything is bought new into an empty
   building) to brownfield accounting: kept equipment is not charged, replaced equipment adds its
   removal cost and its written-off book value, and an improvement that the building would partly
-  have paid for anyway is credited with that share (``cost_spec.md`` §4.1);
+  have paid for anyway is credited with that share (``roadmap/cost_spec.md`` §4.1);
 * **the envelope cost subjects** — one per envelope measure, sized in square metres of the element
   it covers. HiSim prices no envelope measure of its own here: the price comes from the request's
   ``cost`` block, written there by the frontend out of the contract's material table, and a
@@ -1620,7 +1620,7 @@ class EconomicContextBuilder:
         that installs electric heating leaves a twin with no buffer and no emitters. Such an entry
         is *not* declared replaced by its own class -- nothing of that class is bought -- and its
         ``replaced_by_asset_classes`` stays empty, which the mapping report words as a removal. The
-        engine has no booking for a removal without a successor (``cost_spec.md`` §4.1 books the
+        engine has no booking for a removal without a successor (``roadmap/cost_spec.md`` §4.1 books the
         removal cost and the written-off book value only through the subject that replaces an
         asset, ``calculators/context_resolution.py``), so neither is counted, and the note says so
         rather than inventing a booking here (hisim-tqkn).

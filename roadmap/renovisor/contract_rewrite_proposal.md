@@ -3,7 +3,7 @@
 **Superseded** by the adoption of the frontend side's spec (`challenges.md` §13); kept for the reasoning.
 
 **Status:** proposal for the two contract teams, 2026-09-15
-**Basis:** `scripts/hisim_spec.md` (v1: the user's answers are the input, HiSim derives the physics),
+**Basis:** `roadmap/renovisor/hisim_input_spec_v1.md` (v1: the user's answers are the input, HiSim derives the physics),
 the UI's later additions as reflected in v0.3, the measure catalogue, and the decision register in
 `challenges.md` §9 and §12. Supersedes the in-place edits on the contract branch `hisim-alignment`;
 its `REQUESTS.md` and its generated enum lists carry over.

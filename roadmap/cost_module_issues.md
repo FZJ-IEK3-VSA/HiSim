@@ -2,7 +2,7 @@
 
 Open items are tracked in beads since 2026-09-20 (`br ready`); the ids below point at them. This file is no longer maintained as a list.
 
-Running log of ambiguities found while implementing `cost_spec.md`. Items marked **DECIDED (provisional)**
+Running log of ambiguities found while implementing `roadmap/cost_spec.md`. Items marked **DECIDED (provisional)**
 were resolved with a documented default to keep the implementation moving; they should be reviewed.
 
 ## Spec open questions (§11) — provisional defaults taken in code

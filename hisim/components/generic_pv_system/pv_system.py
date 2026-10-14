@@ -110,7 +110,7 @@ class PVSystem(cp.PhysicsComponent):
 
     """
 
-    # Lifecycle cost engine declaration (cost_spec.md §9.2).
+    # Lifecycle cost engine declaration (roadmap/cost_spec.md §9.2).
     cost_relevance = CostRelevance.PRICED
 
     # Inputs
@@ -265,7 +265,7 @@ class PVSystem(cp.PhysicsComponent):
         return capex_cost_data_class
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+        """Cost facts for the lifecycle cost engine (roadmap/cost_spec.md §3.3, §9.1).
 
         Declares the PV array as one priced subject: a `PV` entry of the cost database, sized by
         its **installed module power in kW**. The config holds that power in *watts*, so the

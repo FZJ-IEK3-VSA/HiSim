@@ -1,5 +1,7 @@
 # HiSim Input Specification — Draft 1 (for review)
 
+Status: superseded by the calculation-request contract (`hisim/renovisor/contract/`, `roadmap/renovisor/challenges.md`); kept as the record of the v1 input. Moved from `scripts/hisim_spec.md` on 2026-10-14. Its one open item, the door measure, is the contract's `door_replacement` measure.
+
 What RenoVisor sends to the Python calc service (HiSim + surrogate) to simulate a building:
 the **home inventory** as the user entered it, plus a list of **planned renovation measures**.
 

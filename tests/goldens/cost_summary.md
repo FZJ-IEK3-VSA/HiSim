@@ -1,6 +1,6 @@
 # Lifecycle cost summary
 
-Simulation year 2026, country DE, horizon 20 a, interest 3.0%, price basis 2026. Monetary values as `best_estimate [min | max]` (cost_spec.md §3.9).
+Simulation year 2026, country DE, horizon 20 a, interest 3.0%, price basis 2026. Monetary values as `best_estimate [min | max]` (roadmap/cost_spec.md §3.9).
 
 ## Plausibility checks
 

@@ -283,7 +283,7 @@ class TestTheListIsHonestInBothDirections:
         [
             "",
             "  tracked: hisim-4g9.6\n  deliberate: Never.\n",
-            "  tracked: simulation_issues.md item 8\n",
+            "  tracked: roadmap/simulation_issues.md item 8\n",
             "  tracked: [hisim-4g9.6, challenges.md D-D]\n",
         ],
         ids=["neither", "both", "a document", "a list with a document"],

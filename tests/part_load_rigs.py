@@ -2,6 +2,8 @@
 
 A rig points every input a test drives at a fake output and steps the component on its own, the way
 ``tests/test_dhw_storage_node.py`` steps the hot-water tank, so a test sets exactly the values the component reads.
+:class:`AllInputsRig` also serves other component tests that step a component once on fake inputs, such as the
+district-heating and electric-heating tests.
 """
 
 from typing import Any, Dict, List, Tuple
@@ -353,6 +355,24 @@ class AllInputsRig:
         component.i_simulate(timestep, stsv, force_convergence)
         return {output.field_name: Rig.output(stsv, output) for output in component.outputs}
 
+    @staticmethod
+    def step_once(component: Any, values: Dict[str, float]) -> Dict[str, float]:
+        """Wire every input of a fresh ``component`` to a fake, write ``values``, simulate step 0 once, return outputs.
+
+        It is :meth:`build` followed by one unforced :meth:`step`, for a test that needs a single pass of a component
+        with the inputs it names and 0 on every other input. For example, a district-heating controller stepped with
+        only its tank temperature set reads 0 °C outside.
+
+        Args:
+            component: The component under test, not yet wired.
+            values: The input values by field name; a missing one reads 0.
+
+        Returns:
+            Every output of the component by field name.
+        """
+        stsv, fakes = AllInputsRig.build(component)
+        return AllInputsRig.step(component, stsv, fakes, values)
+
 
 class CollectorRig:
     """A flat-plate collector on a hot-water tank at noon, one step on fake inputs."""
@@ -379,12 +399,9 @@ class CollectorRig:
         )
         collector.apparent_zenith = np.array([30.0])
         collector.solar_azimuth = np.array([180.0])
-        stsv, fakes = AllInputsRig.build(collector)
         system = solar_thermal_system.SolarThermalSystem
-        return AllInputsRig.step(
+        return AllInputsRig.step_once(
             collector,
-            stsv,
-            fakes,
             {
                 system.ControlSignal: control_signal,
                 system.GlobalHorizontalIrradianceWM2: 800.0,

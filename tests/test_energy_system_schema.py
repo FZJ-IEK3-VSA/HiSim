@@ -15,6 +15,7 @@ ones fail only on entries whose classes are not converted yet — the same gap t
 validator pins, seen from the other side.
 """
 
+from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Tuple, cast
 
 import jsonschema
@@ -57,6 +58,48 @@ class Documents:
             "name": "one entry under test",
             "components": {cls.ENTRY_NAME: entry},
         }
+
+
+class Twins:
+    """Locates the recorded energy-system twins the schema is checked against.
+
+    A twin is the file a setup records as its declarative form, and it names each class by the
+    spelling of the module that defines it (``hisim.components.building.building.Building``),
+    not by the shorter package spelling the mockups use. The schema has to check a twin under
+    that spelling as strictly as a mockup under the other one.
+    """
+
+    #: The directory of the committed twins, found from this file so that the tests do not
+    #: depend on the directory pytest is started from.
+    DIRECTORY: ClassVar[Path] = Path(__file__).resolve().parent.parent / "energy_systems"
+
+    #: A twin whose building entry carries a sparse ``config`` block, under the long spelling.
+    WITH_BUILDING_CONFIG: ClassVar[str] = "household_gas_building_sizer"
+
+    #: The class path the twins write for the building.
+    BUILDING_CLASS_PATH: ClassVar[str] = "hisim.components.building.building.Building"
+
+    @classmethod
+    def all_paths(cls) -> List[Path]:
+        """Returns every committed twin, grouped and realized, sorted by file name.
+
+        Returns:
+            The paths of the ``*.energy_system.yaml`` files in the twin directory.
+        """
+        return sorted(cls.DIRECTORY.glob("*.energy_system.yaml"))
+
+    @classmethod
+    def load(cls, stem: str) -> Dict[str, Any]:
+        """Reads one twin as plain data.
+
+        Args:
+            stem: The file name without ``.energy_system.yaml``.
+
+        Returns:
+            The document.
+        """
+        text = (cls.DIRECTORY / f"{stem}.energy_system.yaml").read_text(encoding="utf-8")
+        return cast(Dict[str, Any], yaml.safe_load(text))
 
 
 @pytest.fixture(name="schema", scope="module")
@@ -305,3 +348,64 @@ def test_a_schema_of_two_classes_carries_one_conditional_branch_each() -> None:
     ]
     assert entry["allOf"][0]["then"]["properties"]["constructor"] is False
     assert "for_location" in entry["allOf"][1]["then"]["properties"]["constructor"]["properties"]
+
+
+@pytest.mark.base
+def test_every_class_spelling_the_schema_accepts_carries_exactly_one_class_branch(schema: Dict[str, Any]) -> None:
+    """Catches a class spelling that the schema accepts but checks nothing else about.
+
+    A class reachable under two dotted paths is listed under both in the ``class`` enumeration. If
+    only one of them opened the class's conditional branch, an entry written with the other would
+    pass with any preset and any ``config`` at all; a spelling in two branches would apply two
+    classes' rules to one entry.
+    """
+    entry = schema["$defs"]["entry"]
+    accepted = entry["properties"]["class"]["enum"]
+    branched: List[str] = []
+    for branch in entry["allOf"]:
+        branched.extend(branch["if"]["properties"]["class"]["enum"])
+
+    assert sorted(branched) == sorted(accepted)
+    assert Twins.BUILDING_CLASS_PATH in branched
+
+
+@pytest.mark.base
+def test_a_recorded_twin_with_a_bad_building_config_is_refused(validator: Any) -> None:
+    """Catches the building entry of a twin escaping the schema's check of its ``config``.
+
+    The twins name the building by its defining module's path, which is not the spelling the
+    mockups use. The unchanged twin has to validate, and the same twin with a field the building
+    does not have and a number written as a word has to be refused at exactly those two places.
+    """
+    twin = Twins.load(Twins.WITH_BUILDING_CONFIG)
+    building = twin["components"]["Building"]
+    assert building["class"] == Twins.BUILDING_CLASS_PATH
+    assert errors_of(validator, twin) == []
+
+    building["config"]["number_of_apartments"] = "many"
+    building["config"]["no_such_field_in_m2"] = 1.0
+
+    refused = {tuple(error.absolute_path) for error in errors_of(validator, twin)}
+    assert refused == {
+        ("components", "Building", "config"),
+        ("components", "Building", "config", "number_of_apartments"),
+    }
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("path", Twins.all_paths(), ids=lambda path: path.name)
+def test_every_committed_twin_validates_except_on_a_class_the_schema_does_not_offer(
+    validator: Any, schema: Dict[str, Any], path: Path
+) -> None:
+    """Catches the schema refusing a twin the executor runs, or a twin drifting out of the schema.
+
+    The schema only describes the converted classes, so an entry naming any other class is refused
+    on its ``class`` key, and nowhere else; every entry whose class the schema offers, the
+    building's ``config`` included, has to validate.
+    """
+    offered = set(schema["$defs"]["entry"]["properties"]["class"]["enum"])
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    for error in errors_of(validator, document):
+        assert error.absolute_path and error.absolute_path[-1] == "class", error.message
+        assert error.instance not in offered, error.message

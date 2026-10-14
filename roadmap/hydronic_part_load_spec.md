@@ -301,15 +301,43 @@ past the boiler's band while the boiler's ratio decays towards 0 (§7). Space he
 boiler books +5.7 % / +21.3 % space-heating heat while the building receives -0.17 % / -0.66 %, on #922 too, because
 the space-heating buffer does not close its balance at coarse steps (stage D, hisim-fxix.5, hisim-ign9).
 
-**Parked (#916, #917; decision 18)**, measured on their branches the same way, 900 s / 3600 s. The heat pump's
+**Parked (#916; decision 18)**, measured on its branch the same way, 900 s / 3600 s. The heat pump's
 hot-water electricity is +0.96 % / +8.89 % with the rule and +0.59 % / +9.36 % with whole-step charges, with
 1784 / 887 against 1601 / 618 flagged steps; 1383 of the 1784 flagged steps at 900 s run the whole step, the energy
 manager's raise cycle at the heat pump's own draw (hisim-4g9.28), and the 3600 s excess is the COP above 63 °C under
 that raise. The electric heater is -0.07 % / -0.26 % with the rule and 73 / 72 flagged steps (hisim-fxix.17), against
--0.14 % / +0.04 % and none with whole-step charges. The gas + solar collector is -1.75 % / -1.00 % with its rule and
-+1.28 % / +4.31 % with whole-step pump runs, with 165 / 223 against 123 / 56 flagged steps; the heat pump + solar
-twin's hot-water electricity stays at +1.22 % / +13.64 %. On this base the rule does not improve the heat pump and the
-electric heater, and what is left for the heat pump comes from the energy manager's loop, so both wait for it.
+-0.14 % / +0.04 % and none with whole-step charges. On this base the rule does not improve the heat pump and the
+electric heater, and what is left for the heat pump comes from the energy manager's loop, so both wait for it. (On
+2026-10-12 the collector was measured on #916's branch: -1.75 % / -1.00 % with its rule, and the heat pump + solar
+twin's hot-water electricity +1.22 % / +13.64 % with the heat pump's rule.)
+
+**The collector (#917; decision 20)**, measured 2026-10-14 on its branch, directly on #915 without #916, full year
+2021 with the predefined occupancy, against the 60 s run of the same head. The 60 s years of both solar twins are those
+of #915 (the ratio is exactly 1): gas + solar 418.8 kWh of collector heat and 3002.3 kWh of hot-water gas, 14 flagged
+steps; heat pump + solar 595.8 kWh and 693.6 kWh of hot-water electricity, 216 flagged steps. Each cell gives #917,
+then #915 (the pump runs whole steps), 900 s / 3600 s:
+
+| twin: quantity | #917 | #915 |
+|---|---|---|
+| gas + solar: collector heat | -1.75 % / -1.00 % | +1.28 % / +4.31 % |
+| gas + solar: hot-water gas | +0.28 % / +0.14 % | -0.18 % / -0.66 % |
+| gas + solar: mean passes | 3.49 / 4.02 | 3.31 / 3.75 |
+| gas + solar: flagged steps (with a forced pass) | 165 (128) / 223 (208) | 123 (91) / 56 (48) |
+| gas + solar: partial collector steps converged | 1446 of 1458 / 168 of 284 | – |
+| gas + solar: partial boiler steps converged | 617 of 671 / 548 of 583 | 615 of 672 / 540 of 581 |
+| gas + solar: the tank's highest temperature | 61.44 / 69.48 °C (60 s: 60.46 °C) | – |
+| heat pump + solar: collector heat | -0.71 % / -1.75 % | +2.85 % / +0.85 % |
+| heat pump + solar: hot-water electricity | +2.10 % / +14.57 % | +1.42 % / +13.67 % |
+| heat pump + solar: mean passes | 4.56 / 6.00 | 4.41 / 5.75 |
+| heat pump + solar: flagged steps (with a forced pass) | 1260 (1240) / 534 (518) | 1225 (1206) / 385 (375) |
+| heat pump + solar: partial collector steps converged | 1245 of 1255 / 168 of 273 | – |
+
+The gas + solar figures equal those of 2026-10-12 on #916's branch to every digit given: #916 does not touch them. The
+collector's rule takes the gas + solar collector within 1.75 % of 60 s at both steps and the boiler's hot-water gas
+within 0.3 %; the price is flagged steps at 3600 s, where 116 of the collector's 284 partial steps do not converge.
+In the heat pump + solar twin the heat pump runs whole steps here (#916 is parked); its hot-water electricity keeps
+the error of the energy manager's raise (hisim-4g9.28). hisim-fxix.11's done-when (collector and backup within 1 %
+at both steps, no step at `force_convergence`) is not met; it stays open.
 
 **Dropped (#918; decision 19).** District-heating twin, the quasi-steady loop / the dynamic one-step-lagged loop on the
 same base: heat drawn (the bill) -0.35 % / -0.03 % at 900 s and -0.31 % / +0.03 % at 3600 s, heat delivered to the

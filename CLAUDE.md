@@ -78,7 +78,7 @@ UTSP_API_KEY
 ## Architecture
 
 ### Core simulation loop (`hisim/simulator.py`)
-`Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked. A pass evaluates the components kind by kind (`Simulator.EVALUATION_ORDER_OF_KINDS`: data sources, L2 controllers, L1 controllers, physics, meters), in the order added within a kind, except that every device an L1 controller commands goes before the other physics that controller reads (`hisim/evaluation_order.py`); outputs and result columns keep the order added.
+`Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked. A pass evaluates the components kind by kind (`Simulator.EVALUATION_ORDER_OF_KINDS`: data sources, L2 controllers, L1 controllers, physics, meters), in the order added within a kind, except that an L2 controller goes after the L2 controllers it reads and every device an L1 controller commands goes before the other physics that controller reads (`hisim/evaluation_order.py`); outputs and result columns keep the order added.
 
 ### Config layer (`hisim/config/`)
 The bottom layer, imported by everything else and importing nothing from the rest of HiSim.

@@ -820,7 +820,7 @@ class L2ControllerComponent(Component):
     signals (priorities, prices, set-point shifts) to L1 controllers, never a command to a device. For example,
     ``class L2GenericEnergyManagementSystem(DynamicComponent, L2ControllerComponent)``. The simulator evaluates the
     L2 controllers after the data sources and before the L1 controllers, so a signal reaches the L1 controllers in
-    the same pass.
+    the same pass, and each L2 controller after the L2 controllers it reads (:class:`hisim.evaluation_order.L2Order`).
 
     The class adds no attribute and no method: inheriting it is the declaration of the kind, which
     :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.
@@ -862,7 +862,9 @@ class MeterComponent(Component):
     A meter, such as the electricity, gas, heat or fuel meter, sums the port quantities of physics for the KPIs and
     the post-processing and never acts on what it reads. For example,
     ``class ElectricityMeter(DynamicComponent, MeterComponent)``. The simulator evaluates the meters last in every
-    pass, after everything they read; since nothing in the simulation reads a meter, no other component waits for it.
+    pass, after everything they read. Nothing in the simulation reads a meter, except the listed exceptions of bead
+    hisim-o6a.22, so no other component waits for it; such an exception reads the meter's value of the pass before,
+    which costs passes but not the converged value.
 
     The class adds no attribute and no method: inheriting it is the declaration of the kind, which
     :meth:`ComponentKinds.of` reads. The contract is in ``system_docs/component_design_principles.md`` §A.

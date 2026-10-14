@@ -433,6 +433,33 @@ the table above to the digit; the heat pump + solar one does not (537.5 against 
 60 s). Both columns here come from one script on the same day, so the comparison holds; the cause of the difference
 to the earlier table was not traced.
 
+**The 80 °C solar maximum on #917 and #941 (#942), measured 2026-10-14**, full year 2021 with the predefined
+occupancy, against the 60 s run of the same head. The 60 s years are those of #942 without #917 (gas + solar:
+971.1 kWh of collector heat, 2173.0 kWh of the boiler's hot-water heat, the committed full-year golden values; heat
+pump + solar: 1099.8 kWh and 587.2 kWh of hot-water electricity). Each cell gives #942 with the collector's part load,
+then #942 without it (the pump runs whole steps, as #942 was measured on #915 on 2026-10-13), 900 s / 3600 s:
+
+| twin: quantity | with #917 | without #917 |
+|---|---|---|
+| gas + solar: collector heat | -0.31 % / -3.09 % | +0.21 % / -0.53 % |
+| gas + solar: backup's hot-water heat | +0.09 % / +1.29 % | -0.12 % / +0.22 % |
+| gas + solar: flagged steps (with a forced pass) | 72 (53) / 45 (40) | 65 (46) / 43 (37) |
+| gas + solar: partial collector steps converged | 45 of 55 / 49 of 56 | – |
+| gas + solar: the tank's highest temperature (60 s: 80.11 °C) | 80.05 / 80.05 °C | 81.37 / 86.45 °C |
+| heat pump + solar: collector heat | -0.11 % / -2.58 % | +0.27 % / -1.25 % |
+| heat pump + solar: hot-water electricity | +2.47 % / +16.16 % | +2.29 % / +15.64 % |
+| heat pump + solar: flagged steps (with a forced pass) | 987 (973) / 317 (309) | 994 (979) / 311 (305) |
+| heat pump + solar: the tank's highest temperature (60 s: 80.10 °C) | 80.05 / 80.05 °C | 81.52 / 85.59 °C |
+| gas + solar with a 20 m² collector, 3600 s | runs; tank at most 80.46 °C | stops: "way too high", 94.3 °C |
+| gas + solar with a 20 m² collector, 900 s | runs; tank at most 80.05 °C | runs; tank at most 87.46 °C |
+
+With the collector's part load the tank ends a charging step at the solar maximum, 80.025 °C, instead of wherever a
+whole-step pump run leaves it; the highest tank temperature of a year drops from 86.5 °C to 80.1 °C at 3600 s, and a
+20 m² collector, the top of the solar assembly's declared range, runs the year at 3600 s instead of stopping at the
+tank's 90 °C check. At 900 s the collector heat stays within 0.4 % of 60 s in both twins; at 3600 s it is 2.6 to
+3.1 % below, further than without the part load (-0.53 % / -1.25 %), whose whole-step runs carry the tank past
+80 °C. Unmet hot water is 0.0 kWh (gas + solar) and 15.9 / 16.0 / 19.4 kWh at 60 / 900 / 3600 s (heat pump + solar).
+
 
 ## 12. Beads
 
@@ -446,6 +473,7 @@ Epic hisim-fxix.
 | hisim-fxix.11 (P1) | the collector | #917 |
 | hisim-fxix.19 (P2, closed) | the solar pump's hysteresis | #941 |
 | hisim-fxix.21 (P3, closed) | the solar pump's switch-on step without a fixed point: decided on the tank's start-of-step temperature | #941 |
+| hisim-fxix.22 (P3, closed) | the solar controller's own 80 °C maximum storage temperature instead of the backups' 60 °C aim | #942 |
 | hisim-hhj2 (P1, closed) | the buffer-less distribution loop: on the kind order it needs no quasi-steady path | #918, dropped |
 | hisim-bq3h (P3) | solar priority as a control strategy | – |
 | hisim-ign9 (P2) | the space-heating buffer, after stage D (hisim-fxix.5) | – |

@@ -577,7 +577,24 @@ class SimpleWaterStorage(cp.PhysicsComponent):
 
 
 class SimpleHotWaterStorage(SimpleWaterStorage):
-    """SimpleHotWaterStorage class."""
+    """The space-heating buffer: a node between its heat generators and the heat distribution system.
+
+    With its heat exchanger (the default) the buffer is a start-of-step node (:class:`hisim.hydronics.StartOfStepNode`):
+    it publishes the temperature it starts the step at as the return to its generators
+    (``WaterTemperatureToHeatGenerator``, ``WaterTemperatureToSecondaryHeatGenerator``), as the supply to the heat
+    distribution system (``WaterTemperatureToHeatDistribution``) and as ``WaterMeanTemperatureInStorage``, the value its
+    generators' controllers decide on. Every circuit's heat is ``m c`` times the difference between the stream that
+    enters and that start temperature, the standby loss is taken at it too, and the buffer ends the step at its start
+    temperature plus the net heat over its heat capacity. So the heat a generator books is the heat the buffer receives,
+    the heat the distribution system delivers is the heat the buffer gives, and the balance closes on every step at any
+    step length. For example, 170 kg at 40 °C charged by 5.6 kW while the distribution takes 5.6 kW stay at 40 °C,
+    less the loss.
+
+    Because nothing it publishes changes while the step iterates, the buffer adds no iteration to the step. It does not
+    see its own temperature change within the step either: a generator holding a lift keeps bringing its heat however
+    far the buffer has risen, and the distribution keeps taking the building's demand however far it has fallen.
+    Without the heat exchanger the buffer keeps the earlier mass-mixing law (:meth:`simulate_stratification_path`).
+    """
 
     cost_relevance = CostRelevance.PRICED
 
@@ -913,8 +930,119 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the heating water storage."""
+        """Simulate the buffer: a start-of-step node with a heat exchanger, the stratification path without one.
 
+        With the heat exchanger (the default, :meth:`simulate_start_of_step_node`) every circuit is booked on the
+        buffer's start temperature and the balance closes on every step. Without it the buffer keeps its earlier
+        mass-mixing law and its mixing-factor outlets (:meth:`simulate_stratification_path`), which is not
+        energy-consistent and which no recorded energy system uses.
+        """
+        if self.heat_exchanger_is_present:
+            self.simulate_start_of_step_node(stsv)
+        else:
+            self.simulate_stratification_path(timestep, stsv, force_convergence)
+
+    def circuit_inflows(self, stsv: SingleTimeStepValues) -> List[hydronics.Inflow]:
+        """Return the three streams entering the buffer: both generators' supplies and the distribution's return.
+
+        In the order primary generator, secondary generator, heat distribution. A buffer in series with its heat
+        source has no generator inputs; its generator streams are then without flow.
+
+        Args:
+            stsv: The step's values.
+
+        Returns:
+            The three inflows.
+        """
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
+            primary = hydronics.Inflow(
+                stsv.get_input_value(self.water_mass_flow_rate_heat_generator_input_channel),
+                stsv.get_input_value(self.water_temperature_heat_generator_input_channel),
+            )
+            secondary = hydronics.Inflow(
+                stsv.get_input_value(self.water_mass_flow_rate_secondary_heat_generator_input_channel),
+                stsv.get_input_value(self.water_temperature_secondary_heat_generator_input_channel),
+            )
+        else:
+            primary = secondary = hydronics.Inflow(0.0, 0.0)
+        distribution = hydronics.Inflow(
+            stsv.get_input_value(self.water_mass_flow_rate_heat_distribution_system_input_channel),
+            stsv.get_input_value(self.water_temperature_heat_distribution_system_input_channel),
+        )
+        return [primary, secondary, distribution]
+
+    def simulate_start_of_step_node(self, stsv: SingleTimeStepValues) -> None:
+        """Book every circuit on the buffer's start temperature and end the step at the start plus the net heat.
+
+        The buffer publishes its start temperature ``T0`` as the return to both generators and as the supply to the
+        heat distribution system, so a generator's heat is ``m c (T_sup - T0)``, the distribution's
+        ``m c (T0 - T_ret)``, and the buffer, a :class:`hisim.hydronics.StartOfStepNode`, ends at
+        ``T0 + (heats - loss) / C`` with the standby loss ``UA (T0 - 20 °C)``. Every output is computed from the same
+        node step, so the buffer's balance closes on every step, and nothing it publishes changes while the step
+        iterates. For example, a 170 kg buffer at 40 °C that a boiler charges with 0.3 kg/s at 45 °C while the
+        distribution returns 0.27 kg/s at 35 °C over 900 s, losing 3.58 W/K, ends at 40.70 °C.
+
+        Args:
+            stsv: The step's values.
+        """
+        start_temperature_in_celsius = self.state.mean_water_temperature_in_celsius
+        node = hydronics.StartOfStepNode.step(
+            t0_c=start_temperature_in_celsius,
+            inflows=self.circuit_inflows(stsv),
+            ua_w_per_k=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin * self.storage_surface_in_m2,
+            t_amb_c=self.ambient_temperature_in_celsius,
+            dt_s=self.seconds_per_timestep,
+            heat_capacity_j_per_k=self.heat_capacity_in_joule_per_kelvin,
+        )
+        heat_primary_in_joule, heat_secondary_in_joule, heat_distribution_in_joule = node.heat_in_j_per_inflow
+        joules_per_watt_hour = hydronics.UnitConversion.JOULES_PER_WATT_HOUR
+        dt_in_seconds = self.seconds_per_timestep
+        for channel in (
+            self.water_temperature_heat_distribution_system_output_channel,
+            self.water_temperature_heat_generator_output_channel,
+            self.water_temperature_secondary_heat_generator_output_channel,
+            self.water_temperature_mean_channel,
+        ):
+            stsv.set_output_value(channel, start_temperature_in_celsius)
+        stsv.set_output_value(
+            self.thermal_energy_in_storage_channel,
+            self.heat_capacity_in_joule_per_kelvin * node.t_end_c / joules_per_watt_hour,
+        )
+        stsv.set_output_value(
+            self.thermal_energy_from_heat_generator_channel, heat_primary_in_joule / joules_per_watt_hour
+        )
+        stsv.set_output_value(
+            self.thermal_energy_from_secondary_heat_generator_channel, heat_secondary_in_joule / joules_per_watt_hour
+        )
+        stsv.set_output_value(
+            self.thermal_energy_input_heat_distribution_system_channel,
+            heat_distribution_in_joule / joules_per_watt_hour,
+        )
+        stsv.set_output_value(
+            self.thermal_energy_increase_in_storage_channel,
+            self.heat_capacity_in_joule_per_kelvin
+            * (node.t_end_c - start_temperature_in_celsius)
+            / joules_per_watt_hour,
+        )
+        stsv.set_output_value(self.stand_by_heat_loss_channel, node.loss_j / dt_in_seconds)
+        stsv.set_output_value(self.thermal_power_heat_distribution_channel, -heat_distribution_in_joule / dt_in_seconds)
+        stsv.set_output_value(self.thermal_power_from_heat_generator_channel, heat_primary_in_joule / dt_in_seconds)
+        stsv.set_output_value(
+            self.thermal_power_from_secondary_heat_generator_channel, heat_secondary_in_joule / dt_in_seconds
+        )
+        self.mean_water_temperature_in_water_storage_in_celsius = node.t_end_c
+        self.state.mean_water_temperature_in_celsius = node.t_end_c
+        self.state.heat_loss_in_watt = node.loss_j / dt_in_seconds
+        self.state.temperature_loss_in_celsius_per_timestep = node.loss_j / self.heat_capacity_in_joule_per_kelvin
+
+    def simulate_stratification_path(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Simulate a buffer without a heat exchanger: the earlier mass-mixing law with mixing-factor outlets.
+
+        The inflows are mixed into the buffer's water by mass, the outlets follow from a mixing factor of the step
+        length, and the standby loss is subtracted afterwards. This path does not conserve the heat its circuits
+        book; it is kept unchanged until a stratified tank replaces it, and no recorded energy system uses it.
+        """
+        del timestep, force_convergence
         # Get inputs --------------------------------------------------------------------------------------------------------
 
         state_controller = stsv.get_input_value(self.state_channel)
@@ -1200,6 +1328,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
         self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
             storage_volume_in_liter=concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter),
+        )
+        #: The buffer's heat capacity ``C = M c``, in J/K: 170 kg of water hold 0.71 MJ/K.
+        self.heat_capacity_in_joule_per_kelvin = (
+            self.water_mass_in_storage_in_kg * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
         )
 
         # the ambient temperature is here assumed as the basement temperature which is all year 17°C, this is where the water storage is located

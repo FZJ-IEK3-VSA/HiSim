@@ -87,18 +87,19 @@ def test_horizon_factories_cover_config_factories() -> None:
 def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> None:
     """The shipped config expands to one pair per (setup, parameter_set) the setup's horizons permit.
 
-    The expected counts are hand-written truths about the shipped config — twenty-two setups run the
-    week, and all of them but those in :data:`CANNOT_RUN_A_FULL_YEAR` (today none) the full year as well (owner
+    The expected counts are hand-written truths about the shipped config — twenty-three entries (the
+    twenty-two Python setups and the energy-system file ``gas_boiler_household``) run the week, and all
+    of them but those in :data:`CANNOT_RUN_A_FULL_YEAR` (today none) the full year as well (owner
     decision 2026-10-11) — rather than re-derived through the very predicate under test, which would
     reproduce any logic error on both sides of the assertion. A new setup joining the config moves
     these literals on purpose: the reviewer of that change should see the gate grow.
     """
     config = json.loads(REAL_CONFIG.read_text())
 
-    assert len(config["setups"]) == 22
-    assert len(build_matrix(config, horizon="week")["include"]) == 22
-    assert len(build_matrix(config, horizon="year")["include"]) == 22
-    assert len(build_matrix(config)["include"]) == 44
+    assert len(config["setups"]) == 23
+    assert len(build_matrix(config, horizon="week")["include"]) == 23
+    assert len(build_matrix(config, horizon="year")["include"]) == 23
+    assert len(build_matrix(config)["include"]) == 46
 
 
 #: The setups that cannot complete a full year yet, each with the bead whose fix lifts its week-only
@@ -317,7 +318,7 @@ def test_zero_shards_is_refused() -> None:
 
 
 def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
-    """The workflows' own calls: 22 week pairs in four shards, 22 full-year pairs in five.
+    """The workflows' own calls: 23 week pairs in four shards, 23 full-year pairs in five.
 
     golden-check cuts the week into four shards with the YAML twins and the composed files
     counted (``--with-yaml --with-composed``), the year into five shards with the composed files
@@ -327,13 +328,13 @@ def test_the_shipped_config_shards_into_the_workflows_jobs() -> None:
     composed = composed_setups(config, REPO_ROOT)
     week = build_shards(config, 4, horizon="week", with_yaml=True, composed=composed)["include"]
     year = build_shards(config, 5, horizon="year", composed=composed)["include"]
-    assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
-    assert len(year) == 5 and sum(cell["count"] for cell in year) == 22
+    assert len(week) == 4 and sum(cell["count"] for cell in week) == 23
+    assert len(year) == 5 and sum(cell["count"] for cell in year) == 23
     assert all(cell["count"] > 0 for cell in [*week, *year])
 
 
 def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_shards() -> None:
-    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 22 + 4 jobs.
+    """The bless's call (golden-update.yml, ``--shards 4 --one-pair-per-job year``): 23 + 4 jobs.
 
     Every Python pair of both horizons is blessed exactly once, each full-year pair in a job of its
     own running only it (``jobs`` 1), the week pairs in four shards. Catches a pair the bless would
@@ -343,11 +344,11 @@ def test_the_shipped_config_gives_the_bless_a_job_per_year_pair_and_four_week_sh
     cells = build_shards(config, 4, one_pair_per_job=frozenset({"year"}))["include"]
     year = [cell for cell in cells if cell["horizon"] == "year"]
     week = [cell for cell in cells if cell["horizon"] == "week"]
-    assert len(year) == 22 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
-    assert len(week) == 4 and sum(cell["count"] for cell in week) == 22
+    assert len(year) == 23 and all(cell["count"] == 1 and cell["jobs"] == 1 for cell in year)
+    assert len(week) == 4 and sum(cell["count"] for cell in week) == 23
     emitted = sorted(pair for cell in cells for pair in _pairs_of(cell))
     assert emitted == sorted((p["setup"], p["param"]) for p in build_matrix(config)["include"])
-    assert len(emitted) == 44
+    assert len(emitted) == 46
 
 
 def test_one_pair_per_job_gives_each_pair_of_the_horizon_a_cell_first_and_shards_the_rest() -> None:
@@ -400,14 +401,14 @@ def test_runs_give_every_run_a_cell_of_its_own_heaviest_first() -> None:
 
 
 def test_the_shipped_config_gives_golden_year_one_job_per_run() -> None:
-    """The year tier's call: the 22 Python full-year runs and one composed run per setup with a composed file."""
+    """The year tier's call: the 23 full-year runs of the config's entries and one composed run per setup with a composed file."""
     config = json.loads(REAL_CONFIG.read_text())
     composed = composed_setups(config, REPO_ROOT)
     cells = build_runs(config, horizon="year", composed=composed)["include"]
     python_setups = sorted(cell["setup"] for cell in cells if cell["mode"] == "python")
     assert python_setups == sorted(setup["id"] for setup in config["setups"])
     assert {cell["setup"] for cell in cells if cell["mode"] == "composed"} == set(composed)
-    assert len(cells) == 22 + len(composed)
+    assert len(cells) == 23 + len(composed)
 
 
 def test_runs_and_shards_exclude_each_other() -> None:

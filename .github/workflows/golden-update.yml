@@ -11,9 +11,10 @@
 # The force_rewrite input dumps the fresh values verbatim instead — the way to clear
 # accumulated noise, to retire a KPI, and to repair an unreadable golden.
 #
-# A bless regenerates the Python setups' goldens only, every pair of golden_config.json in both
-# horizons: 22 week and 22 full-year pairs. The YAML twins and the composed files have no goldens
-# of their own; the gates hold them to the Python setup's.
+# A bless regenerates the goldens of golden_config.json's entries, every pair in both horizons:
+# 23 week and 23 full-year pairs. The entries are the Python setups and the energy-system file
+# gas_boiler_household. The YAML twins and the composed files have no goldens of their own; the
+# gates hold them to the Python setup's.
 #
 # ONE JOB PER FULL-YEAR PAIR, THE WEEK PAIRS IN FOUR SHARDS (golden_matrix.py --shards 4
 # --one-pair-per-job year; owner decision 2026-10-15, as golden-year.yml has had since #1005). The

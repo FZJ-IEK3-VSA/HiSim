@@ -4,8 +4,9 @@ How a HiSim component models physics correctly: energy is conserved at every por
 length changes nothing that a 60 s run would not show, a limit either clamps visibly or fails, and every
 parameter has a source. It complements `component_design_principles.md`, which says who computes what and what
 may cross a port. It applies to new components and to every component that is changed, and reviews check it.
-Examples are from the hydronic coupling (`roadmap/hydronic_coupling_spec.md`, stages A to C: #890, #908, #909),
-the part-load rule (`roadmap/hydronic_part_load_spec.md`: #915, #917) and the solar controller (#941).
+Examples are from the hydronic coupling (`roadmap/hydronic_coupling_spec.md`, stages A to C: #890, #908, #909;
+stage D in progress), the part-load rule (`roadmap/hydronic_part_load_spec.md`: #915, #917) and the solar
+controller (#941).
 
 ## 1. Energy is conserved at every port
 
@@ -17,11 +18,19 @@ the part-load rule (`roadmap/hydronic_part_load_spec.md`: #915, #917) and the so
   return rounded to 0.1 K and with 4200 J/(kg K), while the storage integrated the flow at 4180 J/(kg K); the two
   differed by up to 1.5 % per step. Now the heat pump books `m c (T_out - T_in)` of its own outputs, and
   `tests/test_heat_pump_flow_booking.py` checks it on every step.
-- **A node publishes the step mean of its temperature as the return.** A component that holds water and
-  integrates its temperature over the step (a tank) returns the mean temperature `T̄` of the step, not its start or
-  end temperature: only then is `m c (T_sup - T̄) dt` exactly the heat the node integrated. Publishing the start
-  temperature over-books a charging generator (the bug class of #864). The node publishes its start and end
-  temperatures as separate sensor and state outputs (`hydronics.MixedNode.step`, `SimpleDHWStorage` since #909).
+- **A coupled store publishes its start-of-step temperature, and both ends book their flows on it** (owner,
+  2026-10-15; built for the space-heating chain by hydronic stage D, hisim-fxix.5, in progress). A store that
+  holds water (a buffer, a cylinder) publishes its temperature at the start of the step: a committed value that no
+  pass of the step changes. The generator books its flow on it, its outlet the start temperature plus its lift;
+  the distribution system books its own, its return the start temperature minus its drop. The store integrates the
+  energy of these booked flows exactly over the step ("An exact step" below), so the heat each end books is the heat
+  the store gains or gives. At coarse steps the part-load rule (`hisim/part_load.py`) keeps a generator from
+  charging the store past its controller's target. Why: a committed start value does not move while the step
+  iterates, so the coupling needs no iteration between store and generator. Today the hot-water cylinder of stage
+  C (#909) still returns the step mean of its temperature to its generators
+  (`StepMeanWaterTemperatureToHeatGeneratorInCelsius`), while the controllers decide on its start-of-step
+  temperature (part-load spec, decision 3; the solar controller reads `WaterTemperatureAtStartOfStepInCelsius`
+  since #941). A new store follows the rule above.
 - **Power outputs are step means, energy outputs step totals.** A power published for a step is its mean over the
   step, so power times step length is the step's energy (`hisim/energy_port.py` converts it so). A value at the
   start or end of the step is a sensor or a state, and its name says so (`WaterTemperatureAtEndOfStepInCelsius`).

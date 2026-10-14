@@ -897,20 +897,20 @@ class Building(cp.PhysicsComponent):
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
             timesteps=self.my_simulation_parameters.timesteps,
             windows=self.window_geometries,
-            azimuth_in_degrees=self.published_weather_series(Weather.YEARLY_AZIMUTH),
+            azimuth_in_degrees=self.published_weather_series(Weather.RUN_WINDOW_AZIMUTH),
             direct_normal_irradiance_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE
+                Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE
             ),
             diffuse_horizontal_irradiance_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE
+                Weather.RUN_WINDOW_DIFFUSE_HORIZONTAL_IRRADIANCE
             ),
             global_horizontal_irradiance_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE
+                Weather.RUN_WINDOW_GLOBAL_HORIZONTAL_IRRADIANCE
             ),
             direct_normal_irradiance_extra_in_watt_per_square_meter=self.published_weather_series(
-                Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA
+                Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE_EXTRA
             ),
-            apparent_zenith_in_degrees=self.published_weather_series(Weather.YEARLY_APPARENT_ZENITH),
+            apparent_zenith_in_degrees=self.published_weather_series(Weather.RUN_WINDOW_APPARENT_ZENITH),
         )
 
     def weather_artifact_key(self) -> str:
@@ -934,13 +934,13 @@ class Building(cp.PhysicsComponent):
         return str(self.simulation_repository.get_entry(Weather.SERIES_ARTIFACT_KEY))
 
     def published_weather_series(self, key: str) -> Tuple[float, ...]:
-        """Return one full-year weather series the Weather published, as an immutable tuple.
+        """Return one weather series the Weather published over the run's window, as an immutable tuple.
 
         Args:
-            key: the repository key, one of the ``Weather.YEARLY_*`` names.
+            key: the repository key, one of the ``Weather.RUN_WINDOW_*`` names.
 
         Returns:
-            Tuple[float, ...]: the series, one value per timestep of the weather's own frame.
+            Tuple[float, ...]: the series, one value per timestep of the run.
 
         Raises:
             KeyError: if the series is missing although the artifact key is there, which would mean a

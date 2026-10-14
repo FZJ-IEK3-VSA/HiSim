@@ -14,8 +14,8 @@ it was derived from, so that two buildings whose TABULA rows differ in everythin
 windows share one entry, and so that repricing a fuel or renaming a component cannot invalidate a
 physics result.
 
-**The weather as a reference, not as key material.** The gains depend on six full-year weather
-series. They enter the DTO as payload fields, excluded from the key by
+**The weather as a reference, not as key material.** The gains depend on six weather series over
+the run's window. They enter the DTO as payload fields, excluded from the key by
 :attr:`hisim.caching.keys.KeyMaterial.PAYLOAD`, paired with :attr:`SolarGainsInputs.weather_artifact_key`
 -- the digest of the weather series' own cache key, which the ``Weather`` component publishes under
 :attr:`hisim.components.weather.Weather.SERIES_ARTIFACT_KEY`. That is the Merkle composition of spec

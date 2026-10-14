@@ -22,6 +22,7 @@ from hisim.energy_system.loader import load_energy_system
 from hisim.renovisor.apply import SelectsNothing, apply
 from hisim.renovisor.constants import BuildingDefaults, DesignTemperatures, RoofDefaults, StorageDefaults
 from hisim.renovisor.contract import ContractFiles
+from hisim.renovisor.economics import RealizedTwin
 from hisim.renovisor.layers import SimulatedEnvelope
 from hisim.renovisor.report import MappingReport
 from hisim.renovisor.request import Request, RequestError, SemanticChecks
@@ -375,6 +376,36 @@ class TestTheSwitchesOfDecisionDD:
 
 
 @pytest.mark.base
+class TestAStatedSizeReachesTheComponent:
+    """hisim-4g9.2: a size the request states is the size the run builds, not one the setup picks.
+
+    The translator writes a battery's capacity and power onto the twin's two sized ``Battery``
+    fields, which switches their sizing laws off, so the sizing kernel leaves them as written.
+    The heat pump's thermal power has no field in the request contract, so a request cannot
+    state it: the schema refuses the key, and nothing is dropped silently.
+    """
+
+    def test_a_battery_measures_capacity_and_power_reach_the_configured_battery_unchanged(self) -> None:
+        """The values survive group expansion and the sizing kernel, the stages after the translator."""
+        document = baseline()
+        document["measures"] = [{"id": "battery_system", "options": {"capacity_in_kwh": 15, "power_in_watt": 6000}}]
+        system = translate(document)
+
+        configured = {name: config for name, _, config in RealizedTwin.of(system.model).components}
+        battery = configured[Targets.BATTERY]
+        assert battery.custom_battery_capacity_generic_in_kilowatt_hour == 15
+        assert battery.custom_pv_inverter_power_generic_in_watt == 6000
+
+    @pytest.mark.parametrize("key", ["thermal_power_in_watt", "set_thermal_output_power_in_watt", "power_in_watt"])
+    def test_a_heat_pump_power_in_the_house_is_refused_rather_than_dropped(self, key: str) -> None:
+        """The contract has no heat-pump size; stating one is a request error, not a silent auto-size."""
+        with pytest.raises(RequestError) as caught:
+            translate(baseline(heating__type_of_system="air_source_heat_pump", **{f"heating__{key}": 8000}))
+
+        assert [problem.code.value for problem in caught.value.problems] == ["key.unknown"]
+
+
+@pytest.mark.base
 class TestTheHouseFieldsOfTheSharedSchemaAt882a8c1:
     """hisim-wevr: the battery's power, the array's power beside its share, its loss, the air conditioner's year."""
 
@@ -697,7 +728,6 @@ def realized_building(system: TranslatedSystem) -> Any:
     (:class:`hisim.renovisor.economics.RealizedTwin`), and the Building derives its envelope from it.
     """
     from hisim.components.building import BuildingInformation  # pylint: disable=import-outside-toplevel
-    from hisim.renovisor.economics import RealizedTwin  # pylint: disable=import-outside-toplevel
 
     twin = RealizedTwin.of(system.model)
     config = next(config for _, class_name, config in twin.components if class_name == "Building")

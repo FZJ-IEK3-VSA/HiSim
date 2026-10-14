@@ -6,8 +6,9 @@ space heating runs at all, by comparing the day's mean outside temperature with 
 
 Several L1 controllers share these two signals -- the heat pump's, the boiler's and the district-heating substation's
 controllers aim at the supply temperature, and they, the heat-distribution controller and the direct electric heater's
-controller heat only in the heating season. A set point several L1 controllers share comes from an L2 controller, so the curve is a component of its own,
-:class:`HeatingCurveController`, and every L1 controller reads the signals from its outputs instead of keeping a copy.
+controller heat only in the heating season. A set point several L1 controllers share comes from an L2 controller, so
+the curve is a component of its own, :class:`HeatingCurveController`, and every L1 controller reads the signals from
+its outputs instead of keeping a copy.
 """
 
 import math
@@ -210,7 +211,7 @@ class HeatingCurveControllerConfig(ConfigBase):
     @preset
     @classmethod
     def preset_direct_room_heating(cls, name: str) -> "HeatingCurveControllerConfig":
-        """The heating curve of a house heated directly in its rooms, without a water circuit, such as by electric heaters.
+        """The heating curve of a house heated directly in its rooms, without a water circuit, as by electric heaters.
 
         Such a house has no heat-distribution controller to state the emitter type, so the preset pins it to
         ``RADIATOR``: an electric room heater hands its heat to the room air the way a radiator does, and it is the
@@ -224,7 +225,9 @@ class HeatingCurveControllerConfig(ConfigBase):
         Returns:
             The configuration, with the emitter type pinned and every other field still ``AUTO``.
         """
-        return cls(component_id=ComponentID(name=name), heat_distribution_system_type=HeatDistributionSystemType.RADIATOR)
+        return cls(
+            component_id=ComponentID(name=name), heat_distribution_system_type=HeatDistributionSystemType.RADIATOR
+        )
 
 
 class HeatingCurveController(StatelessComponent, L2ControllerComponent):

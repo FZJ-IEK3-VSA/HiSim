@@ -25,6 +25,13 @@ recorded components declare cannot be left to the preset while a twin writes no 
 block, because the file would then be ambiguous rather than reusable. A pinned line is real data,
 so it keeps both its number and the comment saying why the number is there.
 
+A law that reads its fact from *every* provider is not ambiguous in that way. The battery's
+``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`` beside a south and a west array sums both, and a file
+without a ``sizing_sources`` line sums every array it holds, so the field is left to the preset when
+the run summed as many values as the recorded system has providers. When it summed fewer -- a setup
+that sized the battery to one of two arrays -- the file cannot say which, and the number is pinned
+with a comment saying so.
+
 A field whose *preset* pinned a law of its own — the pellet boiler's "a twelfth of the maximum" —
 needs no pin and gets none. Omission leaves the field holding the ``SizingLaw`` the preset put
 there, and the resolver evaluates that object in preference to the class rule; only the bare word
@@ -42,9 +49,18 @@ from __future__ import annotations
 import copy
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
-from hisim.config import AUTO, ConfigBuilder, SizingLaw, declared_facts_of, preset_provenance, presets_of
+from hisim.config import (
+    AUTO,
+    Cardinality,
+    ConfigBuilder,
+    SizingLaw,
+    declared_facts_of,
+    preset_provenance,
+    presets_of,
+    sizable_fields,
+)
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.record import ConfigBlockWriter
 
@@ -132,6 +148,14 @@ class TwinComments:
     #: one of them would be a guess and naming none would make the file ambiguous, so the number
     #: stays until a twin may carry a ``sizing_sources`` block.
     SEVERAL_PROVIDERS: ClassVar[str] = "{fact} is declared by {providers}, and a twin writes no sizing_sources"
+
+    #: Reason for a value a law computed by summing a fact over fewer providers than the recorded
+    #: system holds: the setup chose which arrays a battery is sized to, and a file without a
+    #: ``sizing_sources`` block would sum all of them.
+    SUBSET_OF_PROVIDERS: ClassVar[str] = (
+        "{fact} is summed over {count} of the {total} values {providers} declare, and a twin writes no "
+        "sizing_sources"
+    )
 
     #: Separator between the several providers of one fact.
     SEPARATOR: ClassVar[str] = ", "
@@ -319,13 +343,19 @@ class EntryConfigWriter:
         baseline = self.writer.block(name, self.unresolved(fresh))
         current = self.writer.block(name, config)
         block = {key: value for key, value in current.items() if key not in baseline or baseline[key] != value}
-        decisions = self.decide(name, config, block)
+        decisions = self.decide(name, config, block, self.many_read_facts(config, fresh))
         for decision in decisions:
             if decision.auto:
                 block.pop(decision.field, None)
         return EntryConfiguration(block, decisions)
 
-    def decide(self, name: str, config: Any, block: Mapping[str, Any]) -> Tuple[SizedFieldDecision, ...]:
+    def decide(
+        self,
+        name: str,
+        config: Any,
+        block: Mapping[str, Any],
+        many_facts: Optional[Mapping[str, FrozenSet[str]]] = None,
+    ) -> Tuple[SizedFieldDecision, ...]:
         """Decides, field by field, which computed values the file may compute again (A-P3.1).
 
         The run's ``sizing_record`` is the input: it exists only on a configuration a law was
@@ -347,10 +377,13 @@ class EntryConfigWriter:
             config: The live configuration object, whose current value says whether the setup
                 assigned the field again after resolving it.
             block: The sparse block as the diff produced it, before any field is dropped.
+            many_facts: Per field, the facts its effective law reads from every provider, as
+                :meth:`many_read_facts` derives them; no field reads a fact many-fold when omitted.
 
         Returns:
             One decision per computed field the block states, in resolution order.
         """
+        many_facts = many_facts if many_facts is not None else {}
         decisions: List[SizedFieldDecision] = []
         for entry in getattr(config, "sizing_record", ()) or ():
             if entry.field not in block:
@@ -358,17 +391,25 @@ class EntryConfigWriter:
             value = ConfigBlockWriter.plain(entry.value, name, entry.field)
             if ConfigBlockWriter.plain(getattr(config, entry.field, None), name, entry.field) != value:
                 continue
-            decisions.append(self.field_decision(name, entry, value))
+            decisions.append(self.field_decision(name, entry, value, many_facts.get(entry.field, frozenset())))
         return tuple(decisions)
 
-    def field_decision(self, name: str, entry: Any, value: Any) -> SizedFieldDecision:
+    def field_decision(
+        self, name: str, entry: Any, value: Any, many_facts: FrozenSet[str] = frozenset()
+    ) -> SizedFieldDecision:
         """Decides about one computed field: left to the preset, or concrete with why it stayed.
 
-        Only the facts decide. Two conditions pin a value, and each produces a sentence rather than
-        silence, because a pinned line in a twin is a statement about the fleet's conversion state
-        and a reader has to be able to tell which of them they are looking at: a fact has no
-        provider in this system yet, or a fact has more than one. The third outcome — the field is
-        left to the preset — produces no line and therefore no sentence.
+        Only the facts decide. Three conditions pin a value, and each produces a sentence rather
+        than silence, because a pinned line in a twin is a statement about the fleet's conversion
+        state and a reader has to be able to tell which of them they are looking at: a fact has no
+        provider in this system yet, a fact read from one provider has more than one, or a fact read
+        from every provider was summed over fewer of them than the system holds. The last outcome --
+        the field is left to the preset -- produces no line and therefore no sentence.
+
+        Example: a battery whose capacity law is ``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))``, beside
+        the arrays ``PVSouth`` and ``PVWest``, which a setup resolved with both peak powers, is left
+        to the preset with the sources ``("PVSouth.pv_peak_power_in_watt",
+        "PVWest.pv_peak_power_in_watt")``; resolved with one of the two it is pinned.
 
         Whose law computed the value does not enter into it. ``entry.law`` is the *effective* law,
         the preset's own where a preset pinned one, and omitting the field is what keeps that law
@@ -380,6 +421,7 @@ class EntryConfigWriter:
             name: The component's runtime name.
             entry: The field's :class:`~hisim.config.SizingRecordEntry`.
             value: The value the run produced, already reduced to plain data.
+            many_facts: The facts the field's law reads from every provider (``Sum(Many(...))``).
 
         Returns:
             The decision, carrying the sources of an omitted field or the reason of a pinned one.
@@ -392,6 +434,20 @@ class EntryConfigWriter:
                     name, entry.field, entry.law, value,
                     reason=TwinComments.NO_PROVIDER.format(fact=fact),
                 )
+            if fact in many_facts:
+                count = self.values_read(entry, fact)
+                if count != len(declaring):
+                    return SizedFieldDecision(
+                        name, entry.field, entry.law, value,
+                        reason=TwinComments.SUBSET_OF_PROVIDERS.format(
+                            fact=fact,
+                            count=count,
+                            total=len(declaring),
+                            providers=TwinComments.SEPARATOR.join(declaring),
+                        ),
+                    )
+                sources.extend(f"{provider}.{fact}" for provider in declaring)
+                continue
             if len(declaring) > 1:
                 return SizedFieldDecision(
                     name, entry.field, entry.law, value,
@@ -401,6 +457,65 @@ class EntryConfigWriter:
                 )
             sources.append(f"{declaring[0]}.{fact}")
         return SizedFieldDecision(name, entry.field, entry.law, value, tuple(sources))
+
+    @staticmethod
+    def many_read_facts(config: Any, fresh: Any) -> Dict[str, FrozenSet[str]]:
+        """Names, per sizable field, the facts its effective law reads from every provider.
+
+        The effective law is the one the preset left in the field, where a preset pinned a law of
+        its own, and the class's law otherwise -- the same choice the sizing engine makes. Only a
+        fact read at :attr:`~hisim.config.Cardinality.MANY` is named, because only such a read is
+        unambiguous beside several providers: the law sums all of them.
+
+        Example: the battery's ``sized_to_pv`` preset leaves both power fields to
+        ``Sum(Many(Size.PV_PEAK_POWER_IN_WATT))``, so both map to ``{"pv_peak_power_in_watt"}``;
+        the PV array's ``power_in_watt`` reads the roof area once and is absent.
+
+        Args:
+            config: The live configuration, whose class declares the sizable fields and laws.
+            fresh: A fresh, unresolved build of the preset the configuration is stamped with.
+
+        Returns:
+            The fields whose law reads at least one fact many-fold, each with those facts.
+        """
+        found: Dict[str, FrozenSet[str]] = {}
+        for field_name, class_law in sizable_fields(type(config)).items():
+            preset_value = getattr(fresh, field_name, None)
+            effective = preset_value if isinstance(preset_value, SizingLaw) else class_law
+            facts = frozenset(
+                fact for fact, cardinality in effective.facts_read() if cardinality is Cardinality.MANY
+            )
+            if facts:
+                found[field_name] = facts
+        return found
+
+    @staticmethod
+    def values_read(entry: Any, fact: str) -> int:
+        """Counts the values one field's law summed when it read a fact from every provider.
+
+        The sizing record states them in two forms: a configuration the fact engine resolved
+        carries one ``("<provider>.<fact>", value)`` input per provider, and one a setup resolved
+        against a hand-built context carries a single ``(fact, (value, value, ...))`` input whose
+        tuple holds them all.
+
+        Example: a battery a Python setup resolved with ``SizingContext(pv_peak_power_in_watt=
+        (4000.0, 2000.0))`` records ``(("pv_peak_power_in_watt", (4000.0, 2000.0)),)``, which counts
+        two.
+
+        Args:
+            entry: The field's :class:`~hisim.config.SizingRecordEntry`.
+            fact: The fact read many-fold.
+
+        Returns:
+            How many providers' values the law read.
+        """
+        count = 0
+        for source, value in entry.inputs:
+            if source == fact:
+                count += len(value) if isinstance(value, tuple) else 1
+            elif source.endswith(f".{fact}") and not source.startswith("self."):
+                count += 1
+        return count
 
     @classmethod
     def unresolved(cls, baseline: Any) -> Any:

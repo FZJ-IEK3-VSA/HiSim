@@ -140,6 +140,28 @@ sized independently, both from the photovoltaic power, so state both: a capacity
 power the array would have given. Leaving the lines out keeps the automatic sizing.
 `tests/test_energy_system_explicit_sizes.py` checks all of this on the recorded heat-pump twin.
 
+### Several PV arrays
+
+A house with more than one array — an east and a west roof, or a garage beside the house — has one
+`PVSystem` entry per array, each with a name of its own and its own `power_in_watt`, `azimuth` and
+`tilt`. Nothing else needs to know how many there are:
+
+- the energy manager and the electricity meter take one production input per array and work on
+  their sum;
+- the battery's `sized_to_pv` laws sum the peak power of every array (`Sum(Many(...))`); a
+  `sizing_sources: {pv_peak_power_in_watt: [PVSouth.pv_peak_power_in_watt]}` line sizes it to the
+  arrays it names instead;
+- each array is a cost subject of its own, priced at its own power, and the lifecycle cost engine
+  attributes to each array its own generation (`component_breakdowns` and
+  `annual_energy_attribution_by_subject_in_kwh` in `lifecycle_costs.json`);
+- the General KPIs (`PV production`, self-consumption, grid injection) are the building's totals
+  over all arrays; an array's own generation is in its `ElectricityOutput` result column.
+
+A composed file imports `pv/array` once with one instance per array (`instances: {south: {...},
+west: {...}}`). `tests/energy_systems/two_pv_arrays.energy_system.yaml` (south 4 kWp, west 2 kWp)
+and its composed twin are the worked example, and `tests/test_multiple_pv_arrays.py` checks that
+each array generates exactly what it generates alone and that everything downstream sees the sum.
+
 ## Recording a Python setup
 
 Every `<setup>.energy_system.yaml` here is generated. It was produced by running the Python setup
@@ -191,7 +213,11 @@ would contribute it has not been converted — and the line reads
 `# pinned: no provider of <fact> in this system yet`. Those lines disappear by themselves on the
 re-record that follows that class's conversion, so the twins get shorter as the conversion
 proceeds. One rarer pin names its own reason: a fact several components in the system declare, so
-the file would be ambiguous and a twin writes no `sizing_sources`.
+the file would be ambiguous and a twin writes no `sizing_sources`. A law that sums its fact over
+every provider, the battery's `Sum(Many(Size.PV_PEAK_POWER_IN_WATT))`, is not ambiguous beside
+several arrays — the file sums all of them — so it is left to its preset when the setup summed every
+array, and pinned with `# pinned: … is summed over 1 of the 2 values …` when the setup sized the
+battery to some of them only.
 
 A field whose *preset* pinned a law of its own — the pellet boiler's minimal power, a twelfth of
 its maximum instead of the class default of zero — needs no pin. Leaving the line out is exactly

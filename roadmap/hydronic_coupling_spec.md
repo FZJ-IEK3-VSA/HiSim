@@ -383,13 +383,15 @@ point up to a maximum installers set between about 60 and 80 °C, with a thermos
 tank's tap valve already is (`hydronics.mixing_valve_draw`: above the 40 °C tap temperature the tap draws less tank
 water for the same heat, so the hot-water demand does not rise with the tank). With the maximum at 60 °C, the backups'
 aim, the restart band let the tank wait between 57 and 60 °C on sunny days while the backup supplied the rest
-(measured on the part-load stack, with the collector's part load of #917, now parked: gas + solar, year 2021 at
-900 s, collector heat 390.8 kWh without the band, 314.4 kWh with it). With 80 °C, measured 2026-10-13 on #915 with the
+(measured on the part-load stack with the collector's part load of #917 and the start-of-step decision in place:
+gas + solar, year 2021 at 900 s, collector heat 392.1 kWh without the band, 314.4 kWh with it). With 80 °C, measured 2026-10-13 on #915 with the
 hysteresis of #941 (year 2021, predefined occupancy, 900 s, #941 → 80 °C): collector heat 352.0 → 973.1 kWh
 (`household_gas_solar_thermal`) and 591.3 → 1102.8 kWh (heat pump + solar), the backup's hot-water heat
 2767.8 → 2170.5 kWh and 2477.6 → 1992.6 kWh, the tank's standby loss 267.4 → 291.2 kWh and 235.9 → 262.8 kWh; at 60 s
-the collector heat is 971.1 and 1099.8 kWh. A tank above 60 °C keeps the backups off, since each decides on `T0`
-against its own aim (§5.5), and the larger standby loss of the hotter tank is accepted (owner: "more losses of solar
+the collector heat is 971.1 and 1099.8 kWh. A tank above a backup's aim keeps that backup off, since each decides on
+`T0` against its own aim (§5.5): 60 °C for the boiler, the district-heating substation and the electric heater, and
+for the heat pump 59.5 °C, or up to 69.5 °C while the energy manager raises its set temperature on PV surplus, which
+still lies below the solar maximum. The larger standby loss of the hotter tank is accepted (owner: "more losses of solar
 heat really don't matter").
 
 **Since 2026-10-14 the pump is speed-controlled and its controller is a differential controller** (owner, 2026-10-14:

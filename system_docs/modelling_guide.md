@@ -83,11 +83,12 @@ B10):
   (`component_design_principles.md` B6). Example: the boiler's part-load rule (#915) left every 60 s result and
   golden bit-identical, and changed the gas twin's hot-water gas at 900 s by -0.002 % against 60 s
   (`roadmap/hydronic_part_load_spec.md` §11).
-- **Every coarse-step model has a documented tolerance and a test that measures it.** The spec or the component
-  docstring states the tolerance and the quantity it applies to, and a test runs the same system at 60 s and at
-  the coarse step. Example: `tests/test_dhw_chain_time_resolution.py` runs six twins for four weeks at 60, 900 and
+- **A coarse-step model agrees with the 60 s run within 1 %** at 900 s and 3600 s, on the energy figures it is
+  measured by (heat delivered, fuel or electricity, the bill), unless its spec states and justifies another
+  tolerance (owner, 2026-10-15). A test runs the same system at 60 s and at the coarse steps and asserts the
+  tolerance. Example: `tests/test_dhw_chain_time_resolution.py` runs six twins for four weeks at 60, 900 and
   3600 s; the heat drawn at the tap agrees within 1 %, the generators' hot-water heat within 1 % at 900 s and
-  1.5 % at 3600 s, and its docstring says why 3600 s needs more.
+  1.5 % at 3600 s, and its docstring justifies the 1.5 %.
 - **A change is measured, not assumed.** The PR description gives the change against the 60 s run of the same
   head at 900 s and 3600 s for the twins it affects (part-load spec §11, the tables of #941). A deviation beyond the
   tolerance is a bug or a decision for the owner, never a widened tolerance.
@@ -130,8 +131,9 @@ The rule, generalised from RenoVisor's "fail loudly, except for what is written 
 
 ## 5. Every parameter has a source
 
-- **Every default parameter cites its source** where it is defined: a preset value, a class constant with a
-  physical or technical meaning, a hard-coded set point. The source is a standard (DIN EN, VDI, ISO with its
+- **Every default parameter cites its source** where it is defined, in new and existing code alike (owner,
+  2026-10-15): a preset value, a configuration field's default, a class constant with a physical or technical
+  meaning, a hard-coded set point. The source is a standard (DIN EN, VDI, ISO with its
   number), a datasheet (manufacturer, model, document), a measurement (where, when), the literature, or an owner
   decision with its date. Write it in the `#:` comment above the constant or in the preset's docstring.
 - **Example**, `SolarThermalSystemController.SWITCH_ON_TEMPERATURE_DIFFERENCE_IN_KELVIN` in
@@ -139,8 +141,9 @@ The rule, generalised from RenoVisor's "fail loudly, except for what is written 
   difference of a few kelvin, adjustable from about 2 to 16 K, with factory settings of about 6 K (RESOL DeltaSol A
   and DeltaSol ES manuals, https://www.heizungsdiscount24.de/pdf/Resol-DeltaSol-A-Anleitung.pdf). The owner chose
   7 K and 3 K on 2026-10-14."
-- **An estimate says it is one**, with what it rests on ("estimated from ..."). A value without a source found in
-  existing code gets a bead to find one; it is not copied into new code.
+- **An estimate says it is one**, with what it rests on ("estimated from ..."). The existing values
+  without a source are listed per component family in beads hisim-h2ib.11 to hisim-h2ib.25; until they have one,
+  they are not copied into new code.
 - **A parameter the system decides is sized, not pinned**: a power from the building's heating load is a
   `sized_field(rule=...)` (CLAUDE.md, "Adding a new component"), and a copy of another component's value is sized
   from that component's fact, never configured on its own (the heating threshold lives in the heating-curve L2
@@ -155,14 +158,3 @@ The rule, generalised from RenoVisor's "fail loudly, except for what is written 
   holds everything the cached result depends on. Why: the heat pump sets its minimum thermal power to 0 in hot-water
   mode and never restores it, and the hplib cache key does not contain it, so results depend on when the first
   hot-water charge happens (bead hisim-4g9.26).
-
-## 7. Open questions for the owner
-
-- **Q1. Is the source rule (§5) retroactive?** Many existing presets and constants cite no source. Options: (a) a
-  bead per component family to add the sources; (b) only values that are touched get a source (the boy-scout rule,
-  `coding_style.md` §2, rule 2). Bead hisim-h2ib.8.
-- **Q2. Is 1 % the default tolerance of a coarse-step model against 60 s (§3)?** Today each spec sets its own:
-  stage C's done-when is 1 % (hisim-fxix.4), the dynamic distribution loop's criterion is 1 % on delivered heat
-  and the bill (hisim-hhj2), and `tests/test_dhw_chain_time_resolution.py` allows 1.5 % for the generators at
-  3600 s. Options: (a) 1 % on annual energy figures unless the spec documents and justifies another value; (b) no
-  default, every spec sets its own. Bead hisim-h2ib.9.

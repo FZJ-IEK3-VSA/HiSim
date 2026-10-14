@@ -116,7 +116,7 @@ def test_a_temperature_that_is_not_finite_or_a_ratio_outside_zero_to_one_is_refu
     ratio_run: float, start_in_celsius: float, end_in_celsius: float
 ) -> None:
     """A NaN would pass every comparison as false and give a ratio nobody chose; the rule refuses it, as a bad ratio."""
-    with pytest.raises(ValueError, match="part-load rule needs"):
+    with pytest.raises(ValueError, match="part-load rule"):
         RuleIteration.next_ratio(
             ratio_run, start_in_celsius=start_in_celsius, end_in_celsius=end_in_celsius, target_in_celsius=60.0
         )

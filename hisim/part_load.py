@@ -28,6 +28,7 @@ Terms:
   on the next step, as a fine-step run does.
 """
 
+import math
 from typing import ClassVar
 
 from hisim import loadtypes as lt
@@ -120,8 +121,7 @@ class PartLoadRule:
         cls.check_finite("start_temperature_in_celsius", start_temperature_in_celsius)
         cls.check_finite("end_temperature_in_celsius", end_temperature_in_celsius)
         cls.check_finite("target_temperature_in_celsius", target_temperature_in_celsius)
-        if not 0.0 <= ratio_run <= 1.0:
-            raise ValueError(f"The part-load rule needs a ratio run from 0 to 1, not {ratio_run}.")
+        cls.validated_ratio(ratio_run, "The part-load rule's ratio run")
         if start_temperature_in_celsius >= target_temperature_in_celsius:
             return 0.0
         deviation_in_kelvin = end_temperature_in_celsius - target_temperature_in_celsius
@@ -149,8 +149,31 @@ class PartLoadRule:
         Raises:
             ValueError: If the value is not finite.
         """
-        if not abs(value) < float("inf"):
+        if not math.isfinite(value):
             raise ValueError(f"The part-load rule needs a finite {name}, not {value}.")
+
+    @staticmethod
+    def validated_ratio(value: float, name: str) -> float:
+        """Return a part-load ratio as a float after checking that it lies from 0 to 1, naming it otherwise.
+
+        Every place that reads or publishes a ratio (the rule's ratio run, the ratio a device reports, the ratio a
+        controller commands) checks it the same way, so a device or wiring error stops the step with one message.
+        For example, ``validated_ratio(0.4, "x")`` returns 0.4 and ``validated_ratio(1.2, "x")`` raises.
+
+        Args:
+            value: The ratio to check.
+            name: What the ratio is, for the message, for example the full name of the port it was read from.
+
+        Returns:
+            The ratio as a float, from 0 to 1.
+
+        Raises:
+            ValueError: If the ratio is NaN or lies outside [0, 1].
+        """
+        ratio = float(value)
+        if not 0.0 <= ratio <= 1.0:
+            raise ValueError(f"{name}: a part-load ratio is a fraction from 0 to 1, not {ratio}.")
+        return ratio
 
 
 class PartLoadControl:
@@ -303,12 +326,9 @@ class PartLoadControl:
         Raises:
             ValueError: If the device reported a ratio outside [0, 1].
         """
-        ratio_run = float(stsv.get_input_value(self.ratio_run_channel))
-        if not 0.0 <= ratio_run <= 1.0:
-            raise ValueError(
-                f"{self.ratio_run_channel.fullname}: a part-load ratio run is a fraction from 0 to 1, not {ratio_run}."
-            )
-        return ratio_run
+        return PartLoadRule.validated_ratio(
+            stsv.get_input_value(self.ratio_run_channel), f"{self.ratio_run_channel.fullname} (ratio run)"
+        )
 
 
 class PartLoadCommand:
@@ -357,12 +377,7 @@ class PartLoadCommand:
         Raises:
             ValueError: If the controller sent a ratio outside [0, 1].
         """
-        ratio = float(stsv.get_input_value(self.ratio_channel))
-        if not 0.0 <= ratio <= 1.0:
-            raise ValueError(
-                f"{self.ratio_channel.fullname}: a part-load ratio is a fraction from 0 to 1, not {ratio}."
-            )
-        return ratio
+        return PartLoadRule.validated_ratio(stsv.get_input_value(self.ratio_channel), self.ratio_channel.fullname)
 
     def publish_ratio_run(self, stsv: SingleTimeStepValues, ratio_run: float) -> None:
         """Publish the part-load ratio the device ran with in this pass.
@@ -374,8 +389,7 @@ class PartLoadCommand:
         Raises:
             ValueError: If the ratio lies outside [0, 1].
         """
-        if not 0.0 <= ratio_run <= 1.0:
-            raise ValueError(
-                f"{self.ratio_run_channel.full_name}: a part-load ratio run is a fraction from 0 to 1, not {ratio_run}."
-            )
-        stsv.set_output_value(self.ratio_run_channel, ratio_run)
+        stsv.set_output_value(
+            self.ratio_run_channel,
+            PartLoadRule.validated_ratio(ratio_run, f"{self.ratio_run_channel.full_name} (ratio run)"),
+        )

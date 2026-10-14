@@ -4,6 +4,8 @@ This module turns a JSON config (``scripts/golden_config.json``) into
 :class:`~hisim.simulationparameters.SimulationParameters`, runs a setup via
 :func:`hisim.hisim_main.main`, reads the resulting ``all_kpis.json``, and
 turns it into the golden leaf map (``scripts/golden_kpis.py``, :func:`golden_leaves`).
+An entry whose ``path`` names an energy-system file (``*.energy_system.yaml``) instead of a
+Python setup runs that file through the declarative executor (:func:`run_energy_system_file`).
 
 The pure helpers (``load_config``, ``build_simulation_parameters``,
 ``resolve_setup_path``, ``filter_config``, ``select_pairs``, ``config_hash``,
@@ -80,6 +82,23 @@ class SetupConfig:
             The recorded wall time in seconds, or the default when none is recorded.
         """
         return float(pair_seconds({"id": self.id, "seconds": self.seconds}, parameter_set_id))
+
+    def is_energy_system_file(self) -> bool:
+        """Whether this entry names an energy-system file rather than a Python setup.
+
+        An entry is either a Python setup, ``system_setups/<stem>.py``, or an energy system written
+        in YAML alone, ``energy_systems/<stem>.energy_system.yaml``, a file with no Python setup
+        behind it. The second kind is recognised by the suffixes the ``hisim`` command line itself
+        dispatches on (:class:`hisim.hisim_main.EnergySystemMode`), so the runner and the command
+        line agree on what an energy-system file is.
+
+        Returns:
+            True when :attr:`path` ends in ``.energy_system.yaml`` or ``.energy_system.yml``.
+        """
+        # Imported here so the pure helpers stay importable without the HiSim execution stack.
+        from hisim.hisim_main import EnergySystemMode
+
+        return self.path.endswith(EnergySystemMode.SUFFIXES)
 
     def runs_factory(self, factory: str) -> bool:
         """Whether this setup participates in parameter sets built by ``factory``.
@@ -352,14 +371,20 @@ def build_simulation_parameters(
 def resolve_setup_path(setup: SetupConfig, repo_root: Path) -> Path:
     """Resolve ``setup.path`` relative to ``repo_root`` and return the absolute ``Path``.
 
+    The path names either a Python setup (``.py``) or an energy-system file
+    (``.energy_system.yaml``, :meth:`SetupConfig.is_energy_system_file`).
+
     Raises:
-        FileNotFoundError: if the file does not exist or does not have a ``.py`` suffix.
+        FileNotFoundError: if the file does not exist or is neither a ``.py`` file nor an
+            energy-system file.
     """
     resolved = (repo_root / setup.path).resolve()
     if not resolved.exists():
         raise FileNotFoundError(f"Setup script not found: {setup.path} (resolved to {resolved})")
-    if resolved.suffix != ".py":
-        raise FileNotFoundError(f"Setup script must be a .py file: {setup.path} (resolved to {resolved})")
+    if resolved.suffix != ".py" and not setup.is_energy_system_file():
+        raise FileNotFoundError(
+            f"Setup must be a .py file or an .energy_system.yaml file: {setup.path} (resolved to {resolved})"
+        )
     return resolved
 
 
@@ -371,10 +396,16 @@ def resolve_twin_path(setup: SetupConfig, repo_root: Path) -> Path:
     that twin so the YAML golden check can run the identical system through the
     declarative executor.
 
+    An entry that names an energy-system file (:meth:`SetupConfig.is_energy_system_file`) has
+    no recorded twin: it is a declarative file itself, so this returns that file, and YAML mode
+    runs it a second time through the executor directly.
+
     Raises:
         FileNotFoundError: if the twin does not exist; the message names the recording
             command that produces it.
     """
+    if setup.is_energy_system_file():
+        return resolve_setup_path(setup, repo_root)
     twin_rel = Path("energy_systems") / f"{Path(setup.path).stem}.energy_system.yaml"
     resolved = (repo_root / twin_rel).resolve()
     if not resolved.exists():
@@ -409,6 +440,29 @@ def resolve_composed_path(setup: SetupConfig, repo_root: Path) -> tuple[Path, Co
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
+def run_energy_system_file(path: Path, params: SimulationParameters) -> None:
+    """Run one energy-system file the way ``hisim energy-system run`` runs it, with parameters built here.
+
+    The command line's :func:`hisim.energy_system.executor.run_energy_system` reads its parameters
+    from a file; the golden runner builds them in memory from the config's parameter set
+    (:func:`build_simulation_parameters`). Apart from that, this does what it does: one
+    calculation (:class:`hisim.calculation_scope.CalculationScope`, with its write guard), the file
+    built, its run records written, every time step simulated and the post-processing run.
+
+    Args:
+        path: The ``*.energy_system.yaml`` file.
+        params: The simulation parameters, their result directory already set.
+    """
+    # Imported here so the pure helpers stay importable without the HiSim execution stack.
+    from hisim.calculation_scope import CalculationScope
+    from hisim.energy_system.executor import build_energy_system, write_records
+
+    with CalculationScope.open(label=str(path)):
+        built = build_energy_system(str(path), params)
+        write_records(built, built.simulator.get_simulation_parameters().result_directory)
+        built.simulator.run_all_timesteps()
+
+
 def run_one(
     setup: SetupConfig,
     parameter_set: ParameterSetConfig,
@@ -420,7 +474,8 @@ def run_one(
 
     Builds :class:`SimulationParameters`, resolves the setup, runs it, then reads
     turns ``<result_directory>/all_kpis.json`` into golden leaves. With ``mode="python"``
-    (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`; with
+    (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`, or, for an entry that
+    names an energy-system file, that file via :func:`run_energy_system_file`; with
     ``mode="yaml"`` it runs the recorded ``.energy_system.yaml`` twin through the
     declarative executor, and with ``mode="composed"`` the setup's composed file
     (:func:`resolve_composed_path`), whose KPI leaves are then renamed to the twin's
@@ -452,6 +507,8 @@ def run_one(
                 path = resolve_twin_path(setup, repo_root)
             built = build_energy_system(str(path), params)
             built.simulator.run_all_timesteps()
+        elif setup.is_energy_system_file():
+            run_energy_system_file(resolve_setup_path(setup, repo_root), params)
         else:
             setup_path = resolve_setup_path(setup, repo_root)
             hisim_main.main(str(setup_path), params)

@@ -71,9 +71,10 @@
 # once (golden_check.py --jobs 2, a child process per pair). Every setup of golden_config.json
 # runs the full year (owner decision 2026-10-11: the first week of January never runs a solar
 # collector's pump, so only a year exercises the solar systems); a setup that cannot finish a
-# year would keep a week-only 'horizons' entry until its bead is fixed. That is 22 Python pairs
-# plus the composed files of the eight generator setups, 30 runs of about 155 minutes of
-# simulation in all by the config's weights (the run of 2026-10-13 measured 159). Five shards
+# year would keep a week-only 'horizons' entry until its bead is fixed. That is 22 Python pairs and
+# the energy-system file gas_boiler_household (about 2 minutes, added 2026-10-14), plus the composed
+# files of the eight generator setups, 31 runs of about 157 minutes of simulation in all by the
+# config's weights (the run of 2026-10-13 measured 159 without the energy-system file). Five shards
 # give each about 16 minutes of simulation by the weights (the heaviest pair, the heat pump with
 # car, takes about 12 alone); the shard jobs took 16 to 20 minutes on 2026-10-13. The weights the
 # shards are balanced by are "seconds" in golden_config.json.

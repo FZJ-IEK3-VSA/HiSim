@@ -86,6 +86,9 @@ tests/
   update, check, CI matrix) is driven off this list, so curating the gate never
   requires touching Python or the workflows.
 - Each setup entry: `{ "id": "<stable_id>", "path": "system_setups/<file>.py" }`.
+  An energy system written in YAML alone, with no Python setup behind it, is an entry too:
+  `"path": "energy_systems/<file>.energy_system.yaml"`. The runner runs that file the way
+  `hisim energy-system run` does, and YAML mode runs the same file, since it has no recorded twin.
   Pick whichever setups you want to protect; the only hard requirements are that
   each is **offline-runnable** and **KPI-complete** (see §9 for the validator
   that checks this for you).
@@ -97,8 +100,8 @@ tests/
 - **Two parameter sets per setup** (decision §14.5): `one_week_60s`
   (`one_week_only`) and `full_year_60s` (`full_year`), both 2021 @ 60s. The
   full-year run is deliberately included — many bugs only surface over long
-  horizons. Current list (2026-10-11) = 22 setups, all run the week and the full
-  year = **44 pairs**.
+  horizons. Current list (2026-10-14) = 22 setups plus the energy-system file
+  `gas_boiler_household`, all run the week and the full year = **46 pairs**.
 
 ### 6.2 `runner.py`
 - **Keep**: `load_config`, dataclasses, `build_simulation_parameters`,

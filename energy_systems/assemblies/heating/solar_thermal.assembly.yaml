@@ -84,8 +84,8 @@ tests:
     - {parameter: area_in_m2, kpi: CAPEX - Investment cost, member: Collector, direction: increasing}
       # the investment is priced per m² of collector (3188 EUR for the default 4 m², 1594 to 15940 EUR over the
       # range); the heat delivered is no measure on the test day: unlike the 1200 W/m² ceiling the bounds are sized
-      # for, the test day measures at most 53 W/m² on the collector plane, which never lifts the collector 10 K above
-      # the cylinder, so the pump never starts and every area of the range delivers 0 kWh
+      # for, the test day measures at most 53 W/m² on the collector plane, at which the collector heat stays below the
+      # pump's switch-on flow, so the pump never starts and every area of the range delivers 0 kWh
   expect:
     - {kpi: Total thermal energy delivered, member: Collector, min: 0, max: 0.5}
       # 0.0 kWh measured at the defaults (4 m², one apartment) on the test day: the pump never starts

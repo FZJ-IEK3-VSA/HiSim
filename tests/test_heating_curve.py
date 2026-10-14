@@ -165,3 +165,40 @@ class TestWiredCurve:
         stsv.set_output_value(raise_output, 2.0)
         curve.i_simulate(0, stsv, True)
         assert stsv.values[curve.supply_temperature_set_channel.global_index] == pytest.approx(28.79073817878373, rel=1e-15)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("outside_temperature_in_celsius", "raise_in_kelvin", "reference_temperature_in_celsius"),
+    [
+        (19.0, -2.0, -7.0),  # a negative raise puts the raised room below the day mean: a negative load fraction
+        (5.0, math.nan, -7.0),  # a NaN raise
+        (5.0, 0.0, 20.0),  # a design day as warm as the room: a division by zero
+    ],
+)
+def test_a_curve_point_off_the_curve_is_refused(
+    outside_temperature_in_celsius: float, raise_in_kelvin: float, reference_temperature_in_celsius: float
+) -> None:
+    """Catches a supply set point that is complex, infinite or NaN instead of a refusal that names the values."""
+    with pytest.raises(ValueError, match="heating curve"):
+        HeatingCurveController.supply_temperature_set_in_celsius(
+            daily_average_outside_temperature_in_celsius=outside_temperature_in_celsius,
+            room_set_temperature_in_celsius=20.0,
+            room_set_temperature_raise_in_kelvin=raise_in_kelvin,
+            heating_reference_temperature_in_celsius=reference_temperature_in_celsius,
+            emitter_design=EmitterDesign.for_type(HeatDistributionSystemType.FLOORHEATING),
+        )
+
+
+@pytest.mark.base
+def test_a_curve_whose_design_day_is_not_colder_than_the_room_is_refused_when_built() -> None:
+    """Catches a curve built for a design day at the room set temperature, which would divide by zero in the run."""
+    config = HeatingCurveControllerConfig(
+        component_id=ComponentID(name="HeatingCurveController"),
+        set_heating_threshold_outside_temperature_in_celsius=18.0,
+        heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
+        heating_reference_temperature_in_celsius=20.0,
+        set_heating_temperature_for_building_in_celsius=20.0,
+    )
+    with pytest.raises(ValueError, match="design day must be colder"):
+        HeatingCurveController(my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config)

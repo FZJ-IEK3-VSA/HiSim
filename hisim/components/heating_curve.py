@@ -5,8 +5,8 @@ temperature: the colder the day, the hotter the supply. The same curve decides t
 space heating runs at all, by comparing the day's mean outside temperature with the heating threshold.
 
 Several L1 controllers share these two signals -- the heat pump's, the boiler's and the district-heating substation's
-controllers aim at the supply temperature, and they and the heat-distribution controller heat only in the heating
-season. A set point several L1 controllers share comes from an L2 controller, so the curve is a component of its own,
+controllers aim at the supply temperature, and they, the heat-distribution controller and the direct electric heater's
+controller heat only in the heating season. A set point several L1 controllers share comes from an L2 controller, so the curve is a component of its own,
 :class:`HeatingCurveController`, and every L1 controller reads the signals from its outputs instead of keeping a copy.
 """
 
@@ -173,9 +173,13 @@ class HeatingCurveControllerConfig(ConfigBase):
         rule=HEATING_THRESHOLD_LAW,
         note="16 °C up to 50 W/m² of specific heating load, 18 °C up to 80 W/m², 20 °C above that",
     )
-    #: The emitter the curve is drawn for, the heat-distribution controller's emitter type.
+    #: The emitter the curve is drawn for, the heat-distribution controller's emitter type. A house without a
+    #: heat-distribution controller, heated directly in its rooms, has no such fact: its curve uses
+    #: :meth:`preset_direct_room_heating`, which pins the type.
     heat_distribution_system_type: Sizable[HeatDistributionSystemType] = sized_field(
-        rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE, value_type=HeatDistributionSystemType
+        rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE,
+        value_type=HeatDistributionSystemType,
+        note="a house without a heat-distribution controller uses the preset direct_room_heating, which pins it",
     )
     #: The outside temperature of the design day, on which the emitter runs at its design point, in °C.
     heating_reference_temperature_in_celsius: Sizable[float] = sized_field(

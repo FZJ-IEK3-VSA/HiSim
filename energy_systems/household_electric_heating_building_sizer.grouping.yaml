@@ -17,8 +17,10 @@ assignments:
       range is (0, 1] and no value it can take flips the household into another variant.
   ElectricHeatingController:
     assign: override
-    note: Built from the heater's own power band, so it follows the generator one
-      step further down the same cascade.
+    note: No probe moves it; it reads the heating season from the heating curve and
+      sizes nothing itself. Its two flags - hot-water preparation and serving both
+      circuits at once - are the setup's choices, stated at the baseline, and a
+      consumer may set them otherwise.
   ElectricHeating:
     assign: override
     note: The installed electric power is the building's heating load, so a better

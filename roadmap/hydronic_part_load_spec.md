@@ -403,6 +403,32 @@ those of #941 measured on #915 (the collector's ratio is exactly 1 at 60 s). The
 costs collector heat at every step length (hisim-fxix.22), and the coarser the step the more (gas + solar at 3600 s:
 -15.6 % against 60 s). #942 moves the stop to the solar controller's own 80 °C maximum.
 
+**The differential controller with a speed-controlled pump (#941), measured 2026-10-14**, full year 2021 with the
+predefined occupancy, the flow hysteresis above → the differential controller (§5.3 of the hydronic coupling spec:
+on at 7 K and off at 3 K of the collector's sensor above the tank, a pump of 5 to 40 kg/(m² h) with a 20 K target
+lift, the curve at half the lift above the inlet). "Flips" counts the steps whose pump signal changes between passes
+(the first pass reads the previous step's sensors), "flagged" the steps at `force_convergence` and, in brackets,
+those of them with a flip; the backup is the tank's heat from the boiler or the heat pump:
+
+| twin, step | collector heat, kWh | backup, kWh | pump switch-ons | pump hours | flips | flagged | mean passes | max tank, °C |
+|---|---|---|---|---|---|---|---|---|
+| gas + solar, 60 s | 358.7 → 400.6 | 2761.5 → 2719.9 | 253 → 348 | 426 → 673 | 506 → 713 | 0 → 0 | 3.09 → 3.09 | 60.47 → 60.47 |
+| gas + solar, 900 s | 341.3 → 393.7 | 2778.3 → 2726.1 | 220 → 321 | 407 → 657 | 450 → 647 | 95 (1) → 92 (2) | 3.27 → 3.30 | 61.51 → 61.00 |
+| gas + solar 20 m², 60 s | 633.1 → 680.7 | 2489.8 → 2442.2 | 337 → 367 | 280 → 330 | 696 → 755 | 0 → 0 | 3.09 → 3.09 | 60.58 → 60.58 |
+| gas + solar 20 m², 900 s | 624.2 → 666.9 | 2497.5 → 2455.2 | 320 → 355 | 279 → 321 | 652 → 720 | 98 (15) → 87 (14) | 3.27 → 3.29 | 60.75 → 60.40 |
+| heat pump + solar, 60 s | 537.5 → 607.2 | 2723.9 → 2652.6 | 342 → 458 | 626 → 1022 | 690 → 933 | 211 (0) → 371 (0) | 3.75 → 3.74 | 60.12 → 60.12 |
+| heat pump + solar, 900 s | 514.0 → 571.7 | 2746.2 → 2689.4 | 321 → 433 | 596 → 970 | 656 → 876 | 1328 (13) → 1295 (22) | 4.46 → 4.47 | 60.05 → 60.05 |
+
+The pump starts at a lower sun than at the old switch-on flow and runs at its minimum flow on weak sun, so the
+collector gives 7 to 15 % more heat, the backup correspondingly less, and the pump runs about 60 % longer. The
+switch-ons a day hardly depend on the area any more: 0.95 at 4 m² against 1.01 at 20 m² at 60 s (before 0.69
+against 0.92); at 20 m² the 60 °C stop holds the pump most of the summer. The collector heat at 900 s lies 1.7 %
+(gas + solar) and 5.8 % (heat pump + solar) below 60 s, against 4.9 % and 4.4 % before. The heat pump + solar twin
+flags 160 more steps at 60 s, none of them with a flipping pump signal. The gas + solar "before" column reproduces
+the table above to the digit; the heat pump + solar one does not (537.5 against 584.6 kWh of collector heat at
+60 s). Both columns here come from one script on the same day, so the comparison holds; the cause of the difference
+to the earlier table was not traced.
+
 
 ## 12. Beads
 

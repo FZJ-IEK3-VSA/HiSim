@@ -376,6 +376,37 @@ below their maximum storage temperature; the stop is saved state as well. Withou
 60 °C (the boiler's part-load rule ends one at 60.025 °C) and the next step's standby loss switched the pump every
 second step.
 
+**Since 2026-10-14 the pump is speed-controlled and its controller is a differential controller** (owner, 2026-10-14:
+"build it and fold it into 941"). The flow thresholds above were totals for the whole collector field, so the
+hysteresis band was about 12 K of tank temperature at 4 m² and 2 K at 24 m², and it depended on `ΔT_n`
+(review941b, R6/R13). They, and the collector's `RequiredWaterMassFlowAtStartOfStepInKgPerSecond`, are removed.
+
+- **The pump** (`SpeedControlledSolarPump`, three fields of `SolarThermalSystemConfig`) runs `m = Q/(c · lift)` for
+  its target lift (20 K, the lift of before), clamped to a minimum and a maximum specific flow, 5 and 40 kg/(m² h);
+  at a bound the lift follows from the heat. A constant-flow pump has both bounds equal. Every bound is per m², so
+  fields of any size run alike per m².
+- **The curve's mean temperature** is the inlet plus half the lift (`FlatPlateCollectorCurve`), which replaces the
+  fixed `ΔT_n` (`delta_temperature_n_k` is removed). At the target lift it is the 10 K of before, so a pump within its
+  bounds gives the heat, flow and supply of before to the last bit. At the minimum flow the lift and the heat solve
+  `c m L = Q(T_in + L/2)`, a quadratic in `L`. With the fixed `ΔT_n` a collector whose stagnation temperature lies
+  less than 10 K above the tank gives no heat at all, so a pump switched on at 7 K read its outlet at the tank
+  temperature in the next step and switched off again: about 26 switch-ons a day at 60 s against 2 at 900 s on a
+  45 °C tank (probe on the 2021 Aachen weather).
+- **The sensors.** The collector publishes `CollectorSensorTemperatureAtStartOfStepInCelsius`, a start-of-step
+  quantity: after a step its pump stood (it ran a part-load ratio of 0), its stagnation temperature in the step's sun,
+  from `eta_0 G = a_1 (T − T_a) + a_2 (T − T_a)²`; after a step it ran, its outlet with the tank's start-of-step
+  temperature `T0` at the inlet. Whether the pump ran is the collector's saved state.
+- **The switching.** A pump that stood switches on when the sensor reads more than 7 K above `T0`, a pump that ran
+  keeps running while it reads more than 3 K above `T0` (owner, 2026-10-14). The full-tank stop with its restart
+  band, the start-of-step decision and the forced-pass rule (`pump_ran_as_reported`) are unchanged. In an unforced
+  pass the controller saves the pump as running only with a part-load ratio above 0, the state the collector
+  reports and a forced pass keeps.
+- **The minimum flow sets the switching.** At 5 kg/(m² h) a collector that stagnated 7 K above the tank lifts the
+  water by 3.3 to 4.3 K once the pump runs (tanks of 20 to 60 °C, air of −5 to 25 °C), above the 3 K switch-off
+  difference. At 10 kg/(m² h) the lift there is about 2 K: the pump switches on and off in alternate steps while the
+  sun stands near the switch-on point, about 7 switch-ons a day at 60 s against 1 at 900 s on a 45 °C tank. The real
+  collector's heat capacity, which keeps its outlet warm for minutes after the pump starts, is not modelled.
+
 ### 5.4 District heating substation
 
 The substation is a power-limited heat exchanger: `T_sup = T_ret + min(T_set − T_ret, P_connected/(m c))` on

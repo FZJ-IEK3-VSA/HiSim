@@ -433,9 +433,9 @@ the table above to the digit; the heat pump + solar one does not (537.5 against 
 60 s). Both columns here come from one script on the same day, so the comparison holds; the cause of the difference
 to the earlier table was not traced.
 
-**The 80 °C solar maximum on #917 and #941 (#942), measured 2026-10-14**, full year 2021 with the predefined
-occupancy, against the 60 s run of the same head. The 60 s years are those of #942 without #917 (gas + solar:
-971.1 kWh of collector heat, 2173.0 kWh of the boiler's hot-water heat, the committed full-year golden values; heat
+**The 80 °C solar maximum on #917 and the flow-hysteresis #941 (#942), measured 2026-10-14**, full year 2021 with the
+predefined occupancy, against the 60 s run of the same head. The 60 s years are those of #942 without #917 (gas + solar:
+971.1 kWh of collector heat, 2173.0 kWh of the boiler's hot-water heat, the full-year golden values committed then; heat
 pump + solar: 1099.8 kWh and 587.2 kWh of hot-water electricity). Each cell gives #942 with the collector's part load,
 then #942 without it (the pump runs whole steps, as #942 was measured on #915 on 2026-10-13), 900 s / 3600 s:
 
@@ -459,6 +459,26 @@ whole-step pump run leaves it; the highest tank temperature of a year drops from
 tank's 90 °C check. At 900 s the collector heat stays within 0.4 % of 60 s in both twins; at 3600 s it is 2.6 to
 3.1 % below, further than without the part load (-0.53 % / -1.25 %), whose whole-step runs carry the tank past
 80 °C. Unmet hot water is 0.0 kWh (gas + solar) and 15.9 / 16.0 / 19.4 kWh at 60 / 900 / 3600 s (heat pump + solar).
+
+**The 80 °C solar maximum on the differential controller of #941 (#942), measured 2026-10-14**, full year 2021 with
+the predefined occupancy, #941 → #942. The controller underneath now switches on the collector's sensor (§5.3 of the
+hydronic coupling spec); "flagged" are the steps at `force_convergence`, in brackets those with a pump signal that
+changes between passes; the backup is the tank's heat from the boiler or the heat pump:
+
+| twin, step | collector heat, kWh | backup, kWh | standby loss, kWh | unmet, kWh | flagged | pump switch-ons | max tank, °C |
+|---|---|---|---|---|---|---|---|
+| gas + solar, 60 s | 400.6 → 1062.1 | 2719.9 → 2083.9 | 268.0 → 293.6 | 0.00 → 0.00 | 0 → 0 | 348 → 363 | 60.47 → 80.10 |
+| gas + solar, 900 s | 393.7 → 1053.6 | 2726.1 → 2091.7 | 267.4 → 292.9 | 0.00 → 0.00 | 92 (2) → 69 (1) | 321 → 342 | 61.00 → 80.04 |
+| gas + solar, 3600 s | 354.5 → 1046.0 | 2763.8 → 2097.8 | 265.6 → 291.0 | 0.00 → 0.00 | 58 (17) → 59 (9) | 282 → 302 | 68.83 → 80.05 |
+| heat pump + solar, 60 s | 607.2 → 1237.9 | 2652.6 → 2055.0 | 235.8 → 264.7 | 20.10 → 15.82 | 371 (0) → 322 (0) | 458 → 344 | 60.12 → 80.09 |
+| heat pump + solar, 900 s | 571.7 → 1229.7 | 2689.4 → 2064.4 | 236.5 → 265.9 | 18.95 → 15.36 | 1295 (22) → 1032 (22) | 433 → 332 | 60.05 → 80.04 |
+| heat pump + solar, 3600 s | 533.7 → 1211.9 | 2707.8 → 2071.1 | 236.1 → 265.1 | 33.39 → 20.98 | 479 (85) → 309 (30) | 375 → 300 | 62.89 → 80.56 |
+| gas + solar 20 m², 900 s | 666.9 → 1753.0 | 2455.2 → 1420.3 | 269.6 → 320.9 | 0.00 → 0.00 | 87 (14) → 148 (2) | 355 → 414 | 60.40 → 80.05 |
+| gas + solar 20 m², 3600 s | 548.5 → 1696.1 | 2571.8 → 1473.6 | 267.6 → 317.0 | 0.00 → 0.00 | 172 (117) → 140 (38) | 296 → 362 | 71.20 → 83.63 |
+
+The collector heat at 900 s / 3600 s against 60 s: gas + solar −1.72 % / −11.51 % on #941 and −0.80 % / −1.52 % on
+#942; heat pump + solar −5.85 % / −12.10 % on #941 and −0.66 % / −2.10 % on #942. The 20 m² collector runs the year at
+both step lengths; its tank reaches 83.63 °C at 3600 s, below the tank's 90 °C check.
 
 
 ## 12. Beads

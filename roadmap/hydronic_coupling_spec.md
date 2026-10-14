@@ -389,12 +389,19 @@ the hysteresis of #941 but without the collector's part load (year 2021, predefi
 collector heat 352.0 → 973.1 kWh (`household_gas_solar_thermal`) and 591.3 → 1102.8 kWh (heat pump + solar), the
 backup's hot-water heat 2767.8 → 2170.5 kWh and 2477.6 → 1992.6 kWh, the tank's standby loss 267.4 → 291.2 kWh and 235.9
 → 262.8 kWh; at 60 s the collector heat is 971.1 and 1099.8 kWh. Measured again on 2026-10-14 with the collector's part
-load (#917) below #941, the same way: collector heat 341.3 → 968.1 kWh and 584.7 → 1098.7 kWh, the backup's hot-water
-heat 2778.3 → 2175.1 kWh and 2483.6 → 1996.6 kWh, the standby loss 267.2 → 290.8 kWh and 235.1 → 262.4 kWh; the 60 s
-years do not change. With the part load a charging step ends at 80.025 °C, so the tank stays at or below 80.05 °C at 900
-s and 3600 s, where the whole-step pump had carried it to 81.4 and 86.5 °C (gas + solar), and a 20 m² collector, the top
-of the solar assembly's range, runs the year at 3600 s (at most 80.46 °C) instead of stopping at the tank's 90 °C check
-(94.3 °C). A tank above a backup's aim keeps that backup off, since each decides on `T0` against its own aim (§5.5): 60
+load (#917) below the flow-hysteresis #941, the same way: collector heat 341.3 → 968.1 kWh and 584.7 → 1098.7 kWh, the
+backup's hot-water heat 2778.3 → 2175.1 kWh and 2483.6 → 1996.6 kWh, the standby loss 267.2 → 290.8 kWh and 235.1 →
+262.4 kWh; the 60 s years do not change. With the part load a charging step ends at 80.025 °C, so on the flow-hysteresis
+#941 the tank stayed at or below 80.05 °C at 900 s and 3600 s, where the whole-step pump had carried it to 81.4 and
+86.5 °C (gas + solar), and a 20 m² collector, the top of the solar assembly's range, ran the year at 3600 s (at most
+80.46 °C) instead of stopping at the tank's 90 °C check (94.3 °C). On the differential controller of #941 (measured
+2026-10-14, the same way, #941 → 80 °C, 60 s / 900 s): collector heat 400.6 → 1062.1 / 393.7 → 1053.6 kWh (gas +
+solar) and 607.2 → 1237.9 / 571.7 → 1229.7 kWh (heat pump + solar), the backup's hot-water heat 2719.9 → 2083.9 /
+2726.1 → 2091.7 kWh and 2652.6 → 2055.0 / 2689.4 → 2064.4 kWh, the standby loss 268.0 → 293.6 / 267.4 → 292.9 kWh and
+235.8 → 264.7 / 236.5 → 265.9 kWh. The tank stays at or below 80.05 °C at 900 s in both twins and at 3600 s in gas +
+solar, reaches 80.56 °C at 3600 s in heat pump + solar, and a 20 m² collector runs the year at 900 s (at most 80.05 °C)
+and at 3600 s (at most 83.63 °C), below the tank's 90 °C check. A tank above a backup's aim keeps that backup off,
+since each decides on `T0` against its own aim (§5.5): 60
 °C for the boiler, the district-heating substation and the electric heater, and for the heat pump 59.5 °C, or up to 69.5
 °C while the energy manager raises its set temperature on PV surplus, which still lies below the solar maximum. The
 larger standby loss of the hotter tank is accepted (owner: "more losses of solar heat really don't matter").

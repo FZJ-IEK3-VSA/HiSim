@@ -285,7 +285,7 @@ class PvSeriesInputs:
 
     The simulated year and the timestep length are not fields either: they reach this key through
     :attr:`weather_artifact_key`, which covers both, and what remains of the simulated span is
-    :attr:`number_of_timesteps`.
+    :attr:`number_of_timesteps` and :attr:`window_start`.
     """
 
     #: The identity of the weather series this run consumes: the digest of the weather producer's cache
@@ -333,6 +333,13 @@ class PvSeriesInputs:
     #: while a run may span a day or a week, so this is what decides the artifact's length -- and the
     #: resolution behind it is already carried by :attr:`weather_artifact_key`.
     number_of_timesteps: int
+
+    #: The run's first instant, ISO 8601 without a time zone, for example ``"2021-07-01T00:00:00"``.
+    #: The weather publishes its series over the run's window, which starts there, so two runs over
+    #: the same weather and the same number of timesteps but different windows -- a January week and a
+    #: July week -- compute different series and must not share an entry. The weather artifact key
+    #: cannot tell them apart: it names the weather's whole year.
+    window_start: str
 
     #: Where the module database is on this machine, or ``None`` when it is fetched online. Payload, not
     #: key material: it pairs with :attr:`module_database_content_hash`, which identifies the bytes.

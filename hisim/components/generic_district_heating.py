@@ -1216,7 +1216,9 @@ class DistrictHeatingController(L1ControllerComponent):
             self.water_temperature_input_channel_sh
         )
 
-        heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(self.supply_temperature_set_channel)
+        heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(
+            self.supply_temperature_set_channel
+        )
         water_temperature_input_from_warm_water_storage_in_celsius = None
         if self.config.with_domestic_hot_water_preparation:
             water_temperature_input_from_warm_water_storage_in_celsius = stsv.get_input_value(

@@ -261,7 +261,14 @@ def test_the_isolation_system_partners_every_port_that_changes_what_the_assembly
             "supply/gas_connection",
             Real.LIBRARY,
             heating_site
-            + ["GasBoilerController", "HeatDistributionController", "HeatDistributionSystem", "GasBuffer", "GasCylinder", "GasBoiler"],
+            + [
+                "GasBoilerController",
+                "HeatDistributionController",
+                "HeatDistributionSystem",
+                "GasBuffer",
+                "GasCylinder",
+                "GasBoiler",
+            ],
             {},
         ),
         ("storage/battery", Real.LIBRARY, ["Weather", "UTSPConnector", "Building", "PVArray", "EnergyManager"], {}),

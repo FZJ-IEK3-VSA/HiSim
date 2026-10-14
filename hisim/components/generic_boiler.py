@@ -1794,7 +1794,9 @@ class GenericBoilerController(L1ControllerComponent):
                     self.water_temperature_dhw_input_channel
                 )
 
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(self.supply_temperature_set_channel)
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.supply_temperature_set_channel
+            )
 
             control_signal, temperature_delta = self.determine_operating_mode(
                 stsv.get_input_value(self.heating_season_channel) > 0.5,

@@ -2843,7 +2843,9 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
 
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
 
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(self.supply_temperature_set_channel)
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.supply_temperature_set_channel
+            )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel

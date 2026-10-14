@@ -7,7 +7,12 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import building
-from hisim.components.heating_curve import EmitterDesign, HeatDistributionSystemType, HeatingCurveController, HeatingCurveControllerConfig
+from hisim.components.heating_curve import (
+    EmitterDesign,
+    HeatDistributionSystemType,
+    HeatingCurveController,
+    HeatingCurveControllerConfig,
+)
 from hisim.config import ComponentID, SizingContext
 from hisim.simulationparameters import SimulationParameters
 
@@ -22,7 +27,12 @@ from hisim.simulationparameters import SimulationParameters
         (HeatDistributionSystemType.FLOORHEATING, 25.0, 0.0, 20.0),  # cooling: the room set temperature, at least 19 °C
         (HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR, -7.0, 0.0, 55.0),
         (HeatDistributionSystemType.RADIATOR, 0.0, 0.0, 59.69293923798236),
-        (HeatDistributionSystemType.RADIATOR, 0.0, 2.0, 60.81079437589793),  # the energy manager's raise lifts the curve
+        (
+            HeatDistributionSystemType.RADIATOR,
+            0.0,
+            2.0,
+            60.81079437589793,
+        ),  # the energy manager's raise lifts the curve
     ],
 )
 def test_the_supply_temperature_follows_the_curve_of_the_emitter(
@@ -31,7 +41,7 @@ def test_the_supply_temperature_follows_the_curve_of_the_emitter(
     raise_in_kelvin: float,
     expected_supply_temperature_in_celsius: float,
 ) -> None:
-    """Catches a curve that misses the emitter's design point, ignores the energy manager's raise, or drops below the room."""
+    """Catches a curve that misses the emitter's design point, drops the manager's raise, or falls below the room."""
     assert HeatingCurveController.supply_temperature_set_in_celsius(
         daily_average_outside_temperature_in_celsius=outside_temperature_in_celsius,
         room_set_temperature_in_celsius=20.0,
@@ -43,7 +53,7 @@ def test_the_supply_temperature_follows_the_curve_of_the_emitter(
 
 @pytest.mark.base
 def test_the_cooling_supply_never_falls_below_19_celsius() -> None:
-    """Catches a cooling supply below the dew-point floor of 19 °C, which would let the room air condense on the floor."""
+    """Catches a cooling supply below the dew-point floor of 19 °C, which would let room air condense on the floor."""
     assert (
         HeatingCurveController.supply_temperature_set_in_celsius(
             daily_average_outside_temperature_in_celsius=30.0,
@@ -61,11 +71,14 @@ def test_the_cooling_supply_never_falls_below_19_celsius() -> None:
     ("outside_temperature_in_celsius", "expected"),
     [(17.9, True), (18.0, True), (18.1, False), (-10.0, True), (30.0, False)],
 )
-def test_the_heating_season_includes_a_day_exactly_at_the_threshold(outside_temperature_in_celsius: float, expected: bool) -> None:
-    """Catches the crash a day exactly at the threshold used to raise, and a season on the wrong side of the threshold."""
+def test_the_heating_season_includes_a_day_exactly_at_the_threshold(
+    outside_temperature_in_celsius: float, expected: bool
+) -> None:
+    """Catches the crash a day exactly at the threshold used to raise, and a season on the wrong side of it."""
     assert (
         HeatingCurveController.is_heating_season(
-            daily_average_outside_temperature_in_celsius=outside_temperature_in_celsius, heating_threshold_in_celsius=18.0
+            daily_average_outside_temperature_in_celsius=outside_temperature_in_celsius,
+            heating_threshold_in_celsius=18.0,
         )
         is expected
     )
@@ -77,7 +90,8 @@ def test_a_day_mean_that_is_not_finite_is_refused(outside_temperature_in_celsius
     """Catches a NaN day mean passing as "not in the heating season" and silently switching the heating off."""
     with pytest.raises(ValueError, match="finite"):
         HeatingCurveController.is_heating_season(
-            daily_average_outside_temperature_in_celsius=outside_temperature_in_celsius, heating_threshold_in_celsius=18.0
+            daily_average_outside_temperature_in_celsius=outside_temperature_in_celsius,
+            heating_threshold_in_celsius=18.0,
         )
 
 
@@ -92,7 +106,8 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
     default_building.heating_reference_temperature_in_celsius = -7.0
     resolved = HeatingCurveControllerConfig.preset_building_derived("HeatingCurveController").resolve(
         SizingContext.for_building(default_building).with_facts(
-            heating_reference_temperature_in_celsius=-7.0, heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING
+            heating_reference_temperature_in_celsius=-7.0,
+            heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
         )
     )
     assert resolved.set_heating_threshold_outside_temperature_in_celsius == 18.0
@@ -116,7 +131,7 @@ def test_the_heating_threshold_is_computed_from_the_building_it_serves() -> None
 
 class TestWiredCurve:
 
-    """The heating curve as a component: what it publishes from its inputs, and that it is frozen under forced convergence."""
+    """The heating curve as a component: what it publishes from its inputs, and that forced convergence freezes it."""
 
     @staticmethod
     def curve_with_inputs() -> tuple:
@@ -132,9 +147,15 @@ class TestWiredCurve:
             heating_reference_temperature_in_celsius=-7.0,
             set_heating_temperature_for_building_in_celsius=20.0,
         )
-        curve = HeatingCurveController(my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config)
-        day_mean = cp.ComponentOutput("Weather", "DayMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, component_id=ComponentID(name="Weather"))
-        raise_output = cp.ComponentOutput("EMS", "Raise", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN, component_id=ComponentID(name="EMS"))
+        curve = HeatingCurveController(
+            my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config
+        )
+        day_mean = cp.ComponentOutput(
+            "Weather", "DayMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, component_id=ComponentID(name="Weather")
+        )
+        raise_output = cp.ComponentOutput(
+            "EMS", "Raise", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN, component_id=ComponentID(name="EMS")
+        )
         curve.daily_average_outside_temperature_channel.source_output = day_mean
         curve.building_temperature_modifier_channel.source_output = raise_output
         outputs = [day_mean, raise_output, *curve.outputs]
@@ -149,7 +170,9 @@ class TestWiredCurve:
         stsv.set_output_value(day_mean, 5.0)
         stsv.set_output_value(raise_output, 0.0)
         curve.i_simulate(0, stsv, False)
-        assert stsv.values[curve.supply_temperature_set_channel.global_index] == pytest.approx(28.79073817878373, rel=1e-15)
+        assert stsv.values[curve.supply_temperature_set_channel.global_index] == pytest.approx(
+            28.79073817878373, rel=1e-15
+        )
         assert stsv.values[curve.heating_season_channel.global_index] == 1.0
         stsv.set_output_value(day_mean, 18.5)
         curve.i_simulate(0, stsv, False)
@@ -164,7 +187,9 @@ class TestWiredCurve:
         curve.i_simulate(0, stsv, False)
         stsv.set_output_value(raise_output, 2.0)
         curve.i_simulate(0, stsv, True)
-        assert stsv.values[curve.supply_temperature_set_channel.global_index] == pytest.approx(28.79073817878373, rel=1e-15)
+        assert stsv.values[curve.supply_temperature_set_channel.global_index] == pytest.approx(
+            28.79073817878373, rel=1e-15
+        )
 
 
 @pytest.mark.base

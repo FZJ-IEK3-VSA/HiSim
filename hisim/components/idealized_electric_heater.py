@@ -148,7 +148,9 @@ class IdealizedElectricHeaterController(StatelessComponent, cp.L1ControllerCompo
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Ask the heater for the building's theoretical demand."""
-        stsv.set_output_value(self.thermal_power_set_channel, stsv.get_input_value(self.theoretical_thermal_building_channel))
+        stsv.set_output_value(
+            self.thermal_power_set_channel, stsv.get_input_value(self.theoretical_thermal_building_channel)
+        )
 
     def write_to_report(self) -> List[str]:
         """Return the report lines of the controller.
@@ -159,7 +161,9 @@ class IdealizedElectricHeaterController(StatelessComponent, cp.L1ControllerCompo
         return ["Idealized Electric Heater Controller"]
 
     @staticmethod
-    def get_cost_capex(config: IdealizedHeaterControllerConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: IdealizedHeaterControllerConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Return no investment: the controller is control logic, not a device.
 
         Returns:

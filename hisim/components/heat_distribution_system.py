@@ -959,7 +959,10 @@ class HeatDistributionController(cp.L1ControllerComponent):
             self.State,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            output_description="The valve: 1 heating, -1 cooling, 0 closed or open for heating outside the heating season.",
+            output_description=(
+                "The valve: 1 open for heating, -1 open for cooling, 0 closed or open for heating outside the heating "
+                "season."
+            ),
         )
 
         #: The valve's mode at the start of the step, and the mode the latest free pass of the step decided.
@@ -1029,14 +1032,18 @@ class HeatDistributionController(cp.L1ControllerComponent):
         """Set the valve from the building's demand and the heating season, and publish its state."""
         if force_convergence:
             return
-        theoretical_thermal_building_demand_in_watt = stsv.get_input_value(self.theoretical_thermal_building_demand_channel)
+        theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+            self.theoretical_thermal_building_demand_channel
+        )
         is_heating_season = stsv.get_input_value(self.heating_season_channel) > 0.5
         valve_mode = self.next_valve_mode(self.state.valve_mode, theoretical_thermal_building_demand_in_watt)
         self.end_of_step_state = HeatDistributionControllerState(valve_mode=valve_mode)
         stsv.set_output_value(self.state_channel, self.valve_state(valve_mode, is_heating_season=is_heating_season))
 
     @staticmethod
-    def next_valve_mode(mode: HeatDistributionValveMode, theoretical_thermal_building_demand_in_watt: float) -> HeatDistributionValveMode:
+    def next_valve_mode(
+        mode: HeatDistributionValveMode, theoretical_thermal_building_demand_in_watt: float
+    ) -> HeatDistributionValveMode:
         """Return the valve's mode for this pass, from its mode and the building's theoretical demand.
 
         A closed valve opens for heating on a positive demand and for cooling on a negative one; an open valve closes
@@ -1133,7 +1140,7 @@ class HeatDistributionControllerInformation:
 
     @staticmethod
     def water_mass_flow_rate_for(*, heating_load_in_watt: float, emitter_design: EmitterDesign) -> float:
-        """Return the water mass flow that carries the heating load at the emitter's design temperature difference, in kg/s.
+        """Return the water mass flow that carries the heating load at the emitter's design temperature lift, in kg/s.
 
         For example, 7000 W through a floor heating designed for 35/28 °C (7 K) needs 7000 / (4180 x 7) = 0.24 kg/s.
 
@@ -1149,5 +1156,8 @@ class HeatDistributionControllerInformation:
         ).specific_heat_capacity_in_joule_per_kg_per_kelvin
         return heating_load_in_watt / (
             specific_heat_capacity_of_water_in_joule_per_kg_per_kelvin
-            * (emitter_design.maximal_supply_temperature_in_celsius - emitter_design.maximal_return_temperature_in_celsius)
+            * (
+                emitter_design.maximal_supply_temperature_in_celsius
+                - emitter_design.maximal_return_temperature_in_celsius
+            )
         )

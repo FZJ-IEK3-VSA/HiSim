@@ -133,7 +133,6 @@ def calculation_inputs(**overrides: Any) -> WeatherSeriesInputs:
         "seconds_per_timestep": 900,
         "latitude_in_degrees": 50.78,
         "longitude_in_degrees": 6.09,
-        "duration_in_days": None,
         "source_path": "/home/somebody/HiSim/hisim/inputs/weather/aachen_center",
     }
     baseline.update(overrides)
@@ -177,6 +176,7 @@ def test_the_producer_obeys_the_layering_rule() -> None:
         # The daily average's block length: the one exact number of timesteps per day the window
         # contract also uses. Standard library only and a few lines long, so it is rarely edited.
         "hisim.simulation_day",
+        "hisim.window_offset",
     }, (
         "every HiSim module in the closure is hashed into the weather's cache key, so adding one means "
         "its edits invalidate every cached weather series; pass plain values through the DTO instead"
@@ -257,16 +257,11 @@ def test_the_data_file_enters_the_key_by_its_contents_and_not_by_its_path() -> N
 
 
 @pytest.mark.base
-def test_what_changes_the_series_changes_the_key_and_what_does_not_does_not() -> None:
-    """Every DTO field moves the key, and the simulated span moves it only where a reader reads it.
-
-    The duration is key material for ``DWD_15MIN`` alone, whose reader sizes its raw frame by it. For
-    every other source the produced frame covers the full year whatever the run's span, so a one-week
-    run and a one-year run of the same station deliberately share one entry.
+def test_what_changes_the_series_changes_the_key() -> None:
+    """Every DTO field moves the key.
 
     Catches: a field that decides the series being left out of the DTO (two different series under one
-    key), and the simulated span being hashed for sources that do not read it (a cache that never hits
-    across horizons).
+    key).
     """
     baseline = calculation_inputs()
 
@@ -276,54 +271,27 @@ def test_what_changes_the_series_changes_the_key_and_what_does_not_does_not() ->
     assert digest_of(baseline) != digest_of(calculation_inputs(longitude_in_degrees=12.5))
     assert digest_of(baseline) != digest_of(calculation_inputs(data_source=WeatherDataSourceEnum.NSRDB))
 
-    quarter_hourly = calculation_inputs(data_source=WeatherDataSourceEnum.DWD_15MIN, duration_in_days=7)
-    assert digest_of(quarter_hourly) != digest_of(dataclasses.replace(quarter_hourly, duration_in_days=365))
-
 
 @pytest.mark.base
-def test_the_component_carries_the_simulated_span_only_for_the_reader_sized_by_it() -> None:
-    """What the component puts in the DTO decides whether two horizons share an entry.
+@pytest.mark.parametrize(
+    "data_source", [WeatherDataSourceEnum.DWD_TRY, WeatherDataSourceEnum.DWD_15MIN], ids=lambda source: source.value
+)
+def test_every_window_of_a_station_shares_one_entry(data_source: WeatherDataSourceEnum) -> None:
+    """A one-day, a one-week and a July run of one station at one resolution build the same inputs.
 
-    The claim above -- that a one-week run and a one-year run of an ordinary station share one cached
-    series -- is not a property of the DTO but of what ``build_calculation_inputs`` fills in, so it is
-    asserted there: the same station over two different spans has to produce the same inputs, and
-    therefore the same key, for a source whose reader never sees the span.
+    The produced frame covers the source's whole year, and the component takes the run's window out of
+    it, so nothing about the window belongs in the key. ``DWD_15MIN`` is no exception any more: its
+    reader used to size its frame by the run's span, which put the span into the key and made every
+    run whose span was not the file's fail.
 
-    Catches: the duration folded into the inputs for every source (no cache hit across horizons ever
-    again), and dropped for ``DWD_15MIN``, whose reader builds exactly ``24 * 4 * days`` rows and would
-    otherwise be asked for a frame of no length at all.
+    Catches: the run's span or start folded into the inputs, which would compute and file the same
+    year once per window.
     """
-    one_day = _inputs_of_a_run(SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600))
-    one_week = _inputs_of_a_run(SimulationParameters.one_week_only(year=2021, seconds_per_timestep=3600))
+    one_day = _inputs_of_a_run(SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600), data_source)
+    one_week = _inputs_of_a_run(SimulationParameters.one_week_only(year=2021, seconds_per_timestep=3600), data_source)
+    july = _inputs_of_a_run(SimulationParameters.one_week_july(year=2021, seconds_per_timestep=3600), data_source)
 
-    assert one_day.duration_in_days is None
-    assert one_week.duration_in_days is None
-    assert digest_of(one_day) == digest_of(one_week)
-
-    quarter_hourly = _inputs_of_a_run(
-        SimulationParameters.one_week_only(year=2021, seconds_per_timestep=3600),
-        data_source=WeatherDataSourceEnum.DWD_15MIN,
-    )
-    assert quarter_hourly.duration_in_days == 7
-
-
-@pytest.mark.base
-def test_the_inputs_refuse_a_span_that_does_not_match_the_reader() -> None:
-    """Both ways of getting the span wrong are refused where the DTO is built.
-
-    An unset span for ``DWD_15MIN`` would size its raw frame by nothing; a set span for a source that
-    reads the whole year would file the same series under one key per horizon, because the field is key
-    material whether or not a reader reads it. Neither shows up in the result, so neither is allowed to
-    be built.
-
-    Catches: a source added to ``DURATION_DEPENDENT_SOURCES`` without the component being taught to
-    fill the field, and a caller passing the run's length in for every source because it is there.
-    """
-    with pytest.raises(ValueError, match="duration_in_days"):
-        calculation_inputs(data_source=WeatherDataSourceEnum.DWD_15MIN, duration_in_days=None)
-
-    with pytest.raises(ValueError, match="duration_in_days"):
-        calculation_inputs(data_source=WeatherDataSourceEnum.DWD_TRY, duration_in_days=7)
+    assert digest_of(one_day) == digest_of(one_week) == digest_of(july)
 
 
 def _inputs_of_a_run(

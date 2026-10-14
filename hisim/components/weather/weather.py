@@ -24,6 +24,7 @@ from hisim.caching import CacheClient, CacheEntry, CacheKey
 from hisim.components.weather import calculation
 from hisim.components.weather.calculation import (
     ARTIFACT_KIND,
+    ProducedFrame,
     WeatherSeriesInputs,
     WeatherSourceFiles,
     get_coordinates,
@@ -40,6 +41,7 @@ from hisim.component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.economics.facts import CostRelevance
+from hisim.window_offset import WindowOffset
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -293,6 +295,11 @@ class Weather(DataSourceComponent):
         self.apparent_zenith_list: List[float]
         self.dhi_list: List[float]
         self.daily_average_outside_temperature_list_in_celsius: List[float]
+        #: Each row's label in the source's standard time; what the run's window is looked up in.
+        self.standard_time_labels: pd.DatetimeIndex = pd.DatetimeIndex([])
+        #: The row of the series the run's timestep 0 reads; 0 for a run starting on 1 January.
+        #: Timestep ``t`` reads row ``window_offset_in_timesteps + t``. Set in i_prepare_simulation.
+        self.window_offset_in_timesteps: int = 0
 
     def write_to_report(self):
         """Write configuration to the report."""
@@ -316,31 +323,32 @@ class Weather(DataSourceComponent):
             return
         if force_convergence:
             return
-        """ Performs the simulation. """
-        stsv.set_output_value(self.air_temperature_output, self.temperature_list[timestep])
-        stsv.set_output_value(self.dni_output, self.dni_list[timestep])
-        stsv.set_output_value(self.dni_extra_output, self.dniextra_list[timestep])
-        stsv.set_output_value(self.dhi_output, self.dhi_list[timestep])
-        stsv.set_output_value(self.ghi_output, self.ghi_list[timestep])
-        stsv.set_output_value(self.altitude_output, self.altitude_list[timestep])
-        stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
-        stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
-        stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
+        # The series keep the source's whole year; the run's timestep reads the row of its window.
+        row = self.window_offset_in_timesteps + timestep
+        stsv.set_output_value(self.air_temperature_output, self.temperature_list[row])
+        stsv.set_output_value(self.dni_output, self.dni_list[row])
+        stsv.set_output_value(self.dni_extra_output, self.dniextra_list[row])
+        stsv.set_output_value(self.dhi_output, self.dhi_list[row])
+        stsv.set_output_value(self.ghi_output, self.ghi_list[row])
+        stsv.set_output_value(self.altitude_output, self.altitude_list[row])
+        stsv.set_output_value(self.azimuth_output, self.azimuth_list[row])
+        stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[row])
+        stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[row])
         stsv.set_output_value(
-            self.pressure_output, self.pressure_list[timestep] * 100
+            self.pressure_output, self.pressure_list[row] * 100
         )  # *100 umrechnung von hPA bzw mbar in PA
         stsv.set_output_value(
             self.daily_average_outside_temperature_output,
-            self.daily_average_outside_temperature_list_in_celsius[timestep],
+            self.daily_average_outside_temperature_list_in_celsius[row],
         )
 
-        # set the temperature forecast
+        # set the temperature forecast: the next 24 h of the source's year, which near the end of the
+        # window reaches past it, as it always has, and stops at the end of the year
         if self.weather_config.predictive_control:
             timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            last_forecast_timestep = int(timestep + timesteps_24h)
-            last_forecast_timestep = min(last_forecast_timestep, len(self.temperature_list))
-            # log.information( type(self.temperature))
-            temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
+            last_forecast_row = int(row + timesteps_24h)
+            last_forecast_row = min(last_forecast_row, len(self.temperature_list))
+            temperatureforecast = self.temperature_list[row:last_forecast_row]
             self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
         self.last_timestep_with_update = timestep
 
@@ -363,7 +371,13 @@ class Weather(DataSourceComponent):
             # parser, so without this a cached run and an uncached one are not the same run. See the
             # measurement in the commit that introduced this across the caches.
             weather_series = pd.read_csv(
-                entry.path, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
+                entry.path,
+                sep=",",
+                decimal=".",
+                encoding="cp1252",
+                float_precision="round_trip",
+                index_col=ProducedFrame.INDEX_NAME,
+                parse_dates=[ProducedFrame.INDEX_NAME],
             )
             origin = str(entry.path)
         else:
@@ -373,6 +387,16 @@ class Weather(DataSourceComponent):
                 weather_series.to_csv(temporary_cache_filepath)
             origin = "the weather producer"
         self.read_series(weather_series, origin)
+        self.window_offset_in_timesteps = WindowOffset.resolve(
+            labels=self.standard_time_labels,
+            window_start=self.my_simulation_parameters.start_date,
+            timesteps=self.my_simulation_parameters.timesteps,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+            source=(
+                f"The weather series of {self.weather_config.source_path} "
+                f"({self.weather_config.data_source.value})"
+            ),
+        )
 
         # Publish the weather series over the run's window into this simulation's repository,
         # unconditionally. The PV system needs the whole window rather than the current timestep: it
@@ -405,14 +429,15 @@ class Weather(DataSourceComponent):
     def run_window_of(self, series: List[float]) -> List[float]:
         """Return the part of one of this component's series that covers the run's window.
 
-        The window is the simulated period, ``timesteps`` values long. The series this component
-        reads start on 1 January of the simulation year and run at the simulation's resolution, so
-        the window is their first ``timesteps`` values. Example: a one-day run at 60 s publishes the
-        first 1440 values of a series that covers the whole year. A series that is exactly as long
-        as the window is published as it is, without a copy, which is what a full-year run does.
+        The window is the simulated period: ``timesteps`` values from the row the run's start was
+        found at (:attr:`window_offset_in_timesteps`). Example: a one-week run from 1 July 2021 at
+        60 s publishes the 10 080 values from row 260 640 of a Berlin series that covers the year, and
+        a one-day run from 1 January publishes its first 1440. A series that is exactly the window is
+        published as it is, without a copy, which is what a full-year run does.
 
-        A series shorter than the window is returned whole; the readers check the length they get
-        against the run's number of timesteps and say which series fell short.
+        :meth:`i_prepare_simulation` has refused a window the series does not cover, so the slice is
+        always ``timesteps`` long there; called on a shorter series, it returns what there is, and the
+        readers say which series fell short.
 
         The values are the window's own only for a run that starts on 1 January. A run that starts
         later -- 1 July, say, which the window contract accepts -- still gets the first ``timesteps``
@@ -428,9 +453,10 @@ class Weather(DataSourceComponent):
             The values of the series over the run's window.
         """
         timesteps = self.my_simulation_parameters.timesteps
-        if len(series) <= timesteps:
+        offset = self.window_offset_in_timesteps
+        if offset == 0 and len(series) <= timesteps:
             return series
-        return series[:timesteps]
+        return series[offset: offset + timesteps]
 
     def publish_weather_year(self) -> None:
         """Publish the year of the weather this run reads, and say when it is not the calendar year.
@@ -496,10 +522,10 @@ class Weather(DataSourceComponent):
 
         Everything the calculation depends on is extracted here from the configuration and the
         simulation parameters, and nothing else: the data file enters as the hash of its contents
-        rather than as its path, and the simulated span only for the one data source whose reader is
-        sized by it. What the component keeps to itself -- its name, the building it belongs to, the
-        predictive-control flag, cost and display settings -- is not part of the calculation and
-        therefore not part of its key.
+        rather than as its path. The run's window is not part of it: the series cover the source's whole
+        year, and the component takes the window out of them. What the component keeps to itself -- its
+        name, the building it belongs to, the predictive-control flag, cost and display settings -- is
+        not part of the calculation and therefore not part of its key.
 
         Args:
             location_dict: the station header read by :func:`get_coordinates`.
@@ -508,11 +534,6 @@ class Weather(DataSourceComponent):
             WeatherSeriesInputs: the producer's single argument.
         """
         data_source = self.weather_config.data_source
-        duration_in_days = (
-            int(self.my_simulation_parameters.duration.days)
-            if data_source in WeatherSeriesInputs.DURATION_DEPENDENT_SOURCES
-            else None
-        )
         return WeatherSeriesInputs(
             data_source=data_source,
             source_content_hash=WeatherSourceFiles.content_hash(data_source, self.weather_config.source_path),
@@ -520,7 +541,6 @@ class Weather(DataSourceComponent):
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
             latitude_in_degrees=float(location_dict["latitude"]),
             longitude_in_degrees=float(location_dict["longitude"]),
-            duration_in_days=duration_in_days,
             source_path=self.weather_config.source_path,
         )
 
@@ -574,7 +594,18 @@ class Weather(DataSourceComponent):
 
         Raises:
             KeyError: if the frame lacks a column the component reads.
+            ValueError: if the frame's index is not the rows' labels in time, which every frame the
+                producer writes carries.
         """
+        if not isinstance(weather_series.index, pd.DatetimeIndex):
+            raise ValueError(
+                f"The weather series from {origin} is not indexed by the time of its rows (index "
+                f"{weather_series.index.name!r} of type {type(weather_series.index).__name__}), so the run's "
+                "window cannot be looked up in it. A frame filed under this producer's key carries the "
+                f"labels as its first column, {ProducedFrame.INDEX_NAME!r}; delete it and let the run "
+                "recompute the series."
+            )
+        self.standard_time_labels = weather_series.index
         for column, attribute in self.LIST_ATTRIBUTE_PER_COLUMN.items():
             if column not in weather_series.columns:
                 raise KeyError(

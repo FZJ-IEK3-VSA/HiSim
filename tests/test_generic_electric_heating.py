@@ -324,3 +324,42 @@ def test_the_controller_states_its_hot_water_set_temperature() -> None:
     assert outputs[ElectricHeatingController.SupplyTemperatureSetForDHWInCelsius] == (
         60.0 + config.hysteresis_water_temperature_offset
     )
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("heating_season", "tank_temperature_in_celsius", "expected_mode"),
+    [
+        (1.0, 40.0, HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL),
+        (0.0, 40.0, HeatingMode.DOMESTIC_HOT_WATER),  # out of the season the cold tank is charged, the rooms are not
+        (1.0, 70.0, HeatingMode.SPACE_HEATING),
+        (0.0, 70.0, HeatingMode.OFF),
+    ],
+)
+def test_the_controller_heats_the_rooms_only_in_the_heating_season_the_curve_publishes(
+    heating_season: float, tank_temperature_in_celsius: float, expected_mode: HeatingMode
+) -> None:
+    """Catches a controller that ignores the heating curve's season: rooms heated in summer, or not in winter.
+
+    The controller of the electric twin prepares hot water and may serve both circuits at once; it is stepped from its
+    initial mode with the season and the tank temperature, and its operating mode is read.
+    """
+    from hisim.components.generic_electric_heating import (  # pylint: disable=import-outside-toplevel  # only here
+        ElectricHeatingController,
+        ElectricHeatingControllerConfig,
+    )
+
+    config = ElectricHeatingControllerConfig.preset_standard("ElectricHeatingController")
+    config.with_domestic_hot_water_preparation = True
+    config.parallel_space_heating_and_dhw_option = True
+    controller = ElectricHeatingController(
+        SimulationParameters.one_day_only(year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP), config
+    )
+    outputs = AllInputsRig.step_once(
+        controller,
+        {
+            ElectricHeatingController.HeatingSeason: heating_season,
+            ElectricHeatingController.WaterTemperatureInputFromWarmWaterStorage: tank_temperature_in_celsius,
+        },
+    )
+    assert HeatingMode(outputs[ElectricHeatingController.OperatingMode]) is expected_mode

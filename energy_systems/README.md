@@ -112,6 +112,34 @@ directory binds to with its first line. The schema is generated from the same de
 `describe` reads — regenerate it with `hisim energy-system schema` whenever a component gains a
 preset, a constructor or a field.
 
+### Stating a size instead of letting the system size it
+
+A preset that leaves a sizable field `AUTO` sizes the device from the system around it: the heat
+pump `MoreAdvancedHeatPumpHPLib` from the building's heating load, the battery `Battery` from the
+photovoltaic peak power. To build a device of a size you already know, write the number into the
+entry's `config:` block; the field's law is then not evaluated and the number reaches the
+component unchanged:
+
+```yaml
+  MoreAdvancedHeatPumpHPLib:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    preset: air_water
+    config:
+      set_thermal_output_power_in_watt: 8000
+  Battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    preset: sized_to_pv
+    config:
+      custom_battery_capacity_generic_in_kilowatt_hour: 10
+      custom_pv_inverter_power_generic_in_watt: 5000
+```
+
+Components sized *from* the device follow the stated number: the heating-water buffer beside the
+heat pump reads the heat pump's power, whether computed or written. The battery's two fields are
+sized independently, both from the photovoltaic power, so state both: a capacity alone keeps the
+power the array would have given. Leaving the lines out keeps the automatic sizing.
+`tests/test_energy_system_explicit_sizes.py` checks all of this on the recorded heat-pump twin.
+
 ## Recording a Python setup
 
 Every `<setup>.energy_system.yaml` here is generated. It was produced by running the Python setup

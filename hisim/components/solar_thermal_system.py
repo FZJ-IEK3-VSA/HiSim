@@ -1,6 +1,5 @@
 """Solar thermal system for DHW."""
 
-import datetime
 import math
 from typing import ClassVar, List, Optional, Tuple
 import dataclasses
@@ -30,8 +29,10 @@ from hisim.config import (
     preset,
     sized_field,
 )
-from hisim import hydronics, loadtypes, log, utils
-from hisim.caching import atomic_cache_write
+from hisim import hydronics, loadtypes, log
+from hisim.caching import CacheClient, CacheKey
+from hisim.components import solar_thermal_sun_position
+from hisim.components.solar_thermal_sun_position import SunPositionInputs, produce_sun_position
 from hisim.energy_port import EnergyPort
 from hisim.part_load import PartLoadCommand, PartLoadControl
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -644,7 +645,6 @@ class SolarThermalSystem(PhysicsComponent):
         # so the convergence iterations of one timestep share one pvlib call.
         self.plane_of_array_key: Optional[Tuple[int, float, float]] = None
         self.plane_of_array_irradiance_w_m2: np.float64 = np.float64(0)
-        self.cache_filepath: Optional[str] = None
 
         # Add inputs
         self.t_out_channel: ComponentInput = self.add_input(
@@ -1108,23 +1108,19 @@ class SolarThermalSystem(PhysicsComponent):
         """Doublechecks."""
         pass
 
-    def timestamps_of_the_run(self) -> pd.DatetimeIndex:
-        """Return the instant of every timestep of this simulation.
-
-        The sun's position is a function of these and of the coordinates, and of nothing else, which
-        is what makes it the only part of the collector calculation that can be worked out before
-        the run and cached. They come from ``start_date`` and ``seconds_per_timestep``, both of which
-        are already in the cache key.
+    def sun_position_inputs(self) -> SunPositionInputs:
+        """Build the DTO the sun-position producer is a pure function of: the coordinates and the run's instants.
 
         Returns:
-            pd.DatetimeIndex: one instant per timestep, in simulation order.
+            SunPositionInputs: the producer's single argument.
         """
-        return pd.DatetimeIndex(
-            [
-                self.my_simulation_parameters.start_date
-                + datetime.timedelta(0, self.my_simulation_parameters.seconds_per_timestep * timestep)
-                for timestep in range(self.my_simulation_parameters.timesteps)
-            ]
+        parameters = self.my_simulation_parameters
+        return SunPositionInputs(
+            latitude_in_degrees=float(self.config.coordinates.latitude_in_degrees),
+            longitude_in_degrees=float(self.config.coordinates.longitude_in_degrees),
+            window_start=parameters.start_date.isoformat(),
+            seconds_per_timestep=parameters.seconds_per_timestep,
+            timesteps=parameters.timesteps,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -1132,46 +1128,36 @@ class SolarThermalSystem(PhysicsComponent):
 
         Only the sun's position is precomputed, and only it is cached. The collector calculation has
         three stages and just the first qualifies: the solar position depends on the timestamps and
-        the coordinates, both already in the cache key; the plane-of-array irradiance depends on the
-        weather, which arrives through wired inputs; and the collector efficiency depends on the
-        storage's inlet temperature, which is the simulation's own state feeding back.
+        the coordinates, which are the whole of the producer's key; the plane-of-array irradiance
+        depends on the weather, which arrives through wired inputs; and the collector efficiency
+        depends on the storage's inlet temperature, which is the simulation's own state feeding back.
 
         This component used to cache the output of all three. That value could not be keyed by
         anything -- it was a function of a trajectory the run had not taken yet -- so any hit
-        replayed one system's storage behaviour into another's. Restricting what is cached is what
-        makes the existing key exactly correct, with nothing to widen. See roadmap/pylpg_flakiness.md
-        F8.
+        replayed one system's storage behaviour into another's. See roadmap/pylpg_flakiness.md F8.
+        The sun's position is produced by :func:`hisim.components.solar_thermal_sun_position.produce_sun_position`
+        and filed under that producer's key, which fingerprints its code and pvlib's version as well.
         """
-        file_exists, self.cache_filepath = utils.get_cache_file(
-            self.config.component_id.name, self.config, self.my_simulation_parameters
-        )
-        timestamps = self.timestamps_of_the_run()
+        calculation_inputs = self.sun_position_inputs()
+        key = CacheKey.for_producer(SunPositionInputs.ARTIFACT_KIND, solar_thermal_sun_position, calculation_inputs)
+        entry = CacheClient.from_environment().lookup_producer(key, self.my_simulation_parameters.cache_locations())
 
-        if file_exists:
-            log.information("Get solar position from cache.")
+        if entry.exists:
+            log.information(f"Get solar position from cache: {entry.path}")
             # float_precision="round_trip" is what makes a cached run and an uncached one the same
             # run. pandas' default CSV reader uses a fast, inexact float parser, and it loses the
             # last bit of roughly a sixth of the values here whatever precision they were written
             # with -- measured: 317 of 2000 with the default write format, 358 with "%.17g", 542
             # with "%.20g", and zero with this argument. The loss is in the reader, not in the
             # digits on disk, which is worth knowing because the obvious remedies make it worse.
-            cached = pd.read_csv(self.cache_filepath, sep=",", decimal=".", float_precision="round_trip")
-            # No length check here on purpose. The old one accepted any file with the right number
-            # of rows, which is exactly how a cache entry belonging to a different system passed
-            # unnoticed. With a key that genuinely determines the contents, a mismatched length
-            # means the file is corrupt, so it is left to raise rather than warned about.
-            self.solar_position = cached.set_index(timestamps)
+            cached = pd.read_csv(entry.path, sep=",", decimal=".", float_precision="round_trip")
+            # No length check here on purpose: the key determines the contents, so a mismatched
+            # length means the file is corrupt, and it is left to raise rather than warned about.
+            self.solar_position = cached.set_index(calculation_inputs.timestamps())
         else:
-            self.solar_position = pvlib.solarposition.get_solarposition(
-                time=timestamps,
-                latitude=self.config.coordinates.latitude_in_degrees,
-                longitude=self.config.coordinates.longitude_in_degrees,
-            )[["apparent_zenith", "azimuth"]]
-
-            assert self.cache_filepath is not None
-            with atomic_cache_write(
-                self.cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
-            ) as temporary_cache_filepath:
+            log.information(f"Solar position cache miss: computing it and filing it at {entry.path}")
+            self.solar_position = produce_sun_position(calculation_inputs)
+            with entry.writing() as temporary_cache_filepath:
                 # The default float format already writes a shortest round-trip representation;
                 # forcing more digits does not help, because what loses precision is the read. See
                 # the note beside the read above.

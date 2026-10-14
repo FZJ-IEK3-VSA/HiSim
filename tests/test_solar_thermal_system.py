@@ -210,7 +210,7 @@ def test_every_timestep_gets_an_instant() -> None:
         my_simulation_parameters=simulation_parameters,
     )
 
-    timestamps = collector.timestamps_of_the_run()
+    timestamps = collector.sun_position_inputs().timestamps()
 
     assert len(timestamps) == simulation_parameters.timesteps
     assert timestamps[0] == simulation_parameters.start_date

@@ -381,7 +381,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent, cp.L2C
             object_name=self.component_name,
             field_name=self.BuildingIndoorTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
-            unit=lt.Units.CELSIUS,
+            unit=lt.Units.KELVIN,
             output_description=f"here a description for {self.BuildingIndoorTemperatureModifier} will follow.",
         )
 

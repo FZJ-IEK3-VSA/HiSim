@@ -136,13 +136,13 @@ class NightSetbackController(cp.L2ControllerComponent):
             # Window wraps across midnight.
             self._night_mode = "wrap"
 
-        # Units.CELSIUS is required here because Building.BuildingTemperatureModifier
-        # declares its input as CELSIUS. The value is a delta-T, so 1 K == 1 degC numerically.
+        # The modifier is a temperature difference, so it is declared in kelvin, as
+        # Building.BuildingTemperatureModifier declares its input.
         self.building_temperature_modifier_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.BuildingTemperatureModifier,
             lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
+            lt.Units.KELVIN,
             output_description="Temperature modifier for the building during the night setback window.",
         )
 

@@ -134,7 +134,7 @@ class TestWiredCurve:
         )
         curve = HeatingCurveController(my_simulation_parameters=SimulationParameters.one_day_only(2021, 60), config=config)
         day_mean = cp.ComponentOutput("Weather", "DayMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, component_id=ComponentID(name="Weather"))
-        raise_output = cp.ComponentOutput("EMS", "Raise", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, component_id=ComponentID(name="EMS"))
+        raise_output = cp.ComponentOutput("EMS", "Raise", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN, component_id=ComponentID(name="EMS"))
         curve.daily_average_outside_temperature_channel.source_output = day_mean
         curve.building_temperature_modifier_channel.source_output = raise_output
         outputs = [day_mean, raise_output, *curve.outputs]

@@ -262,7 +262,7 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             self.component_name, self.DailyAverageOutsideTemperature, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True
         )
         self.building_temperature_modifier_channel: ComponentInput = self.add_input(
-            self.component_name, self.BuildingTemperatureModifierInKelvin, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, mandatory=False
+            self.component_name, self.BuildingTemperatureModifierInKelvin, lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN, mandatory=False
         )
         self.supply_temperature_set_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -275,7 +275,7 @@ class HeatingCurveController(StatelessComponent, L2ControllerComponent):
             self.component_name,
             self.HeatingSeason,
             lt.LoadTypes.ANY,
-            lt.Units.ANY,
+            lt.Units.BINARY,
             output_description="1 while the day's mean outside temperature is at or below the heating threshold, else 0.",
         )
         self.add_default_connections(self.get_default_connections_from_weather())

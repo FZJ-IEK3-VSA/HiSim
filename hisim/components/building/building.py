@@ -333,7 +333,7 @@ class Building(cp.PhysicsComponent):
             self.component_name,
             self.BuildingTemperatureModifier,
             lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
+            lt.Units.KELVIN,
             mandatory=False,
         )
 

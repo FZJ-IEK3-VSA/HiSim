@@ -2684,7 +2684,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(L1ControllerComponent):
             self.component_name,
             self.HeatingSeason,
             LoadTypes.ANY,
-            Units.ANY,
+            Units.BINARY,
             True,
         )
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(

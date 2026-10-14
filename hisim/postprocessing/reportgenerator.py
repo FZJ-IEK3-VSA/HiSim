@@ -278,33 +278,39 @@ class ReportGenerator:
             self.story.append(Spacer(1, 10))
 
     def write_figures_to_report(self, file_path: str) -> None:
-        """Add figure to the report."""
+        """Add figure to the report at its own size, read from the image's DPI.
+
+        Every figure method creates its flowable with ``lazy=2``: the image file is read when the
+        figure is drawn and its decoded bitmap is dropped right afterwards. A build keeps every
+        flowable of the story alive until it ends, so with the default (``lazy=1``) a report of a
+        few hundred 3600 x 2400 pixel plots held all their bitmaps at once, about 75 MB each.
+        """
 
         path = Path(file_path)
         if path.is_file():
-            image = Image(str(path), useDPI=True)
+            image = Image(str(path), useDPI=True, lazy=2)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:
             raise ValueError("no files found")
 
     def write_figures_to_report_with_size_four_six(self, file_path: str) -> None:
-        """Add figure to the report with certain size."""
+        """Add figure to the report at 4 x 6 inches; read lazily, as in `write_figures_to_report`."""
 
         path = Path(file_path)
         if path.is_file():
-            image = Image(str(path), width=4 * inch, height=6 * inch)
+            image = Image(str(path), width=4 * inch, height=6 * inch, lazy=2)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:
             raise ValueError("no files found")
 
     def write_figures_to_report_with_size_seven_four(self, file_path: str) -> None:
-        """Add figure to the report with certain size."""
+        """Add figure to the report at 7 x 4 inches; read lazily, as in `write_figures_to_report`."""
 
         path = Path(file_path)
         if path.is_file():
-            image = Image(str(path), width=7 * inch, height=4 * inch)
+            image = Image(str(path), width=7 * inch, height=4 * inch, lazy=2)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:

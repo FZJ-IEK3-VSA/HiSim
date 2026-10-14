@@ -298,8 +298,9 @@ class SolarThermalSystem(PhysicsComponent):
     The pump runs the part-load ratio its controller commands (``PartLoadRatio``): 1, the whole step, at and below the
     part-load threshold, and above it the fraction of the step that ends the tank at the controller's target. Below 1
     the collector publishes the averaged flow at its full-load outlet temperature and books the heat that flow carries;
-    the pump draws the ratio of its electricity. The collector reports the ratio its pump ran (``PartLoadRatioRun``):
-    the commanded ratio while the pump runs, 0 otherwise.
+    the pump draws the ratio of its electricity. At a commanded ratio of 0 the collector circuit is idle even while the
+    pump signal is on: no flow, and the outlet at the inlet temperature. The collector reports the ratio its pump ran
+    (``PartLoadRatioRun``): the commanded ratio while the pump runs, 0 otherwise.
     """
 
     cost_relevance = CostRelevance.PRICED

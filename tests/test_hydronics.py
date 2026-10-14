@@ -471,20 +471,33 @@ def test_an_idle_circuit_moves_no_water_and_supplies_its_return() -> None:
 
 
 def test_a_circuit_at_part_load_carries_the_averaged_flow_at_its_full_load_supply() -> None:
-    """The documented example, and a ratio of 1 or outside [0, 1].
+    """The documented example, and a ratio of 1, of 0 or outside [0, 1].
 
     A part-loaded step that kept the full flow, or booked the full-load heat for the averaged flow, would book heat its
-    water does not carry; a ratio outside [0, 1] is a controller error that must stop the step.
+    water does not carry; a generator that does not run at all but published its full-load supply would show a hot
+    outlet with no flow; a ratio outside [0, 1] is a controller error that must stop the step. The ratio 0.25 keeps
+    the ratio and its complement apart, which 0.5 would not.
     """
     full_load = hydronics.CircuitStep(mass_flow_kg_per_s=0.0144, t_supply_c=75.0, power_w=1504.8)
-    part = full_load.at_part_load(part_load_ratio=0.5, t_return_c=50.0)
-    assert part.mass_flow_kg_per_s == pytest.approx(0.0072, rel=1e-12)
+    part = full_load.at_part_load(part_load_ratio=0.25, t_return_c=50.0)
+    assert part.mass_flow_kg_per_s == pytest.approx(0.0036, rel=1e-12)
     assert part.t_supply_c == 75.0
-    assert part.power_w == pytest.approx(752.4, rel=1e-12)
+    assert part.power_w == pytest.approx(376.2, rel=1e-12)
     assert full_load.at_part_load(part_load_ratio=1.0, t_return_c=50.0) is full_load
+    assert full_load.at_part_load(part_load_ratio=0.0, t_return_c=50.0) == hydronics.CircuitStep.idle(t_return_c=50.0)
     for ratio in (-0.1, 1.5):
         with pytest.raises(ValueError, match="part-load ratio"):
             full_load.at_part_load(part_load_ratio=ratio, t_return_c=50.0)
+
+
+def test_a_circuit_at_part_load_scales_its_full_load_heat_whatever_return_the_caller_passes() -> None:
+    """The heat at part load is the ratio times the full-load heat, not a heat recomputed from the caller's return.
+
+    The full-load step was built at a 50 °C return; a caller that passed 40 °C would otherwise book 1053.36 W at a
+    ratio of 0.5 instead of 752.4 W, heat the generator never delivered.
+    """
+    full_load = hydronics.CircuitStep(mass_flow_kg_per_s=0.0144, t_supply_c=75.0, power_w=1504.8)
+    assert full_load.at_part_load(part_load_ratio=0.5, t_return_c=40.0).power_w == pytest.approx(752.4, rel=1e-12)
 
 
 # --- supply limits --------------------------------------------------------------------------------------------

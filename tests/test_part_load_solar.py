@@ -108,6 +108,24 @@ def test_the_collector_books_the_commanded_fraction_and_the_pump_runs_that_fract
 
 
 @pytest.mark.base
+def test_a_collector_commanded_ratio_zero_is_idle_though_its_pump_signal_is_on() -> None:
+    """At a ratio of 0 the circuit moves no water, so its outlet is its 45 °C inlet, not a hot full-load outlet.
+
+    A hot outlet with no flow behind it would put a temperature into the results that no water carried.
+    """
+    idle = CollectorRig.charge(900, ratio=0.0, control_signal=1.0)
+    assert idle[SolarThermalSystem.WaterTemperatureOutput] == 45.0
+    for field in (
+        SolarThermalSystem.WaterMassFlowOutput,
+        SolarThermalSystem.ThermalPowerOutput,
+        SolarThermalSystem.ThermalEnergyOutput,
+        SolarThermalSystem.ElectricityConsumptionOutput,
+        SolarThermalSystem.PartLoadRatioRun,
+    ):
+        assert idle[field] == 0.0
+
+
+@pytest.mark.base
 def test_the_pump_powers_are_named_constants() -> None:
     """The pump draws 10 W, or 35 W with ``old_solar_pump``, while the controller runs it at full load."""
     assert SolarThermalSystem.PUMP_POWER_IN_WATT == 10

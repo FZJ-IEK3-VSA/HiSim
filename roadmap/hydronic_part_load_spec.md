@@ -383,6 +383,25 @@ identical results. Without the pump's hysteresis K′ forces 165 steps of the ga
 the 172 that remain are slow boiler heat-ups, alternations where the draw takes more than the rise the step still
 needs (hisim-fxix.17), and about 55 steps in which the collector pump switched on with no fixed point (hisim-fxix.21).
 
+**The solar pump's hysteresis on #917 (#941), measured 2026-10-14**, full year 2021 with the predefined occupancy,
+#917 → #941, each against the 60 s run of its own head. #941 decides on the start-of-step sensors with the two
+hysteresis bands of §5.3 of the hydronic coupling spec, and its full-tank stop still sits at the 60 °C aim, 3 K
+restart band included:
+
+| twin, step | flagged steps | pump switch-ons | collector heat, kWh (against 60 s) | backup's hot-water heat, kWh |
+|---|---|---|---|---|
+| gas + solar, 60 s | 14 → 0 | 1855 → 253 | 418.8 → 358.7 | 2702.0 → 2761.5 |
+| gas + solar, 900 s | 165 → 95 | 1638 → 220 | 411.5 → 341.3 (-1.75 % → -4.85 %) | 2709.5 → 2778.3 |
+| gas + solar, 3600 s | 223 → 61 | 428 → 180 | 414.6 → 302.6 (-1.00 % → -15.64 %) | 2705.8 → 2816.0 |
+| heat pump + solar, 60 s | 216 → 194 | 1677 → 353 | 595.8 → 584.6 | 2473.3 → 2486.5 |
+| heat pump + solar, 900 s | 1260 → 1243 | 1466 → 336 | 591.6 → 584.7 (-0.71 % → +0.02 %) | 2476.3 → 2483.6 |
+| heat pump + solar, 3600 s | 534 → 410 | 449 → 286 | 585.4 → 539.0 (-1.75 % → -7.81 %) | 2482.4 → 2525.3 |
+
+The hysteresis removes most pump switch-ons and, in the gas + solar twin, most flagged steps. The 60 s years equal
+those of #941 measured on #915 (the collector's ratio is exactly 1 at 60 s). The restart band 3 K below a 60 °C stop
+costs collector heat at every step length (hisim-fxix.22), and the coarser the step the more (gas + solar at 3600 s:
+-15.6 % against 60 s). #942 moves the stop to the solar controller's own 80 °C maximum.
+
 
 ## 12. Beads
 

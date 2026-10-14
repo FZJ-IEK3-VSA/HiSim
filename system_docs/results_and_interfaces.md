@@ -81,8 +81,9 @@ Rules:
 - **A new public name follows the naming rules from the start**: units in the name (AGENTS.md), `space_heating`
   not `sh` (`coding_style.md` §5). Existing names that break a rule are renamed only in a planned migration, not
   in passing.
-- **A KPI name is a display label beside its mandatory `unit` field and does not repeat the unit** (AGENTS.md,
-  the exception to the units rule). See open question Q1.
+- **A KPI name is a display label beside its mandatory `unit` field** (AGENTS.md, "Guidelines for coding"). The
+  KPI "Unmet DHW heat demand" (`hisim/components/simple_water_storage.py`) is to be renamed, as one pull request
+  under §5 (owner, 2026-10-15; bead hisim-h2ib.7).
 - **The committed schema follows the code.** A change to the format regenerates `hisim/energy_system_v3.schema.json`
   with `hisim energy-system schema`; `tests/test_energy_system_schema.py` fails otherwise. A change under which existing
   files can no longer be read is a new `schema_version`, as the assemblies were (version 4).
@@ -103,15 +104,3 @@ A rename is one pull request that does all of the following:
 
 A rename that cannot be done in one pull request, for example because the backend must change first, is a spec
 with a migration plan (`roadmap/`), not a pull request.
-
-## 6. Open questions for the owner
-
-- **Q1. Does the KPI "Unmet DHW heat demand" keep its name?** Introduced by hydronic stage C (#909) in
-  `hisim/components/simple_water_storage.py`. Bead hisim-h2ib.3 named it as the open example: rename it, with a
-  re-bless and a heads-up to the RenoVisor side (§5), or keep it as a documented exception. AGENTS.md has stated
-  since #919 that a KPI name is a display label, carries its unit in the `unit` field and is not renamed for the
-  units rule; that covers the unit, but not whether this name should otherwise change (for example to spell out
-  "domestic hot water" or to state the quantity as an energy). Options: (a) keep the name and confirm the AGENTS.md
-  exception as the rule for all KPI names; (b) rename it now and record the rename as §5 says. The name is in 26
-  golden files; RenoVisor does not read it today (`hisim/renovisor/` names it nowhere). Undecided: bead
-  hisim-h2ib.7.

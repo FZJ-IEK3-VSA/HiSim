@@ -154,10 +154,11 @@ class ChargingStationConfig(ConfigBase):
         )
 
 
-class L1Controller(cp.L1ControllerComponent):
+class L1Controller(cp.StatelessComponent, cp.L1ControllerComponent):
     """Commands an electric car's battery: its charging at the station and its discharging while the car drives.
 
-    The controller decides every pass from its inputs alone and keeps no state from one step to the next:
+    The controller decides every pass from its inputs alone and keeps no state from one step to the next, so it
+    inherits :class:`~hisim.component.StatelessComponent`, whose save and restore do nothing:
 
     * the car drives: the battery gives the car's consumption;
     * the car is parked away from its charging station: nothing;
@@ -320,20 +321,6 @@ class L1Controller(cp.L1ControllerComponent):
             )
         )
         return connections
-
-    def i_save_state(self) -> None:
-        """Save nothing: the controller decides every pass from its inputs and keeps no state."""
-
-    def i_restore_state(self) -> None:
-        """Restore nothing: the controller decides every pass from its inputs and keeps no state."""
-
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Checks statements."""
-        pass
-
-    def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
 
     def _handle_discharging_power_in_watt(self, car_consumption_in_watt: float) -> float:
         """Handle discharging case when car is consuming energy.

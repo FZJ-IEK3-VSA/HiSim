@@ -9,6 +9,7 @@ import importlib
 import math
 import pathlib
 import pickle
+import types
 from typing import Any, Dict
 
 import pandas as pd
@@ -187,6 +188,22 @@ def test_weather_cache_pressure_present_read_from_cache(
     my_weather = _build_weather_with_cache(tmp_path)
     my_weather.i_prepare_simulation()
     assert my_weather.pressure_list == pytest.approx([0.0, 10.0, 20.0, 30.0, 40.0])
+
+
+@pytest.mark.base
+def test_the_published_series_cover_the_run_window_and_not_the_source_year() -> None:
+    """The Weather publishes one value per timestep of the run, read from the start of its series.
+
+    A one-day run at one-hour resolution publishes the first 24 values of a series that covers a
+    year; a series exactly as long as the run is published as it is, without a copy, which is what
+    keeps a full-year run of minutes from duplicating eight series of 525 600 values.
+    """
+    parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+    owner = types.SimpleNamespace(my_simulation_parameters=parameters)
+    year_long = [float(hour) for hour in range(8760)]
+    assert weather.Weather.run_window_of(owner, year_long) == [float(hour) for hour in range(24)]  # type: ignore[arg-type]
+    day_long = year_long[:24]
+    assert weather.Weather.run_window_of(owner, day_long) is day_long  # type: ignore[arg-type]
 
 
 @pytest.mark.base

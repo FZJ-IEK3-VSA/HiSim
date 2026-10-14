@@ -458,8 +458,8 @@ class PVSystem(cp.PhysicsComponent):
         """Prepare the component by computing or loading the whole simulation period's PV output.
 
         On a cache hit, the AC power ratios for every timestep are read from the
-        cache CSV. On a cache miss, the producer computes them from the yearly
-        weather arrays the weather component published, in one vectorized pvlib
+        cache CSV. On a cache miss, the producer computes them from the weather
+        series over the run's window the weather component published, in one vectorized pvlib
         run, and the result is written to the cache file immediately, so even
         simulations that are interrupted later still populate the cache. After
         that, ``i_simulate`` only performs array lookups.
@@ -504,7 +504,7 @@ class PVSystem(cp.PhysicsComponent):
                     f"The computed PV values have the wrong length. "
                     f"Expected {self.my_simulation_parameters.timesteps} values, "
                     f"but got {len(self.ac_power_ratios_for_all_timesteps_output)}. "
-                    f"The yearly weather arrays in this simulation's sim repository "
+                    f"The weather series in this simulation's sim repository "
                     f"do not match the simulation parameters."
                 )
 
@@ -579,7 +579,7 @@ class PVSystem(cp.PhysicsComponent):
 
         The weather component publishes the digest of its series' cache key when it prepares; it is
         key material here, and it is what makes the PV key change when anything about the weather
-        changes (spec §3.1). Its absence means the same thing the missing yearly arrays mean, and is
+        changes (spec §3.1). Its absence means the same thing the missing weather series mean, and is
         reported the same way.
 
         Returns:
@@ -598,61 +598,52 @@ class PVSystem(cp.PhysicsComponent):
         return str(self.simulation_repository.get_entry(Weather.SERIES_ARTIFACT_KEY))
 
     def read_weather_series(self) -> PvWeatherSeries:
-        """Take the weather arrays the producer computes from out of the singleton repository.
+        """Take the weather series the producer computes from out of the per-simulation repository.
 
-        The weather component always publishes arrays covering the whole
-        year at the simulation's resolution, while the simulation itself
-        may span only part of it (e.g. one day or one week). Both index
-        their series by timestep from the same start, so truncating to
-        the simulated period yields exactly the values the old
-        per-timestep computation produced.
+        The weather component publishes each of its series over the run's window: one value per
+        timestep of the simulated period, in the order the simulation steps through it. This is
+        exactly what the producer computes the PV output from, so the series are handed on unchanged.
 
         Returns:
-            PvWeatherSeries: the eight series, cut to the simulated period.
+            PvWeatherSeries: the eight series over the run's window.
 
         Raises:
             KeyError: if the weather component has not prepared before this one.
-            ValueError: if the published arrays are shorter than the simulated period.
+            ValueError: if a published series does not have one value per timestep of the run.
         """
-        # The Weather publishes its full-year series into this simulation's repository in its
-        # own i_prepare_simulation. prepare_calculation walks the components in the order the
-        # setup added them, so a Weather added after this component has not published yet and
-        # the lookup below would fail with a bare key name. Say what to do instead.
-        if not self.simulation_repository.entry_exists(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE):
+        # The Weather publishes its series into this simulation's repository in its own
+        # i_prepare_simulation. prepare_calculation walks the components in the order the setup
+        # added them, so a Weather added after this component has not published yet and the lookup
+        # below would fail with a bare key name. Say what to do instead.
+        if not self.simulation_repository.entry_exists(Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE):
             raise KeyError(
-                "The yearly weather arrays were not found in this simulation's "
+                "The weather series over the run's window were not found in this simulation's "
                 "sim repository. Please check in your system setup that the "
                 "weather component is added to the simulator before the pv "
-                "system; its i_prepare_simulation publishes these arrays."
+                "system; its i_prepare_simulation publishes these series."
             )
 
-        dni_extra = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE_EXTRA)
-        dni = self.simulation_repository.get_entry(Weather.YEARLY_DIRECT_NORMAL_IRRADIANCE)
-        dhi = self.simulation_repository.get_entry(Weather.YEARLY_DIFFUSE_HORIZONTAL_IRRADIANCE)
-        ghi = self.simulation_repository.get_entry(Weather.YEARLY_GLOBAL_HORIZONTAL_IRRADIANCE)
-        azimuth = self.simulation_repository.get_entry(Weather.YEARLY_AZIMUTH)
-        apparent_zenith = self.simulation_repository.get_entry(Weather.YEARLY_APPARENT_ZENITH)
-        temperature = self.simulation_repository.get_entry(Weather.YEARLY_TEMPERATURE_OUTSIDE)
-        wind_speed = self.simulation_repository.get_entry(Weather.YEARLY_WIND_SPEED)
-
+        series = {
+            "dni_extra": Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE_EXTRA,
+            "dni": Weather.RUN_WINDOW_DIRECT_NORMAL_IRRADIANCE,
+            "dhi": Weather.RUN_WINDOW_DIFFUSE_HORIZONTAL_IRRADIANCE,
+            "ghi": Weather.RUN_WINDOW_GLOBAL_HORIZONTAL_IRRADIANCE,
+            "azimuth": Weather.RUN_WINDOW_AZIMUTH,
+            "apparent_zenith": Weather.RUN_WINDOW_APPARENT_ZENITH,
+            "temperature": Weather.RUN_WINDOW_TEMPERATURE_OUTSIDE,
+            "wind_speed": Weather.RUN_WINDOW_WIND_SPEED,
+        }
         number_of_timesteps = self.my_simulation_parameters.timesteps
-        if len(dni) < number_of_timesteps:
-            raise ValueError(
-                f"The yearly weather arrays in this simulation's sim repository "
-                f"hold {len(dni)} values but the simulation needs "
-                f"{number_of_timesteps}. The arrays do not match the "
-                f"simulation parameters (wrong resolution or duration)."
-            )
-        return PvWeatherSeries.of(
-            dni_extra=dni_extra[:number_of_timesteps],
-            dni=dni[:number_of_timesteps],
-            dhi=dhi[:number_of_timesteps],
-            ghi=ghi[:number_of_timesteps],
-            azimuth=azimuth[:number_of_timesteps],
-            apparent_zenith=apparent_zenith[:number_of_timesteps],
-            temperature=temperature[:number_of_timesteps],
-            wind_speed=wind_speed[:number_of_timesteps],
-        )
+        values_per_series = {name: self.simulation_repository.get_entry(key) for name, key in series.items()}
+        for name, values in values_per_series.items():
+            if len(values) != number_of_timesteps:
+                raise ValueError(
+                    f"The weather series '{series[name]}' in this simulation's sim repository "
+                    f"holds {len(values)} values but the simulation has "
+                    f"{number_of_timesteps} timesteps. The series do not match the "
+                    f"simulation parameters (wrong resolution or duration)."
+                )
+        return PvWeatherSeries.of(**values_per_series)
 
     def cache_entry(self, calculation_inputs: PvSeriesInputs) -> CacheEntry:
         """Look the produced series up in the cache under the key of the producer that makes it.

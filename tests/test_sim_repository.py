@@ -11,8 +11,8 @@ every member of :class:`lt.ComponentType`, so any real enum member (here
 ``ComponentType.PV``) is a valid key without extra setup.
 
 The last test in the file is the exception: a small Weather/occupancy/Building household, run
-end to end, that shows the same repository doing its real job -- carrying the Weather's full-year
-series from the component that computes them to the components that read them.
+end to end, that shows the same repository doing its real job -- carrying the Weather's series over the
+run's window from the component that computes them to the components that read them.
 """
 
 from pathlib import Path
@@ -198,11 +198,11 @@ def test_clear_on_fresh_empty_repo_does_not_raise() -> None:
 def test_household_run_publishes_the_weather_series_into_the_run_repository(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Check that a real run exchanges its whole-year series through the run's own repository.
+    """Check that a real run exchanges its weather series through the run's own repository.
 
     The CRUD tests above drive :class:`SimRepository` directly; this one drives it the way a
-    simulation does. A Weather/occupancy/Building household publishes the Weather's full-year
-    series into the repository the ``Simulator`` owns, under the key names the ``Weather`` class
+    simulation does. A Weather/occupancy/Building household publishes the Weather's series over the
+    run's window -- one value per timestep of the run, not the year the weather file covers -- into the repository the ``Simulator`` owns, under the key names the ``Weather`` class
     exposes, and that is where the PV system reads them. Nothing here is process-global: the
     repository belongs to this ``Simulator`` and is cleared when its run ends.
     """
@@ -327,11 +327,12 @@ def test_household_run_publishes_the_weather_series_into_the_run_repository(
 
     my_sim.run_all_timesteps()
 
-    # The Weather publishes its eight full-year series into the repository the Simulator owns,
-    # which is where the PV system reads them. Two are asserted by name: indexing the key proves
-    # it is there, and a non-empty series proves the Weather genuinely pushed its computed values
-    # through rather than registering an empty entry. The count is the eight series plus the
-    # weather location the report region is read from.
-    assert len(published[weather.Weather.YEARLY_TEMPERATURE_OUTSIDE]) > 0
-    assert len(published[weather.Weather.YEARLY_AZIMUTH]) > 0
+    # The Weather publishes its eight series over the run's window into the repository the
+    # Simulator owns, which is where the PV system and the Building read them. Two are asserted by
+    # name: indexing the key proves it is there, and a series of exactly one value per timestep
+    # proves the Weather pushed its computed values for this run's window rather than an empty
+    # entry or the whole year of its source. The count is the eight series plus the weather
+    # location the report region is read from.
+    assert len(published[weather.Weather.RUN_WINDOW_TEMPERATURE_OUTSIDE]) == my_simulation_parameters.timesteps
+    assert len(published[weather.Weather.RUN_WINDOW_AZIMUTH]) == my_simulation_parameters.timesteps
     assert len(published) >= 9
